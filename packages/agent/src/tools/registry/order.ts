@@ -30,6 +30,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     category: "read",
     group: "order",
     capabilities: ["shopify"],
+    requiredScopes: ["read_orders"],
     label: "Fetched orders",
     planStepLabel: "Fetch recent orders",
     execute: async (input: GetShopifyOrdersInput, ctx, _settings, deps) => {
@@ -73,6 +74,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     category: "read",
     group: "order",
     capabilities: ["shopify"],
+    requiredScopes: ["read_orders"],
     label: "Looked up order",
     planStepLabel: "Look up order",
     execute: async (input: GetOrderByNameInput, ctx, _settings, deps) => {
@@ -91,6 +93,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     category: "read",
     group: "order",
     capabilities: ["shopify"],
+    requiredScopes: ["read_orders"],
     label: "Checked shipping status",
     planStepLabel: "Check shipping status",
     execute: async (input: GetOrderFulfillmentStatusInput, ctx, _settings, deps) => {
@@ -108,6 +111,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     category: "read",
     group: "order",
     capabilities: ["shopify"],
+    requiredScopes: ["read_orders"],
     label: "Fetched tracking info",
     planStepLabel: "Fetch order tracking",
     execute: async (input: GetOrderTrackingInput, ctx, _settings, deps) => {

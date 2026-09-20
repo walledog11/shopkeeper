@@ -36,16 +36,20 @@ function dateFromInput(input: DateInput): Date | null {
   return Number.isFinite(date.getTime()) ? date : null;
 }
 
-function relativeParts(input: DateInput): RelativeParts | null {
+function relativePartsAt(input: DateInput, now: Date): RelativeParts | null {
   const date = dateFromInput(input);
   if (!date) return null;
 
-  const seconds = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
+  const seconds = Math.max(0, Math.floor((now.getTime() - date.getTime()) / 1000));
   const minutes = Math.floor(seconds / 60);
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
 
   return { date, seconds, minutes, hours, days };
+}
+
+function relativeParts(input: DateInput): RelativeParts | null {
+  return relativePartsAt(input, new Date());
 }
 
 function formatMonthDay(date: Date, now = new Date()): string {
@@ -207,4 +211,26 @@ export function formatTicketAge(iso: string): string {
     day: "numeric",
     ...(sameYear ? {} : { year: "numeric" }),
   });
+}
+
+/** Compact relative time for lists (explicit clock for tests). */
+export function timeAgoShort(date: Date, now: Date): string {
+  const parts = relativePartsAt(date, now);
+  if (!parts) return "just now";
+  if (parts.minutes < 1) return "just now";
+  if (parts.minutes < 60) return `${parts.minutes}m ago`;
+  if (parts.hours < 24) return `${parts.hours}h ago`;
+  return `${parts.days}d ago`;
+}
+
+/** Warmer copy for cards — spells out units and falls back to a date. */
+export function timeAgoCard(date: Date, now: Date): string {
+  const parts = relativePartsAt(date, now);
+  if (!parts) return "Just now";
+  if (parts.minutes < 1) return "Just now";
+  if (parts.minutes < 60) return `${parts.minutes} min ago`;
+  if (parts.hours < 24) return parts.hours === 1 ? "1 hr ago" : `${parts.hours} hr ago`;
+  if (parts.days === 1) return "Yesterday";
+  if (parts.days < 7) return `${parts.days} days ago`;
+  return formatMonthDay(parts.date, now);
 }

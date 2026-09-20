@@ -9,31 +9,56 @@ vi.mock("@/components/integrations/EmailForwardingDisclosure", () => ({
 }))
 
 describe("StepEmail", () => {
-  it("puts Gmail first and points to additional integrations", () => {
+  it("puts Gmail first with forwarding as a secondary option", () => {
     const html = renderToStaticMarkup(createElement(StepEmail, {
       data: DEFAULT_DATA,
       update: vi.fn(),
       emailConnected: false,
+      instagramConnected: false,
+      instagramConnectAvailable: true,
       forwardingIntegration: undefined,
       gmailIntegration: undefined,
+      instagramIntegration: undefined,
       orgReady: true,
       orgLoading: false,
       orgError: false,
       onRetryOrg: vi.fn(),
       emailSaving: false,
-      oauthPending: false,
+      oauthPendingProvider: null,
       onSaveForwarding: vi.fn(),
       onSaveGmail: vi.fn(),
       onOAuth: vi.fn(),
     }))
 
-    expect(html).toContain("Where do customers reach you?")
+    expect(html).toContain("Connect customer channels")
     expect(html).toContain("Connect Gmail")
+    expect(html).toContain("Connect Instagram")
     expect(html).toContain("Forward another inbox")
-    expect(html).toContain("Instagram")
-    expect(html).toContain("other channels")
-    expect(html).toContain("Integrations")
     expect(html).not.toContain("Forwarding panel")
+  })
+
+  it("hides Instagram when connect is unavailable for the workspace", () => {
+    const html = renderToStaticMarkup(createElement(StepEmail, {
+      data: DEFAULT_DATA,
+      update: vi.fn(),
+      emailConnected: false,
+      instagramConnected: false,
+      instagramConnectAvailable: false,
+      forwardingIntegration: undefined,
+      gmailIntegration: undefined,
+      instagramIntegration: undefined,
+      orgReady: true,
+      orgLoading: false,
+      orgError: false,
+      onRetryOrg: vi.fn(),
+      emailSaving: false,
+      oauthPendingProvider: null,
+      onSaveForwarding: vi.fn(),
+      onSaveGmail: vi.fn(),
+      onOAuth: vi.fn(),
+    }))
+
+    expect(html).not.toContain("Connect Instagram")
   })
 
   it("shows which direct email provider is connected", () => {
@@ -41,6 +66,8 @@ describe("StepEmail", () => {
       data: { ...DEFAULT_DATA, primaryEmail: "support@example.com" },
       update: vi.fn(),
       emailConnected: true,
+      instagramConnected: false,
+      instagramConnectAvailable: true,
       forwardingIntegration: undefined,
       gmailIntegration: {
         id: "gmail-integration",
@@ -53,12 +80,13 @@ describe("StepEmail", () => {
         metadata: { provider: "gmail" },
         createdAt: "2026-08-07T00:00:00.000Z",
       },
+      instagramIntegration: undefined,
       orgReady: true,
       orgLoading: false,
       orgError: false,
       onRetryOrg: vi.fn(),
       emailSaving: false,
-      oauthPending: false,
+      oauthPendingProvider: null,
       onSaveForwarding: vi.fn(),
       onSaveGmail: vi.fn(),
       onOAuth: vi.fn(),

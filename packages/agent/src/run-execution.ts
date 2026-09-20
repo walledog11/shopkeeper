@@ -345,7 +345,12 @@ export async function executeAgentToolCall(
       dispatchAuthorized = actionDispatch !== undefined;
       await actionDispatch?.markSubmitted();
       const executionIdentity = runtimeOperationId && operationScopeId
-        ? { operationId: runtimeOperationId, executionId: operationScopeId }
+        ? {
+            operationId: runtimeOperationId,
+            executionId: operationScopeId,
+            ...(ctx.agentRequestId ? { agentRequestId: ctx.agentRequestId } : {}),
+            ...(ctx.agentTaskId ? { agentTaskId: ctx.agentTaskId } : {}),
+          }
         : undefined;
       const toolContext = {
         ...ctx,

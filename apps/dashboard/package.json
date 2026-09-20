@@ -30,6 +30,7 @@
     "@clerk/nextjs": "7.3.3",
     "@sentry/nextjs": "^10.62.0",
     "@shopkeeper/agent": "*",
+    "@shopkeeper/shared": "*",
     "@shopkeeper/analytics": "*",
     "@shopkeeper/db": "*",
     "@shopkeeper/email": "*",

@@ -2,7 +2,7 @@ import {
   parseGatewayProductionConfig,
   type GatewayRuntimeRole,
 } from '../../../../scripts/lib/production-config-schema.mjs';
-import { parseBooleanEnvValue } from '@shopkeeper/agent/env';
+import { parseBooleanEnv as readScopedBooleanEnv } from '@shopkeeper/shared/env';
 
 export type { GatewayRuntimeRole } from '../../../../scripts/lib/production-config-schema.mjs';
 
@@ -21,7 +21,7 @@ function parsePositiveIntEnv(name: string, fallback: number): number {
 }
 
 function parseBooleanEnv(name: string, fallback: boolean): boolean {
-  return parseBooleanEnvValue(process.env[name], fallback, name, 'Gateway');
+  return readScopedBooleanEnv((key) => process.env[key], name, fallback, 'Gateway');
 }
 
 export function getGatewayRuntimeRole(): GatewayRuntimeRole {

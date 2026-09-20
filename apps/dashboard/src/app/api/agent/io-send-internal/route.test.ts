@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { findOwnedThread, sendEmail, sendReply } = vi.hoisted(() => ({
+const { findOwnedRequest, findOwnedTask, findOwnedThread, sendEmail, sendReply } = vi.hoisted(() => ({
+  findOwnedRequest: vi.fn(),
+  findOwnedTask: vi.fn(),
   findOwnedThread: vi.fn(),
   sendEmail: vi.fn(),
   sendReply: vi.fn(),
@@ -14,6 +16,8 @@ vi.mock('@shopkeeper/db', async (importOriginal) => {
     db: {
       ...actual.db,
       thread: { findFirst: findOwnedThread },
+      agentRequest: { findFirst: findOwnedRequest },
+      agentTask: { findFirst: findOwnedTask },
     },
   };
 });
@@ -36,6 +40,8 @@ describe('POST /api/agent/io-send-internal', () => {
     vi.clearAllMocks();
     vi.stubEnv('INTERNAL_API_SECRET', 'internal-secret');
     findOwnedThread.mockResolvedValue({ organization: { name: 'Acme' } });
+    findOwnedRequest.mockResolvedValue({ id: 'request-1', taskId: 'task-1' });
+    findOwnedTask.mockResolvedValue({ id: 'task-1' });
     sendReply.mockResolvedValue({ status: 'ok', message: 'Reply sent' });
     sendEmail.mockResolvedValue({ status: 'ok', message: 'Email sent' });
   });
@@ -91,6 +97,40 @@ describe('POST /api/agent/io-send-internal', () => {
       operationId: 'operation-1',
     }));
     expect(invalid.status).toBe(400);
+  });
+
+  it('forwards durable request and task attribution to the sender', async () => {
+    const response = await POST(request({
+      orgId: 'org-1',
+      threadId: 'thread-1',
+      op: 'send_reply',
+      input: { text: 'Your order is on the way.' },
+      operationId: 'operation-1',
+      executionId: 'execution-1',
+      agentRequestId: 'request-1',
+      agentTaskId: 'task-1',
+    }));
+
+    expect(response.status).toBe(200);
+    expect(sendReply).toHaveBeenCalledWith(
+      { text: 'Your order is on the way.' },
+      expect.objectContaining({ agentRequestId: 'request-1', agentTaskId: 'task-1' }),
+    );
+  });
+
+  it('rejects durable work identity from another thread', async () => {
+    findOwnedTask.mockResolvedValueOnce(null);
+
+    const response = await POST(request({
+      orgId: 'org-1',
+      threadId: 'thread-1',
+      op: 'send_reply',
+      input: { text: 'Your order is on the way.' },
+      agentTaskId: 'task-on-another-thread',
+    }));
+
+    expect(response.status).toBe(404);
+    expect(sendReply).not.toHaveBeenCalled();
   });
 
   it('validates operation and input before dispatch', async () => {

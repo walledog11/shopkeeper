@@ -1,6 +1,6 @@
 import express, { type Request, type Response, type Router } from 'express';
 import { isLlmBudgetUnavailableError, isSpendCapError, nanoDollarsToUsd } from '@shopkeeper/db';
-import { ApiError } from '@shopkeeper/agent/errors';
+import { ApiError } from '@shopkeeper/shared/errors';
 import {
   acceptMemberAgentRequest,
   cancelMemberAgentTask,

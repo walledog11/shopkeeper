@@ -5,7 +5,7 @@ import {
   dismissCurrentCachedPlan,
   type ExpectedPlanIdentity,
 } from '@shopkeeper/agent/plan-execution';
-import { ConflictError } from '@shopkeeper/agent/errors';
+import { ConflictError } from '@shopkeeper/shared/errors';
 import { getPlanExecution } from '@shopkeeper/agent/execution-ledger';
 import { executeOperatorApprovedCachedPlan } from './execute-operator-agent-turn.js';
 

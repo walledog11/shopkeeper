@@ -2,7 +2,7 @@ import { db, EmailProvider, Prisma } from '@shopkeeper/db';
 import { getEmailProvider } from '@shopkeeper/email/providers';
 import type { Prisma as PrismaTypes } from '@prisma/client';
 
-import { isRecord } from "@shopkeeper/agent/guards";
+import { isRecord } from "@shopkeeper/shared/guards";
 export type EmailIntegrationProvider = 'gmail' | 'postmark';
 
 export type UpsertEmailIntegrationArgs = {

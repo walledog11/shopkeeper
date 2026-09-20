@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-import { isRecord } from '@shopkeeper/agent/guards';
+import { isRecord } from '@shopkeeper/shared/guards';
 
 import { readString } from '../values.js';
 

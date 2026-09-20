@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { isRecord } from '@shopkeeper/agent/guards';
+import { isRecord } from '@shopkeeper/shared/guards';
 import logger from '@/lib/server/logger';
 import { rateLimit } from '@/lib/server/rate-limit';
 export const runtime = 'nodejs';

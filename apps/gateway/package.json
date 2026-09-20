@@ -32,6 +32,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "0.104.1",
     "@shopkeeper/agent": "*",
+    "@shopkeeper/shared": "*",
     "@shopkeeper/analytics": "*",
     "@shopkeeper/db": "*",
     "@shopkeeper/email": "*",

@@ -15,7 +15,7 @@ import {
   subscribeInstagramMessages,
   unsubscribeInstagramMessages,
   type InstagramProviderError,
-} from '@/lib/integrations/instagram-api-client';
+} from '@shopkeeper/integrations/instagram';
 
 const PROFESSIONAL_ACCOUNT_TYPES = new Set(['BUSINESS', 'CREATOR', 'MEDIA_CREATOR']);
 

@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { isStorefrontChatEnabledForIntegration } from "./enabled";
 
 
-import { isRecord } from "@shopkeeper/agent/guards";
+import { isRecord } from "@shopkeeper/shared/guards";
 export function readStorefrontChatEnabled(metadata: unknown): boolean {
   return isStorefrontChatEnabledForIntegration(metadata);
 }

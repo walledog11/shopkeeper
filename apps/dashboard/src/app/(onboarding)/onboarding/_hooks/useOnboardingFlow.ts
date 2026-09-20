@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useClerk, useOrganization, useOrganizationList, useUser } from "@clerk/nextjs";
+import { useClerk, useOrganizationList, useUser } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { useIntegrations } from "@/hooks/useIntegrations";
 import { useOAuthLauncher } from "@/hooks/useOAuthLauncher";
@@ -17,6 +17,7 @@ import {
   OAUTH_ERROR_MESSAGES,
   type OAuthOutcome,
 } from "@/lib/integrations/oauth-contract";
+import { updateShopifyStorefrontChat } from "@/lib/integrations/requests";
 import { isShopifyIntegrationActive } from "@/lib/integrations/shopify-connection";
 import { captureClientProductEvent } from "@/lib/product-events";
 import type { Integration } from "@/types";
@@ -30,22 +31,29 @@ import {
   type OnboardingSettingsRequest,
 } from "../_lib/onboarding-requests";
 import { useOnboardingDraft } from "./useOnboardingDraft";
+import { useOnboardingOrganization } from "./useOnboardingOrganization";
 import { useShopifyKbSync } from "./useShopifyKbSync";
 
-export type OnboardingOAuthProvider = "gmail" | "shopify";
+export type OnboardingOAuthProvider = "gmail" | "shopify" | "instagram";
 export type OnboardingOAuthParameters = {
   gmail: Record<string, string | undefined>;
   shopify: { shop: string };
+  instagram: Record<string, string | undefined>;
 };
 export type LaunchOnboardingOAuth = <TProvider extends OnboardingOAuthProvider>(
   provider: TProvider,
   params: OnboardingOAuthParameters[TProvider],
 ) => void;
 
+function toOnboardingOAuthPending(
+  provider: ReturnType<typeof useOAuthLauncher>["pendingProvider"],
+): OnboardingOAuthProvider | null {
+  if (provider === "gmail" || provider === "shopify" || provider === "instagram") return provider;
+  return null;
+}
+
 const SETTINGS_ERROR = "Couldn't save your onboarding settings. Try again.";
 const EMAIL_ERROR = "Couldn't save that support address. Try again.";
-const ORGANIZATION_ERROR = "Couldn't prepare your workspace. Try again.";
-
 function clearDraft() {
   try { localStorage.removeItem(STORAGE_KEY); } catch {}
 }
@@ -90,38 +98,15 @@ export function useOnboardingFlow(
   const router = useRouter();
   const { user } = useUser();
   const { signOut } = useClerk();
-  const { isLoaded: organizationLoaded, organization } = useOrganization();
   const organizationList = useOrganizationList({ userMemberships: { infinite: false } });
+  const { setActive, userMemberships } = organizationList;
   const {
-    createOrganization,
-    isLoaded: organizationListLoaded,
-    setActive,
-    userMemberships,
-  } = organizationList;
-  const clerkLoaded = organizationLoaded && organizationListLoaded;
-
-  const { run: runOrganization, state: organizationOperation } = useSingleFlightOperation(async (storeName: string) => {
-    if (organization) return true;
-    if (!clerkLoaded || !createOrganization || !setActive) return false;
-    const name = storeName.trim();
-    if (!name) return false;
-    const created = await createOrganization({ name });
-    await setActive({ organization: created.id });
-    return true;
-  }, ORGANIZATION_ERROR);
-
-  const ensureOrganization = useCallback(async (storeName: string): Promise<boolean> => {
-    if (organization) return true;
-    if (!clerkLoaded) return false;
-    try {
-      return await runOrganization(storeName);
-    } catch {
-      return false;
-    }
-  }, [clerkLoaded, organization, runOrganization]);
-
-  const organizationReady = Boolean(organization)
-    || (organizationOperation.status === "succeeded" && organizationOperation.result);
+    clerkLoaded,
+    ensureOrganization,
+    organization,
+    organizationOperation,
+    organizationReady,
+  } = useOnboardingOrganization();
 
   const { data: integrationRows, mutate: refreshIntegrations } = useIntegrations({
     enabled: organizationReady,
@@ -211,6 +196,13 @@ export function useOnboardingFlow(
     },
   });
 
+  const stepId = STEPS[idx].id;
+  const oauthReturnTo = useMemo(() => {
+    if (stepId === "shopify") return `${RETURN_TO}?step=shopify`;
+    if (stepId === "email") return `${RETURN_TO}?step=email`;
+    return RETURN_TO;
+  }, [stepId]);
+
   const launchOAuth = useCallback<LaunchOnboardingOAuth>((provider, params) => {
     setSettledOAuthState({ status: "idle" });
     const definition = getOAuthIntegrationDefinition(provider);
@@ -218,7 +210,7 @@ export function useOnboardingFlow(
       definition,
       params,
       readinessGuard: ensureOrgForDraft,
-      returnTo: RETURN_TO,
+      returnTo: oauthReturnTo,
       onClosed: () => { void refreshIntegrations(); },
       onLaunchError: (error) => {
         setSettledOAuthState({
@@ -228,7 +220,7 @@ export function useOnboardingFlow(
         });
       },
     });
-  }, [ensureOrgForDraft, launch, refreshIntegrations]);
+  }, [ensureOrgForDraft, launch, oauthReturnTo, refreshIntegrations]);
 
   const oauthState: OperationState = pendingProvider
     ? { status: "pending" }
@@ -265,8 +257,19 @@ export function useOnboardingFlow(
 
   const exitState = otherMembership && setActive ? workspaceSwitchState : signOutState;
 
-  const stepId = STEPS[idx].id;
   const hasEmailReady = selected.emailReady;
+  const hasInstagramReady = selected.instagramReady;
+  const hasCustomerChannel = hasEmailReady || hasInstagramReady;
+
+  const updateStorefrontChat = useCallback(async (enabled: boolean) => {
+    try {
+      await updateShopifyStorefrontChat(enabled);
+      await refreshIntegrations();
+      return true;
+    } catch {
+      return false;
+    }
+  }, [refreshIntegrations]);
 
   const canContinue = useMemo(() => {
     if (stepId === "intro") {
@@ -281,7 +284,7 @@ export function useOnboardingFlow(
     if (stepId === "intro" && !await runSettings().catch(() => false)) return false;
 
     const analyticsStep = stepId === "intro" ? "store" : stepId;
-    const completedOptionalStep = analyticsStep !== "email" || hasEmailReady;
+    const completedOptionalStep = analyticsStep !== "email" || hasCustomerChannel;
     if (analyticsStep !== "plan" && analyticsStep !== "connect" && completedOptionalStep) {
       void captureClientProductEvent({ event: "onboarding_step_completed", step: analyticsStep });
     }
@@ -361,6 +364,7 @@ export function useOnboardingFlow(
     exit,
     idx,
     kbSync,
+    instagramRow: selected.instagram as Integration | undefined,
     shopifyRow: selected.shopify as Integration | undefined,
     handlers: {
       back,
@@ -371,6 +375,7 @@ export function useOnboardingFlow(
       saveEmailIntegration: saveEmail,
       simulateShopify,
       update,
+      updateStorefrontChat,
     },
     status: {
       canContinue,
@@ -378,10 +383,12 @@ export function useOnboardingFlow(
       emailSaving: isOperationPending(emailState),
       error,
       exitPending: isOperationPending(exitState),
+      hasCustomerChannel,
       hasEmailReady,
+      hasInstagramReady,
       hasMessaging,
       hasShopify,
-      oauthPendingProvider: pendingProvider,
+      oauthPendingProvider: toOnboardingOAuthPending(pendingProvider),
       orgEnsureFailed: organizationOperation.status === "failed",
       orgEnsuring: !clerkLoaded || orgPending,
       orgReady: organizationReady && !orgPending,

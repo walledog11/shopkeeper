@@ -1,8 +1,8 @@
-import { isRecord } from "@shopkeeper/agent/guards";
+import { isRecord } from "@shopkeeper/shared/guards";
 import {
   unsubscribeInstagramMessages,
   type InstagramProviderError,
-} from '@/lib/integrations/instagram-api-client';
+} from '@shopkeeper/integrations/instagram';
 import logger from '@/lib/server/logger';
 import { emitOpsAlert } from '@/lib/server/ops-alerts';
 

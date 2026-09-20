@@ -11,11 +11,35 @@ const baseProps = {
   kbSync: { status: "idle" as const, retry: vi.fn() },
   onOAuth: vi.fn(),
   onSimulate: vi.fn(async () => true),
+  onUpdateStorefrontChat: vi.fn(async () => true),
+  simulatorEnabled: false,
+  storefrontChatGloballyEnabled: true,
+  shopifyClientId: "shopify-client-id",
   simulating: false,
   oauthPending: false,
 };
 
 describe("StepShopify", () => {
+  it("offers storefront chat after a live Shopify connection when enabled", () => {
+    const html = renderToStaticMarkup(createElement(StepShopify, {
+      ...baseProps,
+      connected: true,
+      shopifyRow: {
+        id: "shopify-integration",
+        organizationId: "org-1",
+        platform: "shopify",
+        externalAccountId: "demo-store.myshopify.com",
+        fromEmail: null,
+        tokenExpiresAt: null,
+        metadata: { storefrontChat: { enabled: false } },
+        createdAt: "2026-08-07T00:00:00.000Z",
+      },
+    }));
+
+    expect(html).toContain("Storefront chat");
+    expect(html).toContain("Enable storefront chat");
+  });
+
   it("offers the demo store only when the server enables the simulator", () => {
     const enabled = renderToStaticMarkup(createElement(StepShopify, {
       ...baseProps,

@@ -35,10 +35,15 @@ interface IoSendBody {
   input: unknown;
   operationId?: string;
   executionId?: string;
+  agentRequestId?: string;
+  agentTaskId?: string;
 }
 
 function parseBody(value: Record<string, unknown>): IoSendBody {
-  const { agentActionMode, orgId, threadId, op, input, operationId, executionId } = value;
+  const {
+    agentActionMode, orgId, threadId, op, input, operationId, executionId,
+    agentRequestId, agentTaskId,
+  } = value;
   if (typeof orgId !== "string" || typeof threadId !== "string") {
     throw new BadRequestError("orgId and threadId are required");
   }
@@ -62,6 +67,12 @@ function parseBody(value: Record<string, unknown>): IoSendBody {
   if (operationId !== undefined && (typeof operationId !== "string" || typeof executionId !== "string")) {
     throw new BadRequestError("operationId and executionId must be strings");
   }
+  if (agentRequestId !== undefined && typeof agentRequestId !== "string") {
+    throw new BadRequestError("agentRequestId must be a string");
+  }
+  if (agentTaskId !== undefined && typeof agentTaskId !== "string") {
+    throw new BadRequestError("agentTaskId must be a string");
+  }
   return {
     ...(agentActionMode ? { agentActionMode } : {}),
     orgId,
@@ -69,6 +80,8 @@ function parseBody(value: Record<string, unknown>): IoSendBody {
     op,
     input,
     ...(operationId ? { operationId, executionId: executionId as string } : {}),
+    ...(agentRequestId ? { agentRequestId } : {}),
+    ...(agentTaskId ? { agentTaskId } : {}),
   };
 }
 
@@ -79,7 +92,10 @@ export const POST = withInternalRoute(
   },
   async ({ request }) => {
     const requestId = readRequestId(request);
-    const { agentActionMode, orgId, threadId, op, input, operationId, executionId } = parseBody(
+    const {
+      agentActionMode, orgId, threadId, op, input, operationId, executionId,
+      agentRequestId, agentTaskId,
+    } = parseBody(
       await readRequiredJsonObject(request, {
         malformed: { message: "Validation failed", details: [{ code: "invalid_body", message: "Request body must be a JSON object" }] },
         empty: { message: "Validation failed", details: [{ code: "invalid_body", message: "Request body must be a JSON object" }] },
@@ -99,6 +115,34 @@ export const POST = withInternalRoute(
       );
     }
 
+    const [ownedRequest, ownedTask] = await Promise.all([
+      agentRequestId
+        ? db.agentRequest.findFirst({
+            where: { id: agentRequestId, organizationId: orgId, threadId },
+            select: { id: true, taskId: true },
+          })
+        : null,
+      agentTaskId
+        ? db.agentTask.findFirst({
+            where: { id: agentTaskId, organizationId: orgId, threadId },
+            select: { id: true },
+          })
+        : null,
+    ]);
+    const invalidAttribution = (agentRequestId && !ownedRequest)
+      || (agentTaskId && !ownedTask)
+      || (ownedRequest?.taskId && agentTaskId && ownedRequest.taskId !== agentTaskId);
+    if (invalidAttribution) {
+      logger.warn(
+        { requestId, orgId, threadId, agentRequestId, agentTaskId },
+        "[Agent io-send-internal] durable work identity does not own the thread",
+      );
+      return NextResponse.json(
+        { error: "Agent work identity not found", ...(requestId ? { requestId } : {}) },
+        { status: 404 },
+      );
+    }
+
     try {
       const ctx = {
         threadId,
@@ -106,6 +150,8 @@ export const POST = withInternalRoute(
         orgName: ownedThread.organization.name,
         ...(agentActionMode ? { agentActionMode } : {}),
         ...(operationId && executionId ? { operationId, executionId } : {}),
+        ...(agentRequestId ? { agentRequestId } : {}),
+        ...(agentTaskId ? { agentTaskId } : {}),
       };
       const result = op === "send_reply"
         ? await sendReply(input as SendReplyInput, ctx)

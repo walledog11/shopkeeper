@@ -1,6 +1,6 @@
 import { defineTool, stringArg, toolError, toolOk, type AgentToolDefinition } from '@shopkeeper/agent/tools';
 import { formatOperatorDispatchFailure, isPlanExecutionFailureMessage } from '@shopkeeper/agent/message-dispatch';
-import { ConflictError } from '@shopkeeper/agent/errors';
+import { ConflictError } from '@shopkeeper/shared/errors';
 import type { BaseAgentContext, SupportContext } from '@shopkeeper/agent/context';
 import logger from '../logger.js';
 import {

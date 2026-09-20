@@ -1,4 +1,4 @@
-import { parseBooleanEnvValue } from "@shopkeeper/agent/env"
+import { parseBooleanEnv } from "@shopkeeper/shared/env"
 import { SOCIALAPI_PRODUCTION_BASE_URL } from "@shopkeeper/integrations/socialapi"
 import { isInstagramIntegrationEnabledForOrg } from "@/lib/env"
 import { normalizeAbsoluteUrl, readEnv } from "@/lib/env/helpers"
@@ -23,10 +23,6 @@ export interface SocialApiConnectConfig {
 
 /** Which Instagram connect flow, if any, this workspace may start. */
 export type InstagramConnectTransport = "socialapi" | "meta_direct" | null
-
-function parseBooleanEnv(name: string, fallback: boolean): boolean {
-  return parseBooleanEnvValue(readEnv(name), fallback, name, "Dashboard")
-}
 
 function parseMaxActiveOrgs(): number {
   const raw = readEnv("SOCIALAPI_MAX_ACTIVE_ORGS")
@@ -82,7 +78,7 @@ function readBaseUrl(): string {
 }
 
 export function getSocialApiConnectConfig(): SocialApiConnectConfig | null {
-  if (!parseBooleanEnv("SOCIALAPI_ENABLED", false)) return null
+  if (!parseBooleanEnv(readEnv, "SOCIALAPI_ENABLED", false, "Dashboard")) return null
 
   const apiKey = readEnv("SOCIALAPI_API_KEY")
   if (!apiKey) {

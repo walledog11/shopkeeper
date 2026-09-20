@@ -1,6 +1,6 @@
 import { Input } from "@/components/ui/input";
 import { PRODUCT_NAME } from "@/lib/brand";
-import { Accent, Field, Headline, Lede } from "./primitives";
+import { Field, Headline, Lede } from "./primitives";
 import type { OnboardingData } from "./model";
 
 export function StepIntro({
@@ -20,13 +20,9 @@ export function StepIntro({
         onSubmit();
       }}
     >
-      <Headline>
-        Customer support, handled.
-        <Accent>You approve before anything sends.</Accent>
-      </Headline>
+      <Headline>Customer support, handled.</Headline>
       <Lede>
-        {PRODUCT_NAME} reads each message, checks the order in Shopify, and drafts the next step —
-        then waits for your okay.
+        {PRODUCT_NAME} drafts replies from Shopify. You approve before anything sends.
       </Lede>
 
       <div className="mt-6 w-full max-w-[420px] space-y-2">
@@ -53,10 +49,6 @@ export function StepIntro({
           />
         </Field>
       </div>
-
-      <p className="mt-5 max-w-[420px] text-[12.5px] leading-relaxed text-foreground/45">
-        Every reply and Shopify action is recorded, and you start in approval mode — nothing goes out without you.
-      </p>
     </form>
   );
 }

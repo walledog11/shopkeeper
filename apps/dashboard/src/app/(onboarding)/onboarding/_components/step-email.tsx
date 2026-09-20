@@ -1,26 +1,29 @@
 import { useState } from "react";
 import Image from "next/image";
-import { AlertCircle, Check, ChevronDown, Clock3, Loader2, Mail } from "lucide-react";
+import { AlertCircle, Check, ChevronDown, Loader2, Mail } from "lucide-react";
 import { cn } from "@/lib/ui/cn";
 import { EmailForwardingSetupPanel } from "@/components/integrations/EmailForwardingDisclosure";
 import { GmailSupportAddressPanel } from "@/components/integrations/GmailSupportAddressPanel";
-import { Accent, Headline, Lede } from "./primitives";
+import { Headline, Lede } from "./primitives";
 import type { Integration } from "@/types";
 import type { OnboardingData } from "./model";
-import type { LaunchOnboardingOAuth } from "../_hooks/useOnboardingFlow";
+import type { LaunchOnboardingOAuth, OnboardingOAuthProvider } from "../_hooks/useOnboardingFlow";
 
 export function StepEmail({
   data,
   update,
   emailConnected,
+  instagramConnected,
+  instagramConnectAvailable,
   forwardingIntegration,
   gmailIntegration,
+  instagramIntegration,
   orgReady,
   orgLoading,
   orgError,
   onRetryOrg,
   emailSaving,
-  oauthPending,
+  oauthPendingProvider,
   onSaveForwarding,
   onSaveGmail,
   onOAuth,
@@ -28,19 +31,23 @@ export function StepEmail({
   data: OnboardingData;
   update: (p: Partial<OnboardingData>) => void;
   emailConnected: boolean;
+  instagramConnected: boolean;
+  instagramConnectAvailable: boolean;
   forwardingIntegration: Integration | undefined;
   gmailIntegration: Integration | undefined;
+  instagramIntegration: Integration | undefined;
   orgReady: boolean;
   orgLoading: boolean;
   orgError: boolean;
   onRetryOrg: () => void;
   emailSaving: boolean;
-  oauthPending: boolean;
+  oauthPendingProvider: OnboardingOAuthProvider | null;
   onSaveForwarding: (email: string) => void;
   onSaveGmail: (email: string) => void;
   onOAuth: LaunchOnboardingOAuth;
 }) {
   const [forwardingOpen, setForwardingOpen] = useState(false);
+  const showInstagram = instagramConnectAvailable || instagramConnected;
   const connectedEmail = data.primaryEmail
     || gmailIntegration?.fromEmail
     || gmailIntegration?.externalAccountId
@@ -54,51 +61,75 @@ export function StepEmail({
     || forwardingIntegration?.fromEmail
     || forwardingIntegration?.externalAccountId
     || data.primaryEmail;
+  const instagramLabel = instagramDisplayLabel(instagramIntegration);
 
   return (
     <div className="flex flex-col items-center">
-      <Headline>
-        Where do customers reach you?
-        <Accent>Connect a channel, or skip for now.</Accent>
-      </Headline>
-      <Lede>
-        Link an inbox so customer messages arrive in Shopkeeper. You can always add one later from Integrations.
-      </Lede>
+      <Headline>Connect customer channels</Headline>
+      <Lede>Email and Instagram DMs show up in Shopkeeper.</Lede>
 
-      {emailConnected && (
-        <div className="mt-6 w-full max-w-[560px] overflow-hidden rounded-xl border border-foreground/12 bg-foreground/[0.03] text-left">
-          <div className="flex items-start gap-2.5 px-4 py-3.5">
-            <Check className="mt-0.5 size-4 shrink-0 text-foreground" />
-            <div>
-              <div className="text-[13px] font-semibold text-foreground">Email connected</div>
-              <div className="mt-0.5 text-[12.5px] text-foreground/55">
-                {connectedEmail || "Your support inbox"} is ready.
+      {(emailConnected || instagramConnected) && (
+        <div className="mt-6 w-full max-w-[560px] space-y-2 text-left">
+          {emailConnected && (
+            <div className="overflow-hidden rounded-xl border border-foreground/12 bg-foreground/[0.03]">
+              <div className="flex items-start gap-2.5 px-4 py-3.5">
+                <Check className="mt-0.5 size-4 shrink-0 text-foreground" />
+                <div>
+                  <div className="text-[13px] font-semibold text-foreground">Email connected</div>
+                  <div className="mt-0.5 text-[12.5px] text-foreground/55">
+                    {connectedEmail || "Your support inbox"} is ready.
+                  </div>
+                </div>
               </div>
+              {gmailIntegration && (
+                <div className="border-t border-foreground/[0.08]">
+                  <GmailSupportAddressPanel
+                    email={gmailEmail}
+                    setEmail={value => update({ gmailEmail: value })}
+                    loading={emailSaving}
+                    onSave={() => onSaveGmail(gmailEmail)}
+                  />
+                </div>
+              )}
             </div>
-          </div>
-          {gmailIntegration && (
-            <div className="border-t border-foreground/[0.08]">
-              <GmailSupportAddressPanel
-                email={gmailEmail}
-                setEmail={value => update({ gmailEmail: value })}
-                loading={emailSaving}
-                onSave={() => onSaveGmail(gmailEmail)}
-              />
+          )}
+          {instagramConnected && (
+            <div className="flex items-start gap-2.5 rounded-xl border border-foreground/12 bg-foreground/[0.03] px-4 py-3.5">
+              <Check className="mt-0.5 size-4 shrink-0 text-foreground" />
+              <div>
+                <div className="text-[13px] font-semibold text-foreground">Instagram connected</div>
+                <div className="mt-0.5 text-[12.5px] text-foreground/55">
+                  {instagramLabel ? `@${instagramLabel.replace(/^@/, "")}` : "Professional account"} is ready for DMs.
+                </div>
+              </div>
             </div>
           )}
         </div>
       )}
 
-      <div className="mt-6 grid w-full max-w-[560px] gap-3 text-left">
+      <div className="mt-6 grid w-full max-w-[560px] gap-3 text-left sm:grid-cols-2">
         <ChannelCard
           name="Gmail"
           logo="/logos/gmail.png"
-          description="Connect Gmail or Google Workspace and reply from your existing address."
+          description="Use your existing Gmail or Google Workspace address."
           connected={Boolean(gmailIntegration)}
           actionLabel="Connect Gmail"
           onConnect={() => onOAuth("gmail", {})}
-          pending={oauthPending}
+          pending={oauthPendingProvider === "gmail"}
         />
+        {showInstagram && (
+          <ChannelCard
+            name="Instagram"
+            logo="/logos/instagram-logo.png"
+            description="Business or Creator account DMs in the same inbox."
+            connected={instagramConnected}
+            actionLabel="Connect Instagram"
+            onConnect={() => onOAuth("instagram", {})}
+            pending={oauthPendingProvider === "instagram"}
+            unavailable={!instagramConnectAvailable && !instagramConnected}
+            unavailableLabel="Coming soon"
+          />
+        )}
       </div>
 
       <div className="mt-3 w-full max-w-[560px] overflow-hidden rounded-xl border border-foreground/10 bg-card text-left">
@@ -163,13 +194,19 @@ export function StepEmail({
           </div>
         )}
       </div>
-
-      <div className="mt-5 flex items-center justify-center gap-2 text-[11.5px] font-medium uppercase tracking-[0.08em] text-foreground/35">
-        <Clock3 className="size-3.5" />
-        Add Instagram and other channels from Integrations after setup
-      </div>
     </div>
   );
+}
+
+function instagramDisplayLabel(integration: Integration | undefined): string | null {
+  if (!integration) return null;
+  const metadata = integration.metadata;
+  if (typeof metadata === "object" && metadata !== null && "username" in metadata) {
+    const username = metadata.username;
+    if (typeof username === "string" && username.trim()) return username.trim();
+  }
+  const external = integration.externalAccountId?.trim();
+  return external || integration.fromEmail?.trim() || null;
 }
 
 function ChannelCard({
@@ -180,6 +217,8 @@ function ChannelCard({
   actionLabel,
   onConnect,
   pending,
+  unavailable = false,
+  unavailableLabel = "Unavailable",
 }: {
   name: string;
   logo: string;
@@ -188,11 +227,14 @@ function ChannelCard({
   actionLabel: string;
   onConnect: () => void;
   pending: boolean;
+  unavailable?: boolean;
+  unavailableLabel?: string;
 }) {
   return (
     <div className={cn(
       "flex min-h-40 flex-col rounded-xl border bg-card p-4",
       connected ? "border-foreground/25" : "border-foreground/10",
+      unavailable && "opacity-70",
     )}>
       <div className="flex items-center gap-3">
         <span className="inline-flex size-10 items-center justify-center overflow-hidden rounded-lg bg-[#ffffff] ring-1 ring-foreground/10">
@@ -205,10 +247,10 @@ function ChannelCard({
       <button
         type="button"
         onClick={onConnect}
-        disabled={pending}
+        disabled={pending || unavailable}
         className="mt-4 inline-flex h-9 items-center justify-center gap-2 rounded-full bg-foreground px-4 text-[13px] font-semibold text-background transition-colors hover:bg-foreground/85 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {pending ? <Loader2 className="size-4 animate-spin" /> : connected ? `Reconnect ${name}` : actionLabel}
+        {pending ? <Loader2 className="size-4 animate-spin" /> : unavailable ? unavailableLabel : connected ? `Reconnect ${name}` : actionLabel}
       </button>
     </div>
   );

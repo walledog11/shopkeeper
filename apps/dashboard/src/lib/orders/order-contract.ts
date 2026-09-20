@@ -1,4 +1,4 @@
-import { isRecord } from "@shopkeeper/agent/guards";
+import { isRecord } from "@shopkeeper/shared/guards";
 export type OrderClassification = "needs_fulfillment" | "unpaid" | "fulfilled" | "excluded"
 
 export interface OrderCustomer {

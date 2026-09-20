@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 
-import { isRecord } from '@shopkeeper/agent/guards';
+import { isRecord } from '@shopkeeper/shared/guards';
 import type { Request, Response, Router } from 'express';
 import {
   normalizeSocialApiDmReceived,

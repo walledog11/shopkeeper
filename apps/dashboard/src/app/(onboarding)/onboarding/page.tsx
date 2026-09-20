@@ -1,5 +1,9 @@
+import { auth } from "@clerk/nextjs/server";
 import { normalizeImessageLineHandle } from "@/lib/integrations/imessage-visibility";
 import { isShopifySimulatorEnabled } from "@/lib/integrations/shopify-simulator";
+import { getShopifyOAuthAuthorizeConfig } from "@/lib/env";
+import { resolveInstagramConnectTransport } from "@/lib/socialapi/config";
+import { isStorefrontChatGloballyEnabled } from "@/lib/storefront-chat/enabled";
 import {
   resolveOnboardingStepIndex,
   type OnboardingResumeStep,
@@ -33,8 +37,12 @@ export default async function OnboardingPage({
     ? resolveOnboardingStepIndex(resumeStep, 0, STEPS.map(s => s.id))
     : null;
 
+  const { orgId } = await auth();
   const imessageHandle = normalizeImessageLineHandle(process.env.IMESSAGE_LINE_HANDLE);
   const shopifySimulatorEnabled = isShopifySimulatorEnabled();
+  const instagramConnectAvailable = resolveInstagramConnectTransport(orgId) !== null;
+  const storefrontChatGloballyEnabled = isStorefrontChatGloballyEnabled();
+  const shopifyClientId = getShopifyOAuthAuthorizeConfig()?.clientId ?? null;
   const oauthParams = new URLSearchParams();
   for (const key of ["provider", "status", "error"] as const) {
     const value = params[key];
@@ -46,6 +54,9 @@ export default async function OnboardingPage({
     <OnboardingExperience
       imessageHandle={imessageHandle}
       shopifySimulatorEnabled={shopifySimulatorEnabled}
+      instagramConnectAvailable={instagramConnectAvailable}
+      storefrontChatGloballyEnabled={storefrontChatGloballyEnabled}
+      shopifyClientId={shopifyClientId}
       pinnedStepIndex={pinnedStepIndex}
       oauthOutcome={oauthOutcome}
     />

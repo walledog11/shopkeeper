@@ -128,6 +128,8 @@ export async function executeAgentTurn(
       params.operatorLedger,
       params.operatorDeskMode,
     );
+    if (params.agentRequestId) ctx.agentRequestId = params.agentRequestId;
+    if (params.agentTaskId) ctx.agentTaskId = params.agentTaskId;
     const priorGuard = ctx.assertExecutionAllowed;
     ctx.assertExecutionAllowed = () => {
       priorGuard?.();

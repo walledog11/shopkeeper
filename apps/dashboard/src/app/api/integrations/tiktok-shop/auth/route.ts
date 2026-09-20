@@ -3,7 +3,7 @@ import { createPostRedirectResponse } from "@/lib/server/post-redirect-response"
 import {
   getTikTokShopOAuthAuthorizeConfig,
 } from "@/lib/tiktok-shop/config";
-import { buildTikTokShopAuthorizeUrl } from "@/lib/tiktok-shop/client";
+import { buildTikTokShopAuthorizeUrl } from "@shopkeeper/integrations/tiktok";
 import {
   createOAuthSessionCookies,
   requireAuthenticatedOAuthSession,

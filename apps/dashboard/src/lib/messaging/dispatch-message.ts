@@ -121,13 +121,17 @@ export async function dispatchMessage(
       source,
       options.analyticsReplySource,
       attachments,
+      { agentRequestId: options.agentRequestId, agentTaskId: options.agentTaskId },
     )
   }
 
   const persistBeforeSynchronousAgentSend = source === "agent_send_reply"
     && !(isEmailChannel && isOutboundEmailAsyncEnabled())
   const pendingResponse = persistBeforeSynchronousAgentSend
-    ? await createPendingLogicalResponse(thread, text, attachments)
+    ? await createPendingLogicalResponse(thread, text, attachments, {
+        agentRequestId: options.agentRequestId,
+        agentTaskId: options.agentTaskId,
+      })
     : null
 
   const providerResult = thread.channelType === CHANNEL_TYPE.IG_DM
@@ -173,6 +177,7 @@ export async function dispatchMessage(
         providerResult.integrationId,
         providerResult.providerMessageId,
         attachments,
+        { agentRequestId: options.agentRequestId, agentTaskId: options.agentTaskId },
       )
   const replySource = options.analyticsReplySource
     ?? (source === "agent_send_reply" ? "agent_approved" : "manual")

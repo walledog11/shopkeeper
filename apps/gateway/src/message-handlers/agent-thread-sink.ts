@@ -27,6 +27,8 @@ interface ThreadSinkContext {
   orgName: string;
   operationId?: string;
   executionId?: string;
+  agentRequestId?: string;
+  agentTaskId?: string;
 }
 
 function successfulThreadReceipt(
@@ -120,6 +122,8 @@ async function dispatchAgentSend(
       agentActionMode: ctx.agentActionMode,
       operationId: ctx.operationId,
       executionId: ctx.executionId,
+      agentRequestId: ctx.agentRequestId,
+      agentTaskId: ctx.agentTaskId,
     }, { requestId });
     if (!response.ok) {
       logger.warn(

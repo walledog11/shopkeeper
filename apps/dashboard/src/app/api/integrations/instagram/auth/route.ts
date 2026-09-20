@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
 import logger from '@/lib/server/logger';
 import { getInstagramOAuthAuthorizeConfig } from '@/lib/env';
-import { buildInstagramAuthorizationUrl } from '@/lib/integrations/instagram-api-client';
+import { buildInstagramAuthorizationUrl } from '@shopkeeper/integrations/instagram';
 import { resolveInstagramConnectTransport } from '@/lib/socialapi/config';
 import {
   createOAuthSessionCookies,

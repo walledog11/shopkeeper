@@ -38,6 +38,7 @@ export async function dispatchEmailViaGatewayQueue(
   source: DispatchSource,
   replySource?: ReplySource,
   attachments: string[] = [],
+  attribution: { agentRequestId?: string; agentTaskId?: string } = {},
 ): Promise<DispatchMessageResult> {
   let integration
   try {
@@ -53,7 +54,7 @@ export async function dispatchEmailViaGatewayQueue(
     throw error
   }
 
-  const message = await createPendingAgentMessage(thread, text, integration.id, attachments)
+  const message = await createPendingAgentMessage(thread, text, integration.id, attachments, attribution)
 
   const enqueued = await enqueueOutboundEmail({
     organizationId: org.id,

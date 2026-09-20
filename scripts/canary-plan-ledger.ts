@@ -4,7 +4,7 @@ import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { AGENT_NOTE_PREFIX } from '@shopkeeper/agent/thread-constants';
 import { agentTurnMessageFilter } from '@shopkeeper/agent/turns';
-import { isRecord } from '@shopkeeper/agent/guards';
+import { isRecord } from '@shopkeeper/shared/guards';
 
 type Surface = 'dashboard' | 'gateway';
 type ExpectedMode = 'enforce';

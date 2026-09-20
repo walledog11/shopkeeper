@@ -14,6 +14,7 @@ export const PRODUCT_TOOL_DEFINITIONS = [
     category: "read",
     group: "product",
     capabilities: ["shopify"],
+    requiredScopes: ["read_products"],
     label: "Searched products",
     planStepLabel: "Search Shopify products",
     execute: async (input: SearchShopifyProductsInput, ctx, _settings, deps) => {

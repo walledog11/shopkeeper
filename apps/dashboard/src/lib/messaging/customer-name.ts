@@ -1,4 +1,4 @@
-import { STOREFRONT_VISITOR_LABEL } from "@shopkeeper/agent/person-name";
+import { STOREFRONT_VISITOR_LABEL } from "@shopkeeper/shared/customer-labels";
 
 /**
  * A row label derived from what the platform gave us, not the naming rule —

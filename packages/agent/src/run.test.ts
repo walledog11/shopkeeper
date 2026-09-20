@@ -74,7 +74,8 @@ function makeIo(): NonNullable<AgentContext["io"]> {
     providerReference = "thread_1",
   ) => execution ? {
     version: 1 as const,
-    ...execution,
+    operationId: execution.operationId,
+    executionId: execution.executionId,
     tool,
     target: { kind: "thread", id: "thread_1" },
     observedAt: "2026-09-15T07:00:00.000Z",
@@ -243,6 +244,25 @@ describe("runAgent tool execution", () => {
 
     expect(ctx.io?.sendReply).toHaveBeenCalledWith({ text: "Your order shipped!" }, expect.any(Object));
     expect(result.actionsPerformed[0].result).toBe("Reply sent to customer via email.");
+  });
+
+  it("carries durable work identity to the reply sink without putting it in model input", async () => {
+    mockCreate
+      .mockResolvedValueOnce(toolUse("send_reply", { text: "Your order shipped!" }))
+      .mockResolvedValueOnce(endTurn("Reply sent."));
+    const ctx = makeCtx({ agentRequestId: "request-1", agentTaskId: "task-1" });
+
+    await runAgent(ctx, "Where is my order?");
+
+    expect(ctx.io?.sendReply).toHaveBeenCalledWith(
+      { text: "Your order shipped!" },
+      expect.objectContaining({
+        agentRequestId: "request-1",
+        agentTaskId: "task-1",
+        operationId: expect.any(String),
+        executionId: expect.any(String),
+      }),
+    );
   });
 
   it("returns an error string when no Shopify integration is connected", async () => {

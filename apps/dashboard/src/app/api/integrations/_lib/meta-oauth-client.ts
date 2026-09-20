@@ -1,6 +1,6 @@
 import { fetchProviderWithDeadline } from '@/lib/server/provider-fetch';
 
-import { isRecord } from "@shopkeeper/agent/guards";
+import { isRecord } from "@shopkeeper/shared/guards";
 const META_GRAPH_BASE_URL = 'https://graph.facebook.com/v22.0';
 
 interface MetaErrorPayload {

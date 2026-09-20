@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-import { isRecord } from '@shopkeeper/agent/guards';
+import { isRecord } from '@shopkeeper/shared/guards';
 import { readStringKey } from '../values.js';
 
 import type { NormalizedTikTokShopMessage, TikTokShopWebhookConfig } from './types.js';

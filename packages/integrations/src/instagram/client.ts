@@ -1,5 +1,5 @@
 import { readString } from '../values.js';
-import { isRecord } from '@shopkeeper/agent/guards';
+import { isRecord } from '@shopkeeper/shared/guards';
 
 export const INSTAGRAM_GRAPH_VERSION = 'v25.0';
 export const INSTAGRAM_REQUIRED_SCOPES = [

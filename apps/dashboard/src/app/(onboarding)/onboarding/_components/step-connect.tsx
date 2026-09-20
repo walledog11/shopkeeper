@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ComponentType } from "react";
-import { Check, Copy, Loader2, MessageCircle, Smartphone } from "lucide-react";
+import { Copy, Loader2, MessageCircle, Smartphone } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import {
   channelBindingError,
@@ -14,12 +14,12 @@ import {
 } from "@/lib/integrations/channel-binding-client";
 import { captureClientProductEvent } from "@/lib/product-events";
 import { cn } from "@/lib/ui/cn";
-import { Accent, Headline, Lede } from "./primitives";
+import { Headline, Lede } from "./primitives";
 
 type RefreshStatus = () => unknown | Promise<unknown>;
 
 export function StepConnect({ imessageHandle }: { imessageHandle: string | null }) {
-  const { imessage, telegram, refreshImessage, refreshTelegram, anyBound } = useOperatorChannels();
+  const { imessage, telegram, refreshImessage, refreshTelegram } = useOperatorChannels();
   const telegramAvailable = Boolean(telegram?.botUsername);
   const imessageAvailable = Boolean(imessageHandle);
   const noChannelAvailable = !imessageAvailable && !telegramAvailable && telegram !== undefined;
@@ -27,13 +27,10 @@ export function StepConnect({ imessageHandle }: { imessageHandle: string | null 
 
   return (
     <div className="flex flex-col items-center">
-      <Headline>
-        Put me in your pocket.
-        <Accent>Approvals and your morning briefing, by text.</Accent>
-      </Headline>
+      <Headline>Link your phone.</Headline>
       <Lede>
-        Link a phone for approvals, questions, and your morning briefing.
-        {bothAvailable ? " Either one is enough." : ""}
+        Approvals and morning briefings by text.
+        {bothAvailable ? " Either channel works." : ""}
       </Lede>
 
       {noChannelAvailable ? (
@@ -58,19 +55,6 @@ export function StepConnect({ imessageHandle }: { imessageHandle: string | null 
           )}
         </div>
       )}
-
-      <div className="mt-5 flex w-full max-w-[560px] items-center gap-2.5 border-t border-dashed border-foreground/[0.07] pt-4 text-left text-[12px] leading-snug text-foreground/45">
-        {anyBound ? (
-          <>
-            <span className="inline-flex size-4 items-center justify-center rounded bg-foreground/[0.08] text-foreground">
-              <Check className="size-3" />
-            </span>
-            You&apos;re reachable. I&apos;ll send your first briefing tomorrow morning.
-          </>
-        ) : (
-          <>Prefer to set this up later? You can keep going — but until you link a phone, I can only reach you here in the dashboard.</>
-        )}
-      </div>
     </div>
   );
 }
@@ -201,8 +185,11 @@ function ImessageConnector({ handle, onRefresh, handles }: {
             <Smartphone className="size-4" /> Open Messages
           </a>
           <p className="text-center text-[12px] leading-snug text-foreground/50">
-            <span className="hidden sm:inline">On another device, scan the code. </span>
-            Messages opens with your private connection code ready to send.
+            Scan or tap, then send the prefilled message
+            {handle ? (
+              <> (or text the code below to <span className="font-medium text-foreground/70">{handle}</span>)</>
+            ) : null}
+            .
           </p>
           <div className="flex w-full items-center gap-2">
             <code className="flex-1 truncate rounded-md border border-foreground/10 bg-foreground/[0.04] px-2.5 py-2 font-mono text-[12px] text-foreground/80">
@@ -214,21 +201,16 @@ function ImessageConnector({ handle, onRefresh, handles }: {
               aria-label="Copy connect code"
               className="inline-flex size-9 shrink-0 items-center justify-center rounded-md border border-foreground/10 text-foreground/60 transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
             >
-              {copied ? <Check className="size-3.5 text-foreground" /> : <Copy className="size-3.5" />}
+              {copied ? <span className="text-[11px] font-semibold text-foreground">Copied</span> : <Copy className="size-3.5" />}
             </button>
           </div>
-          <p className="w-full text-[12px] leading-snug text-foreground/50">
-            Or text this code to <span className="font-medium text-foreground/70">{handle}</span>.
-          </p>
           <div className="w-full"><WaitingRow /></div>
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          <ol className="list-inside list-decimal space-y-1 text-[12.5px] leading-relaxed text-foreground/55">
-            <li>Create a private connection code</li>
-            <li>Open Messages or scan the code from another device</li>
-            <li>Send the prefilled message</li>
-          </ol>
+          <p className="text-[12.5px] leading-relaxed text-foreground/55">
+            You&apos;ll get a code to send from Messages.
+          </p>
           <MintButton
             label="Link my iPhone"
             onClick={() => { void binding.start(); }}
@@ -284,18 +266,15 @@ function TelegramConnector({ onRefresh, chats }: {
             <MessageCircle className="size-4" /> Open Telegram
           </a>
           <p className="text-center text-[12px] leading-snug text-foreground/50">
-            <span className="hidden sm:inline">On another device, scan the code. </span>
-            Telegram opens on my bot with your private connection code ready to send.
+            Scan or tap, then send the prefilled message in Telegram.
           </p>
           <div className="w-full"><WaitingRow /></div>
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          <ol className="list-inside list-decimal space-y-1 text-[12.5px] leading-relaxed text-foreground/55">
-            <li>Create a private connection link</li>
-            <li>Open it, or scan the code from another device</li>
-            <li>Send the prefilled message</li>
-          </ol>
+          <p className="text-[12.5px] leading-relaxed text-foreground/55">
+            You&apos;ll get a link to open in Telegram.
+          </p>
           <MintButton
             label="Link Telegram"
             onClick={() => { void binding.start(); }}

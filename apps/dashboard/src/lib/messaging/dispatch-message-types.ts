@@ -27,6 +27,9 @@ export interface DispatchMessageOptions {
   // Stored `blob:` refs, already checked for org ownership by the caller.
   // Email is the only channel that carries them; see `attachmentsUnsupported`.
   attachments?: string[]
+  /** Durable agent work that produced this logical response. */
+  agentRequestId?: string
+  agentTaskId?: string
 }
 
 export type Message = Awaited<ReturnType<typeof createMessage>>

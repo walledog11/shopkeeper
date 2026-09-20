@@ -444,10 +444,15 @@ describe("Shopify scope gating", () => {
 
     expect(unchecked).toContain("get_inventory_status");
     expect(unchecked.filter((name) => !short.includes(name))).toEqual([
+      "search_shopify_products",
       "get_inventory_status",
       "update_shopify_customer_info",
       "add_shopify_customer_note",
+      "get_shopify_orders",
       "update_shopify_order_address",
+      "get_order_by_name",
+      "get_order_fulfillment_status",
+      "get_order_tracking",
       "create_refund",
       "create_partial_refund",
       "cancel_order",
@@ -468,9 +473,9 @@ describe("Shopify scope gating", () => {
     expect([...new Set(scoped)]).toEqual([
       "read_products",
       "write_customers",
+      "read_orders",
       "write_orders",
       "write_order_edits",
-      "read_orders",
       "write_returns",
       "write_gift_cards",
       "read_gift_cards",
@@ -479,9 +484,16 @@ describe("Shopify scope gating", () => {
   });
 
   it("reads a tool's requirement through the shared grant rule", () => {
-    expect(toolScopesGranted("search_shopify_products", [])).toBe(true);
+    expect(toolScopesGranted("search_shopify_products", [])).toBe(false);
+    expect(toolScopesGranted("search_shopify_products", ["read_products"])).toBe(true);
+    expect(toolScopesGranted("search_shopify_products", ["write_products"])).toBe(true);
     expect(toolScopesGranted("get_inventory_status", [])).toBe(false);
     expect(toolScopesGranted("get_inventory_status", ["write_products"])).toBe(true);
+    expect(toolScopesGranted("get_shopify_orders", [])).toBe(false);
+    expect(toolScopesGranted("get_shopify_orders", ["read_orders"])).toBe(true);
+    expect(toolScopesGranted("get_order_by_name", ["write_orders"])).toBe(true);
+    expect(toolScopesGranted("get_order_fulfillment_status", [])).toBe(false);
+    expect(toolScopesGranted("get_order_tracking", ["read_orders"])).toBe(true);
     expect(toolScopesGranted("update_shopify_order_address", ["write_orders"])).toBe(false);
     expect(toolScopesGranted("update_shopify_order_address", ["write_orders", "write_customers"])).toBe(true);
     expect(toolScopesGranted("update_shopify_customer_info", ["read_customers"])).toBe(false);

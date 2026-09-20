@@ -13,6 +13,9 @@ import type { OAuthOutcome } from "@/lib/integrations/oauth-contract";
 export interface OnboardingChannelConfig {
   imessageHandle: string | null;
   shopifySimulatorEnabled: boolean;
+  instagramConnectAvailable: boolean;
+  storefrontChatGloballyEnabled: boolean;
+  shopifyClientId: string | null;
 }
 
 export function OnboardingExperience({
@@ -29,6 +32,7 @@ export function OnboardingExperience({
     emailIntegrations,
     exit,
     idx,
+    instagramRow,
     kbSync,
     shopifyRow,
     status,
@@ -79,7 +83,10 @@ export function OnboardingExperience({
                 kbSync={kbSync}
                 onOAuth={handlers.launchOAuth}
                 onSimulate={handlers.simulateShopify}
+                onUpdateStorefrontChat={handlers.updateStorefrontChat}
                 simulatorEnabled={channels.shopifySimulatorEnabled}
+                storefrontChatGloballyEnabled={channels.storefrontChatGloballyEnabled}
+                shopifyClientId={channels.shopifyClientId}
                 simulating={status.shopifySimulating}
                 oauthPending={status.oauthPendingProvider === "shopify"}
               />
@@ -92,14 +99,17 @@ export function OnboardingExperience({
                 data={data}
                 update={handlers.update}
                 emailConnected={status.hasEmailReady}
+                instagramConnected={status.hasInstagramReady}
+                instagramConnectAvailable={channels.instagramConnectAvailable}
                 forwardingIntegration={emailIntegrations.forwarding}
                 gmailIntegration={emailIntegrations.gmail}
+                instagramIntegration={instagramRow}
                 orgReady={status.orgReady}
                 orgLoading={status.orgEnsuring}
                 orgError={status.orgEnsureFailed}
                 onRetryOrg={() => { void handlers.ensureOrganization(); }}
                 emailSaving={status.emailSaving}
-                oauthPending={status.oauthPendingProvider === "gmail"}
+                oauthPendingProvider={status.oauthPendingProvider}
                 onSaveForwarding={(email) => {
                   void handlers.saveEmailIntegration(email, "postmark");
                 }}
@@ -112,7 +122,9 @@ export function OnboardingExperience({
             {stepId === "plan" && (
               <StepPlan
                 data={data}
+                hasCustomerChannel={status.hasCustomerChannel}
                 hasEmail={status.hasEmailReady}
+                hasInstagram={status.hasInstagramReady}
                 hasMessaging={status.hasMessaging}
                 hasShopify={status.hasShopify}
                 onStart={handlers.finish}
@@ -128,7 +140,7 @@ export function OnboardingExperience({
             idx={idx}
             stepId={stepId}
             canContinue={status.canContinue}
-            hasEmail={status.hasEmailReady}
+            hasCustomerChannel={status.hasCustomerChannel}
             hasMessaging={status.hasMessaging}
             saving={status.controlsPending}
             onNext={handlers.next}

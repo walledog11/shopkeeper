@@ -6,7 +6,7 @@ import {
   type IntegrationPlatform,
   type OnboardingStep,
 } from '@shopkeeper/analytics';
-import { isRecord } from '@shopkeeper/agent/guards';
+import { isRecord } from '@shopkeeper/shared/guards';
 import { db } from '@shopkeeper/db';
 import { BadRequestError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';

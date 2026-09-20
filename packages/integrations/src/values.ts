@@ -1,4 +1,4 @@
-import { isRecord } from '@shopkeeper/agent/guards';
+import { isRecord } from '@shopkeeper/shared/guards';
 
 /**
  * Reading a string out of a provider's JSON.

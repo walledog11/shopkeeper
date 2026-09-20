@@ -10,66 +10,12 @@ import {
   ChevronDown,
   ChevronRight,
   Menu,
-  MessageCircle,
-  ShieldCheck,
   Store,
-  Workflow,
   X,
-  type LucideIcon,
 } from "lucide-react";
 import { PRIMARY_CTA_LABEL, PRODUCT_NAME } from "@/lib/brand";
 import { cn } from "@/lib/ui/cn";
-
-type ProductCard = {
-  href: string;
-  title: string;
-  subtitle: string;
-  icon: LucideIcon;
-};
-
-type Partner = {
-  href: string;
-  name: string;
-  logo: string;
-};
-
-const productCards: ProductCard[] = [
-  {
-    href: "/product/order-operations",
-    title: "Order operations",
-    subtitle: "See the Shopify work Shopkeeper can prepare and complete.",
-    icon: Store,
-  },
-  {
-    href: "/product/customer-support",
-    title: "Customer support",
-    subtitle: "Answer from orders, inventory, policies, and approved voice guidance.",
-    icon: MessageCircle,
-  },
-  {
-    href: "/product/approvals-and-controls",
-    title: "Approvals and controls",
-    subtitle: "Set the rules for what can reply, what must ask, and what stays blocked.",
-    icon: ShieldCheck,
-  },
-  {
-    href: "/product/integrations",
-    title: "Integrations",
-    subtitle: "Follow a request from the customer channel to Shopify and the action log.",
-    icon: Workflow,
-  },
-];
-
-const partners: Partner[] = [
-  { href: "/product/integrations", name: "Shopify", logo: "/logos/shopify.svg" },
-  {
-    href: "/product/integrations",
-    name: "Instagram",
-    logo: "/logos/instagram-outline.svg",
-  },
-  { href: "/product/integrations", name: "Email", logo: "/logos/email.svg" },
-  { href: "/product/integrations", name: "iMessage", logo: "/logos/imessage.svg" },
-];
+import { partners, productCards } from "./nav-config";
 
 /* Slot outside the frosted navbar pill — backdrop-filter on a descendant of
    another backdrop-filter (or a `translate`) cannot see the page behind it. */

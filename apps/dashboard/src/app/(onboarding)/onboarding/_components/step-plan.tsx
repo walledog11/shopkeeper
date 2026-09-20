@@ -1,12 +1,13 @@
 import { Check, ChevronLeft, ChevronRight, Loader2, Mail, ShieldCheck, Smartphone } from "lucide-react";
-import { PRODUCT_NAME } from "@/lib/brand";
 import { Button } from "@/components/ui/button";
 import { Accent, Headline } from "./primitives";
 import type { OnboardingData } from "./model";
 
 export function StepPlan({
   data,
+  hasCustomerChannel,
   hasEmail,
+  hasInstagram,
   hasMessaging,
   hasShopify,
   onStart,
@@ -14,7 +15,9 @@ export function StepPlan({
   saving,
 }: {
   data: OnboardingData;
+  hasCustomerChannel: boolean;
   hasEmail: boolean;
+  hasInstagram: boolean;
   hasMessaging: boolean;
   hasShopify: boolean;
   onStart: () => void;
@@ -24,18 +27,21 @@ export function StepPlan({
   const storeName = data.storeName || "your store";
   const firstName = data.founderName.trim();
   const greeting = firstName ? `Good morning, ${firstName}.` : "Good morning.";
+  const customerChannels = customerChannelsSummary(hasEmail, hasInstagram, data.primaryEmail);
 
   return (
     <div className="flex flex-col items-center">
       <Headline>
-        {hasEmail ? "You're all set." : `${storeName} is ready.`}
-        <Accent>{hasEmail ? `I'll start on ${storeName} tonight.` : "Add a customer channel when you are."}</Accent>
+        {hasCustomerChannel ? "You're all set." : `${storeName} is ready.`}
+        <Accent>
+          {hasCustomerChannel ? `Starting on ${storeName} tonight.` : "Connect a channel when you want messages."}
+        </Accent>
       </Headline>
-      <p className="mx-auto mt-3 max-w-[520px] text-center text-[15px] leading-relaxed text-foreground/60">
-        {hasEmail
-          ? `${PRODUCT_NAME} prepares every reply and Shopify action, then waits for your approval. Nothing customer-facing sends on its own.`
-          : `Shopify is connected and ${PRODUCT_NAME} is in approval mode. Connect a customer channel from Integrations when you're ready for messages.`}
-      </p>
+      {!hasCustomerChannel && (
+        <p className="mx-auto mt-3 max-w-[520px] text-center text-[15px] leading-relaxed text-foreground/60">
+          Shopify is connected. Add email or Instagram from the previous step, or from Integrations later.
+        </p>
+      )}
 
       <div className="mt-7 w-full max-w-[440px] rounded-2xl border border-foreground/10 bg-card p-4 text-left">
         <div className="mb-2.5 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.08em] text-foreground/40">
@@ -52,13 +58,19 @@ export function StepPlan({
 
       <div className="mt-5 w-full max-w-[440px] space-y-2.5 text-left">
         <SetupRow icon={ShieldCheck} label="Shopify" value={hasShopify ? "Orders and policies connected" : "Not connected"} ready={hasShopify} />
-        <SetupRow icon={Mail} label="Customer inbox" value={hasEmail ? (data.primaryEmail.trim() || "Connected") : "Add one later"} ready={hasEmail} optional={!hasEmail} />
+        <SetupRow
+          icon={Mail}
+          label="Customer channels"
+          value={customerChannels}
+          ready={hasCustomerChannel}
+          optional={!hasCustomerChannel}
+        />
         <SetupRow icon={Smartphone} label="Approvals" value={hasMessaging ? "On your phone" : "In the dashboard"} ready={hasMessaging} optional={!hasMessaging} />
       </div>
 
       <p className="mt-5 max-w-[440px] text-center text-[12.5px] leading-relaxed text-foreground/45">
-        You start in approval mode: every reply, refund, and cancellation waits for you, refunds stay capped at $50,
-        and everything is recorded. Change any of it in Agent → Configure.
+        You&apos;re in approval mode — nothing customer-facing sends without you. Refunds stay capped at $50 until you change
+        limits in Agent → Configure. TikTok Shop and other channels live in Integrations.
       </p>
 
       <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-center">
@@ -69,7 +81,7 @@ export function StepPlan({
         >
           {saving
             ? <Loader2 className="size-4 animate-spin" />
-            : <>{hasEmail ? "Start working" : "Finish setup"} <ChevronRight className="size-4" /></>}
+            : <>{hasCustomerChannel ? "Start working" : "Finish setup"} <ChevronRight className="size-4" /></>}
         </Button>
         <Button variant="ghost" size="sm" onClick={onBack} disabled={saving} className="text-foreground/55 hover:bg-foreground/[0.05] hover:text-foreground">
           <ChevronLeft className="mr-1 size-4" /> Change something
@@ -77,6 +89,14 @@ export function StepPlan({
       </div>
     </div>
   );
+}
+
+function customerChannelsSummary(hasEmail: boolean, hasInstagram: boolean, primaryEmail: string): string {
+  const parts: string[] = [];
+  if (hasEmail) parts.push(primaryEmail.trim() || "Email");
+  if (hasInstagram) parts.push("Instagram");
+  if (parts.length === 0) return "Add one later";
+  return parts.join(" · ");
 }
 
 function SetupRow({

@@ -156,6 +156,34 @@ describe('gatewayThreadSink persistence', () => {
     expect(publishThreadEvent).not.toHaveBeenCalled();
   });
 
+  it('forwards the durable work identity with a customer reply', async () => {
+    postInternal.mockResolvedValue({
+      ok: true,
+      status: 200,
+      responseBody: '',
+      data: { status: 'ok', message: 'sent' },
+    });
+
+    await gatewayThreadSink.sendReply({ text: 'Your order is on the way.' }, {
+      ...ctx,
+      operationId: 'operation-1',
+      executionId: 'execution-1',
+      agentRequestId: 'request-1',
+      agentTaskId: 'task-1',
+    });
+
+    expect(postInternal).toHaveBeenCalledWith(
+      '/api/agent/io-send-internal',
+      expect.objectContaining({
+        operationId: 'operation-1',
+        executionId: 'execution-1',
+        agentRequestId: 'request-1',
+        agentTaskId: 'task-1',
+      }),
+      expect.anything(),
+    );
+  });
+
   it('returns unknown when the dashboard send outcome cannot be confirmed', async () => {
     postInternal.mockResolvedValue({
       ok: false,

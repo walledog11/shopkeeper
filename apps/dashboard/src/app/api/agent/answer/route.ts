@@ -17,7 +17,7 @@ import { decideAutonomy } from "@shopkeeper/agent/autonomy";
 import { parseAgentAnswerBody } from "@/lib/agent/api/validation";
 import { buildContext, hashInstructionForLog, planAgent } from "@/lib/agent/runner";
 import { suspendsAtProposal } from "@shopkeeper/agent/planner";
-import { ConflictError } from "@shopkeeper/agent/errors";
+import { ConflictError } from "@shopkeeper/shared/errors";
 import { resolveAgentSettings } from "@shopkeeper/agent/settings";
 import type { OrgSettings } from "@/types";
 import logger from "@/lib/server/logger";

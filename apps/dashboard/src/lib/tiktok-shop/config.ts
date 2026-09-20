@@ -1,5 +1,5 @@
 import { normalizeAbsoluteUrl, readEnv } from '@/lib/env/helpers';
-import { parseBooleanEnvValue } from '@shopkeeper/agent/env';
+import { parseBooleanEnv } from '@shopkeeper/shared/env';
 import type {
   TikTokShopApiConfig,
   TikTokShopHttpMethod,
@@ -13,10 +13,6 @@ export type {
   TikTokShopOAuthAuthorizeConfig,
   TikTokShopOAuthCallbackConfig,
 };
-
-function parseBooleanEnv(name: string, fallback: boolean): boolean {
-  return parseBooleanEnvValue(readEnv(name), fallback, name, 'Dashboard');
-}
 
 function parseMethodEnv(name: string, fallback: TikTokShopHttpMethod): TikTokShopHttpMethod {
   const rawValue = readEnv(name);
@@ -44,7 +40,7 @@ function readRedirectUri(appUrl: string): string {
 }
 
 function isTikTokShopEnabled(): boolean {
-  return parseBooleanEnv('TIKTOK_SHOP_ENABLED', false);
+  return parseBooleanEnv(readEnv, 'TIKTOK_SHOP_ENABLED', false, 'Dashboard');
 }
 
 export function getTikTokShopOAuthAuthorizeConfig(): TikTokShopOAuthAuthorizeConfig | null {

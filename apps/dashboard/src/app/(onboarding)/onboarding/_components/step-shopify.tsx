@@ -2,9 +2,11 @@ import { useState } from "react";
 import { Check, ChevronRight, FlaskConical, Loader2, ShoppingBag, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ShopifyStorefrontChatSection } from "@/components/integrations/ShopifyStorefrontChatSection";
 import { cn } from "@/lib/ui/cn";
+import { isStorefrontChatEnabledForIntegration } from "@/lib/storefront-chat/enabled";
 import type { Integration } from "@/types";
-import { Accent, Headline, Lede } from "./primitives";
+import { Headline, Lede } from "./primitives";
 import type { KbSyncViewModel, OnboardingData } from "./model";
 import type { LaunchOnboardingOAuth } from "../_hooks/useOnboardingFlow";
 
@@ -15,7 +17,10 @@ export function StepShopify({
   kbSync,
   onOAuth,
   onSimulate,
+  onUpdateStorefrontChat,
   simulatorEnabled,
+  storefrontChatGloballyEnabled,
+  shopifyClientId,
   simulating,
   oauthPending,
 }: {
@@ -25,15 +30,21 @@ export function StepShopify({
   kbSync: KbSyncViewModel;
   onOAuth: LaunchOnboardingOAuth;
   onSimulate: () => Promise<boolean>;
+  onUpdateStorefrontChat: (enabled: boolean) => Promise<boolean>;
   simulatorEnabled: boolean;
+  storefrontChatGloballyEnabled: boolean;
+  shopifyClientId: string | null;
   simulating: boolean;
   oauthPending: boolean;
 }) {
   const [shop, setShop] = useState("");
   const [simulatorError, setSimulatorError] = useState(false);
   const suggestion = (data.storeName || "your-store").toLowerCase().replace(/\s+/g, "");
-  const storeLabel = data.storeName.trim() || "your store name";
   const simulated = isSimulated(shopifyRow?.metadata);
+  const showStorefrontChat = connected
+    && shopifyRow
+    && !simulated
+    && (storefrontChatGloballyEnabled || isStorefrontChatEnabledForIntegration(shopifyRow.metadata));
 
   function launch() {
     const trimmed = shop.trim();
@@ -49,13 +60,8 @@ export function StepShopify({
 
   return (
     <div className="flex flex-col items-center">
-      <Headline>
-        Connect Shopify.
-        <Accent>So I can look up orders and act on them.</Accent>
-      </Headline>
-      <Lede>
-        I use your orders, products, and policies to answer accurately. Every action still waits for your approval.
-      </Lede>
+      <Headline>Connect Shopify.</Headline>
+      <Lede>Shopkeeper reads orders, products, and policies from this store.</Lede>
 
       <div className={cn(
         "mt-7 w-full max-w-[520px] rounded-2xl border border-foreground/10 bg-card px-6 py-5 text-left",
@@ -167,11 +173,16 @@ export function StepShopify({
         </details>
       </div>
 
-      {!connected && (
-        <p className="mt-4 max-w-[520px] text-center text-[12.5px] leading-relaxed text-foreground/45">
-          This is the one thing I can&apos;t work without — I answer from your real orders, not guesses.
-          If now isn&apos;t the moment, leave and come back: {storeLabel} and everything you&apos;ve entered are saved.
-        </p>
+      {showStorefrontChat && shopifyRow && (
+        <div className="mt-4 w-full max-w-[520px] text-left">
+          <ShopifyStorefrontChatSection
+            integration={shopifyRow}
+            shopifyClientId={shopifyClientId}
+            storefrontChatGloballyEnabled={storefrontChatGloballyEnabled}
+            canManageWorkspace
+            onUpdateEnabled={onUpdateStorefrontChat}
+          />
+        </div>
       )}
 
       {connected && kbSync.status !== "idle" && (
@@ -184,7 +195,7 @@ export function StepShopify({
               <>
                 <div className="text-[13px] font-semibold text-foreground">Reading your store…</div>
                 <div className="mt-0.5 text-[12px] leading-snug text-foreground/55">
-                  Pulling your policies and pages into memory so I can answer accurately.
+                  Syncing policies and pages from your store.
                 </div>
               </>
             ) : kbSync.status === "failed" ? (
@@ -200,12 +211,7 @@ export function StepShopify({
                 )}
               </>
             ) : (
-              <>
-                <div className="text-[13px] font-semibold text-foreground">{learnedSummary(kbSync)}</div>
-                <div className="mt-0.5 text-[12px] leading-snug text-foreground/55">
-                  It&apos;s in my memory now — ask me anything about returns, shipping, or your products.
-                </div>
-              </>
+              <div className="text-[13px] font-semibold text-foreground">{learnedSummary(kbSync)}</div>
             )}
           </div>
         </div>
@@ -227,8 +233,8 @@ function learnedSummary(kbSync: Extract<KbSyncViewModel, { status: "succeeded" }
   const parts: string[] = [];
   if (kbSync.policies > 0) parts.push(`${kbSync.policies} ${kbSync.policies === 1 ? "policy" : "policies"}`);
   if (kbSync.pages > 0) parts.push(`${kbSync.pages} ${kbSync.pages === 1 ? "page" : "pages"}`);
-  if (parts.length === 0) return "I read through your store.";
-  return `I read ${parts.join(" and ")} into memory.`;
+  if (parts.length === 0) return "Store synced.";
+  return `Synced ${parts.join(" and ")}.`;
 }
 
 function AccessRow({ label, hint, on }: { label: string; hint: string; on: boolean }) {

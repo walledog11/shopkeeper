@@ -1,11 +1,11 @@
 import { db, SenderType } from "@shopkeeper/db"
 import { CHANNEL_TYPE } from "@shopkeeper/agent/thread-constants"
-import { isRecord } from "@shopkeeper/agent/guards"
+import { isRecord } from "@shopkeeper/shared/guards"
 import {
   INSTAGRAM_REQUIRED_SCOPES,
   sendInstagramTextMessage,
   type InstagramProviderError,
-} from "@/lib/integrations/instagram-api-client"
+} from "@shopkeeper/integrations/instagram"
 import { createSocialApiClient } from "@shopkeeper/integrations/socialapi"
 import logger from "@/lib/server/logger"
 import { recordOutboundCall } from "@/lib/server/outbound-recorder"

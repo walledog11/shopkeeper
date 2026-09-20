@@ -41,6 +41,8 @@ interface ThreadContext {
   orgName: string;
   operationId?: string;
   executionId?: string;
+  agentRequestId?: string;
+  agentTaskId?: string;
 }
 
 function successfulThreadReceipt(
@@ -223,6 +225,8 @@ export async function sendReply(
       source: "agent_send_reply",
       analyticsReplySource: agentReplySource(ctx.agentActionMode),
       emailSubjectFallback: thread.tag || "Your inquiry",
+      agentRequestId: ctx.agentRequestId,
+      agentTaskId: ctx.agentTaskId,
     },
   );
   if (!result.ok) {

@@ -8,7 +8,7 @@ import {
   exchangeTikTokShopOAuthCode,
   TikTokShopProviderError,
   type TikTokShopTokenResult,
-} from '@/lib/tiktok-shop/client';
+} from '@shopkeeper/integrations/tiktok';
 
 type TikTokShopOAuthError = 'tiktok_shop_missing_shop' | 'tiktok_shop_token_failed';
 

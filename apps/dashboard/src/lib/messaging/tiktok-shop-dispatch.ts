@@ -6,7 +6,7 @@ import { getTikTokShopApiConfig } from "@/lib/tiktok-shop/config"
 import {
   sendTikTokShopTextMessage,
   TikTokShopProviderError,
-} from "@/lib/tiktok-shop/client"
+} from "@shopkeeper/integrations/tiktok"
 import { recordTikTokShopSendFailure } from "@/lib/messaging/provider-send-failures"
 import type {
   DispatchOrg,

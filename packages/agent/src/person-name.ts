@@ -1,4 +1,7 @@
+import { STOREFRONT_VISITOR_LABEL } from "@shopkeeper/shared/customer-labels";
 import { CHANNEL_TYPE } from "./thread-constants.js";
+
+export { STOREFRONT_VISITOR_LABEL } from "@shopkeeper/shared/customer-labels";
 
 /**
  * What we call the person a merchant is being told about.
@@ -31,8 +34,6 @@ export type PersonName =
  * Nobody on storefront chat has identified themselves, so there is no name to
  * print — but "Someone" twice in one list says less than the channel does.
  */
-export const STOREFRONT_VISITOR_LABEL = "Storefront visitor";
-
 export function customerFirstName(customerName: string | null | undefined): string | null {
   const trimmed = customerName?.trim();
   if (!trimmed) return null;

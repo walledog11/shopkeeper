@@ -26,6 +26,10 @@ export interface AgentIO {
 export interface AgentExecutionIdentity {
   operationId: string;
   executionId: string;
+  /** Durable request being answered, when this execution belongs to one. */
+  agentRequestId?: string;
+  /** Durable task whose customer-facing response this execution delivers. */
+  agentTaskId?: string;
 }
 
 export interface ShopifyOrderSummary {
@@ -133,6 +137,9 @@ export interface BaseAgentContext {
   actionAuthorityBlock?: ActionAuthorityBlock | null;
   /** Runtime-owned identity for the current non-read operation, including non-provider writes. */
   execution?: AgentExecutionIdentity;
+  /** Runtime-owned durable identities; never accepted from model input. */
+  agentRequestId?: string;
+  agentTaskId?: string;
   orgId: string;
   orgName: string;
   authState?: AgentAuthState;

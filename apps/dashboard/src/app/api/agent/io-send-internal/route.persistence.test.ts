@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChannelType, SenderType, db } from '@shopkeeper/db';
 import {
-  cleanupTestData,
+  cleanupTestData, createTestMessage,
   createTestCustomer,
   createTestIntegration,
   createTestOrg,
   createTestThread,
 } from '@shopkeeper/db/test-helpers';
+import { acceptCustomerAgentRequest } from '@shopkeeper/agent/task-ledger';
 import { POST } from './route';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
@@ -34,6 +35,19 @@ describe('POST /api/agent/io-send-internal storefront persistence', () => {
     });
     const customer = await createTestCustomer(org.id, `shopify_chat:${agentActionMode}:${org.id}`);
     const thread = await createTestThread(org.id, customer.id, ChannelType.shopify_chat);
+    const sourceMessage = await createTestMessage(thread.id, 'Where is my order?');
+    const { request: agentRequest, task: agentTask } = await acceptCustomerAgentRequest({
+      organizationId: org.id,
+      threadId: thread.id,
+      sourceMessageId: sourceMessage.id,
+      objective: 'Answer the order-status question',
+      budget: {
+        runtimeVersion: 1,
+        modelCallLimit: 20,
+        activeTimeMsLimit: 300_000,
+        spendNanoUsdLimit: BigInt(1_000_000_000),
+      },
+    });
     await db.storefrontChatSession.create({
       data: {
         organizationId: org.id,
@@ -58,6 +72,8 @@ describe('POST /api/agent/io-send-internal storefront persistence', () => {
         threadId: thread.id,
         op: 'send_reply',
         input: { text },
+        agentRequestId: agentRequest.id,
+        agentTaskId: agentTask.id,
       }),
     }));
 
@@ -69,5 +85,7 @@ describe('POST /api/agent/io-send-internal storefront persistence', () => {
     expect(saved.contentText).toBe(text);
     expect(saved.integrationId).toBe(integration.id);
     expect(saved.providerMessageId).toBeNull();
+    expect(saved.agentRequestId).toBe(agentRequest.id);
+    expect(saved.agentTaskId).toBe(agentTask.id);
   });
 });

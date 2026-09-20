@@ -1,0 +1,39 @@
+{
+  "name": "@shopkeeper/shared",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./env": {
+      "types": "./dist/env.d.ts",
+      "default": "./dist/env.js"
+    },
+    "./errors": {
+      "types": "./dist/errors.d.ts",
+      "default": "./dist/errors.js"
+    },
+    "./guards": {
+      "types": "./dist/guards.d.ts",
+      "default": "./dist/guards.js"
+    },
+    "./customer-labels": {
+      "types": "./dist/customer-labels.d.ts",
+      "default": "./dist/customer-labels.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc -p tsconfig.json --noEmit --pretty false",
+    "dev": "tsc --watch --preserveWatchOutput",
+    "lint": "cd ../.. && eslint packages/shared/src packages/shared/tsconfig.json --max-warnings 0"
+  },
+  "devDependencies": {
+    "typescript": "latest"
+  }
+}

@@ -1,7 +1,7 @@
 import { ChannelType, db, Prisma } from '@shopkeeper/db';
 import type { Integration, Prisma as PrismaTypes } from '@prisma/client';
 
-import { isRecord } from "@shopkeeper/agent/guards";
+import { isRecord } from "@shopkeeper/shared/guards";
 import { AmbiguousInstagramIntegrationError } from "@shopkeeper/integrations/instagram";
 
 export class InstagramAccountInUseError extends Error {

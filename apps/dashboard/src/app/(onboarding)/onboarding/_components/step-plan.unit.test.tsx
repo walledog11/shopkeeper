@@ -9,7 +9,9 @@ describe("StepPlan", () => {
   it("allows setup to finish without a customer email channel", () => {
     const html = renderToStaticMarkup(createElement(StepPlan, {
       data: { ...DEFAULT_DATA, storeName: "Demo Store" },
+      hasCustomerChannel: false,
       hasEmail: false,
+      hasInstagram: false,
       hasMessaging: false,
       hasShopify: true,
       onStart: vi.fn(),
@@ -30,7 +32,9 @@ describe("StepPlan", () => {
         storeName: "Demo Store",
         primaryEmail: "support@example.com",
       },
+      hasCustomerChannel: true,
       hasEmail: true,
+      hasInstagram: false,
       hasMessaging: true,
       hasShopify: true,
       onStart: vi.fn(),
@@ -46,7 +50,9 @@ describe("StepPlan", () => {
   it("disables finish and back while completion is pending", () => {
     const html = renderToStaticMarkup(createElement(StepPlan, {
       data: DEFAULT_DATA,
+      hasCustomerChannel: false,
       hasEmail: false,
+      hasInstagram: false,
       hasMessaging: false,
       hasShopify: true,
       onStart: vi.fn(),
@@ -65,7 +71,7 @@ describe("onboarding channel navigation", () => {
       idx: 2,
       stepId: "email",
       canContinue: true,
-      hasEmail: false,
+      hasCustomerChannel: false,
       hasMessaging: false,
       saving: false,
       onNext: vi.fn(),

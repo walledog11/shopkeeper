@@ -43,6 +43,11 @@ and makes cancellation win before dispatch without losing an effect that was
 already submitted. No capability has been
 migrated row by row yet, and the proposal is still not what authorizes the write.
 Package 6 has not started.
+The first retained Package 5 row has now started with its delivery invariant:
+customer replies carry the durable request/task identity through the gateway to
+the persisted `Message`, including pending/unknown delivery records, and the
+dashboard send boundary rejects identity from another tenant or thread. The
+order-status and KB/product row is not complete yet.
 Created 2026-09-11; last updated 2026-09-19.
 
 Implementation detail expanded 2026-09-11 against the current repository. Names marked **proposed** describe work to implement, not APIs or tables that already exist. This document authorizes no production operation by itself.
@@ -2169,6 +2174,40 @@ member-scoped proposal, which is the rule the answer side already shipped: endin
 a wait is tenant membership plus the recorded scope, and approving additionally
 requires the thread still be that member's own.
 
+The sixth Package 5 contract starts the first retained capability row at the
+delivery end. `executeAgentTurn` now places its server-owned request and task IDs
+on the execution context; `send_reply` carries them across the gateway's
+internal dashboard hop and every logical-response persistence path writes them
+on `Message`. This includes synchronous pending-before-provider delivery,
+asynchronous email admission, immediate success, and an unknown provider result,
+so delivery recovery can read the task from the response row without repeating
+the effect. The internal route resolves each supplied identity against the same
+organization and thread and, when both are supplied, requires the request's task
+to be the supplied task before it calls a provider.
+
+Verified by the agent, gateway, and dashboard typechecks; `npm run test:unit`
+for the three affected workspaces (1,216 agent, 472 gateway, 783 dashboard);
+and the database-backed storefront delivery test (2 cases) proving the saved
+message links to both rows. Targeted lint is green. The test services were
+started with `npm run test:services:up`.
+No prompt, tool description, or model surface changed, so no eval run is owed.
+Rollback is reverting this contract; it has no schema change and old callers
+simply omit both nullable identities.
+
+The order-read and knowledge-base host cases now follow that identity through
+the next layer. With the discovery runtime enabled, a fake model selects
+`get_order_by_name` or `search_kb`; the real planner runs the real Shopify read
+adapter against a fake provider response or searches the real test database and
+records its citation; the real plan cache and autonomy boundary execute the
+resulting safe reply; and the gateway delivery hop receives the request/task
+IDs. The two database-backed cases also prove each task completes, and the order
+case proves its successful `send_reply` action names the same request and task.
+They pass alone with the gateway typecheck, targeted lint, and the
+structure/document-reference gate. Still owed before this capability row is
+complete: product-catalog coverage, the order-read and KB/product
+missing-information and revised-instruction conversation cases, and the
+compatibility proof that pins legacy proposals.
+
 For each capability, complete the following row before marking it migrated:
 
 | Item | Evidence required |
@@ -2193,8 +2232,8 @@ Move automatic audit notes/status consequences to the successful-receipt path wi
   fulfillment uses the same boundary but remains isolated from default support
   selection. The conversation runtime those capabilities migrate onto now exists
   for support — every inbound message is a durable request on a claimed task —
-  but no capability has been migrated row by row against the evidence table
-  above.
+  and the first row's durable delivery attribution now holds, but no capability
+  has completed every item in the evidence table above.
 - [ ] Support multiple requests, task switching, terse follow-ups, explicit preferences, and resumption after waiting for the merchant or customer. Resumption after waiting for the merchant now holds for support on both kinds of wait: a parked question names who may answer it and a parked card names who may approve it, and an answer or a revision from any bound member ends that wait and continues the same task from either surface. The rest does not — a conversation still runs one task, and neither the answer nor the dismissal is itself an accepted request.
 - [ ] Stop new actions on cancellation or superseding instructions. Revalidate pending approvals and stale evidence when work resumes. Partial completion: an approval wait now ends at the ledger however it ends — approved, declined, revised, stopped, or superseded by a later customer message — and a proposal that is no longer current records that, so a card held on another device cannot be approved after the fact. Revalidating stale *evidence* on resume does not exist.
 - [ ] Move audit notes and other mechanical bookkeeping out of the model tool surface where they are consequences of execution.

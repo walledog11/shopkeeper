@@ -2,6 +2,11 @@ import { createMessage, db, SenderType } from "@shopkeeper/db"
 import { THREAD_STATUS } from "@shopkeeper/agent/thread-constants"
 import type { DispatchThread } from "./dispatch-message-types"
 
+interface AgentMessageAttribution {
+  agentRequestId?: string
+  agentTaskId?: string
+}
+
 // Sending on a thread normally brings it back into the inbox — a merchant
 // answering a resolved ticket wants it open again. The one exception is a thread
 // a conversation boundary ended: its successor is already open, and reopening it
@@ -24,6 +29,7 @@ export async function createSentAgentMessage(
   integrationId?: string,
   providerMessageId?: string,
   attachments: string[] = [],
+  attribution: AgentMessageAttribution = {},
 ) {
   return createMessage(
     {
@@ -33,6 +39,8 @@ export async function createSentAgentMessage(
       ...(integrationId && { integrationId }),
       ...(providerMessageId && { providerMessageId }),
       ...(attachments.length > 0 && { attachments }),
+      ...(attribution.agentRequestId && { agentRequestId: attribution.agentRequestId }),
+      ...(attribution.agentTaskId && { agentTaskId: attribution.agentTaskId }),
     },
     await reopenPatchFor(thread.id),
   )
@@ -46,6 +54,7 @@ export async function createPendingAgentMessage(
   text: string,
   integrationId: string,
   attachments: string[] = [],
+  attribution: AgentMessageAttribution = {},
 ) {
   return createMessage(
     {
@@ -55,6 +64,8 @@ export async function createPendingAgentMessage(
       integrationId,
       sendStatus: "pending",
       ...(attachments.length > 0 && { attachments }),
+      ...(attribution.agentRequestId && { agentRequestId: attribution.agentRequestId }),
+      ...(attribution.agentTaskId && { agentTaskId: attribution.agentTaskId }),
     },
     await reopenPatchFor(thread.id),
   )
@@ -65,6 +76,7 @@ export async function createPendingLogicalResponse(
   thread: DispatchThread,
   text: string,
   attachments: string[] = [],
+  attribution: AgentMessageAttribution = {},
 ) {
   return createMessage(
     {
@@ -73,6 +85,8 @@ export async function createPendingLogicalResponse(
       contentText: text,
       sendStatus: "pending",
       ...(attachments.length > 0 && { attachments }),
+      ...(attribution.agentRequestId && { agentRequestId: attribution.agentRequestId }),
+      ...(attribution.agentTaskId && { agentTaskId: attribution.agentTaskId }),
     },
     await reopenPatchFor(thread.id),
   )

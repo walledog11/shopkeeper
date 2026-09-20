@@ -41,6 +41,24 @@ describe("selectOnboardingIntegrations", () => {
       .toBe("forwarding");
   });
 
+  it("detects a connected Instagram integration", () => {
+    const selected = selectOnboardingIntegrations([
+      {
+        id: "ig-1",
+        organizationId: "org-1",
+        platform: "ig_dm",
+        externalAccountId: "17841400000000000",
+        fromEmail: null,
+        tokenExpiresAt: null,
+        metadata: { username: "linenandloom" },
+        createdAt: "2026-08-07T00:00:00.000Z",
+      },
+    ]);
+
+    expect(selected.instagram?.id).toBe("ig-1");
+    expect(selected.instagramReady).toBe(true);
+  });
+
   it("uses the canonical emailProvider field when legacy metadata is absent", () => {
     const gmail = emailIntegration("gmail", "gmail", { fromEmail: null });
 

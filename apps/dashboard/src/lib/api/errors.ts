@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { isLlmBudgetUnavailableError, isSpendCapError, nanoDollarsToUsd } from '@shopkeeper/db';
-import { ApiError } from '@shopkeeper/agent/errors';
+import { ApiError } from '@shopkeeper/shared/errors';
 import logger from '@/lib/server/logger';
 
-// The error classes moved to @shopkeeper/agent/errors (Track 4.1) so the shared
+// The error classes moved to @shopkeeper/shared/errors (Track 4.1) so the shared
 // orchestration can throw/catch one class identity across hosts. Re-exported
 // here so the ~56 dashboard importers stay unchanged; the Next-coupled mapper
 // below stays dashboard-side.
@@ -16,8 +16,8 @@ export {
   BadRequestError,
   ConflictError,
   ServiceUnavailableError,
-} from '@shopkeeper/agent/errors';
-export type { ApiErrorDetail } from '@shopkeeper/agent/errors';
+} from '@shopkeeper/shared/errors';
+export type { ApiErrorDetail } from '@shopkeeper/shared/errors';
 
 type ProviderApiError = {
   name?: string;

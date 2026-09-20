@@ -297,6 +297,7 @@
     "@anthropic-ai/sdk": "0.104.1",
     "@prisma/client": "6.19.3",
     "@shopkeeper/db": "*",
+    "@shopkeeper/shared": "*",
     "@vercel/blob": "2.3.3"
   }
 }

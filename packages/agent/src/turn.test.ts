@@ -72,6 +72,29 @@ describe('executeAgentTurn lock policy', () => {
     );
   });
 
+  it('puts durable request and task identity on the tool context', async () => {
+    deps.lock.acquire.mockResolvedValueOnce(NOOP_LOCK);
+    deps.buildContext.mockResolvedValueOnce({ orgId: 'org_1' });
+    deps.runAgent.mockResolvedValueOnce({ summary: 'done', actionsPerformed: [] });
+
+    await executeAgentTurn({
+      orgId: 'org_1',
+      threadId: 'thread_1',
+      instruction: 'Where is my order?',
+      agentRequestId: 'request-1',
+      agentTaskId: 'task-1',
+      persistAuditNote: false,
+    }, deps as never);
+
+    expect(deps.runAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ agentRequestId: 'request-1', agentTaskId: 'task-1' }),
+      'Where is my order?',
+      undefined,
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
   it('fences a lost lease after context loading and releases the lock', async () => {
     const release = vi.fn();
     deps.lock.acquire.mockResolvedValueOnce({ isLost: () => true, release });

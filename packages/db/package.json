@@ -32,6 +32,7 @@
     "typescript": "latest"
   },
   "dependencies": {
+    "@shopkeeper/shared": "*",
     "@neondatabase/serverless": "0.10.4",
     "@prisma/adapter-neon": "6.19.3",
     "@prisma/client": "6.19.3",

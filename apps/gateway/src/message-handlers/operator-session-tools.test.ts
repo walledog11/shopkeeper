@@ -11,7 +11,7 @@ import {
 import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import type { BaseAgentContext } from '@shopkeeper/agent/context';
-import { BadRequestError, ConflictError } from '@shopkeeper/agent/errors';
+import { BadRequestError, ConflictError } from '@shopkeeper/shared/errors';
 import {
   ANY_MEMBER_ACTOR_KEY, acceptCustomerAgentRequest, claimAgentTask, settleAgentTaskClaim,
 } from '@shopkeeper/agent/task-ledger';

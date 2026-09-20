@@ -13,7 +13,7 @@ import {
 } from '../../operator-context.js';
 import { runApprovedPendingPlan, clearPendingPlan } from '../../message-handlers/pending-plan-actions.js';
 import { formatOperatorDispatchFailure, isPlanExecutionFailureMessage } from '@shopkeeper/agent/message-dispatch';
-import { ConflictError } from '@shopkeeper/agent/errors';
+import { ConflictError } from '@shopkeeper/shared/errors';
 import { findTerminalSendTool } from '@shopkeeper/agent/planner-skip-reply';
 import type { PendingPlanCommand } from './command-parser.js';
 import type { OperatorMessageContext } from '../operator-message.js';

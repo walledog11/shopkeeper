@@ -50,6 +50,8 @@ interface ThreadSinkContext {
   orgName: string;
   operationId?: string;
   executionId?: string;
+  agentRequestId?: string;
+  agentTaskId?: string;
 }
 
 export interface ThreadSink {

@@ -3,11 +3,11 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/ui/cn";
 import { STEPS, type StepId } from "./model";
 
-export function Footer({ idx, stepId, canContinue, hasEmail, hasMessaging, saving, onNext, onBack, exitLabel, onExit }: {
+export function Footer({ idx, stepId, canContinue, hasCustomerChannel, hasMessaging, saving, onNext, onBack, exitLabel, onExit }: {
   idx: number;
   stepId: StepId;
   canContinue: boolean;
-  hasEmail: boolean;
+  hasCustomerChannel: boolean;
   hasMessaging: boolean;
   saving: boolean;
   onNext: () => void;
@@ -15,7 +15,7 @@ export function Footer({ idx, stepId, canContinue, hasEmail, hasMessaging, savin
   exitLabel?: string;
   onExit?: () => void | Promise<void>;
 }) {
-  const label = nextLabel(stepId, hasEmail, hasMessaging);
+  const label = nextLabel(stepId, hasCustomerChannel, hasMessaging);
 
   return (
     <footer className="relative shrink-0 px-4 py-4 before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-[linear-gradient(90deg,transparent_8%,rgba(255,255,255,0.7)_50%,transparent_92%)] sm:px-7">
@@ -79,8 +79,8 @@ function StepRail({ idx }: { idx: number }) {
   );
 }
 
-function nextLabel(stepId: StepId, hasEmail: boolean, hasMessaging: boolean): string {
-  if (stepId === "email") return hasEmail ? "Continue" : "Skip for now";
+function nextLabel(stepId: StepId, hasCustomerChannel: boolean, hasMessaging: boolean): string {
+  if (stepId === "email") return hasCustomerChannel ? "Continue" : "Skip for now";
   if (stepId === "connect") return hasMessaging ? "Review setup" : "Skip for now";
   return "Continue";
 }

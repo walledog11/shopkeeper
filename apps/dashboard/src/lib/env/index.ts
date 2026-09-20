@@ -4,7 +4,7 @@ import {
   readEnv,
   requireEnv,
 } from "./helpers";
-import { parseBooleanEnvValue } from "@shopkeeper/agent/env";
+import { parseBooleanEnv } from "@shopkeeper/shared/env";
 import { parseProductAnalyticsConfig } from '@shopkeeper/analytics';
 
 export function getDashboardAppUrl(): string {
@@ -231,12 +231,12 @@ function parsePositiveIntEnv(name: string, fallback: number): number {
   return parsedValue;
 }
 
-function parseBooleanEnv(name: string, fallback: boolean): boolean {
-  return parseBooleanEnvValue(readEnv(name), fallback, name, "Dashboard");
+function readDashboardBooleanEnv(name: string, fallback: boolean): boolean {
+  return parseBooleanEnv(readEnv, name, fallback, "Dashboard");
 }
 
 export function isGmailNativeInboundEnabled(): boolean {
-  return parseBooleanEnv("GMAIL_NATIVE_INBOUND", false);
+  return readDashboardBooleanEnv("GMAIL_NATIVE_INBOUND", false);
 }
 
 /**
@@ -258,7 +258,7 @@ export function isInstagramIntegrationEnabledForOrg(
   clerkOrganizationId?: string | null,
 ): boolean {
   const outsideProduction = process.env.NODE_ENV !== "production";
-  if (!parseBooleanEnv("INSTAGRAM_INTEGRATION_ENABLED", outsideProduction)) return false;
+  if (!readDashboardBooleanEnv("INSTAGRAM_INTEGRATION_ENABLED", outsideProduction)) return false;
 
   const allowlist = (readEnv("INSTAGRAM_BETA_ORG_IDS") ?? "")
     .split(",")
@@ -270,7 +270,7 @@ export function isInstagramIntegrationEnabledForOrg(
 
 export function getDashboardOpsAlertConfig(): DashboardOpsAlertConfig {
   return {
-    enabled: parseBooleanEnv("OPS_ALERTS_ENABLED", true),
+    enabled: readDashboardBooleanEnv("OPS_ALERTS_ENABLED", true),
     windowSecs: parsePositiveIntEnv("OPS_ALERT_WINDOW_SECS", 300),
     queueFailedThreshold: parsePositiveIntEnv("QUEUE_ALERT_FAILED_THRESHOLD", 10),
     queueWaitingThreshold: parsePositiveIntEnv("QUEUE_ALERT_WAITING_THRESHOLD", 100),
