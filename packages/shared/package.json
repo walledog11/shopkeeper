@@ -28,6 +28,7 @@
     }
   },
   "scripts": {
+    "postinstall": "tsc",
     "build": "tsc",
     "typecheck": "tsc -p tsconfig.json --noEmit --pretty false",
     "dev": "tsc --watch --preserveWatchOutput",
