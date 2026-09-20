@@ -1,4 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { isRecord } from '../guards.js';
+import { readString } from '../values.js';
 
 const SIGNATURE_PATTERN = /^sha256=([a-f0-9]{64})$/i;
 const TIMESTAMP_PATTERN = /^\d{10,}$/;
@@ -76,17 +78,7 @@ export interface SocialApiInboundDm {
   receivedAt: string;
 }
 
-type UnknownRecord = Record<string, unknown>;
-
-function isRecord(value: unknown): value is UnknownRecord {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function readString(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
-}
-
-function readMedia(content: UnknownRecord): SocialApiInboundMedia[] {
+function readMedia(content: Record<string, unknown>): SocialApiInboundMedia[] {
   const items = Array.isArray(content.media) ? content.media : [];
   return items.flatMap((item) => {
     if (!isRecord(item)) return [];

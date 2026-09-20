@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 import { isRecord } from '../guards.js';
+import { readStringKey } from '../values.js';
 
 import type { NormalizedTikTokShopMessage, TikTokShopWebhookConfig } from './types.js';
 
@@ -32,7 +33,7 @@ function normalizeTikTokShopMessageEvent(
   const event = isRecord(payload) ? payload : null;
   if (!event) return null;
 
-  const eventType = readString(event, 'event_type', 'eventType', 'type', 'event');
+  const eventType = readStringKey(event, 'event_type', 'eventType', 'type', 'event');
   if (messageEventNames.size > 0 && eventType && !messageEventNames.has(eventType)) return null;
 
   const message = readObject(event, 'message')
@@ -40,14 +41,14 @@ function normalizeTikTokShopMessageEvent(
     ?? readObject(event, 'payload')
     ?? event;
   const accountId =
-    readString(event, 'shop_id', 'shopId', 'seller_id', 'sellerId')
-    ?? readString(message, 'shop_id', 'shopId', 'seller_id', 'sellerId');
+    readStringKey(event, 'shop_id', 'shopId', 'seller_id', 'sellerId')
+    ?? readStringKey(message, 'shop_id', 'shopId', 'seller_id', 'sellerId');
   const conversationId =
-    readString(message, 'conversation_id', 'conversationId', 'conversation_id_str', 'thread_id', 'threadId')
-    ?? readString(event, 'conversation_id', 'conversationId', 'thread_id', 'threadId');
+    readStringKey(message, 'conversation_id', 'conversationId', 'conversation_id_str', 'thread_id', 'threadId')
+    ?? readStringKey(event, 'conversation_id', 'conversationId', 'thread_id', 'threadId');
   const buyerId =
-    readString(message, 'buyer_id', 'buyerId', 'customer_id', 'customerId', 'sender_id', 'senderId')
-    ?? readString(event, 'buyer_id', 'buyerId', 'customer_id', 'customerId', 'sender_id', 'senderId');
+    readStringKey(message, 'buyer_id', 'buyerId', 'customer_id', 'customerId', 'sender_id', 'senderId')
+    ?? readStringKey(event, 'buyer_id', 'buyerId', 'customer_id', 'customerId', 'sender_id', 'senderId');
 
   if (!accountId || !conversationId && !buyerId) return null;
 
@@ -60,14 +61,14 @@ function normalizeTikTokShopMessageEvent(
     attachments,
     buyerId,
     conversationId: conversationId ?? buyerId!,
-    customerName: readString(message, 'buyer_name', 'buyerName', 'customer_name', 'customerName', 'sender_name', 'senderName'),
+    customerName: readStringKey(message, 'buyer_name', 'buyerName', 'customer_name', 'customerName', 'sender_name', 'senderName'),
     eventType,
     isEcho: isEchoMessage(message),
     messageId:
-      readString(message, 'message_id', 'messageId', 'msg_id', 'msgId', 'id')
-      ?? readString(event, 'message_id', 'messageId', 'msg_id', 'msgId'),
-    orderId: readString(message, 'order_id', 'orderId') ?? readString(event, 'order_id', 'orderId'),
-    productId: readString(message, 'product_id', 'productId') ?? readString(event, 'product_id', 'productId'),
+      readStringKey(message, 'message_id', 'messageId', 'msg_id', 'msgId', 'id')
+      ?? readStringKey(event, 'message_id', 'messageId', 'msg_id', 'msgId'),
+    orderId: readStringKey(message, 'order_id', 'orderId') ?? readStringKey(event, 'order_id', 'orderId'),
+    productId: readStringKey(message, 'product_id', 'productId') ?? readStringKey(event, 'product_id', 'productId'),
     text: text || '[Attachment]',
   };
 }
@@ -80,8 +81,8 @@ export function normalizeTikTokShopWebhookMessages(
     if (!isRecord(value) || depth > 8) return [];
     const event = { ...inherited, ...value };
     const metadata = {
-      shop_id: readString(event, 'shop_id', 'shopId', 'seller_id', 'sellerId'),
-      event_type: readString(event, 'event_type', 'eventType', 'type', 'event'),
+      shop_id: readStringKey(event, 'shop_id', 'shopId', 'seller_id', 'sellerId'),
+      event_type: readStringKey(event, 'event_type', 'eventType', 'type', 'event'),
     };
     const children = [
       ...readObjectArray(value, 'events'),
@@ -108,20 +109,20 @@ export function normalizeTikTokShopWebhookPayload(
 }
 
 function readMessageText(message: Record<string, unknown>): string {
-  const directText = readString(message, 'text', 'message_text', 'messageText');
+  const directText = readStringKey(message, 'text', 'message_text', 'messageText');
   if (directText) return directText;
 
   const content = message.content;
   if (typeof content === 'string') return content;
   if (isRecord(content)) {
-    return readString(content, 'text', 'message_text', 'messageText') ?? '';
+    return readStringKey(content, 'text', 'message_text', 'messageText') ?? '';
   }
   return '';
 }
 
 function readAttachmentUrls(message: Record<string, unknown>): string[] {
   const urls = [
-    readString(message, 'media_url', 'mediaUrl', 'attachment_url', 'attachmentUrl'),
+    readStringKey(message, 'media_url', 'mediaUrl', 'attachment_url', 'attachmentUrl'),
     ...readObjectArray(message, 'attachments').map(readAttachmentUrl),
     ...readObjectArray(readObject(message, 'content'), 'attachments').map(readAttachmentUrl),
     ...readObjectArray(readObject(message, 'content'), 'images').map(readAttachmentUrl),
@@ -130,15 +131,15 @@ function readAttachmentUrls(message: Record<string, unknown>): string[] {
 }
 
 function readAttachmentUrl(attachment: Record<string, unknown>): string | null {
-  return readString(attachment, 'url', 'media_url', 'mediaUrl', 'resource_url', 'resourceUrl')
-    ?? readString(readObject(attachment, 'payload'), 'url');
+  return readStringKey(attachment, 'url', 'media_url', 'mediaUrl', 'resource_url', 'resourceUrl')
+    ?? readStringKey(readObject(attachment, 'payload'), 'url');
 }
 
 function isEchoMessage(message: Record<string, unknown>): boolean {
   if (message.is_echo === true || message.isEcho === true) return true;
-  const direction = readString(message, 'direction')?.toLowerCase();
+  const direction = readStringKey(message, 'direction')?.toLowerCase();
   if (direction === 'outbound') return true;
-  const senderType = readString(message, 'sender_type', 'senderType', 'sender_role', 'senderRole')?.toLowerCase();
+  const senderType = readStringKey(message, 'sender_type', 'senderType', 'sender_role', 'senderRole')?.toLowerCase();
   return senderType === 'seller' || senderType === 'shop' || senderType === 'agent' || senderType === 'business';
 }
 
@@ -160,12 +161,3 @@ function readObjectArray(value: unknown, ...keys: string[]): Array<Record<string
   return [];
 }
 
-function readString(value: unknown, ...keys: string[]): string | null {
-  if (!isRecord(value)) return null;
-  for (const key of keys) {
-    const next = value[key];
-    if (typeof next === 'string' && next.trim()) return next.trim();
-    if (typeof next === 'number' && Number.isFinite(next)) return String(next);
-  }
-  return null;
-}
