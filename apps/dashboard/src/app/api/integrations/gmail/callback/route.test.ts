@@ -221,23 +221,26 @@ describe('POST /api/integrations/gmail/callback', () => {
     expect(integration.accessToken).toBe('gmail_access_token');
     expect(integration.refreshToken).toBe('gmail_refresh_token');
     expect(integration.tokenExpiresAt).toBeInstanceOf(Date);
-    expect(integration.metadata).toMatchObject({
-      provider: 'gmail',
-      inboundMode: 'hybrid',
-      oauthScopes: [
-        'openid',
-        'email',
-        'https://www.googleapis.com/auth/gmail.send',
-        'https://www.googleapis.com/auth/gmail.readonly',
-      ],
-      gmail: {
-        accountType: 'personal',
-        inboundStatus: 'active',
-        historyId: '12345',
-        watchExpiration: '1783382400000',
-      },
-    });
     expect(integration.id).toBe(existingGmail.id);
+    await vi.waitFor(async () => {
+      const refreshed = await db.integration.findUniqueOrThrow({ where: { id: existingGmail.id } });
+      expect(refreshed.metadata).toMatchObject({
+        provider: 'gmail',
+        inboundMode: 'hybrid',
+        oauthScopes: [
+          'openid',
+          'email',
+          'https://www.googleapis.com/auth/gmail.send',
+          'https://www.googleapis.com/auth/gmail.readonly',
+        ],
+        gmail: {
+          accountType: 'personal',
+          inboundStatus: 'active',
+          historyId: '12345',
+          watchExpiration: '1783382400000',
+        },
+      });
+    });
     expect(forwarding.id).toBe(staleEmail.id);
     expect(forwarding.externalAccountId).toBe('support@old-domain.test');
     await expect(db.organization.findUniqueOrThrow({ where: { id: org!.id } }))
