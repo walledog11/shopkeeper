@@ -14,8 +14,7 @@ lifecycle, not at the tree root.
 | `shared/` | Cross-cutting display helpers (`request-display`, markdown stripping) |
 
 Import from the subdirectory path, for example
-`../message-handlers/inbound/inbound-persistence.js`. After moving a module,
-run `node scripts/fix-message-handler-imports.mjs` if many paths need updating.
+`../message-handlers/inbound/inbound-persistence.js`.
 
 Operator-channel durable state lives in `apps/gateway/src/operator-context/`
 (serialization vs persistence), not under `message-handlers/`.
