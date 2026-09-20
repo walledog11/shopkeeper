@@ -3,7 +3,7 @@ import { resolveGmailAccountType } from '@shopkeeper/email/providers';
 import type { IntegrationFailureCategory } from '@shopkeeper/analytics';
 import { isGmailNativeInboundEnabled } from '@/lib/env';
 import logger from '@/lib/server/logger';
-import { isRecord } from "@shopkeeper/agent/guards";
+import { isRecord } from "@shopkeeper/integrations/guards";
 import {
   fetchProviderWithDeadline,
   isProviderRequestTimeoutError,

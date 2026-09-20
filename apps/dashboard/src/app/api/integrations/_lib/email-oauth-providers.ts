@@ -1,6 +1,6 @@
 import type { EmailIntegrationProvider } from './email-integration';
 
-import { isRecord } from "@shopkeeper/agent/guards";
+import { isRecord } from "@shopkeeper/integrations/guards";
 type ClientIdEnv = 'GOOGLE_CLIENT_ID';
 type ClientSecretEnv = 'GOOGLE_CLIENT_SECRET';
 type EmailOAuthProvider = Extract<EmailIntegrationProvider, 'gmail'>;
