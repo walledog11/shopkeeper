@@ -27,16 +27,16 @@ const {
 }));
 
 vi.mock('@shopkeeper/agent/turn', () => ({ executeAgentTurn: mockExecuteAgentTurn }));
-vi.mock('./billing/write-gate.js', () => ({ assertBillingWriteAllowedForOrgId: mockAssertBilling }));
+vi.mock('@shopkeeper/db/billing-write-gate', () => ({ assertBillingWriteAllowedForOrgId: mockAssertBilling }));
 vi.mock('./clients/clerk-approver.js', () => ({ resolveClerkUserApprover: mockResolveApprover }));
-vi.mock('./message-handlers/agent-turn-deps.js', () => ({ buildGatewayTurnDeps: mockBuildDeps }));
+vi.mock('./message-handlers/operator/agent-turn-deps.js', () => ({ buildGatewayTurnDeps: mockBuildDeps }));
 vi.mock('./clients/telegram-client.js', () => ({
   isTelegramConfigured: vi.fn(() => true),
   sendMessage: telegramSendSpy,
 }));
 
 import { memberOperatorKey, resolveOperatorThread } from '@shopkeeper/agent/internal-thread';
-import { executeOperatorAgentTurn } from './message-handlers/execute-operator-agent-turn.js';
+import { executeOperatorAgentTurn } from './message-handlers/operator/execute-operator-agent-turn.js';
 import { getContext } from './operator-context.js';
 import { resolveOperatorMemberKey } from './operator-identity.js';
 import { notifyOperator } from './operator-notify.js';

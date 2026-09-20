@@ -1,5 +1,14 @@
 export { db } from './client.js';
-export { createMessage, type CreateMessageInput } from './messages.js';
+export {
+  assertBillingWriteAllowed,
+  assertBillingWriteAllowedForOrgId,
+  type BillingWriteOrg,
+} from './billing-write-gate.js';
+export {
+  createMessage,
+  createMessageInTransaction,
+  type CreateMessageInput,
+} from './messages.js';
 export {
   getOrCreateNotesKnowledgeBase,
   NOTES_KB_SINGLETON_KEY,

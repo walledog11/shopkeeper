@@ -1,5 +1,5 @@
-import { db } from '@shopkeeper/db';
-import { ApiError, NotFoundError } from '@/lib/api/errors';
+import { ApiError, NotFoundError } from '@shopkeeper/shared/errors';
+import { db } from './client.js';
 
 const BLOCKED_WRITE_STATUSES = new Set(['past_due', 'canceled']);
 

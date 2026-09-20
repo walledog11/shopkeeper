@@ -25,6 +25,18 @@
     "./customer-labels": {
       "types": "./dist/customer-labels.d.ts",
       "default": "./dist/customer-labels.js"
+    },
+    "./product-analytics": {
+      "types": "./dist/product-analytics.d.ts",
+      "default": "./dist/product-analytics.js"
+    },
+    "./billing": {
+      "types": "./dist/billing.d.ts",
+      "default": "./dist/billing.js"
+    },
+    "./realtime": {
+      "types": "./dist/realtime.d.ts",
+      "default": "./dist/realtime.js"
     }
   },
   "scripts": {
@@ -32,9 +44,11 @@
     "build": "tsc",
     "typecheck": "tsc -p tsconfig.json --noEmit --pretty false",
     "dev": "tsc --watch --preserveWatchOutput",
-    "lint": "cd ../.. && eslint packages/shared/src --max-warnings 0"
+    "lint": "cd ../.. && eslint packages/shared/src --max-warnings 0",
+    "test:unit": "vitest run --config vitest.config.ts"
   },
   "devDependencies": {
-    "typescript": "latest"
+    "typescript": "latest",
+    "vitest": "^4.1.3"
   }
 }

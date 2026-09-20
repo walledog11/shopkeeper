@@ -1,5 +1,6 @@
-import logger from '../logger.js';
+import { parseBillingPriceIds, type BillingPriceIds } from '@shopkeeper/shared/billing';
 import { parseProductAnalyticsConfig } from '@shopkeeper/analytics';
+import logger from '../logger.js';
 import {
   parseGatewayProductionConfig,
   type EmailInboundMode,
@@ -39,13 +40,12 @@ export function getInternalApiSecret(): string {
 // subscription from a Pro one; with neither set, every org resolves to the
 // unknown tier, which is unbounded, so the conversation cap stays inert until
 // the prices actually exist in Stripe.
-export function getBillingPriceIds(): { starter?: string; pro?: string } {
-  const starter = process.env.PRICE_ID_STARTER?.trim();
-  const pro = process.env.PRICE_ID_PRO?.trim();
-  return {
-    ...(starter ? { starter } : {}),
-    ...(pro ? { pro } : {}),
-  };
+export function getBillingPriceIds(): BillingPriceIds {
+  return parseBillingPriceIds({
+    priceIdStarter: process.env.PRICE_ID_STARTER,
+    priceIdPro: process.env.PRICE_ID_PRO,
+    priceIdLegacy: process.env.PRICE_ID,
+  });
 }
 
 export function getGatewayDashboardUrl(): string {

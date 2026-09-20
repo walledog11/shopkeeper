@@ -4,7 +4,7 @@ import { normalizeStoredOrgSettings } from '@shopkeeper/agent/settings';
 import { readRequiredJsonObject } from '@/lib/api/body';
 import { parseAgentVoiceBody } from '@/lib/agent/api/validation';
 import { withOrgRoute } from '@/lib/api/route';
-import { assertBillingWriteAllowed } from '@/lib/billing/write-gate';
+import { assertBillingWriteAllowed } from '@shopkeeper/db/billing-write-gate';
 
 export const GET = withOrgRoute(
   { context: 'Voice proposal GET', errorMessage: 'Failed to fetch voice proposal' },

@@ -15,12 +15,12 @@ const groups = [
     name: 'dashboard billing writes',
     report: 'apps/dashboard/coverage/coverage-summary.json',
     matches: (file) => /\/src\/app\/api\/billing\/(checkout|portal|webhook)\/route\.ts$/.test(file)
-      || file.endsWith('/src/lib/billing/write-gate.ts'),
+      || file.endsWith('/packages/db/billing-write-gate.ts'),
   },
   {
     name: 'gateway billing writes',
     report: 'apps/gateway/coverage/coverage-summary.json',
-    matches: (file) => file.endsWith('/src/billing/write-gate.ts'),
+    matches: (file) => file.endsWith('/packages/db/billing-write-gate.ts'),
   },
   {
     // The token is the only thing standing between an org's SSE stream and any
@@ -28,13 +28,15 @@ const groups = [
     // in the other.
     name: 'dashboard realtime token',
     report: 'apps/dashboard/coverage/coverage-summary.json',
-    matches: (file) => file.endsWith('/src/lib/realtime/token.ts')
+    matches: (file) => file.endsWith('/packages/shared/src/realtime.ts')
+      || file.endsWith('/src/lib/realtime/token.ts')
       || file.endsWith('/src/app/api/realtime/token/route.ts'),
   },
   {
     name: 'gateway realtime subscription',
     report: 'apps/gateway/coverage/coverage-summary.json',
-    matches: (file) => file.endsWith('/src/realtime/token.ts')
+    matches: (file) => file.endsWith('/packages/shared/src/realtime.ts')
+      || file.endsWith('/src/realtime/token.ts')
       || file.endsWith('/src/realtime/sse.ts'),
   },
   {

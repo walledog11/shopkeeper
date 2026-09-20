@@ -12,7 +12,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@shopkeeper/db';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { dispatchMessage } from '@/lib/messaging/dispatch-message';
-import { assertBillingWriteAllowed } from '@/lib/billing/write-gate';
+import { assertBillingWriteAllowed } from '@shopkeeper/db/billing-write-gate';
 import { readRequiredJsonObject } from '@/lib/api/body';
 import { withInternalRoute } from '@/lib/api/internal-route';
 import { parseAutoAckBody } from '@/app/api/messages/_lib/validation';

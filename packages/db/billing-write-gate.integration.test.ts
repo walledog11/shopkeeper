@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it } from 'vitest';
-import { db } from '@shopkeeper/db';
-import { cleanupTestData, createTestOrg } from '@shopkeeper/db/test-helpers';
+import { db } from './client.js';
+import { cleanupTestData, createTestOrg } from './test-helpers.js';
 import {
   assertBillingWriteAllowed,
   assertBillingWriteAllowedForOrgId,
-} from './write-gate';
+} from './billing-write-gate.js';
 
 const orgIds: string[] = [];
 
@@ -13,7 +13,7 @@ afterEach(async () => {
   await Promise.all(orgIds.splice(0).map((orgId) => cleanupTestData(orgId)));
 });
 
-describe('dashboard billing write gate', () => {
+describe('billing write gate', () => {
   it.each([null, 'trialing', 'active'])('allows %s billing', (stripeStatus) => {
     expect(() => assertBillingWriteAllowed({ stripeStatus })).not.toThrow();
   });

@@ -5,10 +5,11 @@ import {
   SenderType,
   Prisma,
   createMessage,
+  createMessageInTransaction,
   type DbChannelType,
 } from '@shopkeeper/db';
-import logger from '../logger.js';
-import { captureInboundMessageProcessed } from '../product-analytics.js';
+import logger from '../../logger.js';
+import { captureInboundMessageProcessed } from '../../product-analytics.js';
 import {
   classifiedEpisodeFields,
   classifiedFilterFields,
@@ -206,32 +207,30 @@ export async function processInboundMessage(
       }
 
       const messageId = randomUUID();
-      const created = await tx.message.create({
-        data: {
-          id: messageId,
-          inboundProcessingPending: true,
-          inboundProcessingData: {
-            summary: synthetic ? null : {
-              threadId: episode.thread.id,
-              organizationId,
-              sourceMessageId: messageId,
-              customerName: customer.name ?? null,
-              channelType,
-              ...(traceId ? { traceId } : {}),
-              ...(precomputed ? { skipSummary: true } : {}),
-            },
-            rolledOverFromThreadId: episode.rolledOverFromThreadId,
+      const created = await createMessageInTransaction(tx, {
+        id: messageId,
+        inboundProcessingPending: true,
+        inboundProcessingData: {
+          summary: synthetic ? null : {
+            threadId: episode.thread.id,
+            organizationId,
+            sourceMessageId: messageId,
+            customerName: customer.name ?? null,
+            channelType,
+            ...(traceId ? { traceId } : {}),
+            ...(precomputed ? { skipSummary: true } : {}),
           },
-
-          threadId: episode.thread.id,
-          organizationId,
-          senderType: synthetic ? SenderType.note : SenderType.customer,
-          contentText: messageText,
-          ...(providerMessageId && { externalMessageId: providerMessageId }),
-          ...(integrationId && { integrationId }),
-          ...(attachments.length > 0 && { attachments }),
-          ...(providerSentAt && { sentAt: providerSentAt }),
+          rolledOverFromThreadId: episode.rolledOverFromThreadId,
         },
+
+        threadId: episode.thread.id,
+        organizationId,
+        senderType: synthetic ? SenderType.note : SenderType.customer,
+        contentText: messageText,
+        ...(providerMessageId && { externalMessageId: providerMessageId }),
+        ...(integrationId && { integrationId }),
+        ...(attachments.length > 0 && { attachments }),
+        ...(providerSentAt && { sentAt: providerSentAt }),
       });
       let requestWriteOutcome: ClassificationWriteOutcome | null = null;
       // A note is not a conversation turn: it neither invalidates a pending

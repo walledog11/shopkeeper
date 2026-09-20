@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 import { getOrCreateOrg } from '@/lib/server/org';
 import { handleApiError, NotFoundError } from '@/lib/api/errors';
 import { assertOrgAdmin } from '@/lib/api/permissions';
-import { assertBillingWriteAllowed } from '@/lib/billing/write-gate';
+import { assertBillingWriteAllowed } from '@shopkeeper/db/billing-write-gate';
 import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit';
 
 type Org = Awaited<ReturnType<typeof getOrCreateOrg>>;

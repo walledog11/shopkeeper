@@ -1,5 +1,5 @@
-import { db, SenderType } from '@shopkeeper/db';
-import logger from '../logger.js';
+import { createMessage, db, SenderType } from '@shopkeeper/db';
+import logger from '../../logger.js';
 
 export type EmailBounceProvider = 'postmark' | 'gmail';
 
@@ -85,13 +85,10 @@ export async function recordEmailBounce(event: EmailBounceEvent): Promise<EmailB
 
   if (updated.count === 0) return 'already_recorded';
 
-  await db.message.create({
-    data: {
-      threadId: message.threadId,
-      organizationId: message.organizationId,
-      senderType: SenderType.note,
-      contentText: noteText(event),
-    },
+  await createMessage({
+    threadId: message.threadId,
+    senderType: SenderType.note,
+    contentText: noteText(event),
   });
 
   logger.warn(

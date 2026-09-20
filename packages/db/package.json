@@ -10,6 +10,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "default": "./dist/client.js"
+    },
     "./merchant-preferences": {
       "types": "./dist/merchant-preferences.d.ts",
       "default": "./dist/merchant-preferences.js"
@@ -17,6 +21,14 @@
     "./test-helpers": {
       "types": "./dist/test-helpers.d.ts",
       "default": "./dist/test-helpers.js"
+    },
+    "./billing-write-gate": {
+      "types": "./dist/billing-write-gate.d.ts",
+      "default": "./dist/billing-write-gate.js"
+    },
+    "./product-analytics-workspace": {
+      "types": "./dist/product-analytics-workspace.d.ts",
+      "default": "./dist/product-analytics-workspace.js"
     }
   },
   "scripts": {

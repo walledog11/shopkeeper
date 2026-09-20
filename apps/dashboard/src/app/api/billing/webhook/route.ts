@@ -4,6 +4,7 @@ import {
   type SubscriptionPlan,
   type SubscriptionStatus,
 } from '@shopkeeper/analytics'
+import { resolveAnalyticsSubscriptionPlan } from '@shopkeeper/shared/billing'
 import stripe from '@/lib/billing/stripe'
 import {
   claimStripeWebhookEvent,
@@ -23,11 +24,8 @@ function analyticsSubscriptionStatus(status: string | null): SubscriptionStatus 
 }
 
 function analyticsSubscriptionPlan(priceId: string | null): SubscriptionPlan | null {
-  if (!priceId) return 'free'
-  const prices = getBillingPriceIds()
-  if (priceId === prices.starter) return 'starter'
-  if (priceId === prices.pro) return 'pro'
-  return null
+  const { starter, pro } = getBillingPriceIds()
+  return resolveAnalyticsSubscriptionPlan(priceId, { starter, pro })
 }
 
 async function captureCommittedSubscriptionTransition(args: {

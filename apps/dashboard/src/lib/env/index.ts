@@ -4,6 +4,11 @@ import {
   readEnv,
   requireEnv,
 } from "./helpers";
+import {
+  billingPriceIdsRecord,
+  parseBillingPriceIds,
+  resolveBillingPlanDisplayName,
+} from '@shopkeeper/shared/billing';
 import { parseBooleanEnv } from "@shopkeeper/shared/env";
 import { parseProductAnalyticsConfig } from '@shopkeeper/analytics';
 
@@ -102,10 +107,13 @@ export function getInstagramOAuthCallbackConfig(): InstagramOAuthCallbackConfig 
 }
 
 export function getBillingPriceIds(): Record<'starter' | 'pro', string | undefined> {
-  return {
-    starter: readEnv('PRICE_ID_STARTER') ?? undefined,
-    pro: readEnv('PRICE_ID_PRO') ?? readEnv('PRICE_ID') ?? undefined,
-  };
+  return billingPriceIdsRecord(
+    parseBillingPriceIds({
+      priceIdStarter: readEnv('PRICE_ID_STARTER'),
+      priceIdPro: readEnv('PRICE_ID_PRO'),
+      priceIdLegacy: readEnv('PRICE_ID'),
+    }),
+  );
 }
 
 export function getBillingTierPriceId(tier: string): string | undefined {
@@ -114,11 +122,8 @@ export function getBillingTierPriceId(tier: string): string | undefined {
 }
 
 export function resolveBillingPlanName(priceId: string | null): string {
-  if (!priceId) return 'Free';
-  const priceIds = getBillingPriceIds();
-  if (priceId === priceIds.starter) return 'Starter';
-  if (priceId === priceIds.pro) return 'Pro';
-  return 'Paid';
+  const { starter, pro } = getBillingPriceIds();
+  return resolveBillingPlanDisplayName(priceId, { starter, pro });
 }
 
 export function getInboundEmailDomain(): string {
