@@ -1,25 +1,86 @@
 "use client";
 
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useClerk, useOrganization, useOrganizationList, useUser } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
-import { useUser } from "@clerk/nextjs";
-import { captureClientProductEvent } from "@/lib/product-events";
+import { useIntegrations } from "@/hooks/useIntegrations";
+import { useOAuthLauncher } from "@/hooks/useOAuthLauncher";
+import { useOperatorChannels } from "@/hooks/useOperatorChannels";
 import {
   isOperationPending,
   operationError,
   useSingleFlightOperation,
+  type OperationState,
 } from "@/hooks/useSingleFlightOperation";
-import type { OAuthOutcome } from "@/lib/integrations/oauth-contract";
-import { STEPS, STORAGE_KEY } from "../_components/model";
+import { getOAuthIntegrationDefinition } from "@/lib/integrations/catalog";
+import {
+  OAUTH_ERROR_MESSAGES,
+  type OAuthOutcome,
+} from "@/lib/integrations/oauth-contract";
+import { isShopifyIntegrationActive } from "@/lib/integrations/shopify-connection";
+import { captureClientProductEvent } from "@/lib/product-events";
+import type { Integration } from "@/types";
+import { RETURN_TO, STEPS, STORAGE_KEY, type OnboardingData } from "../_components/model";
+import { selectOnboardingIntegrations } from "../_lib/onboarding-integrations";
+import {
+  createForwardingEmail,
+  persistOnboardingSettings,
+  simulateShopifyIntegration,
+  updateGmailSupportAddress,
+  type OnboardingSettingsRequest,
+} from "../_lib/onboarding-requests";
 import { useOnboardingDraft } from "./useOnboardingDraft";
-import { useOnboardingExit } from "./useOnboardingExit";
-import { useOnboardingIntegrationState } from "./useOnboardingIntegrationState";
-import { useOnboardingMutations } from "./useOnboardingMutations";
-import { useOnboardingOAuth } from "./useOnboardingOAuth";
-import { useOnboardingOrganization } from "./useOnboardingOrganization";
+import { useShopifyKbSync } from "./useShopifyKbSync";
+
+export type OnboardingOAuthProvider = "gmail" | "shopify";
+export type OnboardingOAuthParameters = {
+  gmail: Record<string, string | undefined>;
+  shopify: { shop: string };
+};
+export type LaunchOnboardingOAuth = <TProvider extends OnboardingOAuthProvider>(
+  provider: TProvider,
+  params: OnboardingOAuthParameters[TProvider],
+) => void;
+
+const SETTINGS_ERROR = "Couldn't save your onboarding settings. Try again.";
+const EMAIL_ERROR = "Couldn't save that support address. Try again.";
+const ORGANIZATION_ERROR = "Couldn't prepare your workspace. Try again.";
 
 function clearDraft() {
   try { localStorage.removeItem(STORAGE_KEY); } catch {}
+}
+
+function resolveBrowserTimezone(): string | undefined {
+  try {
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return timezone?.trim() ? timezone : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function settingsBody(data: OnboardingData, complete: boolean): OnboardingSettingsRequest {
+  const name = data.storeName.trim();
+  const timezone = resolveBrowserTimezone();
+  return {
+    ...(name ? { name } : {}),
+    settings: {
+      autonomyTier: "guarded",
+      autoExecuteMode: "off",
+      ...(timezone ? { digestTimezone: timezone } : {}),
+      ...(complete ? { onboardingCompletedAt: new Date().toISOString() } : {}),
+    },
+  };
+}
+
+async function updateFounderName(
+  user: { firstName: string | null; update: (params: { firstName: string }) => Promise<unknown> } | null | undefined,
+  founderName: string,
+) {
+  const firstName = founderName.trim();
+  if (user && firstName && firstName !== user.firstName) {
+    await user.update({ firstName });
+  }
 }
 
 export function useOnboardingFlow(
@@ -28,32 +89,50 @@ export function useOnboardingFlow(
 ) {
   const router = useRouter();
   const { user } = useUser();
-  const organizationController = useOnboardingOrganization();
+  const { signOut } = useClerk();
+  const { isLoaded: organizationLoaded, organization } = useOrganization();
+  const organizationList = useOrganizationList({ userMemberships: { infinite: false } });
   const {
-    clerkLoaded,
-    ensureOrganization: ensureOrganizationForStore,
-    operation: organizationOperation,
-    organization,
+    createOrganization,
+    isLoaded: organizationListLoaded,
     setActive,
     userMemberships,
-  } = organizationController;
+  } = organizationList;
+  const clerkLoaded = organizationLoaded && organizationListLoaded;
+
+  const { run: runOrganization, state: organizationOperation } = useSingleFlightOperation(async (storeName: string) => {
+    if (organization) return true;
+    if (!clerkLoaded || !createOrganization || !setActive) return false;
+    const name = storeName.trim();
+    if (!name) return false;
+    const created = await createOrganization({ name });
+    await setActive({ organization: created.id });
+    return true;
+  }, ORGANIZATION_ERROR);
+
+  const ensureOrganization = useCallback(async (storeName: string): Promise<boolean> => {
+    if (organization) return true;
+    if (!clerkLoaded) return false;
+    try {
+      return await runOrganization(storeName);
+    } catch {
+      return false;
+    }
+  }, [clerkLoaded, organization, runOrganization]);
+
   const organizationReady = Boolean(organization)
     || (organizationOperation.status === "succeeded" && organizationOperation.result);
-  const integrationState = useOnboardingIntegrationState(organizationReady);
-  const {
-    emailReady: hasEmailReady,
-    forwarding,
-    gmail,
-    hasMessaging,
-    hasShopify,
-    imessageStatus,
-    kbSync,
-    preferredEmail,
-    refresh: refreshIntegrations,
-    refreshImessage,
-    shopify: shopifyRow,
-  } = integrationState;
-  const savedEmail = (preferredEmail?.fromEmail ?? preferredEmail?.externalAccountId)?.trim();
+
+  const { data: integrationRows, mutate: refreshIntegrations } = useIntegrations({
+    enabled: organizationReady,
+    refreshInterval: 3000,
+  });
+  const selected = useMemo(() => selectOnboardingIntegrations(integrationRows ?? []), [integrationRows]);
+  const { anyBound: hasMessaging } = useOperatorChannels(organizationReady);
+  const hasShopify = isShopifyIntegrationActive(selected.shopify);
+  const kbSync = useShopifyKbSync(hasShopify ? selected.shopify?.id : undefined);
+
+  const savedEmail = (selected.preferredEmail?.fromEmail ?? selected.preferredEmail?.externalAccountId)?.trim();
   const { advance, back: draftBack, data, idx, update } = useOnboardingDraft({
     founderName: user?.firstName,
     organizationName: organization?.name,
@@ -61,31 +140,134 @@ export function useOnboardingFlow(
     savedEmail,
   });
 
-  const ensureOrganization = useCallback(
-    () => ensureOrganizationForStore(data.storeName),
-    [data.storeName, ensureOrganizationForStore],
+  const ensureOrgForDraft = useCallback(
+    () => ensureOrganization(data.storeName),
+    [data.storeName, ensureOrganization],
   );
-  const mutations = useOnboardingMutations({
-    data,
-    ensureOrganization,
-    forwarding,
-    gmail,
-    refreshIntegrations,
-    update,
-    user,
-  });
-  const oauth = useOnboardingOAuth({
-    ensureOrganization,
+
+  const { run: runSettings, state: settingsState } = useSingleFlightOperation(async () => {
+    if (!await ensureOrgForDraft()) return false;
+    await persistOnboardingSettings(settingsBody(data, false));
+    await updateFounderName(user, data.founderName);
+    return true;
+  }, SETTINGS_ERROR);
+
+  const { run: runCompletion, state: completionState } = useSingleFlightOperation(async () => {
+    if (!await ensureOrgForDraft()) return false;
+    await persistOnboardingSettings(settingsBody(data, true));
+    await updateFounderName(user, data.founderName);
+    return true;
+  }, SETTINGS_ERROR);
+
+  const { run: runEmail, state: emailState } = useSingleFlightOperation(async (
+    value: string,
+    provider: "gmail" | "postmark",
+  ) => {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized || !await ensureOrgForDraft()) return false;
+    void captureClientProductEvent({ event: "integration_connection_started", platform: "email" });
+
+    const integration = provider === "gmail" ? selected.gmail : selected.forwarding;
+    if (provider === "gmail") {
+      if (!integration) throw new Error("Reconnect Gmail before updating its support address.");
+      await updateGmailSupportAddress(integration.id, normalized);
+    } else {
+      await createForwardingEmail(normalized);
+    }
+
+    update({
+      primaryEmail: normalized,
+      ...(provider === "gmail"
+        ? { gmailEmail: normalized }
+        : { forwardingEmail: normalized }),
+    });
+    await refreshIntegrations();
+    return true;
+  }, (error) => error instanceof Error && error.message.startsWith("Reconnect Gmail")
+    ? error.message
+    : EMAIL_ERROR);
+
+  const { run: runShopifySimulation, state: shopifySimulationState } = useSingleFlightOperation(async () => {
+    if (!await ensureOrgForDraft()) return false;
+    await simulateShopifyIntegration();
+    await refreshIntegrations();
+    return true;
+  }, "Couldn't connect the demo store. Try again.");
+
+  const [settledOAuthState, setSettledOAuthState] = useState<OperationState>({ status: "idle" });
+  const { launch, pendingProvider } = useOAuthLauncher({
     outcome: oauthOutcome,
-    refreshIntegrations,
-  });
-  const { exit, state: exitState } = useOnboardingExit({
-    activeOrganizationId: organization?.id,
-    memberships: userMemberships?.data,
-    setActive,
+    onOutcome: (nextOutcome) => {
+      if (nextOutcome.status === "failed") {
+        setSettledOAuthState({
+          status: "failed",
+          error: nextOutcome,
+          message: OAUTH_ERROR_MESSAGES[nextOutcome.error],
+        });
+        return;
+      }
+      setSettledOAuthState({ status: "succeeded", result: undefined });
+      void refreshIntegrations();
+    },
   });
 
+  const launchOAuth = useCallback<LaunchOnboardingOAuth>((provider, params) => {
+    setSettledOAuthState({ status: "idle" });
+    const definition = getOAuthIntegrationDefinition(provider);
+    void launch({
+      definition,
+      params,
+      readinessGuard: ensureOrgForDraft,
+      returnTo: RETURN_TO,
+      onClosed: () => { void refreshIntegrations(); },
+      onLaunchError: (error) => {
+        setSettledOAuthState({
+          status: "failed",
+          error,
+          message: OAUTH_ERROR_MESSAGES.provider_unavailable,
+        });
+      },
+    });
+  }, [ensureOrgForDraft, launch, refreshIntegrations]);
+
+  const oauthState: OperationState = pendingProvider
+    ? { status: "pending" }
+    : settledOAuthState;
+
+  const otherMembership = userMemberships?.data?.find(
+    membership => membership.organization.id !== organization?.id,
+  );
+  const { run: runWorkspaceSwitch, state: workspaceSwitchState } = useSingleFlightOperation(async (organizationId: string) => {
+    if (!setActive) throw new Error("Workspace switching is not ready.");
+    await setActive({ organization: organizationId });
+    clearDraft();
+    router.push("/dashboard");
+  }, "Couldn't switch workspaces. Try again.");
+  const { run: runSignOut, state: signOutState } = useSingleFlightOperation(async () => {
+    await signOut({ redirectUrl: "/login" });
+    clearDraft();
+  }, "Couldn't sign you out. Try again.");
+
+  const exitAction = useCallback(async () => {
+    if (otherMembership && setActive) {
+      try { await runWorkspaceSwitch(otherMembership.organization.id); } catch {}
+      return;
+    }
+    try { await runSignOut(); } catch {}
+  }, [otherMembership, runSignOut, runWorkspaceSwitch, setActive]);
+
+  const exit = useMemo(() => ({
+    label: otherMembership && setActive
+      ? `Back to ${otherMembership.organization.name}`
+      : "Sign out",
+    action: exitAction,
+  }), [exitAction, otherMembership, setActive]);
+
+  const exitState = otherMembership && setActive ? workspaceSwitchState : signOutState;
+
   const stepId = STEPS[idx].id;
+  const hasEmailReady = selected.emailReady;
+
   const canContinue = useMemo(() => {
     if (stepId === "intro") {
       return data.storeName.trim().length > 0 && data.founderName.trim().length > 0;
@@ -96,7 +278,7 @@ export function useOnboardingFlow(
 
   const { run: runNext, state: nextState } = useSingleFlightOperation(async () => {
     if (!canContinue) return false;
-    if (stepId === "intro" && !await mutations.saveSettings()) return false;
+    if (stepId === "intro" && !await runSettings().catch(() => false)) return false;
 
     const analyticsStep = stepId === "intro" ? "store" : stepId;
     const completedOptionalStep = analyticsStep !== "email" || hasEmailReady;
@@ -108,7 +290,7 @@ export function useOnboardingFlow(
   }, "Couldn't continue onboarding. Try again.");
 
   const { run: runFinish, state: finishState } = useSingleFlightOperation(async () => {
-    if (!hasShopify || !await mutations.completeOnboarding()) return false;
+    if (!hasShopify || !await runCompletion().catch(() => false)) return false;
     void captureClientProductEvent({ event: "onboarding_step_completed", step: "plan" });
     clearDraft();
     router.push("/dashboard");
@@ -117,102 +299,100 @@ export function useOnboardingFlow(
   }, "Couldn't finish onboarding. Try again.");
 
   const { run: runSimulation, state: simulationState } = useSingleFlightOperation(async () => {
-    if (!await mutations.simulateShopify()) return false;
+    if (!await runShopifySimulation().catch(() => false)) return false;
     advance();
     return true;
   }, "Couldn't connect the demo store. Try again.");
 
   const pending = [
     organizationOperation,
-    mutations.states.settings,
-    mutations.states.completion,
-    mutations.states.email,
-    mutations.states.shopifySimulation,
+    settingsState,
+    completionState,
+    emailState,
+    shopifySimulationState,
     nextState,
     finishState,
     simulationState,
-    oauth.state,
+    oauthState,
     exitState,
   ].some(isOperationPending);
 
   const next = useCallback(async () => {
     try { await runNext(); } catch {}
   }, [runNext]);
+
   const finish = useCallback(async () => {
     try { await runFinish(); } catch {}
   }, [runFinish]);
+
   const simulateShopify = useCallback(async (): Promise<boolean> => {
     try { return await runSimulation(); } catch { return false; }
   }, [runSimulation]);
+
+  const saveEmail = useCallback(async (value: string, provider: "gmail" | "postmark") => {
+    try { return await runEmail(value, provider); } catch { return false; }
+  }, [runEmail]);
+
   const back = useCallback(() => {
     if (!pending) draftBack();
   }, [draftBack, pending]);
 
   useEffect(() => {
     if (stepId !== "connect" && stepId !== "email") return;
-    void ensureOrganization();
-  }, [ensureOrganization, stepId]);
+    void ensureOrgForDraft();
+  }, [ensureOrgForDraft, stepId]);
 
   const relevantErrors = stepId === "intro"
-    ? [mutations.states.settings, organizationOperation, exitState]
+    ? [settingsState, organizationOperation, exitState]
     : stepId === "shopify"
-      ? [oauth.state, mutations.states.shopifySimulation, organizationOperation, exitState]
+      ? [oauthState, shopifySimulationState, organizationOperation, exitState]
       : stepId === "email"
-        ? [mutations.states.email, oauth.state, organizationOperation, exitState]
+        ? [emailState, oauthState, organizationOperation, exitState]
         : stepId === "plan"
-          ? [mutations.states.completion, organizationOperation, exitState]
+          ? [completionState, organizationOperation, exitState]
           : [organizationOperation, exitState];
   const error = relevantErrors.map(operationError).find(Boolean) ?? null;
 
   const orgPending = isOperationPending(organizationOperation);
-  const emailSaving = isOperationPending(mutations.states.email);
-  const shopifySimulating = isOperationPending(simulationState)
-    || isOperationPending(mutations.states.shopifySimulation);
-  const saving = isOperationPending(nextState)
-    || isOperationPending(finishState)
-    || isOperationPending(mutations.states.settings)
-    || isOperationPending(mutations.states.completion)
-    || orgPending;
 
   return {
     data,
-    emailIntegrations: { forwarding, gmail },
-    messaging: {
-      imessageStatus,
-      refreshImessage,
-    },
+    emailIntegrations: { forwarding: selected.forwarding, gmail: selected.gmail },
     exit,
+    idx,
     kbSync,
+    shopifyRow: selected.shopify as Integration | undefined,
     handlers: {
       back,
-      ensureOrganization,
+      ensureOrganization: ensureOrgForDraft,
       finish,
-      launchOAuth: oauth.launchOAuth,
+      launchOAuth,
       next,
-      saveEmailIntegration: mutations.saveEmail,
+      saveEmailIntegration: saveEmail,
       simulateShopify,
       update,
     },
-    idx,
-    shopifyRow,
     status: {
       canContinue,
       controlsPending: pending,
-      emailSaving,
+      emailSaving: isOperationPending(emailState),
       error,
       exitPending: isOperationPending(exitState),
       hasEmailReady,
       hasMessaging,
       hasShopify,
-      oauthPendingProvider: oauth.pendingProvider,
+      oauthPendingProvider: pendingProvider,
       orgEnsureFailed: organizationOperation.status === "failed",
       orgEnsuring: !clerkLoaded || orgPending,
       orgReady: organizationReady && !orgPending,
-      saving,
-      shopifySimulating,
+      saving: isOperationPending(nextState)
+        || isOperationPending(finishState)
+        || isOperationPending(settingsState)
+        || isOperationPending(completionState)
+        || orgPending,
+      shopifySimulating: isOperationPending(simulationState)
+        || isOperationPending(shopifySimulationState),
     },
     step: STEPS[idx],
   };
 }
-
-export type OnboardingFlow = ReturnType<typeof useOnboardingFlow>;

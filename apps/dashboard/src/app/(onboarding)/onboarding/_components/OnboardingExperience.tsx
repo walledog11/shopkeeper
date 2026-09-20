@@ -7,10 +7,7 @@ import { StepShopify } from "./step-shopify";
 import { StepConnect } from "./step-connect";
 import { StepEmail } from "./step-email";
 import { StepPlan } from "./step-plan";
-import {
-  useOnboardingFlow,
-  type OnboardingFlow,
-} from "../_hooks/useOnboardingFlow";
+import { useOnboardingFlow } from "../_hooks/useOnboardingFlow";
 import type { OAuthOutcome } from "@/lib/integrations/oauth-contract";
 
 export interface OnboardingChannelConfig {
@@ -27,23 +24,12 @@ export function OnboardingExperience({
   oauthOutcome: OAuthOutcome | null;
 }) {
   const flow = useOnboardingFlow(pinnedStepIndex, oauthOutcome);
-  return <OnboardingExperienceView flow={flow} channels={channels} />;
-}
-
-function OnboardingExperienceView({
-  flow,
-  channels,
-}: {
-  flow: OnboardingFlow;
-  channels: OnboardingChannelConfig;
-}) {
   const {
     data,
     emailIntegrations,
     exit,
     idx,
     kbSync,
-    messaging,
     shopifyRow,
     status,
     step,
@@ -53,8 +39,6 @@ function OnboardingExperienceView({
 
   return (
     <div className="onboarding-shell relative isolate flex min-h-screen w-full items-center justify-center overflow-hidden bg-[#efe9df] px-4 py-6 text-foreground sm:px-6 sm:py-10">
-      {/* Dawn-sky scenery behind the card — the same placeholder photography as
-          the marketing footer, masked so it fades up into the paper. */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-[62vh] [mask-image:linear-gradient(180deg,transparent_0%,black_55%)]"
@@ -72,76 +56,72 @@ function OnboardingExperienceView({
       <div className="flex max-h-[calc(100dvh-3rem)] w-full max-w-[900px] flex-col overflow-hidden rounded-[28px] border border-[rgba(255,255,255,0.55)] bg-background/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_1px_2px_rgba(43,33,24,0.05),0_28px_70px_-28px_rgba(43,33,24,0.32)] backdrop-blur-2xl sm:max-h-[calc(100dvh-5rem)]">
         <main className="flex flex-1 flex-col overflow-y-auto px-4 py-6 sm:px-7">
           <div key={step.id} className="m-auto w-full max-w-[640px] animate-[ob-fade-in_360ms_ease]">
-          {status.error && (
-            <div
-              role="alert"
-              className="mx-auto mb-4 max-w-[560px] rounded-xl border border-destructive/20 bg-destructive/[0.06] px-4 py-3 text-center text-[13px] text-destructive"
-            >
-              {status.error}
-            </div>
-          )}
-          {stepId === "intro" && (
-            <StepIntro
-              data={data}
-              onSubmit={() => { void handlers.next(); }}
-              update={handlers.update}
-            />
-          )}
-          {stepId === "shopify" && (
-            <StepShopify
-              data={data}
-              connected={status.hasShopify}
-              shopifyRow={shopifyRow}
-              kbSync={kbSync}
-              onOAuth={handlers.launchOAuth}
-              onSimulate={handlers.simulateShopify}
-              simulatorEnabled={channels.shopifySimulatorEnabled}
-              simulating={status.shopifySimulating}
-              oauthPending={status.oauthPendingProvider === "shopify"}
-            />
-          )}
-          {stepId === "connect" && (
-            <StepConnect
-              imessageStatus={messaging.imessageStatus}
-              onRefreshImessage={messaging.refreshImessage}
-              imessageHandle={channels.imessageHandle}
-            />
-          )}
-          {stepId === "email" && (
-            <StepEmail
-              data={data}
-              update={handlers.update}
-              emailConnected={status.hasEmailReady}
-              forwardingIntegration={emailIntegrations.forwarding}
-              gmailIntegration={emailIntegrations.gmail}
-              orgReady={status.orgReady}
-              orgLoading={status.orgEnsuring}
-              orgError={status.orgEnsureFailed}
-              onRetryOrg={() => { void handlers.ensureOrganization(); }}
-              emailSaving={status.emailSaving}
-              oauthPending={status.oauthPendingProvider === "gmail"}
-              onSaveForwarding={(email) => {
-                void handlers.saveEmailIntegration(email, "postmark");
-              }}
-              onSaveGmail={(email) => {
-                void handlers.saveEmailIntegration(email, "gmail");
-              }}
-              onOAuth={handlers.launchOAuth}
-            />
-          )}
-          {stepId === "plan" && (
-            <StepPlan
-              data={data}
-              hasEmail={status.hasEmailReady}
-              hasMessaging={status.hasMessaging}
-              hasShopify={status.hasShopify}
-              onStart={handlers.finish}
-              onBack={handlers.back}
-              saving={status.saving}
-            />
-          )}
-        </div>
-      </main>
+            {status.error && (
+              <div
+                role="alert"
+                className="mx-auto mb-4 max-w-[560px] rounded-xl border border-destructive/20 bg-destructive/[0.06] px-4 py-3 text-center text-[13px] text-destructive"
+              >
+                {status.error}
+              </div>
+            )}
+            {stepId === "intro" && (
+              <StepIntro
+                data={data}
+                onSubmit={() => { void handlers.next(); }}
+                update={handlers.update}
+              />
+            )}
+            {stepId === "shopify" && (
+              <StepShopify
+                data={data}
+                connected={status.hasShopify}
+                shopifyRow={shopifyRow}
+                kbSync={kbSync}
+                onOAuth={handlers.launchOAuth}
+                onSimulate={handlers.simulateShopify}
+                simulatorEnabled={channels.shopifySimulatorEnabled}
+                simulating={status.shopifySimulating}
+                oauthPending={status.oauthPendingProvider === "shopify"}
+              />
+            )}
+            {stepId === "connect" && (
+              <StepConnect imessageHandle={channels.imessageHandle} />
+            )}
+            {stepId === "email" && (
+              <StepEmail
+                data={data}
+                update={handlers.update}
+                emailConnected={status.hasEmailReady}
+                forwardingIntegration={emailIntegrations.forwarding}
+                gmailIntegration={emailIntegrations.gmail}
+                orgReady={status.orgReady}
+                orgLoading={status.orgEnsuring}
+                orgError={status.orgEnsureFailed}
+                onRetryOrg={() => { void handlers.ensureOrganization(); }}
+                emailSaving={status.emailSaving}
+                oauthPending={status.oauthPendingProvider === "gmail"}
+                onSaveForwarding={(email) => {
+                  void handlers.saveEmailIntegration(email, "postmark");
+                }}
+                onSaveGmail={(email) => {
+                  void handlers.saveEmailIntegration(email, "gmail");
+                }}
+                onOAuth={handlers.launchOAuth}
+              />
+            )}
+            {stepId === "plan" && (
+              <StepPlan
+                data={data}
+                hasEmail={status.hasEmailReady}
+                hasMessaging={status.hasMessaging}
+                hasShopify={status.hasShopify}
+                onStart={handlers.finish}
+                onBack={handlers.back}
+                saving={status.saving}
+              />
+            )}
+          </div>
+        </main>
 
         {stepId !== "plan" && (
           <Footer

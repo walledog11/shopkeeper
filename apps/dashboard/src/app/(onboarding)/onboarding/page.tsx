@@ -9,7 +9,7 @@ import { STEPS } from "./_components/model";
 import { parseOAuthOutcome } from "@/lib/integrations/oauth-contract";
 
 function parseResumeStep(value: string | string[] | undefined): OnboardingResumeStep | null {
-  if (value === "shopify" || value === "email" || value === "plan") return value;
+  if (value === "shopify" || value === "email" || value === "connect" || value === "plan") return value;
   return null;
 }
 

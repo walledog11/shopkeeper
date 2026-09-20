@@ -10,6 +10,7 @@ import { AgentPanelProvider } from "../_components/agent-panel/AgentPanelContext
 import { RightRailProvider } from "../_components/right-rail/RightRailContext";
 import DashboardRightRail from "../_components/right-rail/DashboardRightRail";
 import RealtimeProvider from "@/components/realtime/RealtimeProvider";
+import { auth } from "@clerk/nextjs/server";
 import { getOrCreateOrg } from "@/lib/server/org";
 import { getIncompleteOnboardingRedirect } from "@/lib/server/onboarding-guard";
 import { resolveAgentSettings } from "@shopkeeper/agent/settings";
@@ -25,8 +26,9 @@ import {
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const { userId } = await auth();
   const org = await getOrCreateOrg();
-  const incompleteOnboardingPath = await getIncompleteOnboardingRedirect(org.id, org.settings);
+  const incompleteOnboardingPath = await getIncompleteOnboardingRedirect(org.id, org.settings, userId);
   if (incompleteOnboardingPath) redirect(incompleteOnboardingPath);
 
   const settings = resolveAgentSettings(org.settings as Partial<OrgSettings> | null);

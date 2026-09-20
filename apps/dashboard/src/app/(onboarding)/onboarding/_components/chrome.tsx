@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight, Loader2, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/ui/cn";
-import type { StepId } from "./model";
+import { STEPS, type StepId } from "./model";
 
 export function Footer({ idx, stepId, canContinue, hasEmail, hasMessaging, saving, onNext, onBack, exitLabel, onExit }: {
   idx: number;
@@ -38,6 +38,8 @@ export function Footer({ idx, stepId, canContinue, hasEmail, hasMessaging, savin
           </Button>
         )}
         <span className="flex-1" />
+        <StepRail idx={idx} />
+        <span className="flex-1" />
         <Button
           onClick={onNext}
           disabled={!canContinue || saving}
@@ -52,6 +54,28 @@ export function Footer({ idx, stepId, canContinue, hasEmail, hasMessaging, savin
         </Button>
       </div>
     </footer>
+  );
+}
+
+function StepRail({ idx }: { idx: number }) {
+  return (
+    <div className="hidden items-center gap-1.5 sm:flex">
+      <span className="sr-only" role="status">Step {idx + 1} of {STEPS.length}</span>
+      {STEPS.map((step, stepIdx) => (
+        <span
+          key={step.id}
+          aria-hidden
+          className={cn(
+            "h-1 rounded-full transition-all duration-300",
+            stepIdx === idx
+              ? "w-5 bg-foreground"
+              : stepIdx < idx
+                ? "w-1.5 bg-foreground/45"
+                : "w-1.5 bg-foreground/[0.12]",
+          )}
+        />
+      ))}
+    </div>
   );
 }
 

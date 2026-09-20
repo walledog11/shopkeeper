@@ -5,6 +5,16 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StepConnect } from "./step-connect";
 
+vi.mock("@/hooks/useOperatorChannels", () => ({
+  useOperatorChannels: () => ({
+    imessage: { connected: false, handles: [], lineConnected: true },
+    telegram: { connected: false, chats: [], botUsername: null },
+    refreshImessage: () => undefined,
+    refreshTelegram: () => undefined,
+    anyBound: false,
+  }),
+}));
+
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 describe("StepConnect interactions", () => {
@@ -30,11 +40,7 @@ describe("StepConnect interactions", () => {
     }), { status: 200 })));
 
     await act(async () => root.render(
-      <StepConnect
-        imessageHandle="+15551234567"
-        imessageStatus={undefined}
-        onRefreshImessage={() => undefined}
-      />,
+      <StepConnect imessageHandle="+15551234567" />,
     ));
 
     const button = Array.from(container.querySelectorAll("button"))

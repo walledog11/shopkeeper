@@ -35,23 +35,33 @@ describe("resolveOnboardingRedirectStep", () => {
       onboardingCompletedAt: "2026-06-16T00:00:00.000Z",
       hasShopify: false,
       hasEmail: false,
+      hasPhone: false,
     })).toBeNull()
   })
 
-  it("prioritizes shopify before email", () => {
+  it("prioritizes shopify, email, connect, then plan", () => {
     expect(resolveOnboardingRedirectStep({
       hasShopify: false,
       hasEmail: false,
+      hasPhone: false,
     })).toBe("shopify")
 
     expect(resolveOnboardingRedirectStep({
       hasShopify: true,
       hasEmail: false,
+      hasPhone: false,
     })).toBe("email")
 
     expect(resolveOnboardingRedirectStep({
       hasShopify: true,
       hasEmail: true,
+      hasPhone: false,
+    })).toBe("connect")
+
+    expect(resolveOnboardingRedirectStep({
+      hasShopify: true,
+      hasEmail: true,
+      hasPhone: true,
     })).toBe("plan")
   })
 })

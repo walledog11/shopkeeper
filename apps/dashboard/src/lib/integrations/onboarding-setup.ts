@@ -8,7 +8,7 @@ export type EmailIntegrationLike = {
   metadata?: unknown | null
 } | null | undefined
 
-export type OnboardingResumeStep = "shopify" | "email" | "plan"
+export type OnboardingResumeStep = "shopify" | "email" | "connect" | "plan"
 
 export function isEmailIntegrationConfigured(integration: EmailIntegrationLike): boolean {
   if (!integration || integration.platform !== "email") return false
@@ -20,10 +20,12 @@ export function resolveOnboardingRedirectStep(args: {
   onboardingCompletedAt?: string
   hasShopify: boolean
   hasEmail: boolean
+  hasPhone: boolean
 }): OnboardingResumeStep | null {
   if (args.onboardingCompletedAt) return null
   if (!args.hasShopify) return "shopify"
   if (!args.hasEmail) return "email"
+  if (!args.hasPhone) return "connect"
   return "plan"
 }
 

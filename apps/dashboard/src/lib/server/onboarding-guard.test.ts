@@ -7,7 +7,6 @@ vi.mock('@clerk/nextjs/server', () => ({
   clerkClient: vi.fn(),
 }));
 
-// revalidatePath needs a Next request store that vitest route tests do not provide.
 vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
   revalidateTag: vi.fn(),
@@ -18,12 +17,14 @@ import { getIncompleteOnboardingRedirect } from './onboarding-guard';
 import { POST as createIntegration } from '@/app/api/integrations/route';
 import { PATCH as patchOrg } from '@/app/api/org/route';
 
+const USER_ID = 'usr_test';
+
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
 
 beforeEach(async () => {
   org = await createTestOrg();
   vi.mocked(auth).mockResolvedValue({
-    userId: 'usr_test',
+    userId: USER_ID,
     orgId: org.clerkOrgId,
     orgRole: 'org:admin',
   } as ReturnType<typeof auth> extends Promise<infer T> ? T : never);
@@ -42,6 +43,30 @@ async function connectShopify() {
   });
 }
 
+async function connectEmail() {
+  return createTestIntegration(org.id, {
+    platform: ChannelType.email,
+    externalAccountId: 'support@store.com',
+    fromEmail: 'support@store.com',
+  });
+}
+
+async function bindPhone() {
+  const member = await db.orgMember.upsert({
+    where: { organizationId_clerkUserId: { organizationId: org.id, clerkUserId: USER_ID } },
+    create: { organizationId: org.id, clerkUserId: USER_ID },
+    update: {},
+    select: { id: true },
+  });
+  return db.orgMemberImessageBinding.create({
+    data: {
+      orgMemberId: member.id,
+      senderId: `+1555${Date.now()}`,
+      spaceId: 'space_test',
+    },
+  });
+}
+
 async function reloadOrgSettings() {
   const row = await db.organization.findUniqueOrThrow({ where: { id: org.id } });
   return row.settings;
@@ -49,7 +74,7 @@ async function reloadOrgSettings() {
 
 describe('getIncompleteOnboardingRedirect', () => {
   it('sends a fresh org to the Shopify step first', async () => {
-    await expect(getIncompleteOnboardingRedirect(org.id, org.settings)).resolves.toBe(
+    await expect(getIncompleteOnboardingRedirect(org.id, org.settings, USER_ID)).resolves.toBe(
       '/onboarding?step=shopify',
     );
   });
@@ -57,20 +82,35 @@ describe('getIncompleteOnboardingRedirect', () => {
   it('sends an org with Shopify but no email to the email step', async () => {
     await connectShopify();
 
-    await expect(getIncompleteOnboardingRedirect(org.id, org.settings)).resolves.toBe(
+    await expect(getIncompleteOnboardingRedirect(org.id, org.settings, USER_ID)).resolves.toBe(
       '/onboarding?step=email',
+    );
+  });
+
+  it('sends a store-and-inbox org with no phone to the connect step', async () => {
+    await connectShopify();
+    await connectEmail();
+
+    await expect(getIncompleteOnboardingRedirect(org.id, org.settings, USER_ID)).resolves.toBe(
+      '/onboarding?step=connect',
     );
   });
 
   it('sends a fully connected but uncompleted org to the plan step', async () => {
     await connectShopify();
-    await createTestIntegration(org.id, {
-      platform: ChannelType.email,
-      externalAccountId: 'support@store.com',
-      fromEmail: 'support@store.com',
-    });
+    await connectEmail();
+    await bindPhone();
 
-    await expect(getIncompleteOnboardingRedirect(org.id, org.settings)).resolves.toBe(
+    await expect(getIncompleteOnboardingRedirect(org.id, org.settings, USER_ID)).resolves.toBe(
+      '/onboarding?step=plan',
+    );
+  });
+
+  it('skips the connect step when there is no signed-in member', async () => {
+    await connectShopify();
+    await connectEmail();
+
+    await expect(getIncompleteOnboardingRedirect(org.id, org.settings, null)).resolves.toBe(
       '/onboarding?step=plan',
     );
   });
@@ -86,7 +126,7 @@ describe('getIncompleteOnboardingRedirect', () => {
       },
     });
 
-    await expect(getIncompleteOnboardingRedirect(org.id, org.settings)).resolves.toBe(
+    await expect(getIncompleteOnboardingRedirect(org.id, org.settings, USER_ID)).resolves.toBe(
       '/onboarding?step=shopify',
     );
   });
@@ -96,12 +136,10 @@ describe('onboarding finish contract', () => {
   it('saves the support email and clears the redirect once onboarding completes', async () => {
     await connectShopify();
 
-    // Before finishing, the guard pins the merchant to the email step.
-    await expect(getIncompleteOnboardingRedirect(org.id, org.settings)).resolves.toBe(
+    await expect(getIncompleteOnboardingRedirect(org.id, org.settings, USER_ID)).resolves.toBe(
       '/onboarding?step=email',
     );
 
-    // finish() persists the forwarding address via POST /api/integrations.
     const saveRes = await createIntegration(new Request('http://localhost/api/integrations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -116,12 +154,10 @@ describe('onboarding finish contract', () => {
     expect(emailRows[0].externalAccountId).toBe('support@store.com');
     expect(emailRows[0].metadata).toMatchObject({ provider: 'postmark' });
 
-    // With Shopify + email connected, the guard now routes to the plan step.
-    await expect(getIncompleteOnboardingRedirect(org.id, await reloadOrgSettings())).resolves.toBe(
-      '/onboarding?step=plan',
+    await expect(getIncompleteOnboardingRedirect(org.id, await reloadOrgSettings(), USER_ID)).resolves.toBe(
+      '/onboarding?step=connect',
     );
 
-    // finish() then stamps settings.onboardingCompletedAt via PATCH /api/org.
     const completedAt = new Date().toISOString();
     const patchRes = await patchOrg(new Request('http://localhost/api/org', {
       method: 'PATCH',
@@ -133,8 +169,7 @@ describe('onboarding finish contract', () => {
     const saved = await reloadOrgSettings();
     expect(saved).toMatchObject({ onboardingCompletedAt: completedAt });
 
-    // Onboarding is complete — the merchant is no longer redirected.
-    await expect(getIncompleteOnboardingRedirect(org.id, saved)).resolves.toBeNull();
+    await expect(getIncompleteOnboardingRedirect(org.id, saved, USER_ID)).resolves.toBeNull();
   });
 
   it('keeps redirecting when the completion flag is set without the integrations', async () => {
@@ -145,8 +180,6 @@ describe('onboarding finish contract', () => {
     }));
     expect(patchRes.status).toBe(200);
 
-    // The flag short-circuits the guard by design, so once stamped the merchant
-    // is trusted as complete even if integrations were later removed.
-    await expect(getIncompleteOnboardingRedirect(org.id, await reloadOrgSettings())).resolves.toBeNull();
+    await expect(getIncompleteOnboardingRedirect(org.id, await reloadOrgSettings(), USER_ID)).resolves.toBeNull();
   });
 });

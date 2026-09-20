@@ -6,7 +6,7 @@ import { cn } from "@/lib/ui/cn";
 import type { Integration } from "@/types";
 import { Accent, Headline, Lede } from "./primitives";
 import type { KbSyncViewModel, OnboardingData } from "./model";
-import type { LaunchOnboardingOAuth } from "../_hooks/useOnboardingOAuth";
+import type { LaunchOnboardingOAuth } from "../_hooks/useOnboardingFlow";
 
 export function StepShopify({
   data,
@@ -32,6 +32,7 @@ export function StepShopify({
   const [shop, setShop] = useState("");
   const [simulatorError, setSimulatorError] = useState(false);
   const suggestion = (data.storeName || "your-store").toLowerCase().replace(/\s+/g, "");
+  const storeLabel = data.storeName.trim() || "your store name";
   const simulated = isSimulated(shopifyRow?.metadata);
 
   function launch() {
@@ -108,6 +109,26 @@ export function StepShopify({
             <p className="mt-1.5 text-[12.5px] text-foreground/45">
               Find your <span className="font-medium text-foreground/60">.myshopify.com</span> address in your Shopify admin URL.
             </p>
+            <details className="mt-3">
+              <summary className="cursor-pointer text-[12.5px] font-medium text-foreground/55 hover:text-foreground/75">
+                Can&apos;t find your store URL?
+              </summary>
+              <ul className="mt-2 space-y-1.5 text-[12.5px] leading-relaxed text-foreground/50">
+                <li>
+                  Your admin address bar reads{" "}
+                  <span className="font-mono text-foreground/65">admin.shopify.com/store/{suggestion}</span> —
+                  the last part plus <span className="font-mono text-foreground/65">.myshopify.com</span> is what goes above.
+                </li>
+                <li>
+                  Or open <span className="font-medium text-foreground/65">Settings → Domains</span> in Shopify; it&apos;s
+                  listed there as your <span className="font-mono text-foreground/65">.myshopify.com</span> domain.
+                </li>
+                <li>
+                  Signed in as staff rather than the owner? Installing apps needs that permission — ask
+                  whoever owns the store to run this step.
+                </li>
+              </ul>
+            </details>
             {simulatorEnabled && (
               <div className="mt-4 border-t border-foreground/[0.08] pt-4">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -145,6 +166,13 @@ export function StepShopify({
           </div>
         </details>
       </div>
+
+      {!connected && (
+        <p className="mt-4 max-w-[520px] text-center text-[12.5px] leading-relaxed text-foreground/45">
+          This is the one thing I can&apos;t work without — I answer from your real orders, not guesses.
+          If now isn&apos;t the moment, leave and come back: {storeLabel} and everything you&apos;ve entered are saved.
+        </p>
+      )}
 
       {connected && kbSync.status !== "idle" && (
         <div className="mt-4 flex w-full max-w-[520px] items-start gap-3 rounded-xl border border-foreground/10 bg-foreground/[0.03] px-4 py-3.5 text-left">

@@ -12,7 +12,7 @@ export default async function OnboardingLayout({ children }: { children: React.R
       select: { id: true, settings: true },
     });
     if (org) {
-      const incompleteOnboardingPath = await getIncompleteOnboardingRedirect(org.id, org.settings);
+      const incompleteOnboardingPath = await getIncompleteOnboardingRedirect(org.id, org.settings, userId);
       if (!incompleteOnboardingPath) {
         redirect("/dashboard");
       }
