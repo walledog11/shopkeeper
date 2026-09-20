@@ -1,16 +1,11 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import { beforeEach, afterEach, vi } from 'vitest';
-import { ChannelType, db } from '@shopkeeper/db';
 import {
   createTestOrg,
-  createTestIntegration,
   cleanupTestData,
 } from '@shopkeeper/db/test-helpers';
 import {
   clearMockLogger,
   createWebhookRouterApp,
-  hmacSha256,
-  hmacSha256Base64,
 } from './webhook-route-test-helpers.js';
 
 // Mock ioredis and bullmq so the webhook module doesn't open live Redis connections.

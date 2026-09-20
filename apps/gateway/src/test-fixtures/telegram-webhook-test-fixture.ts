@@ -1,14 +1,9 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import { beforeEach, afterEach, vi } from 'vitest';
-import { ChannelType, db } from '@shopkeeper/db';
+import { db } from '@shopkeeper/db';
 import {
   createTestOrg,
-  createTestCustomer,
-  createTestThread,
-  createTestMessage,
   cleanupTestData,
 } from '@shopkeeper/db/test-helpers';
-import { updateContext, getContext } from '../operator-context.js';
 import {
   clearMockLogger,
   createRegisteredWebhookRouterApp,
