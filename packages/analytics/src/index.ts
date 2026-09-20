@@ -14,6 +14,7 @@ import {
 
 export * from './config.js';
 export * from './events.js';
+export * from './host-shared.js';
 export * from './insert-id.js';
 export * from './posthog-batched.js';
 export * from './posthog-immediate.js';

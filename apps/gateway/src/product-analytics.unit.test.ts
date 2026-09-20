@@ -1,18 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { captureProductEvent, db, loggerWarn } = vi.hoisted(() => ({
+const {
+  captureProductEvent,
+  db,
+  loadWorkspaceActivationSnapshot,
+  loggerWarn,
+} = vi.hoisted(() => ({
   captureProductEvent: vi.fn(),
   db: {
-    integration: {
-      findMany: vi.fn(),
-    },
     message: {
       count: vi.fn(),
     },
-    organization: {
-      findUnique: vi.fn(),
-    },
   },
+  loadWorkspaceActivationSnapshot: vi.fn(),
   loggerWarn: vi.fn(),
 }));
 
@@ -24,6 +24,7 @@ vi.mock('@shopkeeper/analytics', async (importActual) => ({
 vi.mock('@shopkeeper/db', async (importActual) => ({
   ...(await importActual<typeof import('@shopkeeper/db')>()),
   db,
+  loadWorkspaceActivationSnapshot,
 }));
 
 vi.mock('./logger.js', () => ({
@@ -47,13 +48,12 @@ const MESSAGE_ID = '00000000-0000-4000-8000-000000000002';
 beforeEach(() => {
   vi.clearAllMocks();
   db.message.count.mockResolvedValue(1);
-  db.organization.findUnique.mockResolvedValue({
-    createdAt: new Date(Date.now() - 60_000),
+  loadWorkspaceActivationSnapshot.mockResolvedValue({
+    organizationCreatedAt: new Date(Date.now() - 60_000),
+    inboundMessageCount: 1,
+    hasShopifyIntegration: true,
+    hasEmailIntegration: true,
   });
-  db.integration.findMany.mockResolvedValue([
-    { platform: 'shopify' },
-    { platform: 'email' },
-  ]);
 });
 
 describe('product analytics shutdown resource', () => {
@@ -190,11 +190,11 @@ describe('gateway product event boundaries', () => {
     });
 
     expect(captureProductEvent).toHaveBeenCalledTimes(1);
-    expect(db.organization.findUnique).not.toHaveBeenCalled();
+    expect(loadWorkspaceActivationSnapshot).not.toHaveBeenCalled();
   });
 
-  it('does not activate without both required integrations', async () => {
-    db.integration.findMany.mockResolvedValue([{ platform: 'shopify' }]);
+  it('does not emit when the workspace has not met the activation bar', async () => {
+    loadWorkspaceActivationSnapshot.mockResolvedValue(null);
 
     await captureWorkspaceActivation(ORGANIZATION_ID);
 

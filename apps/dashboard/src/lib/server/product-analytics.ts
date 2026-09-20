@@ -1,11 +1,12 @@
 import {
   captureProductEvent,
   initializeProductAnalytics,
-  MESSAGE_CHANNELS,
   productEventInsertId,
   TOOL_CATEGORIES,
   TOOL_NAMES,
-  type ActionOutcome,
+  WORKSPACE_ACTIVATION_WINDOW_SECONDS,
+  agentActionOutcome,
+  toProductMessageChannel,
   type IntegrationFailureCategory,
   type IntegrationPlatform,
   type MessageChannel,
@@ -18,18 +19,10 @@ import {
   type ToolName,
 } from '@shopkeeper/analytics';
 import type { PersistedAgentAction } from '@shopkeeper/agent/agent-actions';
-import { db, SenderType, type DbChannelType } from '@shopkeeper/db';
+import { db, loadWorkspaceActivationSnapshot } from '@shopkeeper/db';
 import logger from '@/lib/server/logger';
 
 let initializationAttempted = false;
-const ACTIVATION_INBOUND_CHANNELS: DbChannelType[] = [
-  'email',
-  'ig_dm',
-  'tiktok',
-  'imessage',
-  'sms',
-];
-const SEVEN_DAYS_SECONDS = 7 * 24 * 60 * 60;
 
 function ensureDashboardProductAnalytics(): void {
   // Tests install a RecordingAnalyticsSink explicitly. Initializing here would
@@ -169,20 +162,13 @@ export function captureAgentActionsCompleted(actions: PersistedAgentAction[]): v
       continue;
     }
 
-    const outcome: ActionOutcome = action.status === 'success'
-      ? 'succeeded'
-      : action.status === 'unknown'
-        ? 'unknown'
-        : action.status === 'error'
-          ? 'failed'
-          : 'blocked';
     void captureDashboardProductEvent({
       event: 'agent_action_completed',
       organizationId: action.organizationId,
       source: 'dashboard',
       toolName: action.tool as ToolName,
       toolCategory: action.category as ToolCategory,
-      outcome,
+      outcome: agentActionOutcome(action.status),
       insertId: productEventInsertId.agentActionCompleted(action.id),
     });
   }
@@ -206,12 +192,6 @@ export async function captureAgentPlanDecided(args: {
   });
 }
 
-function analyticsChannel(channel: string): MessageChannel | null {
-  return (MESSAGE_CHANNELS as readonly string[]).includes(channel)
-    ? channel as MessageChannel
-    : null;
-}
-
 export async function captureDashboardOutboundReplySent(args: {
   channel: string;
   messageId: string;
@@ -219,7 +199,7 @@ export async function captureDashboardOutboundReplySent(args: {
   replySource: ReplySource;
 }): Promise<void> {
   try {
-    const channel = analyticsChannel(args.channel);
+    const channel = toProductMessageChannel(args.channel);
     if (!channel) return;
 
     await captureDashboardProductEvent({
@@ -248,44 +228,19 @@ export async function captureDashboardOutboundReplySent(args: {
 async function captureDashboardWorkspaceActivation(
   organizationId: string,
 ): Promise<void> {
-  const [organization, integrations, inboundMessageCount] = await Promise.all([
-    db.organization.findUnique({
-      where: { id: organizationId },
-      select: { createdAt: true },
-    }),
-    db.integration.findMany({
-      where: {
-        organizationId,
-        OR: [
-          { platform: 'shopify', accessToken: { not: null } },
-          { platform: 'email' },
-        ],
-      },
-      select: { platform: true },
-    }),
-    db.message.count({
-      where: {
-        organizationId,
-        senderType: SenderType.customer,
-        thread: { channelType: { in: ACTIVATION_INBOUND_CHANNELS } },
-      },
-    }),
-  ]);
-  if (!organization || inboundMessageCount === 0) return;
-
-  const connectedPlatforms = new Set(integrations.map(({ platform }) => platform));
-  if (!connectedPlatforms.has('shopify') || !connectedPlatforms.has('email')) return;
+  const snapshot = await loadWorkspaceActivationSnapshot(organizationId);
+  if (!snapshot) return;
 
   const secondsSinceWorkspaceCreated = Math.max(
     0,
-    Math.floor((Date.now() - organization.createdAt.getTime()) / 1_000),
+    Math.floor((Date.now() - snapshot.organizationCreatedAt.getTime()) / 1_000),
   );
   await captureDashboardProductEvent({
     event: 'workspace_activated',
     organizationId,
     source: 'dashboard',
     secondsSinceWorkspaceCreated,
-    withinSevenDays: secondsSinceWorkspaceCreated <= SEVEN_DAYS_SECONDS,
+    withinSevenDays: secondsSinceWorkspaceCreated <= WORKSPACE_ACTIVATION_WINDOW_SECONDS,
     insertId: productEventInsertId.workspaceActivated(organizationId),
   });
 }

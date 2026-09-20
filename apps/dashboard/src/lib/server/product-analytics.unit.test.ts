@@ -3,14 +3,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const {
   captureProductEvent,
   initializeProductAnalytics,
+  loadWorkspaceActivationSnapshot,
   loggerWarn,
 } = vi.hoisted(() => ({
   captureProductEvent: vi.fn(),
   initializeProductAnalytics: vi.fn(),
+  loadWorkspaceActivationSnapshot: vi.fn(),
   loggerWarn: vi.fn(),
 }));
 
-vi.mock('@shopkeeper/analytics', () => ({
+vi.mock('@shopkeeper/analytics', async (importActual) => ({
+  ...(await importActual<typeof import('@shopkeeper/analytics')>()),
   captureProductEvent,
   initializeProductAnalytics,
   TOOL_CATEGORIES: ['action', 'communication', 'internal', 'read'],
@@ -21,6 +24,8 @@ vi.mock('@shopkeeper/analytics', () => ({
     integrationConnectionCompleted: vi.fn(),
     integrationConnectionFailed: vi.fn(),
     subscriptionStatusChanged: (eventId: string) => `subscription_status_changed:${eventId}`,
+    outboundReplySent: (messageId: string) => `outbound_reply_sent:${messageId}`,
+    workspaceActivated: (orgId: string) => `workspace_activated:${orgId}`,
   },
 }));
 
@@ -30,6 +35,7 @@ vi.mock('@shopkeeper/db', () => ({
       findUnique: vi.fn(),
     },
   },
+  loadWorkspaceActivationSnapshot,
 }));
 
 vi.mock('@/lib/server/logger', () => ({
@@ -185,5 +191,72 @@ describe('agent value events', () => {
       outcome: 'succeeded',
       insertId: 'agent_action_completed:action-1',
     });
+  });
+});
+
+describe('dashboard workspace activation', () => {
+  beforeEach(() => {
+    loadWorkspaceActivationSnapshot.mockResolvedValue({
+      organizationCreatedAt: new Date(Date.now() - 60_000),
+      inboundMessageCount: 1,
+      hasShopifyIntegration: true,
+      hasEmailIntegration: true,
+    });
+  });
+
+  it('emits activation after an agent reply once the workspace qualifies', async () => {
+    const { captureDashboardOutboundReplySent } = await import('./product-analytics');
+
+    await captureDashboardOutboundReplySent({
+      channel: 'email',
+      messageId: 'message-1',
+      organizationId: EVENT.organizationId,
+      replySource: 'agent_approved',
+    });
+
+    expect(captureProductEvent).toHaveBeenNthCalledWith(1, {
+      event: 'outbound_reply_sent',
+      organizationId: EVENT.organizationId,
+      source: 'dashboard',
+      channel: 'email',
+      replySource: 'agent_approved',
+      insertId: 'outbound_reply_sent:message-1',
+    });
+    expect(captureProductEvent).toHaveBeenNthCalledWith(2, {
+      event: 'workspace_activated',
+      organizationId: EVENT.organizationId,
+      source: 'dashboard',
+      secondsSinceWorkspaceCreated: expect.any(Number),
+      withinSevenDays: true,
+      insertId: `workspace_activated:${EVENT.organizationId}`,
+    });
+  });
+
+  it('does not evaluate activation for a manual reply', async () => {
+    const { captureDashboardOutboundReplySent } = await import('./product-analytics');
+
+    await captureDashboardOutboundReplySent({
+      channel: 'email',
+      messageId: 'message-1',
+      organizationId: EVENT.organizationId,
+      replySource: 'manual',
+    });
+
+    expect(captureProductEvent).toHaveBeenCalledTimes(1);
+    expect(loadWorkspaceActivationSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('does not emit when the workspace has not met the activation bar', async () => {
+    loadWorkspaceActivationSnapshot.mockResolvedValue(null);
+    const { captureDashboardOutboundReplySent } = await import('./product-analytics');
+
+    await captureDashboardOutboundReplySent({
+      channel: 'email',
+      messageId: 'message-1',
+      organizationId: EVENT.organizationId,
+      replySource: 'agent_approved',
+    });
+
+    expect(captureProductEvent).toHaveBeenCalledTimes(1);
   });
 });

@@ -162,3 +162,5 @@ export {
   isIntegrationReauthorizationRequired,
   markIntegrationReauthorizationRequired,
 } from './integration-auth.js';
+export { loadWorkspaceActivationSnapshot } from './product-analytics-workspace.js';
+export type { WorkspaceActivationSnapshot } from './product-analytics-workspace.js';
