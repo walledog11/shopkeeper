@@ -2,7 +2,7 @@ import { isAgentToolName } from "@shopkeeper/agent/tools"
 import { INTENT_KEYS } from "@shopkeeper/agent/classifier-signals"
 import type { Fixture, ToolInputExpectation } from "./types"
 
-import { isRecord } from "@shopkeeper/agent/guards";
+import { isRecord } from "@shopkeeper/integrations/guards";
 const SUITES = new Set(["core", "extended"])
 // Must track `enum ChannelType` in packages/db/prisma/schema.prisma: a fixture's
 // channelType goes straight into db.thread.create, so anything this set blesses

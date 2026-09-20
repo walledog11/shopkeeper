@@ -1,6 +1,6 @@
 import { ApiRequestError, requestJson } from "@/lib/api/fetcher";
 
-import { isRecord } from "@shopkeeper/agent/guards";
+import { isRecord } from "@shopkeeper/integrations/guards";
 export interface ChannelBindingAttempt {
   value: string;
   expiresAt: number;

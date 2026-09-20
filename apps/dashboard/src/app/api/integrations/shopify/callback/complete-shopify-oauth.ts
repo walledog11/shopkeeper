@@ -5,7 +5,7 @@ import { db, Prisma } from '@shopkeeper/db';
 import type { Prisma as PrismaTypes } from '@prisma/client';
 import logger from '@/lib/server/logger';
 import { timingSafeIncludes } from '@/lib/security/timing-safe';
-import { isRecord } from "@shopkeeper/agent/guards";
+import { isRecord } from "@shopkeeper/integrations/guards";
 import {
   isSameShopifyStore,
   normalizeShopifyShopDomain,

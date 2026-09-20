@@ -1,4 +1,4 @@
-import { isRecord } from "@shopkeeper/agent/guards";
+import { isRecord } from "@shopkeeper/integrations/guards";
 import {
   getEmailAuthReauthorizationReason,
   getGmailInboundStatus,

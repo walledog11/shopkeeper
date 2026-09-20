@@ -1,6 +1,6 @@
 import { db, SenderType } from "@shopkeeper/db"
 import { CHANNEL_TYPE } from "@shopkeeper/agent/thread-constants"
-import { isRecord } from "@shopkeeper/agent/guards"
+import { isRecord } from "@shopkeeper/integrations/guards"
 import {
   INSTAGRAM_REQUIRED_SCOPES,
   sendInstagramTextMessage,
