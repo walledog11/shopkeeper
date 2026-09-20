@@ -4,7 +4,7 @@ import { getInstagramWebhookConfig } from '../config/runtime-config.js';
 import logger from '../logger.js';
 import { JOB } from '../constants.js';
 import { rateLimit } from '../rate-limit.js';
-import { isRecord } from '../lib/typing.js';
+import { isRecord, readString } from '../lib/typing.js';
 import type {
   InstagramInboundAttachment,
   InstagramInboundJobData,
@@ -25,11 +25,6 @@ interface NormalizedInstagramMessage {
   attachments: InstagramInboundAttachment[];
 }
 
-
-function readNonEmptyString(value: unknown): string | null {
-  if (typeof value !== 'string' || value.trim().length === 0) return null;
-  return value;
-}
 
 function readProviderTimestamp(value: unknown): string | null {
   let timestampMs: number;
@@ -53,15 +48,15 @@ function normalizeAttachment(value: unknown): InstagramInboundAttachment | null 
   if (!isRecord(value)) return null;
   const payload = isRecord(value.payload) ? value.payload : null;
   return {
-    type: readNonEmptyString(value.type) ?? 'unknown',
-    url: readNonEmptyString(payload?.url) ?? readNonEmptyString(value.url),
+    type: readString(value.type) ?? 'unknown',
+    url: readString(payload?.url) ?? readString(value.url),
   };
 }
 
 function normalizeInstagramMessage(value: unknown): NormalizedInstagramMessage | null {
   if (!isRecord(value) || !isRecord(value.sender) || !isRecord(value.message)) return null;
 
-  const senderIgsid = readNonEmptyString(value.sender.id);
+  const senderIgsid = readString(value.sender.id);
   const providerSentAt = readProviderTimestamp(value.timestamp);
   if (!senderIgsid || !providerSentAt) return null;
 
@@ -79,7 +74,7 @@ function normalizeInstagramMessage(value: unknown): NormalizedInstagramMessage |
       if (!isRecord(share)) continue;
       attachments.push({
         type: 'share',
-        url: readNonEmptyString(share.link) ?? readNonEmptyString(share.url),
+        url: readString(share.link) ?? readString(share.url),
       });
     }
   }
@@ -88,14 +83,14 @@ function normalizeInstagramMessage(value: unknown): NormalizedInstagramMessage |
     attachments.push({ type: 'deleted', url: null });
   }
 
-  const text = readNonEmptyString(message.text);
+  const text = readString(message.text);
   if (!text && attachments.length === 0) {
     attachments.push({ type: 'unsupported', url: null });
   }
 
   return {
     senderIgsid,
-    externalMessageId: readNonEmptyString(message.mid),
+    externalMessageId: readString(message.mid),
     providerSentAt,
     text,
     attachments,
@@ -175,7 +170,7 @@ export function registerMetaWebhookRoutes(router: Router): void {
 
       for (const entryValue of Array.isArray(payload.entry) ? payload.entry : []) {
         if (!isRecord(entryValue)) continue;
-        const instagramAccountId = readNonEmptyString(entryValue.id);
+        const instagramAccountId = readString(entryValue.id);
         if (!instagramAccountId) {
           logger.warn('[Webhook] Instagram entry is missing an account id — skipping entry');
           continue;
