@@ -1,7 +1,7 @@
 import { Check, ChevronLeft, ChevronRight, Loader2, Mail, ShieldCheck, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Accent, Headline } from "./primitives";
-import type { OnboardingData } from "./model";
+import type { OnboardingData } from "../_lib/onboarding-model";
 
 export function StepPlan({
   data,

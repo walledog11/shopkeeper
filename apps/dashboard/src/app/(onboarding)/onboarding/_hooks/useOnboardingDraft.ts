@@ -6,7 +6,7 @@ import {
   STEPS,
   STORAGE_KEY,
   type OnboardingData,
-} from "../_components/model";
+} from "../_lib/onboarding-model";
 import { parseStoredOnboardingState } from "../_lib/onboarding-state";
 
 interface DraftState {

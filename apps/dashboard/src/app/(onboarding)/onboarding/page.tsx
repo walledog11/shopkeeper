@@ -9,7 +9,7 @@ import {
   type OnboardingResumeStep,
 } from "@/lib/integrations/onboarding-setup";
 import { OnboardingExperience } from "./_components/OnboardingExperience";
-import { STEPS } from "./_components/model";
+import { STEPS } from "./_lib/onboarding-model";
 import { parseOAuthOutcome } from "@/lib/integrations/oauth-contract";
 
 function parseResumeStep(value: string | string[] | undefined): OnboardingResumeStep | null {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_DATA } from "../_components/model";
+import { DEFAULT_DATA } from "../_lib/onboarding-model";
 import { parseStoredOnboardingState } from "./onboarding-state";
 
 describe("parseStoredOnboardingState", () => {

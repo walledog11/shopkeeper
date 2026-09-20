@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { jsonResponse } from '@shopkeeper/agent/testing';
+import { jsonResponse } from '../test-helpers/json-response.js';
 import {
   buildInstagramAuthorizationUrl,
   exchangeInstagramAuthorizationCode,

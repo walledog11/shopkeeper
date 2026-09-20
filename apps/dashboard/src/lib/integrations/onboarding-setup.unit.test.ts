@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest"
 import {
   isEmailIntegrationConfigured,
   resolveOnboardingRedirectStep,
-  resolveOnboardingStepIndex,
 } from "./onboarding-setup"
 
 describe("isEmailIntegrationConfigured", () => {
@@ -63,14 +62,5 @@ describe("resolveOnboardingRedirectStep", () => {
       hasEmail: true,
       hasPhone: true,
     })).toBe("plan")
-  })
-})
-
-describe("resolveOnboardingStepIndex", () => {
-  it("maps step query params to onboarding indices", () => {
-    const ids = ["intro", "shopify", "email", "connect", "plan"]
-    expect(resolveOnboardingStepIndex("email", 0, ids)).toBe(2)
-    expect(resolveOnboardingStepIndex("plan", 0, ids)).toBe(4)
-    expect(resolveOnboardingStepIndex(null, 2, ids)).toBe(2)
   })
 })

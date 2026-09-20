@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { jsonResponse } from '@shopkeeper/agent/testing';
+import { jsonResponse } from '../test-helpers/json-response.js';
 import { createSocialApiClient, SOCIALAPI_PRODUCTION_BASE_URL } from './client.js';
 
 function client(fetchImpl: typeof fetch) {

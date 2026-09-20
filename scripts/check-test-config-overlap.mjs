@@ -104,6 +104,18 @@ assertArrayEqual(
   'agent integration config must own database-backed integration tests.',
 );
 
+const dbRoot = join(REPO_ROOT, 'packages/db');
+assertArrayEqual(
+  readStringArray(join(dbRoot, 'vitest.integration.config.ts'), 'include'),
+  ['**/*.integration.test.ts'],
+  'db integration config must own database-backed lifecycle tests.',
+);
+const dbTests = listFiles(dbRoot)
+  .filter(isVitestFile)
+  .map((file) => relative(REPO_ROOT, file))
+  .sort();
+assertExactlyOneOwner(dbTests, () => ['db:integration']);
+
 const scriptTests = listFiles(join(REPO_ROOT, 'scripts'))
   .filter((file) => file.endsWith('.test.mjs'))
   .map((file) => relative(REPO_ROOT, file));

@@ -13,7 +13,7 @@ export type IntegrationId =
   | "tiktok-shop"
   | "whatsapp"
 
-interface IntegrationDefinitionBase {
+type IntegrationDefinitionCore = {
   id: IntegrationId
   name: string
   logo: string | null
@@ -22,54 +22,54 @@ interface IntegrationDefinitionBase {
   permissions: readonly string[]
 }
 
-export interface OAuthIntegrationDefinition extends IntegrationDefinitionBase {
-  kind: "oauth"
-  id: "gmail" | "instagram" | "shopify" | "tiktok-shop"
-  platform: Integration["platform"]
-  connectType: WorkspaceConnectType
-  details: "gmail" | "shopify" | "oauth"
-  oauth: {
-    authPath: string
-    analyticsPlatform: "email" | "ig_dm" | "shopify" | "tiktok"
-    successCopy: string
-    reauthorizePath?: (integration: Integration) => string | null
-  }
-  availabilityFlag?: "tiktok-shop" | "instagram"
-  matches: (integration: Integration) => boolean
-}
+type OAuthIntegrationId = "gmail" | "instagram" | "shopify" | "tiktok-shop"
 
-export interface ForwardingEmailIntegrationDefinition extends IntegrationDefinitionBase {
-  kind: "forwarding-email"
-  id: "email"
-  platform: "email"
-  connectType: "email"
-  details: "forwarding-email"
-  analyticsPlatform: "email"
-  matches: (integration: Integration) => boolean
+type OAuthBlock = {
+  authPath: string
+  analyticsPlatform: "email" | "ig_dm" | "shopify" | "tiktok"
+  successCopy: string
+  reauthorizePath?: (integration: Integration) => string | null
 }
-
-export interface PersonalDeviceIntegrationDefinition extends IntegrationDefinitionBase {
-  kind: "personal-device"
-  id: PersonalDeviceType
-  details: "device-binding"
-  device: PersonalDeviceType
-}
-
-export interface UnavailableIntegrationDefinition extends IntegrationDefinitionBase {
-  kind: "unavailable"
-  id: "whatsapp"
-  details: "unavailable"
-  unavailableLabel: "Coming soon"
-}
-
-export type WorkspaceIntegrationDefinition =
-  | OAuthIntegrationDefinition
-  | ForwardingEmailIntegrationDefinition
 
 export type IntegrationDefinition =
-  | WorkspaceIntegrationDefinition
-  | PersonalDeviceIntegrationDefinition
-  | UnavailableIntegrationDefinition
+  | (IntegrationDefinitionCore & {
+      kind: "oauth"
+      id: OAuthIntegrationId
+      platform: Integration["platform"]
+      connectType: WorkspaceConnectType
+      details: "gmail" | "shopify" | "oauth"
+      oauth: OAuthBlock
+      availabilityFlag?: "tiktok-shop" | "instagram"
+      matches: (integration: Integration) => boolean
+    })
+  | (IntegrationDefinitionCore & {
+      kind: "forwarding-email"
+      id: "email"
+      platform: "email"
+      connectType: "email"
+      details: "forwarding-email"
+      analyticsPlatform: "email"
+      matches: (integration: Integration) => boolean
+    })
+  | (IntegrationDefinitionCore & {
+      kind: "personal-device"
+      id: PersonalDeviceType
+      details: "device-binding"
+      device: PersonalDeviceType
+    })
+  | (IntegrationDefinitionCore & {
+      kind: "unavailable"
+      id: "whatsapp"
+      details: "unavailable"
+      unavailableLabel: "Coming soon"
+    })
+
+export type OAuthIntegrationDefinition = Extract<IntegrationDefinition, { kind: "oauth" }>
+export type WorkspaceIntegrationDefinition = Extract<
+  IntegrationDefinition,
+  { kind: "oauth" | "forwarding-email" }
+>
+export type PersonalDeviceIntegrationDefinition = Extract<IntegrationDefinition, { kind: "personal-device" }>
 
 export const INTEGRATION_CHANNEL_SECTIONS: {
   kind: IntegrationChannelKind
