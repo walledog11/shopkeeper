@@ -12,14 +12,11 @@
 
 **Architecture:** The agent core lives in `packages/agent/` (`@shopkeeper/agent`) and is consumed by both apps. The gateway runs durable inbound, planning, and module work in-process; the dashboard owns interactive UI and provider-coupled delivery. Host-specific locks, logging, alerts, and delivery are injected at the package boundary. More execution continues to move into the gateway worker. Read this before assuming a support-only framing when touching agent architecture.
 
-**Modules:** Support is v1 (built). Order-ops (module #2) is code-complete and monitoring-only behind `ORDER_RISK_MONITOR_ENABLED` — flag-and-notify only, no autonomy tiers, no plan surface. Shop management (inventory, promotions, repricing) is code-complete and **operator-only** — its write tools live in `apps/gateway/src/message-handlers/operator-shop-tools.ts`, never the shared registry. Open rollout gates are in `docs/to-do-list.md`.
+**Modules:** Support is v1 (built). Order-ops (module #2) is code-complete and monitoring-only behind `ORDER_RISK_MONITOR_ENABLED` — flag-and-notify only, no autonomy tiers, no plan surface. Shop management (inventory, promotions, repricing) is code-complete and **operator-only** — its write tools live in `apps/gateway/src/message-handlers/operator/operator-shop-tools.ts`, never the shared registry. Open rollout gates are in `docs/to-do-list.md`.
 
 **Channel priority — do not propose WhatsApp as the next channel** (decision 2026-08-07). WhatsApp is a *merchant-control* channel, not a customer-origin one (`docs/product-truth.md` §2 and its guardrails), so building it adds a third way for the merchant to reach the agent alongside Telegram and iMessage — it does not add a way for customers to reach the merchant. It is also a weak wedge in the US market Shopkeeper targets, where WhatsApp penetration is low. Treat it as built-when-a-merchant-asks, never as the default next thing. It stays on the roadmap and is not a removal candidate.
 
 ## Stack
-- `apps/dashboard/` — Next.js 15 (app router), Tailwind, SWR, Clerk.com auth → Vercel
-- `apps/gateway/` — Express + BullMQ worker → Railway
-- `packages/db/` — Prisma + Neon Postgres, exported as `@shopkeeper/db`
 - Redis: `@upstash/redis` (REST) in dashboard; `ioredis` (`REDIS_URL`) in gateway — **separate instances** (gateway needs a dedicated per-instance Redis for BullMQ, not Upstash). Daily LLM spend cap is shared across both apps via Postgres (`llm_daily_spend`), not Redis.
 - AI: Anthropic SDK (agent, plan, summary). KB search is Prisma `contains`, not embeddings.
 - Multi-tenant: every DB query is scoped by `organizationId`. `getOrCreateOrg()` maps Clerk org → DB `Organization`.
@@ -35,11 +32,9 @@ Both hostnames serve every route, so `src/proxy/canonical-host.ts` 307s the app 
 **"Shopkeeper" is a working brand, not a registrable mark** — `SHOPKEEP` (Lightspeed, IC 042 SaaS) is live, incontestable, and a `+SHOPKEEPER` application was refused against it in 2024. Operating unregistered is a deliberate decision; see `docs/to-do-list.md` for the findings and the conditions for revisiting. **Never write "ShopKeep"** (no trailing `-er`) in any user-facing surface, bot username, or logo lockup — the `-er` is what distinguishes this product from that mark. Bot/handle convention is the `use` prefix (`@useshopkeeper`, `@useshopkeeperbot`), matching the handles already held on X and Instagram.
 
 ## Inbound flow
-External webhook → `apps/gateway/src/routes/webhooks.ts` (HMAC verify, enqueue BullMQ) → `apps/gateway/src/message-handlers/` (upsert customer/thread/message, sanitize prompt-injection, dedupe by `externalMessageId`, enqueue summary) → Claude tags + 1-sentence summary → gateway generates the agent plan in-process (`@shopkeeper/agent` planner, `message-handlers/generate-thread-plan.ts`) and caches it on the thread → Telegram notify bound org members. Dashboard polls `/api/threads?status=open` via SWR every 15s (60s for secondary lists, paused when the tab is hidden). When realtime is enabled — `NEXT_PUBLIC_GATEWAY_EVENTS_URL` set — gateway SSE becomes the primary freshness signal and those intervals drop to 60s/120s as a safety net.
+External webhook → `apps/gateway/src/routes/webhooks.ts` (HMAC verify, enqueue BullMQ) → `apps/gateway/src/message-handlers/` (upsert customer/thread/message, sanitize prompt-injection, dedupe by `externalMessageId`, enqueue summary) → Claude tags + 1-sentence summary → gateway generates the agent plan in-process (`@shopkeeper/agent` planner, `message-handlers/support-plan/generate-thread-plan.ts`) and caches it on the thread → Telegram notify bound org members. Dashboard polls `/api/threads?status=open` via SWR every 15s (60s for secondary lists, paused when the tab is hidden). When realtime is enabled — `NEXT_PUBLIC_GATEWAY_EVENTS_URL` set — gateway SSE becomes the primary freshness signal and those intervals drop to 60s/120s as a safety net.
 
 ## Database (`packages/db/prisma/schema.prisma`)
-- `Organization` — Stripe subscription fields + `settings` JSON (agent config)
-- `Integration` — per platform per org (access token, expiry)
 - `Customer` — unique `(organizationId, platformId)`; `platformId` = email / IG sender ID / phone
 - `Thread` — `channelType`, `status` (open/pending/closed), `aiSummary`, `tag`, `shopifyCustomerId`, `cachedPlan`, soft-delete + archive
 - `Message` — `senderType`: customer/agent/ai/note. Agent turn transcripts in threads are `note` rows prefixed `__shopkeeper_agent__`; the audit trail is `AgentAction`, not note-row parsing.
@@ -47,8 +42,6 @@ External webhook → `apps/gateway/src/routes/webhooks.ts` (HMAC verify, enqueue
 - `AutonomyShadowDecision` — per-plan shadow record while `autoExecuteMode: "shadow"`: what the agent would have auto-executed vs. what the human decided
 - `OperatorContext` — per (org, `memberKey`) operator pending-state only: `pendingPlans` (a newest-last JSONB array, at most one entry per thread), `pendingQuestion`, `pendingDigest` (the approval ledger's backing store). **DB-backed, not Redis.**
 - `OperatorEvent` — durable inbound operator-message record (P4-03, complete): persisted+enqueued before the webhook ack, claimed once by the operator-event worker, unique `(channel, providerMessageId)` for dedupe. Always on for Telegram and iMessage. A 15-min `operator-event-sweep` maintenance job reconciles stale `claimed` rows to `unknown` and re-sends committed-but-undelivered replies.
-- `OrgMember` — extends Clerk org membership; Telegram chats bound via `OrgMemberTelegramChat`
-- `KnowledgeBase` (`source: "user" | "shopify"`) / `KbArticle` (tagged for context filtering) / `KbCitation` (per-thread article citation events)
 - `VoiceEdit` — merchant edits to AI drafts, consumed by gateway voice synthesis to refine the brand-voice brief
 
 ## Channels
@@ -58,24 +51,9 @@ Internal-only `channelType` values (not user-facing): `dashboard_agent` (Concier
 
 ## Agent core (`packages/agent/`, imported as `@shopkeeper/agent/*`)
 Canonical location for all agent logic; both apps import it via subpath exports.
-- `context.ts` — `buildContext()` (loads thread, customer, recent messages, KB, recent orders)
-- `planner.ts` — `planAgent()` (generates plan with no side effects, caches in `Thread.cachedPlan`)
-- `run.ts` — `runAgent()` (executes approved plan or runs an instruction end-to-end)
-- `prompt.ts` — system prompt builder
-- `intent.ts` — customer-prose guard signals (mutative-intent detection over message text)
-- `plan-preview.ts` — classifies plans as `quick_reply` vs `needs_review` for the dashboard home
-- `tools/registry/` — all tool definitions (Anthropic format), `TOOL_CATEGORIES`, `PLAN_STEP_LABELS`, `TOOL_LABELS`, input types
-- `tools/executor.ts` — tool dispatch + policy enforcement (`maxRefundAmount`, `blockCancellations`, etc.)
-- `shopify/*.ts` — Shopify API implementations
-- `settings.ts` — defaults + resolver. Settings live in `Organization.settings` JSON.
-- `thread-auth.ts`, `plan-cache.ts`, `plan-cache-shape.ts`, `turns.ts`, `turn.ts`, `plan-execution.ts` — route-facing helpers
 
 ### Dashboard host adapters (`apps/dashboard/src/lib/agent/`)
-Not a copy of the core — these inject dashboard infrastructure into it:
-- `context.ts` / `run.ts` — wrap core `buildContext`/`runAgent` with the thread I/O sink and ops-alert recorder
-- `tools/thread.ts` — the actual thread I/O sink (send reply/email, escalate)
-- `runner.ts` — barrel composing core + wrapper exports
-- `api/*` — Next.js route glue (validation, sessions, action-log, dashboard approval, turn seams)
+Not a copy of the core — these inject dashboard infrastructure into it.
 - `__evals__/` — agent eval harness, wired to `test:evals` / `test:evals:baseline`
 
 Modes:
@@ -90,7 +68,7 @@ Read tool list and exact behavior from `packages/agent/src/tools/registry/` — 
 
 ### Agent-change invariants
 Standing rules for any change to agent behavior (promoted from the 2026-07 behavior plan):
-- **Don't touch the support-planner surface without the eval gate.** Operator-only changes ship as gateway `moduleTools` (`apps/gateway/src/message-handlers/operator-*-tools.ts`), **not** the shared registry, and prompt edits stay inside the `isOperatorMode` branch of `packages/agent/src/prompt.ts`. Operator prompt changes are verified by live phone round-trip, not evals.
+- **Don't touch the support-planner surface without the eval gate.** Operator-only changes ship as gateway `moduleTools` (`apps/gateway/src/message-handlers/operator/operator-*-tools.ts`), **not** the shared registry, and prompt edits stay inside the `isOperatorMode` branch of `packages/agent/src/prompt.ts`. Operator prompt changes are verified by live phone round-trip, not evals.
 - **Land agent-path work through a pull request.** Since 2026-08-27 `evals.yml` also triggers on `push: branches: [master]`, so a direct push runs the **free preflight** and an ungated agent change shows as a red check within minutes — but it reports, it does not block, and no paid lane runs outside `workflow_dispatch`. A PR is still how agent-path work lands. 31 of 34 agent-path commits between 2026-08-09 and 08-19 bypassed the gate before that trigger existed, planner-behavior changes among them; that backlog, not CI, is what the eval bill was paying for.
 - **The gate trigger is "can this change move an assertion?" — not "did it touch a gated path?"** The `paths` filter is deliberately coarse; the reasoning is not. Read what the fixtures actually assert before booking a paid run. Worked example: `groundEscalationReasons` rewrote `escalate_to_human` reason text, but zero fixtures assert on that tool's inputs and `judge.ts` grades only `replyText`, so it provably could not move a result and owed no run. A tool *description* edit is the opposite case — it sits in the prompt the model reads, so it is gated even when no assertion names it.
 - **Justify every eval run** before making it; single-fixture probes for diagnosis, no tune-then-rerun loops.
