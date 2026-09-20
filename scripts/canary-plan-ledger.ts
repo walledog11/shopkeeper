@@ -104,7 +104,7 @@ async function executeApprovedPlan(
 
   const { executeCurrentCachedHomePlan } = await import('@shopkeeper/agent/plan-execution');
   const { buildGatewayPlanExecutionDeps } = await import(
-    '../apps/gateway/src/message-handlers/agent-turn-deps.js'
+    '../apps/gateway/src/message-handlers/operator/agent-turn-deps.js'
   );
   return executeCurrentCachedHomePlan(baseParams, buildGatewayPlanExecutionDeps());
 }
