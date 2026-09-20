@@ -8,8 +8,8 @@ import {
   markWorkspaceClerkDeleted,
   markWorkspaceIntegrationsCleaned,
   markWorkspaceStripeCanceled,
-} from '@shopkeeper/db';
-import { cleanupTestData, createTestOrg } from '@shopkeeper/db/test-helpers';
+} from './index.js';
+import { cleanupTestData, createTestOrg } from './test-helpers.js';
 
 let organizationId: string | null = null;
 

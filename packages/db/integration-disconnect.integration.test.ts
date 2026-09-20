@@ -8,12 +8,12 @@ import {
   listRecoverableIntegrationDisconnects,
   markIntegrationProviderCleaned,
   releaseIntegrationDisconnect,
-} from '@shopkeeper/db';
+} from './index.js';
 import {
   cleanupTestData,
   createTestIntegration,
   createTestOrg,
-} from '@shopkeeper/db/test-helpers';
+} from './test-helpers.js';
 
 let organizationId: string | null = null;
 
