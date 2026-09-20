@@ -1,4 +1,4 @@
-import { isRecord } from '@shopkeeper/agent/guards';
+import { isRecord } from '../guards.js';
 
 export const INSTAGRAM_GRAPH_VERSION = 'v25.0';
 export const INSTAGRAM_REQUIRED_SCOPES = [

@@ -1,4 +1,4 @@
-import { isRecord } from '@shopkeeper/agent/guards';
+import { isRecord } from '../guards.js';
 
 import type {
   TikTokShopApiConfig,
