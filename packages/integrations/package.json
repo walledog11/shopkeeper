@@ -31,7 +31,6 @@
     "@shopkeeper/shared": "*"
   },
   "devDependencies": {
-    "@shopkeeper/agent": "*",
     "@vitest/coverage-v8": "^4.1.3",
     "typescript": "latest",
     "vitest": "^4.1.3"

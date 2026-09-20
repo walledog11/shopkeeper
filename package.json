@@ -103,8 +103,7 @@
     "typescript-eslint": "^8.46.0"
   },
   "dependencies": {
-    "@prisma/client": "6.19.3",
-    "@shopkeeper/common": "*"
+    "@prisma/client": "6.19.3"
   },
   "packageManager": "npm@10.9.3",
   "overrides": {

@@ -32,7 +32,7 @@
     "build": "tsc",
     "typecheck": "tsc -p tsconfig.json --noEmit --pretty false",
     "dev": "tsc --watch --preserveWatchOutput",
-    "lint": "cd ../.. && eslint packages/shared/src packages/shared/tsconfig.json --max-warnings 0"
+    "lint": "cd ../.. && eslint packages/shared/src --max-warnings 0"
   },
   "devDependencies": {
     "typescript": "latest"
