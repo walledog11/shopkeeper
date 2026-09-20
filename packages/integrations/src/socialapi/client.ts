@@ -1,4 +1,4 @@
-import { isRecord } from '@shopkeeper/agent/guards';
+import { isRecord } from '../guards.js';
 
 export const SOCIALAPI_PRODUCTION_BASE_URL = 'https://api.social-api.ai/v1';
 
