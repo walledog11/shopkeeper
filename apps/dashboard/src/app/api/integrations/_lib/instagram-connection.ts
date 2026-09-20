@@ -1,8 +1,10 @@
 import { ChannelType, db, Prisma } from '@shopkeeper/db';
 import type { Integration, Prisma as PrismaTypes } from '@prisma/client';
 
-import { isRecord } from "@shopkeeper/shared/guards";
-import { AmbiguousInstagramIntegrationError } from "@shopkeeper/integrations/instagram";
+import {
+  AmbiguousInstagramIntegrationError,
+  buildInstagramLoginMetadata,
+} from "@shopkeeper/integrations/instagram";
 
 export class InstagramAccountInUseError extends Error {
   constructor() {
@@ -32,29 +34,6 @@ export interface PersistInstagramConnectionResult {
   replacedIntegration: Pick<Integration, 'accessToken' | 'externalAccountId' | 'id'> | null;
 }
 
-
-function instagramLoginMetadata(
-  current: unknown,
-  input: PersistInstagramConnectionInput,
-): PrismaTypes.InputJsonValue {
-  const root = isRecord(current) ? { ...current } : {};
-  const instagram = isRecord(root.instagram) ? { ...root.instagram } : {};
-
-  return {
-    ...root,
-    instagram: {
-      ...instagram,
-      accessTokenIssuedAt: input.subscriptionVerifiedAt.toISOString(),
-      accountType: input.accountType,
-      authModel: 'instagram_login',
-      grantedScopes: input.grantedScopes,
-      lastSuccessfulSubscriptionAt: input.subscriptionVerifiedAt.toISOString(),
-      permissionsVerified: input.permissionsVerified,
-      subscribedFields: ['messages'],
-      username: input.username,
-    },
-  } as PrismaTypes.InputJsonValue;
-}
 
 export async function inspectInstagramConnection(
   organizationId: string,
@@ -115,10 +94,16 @@ export async function persistInstagramConnection(
         tokenExpiresAt: input.expiresAt,
         // Re-authorizing clears a lifecycle left behind by a failed disconnect.
         lifecycleStatus: 'active',
-        metadata: instagramLoginMetadata(
+        metadata: buildInstagramLoginMetadata(
           existing?.externalAccountId === input.accountId ? existing.metadata : null,
-          input,
-        ),
+          {
+            accountType: input.accountType,
+            grantedScopes: input.grantedScopes,
+            permissionsVerified: input.permissionsVerified,
+            subscriptionVerifiedAt: input.subscriptionVerifiedAt,
+            username: input.username,
+          },
+        ) as PrismaTypes.InputJsonValue,
       } satisfies PrismaTypes.IntegrationUncheckedUpdateInput;
 
       if (existing?.externalAccountId === input.accountId) {

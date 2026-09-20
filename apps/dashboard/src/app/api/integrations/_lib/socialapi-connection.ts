@@ -1,7 +1,10 @@
 import { ChannelType, db, Prisma } from '@shopkeeper/db';
 import type { Integration, Prisma as PrismaTypes } from '@prisma/client';
 
-import { AmbiguousInstagramIntegrationError } from '@shopkeeper/integrations/instagram';
+import {
+  AmbiguousInstagramIntegrationError,
+  buildSocialApiInstagramMetadata,
+} from '@shopkeeper/integrations/instagram';
 import { InstagramAccountInUseError } from './instagram-connection';
 
 export interface PersistSocialApiConnectionInput {
@@ -15,35 +18,6 @@ export interface PersistSocialApiConnectionInput {
 export interface PersistSocialApiConnectionResult {
   integration: Integration;
   replacedIntegrationId: string | null;
-}
-
-/**
- * Neither the OAuth exchange nor the account listing returns Instagram's own
- * account id, so `externalAccountId` holds the provider's. The source is
- * recorded rather than assumed: the schema comment on `external_account_id`
- * says it is the native platform id, and code that joins the two transports on
- * that column has to be able to see that a SocialAPI row cannot honour it.
- */
-function socialApiMetadata(
-  current: unknown,
-  input: PersistSocialApiConnectionInput,
-): PrismaTypes.InputJsonValue {
-  const root = current && typeof current === 'object' && !Array.isArray(current)
-    ? { ...(current as Record<string, unknown>) }
-    : {};
-
-  return {
-    ...root,
-    instagram: {
-      authModel: 'socialapi',
-      transport: 'socialapi',
-      socialApiAccountId: input.providerAccountId,
-      socialApiBrandId: input.brandId,
-      externalAccountIdSource: 'provider',
-      username: input.username,
-      connectedAt: input.connectedAt.toISOString(),
-    },
-  } as PrismaTypes.InputJsonValue;
 }
 
 /**
@@ -84,10 +58,15 @@ export async function persistSocialApiConnection(
         providerAccountId: input.providerAccountId,
         // Reconnecting clears a lifecycle left behind by a failed disconnect.
         lifecycleStatus: 'active',
-        metadata: socialApiMetadata(
+        metadata: buildSocialApiInstagramMetadata(
           existing?.providerAccountId === input.providerAccountId ? existing.metadata : null,
-          input,
-        ),
+          {
+            brandId: input.brandId,
+            connectedAt: input.connectedAt,
+            providerAccountId: input.providerAccountId,
+            username: input.username,
+          },
+        ) as PrismaTypes.InputJsonValue,
       } satisfies PrismaTypes.IntegrationUncheckedUpdateInput;
 
       if (existing?.providerAccountId === input.providerAccountId) {

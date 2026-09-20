@@ -1,4 +1,8 @@
-import { isRecord } from "@shopkeeper/shared/guards";
+import {
+  instagramMessagesSubscriptionActive,
+  readInstagramHealth,
+  readInstagramMetadata,
+} from "@shopkeeper/integrations/instagram";
 import {
   getEmailAuthReauthorizationReason,
   getGmailInboundStatus,
@@ -27,31 +31,6 @@ function isTokenExpiringSoon(integration: Integration) {
   return msLeft > 0 && msLeft / 86_400_000 < 10
 }
 
-type InstagramHealthStatus = "healthy" | "degraded" | "reconnect_required"
-
-
-function getInstagramHealth(integration: Integration): {
-  errorCategory: string | null
-  errorCode: string | number | null
-  status: InstagramHealthStatus | null
-} {
-  if (!isRecord(integration.metadata) || !isRecord(integration.metadata.instagram)) {
-    return { errorCategory: null, errorCode: null, status: null }
-  }
-  const instagram = integration.metadata.instagram
-  const status = instagram.healthStatus === "healthy"
-    || instagram.healthStatus === "degraded"
-    || instagram.healthStatus === "reconnect_required"
-    ? instagram.healthStatus
-    : null
-  const error = isRecord(instagram.lastHealthError) ? instagram.lastHealthError : null
-  const errorCategory = typeof error?.category === "string" ? error.category : null
-  const errorCode = typeof error?.code === "string" || typeof error?.code === "number"
-    ? error.code
-    : null
-  return { errorCategory, errorCode, status }
-}
-
 export interface InstagramConnectionDisplay {
   subscription: { action: string; description: string }
   token: { action: string; description: string }
@@ -61,14 +40,9 @@ export function getInstagramConnectionDisplay(
   integration: Integration,
   now = Date.now(),
 ): InstagramConnectionDisplay {
-  const health = getInstagramHealth(integration)
-  const instagram = isRecord(integration.metadata) && isRecord(integration.metadata.instagram)
-    ? integration.metadata.instagram
-    : {}
-  const subscribedFields = Array.isArray(instagram.subscribedFields)
-    ? instagram.subscribedFields.filter((field): field is string => typeof field === "string")
-    : []
-  const messagesActive = subscribedFields.includes("messages")
+  const health = readInstagramHealth(integration.metadata)
+  const instagram = readInstagramMetadata(integration.metadata) ?? {}
+  const messagesActive = instagramMessagesSubscriptionActive(instagram)
   const expiresAt = integration.tokenExpiresAt
     ? new Date(integration.tokenExpiresAt).getTime()
     : Number.NaN
@@ -145,7 +119,7 @@ export function deriveIntegrationHealth(
   const connectType = definition.connectType
 
   if (connectType === "ig") {
-    const instagramHealth = getInstagramHealth(integration)
+    const instagramHealth = readInstagramHealth(integration.metadata)
     if (instagramHealth.status === "reconnect_required") {
       const note = instagramHealth.errorCode === "messages_subscription_missing"
         ? "Instagram is no longer subscribed to DMs — reconnect Instagram."

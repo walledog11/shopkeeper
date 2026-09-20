@@ -1,6 +1,10 @@
 import type { Prisma } from '@prisma/client';
 import { db, INTEGRATION_REAUTH_SENTINEL } from '@shopkeeper/db';
-import { isRecord } from '../lib/typing.js';
+import {
+  mergeInstagramHealthMetadata,
+  readInstagramTokenIssuedAtMs,
+  type InstagramStoredHealthError,
+} from '@shopkeeper/integrations/instagram';
 import {
   fetchConnectedInstagramAccount,
   fetchInstagramMessageSubscription,
@@ -26,8 +30,6 @@ const TIKTOK_REFRESH_WINDOW_MS = 7 * ONE_DAY_MS;
 // One definition, in @shopkeeper/db: four files each had their own.
 const EPOCH_SENTINEL = INTEGRATION_REAUTH_SENTINEL;
 
-type InstagramHealthStatus = 'healthy' | 'degraded' | 'reconnect_required';
-
 interface InstagramIntegrationRow {
   accessToken: string | null;
   createdAt: Date;
@@ -38,34 +40,7 @@ interface InstagramIntegrationRow {
   tokenExpiresAt: Date | null;
 }
 
-interface InstagramHealthError {
-  category: InstagramProviderError['category'];
-  code: string | number | null;
-  httpStatus: number;
-  requestId: string | null;
-  subcode: number | null;
-}
-
-
-function readTimestamp(value: unknown): number | null {
-  if (typeof value !== 'string' || value.length === 0) return null;
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? timestamp : null;
-}
-
-function instagramMetadata(metadata: unknown): Record<string, unknown> {
-  if (!isRecord(metadata) || !isRecord(metadata.instagram)) return {};
-  return metadata.instagram;
-}
-
-function tokenIssuedAtMs(integration: InstagramIntegrationRow): number {
-  const instagram = instagramMetadata(integration.metadata);
-  return readTimestamp(instagram.accessTokenIssuedAt)
-    ?? readTimestamp(instagram.lastRefreshAt)
-    ?? integration.createdAt.getTime();
-}
-
-function providerHealthError(error: InstagramProviderError): InstagramHealthError {
+function providerHealthError(error: InstagramProviderError): InstagramStoredHealthError {
   return {
     category: error.category,
     code: error.code,
@@ -78,46 +53,15 @@ function providerHealthError(error: InstagramProviderError): InstagramHealthErro
 function localHealthError(
   code: string,
   category: InstagramProviderError['category'] = 'validation',
-): InstagramHealthError {
+): InstagramStoredHealthError {
   return { category, code, httpStatus: 0, requestId: null, subcode: null };
 }
 
-function mergeInstagramHealthMetadata(
+function instagramHealthMetadata(
   metadata: unknown,
-  input: {
-    error: InstagramHealthError | null;
-    now: Date;
-    status: InstagramHealthStatus;
-    subscriptionFields?: string[];
-    successful?: boolean;
-    tokenRefreshed?: boolean;
-  },
+  input: Parameters<typeof mergeInstagramHealthMetadata>[1],
 ): Prisma.InputJsonObject {
-  const root = isRecord(metadata) ? { ...metadata } : {};
-  const current = instagramMetadata(metadata);
-  const checkedAt = input.now.toISOString();
-  return {
-    ...root,
-    instagram: {
-      ...current,
-      healthStatus: input.status,
-      lastHealthCheckAt: checkedAt,
-      lastHealthError: input.error,
-      ...(input.successful ? { lastSuccessfulHealthCheckAt: checkedAt } : {}),
-      ...(input.subscriptionFields !== undefined
-        ? {
-            lastSubscriptionCheckAt: checkedAt,
-            subscribedFields: input.subscriptionFields,
-            ...(input.subscriptionFields.includes('messages')
-              ? { lastSuccessfulSubscriptionAt: checkedAt }
-              : {}),
-          }
-        : {}),
-      ...(input.tokenRefreshed
-        ? { accessTokenIssuedAt: checkedAt, lastRefreshAt: checkedAt }
-        : {}),
-    },
-  } as Prisma.InputJsonObject;
+  return mergeInstagramHealthMetadata(metadata, input) as Prisma.InputJsonObject;
 }
 
 function isReconnectRequired(error: InstagramProviderError): boolean {
@@ -156,7 +100,7 @@ async function recordInstagramProviderFailure(
   await db.integration.update({
     where: { id: integration.id },
     data: {
-      metadata: mergeInstagramHealthMetadata(integration.metadata, {
+      metadata: instagramHealthMetadata(integration.metadata, {
         error: providerHealthError(error),
         now,
         status: reconnectRequired ? 'reconnect_required' : 'degraded',
@@ -179,7 +123,7 @@ async function checkInstagramIntegration(
     await db.integration.update({
       where: { id: integration.id },
       data: {
-        metadata: mergeInstagramHealthMetadata(integration.metadata, {
+        metadata: instagramHealthMetadata(integration.metadata, {
           error: localHealthError('stored_token_expired', 'authentication'),
           now,
           status: 'reconnect_required',
@@ -209,7 +153,7 @@ async function checkInstagramIntegration(
     await db.integration.update({
       where: { id: integration.id },
       data: {
-        metadata: mergeInstagramHealthMetadata(integration.metadata, {
+        metadata: instagramHealthMetadata(integration.metadata, {
           error: localHealthError('account_identity_mismatch'),
           now,
           status: 'reconnect_required',
@@ -241,7 +185,7 @@ async function checkInstagramIntegration(
     await db.integration.update({
       where: { id: integration.id },
       data: {
-        metadata: mergeInstagramHealthMetadata(integration.metadata, {
+        metadata: instagramHealthMetadata(integration.metadata, {
           error: localHealthError('messages_subscription_missing', 'permission'),
           now,
           status: 'reconnect_required',
@@ -257,7 +201,7 @@ async function checkInstagramIntegration(
     await db.integration.update({
       where: { id: integration.id },
       data: {
-        metadata: mergeInstagramHealthMetadata(integration.metadata, {
+        metadata: instagramHealthMetadata(integration.metadata, {
           error: localHealthError('token_expiry_missing'),
           now,
           status: 'degraded',
@@ -270,12 +214,13 @@ async function checkInstagramIntegration(
   }
 
   const shouldRefresh = integration.tokenExpiresAt.getTime() - nowMs <= INSTAGRAM_REFRESH_WINDOW_MS
-    && nowMs - tokenIssuedAtMs(integration) >= INSTAGRAM_MIN_REFRESH_AGE_MS;
+    && nowMs - readInstagramTokenIssuedAtMs(integration.metadata, integration.createdAt.getTime())
+      >= INSTAGRAM_MIN_REFRESH_AGE_MS;
   if (!shouldRefresh) {
     await db.integration.update({
       where: { id: integration.id },
       data: {
-        metadata: mergeInstagramHealthMetadata(integration.metadata, {
+        metadata: instagramHealthMetadata(integration.metadata, {
           error: null,
           now,
           status: 'healthy',
@@ -304,7 +249,7 @@ async function checkInstagramIntegration(
     where: { id: integration.id },
     data: {
       accessToken: refreshed.data.accessToken,
-      metadata: mergeInstagramHealthMetadata(integration.metadata, {
+      metadata: instagramHealthMetadata(integration.metadata, {
         error: null,
         now,
         status: 'healthy',

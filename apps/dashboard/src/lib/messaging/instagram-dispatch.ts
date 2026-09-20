@@ -1,8 +1,13 @@
 import { db, SenderType } from "@shopkeeper/db"
 import { CHANNEL_TYPE } from "@shopkeeper/agent/thread-constants"
-import { isRecord } from "@shopkeeper/shared/guards"
 import {
+  hasVerifiedInstagramMessagingPermission,
   INSTAGRAM_REQUIRED_SCOPES,
+  instagramReconnectRequiredByHealth,
+  isLegacyInstagramMetadata,
+  isSocialApiMetadata,
+  readInstagramMetadata,
+  readSocialApiAccountId,
   sendInstagramTextMessage,
   type InstagramProviderError,
 } from "@shopkeeper/integrations/instagram"
@@ -27,24 +32,6 @@ const MISSING_PERMISSION = "Instagram messaging permission is missing — reconn
 const SOCIALAPI_UNCONFIGURED = "Instagram replies are not configured — contact support"
 const SOCIALAPI_NO_CONVERSATION = "This Instagram conversation cannot be replied to yet"
 
-
-function instagramMetadata(metadata: unknown): Record<string, unknown> | null {
-  if (!isRecord(metadata) || !isRecord(metadata.instagram)) return null
-  return metadata.instagram
-}
-
-function hasVerifiedMessagingPermission(metadata: Record<string, unknown>): boolean {
-  if (metadata.permissionsVerified !== true) return true
-  const grantedScopes = metadata.grantedScopes
-  if (!Array.isArray(grantedScopes)) return false
-  return INSTAGRAM_REQUIRED_SCOPES.every(scope => grantedScopes.includes(scope))
-}
-
-function reconnectRequiredByHealth(metadata: Record<string, unknown>): "permission" | "connection" | null {
-  if (metadata.healthStatus !== "reconnect_required") return null
-  const lastHealthError = isRecord(metadata.lastHealthError) ? metadata.lastHealthError : null
-  return lastHealthError?.category === "permission" ? "permission" : "connection"
-}
 
 function mapInstagramProviderError(error: InstagramProviderError): {
   detail: string
@@ -78,11 +65,6 @@ function mapInstagramProviderError(error: InstagramProviderError): {
     return { detail: "Instagram rejected the message as invalid", error: error.message }
   }
   return { detail: "Instagram provider returned an unknown error", error: "Failed to send via Instagram" }
-}
-
-function socialApiAccountId(metadata: Record<string, unknown>): string | null {
-  const value = metadata.socialApiAccountId
-  return typeof value === "string" && value.trim() ? value.trim() : null
 }
 
 /**
@@ -232,9 +214,9 @@ export async function dispatchInstagramDirect(
     return { ok: false, error: DISCONNECTED_CONVERSATION }
   }
 
-  const metadata = instagramMetadata(igIntegration.metadata)
-  const isSocialApi = metadata?.transport === "socialapi"
-  if (!isSocialApi && metadata?.authModel !== "instagram_login") {
+  const metadata = readInstagramMetadata(igIntegration.metadata)
+  const isSocialApi = isSocialApiMetadata(igIntegration.metadata)
+  if (!isSocialApi && isLegacyInstagramMetadata(igIntegration.metadata)) {
     await recordFailure({
       detail: "Legacy Instagram integration cannot send replies",
       integrationId: igIntegration.id,
@@ -244,7 +226,9 @@ export async function dispatchInstagramDirect(
     return { ok: false, error: LEGACY_CONVERSATION }
   }
 
-  const healthReconnect = isSocialApi ? null : reconnectRequiredByHealth(metadata)
+  const healthReconnect = isSocialApi || !metadata
+    ? null
+    : instagramReconnectRequiredByHealth(metadata)
   if (healthReconnect) {
     const permissionFailure = healthReconnect === "permission"
     await recordFailure({
@@ -258,7 +242,7 @@ export async function dispatchInstagramDirect(
     return { ok: false, error: permissionFailure ? MISSING_PERMISSION : EXPIRED_CONNECTION }
   }
 
-  if (!isSocialApi && !hasVerifiedMessagingPermission(metadata)) {
+  if (!isSocialApi && metadata && !hasVerifiedInstagramMessagingPermission(metadata, INSTAGRAM_REQUIRED_SCOPES)) {
     await recordFailure({
       detail: "Instagram messaging permission missing",
       integrationId: igIntegration.id,
@@ -309,7 +293,7 @@ export async function dispatchInstagramDirect(
     return { ok: false, error: OUTSIDE_REPLY_WINDOW }
   }
 
-  const providerAccountId = isSocialApi && metadata ? socialApiAccountId(metadata) : null
+  const providerAccountId = isSocialApi && metadata ? readSocialApiAccountId(metadata) : null
   const conversationId = threadRoute.externalSpaceId
   if (isSocialApi && (!providerAccountId || !conversationId)) {
     await recordFailure({

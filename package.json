@@ -104,7 +104,7 @@
   },
   "dependencies": {
     "@prisma/client": "6.19.3",
-    "@shopkeeper/common": "*"
+    "@shopkeeper/shared": "*"
   },
   "packageManager": "npm@10.9.3",
   "overrides": {

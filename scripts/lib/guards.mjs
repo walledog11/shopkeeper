@@ -1,1 +1,1 @@
-export { isRecord } from '@shopkeeper/common/guards';
+export { isRecord } from '@shopkeeper/shared/guards';

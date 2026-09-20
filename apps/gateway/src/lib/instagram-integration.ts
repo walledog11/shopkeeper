@@ -1,7 +1,10 @@
 import { db } from '@shopkeeper/db';
-import { AmbiguousInstagramIntegrationError } from '@shopkeeper/integrations/instagram';
+import {
+  AmbiguousInstagramIntegrationError,
+  isInstagramLoginMetadata,
+  isSocialApiMetadata,
+} from '@shopkeeper/integrations/instagram';
 
-import { isRecord } from './typing.js';
 interface ActiveInstagramIntegrationBase {
   id: string;
   organizationId: string;
@@ -22,18 +25,6 @@ export type ActiveInstagramIntegration =
   | ActiveMetaDirectIntegration
   | ActiveSocialApiIntegration;
 
-function isInstagramLoginMetadata(metadata: unknown): boolean {
-  if (!isRecord(metadata) || !isRecord(metadata.instagram)) return false;
-  return metadata.instagram.authModel === 'instagram_login';
-}
-
-// Records written before the transport field existed are direct Meta; the field
-// is only ever read, never inferred from the row's current credentials.
-function isSocialApiMetadata(metadata: unknown): boolean {
-  if (!isRecord(metadata) || !isRecord(metadata.instagram)) return false;
-  return metadata.instagram.transport === 'socialapi';
-}
-
 function toActiveInstagramIntegration(
   integration: {
     accessToken: string | null;
@@ -44,6 +35,7 @@ function toActiveInstagramIntegration(
   },
 ): ActiveMetaDirectIntegration | null {
   if (!integration.accessToken || !isInstagramLoginMetadata(integration.metadata)) return null;
+  if (isSocialApiMetadata(integration.metadata)) return null;
   return {
     transport: 'meta_direct',
     id: integration.id,

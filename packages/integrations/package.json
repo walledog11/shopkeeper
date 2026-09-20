@@ -17,6 +17,10 @@
     "./tiktok": {
       "types": "./dist/tiktok/index.d.ts",
       "default": "./dist/tiktok/index.js"
+    },
+    "./values": {
+      "types": "./dist/values.d.ts",
+      "default": "./dist/values.js"
     }
   },
   "scripts": {

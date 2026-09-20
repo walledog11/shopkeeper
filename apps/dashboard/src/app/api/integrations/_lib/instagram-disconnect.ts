@@ -1,5 +1,5 @@
-import { isRecord } from "@shopkeeper/shared/guards";
 import {
+  isInstagramLoginMetadata,
   unsubscribeInstagramMessages,
   type InstagramProviderError,
 } from '@shopkeeper/integrations/instagram';
@@ -23,13 +23,6 @@ export type InstagramCleanupResult =
       reason: 'missing_access_token' | 'provider_unsubscribe_failed' | 'unexpected_failure';
     };
 
-
-function isInstagramLoginIntegration(integration: InstagramDisconnectIntegration): boolean {
-  return integration.platform === 'ig_dm'
-    && isRecord(integration.metadata)
-    && isRecord(integration.metadata.instagram)
-    && integration.metadata.instagram.authModel === 'instagram_login';
-}
 
 function recordCleanupWarning(
   integration: InstagramDisconnectIntegration,
@@ -76,7 +69,9 @@ function recordCleanupWarning(
 export async function unsubscribeInstagramBeforeDisconnect(
   integration: InstagramDisconnectIntegration,
 ): Promise<InstagramCleanupResult> {
-  if (!isInstagramLoginIntegration(integration)) return { ok: true };
+  if (integration.platform !== 'ig_dm' || !isInstagramLoginMetadata(integration.metadata)) {
+    return { ok: true };
+  }
   if (!integration.accessToken) {
     recordCleanupWarning(integration, null, 'missing_access_token');
     return { ok: false, error: null, reason: 'missing_access_token' };

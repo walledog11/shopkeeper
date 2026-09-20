@@ -48,7 +48,7 @@
     "packages/analytics": {
       "project": ["src/**/*.ts"]
     },
-    "packages/common": {
+    "packages/shared": {
       "project": ["src/**/*.ts"]
     },
     "packages/integrations": {
