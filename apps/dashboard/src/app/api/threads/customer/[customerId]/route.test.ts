@@ -103,7 +103,6 @@ describe('GET /api/threads/customer/[customerId]', () => {
     const customer = await createTestCustomer(org!.id, 'shopper2@example.com');
     const support = await createTestThread(org!.id, customer.id, ChannelType.email);
     await createTestThread(org!.id, customer.id, ChannelType.operator);
-    await createTestThread(org!.id, customer.id, ChannelType.operator);
 
     const threads = await readThreads(await call(customer.id));
 
