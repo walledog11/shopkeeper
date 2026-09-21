@@ -13,7 +13,7 @@ import { summarizeAgentBriefingInventory } from './agent-briefing-inventory-lib.
 loadLocalEnv();
 
 const { db } = await import('@shopkeeper/db');
-
+const { INTERNAL_OPERATOR_THREAD_CHANNELS } = await import('@shopkeeper/shared/product-analytics');
 
 function pendingThreadIds(contexts) {
   const ids = new Set();
@@ -33,7 +33,7 @@ try {
         status: 'open',
         archivedAt: null,
         deletedAt: null,
-        channelType: { notIn: ['sms_agent', 'dashboard_agent'] },
+        channelType: { notIn: [...INTERNAL_OPERATOR_THREAD_CHANNELS] },
         filterStatus: { not: 'filtered' },
       },
       select: {

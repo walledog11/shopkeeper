@@ -75,7 +75,7 @@ async function main(): Promise<void> {
         // thread holds SQL NULL rather than a JSON `null` literal.
         classifierSignals: { equals: Prisma.DbNull },
         createdAt: { gte: REQUEST_CONTRACT_LANDED_AT },
-        channelType: { notIn: ['operator', 'dashboard_agent'] },
+        channelType: { notIn: ['operator'] },
         messages: { some: { senderType: 'customer', deletedAt: null } },
       },
       select: {

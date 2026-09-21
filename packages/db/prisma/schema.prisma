@@ -18,7 +18,6 @@ enum ChannelType {
   tiktok
   shopify
   operator
-  dashboard_agent
   // Storefront chat (customer-origin). Distinct from `shopify`, which is the
   // merchant's store integration and its email-fallback behavior.
   shopify_chat

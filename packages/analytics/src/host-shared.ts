@@ -6,11 +6,18 @@ export {
   type ActivationInboundChannel,
 } from '@shopkeeper/shared/product-analytics';
 
+/** Historical thread channel values removed from Postgres or renamed in place. */
+const LEGACY_MESSAGE_CHANNEL_ALIASES: Record<string, MessageChannel> = {
+  sms_agent: 'operator',
+  dashboard_agent: 'operator',
+};
+
 export function toProductMessageChannel(
   channel: string,
 ): MessageChannel | null {
-  return (MESSAGE_CHANNELS as readonly string[]).includes(channel)
-    ? (channel as MessageChannel)
+  const normalized = LEGACY_MESSAGE_CHANNEL_ALIASES[channel] ?? channel;
+  return (MESSAGE_CHANNELS as readonly string[]).includes(normalized)
+    ? (normalized as MessageChannel)
     : null;
 }
 

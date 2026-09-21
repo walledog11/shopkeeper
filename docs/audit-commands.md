@@ -10,7 +10,7 @@ what each audit still blocks.
 | Command | Run when |
 | --- | --- |
 | `npm run audit:operator-context-compatibility` | Before removing identity-less queue handling or changing `operator_contexts` shape. Use `--strict` on retirement PRs. |
-| `npm run audit:legacy-imessage-threads` | Before changing thread channel enums or display mappings for retired transport names, and as the production gate for migration `20260920120000_drop_retired_channel_types`. Reports retired-value row counts across all five retyped columns and any object depending on the enum that the migration does not rebuild. Use `--strict`. |
+| `npm run audit:retired-channel-types` | After channel enum migrations: confirms no rows reference retired values and the live Postgres enum matches. Use `--strict` before `db:migrate:deploy` when a migration recreates `ChannelType`. |
 
 ## Platform and messaging infrastructure
 
@@ -25,7 +25,7 @@ what each audit still blocks.
 | Command | Run when |
 | --- | --- |
 | `npm run audit:plan-executions` | During agent execution or ledger rollouts. |
-| `npm run audit:conversational-overhaul-p0` | When landing conversational-overhaul package milestones. |
+| `npm run audit:conversational-overhaul-p0` | During agent runtime v1 retirement and Package 6 rollout (cached-plan / pending-plan inventory). |
 | `npm run audit:classification-alignment` | After classifier contract or routing changes. |
 
 ## Repo hygiene

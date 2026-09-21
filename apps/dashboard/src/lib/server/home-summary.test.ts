@@ -88,7 +88,7 @@ async function excludeThread(
   kind: "archived" | "deleted" | "filtered" | "operator",
 ) {
   const thread = await createThread({
-    channelType: kind === "operator" ? ChannelType.dashboard_agent : ChannelType.email,
+    channelType: kind === "operator" ? ChannelType.operator : ChannelType.email,
   })
   await addMessage(thread.id, SenderType.ai, new Date("2026-06-04T12:00:00.000Z"))
   if (kind === "archived") {

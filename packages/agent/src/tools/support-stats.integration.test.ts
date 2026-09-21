@@ -66,7 +66,7 @@ describe("getSupportStats", () => {
       { channelType: ChannelType.email, deletedAt: now },
       { channelType: ChannelType.email, filterStatus: "filtered" as const },
       { channelType: ChannelType.operator },
-      { channelType: ChannelType.dashboard_agent },
+      { channelType: ChannelType.operator },
     ];
     for (const [index, excluded] of excludedThreads.entries()) {
       const excludedCustomer = await createTestCustomer(

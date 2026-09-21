@@ -13,10 +13,7 @@ const CHANNELS = new Set([
   "email",
   "tiktok",
   "shopify",
-  "sms",
   "operator",
-  "dashboard_agent",
-  "imessage",
   "shopify_chat",
 ])
 const SENDERS = new Set(["customer", "agent", "ai", "note"])

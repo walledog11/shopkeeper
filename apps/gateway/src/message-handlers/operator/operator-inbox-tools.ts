@@ -172,7 +172,7 @@ export function buildOperatorInboxTools(
       if (!isThreadId(input.ticket_id)) return toolError(TICKET_NOT_IN_INBOX);
       // Org-scoped + the canonical inbox predicate, so a ticket id alone can
       // never reach another tenant's thread or the operator's own internal
-      // operator/dashboard_agent threads.
+      // operator threads.
       const thread = await db.thread.findFirst({
         where: { ...canonicalInboxThreadWhere(organizationId), id: input.ticket_id },
         select: {

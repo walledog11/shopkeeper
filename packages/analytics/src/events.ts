@@ -19,23 +19,15 @@ export const INTEGRATION_FAILURE_CATEGORIES = [
 ] as const;
 export type IntegrationFailureCategory = (typeof INTEGRATION_FAILURE_CATEGORIES)[number];
 
-// Mirrors the ChannelType enum. `analyticsChannel()` uses this as a runtime
-// allowlist and drops events for anything absent, so a channel added to the
-// database enum but not here is silently missing from product analytics.
+// Mirrors the live `ChannelType` enum (see migration 20260920120000). Retired
+// members (`sms`, `imessage`, `sms_agent`) are normalized in `toProductMessageChannel`.
 export const MESSAGE_CHANNELS = [
   'ig_dm',
   'email',
   'tiktok',
   'shopify',
   'shopify_chat',
-  'sms',
   'operator',
-  'dashboard_agent',
-  'imessage',
-  // Renamed to `operator` on 2026-09-11. Still accepted so an event already in
-  // flight from a loaded page is recorded rather than rejected; nothing emits
-  // it now.
-  'sms_agent',
 ] as const;
 export type MessageChannel = (typeof MESSAGE_CHANNELS)[number];
 

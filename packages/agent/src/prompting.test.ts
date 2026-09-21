@@ -57,7 +57,7 @@ describe('buildSystemPrompt', () => {
       thread: {
         id: 'thread_test',
         status: 'open',
-        channelType: 'dashboard_agent',
+        channelType: 'operator',
         tag: 'Support',
         aiSummary: null,
         shopifyCustomerId: null,
@@ -258,7 +258,7 @@ describe('untrusted content handling', () => {
       thread: {
         id: 'thread_test',
         status: 'open',
-        channelType: 'dashboard_agent',
+        channelType: 'operator',
         tag: 'Support',
         aiSummary: null,
         shopifyCustomerId: null,

@@ -39,7 +39,7 @@ function inboxScopeSql(organizationId: string, filters: ThreadListSqlFilters) {
       t.deleted_at IS NULL
       AND t.archived_at IS NULL
       AND t.organization_id = ${organizationId}::uuid
-      AND t.channel_type NOT IN ('operator', 'dashboard_agent')
+      AND t.channel_type NOT IN ('operator')
       AND t.filter_status = 'filtered'
     `
   }
@@ -48,7 +48,7 @@ function inboxScopeSql(organizationId: string, filters: ThreadListSqlFilters) {
     t.deleted_at IS NULL
     AND t.archived_at IS NULL
     AND t.organization_id = ${organizationId}::uuid
-    AND t.channel_type NOT IN ('operator', 'dashboard_agent')
+    AND t.channel_type NOT IN ('operator')
     AND t.filter_status <> 'filtered'
     ${filters.status === "open"
       ? Prisma.sql`AND t.status = 'open'`

@@ -187,13 +187,13 @@ describe("planAgent capture loop", () => {
     installAgentLogger(injectedLogger);
     mockCreate.mockResolvedValueOnce(endTurn("No action needed."));
 
-    await planAgent(makeCtx({ thread: { ...makeCtx().thread, channelType: "dashboard_agent" } }), "Check this thread");
+    await planAgent(makeCtx({ thread: { ...makeCtx().thread, channelType: "operator" } }), "Check this thread");
 
     expect(injectedLogger.info).toHaveBeenCalledWith(
       expect.objectContaining({
         orgId: "org_1",
         threadId: "thread_1",
-        channelType: "dashboard_agent",
+        channelType: "operator",
         messageCount: 2,
       }),
       "[agent:plan] start",
@@ -550,7 +550,7 @@ describe("planAgent capture loop", () => {
     mockCreate.mockResolvedValueOnce(endTurn("Reviewed — nothing to do."));
 
     await planAgent(
-      makeCtx({ thread: { ...makeCtx().thread, channelType: "dashboard_agent" } }),
+      makeCtx({ thread: { ...makeCtx().thread, channelType: "operator" } }),
       "Look into this",
     );
 

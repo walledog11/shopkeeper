@@ -889,7 +889,7 @@ only; operator iMessage uses `operator` plus `org_member_imessage_bindings` and 
 unaffected. Verify with:
 
 ```bash
-npm run audit:legacy-imessage-threads
+npm run audit:retired-channel-types -- --strict
 ```
 
 Hard purge of soft-deleted rows follows the normal 90-day retention job in `maintenance/retention.ts`.

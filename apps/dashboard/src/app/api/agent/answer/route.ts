@@ -43,7 +43,7 @@ async function claimAnsweredTaskForThread(
   const continuation = await claimContinuedAgentTask({
     organizationId, clerkUserId: userId, threadId, endsWait: "question",
     continuationInstruction: answer,
-    continuationChannel: "dashboard_agent",
+    continuationChannel: "operator",
   });
   if (!continuation) {
     throw new ConflictError("This question is already being continued or is no longer available to answer.");

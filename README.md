@@ -72,8 +72,7 @@ Run `nvm use` from the repository root to select the version declared in `.nvmrc
 - **TikTok** — not started (type stubs and UI placeholder only)
 
 ### Internal Channel Types (not user-facing)
-- `dashboard_agent` — thread created for each standalone Concierge chat session on `/dashboard/agent`
-- `sms_agent` — legacy thread name used by the internal Telegram test transport
+- `operator` — the merchant's durable operator thread (Telegram/iMessage bindings and Concierge on `/dashboard/agent`)
 
 ## Dashboard Navigation Structure
 ```
@@ -91,7 +90,7 @@ Workspace
   Integrations           /dashboard/integrations  — connect channels and external tools
   Team                   /dashboard/team          — members, roles, and access
 ```
-The standalone Concierge agent chat lives at `/dashboard/agent` (each session opens a new `dashboard_agent` thread); it is reached from the Agent surface rather than the top-level nav.
+The standalone Concierge agent chat lives at `/dashboard/agent` on `operator` threads; it is reached from the Agent surface rather than the top-level nav.
 
 ## AI Agent System
 The agent is the core of the product. It operates in two modes:
@@ -103,9 +102,9 @@ Triggered from the tickets page. When a ticket is opened:
 3. **Approve** → `POST /api/agent` executes the approved tool calls, then runs the standard tool-use loop for follow-up steps.
 4. Agent can also be invoked manually: type `@{agentName}` in the ticket composer.
 
-### Operator Mode (dashboard_agent, sms_agent)
+### Operator Mode (`operator`)
 Direct interface for the merchant/team. No customer in context — the agent takes instructions and acts on Shopify directly.
-- **Dashboard**: `/dashboard/agent` page has a persistent chat interface (session-based, one `dashboard_agent` thread per session).
+- **Dashboard**: `/dashboard/agent` page has a persistent chat interface on `operator` threads.
 - **Telegram test transport**: internal-only harness for exercising notification, approval, skip, and freeform-instruction paths.
 - **iMessage**: product operator flow. Plan pushes include a dashboard deep link; reply `yes` / `no` / `skip N` or freeform from a linked iPhone.
 
@@ -170,7 +169,7 @@ Configurable per org via Agent → Configure:
 
 ### Concierge (Standalone Agent)
 - `/dashboard/agent` — direct chat interface with the AI agent
-- Session-based: each new session creates a `dashboard_agent` thread, previous session is closed
+- Session-based Concierge uses `operator` threads; previous sessions are closed when a new one opens
 - Activity log tab shows all past agent turns with actions performed
 
 ### Knowledge Base (Memory)

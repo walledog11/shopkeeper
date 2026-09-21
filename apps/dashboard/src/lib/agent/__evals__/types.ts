@@ -33,10 +33,7 @@ export interface ThreadSetup {
     | "email"
     | "tiktok"
     | "shopify"
-    | "sms"
     | "operator"
-    | "dashboard_agent"
-    | "imessage"
     | "shopify_chat";
   /** Storefront fixtures must name the authorization boundary they exercise. */
   authState?: AgentAuthState;

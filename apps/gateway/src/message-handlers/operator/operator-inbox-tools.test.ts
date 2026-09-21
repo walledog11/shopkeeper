@@ -102,7 +102,7 @@ describe('list_active_tickets', () => {
   it('excludes closed, archived, deleted, filtered, and operator threads', async () => {
     // A partial unique index allows only one open thread per (org, customer,
     // channel), so each excluded-thread case needs its own customer.
-    const threadFor = async (platformId: string, channel: 'email' | 'operator' | 'dashboard_agent') => {
+    const threadFor = async (platformId: string, channel: 'email' | 'operator') => {
       const customer = await createTestCustomer(org.id, platformId, { name: `Noisy ${platformId}` });
       return createTestThread(org.id, customer.id, channel);
     };
@@ -116,7 +116,7 @@ describe('list_active_tickets', () => {
     const filtered = await threadFor('filtered@example.com', 'email');
     await db.thread.update({ where: { id: filtered.id }, data: { filterStatus: 'filtered' } });
     await threadFor('operator@example.com', 'operator');
-    await threadFor('concierge@example.com', 'dashboard_agent');
+    await threadFor('concierge@example.com', 'operator');
 
     const { message } = await listTickets();
     expect(message).toContain('inbox is clear');

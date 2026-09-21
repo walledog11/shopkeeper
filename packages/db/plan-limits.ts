@@ -59,7 +59,7 @@ export function utcMonthStart(now: Date = new Date()): Date {
 // Operator surfaces are the merchant talking to their own agent, not a customer
 // conversation, so they never count against a plan that is sold per customer
 // conversation.
-const INTERNAL_CHANNEL_TYPES = ['operator', 'dashboard_agent'] as const;
+const INTERNAL_CHANNEL_TYPES = ['operator'] as const;
 
 // A "conversation" is a thread opened in the period. Counting threads rather
 // than messages means a long back-and-forth with one customer costs the same as

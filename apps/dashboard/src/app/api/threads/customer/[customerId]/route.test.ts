@@ -103,11 +103,11 @@ describe('GET /api/threads/customer/[customerId]', () => {
     const customer = await createTestCustomer(org!.id, 'shopper2@example.com');
     const support = await createTestThread(org!.id, customer.id, ChannelType.email);
     await createTestThread(org!.id, customer.id, ChannelType.operator);
-    await createTestThread(org!.id, customer.id, ChannelType.dashboard_agent);
+    await createTestThread(org!.id, customer.id, ChannelType.operator);
 
     const threads = await readThreads(await call(customer.id));
 
-    // operator and dashboard_agent carry the merchant's own conversations with
+    // operator threads carry the merchant's own conversations with
     // the agent. Surfacing them as customer history would show the merchant's
     // private operator turns on a customer record.
     expect(threads.map(t => t.id)).toEqual([support.id]);

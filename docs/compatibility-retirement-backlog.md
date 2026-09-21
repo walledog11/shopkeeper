@@ -4,7 +4,7 @@ Evidence-gated removal of compatibility surfaces identified in the 2026-07-10
 codebase audit (in git history). One candidate per pull request; never
 batch unrelated retirements.
 
-Last reviewed: 2026-08-28.
+Last reviewed: 2026-09-21.
 
 ## Completed
 
@@ -14,9 +14,11 @@ Last reviewed: 2026-08-28.
 | Deprecated `GATEWAY_PUBLIC_URL` alias | Platform / dashboard | Dashboard reads only `GATEWAY_INTERNAL_URL`; legacy alias removed from `gateway-url.ts`, test harness, and production env checker | 2026-07-30 |
 | Legacy `pending_plan` dual-read fallback | Operator channels | `npm run audit:operator-context-compatibility` reports zero `legacyPendingPlanColumn` and zero `dualReadFallbackRows` in production | 2026-07-30 |
 | Legacy operator tool-call inline-input normalization | Agent core | Same audit reports zero `legacyToolCalls`; `normalizeApprovedToolCalls` now maps `input` only | 2026-07-30 |
-| Legacy iMessage purge module | Operator / iMessage | `npm run audit:legacy-imessage-threads` reports zero active/soft-deleted `channel_type = imessage` rows; operator iMessage (`operator` + bindings) unchanged | 2026-07-30 |
+| Legacy iMessage purge module | Operator / iMessage | Zero active/soft-deleted `channel_type = imessage` rows before enum recreation; operator iMessage (`operator` + bindings) unchanged | 2026-07-30 |
 | `operator_contexts.pending_plan` column | Operator channels | Dual-read retired 2026-07-30; audit showed zero live rows in the column; migration `20260806120000_drop_operator_pending_plan_column` | 2026-08-06 |
 | `AGENT_CONTEXT_BUDGET_MODE` and the legacy unbounded context branch | Agent core | Both hosts held `shadow`, which `6c6d79a5` aliased to `enforce`, so production was already on the bounded path; full 3-repeat eval baseline run on bounded context showed no regression attributable to the change. Flag, branch, gateway startup requirement, production env contract entry, P2-02 canary, and mode-comparison eval removed in `d0f76f2a`. Evidence: `git show dab6aa1b:docs/agent-m2-evidence-2026-08-25.md` | 2026-08-25 |
+| Retired `ChannelType` values `sms` and `imessage` | Platform / channels | Migration `20260920120000_drop_retired_channel_types`; application constants and analytics aligned; gate script replaced by `audit:retired-channel-types` | 2026-09-21 |
+| `dashboard_agent` ChannelType enum value | Operator channels | Migration `20260921120000_rechannel_dashboard_agent_and_drop_enum` re-channels historical rows to `operator` and drops the enum member; durable dashboard requests use `operator` | 2026-09-21 |
 
 ## Deferred — do not rename or remove without explicit migration / product sign-off
 
@@ -29,10 +31,8 @@ repeatable schedulers and can break operator digests and async outbound recovery
 | Synchronous outbound email path | Email / messaging | `npm run audit:outbound-email-mode` shows `asyncEnabled=false` until P4-01 recovery exercises complete and launch owner sets an async-only date | Deferred — documented rollback rail |
 | WhatsApp-named BullMQ queue IDs | Gateway / platform | `npm run audit:bullmq-compatibility-names` inventories live repeatable jobs; rename only after old Redis entries are removed and recreated | Deferred — storage compatibility names per AUD-021 |
 | `OUTBOUND_SEND_SWEEP` legacy string | Gateway maintenance | Same BullMQ audit; sweep is channel-agnostic (email + iMessage) | Deferred — cosmetic rename blocked on Redis migration |
-| `dashboard_agent` ChannelType enum value | Operator channels | Nothing has written it since the Concierge moved onto `operator` threads (2026-08-06), but a Postgres enum value cannot be dropped while rows reference it — and historical rows do. Needs those rows re-channelled or purged first; the display mappings stay meanwhile so history still renders. **Production inventory 2026-09-11: 20 rows, all active** — still blocked | Deferred — live rows reference it |
-| `imessage` ChannelType enum value | Operator / iMessage | `npm run audit:legacy-imessage-threads` must report zero active **and** zero soft-deleted rows. Same shape as `dashboard_agent`: the purge module was retired 2026-07-30, but the enum value outlived it and no live path writes a thread on it — operator iMessage is `operator` plus `org_member_imessage_bindings`. The `'imessage'` strings elsewhere in the gateway are transport/provider names, not this enum. **Production inventory 2026-09-11: 0 rows, active and soft-deleted** — precondition met. Migration `20260920120000_drop_retired_channel_types` is now written and verified against a pre-migration database; it recreates the type rather than dropping a value, and drops/rebuilds the five objects whose definitions embed the enum. Blocked only on a production run of the gate | Ready — migration written, awaiting production gate |
-| `sms` ChannelType enum value | Channels | Never a shipped channel; `resolve-inbound-episode.ts` already calls it retired and gives it no episode policy. **Production inventory 2026-09-11: 0 rows, active and soft-deleted.** Drops in the same type recreation as `imessage`, together with `sms_agent` — which production still carried on 2026-09-20 (4 thread rows), because `20260911120000_rename_sms_agent_channel_to_operator` was itself unapplied. Those rows do not block: `RENAME VALUE` runs first and repoints them at `operator` in place, verified end to end on a replica of production's state; `tiktok` is also at 0 rows but stays, because TikTok Shop is wired and gated rather than retired | Ready — migration written, awaiting production gate |
 | Identity-less operator queue entries | Operator channels | `npm run audit:operator-context-compatibility` must report zero `identityLessQueuedPlans`. Queue entries written before durable approval carry no `planId`/`sourceMessageId`/`planHash`/`instructionHash`; `operator-context.ts` refuses to offer them rather than risk running a stale plan. That reader retires when no such rows remain | Deferred — live rows reference it |
+| Cached-plan digest / plan-recovery maintenance | Gateway | `Thread.cachedPlan` and runtime v1 paths still active until Package 6 production cutover | Deferred — trim after agent v1 deletion |
 
 ## Product decisions blocking retirement
 
@@ -52,23 +52,16 @@ repeatable schedulers and can break operator digests and async outbound recovery
 
 ```bash
 npm run audit:operator-context-compatibility
-npm run audit:legacy-imessage-threads
+npm run audit:retired-channel-types
 npm run audit:bullmq-compatibility-names
 npm run audit:outbound-email-mode
 ```
 
-The first two read as dead tooling, because every candidate they were
-originally written for is in the Completed table above. They are not: each
-still measures a surface in the Deferred table — the `imessage` enum value and
-identity-less queue entries respectively. Retire the script with the last
-candidate it gates, never before.
-
-`audit:legacy-imessage-threads` queries raw SQL against `::text` on purpose. The
-retired members are gone from the Prisma client, so `ChannelType.imessage` is
-`undefined`, and Prisma reads an `undefined` filter value as *no filter* — the
-count silently becomes every row rather than none. The script shipped with that
-bug against `ChannelType.sms_agent` from `6ca7556e` until 2026-09-20, reporting
-the total active thread count as its `sms_agent` count. Any audit that filters on
-an enum member is exposed to the same failure the moment that member is retired.
+`audit:retired-channel-types` queries raw SQL against `::text` on purpose. The
+retired members are gone from the Prisma client, so filtering on a removed enum
+member with Prisma reads `undefined` as *no filter* and silently counts every
+row. Cast to text for any audit that gates a channel retirement.
 
 Add `--strict` to any audit that supports it when gating a retirement PR.
+
+**Production channel migrations:** run `npm run audit:retired-channel-types -- --strict`, then `npm run db:migrate:deploy` (with production credentials). Repeat after each pending migration that recreates `ChannelType`.

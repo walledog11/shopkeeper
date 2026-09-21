@@ -124,7 +124,7 @@ export async function acceptMemberAgentRequest(input: MemberRequestInput) {
     await tx.agentRequest.createMany({
       data: {
         id, organizationId: input.organizationId, actorKey, actorKind: "member",
-        channel: "dashboard_agent", threadId: input.threadId,
+        channel: "operator", threadId: input.threadId,
         dedupeKey: input.dedupeKey, payloadVersion: 1, payloadHash, payload,
         normalizedInstruction: instruction,
       },
@@ -133,7 +133,7 @@ export async function acceptMemberAgentRequest(input: MemberRequestInput) {
     let request = await tx.agentRequest.findUniqueOrThrow({
       where: { organizationId_actorKind_actorKey_channel_dedupeKey: {
         organizationId: input.organizationId, actorKind: "member", actorKey,
-        channel: "dashboard_agent", dedupeKey: input.dedupeKey,
+        channel: "operator", dedupeKey: input.dedupeKey,
       } },
     });
     if (request.payloadVersion !== 1 || request.payloadHash !== payloadHash) {
@@ -954,7 +954,7 @@ export async function claimContinuedAgentTask(input: {
         ? target.pendingQuestionId
         : target.activeProposalId;
       if (!waitIdentity) return null;
-      const channel = input.continuationChannel ?? "dashboard_agent";
+      const channel = input.continuationChannel ?? "operator";
       const payload = {
         version: 1,
         threadId: target.threadId,

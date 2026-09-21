@@ -930,7 +930,7 @@ describe("support question continuation", () => {
     const continued = await claimContinuedAgentTask({
       ...seeded,
       continuationInstruction: "Yes, refund this one.",
-      continuationChannel: "dashboard_agent",
+      continuationChannel: "operator",
     });
 
     expect(continued).toMatchObject({ taskId, expectedRevision: 1 });
@@ -943,7 +943,7 @@ describe("support question continuation", () => {
       taskId,
       actorKind: "member",
       actorKey: `member:${seeded.answering.id}`,
-      channel: "dashboard_agent",
+      channel: "operator",
       state: "attached",
       normalizedInstruction: "Yes, refund this one.",
     });

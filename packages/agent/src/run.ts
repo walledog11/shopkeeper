@@ -226,13 +226,6 @@ export async function runAgent(
     if (!readOnly && approvedToolCalls && approvedToolCalls.length > 0) {
       const executableToolCalls = selectExecutableApprovedToolCalls(supportThread, approvedToolCalls);
 
-      if (supportThread?.channelType === "dashboard_agent" && executableToolCalls.length === 0) {
-        return finish({
-          summary: "No approved dashboard action was available to execute.",
-          actionsPerformed,
-        }, "approved_dashboard_actions_empty");
-      }
-
       const toolResults = await executeToolCalls(executableToolCalls, { stopOnDefiniteFailure: true });
 
       if (escalationReason) {

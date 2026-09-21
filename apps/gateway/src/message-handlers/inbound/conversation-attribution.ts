@@ -122,7 +122,7 @@ async function findConversation(
       where: {
         organizationId,
         customer: { platformId: order.email, deletedAt: null },
-        channelType: { notIn: [CHANNEL_TYPE.OPERATOR, CHANNEL_TYPE.DASHBOARD_AGENT] },
+        channelType: { notIn: [CHANNEL_TYPE.OPERATOR] },
         createdAt: { gte: since, lte: order.orderedAt },
         deletedAt: null,
       },
@@ -144,7 +144,7 @@ async function findConversation(
       where: {
         organizationId,
         shopifyCustomerId: order.shopifyCustomerId,
-        channelType: { notIn: [CHANNEL_TYPE.OPERATOR, CHANNEL_TYPE.DASHBOARD_AGENT] },
+        channelType: { notIn: [CHANNEL_TYPE.OPERATOR] },
         createdAt: { gte: since, lte: order.orderedAt },
         deletedAt: null,
       },

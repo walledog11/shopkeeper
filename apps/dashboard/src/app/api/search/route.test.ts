@@ -61,7 +61,7 @@ describe('GET /api/search', () => {
       data: {
         organizationId: org.id,
         customerId: customer.id,
-        channelType: ChannelType.dashboard_agent,
+        channelType: ChannelType.operator,
         aiSummary: 'Canvas internal session',
       },
     });

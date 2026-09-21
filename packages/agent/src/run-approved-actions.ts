@@ -13,16 +13,12 @@ export function summarizeApprovedDashboardActions(actions: ActionEntry[]): strin
 }
 
 export function selectExecutableApprovedToolCalls(
-  supportThread: SupportContext["thread"] | null,
+  _supportThread: SupportContext["thread"] | null,
   approvedToolCalls: RawToolCall[],
 ) {
-  return supportThread?.channelType === "dashboard_agent"
-    ? approvedToolCalls.filter((tc) => TOOL_CATEGORIES[tc.name] === "action")
-    : approvedToolCalls;
+  return approvedToolCalls;
 }
 
-export function approvedActionsCompleteOutcome(supportThread: SupportContext["thread"] | null) {
-  return supportThread?.channelType === "dashboard_agent"
-    ? "approved_dashboard_actions"
-    : "approved_plan_actions";
+export function approvedActionsCompleteOutcome(_supportThread: SupportContext["thread"] | null) {
+  return "approved_plan_actions";
 }

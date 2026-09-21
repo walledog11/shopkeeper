@@ -258,7 +258,7 @@ describe('POST /api/agent/answer', () => {
         // an approval wait with an answer is a different decision.
         endsWait: 'question',
         continuationInstruction: '$15 flat rate',
-        continuationChannel: 'dashboard_agent',
+        continuationChannel: 'operator',
       });
       expect(supportSettlement).toHaveBeenCalledWith(expect.objectContaining({
         orgId: 'org-1',

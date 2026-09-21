@@ -16,12 +16,13 @@ import { summarizeRequestAlignment } from './classification-alignment-lib.mjs';
 loadLocalEnv();
 
 const { db } = await import('@shopkeeper/db');
+const { INTERNAL_OPERATOR_THREAD_CHANNELS } = await import('@shopkeeper/shared/product-analytics');
 
 try {
   const threads = await db.thread.findMany({
     where: {
       deletedAt: null,
-      channelType: { notIn: ['sms_agent', 'dashboard_agent'] },
+      channelType: { notIn: [...INTERNAL_OPERATOR_THREAD_CHANNELS] },
     },
     select: {
       id: true,

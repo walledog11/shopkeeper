@@ -87,7 +87,7 @@ describe("action log display", () => {
   it("links operator desk chat sessions back to the panel", () => {
     const row = entry({
       threadId: "session-9",
-      channelType: "dashboard_agent",
+      channelType: "operator",
       instruction: "How many orders shipped today?",
     })
 

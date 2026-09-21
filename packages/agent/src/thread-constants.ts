@@ -6,16 +6,12 @@ export const CHANNEL_TYPE = {
   // Storefront chat widget. Distinct from SHOPIFY, which is merchant-side and
   // falls back to email — this one delivers into the shopper's open widget.
   SHOPIFY_CHAT: 'shopify_chat',
-  IMESSAGE: 'imessage',
-  SMS: 'sms',
   OPERATOR: 'operator',
-  DASHBOARD_AGENT: 'dashboard_agent',
 } as const;
 
 // Operator-facing channels (Concierge + Telegram/iMessage). Single source of truth for
 // the operator-class predicate — do not re-spell `channelType === ...` for this.
 export const OPERATOR_CHANNEL_TYPES = new Set<string>([
-  CHANNEL_TYPE.DASHBOARD_AGENT,
   CHANNEL_TYPE.OPERATOR,
 ]);
 
@@ -38,10 +34,7 @@ export const CHANNEL_DISPLAY_NAME: Readonly<Record<string, string>> = {
   [CHANNEL_TYPE.TIKTOK]: 'TikTok Shop',
   [CHANNEL_TYPE.SHOPIFY]: 'Shopify',
   [CHANNEL_TYPE.SHOPIFY_CHAT]: 'Storefront chat',
-  [CHANNEL_TYPE.IMESSAGE]: 'iMessage',
-  [CHANNEL_TYPE.SMS]: 'SMS',
   [CHANNEL_TYPE.OPERATOR]: 'Messages',
-  [CHANNEL_TYPE.DASHBOARD_AGENT]: 'Dashboard',
 };
 
 export function channelDisplayName(

@@ -71,7 +71,7 @@ describe('GET /api/threads', () => {
     expect(body.threads).toHaveLength(0);
   });
 
-  it('excludes operator and dashboard_agent channel threads', async () => {
+  it('excludes operator channel threads', async () => {
     const customer = await createTestCustomer(org.id, 'cust_agent', { name: 'Dave' });
     await db.thread.create({
       data: { organizationId: org.id, customerId: customer.id, channelType: ChannelType.operator, status: 'open' },
