@@ -1,4 +1,4 @@
-import type { ActionEntry, SupportContext } from "./agent-context.js";
+import type { ActionEntry } from "./agent-context.js";
 import type { RawToolCall } from "./types.js";
 import { TOOL_CATEGORIES } from "./tools/registry/index.js";
 import { formatOperatorDispatchFailure, isPlanExecutionFailureMessage } from "./message-dispatch.js";
@@ -12,13 +12,10 @@ export function summarizeApprovedDashboardActions(actions: ActionEntry[]): strin
     : message;
 }
 
-export function selectExecutableApprovedToolCalls(
-  _supportThread: SupportContext["thread"] | null,
-  approvedToolCalls: RawToolCall[],
-) {
+export function selectExecutableApprovedToolCalls(approvedToolCalls: RawToolCall[]) {
   return approvedToolCalls;
 }
 
-export function approvedActionsCompleteOutcome(_supportThread: SupportContext["thread"] | null) {
+export function approvedActionsCompleteOutcome() {
   return "approved_plan_actions";
 }

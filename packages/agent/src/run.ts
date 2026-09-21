@@ -224,7 +224,7 @@ export async function runAgent(
 
   try {
     if (!readOnly && approvedToolCalls && approvedToolCalls.length > 0) {
-      const executableToolCalls = selectExecutableApprovedToolCalls(supportThread, approvedToolCalls);
+      const executableToolCalls = selectExecutableApprovedToolCalls(approvedToolCalls);
 
       const toolResults = await executeToolCalls(executableToolCalls, { stopOnDefiniteFailure: true });
 
@@ -245,7 +245,7 @@ export async function runAgent(
         return finish({
           summary: summarizeApprovedDashboardActions(actionsPerformed),
           actionsPerformed,
-        }, approvedActionsCompleteOutcome(supportThread));
+        }, approvedActionsCompleteOutcome());
       }
 
       // Every tool_use block owes a tool_result, so the transcript carries only
