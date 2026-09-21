@@ -1,8 +1,3 @@
-import type { ToolResult } from "../tools/result.js";
-import type {
-  SendEmailInput,
-  SendReplyInput,
-} from "../tools/registry/index.js";
 import {
   addInternalNoteMutation,
   askOperatorMutation,

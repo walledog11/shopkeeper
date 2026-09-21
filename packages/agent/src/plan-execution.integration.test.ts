@@ -1104,7 +1104,7 @@ describe("maybeAutoExecuteCurrentCachedHomePlan", () => {
 describe("bounded failure replan", () => {
   it("replans once after a definite partial failure and completes remaining work", async () => {
     const settings = resolveAgentSettings({ autonomyTier: "trusted", autoExecuteMode: "live" });
-    const { org, thread, message } = await seedThreadWithPlan({ plan: threeStepPlan(), settings });
+    const { org, thread } = await seedThreadWithPlan({ plan: threeStepPlan(), settings });
     const partialResult: AgentResult = {
       summary: "Refund failed",
       actionsPerformed: [

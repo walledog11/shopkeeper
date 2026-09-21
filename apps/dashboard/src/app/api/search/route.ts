@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { db, SenderType } from '@shopkeeper/db';
 import { BadRequestError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
-import { CHANNEL_TYPE } from '@shopkeeper/agent/thread-constants';
+import { merchantInboxInternalChannelFilter } from '@shopkeeper/agent/merchant-inbox-surfaces';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,7 +23,7 @@ export const GET = withOrgRoute(
     const threads = await db.thread.findMany({
       where: {
         organizationId: org.id,
-        channelType: { notIn: [CHANNEL_TYPE.OPERATOR, CHANNEL_TYPE.DASHBOARD_AGENT] },
+        channelType: merchantInboxInternalChannelFilter(),
         archivedAt: null,
         deletedAt: null,
         OR: [

@@ -348,7 +348,8 @@ function renderClaimingText(
   text: string,
   facts: readonly CompletionFact[],
   allowedOutcomes: ReadonlySet<CompletionFactOutcome>,
-  ctx?: FactContext,
+  ctx: FactContext | undefined,
+  toolName: RawToolCall["name"],
 ): string {
   return text.split(/(\n)/).map((line) => {
     if (line === "\n") return line;
@@ -364,6 +365,18 @@ function renderClaimingText(
       }
       const matching = matchingCompletionFacts(normalized, facts, allowedOutcomes, ctx);
       if (matching.length === 0) return sentence;
+      // Replace only when every mutation claim in the sentence is grounded. A
+      // coordinated phrase such as "refunded … and opened a return" must not
+      // collapse to the grounded half — the ungrounded claim stays in place so
+      // execution can reject the reply.
+      if (unsupportedReplyCompletionClaims(
+        { name: toolName, input: { text: normalized } },
+        facts,
+        ctx,
+        allowedOutcomes,
+      ).length > 0) {
+        return sentence;
+      }
       const leading = sentence.match(/^\s*/)?.[0] ?? "";
       const trailing = sentence.match(/\s*$/)?.[0] ?? "";
       return `${leading}${matching.map(renderCompletionFact).join(" ")}${trailing}`;
@@ -390,7 +403,7 @@ export function renderReplyCompletionClaims(
     ...toolCall,
     input: {
       ...input,
-      [field]: renderClaimingText(value, facts, new Set(["success"]), ctx),
+      [field]: renderClaimingText(value, facts, new Set(["success"]), ctx, toolCall.name),
     },
   };
 }

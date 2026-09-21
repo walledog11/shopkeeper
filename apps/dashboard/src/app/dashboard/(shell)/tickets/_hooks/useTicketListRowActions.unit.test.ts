@@ -49,6 +49,33 @@ function thread(): Thread {
   }
 }
 
+type RowActions = ReturnType<typeof useTicketListRowActions>
+
+function renderRowActions(props: Parameters<typeof useTicketListRowActions>[0]) {
+  const captured: { current: RowActions | null } = { current: null }
+
+  function Harness() {
+    const actions = useTicketListRowActions(props)
+    React.useLayoutEffect(() => {
+      captured.current = actions
+    }, [actions])
+    return null
+  }
+
+  container = document.createElement("div")
+  document.body.appendChild(container)
+  root = createRoot(container)
+  return {
+    mount: () => act(async () => {
+      root!.render(React.createElement(Harness))
+    }),
+    get actions() {
+      if (!captured.current) throw new Error("hook result not captured")
+      return captured.current
+    },
+  }
+}
+
 afterEach(() => {
   act(() => root?.unmount())
   root = null
@@ -64,22 +91,11 @@ describe("useTicketListRowActions", () => {
     const revalidateThreadCaches = vi.fn().mockResolvedValue(undefined)
     const showToast = vi.fn()
 
-    let latest: ReturnType<typeof useTicketListRowActions> | null = null
-
-    function Harness() {
-      latest = useTicketListRowActions({ patchThreadCaches, revalidateThreadCaches, showToast })
-      return null
-    }
-
-    container = document.createElement("div")
-    document.body.appendChild(container)
-    root = createRoot(container)
-    await act(async () => {
-      root!.render(React.createElement(Harness))
-    })
+    const harness = renderRowActions({ patchThreadCaches, revalidateThreadCaches, showToast })
+    await harness.mount()
 
     await act(async () => {
-      await latest!.handleQuickApproveFromList("thread-send", "plan-1")
+      await harness.actions.handleQuickApproveFromList("thread-send", "plan-1")
     })
 
     expect(quickApprove).toHaveBeenCalledWith("thread-send", "plan-1")
@@ -95,25 +111,15 @@ describe("useTicketListRowActions", () => {
     const patchThreadCaches = vi.fn()
     const showToast = vi.fn()
 
-    let latest: ReturnType<typeof useTicketListRowActions> | null = null
-    function Harness() {
-      latest = useTicketListRowActions({
-        patchThreadCaches,
-        revalidateThreadCaches: vi.fn(),
-        showToast,
-      })
-      return null
-    }
-
-    container = document.createElement("div")
-    document.body.appendChild(container)
-    root = createRoot(container)
-    await act(async () => {
-      root!.render(React.createElement(Harness))
+    const harness = renderRowActions({
+      patchThreadCaches,
+      revalidateThreadCaches: vi.fn(),
+      showToast,
     })
+    await harness.mount()
 
     await act(async () => {
-      await latest!.handleQuickApproveFromList("thread-send", "plan-1")
+      await harness.actions.handleQuickApproveFromList("thread-send", "plan-1")
     })
 
     expect(patchThreadCaches).not.toHaveBeenCalled()

@@ -126,6 +126,10 @@
       "types": "./dist/thread-io/index.d.ts",
       "default": "./dist/thread-io/index.js"
     },
+    "./merchant-inbox-surfaces": {
+      "types": "./dist/merchant-inbox-surfaces.d.ts",
+      "default": "./dist/merchant-inbox-surfaces.js"
+    },
     "./planner-skip-reply": {
       "types": "./dist/planner-skip-reply.d.ts",
       "default": "./dist/planner-skip-reply.js"

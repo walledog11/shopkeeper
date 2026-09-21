@@ -46,7 +46,7 @@ async function notifyGatewayOfEscalation(args: {
   }
 }
 
-export const dashboardThreadSink = composeThreadSink({
+const dashboardThreadSink = composeThreadSink({
   sendReply,
   sendEmail,
   onEscalated: (ctx, reason) => notifyGatewayOfEscalation({
