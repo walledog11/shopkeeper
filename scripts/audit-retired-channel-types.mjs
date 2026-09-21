@@ -14,7 +14,7 @@ const { RETIRED_THREAD_CHANNEL_TYPES } = await import('@shopkeeper/shared/produc
 
 const strict = process.argv.includes('--strict');
 
-const RETIRED = [...RETIRED_THREAD_CHANNEL_TYPES, 'dashboard_agent'];
+const RETIRED = [...RETIRED_THREAD_CHANNEL_TYPES];
 
 const COLUMNS = [
   ['threads', 'channel_type'],

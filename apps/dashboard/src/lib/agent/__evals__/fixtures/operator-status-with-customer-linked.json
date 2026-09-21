@@ -2,7 +2,7 @@
   "id": "operator-status-with-customer-linked",
   "description": "Operator in the Concierge channel asks about the status of an order for a customer who is already linked to the thread (shopifyCustomerId set). The agent should call get_shopify_orders directly using the linked ID - no need to search for the customer again.",
   "setup": {
-    "channelType": "dashboard_agent",
+    "channelType": "operator",
     "tag": "Concierge",
     "customerName": "Concierge Session",
     "customerPlatformId": "operator-session@internal.local",

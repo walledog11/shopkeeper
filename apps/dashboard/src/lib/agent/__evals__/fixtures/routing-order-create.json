@@ -3,7 +3,7 @@
   "description": "A dashboard operator supplies complete details for a catalog-backed Shopify order.",
   "suite": "extended",
   "setup": {
-    "channelType": "dashboard_agent",
+    "channelType": "operator",
     "customerName": "Operator Session",
     "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
     "messages": [{ "senderType": "customer", "contentText": "Create an order for Jane Smith, jane@example.com, 123 Main St, New York, NY 10001, United States, one unit of variant 8801." }],

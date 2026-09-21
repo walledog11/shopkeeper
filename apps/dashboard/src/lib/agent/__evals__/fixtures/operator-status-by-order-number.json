@@ -2,7 +2,7 @@
   "id": "operator-status-by-order-number",
   "description": "Operator in the Concierge channel asks about an order by its name (#1001). The agent should look it up via get_order_by_name and report back in text - no customer search needed, and no mutative actions.",
   "setup": {
-    "channelType": "dashboard_agent",
+    "channelType": "operator",
     "tag": "Concierge",
     "customerName": "Operator Session",
     "customerPlatformId": "operator-session@internal.local",
