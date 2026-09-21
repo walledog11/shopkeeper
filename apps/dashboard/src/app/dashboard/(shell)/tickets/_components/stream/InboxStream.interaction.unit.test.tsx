@@ -24,12 +24,13 @@ vi.mock("@/components/agent/MerchantAnswerForm", () => ({
   default: () => null,
 }))
 
-const planCache = vi.hoisted(() => ({
-  readAgentPlanCacheRecordShape: vi.fn(() => ({ planId: "plan-send-1" })),
-}))
+const readAgentPlanCacheRecordShape = vi.hoisted(() =>
+  vi.fn(() => ({ planId: "plan-send-1" })),
+)
 
-vi.mock("@shopkeeper/agent/plan-cache-shape", () => ({
-  readAgentPlanCacheRecordShape: planCache.readAgentPlanCacheRecordShape,
+vi.mock("@shopkeeper/agent/plan-cache-shape", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@shopkeeper/agent/plan-cache-shape")>()),
+  readAgentPlanCacheRecordShape,
 }))
 
 let root: Root | null = null
