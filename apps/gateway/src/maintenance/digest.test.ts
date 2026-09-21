@@ -413,7 +413,6 @@ describe('buildOrgDigest — inbox scope', () => {
     const janeThread = await createTestThread(org.id, jane.id, 'email');
     await createTestMessage(janeThread.id, 'Is the mug set back in stock?');
     await createTestThread(org.id, operator.id, 'operator');
-    await createTestThread(org.id, operator.id, 'operator');
     const archived = await createTestThread(org.id, archivedCustomer.id, 'email');
     await db.thread.update({ where: { id: archived.id }, data: { archivedAt: new Date() } });
 
