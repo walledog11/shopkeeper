@@ -25,11 +25,11 @@ vi.mock("@/components/agent/MerchantAnswerForm", () => ({
 }))
 
 const planCache = vi.hoisted(() => ({
-  readAgentPlanCache: vi.fn(() => ({ planId: "plan-send-1" })),
+  readAgentPlanCacheRecordShape: vi.fn(() => ({ planId: "plan-send-1" })),
 }))
 
-vi.mock("@shopkeeper/agent/plan-cache", () => ({
-  readAgentPlanCache: planCache.readAgentPlanCache,
+vi.mock("@shopkeeper/agent/plan-cache-shape", () => ({
+  readAgentPlanCacheRecordShape: planCache.readAgentPlanCacheRecordShape,
 }))
 
 let root: Root | null = null

@@ -16,7 +16,7 @@ import {
   InboxWaitingLead,
 } from "./InboxStreamChrome"
 import type { OrgSettings, Ticket } from "@/types"
-import { readAgentPlanCache } from "@shopkeeper/agent/plan-cache"
+import { readAgentPlanCacheRecordShape } from "@shopkeeper/agent/plan-cache-shape"
 
 export interface InboxStreamProps {
   tickets: Ticket[]
@@ -118,7 +118,7 @@ export function InboxStream({
 
   const cardActions = (ticket: Ticket) => ({
     onOpen: () => onOpen(ticket.id),
-    onSend: () => onSend(ticket.id, readAgentPlanCache(ticket.cachedPlan)?.planId),
+    onSend: () => onSend(ticket.id, readAgentPlanCacheRecordShape(ticket.cachedPlan)?.planId),
     onReview: () => onReview(ticket.id),
     onTrust: () => onTrust(ticket.id),
     onNotReal: () => onNotReal(ticket.id),
