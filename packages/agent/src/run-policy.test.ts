@@ -135,7 +135,7 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
     thread: {
       id: "thread_1",
       status: "open",
-      channelType: "operator",
+      channelType: "ig_dm",
       tag: "Support",
       aiSummary: null,
       shopifyCustomerId: null,
