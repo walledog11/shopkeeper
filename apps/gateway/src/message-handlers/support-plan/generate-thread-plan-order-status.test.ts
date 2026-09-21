@@ -633,7 +633,7 @@ describe('durable order-status host path', () => {
         country: 'United States',
       }))
       .mockResolvedValueOnce(toolUse('reply', 'send_reply', {
-        text: 'I updated the shipping address for order #1001 to 123 Main St, Los Angeles, CA 90001.',
+        text: 'The address for order #1001 has been updated.',
       }));
 
     const oldAddress = {

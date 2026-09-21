@@ -459,7 +459,7 @@ describe('generateThreadPlan auto-execute path', () => {
       expect.anything(),
       'Where is my order #1001?',
       expect.anything(),
-      undefined,
+      { runtimeVersion: 1 },
     );
     expect(result.instruction).toBe('Where is my order #1001?');
   });
@@ -488,7 +488,7 @@ describe('generateThreadPlan auto-execute path', () => {
       expect.anything(),
       expect.any(String),
       expect.anything(),
-      undefined,
+      { runtimeVersion: 1 },
     );
   });
 
