@@ -17,10 +17,8 @@ enum ChannelType {
   email
   tiktok
   shopify
-  sms
   operator
   dashboard_agent
-  imessage
   // Storefront chat (customer-origin). Distinct from `shopify`, which is the
   // merchant's store integration and its email-fallback behavior.
   shopify_chat

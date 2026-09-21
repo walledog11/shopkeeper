@@ -29,8 +29,6 @@ const CHANNEL_CHROME: Record<ChannelType, Pick<ChannelInfo, 'logo' | 'badgeClass
   tiktok: { logo: '/logos/tiktok-logo.png', badgeClassName: 'bg-slate-500/15 text-stone-600' },
   shopify: { logo: '/logos/shopify.svg', badgeClassName: 'bg-green-500/15 text-green-600' },
   shopify_chat: { logo: '/logos/shopify.svg', badgeClassName: 'bg-green-500/15 text-green-600' },
-  imessage: { logo: '/logos/sms.svg', badgeClassName: 'bg-sky-500/15 text-sky-600' },
-  sms: { logo: '/logos/sms.svg', badgeClassName: 'bg-emerald-500/15 text-emerald-600' },
   operator: { logo: '/logos/sms.svg', badgeClassName: 'bg-emerald-500/15 text-emerald-600' },
   dashboard_agent: { logo: '/logos/sms.svg', badgeClassName: 'bg-violet-500/15 text-violet-600' },
 }

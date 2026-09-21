@@ -207,7 +207,7 @@ describe('tenant data surfaces', () => {
   it('does not use Shopify credentials from another organization', async () => {
     await createTestIntegration(otherOrg.id, {
       platform: ChannelType.shopify,
-      externalAccountId: 'foreign-shop.myshopify.com',
+      externalAccountId: 'tenant-foreign-shop.myshopify.com',
       accessToken: 'foreign-token',
     });
 
@@ -228,7 +228,7 @@ describe('tenant data surfaces', () => {
     const foreignCustomer = await createTestCustomer(otherOrg.id, email, { name: 'Foreign Existing' });
     await createTestIntegration(callerOrg.id, {
       platform: ChannelType.shopify,
-      externalAccountId: 'caller-shop.myshopify.com',
+      externalAccountId: 'tenant-caller-shop.myshopify.com',
       accessToken: 'caller-token',
     });
     mockFetch.mockResolvedValueOnce(jsonResponse({
@@ -249,7 +249,7 @@ describe('tenant data surfaces', () => {
     const res = await getShopifyCustomer(new Request(`http://localhost/api/shopify/customer?email=${encodeURIComponent(email)}&orderLimit=0`));
 
     expect(res.status).toBe(200);
-    expect(String(mockFetch.mock.calls[0][0])).toContain('https://caller-shop.myshopify.com/admin/api/2026-04/customers/search.json');
+    expect(String(mockFetch.mock.calls[0][0])).toContain('https://tenant-caller-shop.myshopify.com/admin/api/2026-04/customers/search.json');
     expect(mockFetch.mock.calls[0][1]).toMatchObject({ headers: { 'X-Shopify-Access-Token': 'caller-token' } });
 
     const callerUpdated = await db.customer.findUniqueOrThrow({ where: { id: callerCustomer.id } });

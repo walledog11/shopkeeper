@@ -192,7 +192,7 @@ describe("getHomeSummary", () => {
 
     for (let customerIndex = 0; customerIndex < 5; customerIndex++) {
       const customer = await createCustomer("Repeat")
-      const channels = [ChannelType.email, ChannelType.ig_dm, ChannelType.sms] as const
+      const channels = [ChannelType.email, ChannelType.ig_dm, ChannelType.shopify_chat] as const
       for (let threadIndex = 0; threadIndex < 3; threadIndex++) {
         await createThread({
           customerId: customer.id,

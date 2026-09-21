@@ -86,7 +86,7 @@ beforeEach(async () => {
   });
   await createTestIntegration(org.id, {
     platform: ChannelType.shopify,
-    externalAccountId: 'test-store.myshopify.com',
+    externalAccountId: 'operator-smoke-store.myshopify.com',
     accessToken: 'shpat_test',
   });
   vi.stubEnv('PLAN_EXECUTION_LEDGER_MODE', 'enforce');
