@@ -18,9 +18,11 @@ const groups = [
       || file.endsWith('/packages/db/billing-write-gate.ts'),
   },
   {
+    // Shared write-gate logic is ratcheted under dashboard billing writes; gateway
+    // tests mock the module, so coverage lands on the operator turn entrypoint.
     name: 'gateway billing writes',
     report: 'apps/gateway/coverage/coverage-summary.json',
-    matches: (file) => file.endsWith('/packages/db/billing-write-gate.ts'),
+    matches: (file) => file.endsWith('/src/message-handlers/operator/execute-operator-agent-turn.ts'),
   },
   {
     // The token is the only thing standing between an org's SSE stream and any
