@@ -481,6 +481,19 @@ describe("shared proposal rejection boundary", () => {
     const task = await db.agentTask.findUniqueOrThrow({ where: { id: support.taskId } });
     expect(task).toMatchObject({ status: "cancelled", activeProposalId: null });
     expect(task.cancelledAt).not.toBeNull();
+    expect(await db.agentRequest.findFirstOrThrow({
+      where: {
+        organizationId: support.organizationId,
+        taskId: support.taskId,
+        actorKind: "member",
+      },
+      orderBy: { acceptedAt: "desc" },
+    })).toMatchObject({
+      threadId: task.threadId,
+      channel: "operator",
+      state: "attached",
+      normalizedInstruction: "Reject the proposed work",
+    });
   });
 
   it("refuses a member the proposal does not admit", async () => {
@@ -518,6 +531,13 @@ describe("shared proposal rejection boundary", () => {
     expect(await reject(support.input, support.planId)).toBe(true);
     expect((await db.agentTask.findUniqueOrThrow({ where: { id: support.taskId } })).status)
       .toBe("cancelled");
+    expect(await db.agentRequest.count({
+      where: {
+        organizationId: support.organizationId,
+        taskId: support.taskId,
+        actorKind: "member",
+      },
+    })).toBe(1);
   });
 
   it("leaves a dismissal that names no durable proposal to the legacy path", async () => {

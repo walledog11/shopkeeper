@@ -9,10 +9,12 @@ import {
   NeedsYouCardHeader,
   NeedsYouCardShell,
   NeedsYouPrimaryButton,
+} from "@/app/dashboard/_components/home/needs-you-card-ui"
+import {
   TicketCardMetaRow,
   type TicketCardMeta,
   type TicketCardMetaStatusTone,
-} from "@/app/dashboard/_components/home/needs-you-card-ui"
+} from "@/app/dashboard/_components/home/needs-you-card-meta"
 import { needsYouSecondaryButtonClassName } from "@/app/dashboard/_components/home/needs-you-card-styles"
 import { buildTicketCardMeta } from "../../_lib/inbox-row"
 import type { InboxRow as InboxRowModel, InboxRowDecision } from "../../_lib/inbox-row"

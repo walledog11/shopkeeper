@@ -5,7 +5,7 @@ import {
   merchantRoutingQuestionFromCustomerMessage,
 } from "@shopkeeper/agent/plan-preview"
 import { SENDER_TYPE } from "@shopkeeper/agent/thread-constants"
-import type { TicketCardMeta } from "@/app/dashboard/_components/home/needs-you-card-ui"
+import type { TicketCardMeta } from "@/app/dashboard/_components/home/needs-you-card-meta"
 import { getChannelInfo } from "@/lib/messaging/channels"
 import { customerDisplayLabel } from "@/lib/messaging/customer-display"
 import {

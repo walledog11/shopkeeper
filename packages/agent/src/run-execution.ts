@@ -330,7 +330,12 @@ export async function executeAgentToolCall(
     errorDetail = result;
   } else if (
     (toolCall.name === "send_reply" || toolCall.name === "send_email")
-    && unsupportedReplyCompletionClaims(toolCall, completionFacts, ctx).length > 0
+    // Validate the exact receipt-bound text that will be dispatched. The model
+    // draft may contain a broader phrase (for example "shipping address") that
+    // the canonical renderer deliberately replaces with one grounded claim;
+    // checking the discarded draft can reject a safe reply for a claim no
+    // customer will receive.
+    && unsupportedReplyCompletionClaims(executableToolCall, completionFacts, ctx).length > 0
   ) {
     result = `Error: skipped ${toolCall.name} because its completion claim is not supported by a successful action result.`;
     status = "error";

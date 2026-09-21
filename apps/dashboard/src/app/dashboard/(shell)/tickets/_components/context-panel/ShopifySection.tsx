@@ -61,7 +61,7 @@ type ShopifySectionAction =
   | { type: "createError"; error: string | null }
   | { type: "createSuccess" }
 
-const initialShopifyState: ShopifySectionState = {
+export const initialShopifySectionState: ShopifySectionState = {
   mode: 'view',
   isEditingCustomer: false,
   query: '',
@@ -73,7 +73,7 @@ const initialShopifyState: ShopifySectionState = {
   createError: null,
 }
 
-function shopifySectionReducer(state: ShopifySectionState, action: ShopifySectionAction): ShopifySectionState {
+export function shopifySectionReducer(state: ShopifySectionState, action: ShopifySectionAction): ShopifySectionState {
   switch (action.type) {
     case "mode":
       return { ...state, mode: action.mode }
@@ -141,7 +141,7 @@ function ShopifySectionContent({
   const canCreate = !isEmailThread
   const platformHandle = thread.customer?.platformId
   const emailHint = platformHandle?.includes('@') ? platformHandle : null
-  const [state, dispatch] = useReducer(shopifySectionReducer, initialShopifyState)
+  const [state, dispatch] = useReducer(shopifySectionReducer, initialShopifySectionState)
   const {
     mode,
     isEditingCustomer,

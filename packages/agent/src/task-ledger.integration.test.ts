@@ -39,7 +39,8 @@ async function seedTask() {
 function proposalData(task: { id: string; organizationId: string; revision: number }) {
   return {
     organizationId: task.organizationId, taskId: task.id, taskRevision: task.revision,
-    schemaVersion: 1, canonicalActions: [], dependencies: [], proposalHash: "a".repeat(64),
+    schemaVersion: 1, instruction: "Find the order and check its status",
+    canonicalActions: [], dependencies: [], proposalHash: "a".repeat(64),
     sourceRequestIds: [],
     approverScopeKind: "member" as const, approverScopeKey: `member:${task.id}`,
   };
@@ -455,6 +456,7 @@ describe("durable proposal and question writers", () => {
     expect(stored.status).toBe("waiting_approval");
     expect(stored.activeProposal).toMatchObject({
       taskId: task.id, taskRevision: 0, schemaVersion: 1, status: "ready",
+      instruction: "refund the order",
       canonicalActions: refundCalls, sourceRequestIds: [request.id],
     });
     expect(stored.activeProposal!.proposalHash).toMatch(/^[a-f0-9]{64}$/);
@@ -720,6 +722,78 @@ describe("support conversation request boundary", () => {
     expect(await db.agentRequest.count({ where: { organizationId: input.organizationId } })).toBe(2);
   });
 
+  it("keeps independent classified topics as separate tasks", async () => {
+    const input = await seedSupport();
+    const first = await acceptCustomerAgentRequest({
+      ...input,
+      continuity: { ask: "return", order: "#1001", subject: "blue shirt" },
+    });
+    const next = await createTestMessage(input.threadId, "Also, where is order 2002?");
+    const second = await acceptCustomerAgentRequest({
+      ...input,
+      sourceMessageId: next.id,
+      continuity: { ask: "order_status", order: "#2002", subject: null },
+    });
+
+    expect(second.task.id).not.toBe(first.task.id);
+    expect(await db.agentTask.count({ where: { organizationId: input.organizationId } })).toBe(2);
+    expect((await db.agentTask.findUniqueOrThrow({ where: { id: first.task.id } })).revision).toBe(0);
+  });
+
+  it("returns to the one task matching the classified topic and entity", async () => {
+    const input = await seedSupport();
+    const first = await acceptCustomerAgentRequest({
+      ...input,
+      continuity: { ask: "return", order: "#1001", subject: "blue shirt" },
+    });
+    const otherMessage = await createTestMessage(input.threadId, "Where is order 2002?");
+    await acceptCustomerAgentRequest({
+      ...input,
+      sourceMessageId: otherMessage.id,
+      continuity: { ask: "order_status", order: "#2002", subject: null },
+    });
+    const returnMessage = await createTestMessage(input.threadId, "Back to returning order 1001");
+    const resumed = await acceptCustomerAgentRequest({
+      ...input,
+      sourceMessageId: returnMessage.id,
+      continuity: { ask: "return", order: "#1001", subject: null },
+    });
+
+    expect(resumed.task.id).toBe(first.task.id);
+    expect(resumed.task.revision).toBe(1);
+    expect((resumed.task.checkpoint as { sourceRequestIds: string[] }).sourceRequestIds).toEqual([
+      first.request.id,
+      resumed.request.id,
+    ]);
+  });
+
+  it("does not choose between two tasks for an ambiguous terse follow-up", async () => {
+    const input = await seedSupport();
+    const first = await acceptCustomerAgentRequest({
+      ...input,
+      continuity: { ask: "return", order: null, subject: "blue shirt" },
+    });
+    const secondMessage = await createTestMessage(input.threadId, "I also need to return the black shoes");
+    const second = await acceptCustomerAgentRequest({
+      ...input,
+      sourceMessageId: secondMessage.id,
+      continuity: { ask: "return", order: null, subject: "black shoes" },
+    });
+    const ambiguousMessage = await createTestMessage(input.threadId, "Yes, that one");
+    const ambiguous = await acceptCustomerAgentRequest({
+      ...input,
+      sourceMessageId: ambiguousMessage.id,
+      continuity: { ask: "return", order: null, subject: null },
+    });
+
+    expect(new Set([first.task.id, second.task.id, ambiguous.task.id]).size).toBe(3);
+    const originals = await db.agentTask.findMany({
+      where: { id: { in: [first.task.id, second.task.id] } },
+      select: { revision: true },
+    });
+    expect(originals).toEqual([{ revision: 0 }, { revision: 0 }]);
+  });
+
   it("opens a new task rather than replaying one that reached a provider", async () => {
     const input = await seedSupport();
     const { task } = await acceptCustomerAgentRequest(input);
@@ -848,6 +922,31 @@ describe("support question continuation", () => {
       ...continued!, requestId: continued!.requestId, settlement: { status: "completed" },
     })).toBe(true);
     expect((await db.agentTask.findUniqueOrThrow({ where: { id: taskId } })).status).toBe("completed");
+  });
+
+  it("accepts the merchant answer as a durable request before continuing the task", async () => {
+    const seeded = await seedAnswerable();
+    const taskId = await park(seeded, current(seeded));
+    const continued = await claimContinuedAgentTask({
+      ...seeded,
+      continuationInstruction: "Yes, refund this one.",
+      continuationChannel: "dashboard_agent",
+    });
+
+    expect(continued).toMatchObject({ taskId, expectedRevision: 1 });
+    expect(continued!.requestId).not.toBe(seeded.request.id);
+    expect(await db.agentRequest.findUniqueOrThrow({
+      where: { id: continued!.requestId },
+    })).toMatchObject({
+      organizationId: seeded.organizationId,
+      threadId: seeded.threadId,
+      taskId,
+      actorKind: "member",
+      actorKey: `member:${seeded.answering.id}`,
+      channel: "dashboard_agent",
+      state: "attached",
+      normalizedInstruction: "Yes, refund this one.",
+    });
   });
 
   it("refuses an answer from outside the organization", async () => {

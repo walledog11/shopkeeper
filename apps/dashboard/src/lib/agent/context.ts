@@ -1,5 +1,5 @@
 // Host wrapper — buildContext moved to @shopkeeper/agent (Track 2 extraction). The
-// dashboard injects the thread I/O sink (Postmark/IG/email via ./tools/thread)
+// dashboard injects the thread I/O sink (Postmark/IG/email via ./thread-io)
 // so the shared package never imports a message provider. Postmark/outbound
 // delivery stays here; the package owns the data assembly + sink wiring.
 import { buildContext as coreBuildContext, type BuildContextOptions } from "@shopkeeper/agent/build-context";
@@ -11,7 +11,7 @@ import {
   sendEmail,
   updateThreadStatus,
   updateThreadTag,
-} from "./tools/thread";
+} from "./thread-io/sink";
 import type { AgentContext } from "@shopkeeper/agent/context";
 
 export function buildContext(

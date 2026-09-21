@@ -193,14 +193,50 @@ export async function claimCurrentPlanExecution(
         select: { id: true, senderType: true },
       }),
     ]);
+    let durableCurrent = false;
+    if (identity.taskId && identity.proposalId) {
+      const lockedTask = await tx.$queryRaw<Array<{ runtimeVersion: number }>>(Prisma.sql`
+        SELECT "runtime_version" AS "runtimeVersion"
+        FROM "agent_tasks"
+        WHERE "id" = ${identity.taskId}::uuid
+          AND "organization_id" = ${identity.orgId}::uuid
+          AND "thread_id" = ${identity.threadId}::uuid
+        FOR UPDATE
+      `);
+      if ((lockedTask[0]?.runtimeVersion ?? 0) >= 2) {
+        const proposal = await tx.agentProposal.findFirst({
+          where: {
+            id: identity.proposalId,
+            organizationId: identity.orgId,
+            taskId: identity.taskId,
+          },
+          include: { task: true },
+        });
+        durableCurrent = Boolean(
+          proposal
+          && proposal.id === identity.planId
+          && proposal.status === "approved"
+          && proposal.approvedHash === proposal.proposalHash
+          && proposal.proposalHash === identity.planHash
+          && hashInstruction(proposal.instruction) === identity.instructionHash
+          && proposal.taskRevision === proposal.task.revision
+          && proposal.task.status === "waiting_approval"
+          && proposal.task.activeProposalId === proposal.id
+          && proposal.task.cancelledAt === null
+          && latestConversation?.senderType === SENDER_TYPE.CUSTOMER
+          && latestConversation.id === identity.sourceMessageId
+        );
+      }
+    }
     const cached = readAgentPlanCache(thread.cachedPlan);
-    const current = latestConversation?.senderType === SENDER_TYPE.CUSTOMER
+    const cachedCurrent = latestConversation?.senderType === SENDER_TYPE.CUSTOMER
       && latestConversation.id === identity.sourceMessageId
       && thread.cachedPlanMessageId === identity.sourceMessageId
       && cached?.planId === identity.planId
       && cached.lastCustomerMessageId === identity.sourceMessageId
       && hashPlan(cached.plan) === identity.planHash
       && hashInstruction(cached.instruction) === identity.instructionHash;
+    const current = durableCurrent || cachedCurrent;
     if (!current) {
       await tx.planExecution.updateMany({
         where: { id: execution.id, status: "pending", claimToken: null },

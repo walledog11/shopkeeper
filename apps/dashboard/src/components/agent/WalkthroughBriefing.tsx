@@ -55,7 +55,7 @@ export function WalkthroughCard({
       const response = await fetch("/api/agent/quick-approve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ threadId: item.threadId }),
+        body: JSON.stringify({ threadId: item.threadId, planId: item.planId }),
       })
       const data = await response.json().catch(() => null) as { error?: string } | null
       if (!response.ok) {

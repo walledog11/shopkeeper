@@ -16,6 +16,7 @@ import {
   InboxWaitingLead,
 } from "./InboxStreamChrome"
 import type { OrgSettings, Ticket } from "@/types"
+import { readAgentPlanCache } from "@shopkeeper/agent/plan-cache"
 
 export interface InboxStreamProps {
   tickets: Ticket[]
@@ -27,7 +28,7 @@ export interface InboxStreamProps {
   isLoadingMore: boolean
   hasAnyConversation: boolean
   onOpen: (id: string) => void
-  onSend: (id: string) => void
+  onSend: (id: string, planId?: string | null) => void
   onReview: (id: string) => void
   onTrust: (id: string) => void
   onNotReal: (id: string) => void
@@ -115,13 +116,13 @@ export function InboxStream({
     )
   }
 
-  const cardActions = (ticketId: string) => ({
-    onOpen: () => onOpen(ticketId),
-    onSend: () => onSend(ticketId),
-    onReview: () => onReview(ticketId),
-    onTrust: () => onTrust(ticketId),
-    onNotReal: () => onNotReal(ticketId),
-    onRecover: () => onRecover(ticketId),
+  const cardActions = (ticket: Ticket) => ({
+    onOpen: () => onOpen(ticket.id),
+    onSend: () => onSend(ticket.id, readAgentPlanCache(ticket.cachedPlan)?.planId),
+    onReview: () => onReview(ticket.id),
+    onTrust: () => onTrust(ticket.id),
+    onNotReal: () => onNotReal(ticket.id),
+    onRecover: () => onRecover(ticket.id),
     onAnswered,
   })
 
@@ -136,7 +137,7 @@ export function InboxStream({
       variant={variant}
       isSending={approvingTicketId === entry.ticket.id}
       actionsDisabled={approvingTicketId !== null && approvingTicketId !== entry.ticket.id}
-      actions={cardActions(entry.ticket.id)}
+      actions={cardActions(entry.ticket)}
     />
   )
 

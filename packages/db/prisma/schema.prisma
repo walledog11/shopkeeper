@@ -1448,6 +1448,7 @@ model AgentProposal {
   taskRevision Int @map("task_revision")
   schemaVersion Int @map("schema_version")
   status AgentProposalStatus @default(ready)
+  instruction String @db.VarChar(4000)
   canonicalActions Json @map("canonical_actions") @db.JsonB
   dependencies Json @db.JsonB
   proposalHash String @map("proposal_hash") @db.VarChar(64)

@@ -12,7 +12,7 @@
 import { NextResponse } from "next/server";
 import { INTERNAL_REQUEST_ID_HEADER } from "@shopkeeper/agent/message-dispatch";
 import { db } from "@shopkeeper/db";
-import { sendReply, sendEmail } from "@/lib/agent/tools/thread";
+import { sendReply, sendEmail } from "@/lib/agent/thread-io/send";
 import type { SendReplyInput, SendEmailInput } from "@shopkeeper/agent/tools";
 import type { AgentActionMode } from "@shopkeeper/agent/context";
 import { readRequiredJsonObject } from "@/lib/api/body";

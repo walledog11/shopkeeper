@@ -224,14 +224,17 @@ export function planRequestErrorTurn(instruction: string, error: unknown): Omit<
   return requestErrorTurn(instruction, error, "Failed to generate plan — please try again.")
 }
 
-export async function quickApproveCachedPlan(threadId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function quickApproveCachedPlan(
+  threadId: string,
+  planId?: string | null,
+): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     await requestJson(
       "/api/agent/quick-approve",
       {
         method: "POST",
         headers: JSON_HEADERS,
-        body: JSON.stringify({ threadId }),
+        body: JSON.stringify({ threadId, planId }),
       },
       "Could not complete this action.",
     )

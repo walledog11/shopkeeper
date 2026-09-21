@@ -15,6 +15,8 @@ export default function InboxPageClient(props: InboxPageClientProps) {
 
 function InboxPageContent(props: InboxPageClientProps) {
   const view = useInboxPageView(props)
-  if (view.kind === "error") return <TicketsErrorState />
+  if (view.kind === "error") {
+    return <TicketsErrorState error={view.error} onRetry={view.onRetry} />
+  }
   return <InboxPageLayout {...view.layoutProps} />
 }

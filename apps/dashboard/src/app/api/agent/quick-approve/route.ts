@@ -38,7 +38,7 @@ export const POST = withOrgRoute(
   },
   async ({ org, request }) => {
     const startedAt = Date.now();
-    const { threadId } = parseAgentQuickApproveBody(await readRequiredJsonObject(request));
+    const { threadId, planId } = parseAgentQuickApproveBody(await readRequiredJsonObject(request));
     const settings = resolveAgentSettings(org.settings as Partial<OrgSettings> | null);
     const approver = await resolveSessionApprover();
     const executed = await executeCurrentCachedHomePlan({
@@ -47,6 +47,7 @@ export const POST = withOrgRoute(
       settings,
       executionIntent: "merchant_approved",
       failureRoute: "/api/agent/quick-approve",
+      ...(planId ? { expectedIdentity: { planId } } : {}),
       ...(approver ? { approver } : {}),
     });
     const instructionHash = executed.instruction ? hashInstructionForLog(executed.instruction) : null;

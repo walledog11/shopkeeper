@@ -15,6 +15,8 @@ export interface HomeProposedPreferenceItem {
 
 export interface HomeNeedsAttentionItem {
   threadId: string
+  /** Exact cached/durable proposal identity rendered by this card. */
+  planId?: string | null
   kind: "quick_reply" | "needs_review" | "needs_merchant_input" | "invalid"
   customerName: string | null
   customerMessage: string

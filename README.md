@@ -221,7 +221,7 @@ Configurable per org via Agent → Configure:
 - `packages/agent/src/tools/registry/` — tool registry, categories, and plan-step labels
 - `packages/agent/src/settings.ts` — agent settings defaults + resolver
 - `apps/dashboard/src/lib/agent/runner.ts` — dashboard host adapter: re-exports core `buildContext()`/`planAgent()`/`runAgent()` with dashboard infrastructure injected
-- `apps/dashboard/src/lib/agent/tools/thread.ts` — dashboard thread/message tool sink (provider delivery)
+- `apps/dashboard/src/lib/agent/thread-io/` — dashboard thread/message sink (provider delivery via `send.ts`, mutations via `@shopkeeper/agent/thread-io`)
 - `apps/dashboard/src/lib/agent/shopify/` — dashboard Shopify host wiring
 - `apps/dashboard/src/app/api/agent/route.ts` — POST: execute agent run on a ticket thread
 - `apps/dashboard/src/app/api/agent/plan/route.ts` — POST: generate plan (no side effects)

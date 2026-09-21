@@ -32,6 +32,7 @@ export const maxDuration = 60;
 async function claimAnsweredTaskForThread(
   organizationId: string,
   threadId: string,
+  answer: string,
 ): Promise<ContinuedTaskClaim | null> {
   const { userId } = await auth();
   if (!userId) throw new ConflictError("The answering member session is no longer available.");
@@ -41,6 +42,8 @@ async function claimAnsweredTaskForThread(
   if (durableWait === 0) return null;
   const continuation = await claimContinuedAgentTask({
     organizationId, clerkUserId: userId, threadId, endsWait: "question",
+    continuationInstruction: answer,
+    continuationChannel: "dashboard_agent",
   });
   if (!continuation) {
     throw new ConflictError("This question is already being continued or is no longer available to answer.");
@@ -96,7 +99,7 @@ export const POST = withOrgRoute(
       ? getPendingCustomerMessageId([latestConversation])
       : null;
     const question = extractCachedQuestion(thread.cachedPlan);
-    const continuation = await claimAnsweredTaskForThread(org.id, threadId);
+    const continuation = await claimAnsweredTaskForThread(org.id, threadId, answer);
 
     let savedArticle: { title: string; body: string } | null = null;
     try {
@@ -155,7 +158,14 @@ export const POST = withOrgRoute(
         ctx,
         planningInstruction,
         settings,
-        suspendsAtProposal() ? { suspendAtProposal: true } : undefined,
+        {
+          ...(suspendsAtProposal(continuation?.runtimeVersion)
+            ? { suspendAtProposal: true }
+            : {}),
+          ...(continuation?.runtimeVersion !== undefined
+            ? { runtimeVersion: continuation.runtimeVersion }
+            : {}),
+        },
       );
 
       // Cache under the base instruction so the normal /plan path serves this

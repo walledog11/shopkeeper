@@ -1,10 +1,14 @@
-import { db, SenderType, createMessage } from "@shopkeeper/db";
 import { createHash } from "node:crypto";
-import { AGENT_NOTE_PREFIX, CHANNEL_TYPE, THREAD_STATUS } from "@shopkeeper/agent/thread-constants";
+import { db, SenderType, createMessage } from "@shopkeeper/db";
+import { CHANNEL_TYPE, THREAD_STATUS } from "@shopkeeper/agent/thread-constants";
+import { communicationFailure, communicationSuccess, type ThreadSinkContext } from "@shopkeeper/agent/thread-io";
+import type { SendReplyInput, SendEmailInput } from "@shopkeeper/agent/tools";
+import type { AgentActionMode } from "@shopkeeper/agent/context";
+import type { ReplySource } from "@shopkeeper/analytics";
+import type { ToolResult } from "@shopkeeper/agent/tools";
+import { toolError, toolNotFound, toolOk, toolUnknown } from "@shopkeeper/agent/tools";
 import { recordOutboundCall } from "@/lib/server/outbound-recorder";
 import logger from "@/lib/server/logger";
-import { getGatewayBaseUrl } from "@/lib/server/gateway-url";
-import { fetchProviderWithDeadline } from "@/lib/server/provider-fetch";
 import { getEmailProvider } from "@shopkeeper/email/providers";
 import { buildThreadReplyHeaders, formatReplySubject } from "@shopkeeper/email/reply";
 import { getEmailSender } from "@shopkeeper/email/senders";
@@ -21,121 +25,8 @@ import {
   markPendingAgentMessageSendUnknown,
 } from "@/lib/messaging/dispatch-message-common";
 import { captureDashboardOutboundReplySent } from "@/lib/server/product-analytics";
-import { toolError, toolEscalated, toolNotFound, toolOk, toolUnknown, type ReceiptV1, type ToolResult } from "@shopkeeper/agent/tools";
-import type {
-  AddInternalNoteInput,
-  AskOperatorInput,
-  SendReplyInput,
-  SendEmailInput,
-  UpdateThreadStatusInput,
-  UpdateThreadTagInput,
-  EscalateToHumanInput,
-} from "@shopkeeper/agent/tools";
-import type { AgentActionMode } from "@shopkeeper/agent/context";
-import type { ReplySource } from "@shopkeeper/analytics";
 
-interface ThreadContext {
-  agentActionMode?: AgentActionMode;
-  threadId: string;
-  orgId: string;
-  orgName: string;
-  operationId?: string;
-  executionId?: string;
-  agentRequestId?: string;
-  agentTaskId?: string;
-}
-
-function successfulThreadReceipt(
-  ctx: ThreadContext,
-  tool: 'add_internal_note' | 'update_thread_status' | 'update_thread_tag',
-  providerReference: string,
-  facts: Record<string, unknown>,
-): ReceiptV1 | undefined {
-  if (!ctx.operationId || !ctx.executionId) return undefined;
-  return {
-    version: 1,
-    operationId: ctx.operationId,
-    executionId: ctx.executionId,
-    tool,
-    target: { kind: 'thread', id: ctx.threadId },
-    observedAt: new Date().toISOString(),
-    providerReference,
-    outcome: 'succeeded',
-    facts,
-  } as unknown as ReceiptV1;
-}
-
-type CommunicationTool = 'send_reply' | 'send_email';
-
-function communicationFailure(
-  ctx: ThreadContext,
-  tool: CommunicationTool,
-  target: { kind: 'thread' | 'email'; id: string },
-  outcome: 'failed' | 'not_found' | 'unknown',
-  code: string,
-  message: string,
-): ToolResult {
-  const result = outcome === 'unknown'
-    ? toolUnknown(message)
-    : outcome === 'not_found'
-      ? toolNotFound(message)
-      : toolError(message);
-  if (!ctx.operationId || !ctx.executionId) return result;
-  return {
-    ...result,
-    receipt: {
-      version: 1,
-      operationId: ctx.operationId,
-      executionId: ctx.executionId,
-      tool,
-      target,
-      observedAt: new Date().toISOString(),
-      providerReference: null,
-      outcome,
-      code,
-    },
-  };
-}
-
-function communicationSuccess(
-  ctx: ThreadContext,
-  tool: CommunicationTool,
-  args: {
-    threadId: string;
-    destination: { kind: 'thread' | 'email'; id: string };
-    text: string;
-    message: { id: string; sendStatus?: string | null; providerMessageId?: string | null };
-    deliveryState?: 'accepted' | 'sent' | 'delivered';
-  },
-  display: string,
-): ToolResult {
-  const result = toolOk(display);
-  if (!ctx.operationId || !ctx.executionId) return result;
-  const deliveryState = args.deliveryState
-    ?? (args.message.sendStatus === 'pending' || args.message.sendStatus === 'processing' ? 'accepted' : 'sent');
-  return {
-    ...result,
-    receipt: {
-      version: 1,
-      operationId: ctx.operationId,
-      executionId: ctx.executionId,
-      tool,
-      target: { kind: 'thread', id: args.threadId },
-      observedAt: new Date().toISOString(),
-      providerReference: args.message.id,
-      outcome: 'succeeded',
-      facts: {
-        logicalResponseId: args.message.id,
-        messageId: args.message.id,
-        threadId: args.threadId,
-        destination: args.destination,
-        contentSha256: createHash('sha256').update(args.text).digest('hex'),
-        deliveryState,
-        providerMessageId: args.message.providerMessageId ?? null,
-      },
-    },
-  };
-}
+type ThreadContext = ThreadSinkContext;
 
 function agentReplySource(mode: AgentActionMode | undefined): ReplySource {
   return mode === 'auto_executed' ? 'agent_automatic' : 'agent_approved';
@@ -170,31 +61,6 @@ function agentReplyDispatchError(
   return toolError(`Error: ${agentMessage}.`);
 }
 
-// ── add_internal_note ─────────────────────────────────────────────────────────
-
-export async function addInternalNote(
-  input: AddInternalNoteInput,
-  ctx: ThreadContext
-): Promise<ToolResult> {
-  const owned = await db.thread.findFirst({
-    where: { id: ctx.threadId, organizationId: ctx.orgId },
-    select: { id: true },
-  });
-  if (!owned) return toolNotFound("Error: thread not found.");
-  const message = await createMessage({
-    threadId: ctx.threadId,
-    organizationId: ctx.orgId,
-    senderType: SenderType.note,
-    contentText: `${AGENT_NOTE_PREFIX}${input.text}`,
-  });
-  const result = toolOk(`Note logged: "${input.text}"`);
-  const receipt = successfulThreadReceipt(ctx, 'add_internal_note', message.id, {
-    threadId: ctx.threadId,
-    messageId: message.id,
-    contentSha256: createHash('sha256').update(input.text).digest('hex'),
-  });
-  return receipt ? { ...result, receipt } : result;
-}
 
 // ── send_reply ────────────────────────────────────────────────────────────────
 
@@ -489,147 +355,3 @@ export async function sendEmail(
   );
 }
 
-// ── update_thread_status ──────────────────────────────────────────────────────
-
-export async function updateThreadStatus(
-  input: UpdateThreadStatusInput,
-  ctx: ThreadContext
-): Promise<ToolResult> {
-  const observed = await db.$transaction(async tx => {
-    const before = await tx.thread.findFirst({
-      where: { id: ctx.threadId, organizationId: ctx.orgId }, select: { status: true },
-    });
-    if (!before) return null;
-    const after = await tx.thread.update({
-      where: { id: ctx.threadId }, data: { status: input.status }, select: { status: true },
-    });
-    return { before: before.status, after: after.status };
-  });
-  if (!observed) return toolNotFound("Error: thread not found.");
-  const result = toolOk(`Thread status updated to "${observed.after}".`);
-  const receipt = successfulThreadReceipt(ctx, 'update_thread_status', ctx.threadId, {
-    threadId: ctx.threadId, beforeStatus: observed.before, afterStatus: observed.after,
-  });
-  return receipt ? { ...result, receipt } : result;
-}
-
-// ── update_thread_tag ─────────────────────────────────────────────────────────
-
-export async function updateThreadTag(
-  input: UpdateThreadTagInput,
-  ctx: ThreadContext
-): Promise<ToolResult> {
-  const observed = await db.$transaction(async tx => {
-    const before = await tx.thread.findFirst({
-      where: { id: ctx.threadId, organizationId: ctx.orgId }, select: { tag: true },
-    });
-    if (!before) return null;
-    const after = await tx.thread.update({
-      where: { id: ctx.threadId }, data: { tag: input.tag }, select: { tag: true },
-    });
-    return { before: before.tag, after: after.tag };
-  });
-  if (!observed) return toolNotFound("Error: thread not found.");
-  const result = toolOk(`Thread tag updated to "${observed.after}".`);
-  const receipt = successfulThreadReceipt(ctx, 'update_thread_tag', ctx.threadId, {
-    threadId: ctx.threadId, beforeTag: observed.before, afterTag: observed.after,
-  });
-  return receipt ? { ...result, receipt } : result;
-}
-
-// ── escalate_to_human ─────────────────────────────────────────────────────────
-
-async function notifyGatewayOfEscalation(args: {
-  organizationId: string;
-  threadId: string;
-  reason: string;
-}): Promise<void> {
-  const base = getGatewayBaseUrl();
-  if (!base) {
-    logger.warn({ threadId: args.threadId }, '[escalateToHuman] No gateway base URL — skipping operator push');
-    return;
-  }
-  const secret = process.env.INTERNAL_API_SECRET;
-  if (!secret) {
-    logger.warn({ threadId: args.threadId }, '[escalateToHuman] INTERNAL_API_SECRET unset — skipping operator push');
-    return;
-  }
-  try {
-    const res = await fetchProviderWithDeadline(`${base}/internal/operator/escalate`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-internal-secret': secret,
-      },
-      body: JSON.stringify(args),
-    }, {
-      provider: 'gateway',
-      operation: 'operator escalation notification',
-    });
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      logger.warn(
-        { status: res.status, threadId: args.threadId, body: body.slice(0, 300) },
-        '[escalateToHuman] Gateway escalation push failed',
-      );
-    }
-  } catch (err) {
-    logger.warn(
-      { err: (err as Error).message, threadId: args.threadId },
-      '[escalateToHuman] Gateway escalation push errored',
-    );
-  }
-}
-
-export async function escalateToHuman(
-  input: EscalateToHumanInput,
-  ctx: ThreadContext
-): Promise<ToolResult> {
-  const reason = input.reason.trim() || "No reason provided";
-  // P5-04: keep the ticket `open` so it stays in the inbox and inbound
-  // follow-ups correlate to it; escalation rides on the orthogonal flag.
-  const updated = await db.thread.updateMany({
-    where: { id: ctx.threadId, organizationId: ctx.orgId },
-    data: { status: THREAD_STATUS.OPEN, tag: "needs_human", escalatedAt: new Date() },
-  });
-  if (updated.count !== 1) return toolError("Error: thread not found.");
-  await createMessage({
-    threadId: ctx.threadId,
-    organizationId: ctx.orgId,
-    senderType: SenderType.note,
-    contentText: `${AGENT_NOTE_PREFIX}Escalated to merchant: ${reason}`,
-  });
-  void notifyGatewayOfEscalation({
-    organizationId: ctx.orgId,
-    threadId: ctx.threadId,
-    reason,
-  });
-  return toolEscalated(reason);
-}
-
-// ── ask_operator ──────────────────────────────────────────────────────────────
-
-// Soft sibling of escalateToHuman: the agent needs one fact/decision from the
-// merchant to finish the ticket. Unlike escalation it does not park the thread —
-// the question rides in the cached plan and surfaces as `needs_merchant_input`.
-// This sink only runs if an ask_operator plan is executed, which it never is
-// (classification surfaces the question instead), so the operator push lives in
-// the gateway operator-notification path, not here. We record a note for the audit trail.
-export async function askOperator(
-  input: AskOperatorInput,
-  ctx: ThreadContext
-): Promise<ToolResult> {
-  const question = input.question.trim() || "No question provided";
-  const owned = await db.thread.findFirst({
-    where: { id: ctx.threadId, organizationId: ctx.orgId },
-    select: { id: true },
-  });
-  if (!owned) return toolError("Error: thread not found.");
-  await createMessage({
-    threadId: ctx.threadId,
-    organizationId: ctx.orgId,
-    senderType: SenderType.note,
-    contentText: `${AGENT_NOTE_PREFIX}Asked the merchant: ${question}`,
-  });
-  return toolOk(question);
-}

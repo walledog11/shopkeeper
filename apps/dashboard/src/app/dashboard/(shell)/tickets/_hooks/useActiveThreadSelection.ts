@@ -1,6 +1,8 @@
 import { useCallback, useMemo, useState } from 'react'
 import useSWR from 'swr'
 import { fetcher } from '@/lib/api/fetcher'
+import { REALTIME_ENABLED } from '@/lib/realtime/config'
+import { useDocumentVisible } from '@/hooks/useDocumentVisible'
 import { threadToTicket } from '../_lib/thread-to-ticket'
 import type { ActiveThreadData } from './useThreadCacheCoordinator'
 import type { Thread, Ticket } from '@/types'
@@ -40,10 +42,14 @@ function createLoadingTicket(threadId: string): Ticket {
   }
 }
 
+/** Fallback poll while a conversation is open — complements SSE list revalidation. */
+const ACTIVE_THREAD_REFRESH_MS = REALTIME_ENABLED ? 30_000 : 15_000
+
 export function useActiveThreadSelection({
   queryThreadId,
   knownThreads,
 }: UseActiveThreadSelectionProps) {
+  const isVisible = useDocumentVisible()
   const [selectedActiveTicketId, setSelectedActiveTicketId] = useState<string | null>(null)
   const [dismissedQueryThreadId, setDismissedQueryThreadId] = useState<string | null>(null)
   const queryActiveTicketId = queryThreadId && dismissedQueryThreadId !== queryThreadId ? queryThreadId : null
@@ -63,7 +69,9 @@ export function useActiveThreadSelection({
     data: activeThreadData,
     error: activeThreadError,
     mutate: mutateActiveThread,
-  } = useSWR<ActiveThreadData>(activeThreadKey, fetcher)
+  } = useSWR<ActiveThreadData>(activeThreadKey, fetcher, {
+    refreshInterval: activeThreadKey && isVisible ? ACTIVE_THREAD_REFRESH_MS : 0,
+  })
   const activeThread = activeThreadData?.thread
 
   const activeTicket = activeThread ? threadToTicket(activeThread) : undefined

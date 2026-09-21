@@ -2,6 +2,7 @@ import { db } from '@shopkeeper/db';
 import { requireOrgThread, getLatestConversationMessage } from '@shopkeeper/agent/thread-auth';
 import { buildContext } from '@shopkeeper/agent/build-context';
 import { planAgent, suspendsAtProposal } from '@shopkeeper/agent/planner';
+import { resolveAgentRuntimeVersion } from '@shopkeeper/agent/runtime-modes';
 import { decideAutonomy } from '@shopkeeper/agent/autonomy';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import {
@@ -22,12 +23,17 @@ import {
   acceptCustomerAgentRequest,
   claimAgentTask,
   failAgentTaskClaim,
+  recordAgentTaskModelUsage,
+  reserveAgentTaskModelCall,
   settleAgentTaskClaim,
 } from '@shopkeeper/agent/task-ledger';
+import { estimateModelUsageCostUsd, UnknownModelPriceError } from '@shopkeeper/agent/model-cost';
+import type { TaskModelBudget } from '@shopkeeper/agent/context';
 import { shouldSkipAutoPlan } from '@shopkeeper/agent/sender-trust';
 import { hashInstruction, hashPlan } from '@shopkeeper/agent/agent-actions';
 import { CHANNEL_TYPE } from '@shopkeeper/agent/thread-constants';
 import type { AgentPlan as PackageAgentPlan, OrgSettings } from '@shopkeeper/agent/types';
+import { parseClassifierSignals } from '@shopkeeper/agent/classifier-signals';
 import { getEmailProvider } from '@shopkeeper/email/providers';
 import type { AgentPlan } from '../../types.js';
 import { toGatewayAgentPlan } from './agent-plan-adapter.js';
@@ -230,6 +236,7 @@ export async function generateThreadPlan(
     threadId,
     sourceMessageId: pendingCustomerMessageId,
     objective: instruction,
+    continuity: parseClassifierSignals(thread.classifierSignals)?.requestFacts,
   });
   const scope: PlanAttemptScope = {
     organizationId, threadId, allowAutoExecute, instruction, thread, settings,
@@ -237,6 +244,7 @@ export async function generateThreadPlan(
     ...(durableResult.kind === 'claimed' ? { durableTurn: {
       requestId: durableResult.claim.requestId,
       taskId: durableResult.claim.taskId,
+      runtimeVersion: durableResult.claim.runtimeVersion,
       expectedRevision: durableResult.claim.expectedRevision,
       claimToken: durableResult.claim.claimToken,
     } } : {}),
@@ -288,6 +296,44 @@ interface PlanAttemptScope {
   durableTurn?: DurableTurnIdentity;
 }
 
+function supportTaskModelBudget(
+  organizationId: string,
+  durableTurn?: DurableTurnIdentity,
+): TaskModelBudget | undefined {
+  if (!durableTurn || durableTurn.expectedRevision === undefined || !durableTurn.claimToken) {
+    return undefined;
+  }
+  const claim = {
+    organizationId,
+    taskId: durableTurn.taskId,
+    expectedRevision: durableTurn.expectedRevision,
+    claimToken: durableTurn.claimToken,
+  };
+  return {
+    reserveModelCall: async () => {
+      const state = await reserveAgentTaskModelCall(claim);
+      if (state !== 'active') throw new Error(`Task stopped: ${state}.`);
+    },
+    recordModelUsage: async (usage, model) => {
+      let spentNanoUsd = 0n;
+      try {
+        spentNanoUsd = BigInt(Math.ceil(estimateModelUsageCostUsd(model, usage) * 1_000_000_000));
+      } catch (error) {
+        if (!(error instanceof UnknownModelPriceError)) throw error;
+        logger.warn(
+          { model, taskId: durableTurn.taskId },
+          '[gateway:auto-plan] Unpriced model; call counted without spend',
+        );
+      }
+      const recorded = await recordAgentTaskModelUsage({
+        ...claim,
+        usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, spentNanoUsd },
+      });
+      if (!recorded) throw new Error('Task claim was lost while recording model usage.');
+    },
+  };
+}
+
 // The plan attempt itself: serve a warm cache or plan and cache a fresh one,
 // then auto-execute within business hours. Unchanged by the task around it
 // except that its executions name the request they belong to.
@@ -337,11 +383,18 @@ async function runPlanAttempt(scope: PlanAttemptScope): Promise<GeneratedThreadP
   }
 
   const ctx = await buildContext(threadId, organizationId, gatewayThreadSink);
+  const taskBudget = supportTaskModelBudget(organizationId, scope.durableTurn);
+  if (taskBudget) ctx.taskBudget = taskBudget;
   const plan = await planAgent(
     ctx,
     instruction,
     settings,
-    suspendsAtProposal() ? { suspendAtProposal: true } : undefined,
+    {
+      ...(suspendsAtProposal(scope.durableTurn?.runtimeVersion) ? { suspendAtProposal: true } : {}),
+      ...(scope.durableTurn?.runtimeVersion !== undefined
+        ? { runtimeVersion: scope.durableTurn.runtimeVersion }
+        : {}),
+    },
   );
   const cacheRecord = buildAgentPlanCacheRecord({
     instruction,
@@ -431,7 +484,7 @@ async function buildAutoExecutionResult(
       allowMutativeAutoExecute: scope.allowAutoExecute,
       ...(scope.durableTurn ? { durableTurn: scope.durableTurn } : {}),
     },
-    buildGatewayPlanExecutionDeps(),
+    buildGatewayPlanExecutionDeps(supportTaskModelBudget(organizationId, scope.durableTurn)),
   );
   if (!executed) {
     return {};
@@ -483,12 +536,14 @@ const SUPPORT_TASK_LEASE_MS = 300_000;
 // Limits, not yet meters: the attempt's active time is charged on settle, and
 // nothing reserves model calls or spend against a support task. The shared LLM
 // spend cap still applies, as it does today.
-const SUPPORT_TASK_BUDGET = {
-  runtimeVersion: 1,
-  modelCallLimit: 20,
-  activeTimeMsLimit: 300_000,
-  spendNanoUsdLimit: 1_000_000_000n,
-} as const;
+function supportTaskBudget() {
+  return {
+    runtimeVersion: resolveAgentRuntimeVersion(),
+    modelCallLimit: 20,
+    activeTimeMsLimit: 300_000,
+    spendNanoUsdLimit: 1_000_000_000n,
+  } as const;
+}
 
 interface DurableSupportTask {
   requestId: string;
@@ -496,6 +551,7 @@ interface DurableSupportTask {
   organizationId: string;
   expectedRevision: number;
   claimToken: string;
+  runtimeVersion: number;
 }
 
 /**
@@ -512,9 +568,10 @@ async function openDurableSupportTask(input: {
   threadId: string;
   sourceMessageId: string;
   objective: string;
+  continuity?: { ask: string; order: string | null; subject: string | null };
 }): Promise<{ kind: 'claimed'; claim: DurableSupportTask } | { kind: 'not_owned' }> {
   const { request, task } = await acceptCustomerAgentRequest({
-    ...input, budget: SUPPORT_TASK_BUDGET,
+    ...input, budget: supportTaskBudget(),
   });
   const claimed = await claimAgentTask({
     organizationId: input.organizationId,
@@ -537,6 +594,7 @@ async function openDurableSupportTask(input: {
       organizationId: input.organizationId,
       expectedRevision: task.revision,
       claimToken: claimed.claimToken,
+      runtimeVersion: task.runtimeVersion,
     },
   };
 }

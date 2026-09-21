@@ -7,6 +7,7 @@ import {
   resolveTicketCocoAction,
 } from "../../_lib/resolve-ticket-coco-action"
 import type { AgentPlan, OrgSettings, Thread, Ticket } from "@/types"
+import { readAgentPlanCache } from "@shopkeeper/agent/plan-cache"
 
 interface UseConversationCocoActionProps {
   activeTab: "open" | "closed"
@@ -85,7 +86,9 @@ export function useConversationCocoAction({
 
     switch (cocoAction.handler) {
       case "quick-approve": {
-        const result = await quickApproveCachedPlan(ticket.id)
+        const planId = pendingPlan?.planId
+          ?? readAgentPlanCache(threadContext?.cachedPlan)?.planId
+        const result = await quickApproveCachedPlan(ticket.id, planId)
         if (!result.ok) {
           onActionError?.(result.error)
           return
@@ -113,6 +116,8 @@ export function useConversationCocoAction({
     cocoAction,
     focusPlanCard,
     onActionError,
+    pendingPlan,
+    threadContext,
     onFocusShopifyLink,
     onTicketRefresh,
     requestDraftReply,

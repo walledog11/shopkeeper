@@ -3,7 +3,7 @@ import { planAgent } from '@shopkeeper/agent/planner';
 import { runAgent } from '@shopkeeper/agent/run';
 import type { ExecuteAgentTurnDeps, ExecuteTurnRunAgent } from '@shopkeeper/agent/turn';
 import type { PlanExecutionDeps } from '@shopkeeper/agent/plan-execution';
-import type { AgentContext } from '@shopkeeper/agent/context';
+import type { AgentContext, TaskModelBudget } from '@shopkeeper/agent/context';
 import { getGatewayLockProvider } from '../../clients/agent-runtime.js';
 import { captureAgentActionsCompleted } from '../../product-analytics.js';
 import { gatewayThreadSink } from '../support-plan/agent-thread-sink.js';
@@ -56,9 +56,17 @@ export function buildGatewayTurnDeps(): ExecuteAgentTurnDeps {
   };
 }
 
-export function buildGatewayPlanExecutionDeps(): PlanExecutionDeps {
+export function buildGatewayPlanExecutionDeps(taskBudget?: TaskModelBudget): PlanExecutionDeps {
+  const turnDeps = buildGatewayTurnDeps();
   return {
-    ...buildGatewayTurnDeps(),
+    ...turnDeps,
+    ...(taskBudget ? {
+      buildContext: async (...args: Parameters<typeof turnDeps.buildContext>) => {
+        const context = await turnDeps.buildContext(...args);
+        context.taskBudget = taskBudget;
+        return context;
+      },
+    } : {}),
     planAgent,
   };
 }

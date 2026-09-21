@@ -118,6 +118,14 @@
       "types": "./dist/planner.d.ts",
       "default": "./dist/planner.js"
     },
+    "./runtime-modes": {
+      "types": "./dist/runtime-modes.d.ts",
+      "default": "./dist/runtime-modes.js"
+    },
+    "./thread-io": {
+      "types": "./dist/thread-io/index.d.ts",
+      "default": "./dist/thread-io/index.js"
+    },
     "./planner-skip-reply": {
       "types": "./dist/planner-skip-reply.d.ts",
       "default": "./dist/planner-skip-reply.js"

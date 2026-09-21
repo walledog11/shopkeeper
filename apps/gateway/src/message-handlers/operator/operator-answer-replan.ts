@@ -123,6 +123,8 @@ export async function applyOperatorAnswerReplan(
         clerkUserId: params.clerkUserId,
         threadId: params.threadId,
         endsWait: params.endsWait,
+        continuationInstruction: params.answer,
+        continuationChannel: 'operator',
         leaseMs: ANSWER_REPLAN_LEASE_MS,
       })
     : null;
@@ -132,7 +134,7 @@ export async function applyOperatorAnswerReplan(
 
   let outcome: AnswerReplanOutcome;
   try {
-    outcome = await runAnswerReplan(params);
+    outcome = await runAnswerReplan(params, continuation?.runtimeVersion);
   } catch (err) {
     if (continuation) await failAnswerContinuation(continuation, params);
     throw err;
@@ -198,6 +200,7 @@ async function failAnswerContinuation(
 
 async function runAnswerReplan(
   params: OperatorAnswerReplanParams,
+  runtimeVersion?: number,
 ): Promise<AnswerReplanOutcome> {
   const { organizationId, memberKey, threadId, deliveryRef } = params;
   const answer = params.answer.trim();
@@ -296,7 +299,10 @@ async function runAnswerReplan(
       ctx,
       planningInstruction,
       settings,
-      suspendsAtProposal() ? { suspendAtProposal: true } : undefined,
+      {
+        ...(suspendsAtProposal(runtimeVersion) ? { suspendAtProposal: true } : {}),
+        ...(runtimeVersion !== undefined ? { runtimeVersion } : {}),
+      },
     );
     const cacheRecord = buildAgentPlanCacheRecord({
       instruction: baseInstruction,

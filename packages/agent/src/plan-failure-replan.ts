@@ -18,6 +18,7 @@ import {
   planExecutionOutcomeForResult,
 } from "./execution-outcome.js";
 import type { planAgent } from "./planner.js";
+import { suspendsAtProposal } from "./runtime-modes.js";
 
 export type PlanAgentFn = typeof planAgent;
 
@@ -188,6 +189,7 @@ export async function attemptFailureReplanAfterExecution(params: {
   approvedToolCalls: RawToolCall[];
   result: AgentResult;
   allowMutativeAutoExecute?: boolean;
+  runtimeVersion?: number;
   buildContext: ExecuteAgentTurnDeps["buildContext"];
   planAgent: PlanAgentFn;
 }): Promise<FailureReplanAttempt | null> {
@@ -221,7 +223,10 @@ export async function attemptFailureReplanAfterExecution(params: {
 
   const ctx = await params.buildContext(params.threadId, params.orgId);
   const thread = await requireOrgThread(params.threadId, params.orgId);
-  const childPlan = await params.planAgent(ctx, replanInstruction, params.settings);
+  const childPlan = await params.planAgent(ctx, replanInstruction, params.settings, {
+    ...(suspendsAtProposal(params.runtimeVersion) ? { suspendAtProposal: true } : {}),
+    ...(params.runtimeVersion !== undefined ? { runtimeVersion: params.runtimeVersion } : {}),
+  });
   if (childPlanRepeatsCommittedSteps(childPlan, failureReplan.committedToolCallIds)) {
     return null;
   }

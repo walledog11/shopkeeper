@@ -35,7 +35,13 @@ import { isInvalidPlan } from "./plan-validation.js";
 import { recordRequestEpisodeDismissed, recordRequestEpisodeExecution } from "./request-outcome.js";
 import { historicalCompletionFacts } from "./completion-facts.js";
 import { ANY_MEMBER_ACTOR_KEY, type ProposalSnapshot, type TaskSettlement } from "./task-ledger.js";
-import { authorizeAgentProposal, rejectAgentProposal } from "./task-approval.js";
+import {
+  authorizeAgentProposal,
+  readDurableProposalExecutionSource,
+  rejectAgentProposal,
+  type DurableProposalExecutionSource,
+} from "./task-approval.js";
+import { buildPlanSteps } from "./planner-steps.js";
 
 export type PlanExecutionDeps = ExecuteAgentTurnDeps & {
   planAgent?: PlanAgentFn;
@@ -58,6 +64,8 @@ interface CurrentCachedPlan {
   plan: AgentPlan | null;
   verdict: AutonomyVerdict;
   failureReplan: PlanFailureReplanContext | null;
+  /** Exact identity was already checked against the durable v2 proposal. */
+  durableProposal?: boolean;
 }
 
 export interface FailureReplanRecovery {
@@ -177,6 +185,19 @@ function validateExpectedIdentity(
   }
 }
 
+function validateDurableExpectedIdentity(
+  source: DurableProposalExecutionSource,
+  expected: ExpectedPlanIdentity,
+): void {
+  const mismatch = expected.planId !== source.proposalId
+    || (expected.sourceMessageId && expected.sourceMessageId !== source.sourceMessageId)
+    || (expected.planHash && expected.planHash !== source.proposalHash)
+    || (expected.instructionHash && expected.instructionHash !== hashInstruction(source.instruction));
+  if (mismatch) {
+    throw new ConflictError("This plan is no longer current. Review the latest plan before approving it.");
+  }
+}
+
 function terminalStatusForResult(result: AgentResult): "committed" | "failed" | "unknown" {
   return ledgerStatusForPlanOutcome(planExecutionOutcomeForResult(result));
 }
@@ -231,6 +252,47 @@ async function loadCurrentCachedHomePlan(params: {
     plan,
     verdict,
     failureReplan: cachedPlan?.failureReplan ?? null,
+  };
+}
+
+async function loadExecutionSource(params: {
+  orgId: string;
+  threadId: string;
+  settings: OrgSettings;
+  executionIntent: ExecutionIntent;
+  expectedIdentity?: ExpectedPlanIdentity;
+  allowMutativeAutoExecute?: boolean;
+}): Promise<CurrentCachedPlan> {
+  const durable = params.executionIntent === "merchant_approved" && params.expectedIdentity?.planId
+    ? await readDurableProposalExecutionSource({
+        organizationId: params.orgId,
+        threadId: params.threadId,
+        proposalId: params.expectedIdentity.planId,
+      })
+    : null;
+  if (!durable) return loadCurrentCachedHomePlan(params);
+
+  validateDurableExpectedIdentity(durable, params.expectedIdentity!);
+  const plan: AgentPlan = {
+    planId: durable.proposalId,
+    instruction: durable.instruction,
+    steps: buildPlanSteps(durable.canonicalActions),
+    rawToolCalls: durable.canonicalActions,
+    validation: { status: "valid", issues: [] },
+    routingEvidence: { classifierState: "not_applicable", codes: [] },
+    suspendedAtProposal: true,
+  };
+  return {
+    channel: (await requireOrgThread(params.threadId, params.orgId)).channelType,
+    instruction: durable.instruction,
+    lastCustomerMessageId: durable.sourceMessageId,
+    planId: durable.proposalId,
+    plan,
+    verdict: decideAutonomy(plan, params.settings, {
+      allowMutativeAutoExecute: params.allowMutativeAutoExecute,
+    }),
+    failureReplan: null,
+    durableProposal: true,
   };
 }
 
@@ -316,7 +378,32 @@ export async function consumeThreadCachedPlan(params: {
   orgId: string;
   threadId: string;
   lastCustomerMessageId: string | null;
+  expectedPlanId?: string | null;
 }) {
+  if (params.expectedPlanId) {
+    await db.$transaction(async (tx) => {
+      const locked = await tx.$queryRaw<Array<{
+        cachedPlan: unknown;
+        cachedPlanMessageId: string | null;
+      }>>(Prisma.sql`
+        SELECT "cached_plan" AS "cachedPlan", "cached_plan_message_id" AS "cachedPlanMessageId"
+        FROM "threads"
+        WHERE "id" = ${params.threadId}::uuid
+          AND "organization_id" = ${params.orgId}::uuid
+        FOR UPDATE
+      `);
+      const current = locked[0];
+      if (current?.cachedPlanMessageId !== params.lastCustomerMessageId) return;
+      const cached = current.cachedPlan;
+      if (!cached || typeof cached !== "object" || Array.isArray(cached)) return;
+      if ((cached as { planId?: unknown }).planId !== params.expectedPlanId) return;
+      await tx.thread.updateMany({
+        where: { id: params.threadId, organizationId: params.orgId },
+        data: { cachedPlan: Prisma.DbNull, cachedPlanMessageId: null },
+      });
+    });
+    return;
+  }
   await db.thread.updateMany({
     where: {
       id: params.threadId,
@@ -419,6 +506,7 @@ export async function dismissCurrentCachedPlan(params: {
 export interface DurableTurnIdentity {
   requestId: string;
   taskId: string;
+  runtimeVersion?: number;
   expectedRevision?: number;
   claimToken?: string;
 }
@@ -443,7 +531,7 @@ export async function executeCurrentCachedHomePlan(params: {
     throw new BadRequestError("Review the sender before sending");
   }
 
-  const current = await loadCurrentCachedHomePlan(params);
+  const current = await loadExecutionSource(params);
 
   if (current.plan && isInvalidPlan(current.plan)) {
     throw new BadRequestError(
@@ -467,13 +555,15 @@ export async function executeCurrentCachedHomePlan(params: {
     throw new BadRequestError("This plan is not executable for the requested approval path");
   }
 
-  validateExpectedIdentity({ ...current, plan: current.plan }, params.expectedIdentity);
+  if (!current.durableProposal) {
+    validateExpectedIdentity({ ...current, plan: current.plan }, params.expectedIdentity);
+  }
 
-  const approvedToolCalls = params.approvedToolCalls
+  const requestedToolCalls = params.approvedToolCalls
     ?? ("toolCalls" in verdict ? verdict.toolCalls : []);
-  validateApprovedToolCalls(current.plan, approvedToolCalls);
-  validateCustomerFacingApprovalSet(verdict, approvedToolCalls);
-  if (!approvedToolCalls.some((call) => {
+  validateApprovedToolCalls(current.plan, requestedToolCalls);
+  validateCustomerFacingApprovalSet(verdict, requestedToolCalls);
+  if (!requestedToolCalls.some((call) => {
     const category = TOOL_CATEGORIES[call.name];
     return Boolean(category && EXECUTABLE_CATEGORIES.has(category));
   })) {
@@ -483,14 +573,6 @@ export async function executeCurrentCachedHomePlan(params: {
   const auditMode = params.executionIntent === "automatic"
     ? "auto_executed"
     : "human_approved";
-  const approval: AgentActionApproval | undefined = auditMode === "human_approved" && params.approver
-    ? {
-        approverId: formatApproverId(params.approver),
-        approvedAt: new Date(),
-        approvedPlanHash: hashPlan(current.plan),
-        instructionHash: hashInstruction(current.instruction),
-      }
-    : undefined;
 
   if (!current.planId || !current.lastCustomerMessageId) {
     throw new ConflictError("This plan predates durable approvals. Regenerate it before executing.");
@@ -506,12 +588,34 @@ export async function executeCurrentCachedHomePlan(params: {
     ? await authorizeAgentProposal({
         organizationId: params.orgId,
         clerkUserId: params.approver.clerkUserId,
+        threadId: params.threadId,
         proposalId: current.planId,
         instruction: current.instruction,
-        approvedToolCalls,
+        approvedToolCalls: requestedToolCalls,
         executionLedgerEnforced: ledgerMode === "enforce",
       })
     : null;
+  const proposalBacked = authorized && authorized.runtimeVersion >= 2;
+  // Runtime v2 executes the immutable proposal bundle returned by the same
+  // transaction that authorized it. The thread cache remains a presentation
+  // and v1 compatibility record; it is no longer the source of write inputs.
+  const approvedToolCalls = proposalBacked
+    ? authorized.canonicalActions
+    : requestedToolCalls;
+  const executionInstruction = proposalBacked
+    ? authorized.instruction
+    : current.instruction;
+  const executionPlanHash = proposalBacked
+    ? authorized.proposalHash
+    : hashPlan(current.plan);
+  const approval: AgentActionApproval | undefined = auditMode === "human_approved" && params.approver
+    ? {
+        approverId: formatApproverId(params.approver),
+        approvedAt: new Date(),
+        approvedPlanHash: executionPlanHash,
+        instructionHash: hashInstruction(executionInstruction),
+      }
+    : undefined;
   // Its own turn, separate from the planning attempt that created the proposal.
   const approvedTurnId = authorized ? randomUUID() : undefined;
 
@@ -523,8 +627,8 @@ export async function executeCurrentCachedHomePlan(params: {
     planId: current.planId,
     threadId: params.threadId,
     sourceMessageId: current.lastCustomerMessageId,
-    planHash: hashPlan(current.plan),
-    instructionHash: hashInstruction(current.instruction),
+    planHash: executionPlanHash,
+    instructionHash: hashInstruction(executionInstruction),
     mode: auditMode,
     approverId: approval?.approverId,
     approvedAt: approval?.approvedAt,
@@ -547,7 +651,7 @@ export async function executeCurrentCachedHomePlan(params: {
     result = await executeAgentTurn({
       orgId: params.orgId,
       threadId: params.threadId,
-      instruction: current.instruction,
+      instruction: executionInstruction,
       failureRoute: params.failureRoute,
       orgSettings: params.settings,
       approvedToolCalls,
@@ -640,6 +744,7 @@ export async function executeCurrentCachedHomePlan(params: {
       orgId: params.orgId,
       threadId: params.threadId,
       lastCustomerMessageId: current.lastCustomerMessageId,
+      expectedPlanId: current.planId,
     });
   }
 
@@ -697,6 +802,7 @@ export async function executeCurrentCachedHomePlan(params: {
         approvedToolCalls,
         result,
         allowMutativeAutoExecute: params.allowMutativeAutoExecute,
+        runtimeVersion: params.durableTurn?.runtimeVersion,
         buildContext: deps.buildContext,
         planAgent: deps.planAgent,
       });
@@ -706,11 +812,10 @@ export async function executeCurrentCachedHomePlan(params: {
         // the parent's approval envelope — approvedToolCalls, expectedIdentity,
         // approver — cannot travel with it. Everything it inherits is listed
         // here; it runs on the authority its own verdict grants, which is why
-        // the intent is automatic. The durable turn stays off that list too: the
-        // parent's request ID is the turn its own actions are ordered within, so
-        // a child writing into it would interleave two action sequences. The
-        // child's actions reach the task through the thread, not through
-        // `taskId`.
+        // the intent is automatic. It does retain the durable task claim:
+        // operation IDs, rather than model tool-call IDs or action indexes, are
+        // the write identity, and recovery must find every child action from
+        // the task that authorized this bounded replan.
         const childExecuted = await executeCurrentCachedHomePlan({
           orgId: params.orgId,
           threadId: params.threadId,
@@ -721,6 +826,7 @@ export async function executeCurrentCachedHomePlan(params: {
             ? { allowMutativeAutoExecute: params.allowMutativeAutoExecute }
             : {}),
           failureReplanAllowed: false,
+          ...(params.durableTurn ? { durableTurn: params.durableTurn } : {}),
         }, deps);
         return {
           ...childExecuted,

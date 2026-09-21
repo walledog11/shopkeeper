@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
-import type { AgentActionDispatchState, AgentActorKind, Prisma as PrismaTypes } from "@prisma/client";
+import type {
+  AgentActionDispatchState, AgentActorKind, ChannelType, Prisma as PrismaTypes,
+} from "@prisma/client";
 import { db, Prisma } from "@shopkeeper/db";
 import { BadRequestError, ConflictError, ForbiddenError } from "./errors.js";
 import { hashInstruction, hashPlan } from "./agent-actions.js";
@@ -331,9 +333,11 @@ async function advanceOrOpenThreadTask(
   input: {
     organizationId: string; threadId: string; actorKey: string;
     objective: string; budget: TaskBudget; requestId: string;
+    continuity?: TaskContinuityHint;
   },
 ) {
-  const open = await tx.agentTask.findFirst({
+  const continuity = normalizedContinuityHint(input.continuity);
+  const openTasks = await tx.agentTask.findMany({
     where: {
       organizationId: input.organizationId, threadId: input.threadId,
       initiatingActorKind: "customer",
@@ -342,8 +346,19 @@ async function advanceOrOpenThreadTask(
       actions: { none: { dispatchState: { in: DISPATCHED_STATES } } },
     },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    select: { id: true, status: true, activeProposalId: true },
+    select: { id: true, status: true, activeProposalId: true, checkpoint: true },
+    take: continuity ? 20 : 1,
   });
+  const candidates = continuity
+    ? openTasks.filter(task => {
+        const prior = checkpointContinuity(task.checkpoint);
+        return prior ? continuityMatches(continuity, prior) : false;
+      })
+    : openTasks;
+  // Runtime-v2 relevance is fail-closed: no match or more than one match opens
+  // separate work. The model can then ask a focused question without either
+  // pending task or proposal being silently invalidated.
+  const open = candidates.length === 1 ? candidates[0] : null;
   if (open) {
     // Conditional on the status it was read at: a concurrent claim, stop, or
     // sweep that moved the task first leaves this request to open its own.
@@ -355,6 +370,11 @@ async function advanceOrOpenThreadTask(
       data: {
         ...NO_SUSPENSION, status: "queued",
         revision: { increment: 1 }, lastProgressAt: new Date(),
+        checkpoint: {
+          sourceRequestIds: [...checkpointSourceRequestIds(open.checkpoint), input.requestId],
+          nextWork: "investigate",
+          ...(continuity ? { continuity } : {}),
+        },
       },
     });
     if (advanced.count === 1) {
@@ -373,7 +393,10 @@ async function advanceOrOpenThreadTask(
       initiatingActorKind: "customer", initiatingActorKey: input.actorKey,
       objective: input.objective.slice(0, 4000),
       ...input.budget, checkpointVersion: 1,
-      checkpoint: { sourceRequestIds: [input.requestId], nextWork: "investigate" },
+      checkpoint: {
+        sourceRequestIds: [input.requestId], nextWork: "investigate",
+        ...(continuity ? { continuity } : {}),
+      },
     },
   });
 }
@@ -386,6 +409,52 @@ export interface CustomerRequestInput {
   /** The task's durable objective — the planner's instruction for this thread. */
   objective: string;
   budget: TaskBudget;
+  /** Classifier-derived relevance hint. It selects no authority by itself. */
+  continuity?: TaskContinuityHint;
+}
+
+export interface TaskContinuityHint {
+  ask: string;
+  order: string | null;
+  subject: string | null;
+}
+
+function normalizedContinuityHint(value: TaskContinuityHint | undefined): TaskContinuityHint | null {
+  if (!value) return null;
+  const ask = value.ask.trim().slice(0, 64);
+  if (!ask || ask === "none" || ask === "other") return null;
+  const order = value.order?.trim().slice(0, 24) || null;
+  const subject = value.subject?.trim().toLocaleLowerCase().slice(0, 120) || null;
+  return { ask, order, subject };
+}
+
+function checkpointContinuity(value: unknown): TaskContinuityHint | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const continuity = (value as Record<string, unknown>).continuity;
+  if (!continuity || typeof continuity !== "object" || Array.isArray(continuity)) return null;
+  const source = continuity as Record<string, unknown>;
+  if (typeof source.ask !== "string") return null;
+  return normalizedContinuityHint({
+    ask: source.ask,
+    order: typeof source.order === "string" ? source.order : null,
+    subject: typeof source.subject === "string" ? source.subject : null,
+  });
+}
+
+function checkpointSourceRequestIds(value: unknown): string[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  const ids = (value as Record<string, unknown>).sourceRequestIds;
+  if (!Array.isArray(ids)) return [];
+  return ids.filter((id): id is string => typeof id === "string").slice(-31);
+}
+
+function continuityMatches(current: TaskContinuityHint, prior: TaskContinuityHint): boolean {
+  if (current.ask !== prior.ask) return false;
+  if (current.order && prior.order) return current.order === prior.order;
+  if (current.subject && prior.subject) return current.subject === prior.subject;
+  // One side may be the focused follow-up that supplies the entity the first
+  // turn was missing. The caller still requires this to be the sole match.
+  return true;
 }
 
 /**
@@ -451,6 +520,7 @@ export async function acceptCustomerAgentRequest(input: CustomerRequestInput) {
     const task = await advanceOrOpenThreadTask(tx, {
       organizationId: input.organizationId, threadId: input.threadId,
       actorKey: actor.actorKey, objective, budget: input.budget, requestId: request.id,
+      ...(input.continuity ? { continuity: input.continuity } : {}),
     });
     request = await tx.agentRequest.update({
       where: { id: request.id, organizationId: input.organizationId },
@@ -754,6 +824,7 @@ async function supersedeActiveProposal(
 /** A claim on a task that was waiting, plus the request the attempt advances. */
 export interface ContinuedTaskClaim extends ActiveTaskClaim {
   requestId: string;
+  runtimeVersion: number;
 }
 
 /**
@@ -837,6 +908,9 @@ export async function claimContinuedAgentTask(input: {
   clerkUserId: string;
   threadId: string;
   endsWait: EndedWait;
+  /** The merchant input that ends the wait; persisted before the claim moves. */
+  continuationInstruction?: string;
+  continuationChannel?: ChannelType;
   now?: Date;
   leaseMs?: number;
 }): Promise<ContinuedTaskClaim | null> {
@@ -866,16 +940,74 @@ export async function claimContinuedAgentTask(input: {
     `);
     const target = await tx.agentTask.findFirst({
       where: { ...continuable, id: candidateId },
-      select: { id: true, revision: true, status: true, activeProposalId: true },
+      select: {
+        id: true, threadId: true, revision: true, status: true,
+        activeProposalId: true, pendingQuestionId: true,
+      },
     });
     if (!target) return null;
-    // The attempt advances the request the task is already running; a merchant's
-    // answer is not itself an accepted request on a customer's conversation.
-    const request = await tx.agentRequest.findFirst({
-      where: { organizationId: input.organizationId, taskId: target.id },
-      orderBy: [{ acceptedAt: "desc" }, { id: "desc" }],
-      select: { id: true },
-    });
+    let request: { id: string } | null;
+    const instruction = input.continuationInstruction?.trim() ?? "";
+    if (instruction) {
+      if (instruction.length > 16000) throw new BadRequestError("Instruction must contain 1–16000 characters.");
+      const waitIdentity = input.endsWait === "question"
+        ? target.pendingQuestionId
+        : target.activeProposalId;
+      if (!waitIdentity) return null;
+      const channel = input.continuationChannel ?? "dashboard_agent";
+      const payload = {
+        version: 1,
+        threadId: target.threadId,
+        taskId: target.id,
+        waitKind: input.endsWait,
+        waitIdentity,
+        instruction,
+      };
+      const payloadHash = hashInstruction(JSON.stringify(payload));
+      const dedupeKey = `continuation:${input.endsWait}:${waitIdentity}:${hashInstruction(instruction)}`;
+      const requestId = randomUUID();
+      await tx.agentRequest.createMany({
+        data: {
+          id: requestId,
+          organizationId: input.organizationId,
+          actorKind: "member",
+          actorKey,
+          channel,
+          threadId: target.threadId,
+          dedupeKey,
+          payloadVersion: 1,
+          payloadHash,
+          payload,
+          normalizedInstruction: instruction,
+          state: "attached",
+          taskId: target.id,
+          attachedAt: now,
+        },
+        skipDuplicates: true,
+      });
+      const accepted = await tx.agentRequest.findUniqueOrThrow({
+        where: { organizationId_actorKind_actorKey_channel_dedupeKey: {
+          organizationId: input.organizationId,
+          actorKind: "member",
+          actorKey,
+          channel,
+          dedupeKey,
+        } },
+        select: { id: true, payloadHash: true, taskId: true },
+      });
+      if (accepted.payloadHash !== payloadHash || accepted.taskId !== target.id) {
+        throw new ConflictError("This continuation was already recorded for different work.");
+      }
+      request = accepted;
+    } else {
+      // Compatibility callers advance the newest request already attached to
+      // the task. Migrated answer/revision surfaces always take the branch above.
+      request = await tx.agentRequest.findFirst({
+        where: { organizationId: input.organizationId, taskId: target.id },
+        orderBy: [{ acceptedAt: "desc" }, { id: "desc" }],
+        select: { id: true },
+      });
+    }
     if (!request) return null;
     const claimed = await tx.agentTask.updateMany({
       where: {
@@ -898,6 +1030,7 @@ export async function claimContinuedAgentTask(input: {
     return {
       organizationId: input.organizationId, taskId: task.id,
       expectedRevision: task.revision, claimToken, requestId: request.id,
+      runtimeVersion: task.runtimeVersion,
     };
   });
 }
@@ -938,6 +1071,7 @@ async function persistProposal(
       ...identity,
       ...(snapshot.proposalId ? { id: snapshot.proposalId } : {}),
       schemaVersion: AGENT_PROPOSAL_SCHEMA_VERSION,
+      instruction: snapshot.instruction,
       approverScopeKind: approver.kind,
       approverScopeKey: approver.key,
       canonicalActions: snapshot.rawToolCalls as unknown as PrismaTypes.InputJsonValue,

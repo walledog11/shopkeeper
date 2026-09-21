@@ -56,6 +56,9 @@ vi.mock('@shopkeeper/agent/request-outcome', () => ({
 }));
 
 import { generateThreadPlan } from './generate-thread-plan.js';
+import { executeCurrentCachedHomePlan } from '@shopkeeper/agent/plan-execution';
+import { resolveAgentSettings } from '@shopkeeper/agent/settings';
+import { buildGatewayPlanExecutionDeps } from '../operator/agent-turn-deps.js';
 
 const orgIds: string[] = [];
 let providerFetch: ReturnType<typeof vi.fn>;
@@ -233,7 +236,10 @@ describe('durable order-status host path', () => {
     ]);
     expect(anthropicCreate).toHaveBeenCalledTimes(2);
     expect((anthropicCreate.mock.calls[0]?.[0] as { tools: Array<{ name: string }> }).tools)
-      .toEqual(expect.arrayContaining([expect.objectContaining({ name: 'get_order_by_name' })]));
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({ name: 'get_order_by_name' }),
+        expect.objectContaining({ name: 'discover_capabilities' }),
+      ]));
     expect(JSON.stringify((anthropicCreate.mock.calls[1]?.[0] as { messages: unknown }).messages))
       .toContain('fulfilled');
     expect(fetch).toHaveBeenCalledWith(
@@ -609,5 +615,306 @@ describe('durable order-status host path', () => {
       .toMatchObject({ sourceMessageId: revisedMessage.id });
     expect(providerFetch).toHaveBeenCalledTimes(1);
     expect(String(providerFetch.mock.calls[0]?.[0])).toContain('/graphql.json');
+  });
+
+  it('executes an approved address change from the durable proposal and replies from its receipt', async () => {
+    anthropicCreate.mockReset();
+    anthropicCreate
+      .mockResolvedValueOnce(toolUse('discover-address', 'discover_capabilities', {
+        capability: 'change an order shipping address',
+      }))
+      .mockResolvedValueOnce(toolUse('change-address', 'update_shopify_order_address', {
+        order_id: '9000001001',
+        customer_id: '1234',
+        address1: '123 Main St',
+        city: 'Los Angeles',
+        province: 'CA',
+        zip: '90001',
+        country: 'United States',
+      }))
+      .mockResolvedValueOnce(toolUse('reply', 'send_reply', {
+        text: 'I updated the shipping address for order #1001 to 123 Main St, Los Angeles, CA 90001.',
+      }));
+
+    const oldAddress = {
+      id: 789,
+      address1: '10 Old St',
+      city: 'Los Angeles',
+      province: 'California',
+      province_code: 'CA',
+      zip: '90002',
+      country: 'United States',
+      country_code: 'US',
+    };
+    const newAddress = {
+      id: 789,
+      address1: '123 Main St',
+      city: 'Los Angeles',
+      province: 'California',
+      province_code: 'CA',
+      zip: '90001',
+      country: 'United States',
+      country_code: 'US',
+    };
+    const addressOrder = {
+      ...order,
+      fulfillment_status: null,
+      customer: { id: 1234 },
+      shipping_address: oldAddress,
+    };
+    providerFetch.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      if (url.includes('/orders/9000001001.json')) {
+        return new Response(JSON.stringify({
+          order: method === 'PUT'
+            ? { ...addressOrder, shipping_address: newAddress }
+            : addressOrder,
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      if (url.includes('/customers/1234/addresses/789.json')) {
+        return new Response(JSON.stringify({ customer_address: newAddress }), {
+          status: 200, headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (url.includes('/customers/1234.json')) {
+        return new Response(JSON.stringify({ customer: { id: 1234, default_address: oldAddress } }), {
+          status: 200, headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (url.includes('/orders.json')) {
+        return new Response(JSON.stringify({ orders: [addressOrder] }), {
+          status: 200, headers: { 'content-type': 'application/json' },
+        });
+      }
+      throw new Error(`Unexpected external request: ${method} ${url}`);
+    });
+
+    const org = await createTestOrg();
+    orgIds.push(org.id);
+    const settings = { autonomyTier: 'guarded' as const, autoExecuteMode: 'off' as const };
+    await db.organization.update({ where: { id: org.id }, data: { settings } });
+    await createTestIntegration(org.id, {
+      platform: 'shopify',
+      externalAccountId: 'test-store.myshopify.com',
+      accessToken: 'shpat_test',
+      metadata: { oauthScopes: ['read_orders', 'write_orders', 'read_customers', 'write_customers'] },
+    });
+    const member = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: randomUUID() },
+    });
+    const customer = await createTestCustomer(org.id, `${randomUUID()}@example.com`);
+    const thread = await createTestThread(org.id, customer.id, 'ig_dm', { shopifyCustomerId: '1234' });
+    const sourceMessage = await createTestMessage(
+      thread.id,
+      'Please change the shipping address on order #1001 to 123 Main St, Los Angeles, CA 90001.',
+    );
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        requestSummary: 'Change the shipping address for order #1001.',
+        requestSourceMessageId: sourceMessage.id,
+        classifierSignals: {
+          version: 5,
+          language: 'en',
+          intents: { mutative_request: true },
+          requestFacts: { ask: 'address_change', order: '#1001' },
+        },
+      },
+    });
+
+    const generated = await generateThreadPlan(org.id, thread.id, false, {
+      sourceMessageId: sourceMessage.id,
+    });
+    expect(generated.identity?.planId).toEqual(expect.any(String));
+    expect(generated.plan?.rawToolCalls.map(call => call.name)).toEqual([
+      'update_shopify_order_address',
+    ]);
+    expect(await db.agentTask.findFirstOrThrow({ where: { organizationId: org.id } }))
+      .toMatchObject({ status: 'waiting_approval', activeProposalId: generated.identity!.planId });
+
+    const executed = await executeCurrentCachedHomePlan({
+      orgId: org.id,
+      threadId: thread.id,
+      settings: resolveAgentSettings(settings),
+      executionIntent: 'merchant_approved',
+      failureRoute: 'test:address-host',
+      approver: { clerkUserId: member.clerkUserId, displayName: 'Test Merchant' },
+    }, buildGatewayPlanExecutionDeps());
+
+    expect(executed.execution.status).toBe('committed');
+    expect(executed.result.actionsPerformed.map(action => action.tool)).toEqual([
+      'update_shopify_order_address',
+      'send_reply',
+    ]);
+    const addressAction = await db.agentAction.findFirstOrThrow({
+      where: { organizationId: org.id, tool: 'update_shopify_order_address' },
+    });
+    expect(addressAction).toMatchObject({
+      taskId: expect.any(String),
+      proposalId: generated.identity!.planId,
+      status: 'success',
+      receiptVersion: 1,
+      dispatchState: 'settled',
+    });
+    expect(addressAction.receipt).toMatchObject({
+      outcome: 'succeeded',
+      facts: {
+        orderId: '9000001001',
+        customerId: '1234',
+        orderAddress: {
+          outcome: 'updated',
+          address: { address1: '123 Main St', province: 'California', provinceCode: 'CA' },
+        },
+        customerDefaultAddress: { outcome: 'updated', addressId: '789' },
+      },
+    });
+    expect(postDashboardInternal).toHaveBeenCalledWith(
+      '/api/agent/io-send-internal',
+      expect.objectContaining({
+        orgId: org.id,
+        threadId: thread.id,
+        input: {
+          text: 'The address for order #1001 has been updated.',
+        },
+        agentTaskId: addressAction.taskId,
+      }),
+      expect.anything(),
+    );
+    expect((await db.agentTask.findUniqueOrThrow({ where: { id: addressAction.taskId! } })).status)
+      .toBe('completed');
+  });
+
+  it('executes an approved cancellation once and grounds the reply in confirmed Shopify state', async () => {
+    anthropicCreate.mockReset();
+    anthropicCreate
+      .mockResolvedValueOnce(toolUse('discover-cancel', 'discover_capabilities', {
+        capability: 'cancel an unfulfilled order',
+      }))
+      .mockResolvedValueOnce(toolUse('cancel', 'cancel_order', {
+        order_id: '9000001001', reason: 'customer', restock: true,
+      }))
+      .mockResolvedValueOnce(toolUse('reply', 'send_reply', {
+        text: 'Order #1001 has been canceled.',
+      }));
+
+    const cancellable = {
+      ...order,
+      fulfillment_status: null,
+      cancelled_at: null,
+      customer: { id: 1234 },
+    };
+    const cancelled = {
+      ...cancellable,
+      cancelled_at: '2026-09-20T12:00:00Z',
+      cancel_reason: 'customer',
+      financial_status: 'refunded',
+    };
+    let cancelCalls = 0;
+    providerFetch.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      if (url.includes('/orders/9000001001/cancel.json')) {
+        cancelCalls += 1;
+        return new Response(JSON.stringify({ order: cancelled }), {
+          status: 200, headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (url.includes('/orders/9000001001.json')) {
+        return new Response(JSON.stringify({ order: cancelCalls > 0 ? cancelled : cancellable }), {
+          status: 200, headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (url.includes('/customers/1234.json')) {
+        return new Response(JSON.stringify({ customer: { id: 1234 } }), {
+          status: 200, headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (url.includes('/orders.json')) {
+        return new Response(JSON.stringify({ orders: [cancelCalls > 0 ? cancelled : cancellable] }), {
+          status: 200, headers: { 'content-type': 'application/json' },
+        });
+      }
+      throw new Error(`Unexpected external request: ${method} ${url}`);
+    });
+
+    const org = await createTestOrg();
+    orgIds.push(org.id);
+    const settings = { autonomyTier: 'guarded' as const, autoExecuteMode: 'off' as const };
+    await db.organization.update({ where: { id: org.id }, data: { settings } });
+    await createTestIntegration(org.id, {
+      platform: 'shopify',
+      externalAccountId: 'test-store.myshopify.com',
+      accessToken: 'shpat_test',
+      metadata: { oauthScopes: ['read_orders', 'write_orders'] },
+    });
+    const member = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: randomUUID() },
+    });
+    const customer = await createTestCustomer(org.id, `${randomUUID()}@example.com`);
+    const thread = await createTestThread(org.id, customer.id, 'ig_dm', { shopifyCustomerId: '1234' });
+    const sourceMessage = await createTestMessage(thread.id, 'Please cancel order #1001.');
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        requestSummary: 'Cancel unfulfilled order #1001.',
+        requestSourceMessageId: sourceMessage.id,
+        classifierSignals: {
+          version: 5,
+          language: 'en',
+          intents: { mutative_request: true },
+          requestFacts: { ask: 'cancel', order: '#1001' },
+        },
+      },
+    });
+
+    const generated = await generateThreadPlan(org.id, thread.id, false, {
+      sourceMessageId: sourceMessage.id,
+    });
+    expect(generated.plan?.rawToolCalls.map(call => call.name)).toEqual(['cancel_order']);
+
+    const executed = await executeCurrentCachedHomePlan({
+      orgId: org.id,
+      threadId: thread.id,
+      settings: resolveAgentSettings(settings),
+      executionIntent: 'merchant_approved',
+      failureRoute: 'test:cancellation-host',
+      approver: { clerkUserId: member.clerkUserId, displayName: 'Test Merchant' },
+    }, buildGatewayPlanExecutionDeps());
+
+    expect(cancelCalls).toBe(1);
+    expect(executed.execution.status).toBe('committed');
+    expect(executed.result.actionsPerformed.map(action => action.tool)).toEqual([
+      'cancel_order', 'send_reply',
+    ]);
+    const cancellation = await db.agentAction.findFirstOrThrow({
+      where: { organizationId: org.id, tool: 'cancel_order' },
+    });
+    expect(cancellation).toMatchObject({
+      taskId: expect.any(String),
+      proposalId: generated.identity!.planId,
+      status: 'success',
+      dispatchState: 'settled',
+      receiptVersion: 1,
+    });
+    expect(cancellation.receipt).toMatchObject({
+      outcome: 'succeeded',
+      facts: {
+        orderId: '9000001001',
+        cancelledAt: '2026-09-20T12:00:00Z',
+        reason: 'customer',
+        financialStatus: 'refunded',
+      },
+    });
+    expect(postDashboardInternal).toHaveBeenCalledWith(
+      '/api/agent/io-send-internal',
+      expect.objectContaining({
+        agentTaskId: cancellation.taskId,
+        input: { text: 'Order #1001 has been canceled.' },
+      }),
+      expect.anything(),
+    );
+    expect((await db.agentTask.findUniqueOrThrow({ where: { id: cancellation.taskId! } })).status)
+      .toBe('completed');
   });
 });

@@ -17,7 +17,7 @@
 
 import { db, Prisma } from "@shopkeeper/db";
 import { ConflictError, ForbiddenError } from "./errors.js";
-import { hashPlan } from "./agent-actions.js";
+import { hashInstruction, hashPlan } from "./agent-actions.js";
 import {
   ANY_MEMBER_ACTOR_KEY, actorMayEndWait, NO_SUSPENSION, requireMemberActorKey,
 } from "./task-ledger.js";
@@ -28,7 +28,38 @@ export interface AuthorizedProposal {
   taskId: string;
   proposalId: string;
   taskRevision: number;
+  runtimeVersion: number;
+  threadId: string;
+  instruction: string;
+  canonicalActions: RawToolCall[];
+  proposalHash: string;
   approverKey: string;
+}
+
+export interface DurableProposalExecutionSource {
+  proposalId: string;
+  taskId: string;
+  taskRevision: number;
+  runtimeVersion: number;
+  threadId: string;
+  instruction: string;
+  canonicalActions: RawToolCall[];
+  proposalHash: string;
+  sourceMessageId: string;
+}
+
+function canonicalActions(value: unknown): RawToolCall[] {
+  if (!Array.isArray(value) || !value.every((entry) => (
+    entry !== null
+    && typeof entry === "object"
+    && !Array.isArray(entry)
+    && typeof (entry as { id?: unknown }).id === "string"
+    && typeof (entry as { name?: unknown }).name === "string"
+    && Object.hasOwn(entry, "input")
+  ))) {
+    throw new ConflictError("The durable proposal snapshot is invalid. Regenerate it before approving.");
+  }
+  return value as unknown as RawToolCall[];
 }
 
 // Proposal IDs are UUIDs because the column is. A plan parked before durable
@@ -37,9 +68,63 @@ export interface AuthorizedProposal {
 // cannot be a proposal ID names no proposal.
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+function sourceRequestIds(value: unknown): string[] {
+  if (!Array.isArray(value) || !value.every((id) => typeof id === "string" && UUID.test(id))) {
+    throw new ConflictError("The durable proposal source is invalid. Regenerate it before approving.");
+  }
+  return value;
+}
+
+/** Read the immutable v2 envelope before the locking authorization transaction. */
+export async function readDurableProposalExecutionSource(input: {
+  organizationId: string;
+  threadId: string;
+  proposalId?: string | null;
+}): Promise<DurableProposalExecutionSource | null> {
+  if (!input.proposalId || !UUID.test(input.proposalId)) return null;
+  const proposal = await db.agentProposal.findFirst({
+    where: {
+      id: input.proposalId,
+      organizationId: input.organizationId,
+      task: { threadId: input.threadId, runtimeVersion: { gte: 2 } },
+    },
+    include: {
+      task: {
+        include: {
+          requests: {
+            select: { id: true, sourceMessageId: true, acceptedAt: true },
+            orderBy: { acceptedAt: "desc" },
+          },
+        },
+      },
+    },
+  });
+  if (!proposal) return null;
+  const allowedRequestIds = new Set(sourceRequestIds(proposal.sourceRequestIds));
+  const source = proposal.task.requests.find((request) => (
+    allowedRequestIds.has(request.id) && request.sourceMessageId
+  ));
+  if (!source?.sourceMessageId) {
+    throw new ConflictError("The durable proposal has no customer message source. Regenerate it before approving.");
+  }
+  return {
+    proposalId: proposal.id,
+    taskId: proposal.taskId,
+    taskRevision: proposal.task.revision,
+    runtimeVersion: proposal.task.runtimeVersion,
+    threadId: proposal.task.threadId,
+    instruction: proposal.instruction,
+    canonicalActions: canonicalActions(proposal.canonicalActions),
+    proposalHash: proposal.proposalHash,
+    sourceMessageId: source.sourceMessageId,
+  };
+}
+
 export interface ProposalApprovalInput {
   organizationId: string;
   clerkUserId: string;
+  /** Execution hosts bind the proposal to the conversation they are about to use. */
+  threadId?: string;
   /** The parked plan's ID, which is the durable proposal's ID where one exists. */
   proposalId?: string | undefined;
   instruction: string;
@@ -89,7 +174,10 @@ export async function authorizeAgentProposal(
     if (input.executionLedgerEnforced === false) {
       throw new ConflictError("Durable proposals require the execution ledger.");
     }
-    const actorKey = await requireMemberActorKey(tx, input);
+    const actorKey = await requireMemberActorKey(tx, {
+      organizationId: input.organizationId,
+      clerkUserId: input.clerkUserId,
+    });
     // Who may approve is read from the proposal, never re-derived from who
     // initiated the task. A support task is initiated by the customer and
     // approved by any bound member; deriving refused every one of them.
@@ -101,6 +189,7 @@ export async function authorizeAgentProposal(
     const task = await tx.agentTask.findFirst({
       where: {
         id: proposal.taskId, organizationId: input.organizationId,
+        ...(input.threadId ? { threadId: input.threadId } : {}),
         thread: {
           deletedAt: null, archivedAt: null,
           ...(scope.key === ANY_MEMBER_ACTOR_KEY ? {} : { operatorKey: actorKey }),
@@ -118,6 +207,10 @@ export async function authorizeAgentProposal(
     const authorized = {
       organizationId: input.organizationId, taskId: task.id,
       proposalId: proposal.id, taskRevision: task.revision,
+      runtimeVersion: task.runtimeVersion, threadId: task.threadId,
+      instruction: proposal.instruction,
+      canonicalActions: canonicalActions(proposal.canonicalActions),
+      proposalHash: proposal.proposalHash,
     };
     // The same decision arriving twice — a retry, or the other device — reports
     // the outcome that already stands rather than a conflict.
@@ -155,7 +248,8 @@ export async function authorizeAgentProposal(
  * about whether it happened.
  */
 export type ProposalDecisionTx = Pick<
-  typeof db, "$queryRaw" | "orgMember" | "thread" | "agentTask" | "agentProposal"
+  typeof db,
+  "$queryRaw" | "orgMember" | "thread" | "agentRequest" | "agentTask" | "agentProposal"
 >;
 
 /**
@@ -217,6 +311,30 @@ export async function rejectAgentProposal(
   if (!task || !actorMayEndWait(scope, { kind: "member", key: actorKey })) {
     throw new ForbiddenError("This proposal is not available to the member.");
   }
+  const decisionPayload = {
+    version: 1,
+    decision: "reject",
+    proposalId: proposal.id,
+    taskId: task.id,
+  };
+  await tx.agentRequest.createMany({
+    data: {
+      organizationId: input.organizationId,
+      actorKind: "member",
+      actorKey,
+      channel: "operator",
+      threadId: task.threadId,
+      dedupeKey: `proposal-reject:${proposal.id}`,
+      payloadVersion: 1,
+      payloadHash: hashInstruction(JSON.stringify(decisionPayload)),
+      payload: decisionPayload,
+      normalizedInstruction: "Reject the proposed work",
+      state: "attached",
+      taskId: task.id,
+      attachedAt: input.now ?? new Date(),
+    },
+    skipDuplicates: true,
+  });
   // The same dismissal arriving twice reports the outcome that already stands.
   if (proposal.status === "rejected") return true;
   if (proposal.status === "approved") {

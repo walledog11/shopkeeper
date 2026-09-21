@@ -13,6 +13,7 @@ import {
   desktopTopBarDropdownMenuItemClass,
   navPillDropdownPanelClass,
 } from "./sidebar-helpers";
+import { notifyOrgSwitchFailed } from "@/lib/dashboard/org-switch-error";
 import type { NavAuth } from "./useNavAuth";
 
 type OrganizationMembership = {
@@ -48,8 +49,8 @@ export function OrganizationNavPill({
     try {
       await setActive({ organization: organizationId });
       window.location.reload();
-    } catch (error) {
-      console.error("Failed to switch organization", error);
+    } catch {
+      notifyOrgSwitchFailed();
       onSwitching(false);
     }
   };

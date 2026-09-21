@@ -1,6 +1,7 @@
 "use client"
 
 import { SearchFilterBar } from "@/components/ui/search-filter-bar"
+import { InboxRealtimeStatus } from "./InboxRealtimeStatus"
 
 export function InboxControls({
   searchQuery,
@@ -16,6 +17,8 @@ export function InboxControls({
   onToggleClosed: () => void
 }) {
   return (
+    <>
+    <InboxRealtimeStatus />
     <SearchFilterBar
       value={searchQuery}
       onValueChange={onSearchChange}
@@ -47,5 +50,6 @@ export function InboxControls({
         },
       ]}
     />
+    </>
   )
 }

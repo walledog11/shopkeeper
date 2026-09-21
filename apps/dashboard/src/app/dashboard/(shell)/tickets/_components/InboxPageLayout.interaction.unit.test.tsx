@@ -95,6 +95,7 @@ function Harness() {
       onTicketRefresh: noop,
       onToggleClosed: noop,
       onTrust: noop,
+      onRetryConversationLoad: noop,
     },
     conversation: {
       activeAgentTurns: [],

@@ -6,9 +6,11 @@ import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/ui/cn"
 import {
   NeedsYouCardHeader,
+} from "@/app/dashboard/_components/home/needs-you-card-ui"
+import {
   TicketCardMetaRow,
   type TicketCardMeta,
-} from "@/app/dashboard/_components/home/needs-you-card-ui"
+} from "@/app/dashboard/_components/home/needs-you-card-meta"
 import { needsYouMetaPillShellClassName } from "@/app/dashboard/_components/home/needs-you-card-styles"
 import type { TicketCocoAction } from "../../_lib/resolve-ticket-coco-action"
 

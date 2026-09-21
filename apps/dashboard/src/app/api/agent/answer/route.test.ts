@@ -235,7 +235,7 @@ describe('POST /api/agent/answer', () => {
   describe('durable continuation', () => {
     const continuation = {
       organizationId: 'org-1', taskId: 'task-1', expectedRevision: 3,
-      claimToken: 'claim-1', requestId: 'request-1',
+      claimToken: 'claim-1', requestId: 'request-1', runtimeVersion: 2,
     };
 
     beforeEach(() => {
@@ -257,6 +257,8 @@ describe('POST /api/agent/answer', () => {
         // This surface answers questions; it has no revise button, and ending
         // an approval wait with an answer is a different decision.
         endsWait: 'question',
+        continuationInstruction: '$15 flat rate',
+        continuationChannel: 'dashboard_agent',
       });
       expect(supportSettlement).toHaveBeenCalledWith(expect.objectContaining({
         orgId: 'org-1',

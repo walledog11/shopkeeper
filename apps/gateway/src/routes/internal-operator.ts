@@ -24,6 +24,7 @@ import { internalJsonParser } from './body-parsers.js';
 import { authorizeInternalRequest } from './internal-auth.js';
 import type { OperatorMessageContext } from './operator-message.js';
 import { ensureAgentTaskEnqueued } from '../agent-task-ingest.js';
+import { resolveAgentRuntimeVersion } from '@shopkeeper/agent/runtime-modes';
 
 const DASHBOARD_TASK_LIMITS = {
   modelCallLimit: 20,
@@ -34,7 +35,7 @@ const DASHBOARD_TASK_LIMITS = {
 function dashboardTaskBudget() {
   return {
     ...DASHBOARD_TASK_LIMITS,
-    runtimeVersion: 1,
+    runtimeVersion: resolveAgentRuntimeVersion(),
   };
 }
 

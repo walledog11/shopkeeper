@@ -33,7 +33,7 @@ import {
   sendReply,
   updateThreadStatus,
   updateThreadTag,
-} from "../tools/thread"
+} from "../thread-io/sink"
 import type { AgentPlan, OrgSettings } from "@/types"
 import { isInvalidPlan } from "@shopkeeper/agent/plan-validation"
 import type { ExpectedAgentAction, Fixture } from "./types"

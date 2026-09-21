@@ -101,7 +101,7 @@ export const REVIEW_FILTERS: ReviewFilterConfig[] = [
     label: "You approved",
     emptyTitle: "Nothing approved yet",
     emptyBody: "Plans you approved before they ran appear here.",
-    query: { modes: ["human_approved"] },
+    query: { modes: ["human_approved"], excludeOperator: true },
   },
 ]
 

@@ -83,6 +83,7 @@ export async function loadNeedsAttention(
 
     return [{
       threadId: thread.id,
+      planId: plan.planId ?? null,
       kind,
       // Real name, else the email/handle they wrote in from. Null only when the
       // customer record carries neither — "Unknown Customer" is not worth showing.

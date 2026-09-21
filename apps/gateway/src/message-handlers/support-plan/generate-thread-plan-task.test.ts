@@ -144,6 +144,32 @@ describe('durable support task', () => {
     expect(await db.agentProposal.count({ where: { organizationId: seed.organizationId } })).toBe(0);
   });
 
+  it('charges planning model calls and measured spend to the claimed support task', async () => {
+    const seed = await seedThread();
+    mockPlanAgent.mockImplementation(async (ctx) => {
+      expect(ctx.taskBudget).toBeDefined();
+      await ctx.taskBudget!.reserveModelCall();
+      await ctx.taskBudget!.recordModelUsage({
+        inputTokens: 100,
+        outputTokens: 25,
+        cacheCreationInputTokens: 0,
+        cacheCreation1hInputTokens: 0,
+        cacheReadInputTokens: 0,
+      }, 'claude-sonnet-5');
+      return plan([{ id: 'esc', name: 'escalate_to_human', input: { reason: 'Needs a human' } }]);
+    });
+
+    await generateThreadPlan(seed.organizationId, seed.threadId, false);
+
+    expect(await taskFor(seed.organizationId)).toMatchObject({
+      status: 'completed',
+      modelCallsUsed: 1,
+      inputTokensUsed: 100,
+      outputTokensUsed: 25,
+      spentNanoUsd: 450_000n,
+    });
+  });
+
   it('parks a merchant question on the members who can answer it', async () => {
     const seed = await seedThread();
     mockPlanAgent.mockResolvedValue(plan([
@@ -180,6 +206,60 @@ describe('durable support task', () => {
     expect(second.activeProposalId).not.toBe(first.activeProposalId);
     expect(await db.agentTask.count({ where: { organizationId: seed.organizationId } })).toBe(1);
     expect(await db.agentRequest.count({ where: { organizationId: seed.organizationId } })).toBe(2);
+  });
+
+  it('preserves a parked task when the classified next request is a different topic', async () => {
+    const seed = await seedThread();
+    await db.thread.update({
+      where: { id: seed.threadId },
+      data: { classifierSignals: {
+        version: 5,
+        language: 'en',
+        intents: {},
+        requestFacts: {
+          ask: 'refund', subject: null, order: '#1001', deadline: null,
+          deadlineText: null, alternative: null,
+        },
+      } },
+    });
+    mockPlanAgent.mockResolvedValue(plan([refund, reply]));
+    await generateThreadPlan(seed.organizationId, seed.threadId, false);
+    const first = await taskFor(seed.organizationId);
+    expect(first.checkpoint).toMatchObject({
+      continuity: { ask: 'refund', order: '#1001', subject: null },
+    });
+
+    await createTestMessage(seed.threadId, 'Also, where is order 2002?');
+    await db.thread.update({
+      where: { id: seed.threadId },
+      data: {
+        requestSummary: 'Tell the customer where order #2002 is.',
+        classifierSignals: {
+          version: 5,
+          language: 'en',
+          intents: {},
+          requestFacts: {
+            ask: 'order_status', subject: null, order: '#2002', deadline: null,
+            deadlineText: null, alternative: null,
+          },
+        },
+      },
+    });
+    mockPlanAgent.mockResolvedValue(plan([reply]));
+    await generateThreadPlan(seed.organizationId, seed.threadId, false);
+
+    const tasks = await db.agentTask.findMany({
+      where: { organizationId: seed.organizationId },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(tasks).toHaveLength(2);
+    expect(tasks[0]).toMatchObject({
+      id: first.id,
+      status: 'waiting_approval',
+      activeProposalId: first.activeProposalId,
+      revision: 0,
+    });
+    expect(tasks[1]).toMatchObject({ status: 'completed', revision: 0 });
   });
 
   it('records the attempt as failed without swallowing the failure', async () => {

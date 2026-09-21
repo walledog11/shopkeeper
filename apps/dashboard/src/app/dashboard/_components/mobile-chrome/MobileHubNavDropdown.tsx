@@ -17,6 +17,7 @@ import {
   mobileNavGroupCardClass,
   mobileNavLinkClass,
 } from "../sidebar/sidebar-helpers";
+import { notifyOrgSwitchFailed } from "@/lib/dashboard/org-switch-error";
 import type { NavAuth } from "../sidebar/useNavAuth";
 import { resolveMobileRouteTitle } from "./resolveMobileRouteTitle";
 
@@ -99,8 +100,8 @@ export function MobileHubNavDropdown({
     try {
       await setActive({ organization: organizationId });
       window.location.reload();
-    } catch (error) {
-      console.error("Failed to switch organization", error);
+    } catch {
+      notifyOrgSwitchFailed();
       onSwitching(false);
     }
   };

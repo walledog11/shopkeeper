@@ -123,18 +123,19 @@ export default async function DashboardLayout({ children }: { children: React.Re
         className="dashboard-shell flex h-dvh w-full flex-col overflow-hidden bg-background font-sans"
         style={{ "--m-serif": "Georgia, 'Times New Roman', serif" } as React.CSSProperties}
       >
-        <RealtimeProvider />
         <NotificationBar
           notifications={visibleNotifications}
           initialDismissedIds={[...dismissedNotificationIds]}
         />
         <NavProgressBar />
-        <DashboardSidebar
-          initialAutonomyTier={settings.autonomyTier ?? "guarded"}
-          rightRail={<DashboardRightRail />}
-        >
-          {children}
-        </DashboardSidebar>
+        <RealtimeProvider>
+          <DashboardSidebar
+            initialAutonomyTier={settings.autonomyTier ?? "guarded"}
+            rightRail={<DashboardRightRail />}
+          >
+            {children}
+          </DashboardSidebar>
+        </RealtimeProvider>
       </div>
       </AgentPanelProvider>
     </HelpProvider>

@@ -22,10 +22,12 @@ Package 4's steps are all landed: registry-derived bounded
 discovery, the caller that replaced the full-registry widening, the narrowed
 mutation bucket, the three declared context-dependency tiers with the knowledge
 base deferred on a status question, gift-card issuance out of the default support
-selection and its prompt branch, and the input-side cost measurement. All of it
-sits behind `AGENT_CAPABILITY_DISCOVERY_MODE`, off in both apps; the same live
-run is the first time a model planned against it, and it discovered the
-capability it needed by name on its second call. Package 5 has started with the
+selection and its prompt branch, and the input-side cost measurement. Persisted
+runtime-v2 tasks now select bounded discovery from their immutable task version;
+`AGENT_CAPABILITY_DISCOVERY_MODE` remains only for taskless/manual and v1
+compatibility callers. The same live run is the first time a model planned
+against discovery, and it found the capability it needed by name on its second
+call. Package 5 has started with the
 contract every one
 of its rows is written against: a support conversation now accepts each inbound
 customer message as a durable request and runs it as a claimed task, which also
@@ -40,15 +42,44 @@ on and supersedes it, and declining one ends the task at the ledger instead of
 only in the merchant's queue. The fifth binds task authority through action
 dispatch and execution settlement, removes the remaining untracked retry paths,
 and makes cancellation win before dispatch without losing an effect that was
-already submitted. No capability has been
-migrated row by row yet, and the proposal is still not what authorizes the write.
-Package 6 has not started.
-The first retained Package 5 row has now started with its delivery invariant:
+already submitted. The cutover spine now lets an exact runtime-v2 proposal
+authorize and enter execution without a cached-plan record. The first retained
+safe-read row — order status plus policy/product questions and delivery — now
+runs on that spine with discovery selected by the persisted task runtime.
+Package 6 implementation has started with the additive runtime router, immutable
+task version, v1 compatibility path, and direct v2 proposal entry. Controlled
+production rollout, comparison, rollback rehearsal, and deletion have not
+started. The first retained Package 5 row is complete through its delivery
+invariant:
 customer replies carry the durable request/task identity through the gateway to
 the persisted `Message`, including pending/unknown delivery records, and the
 dashboard send boundary rejects identity from another tenant or thread. The
-order-status and KB/product row is not complete yet.
-Created 2026-09-11; last updated 2026-09-19.
+order-status and KB/product host matrix now covers catalog reads, missing
+information, revised instructions, delivery, and bounded discovery selected by
+the persisted runtime version.
+Created 2026-09-11; last updated 2026-09-20.
+
+Current checkpoint:
+
+- [x] Packages 0–4 are implemented, with the real-store Package 3 release
+  exercise still required before production cutover.
+- [x] The common Package 5 support-task spine is durable from request intake
+  through task claim, waits, approval, action authority, settlement, and
+  attributed reply persistence.
+- [x] The first Package 5 capability row — order status and policy/product
+  questions — satisfies the availability-through-compatibility evidence table.
+- [ ] Package 5 mutative rows remain: address changes, cancellation, basic
+  returns, and retained merchant operations must each pass the same host matrix.
+- [ ] Package 5 continuity remains: independent tasks in one conversation,
+  task switching, terse/ambiguous follow-ups, customer waits, and accepted
+  request records for merchant answers, revisions, and dismissals.
+- [ ] Package 5 bookkeeping cleanup remains: move automatic notes and status
+  consequences out of the model tool surface where they follow from receipts.
+- [x] The Package 6 code path can pin new tasks to runtime v1 or v2 and lets an
+  exact v2 proposal authorize execution without `Thread.cachedPlan`.
+- [ ] Package 6 operational work remains: controlled real-provider exercise,
+  old/new comparison, staged routing, rollback rehearsal, persisted-state
+  inventory, and deletion of superseded active paths.
 
 Implementation detail expanded 2026-09-11 against the current repository. Names marked **proposed** describe work to implement, not APIs or tables that already exist. This document authorizes no production operation by itself.
 
@@ -1958,15 +1989,14 @@ No prompt, tool description or planner surface changed, so no eval run is owed.
 Rollback is reverting the commit and the migration together; nothing outside this
 plan's own tables reads the new columns.
 
-Not done, and named rather than assumed. The proposal still is not what
-authorizes the write: approval is recorded against it and the run is attributed
-to its task, but the bundle that executes is still the cached plan's, so Package
-6's cutover owns that switch. The customer-facing reply carries no `agentTaskId`,
-because the thread sink writes that row and the task is not plumbed through the
-sink contract on either host; the audit note beside it does carry one.
-Durable approval execution now writes `PlanExecution.taskId` and
-`PlanExecution.proposalId`; legacy plans continue to leave both null.
-The task budget is limits without meters: the attempt's active time is
+The gaps recorded after that contract now have explicit outcomes. Runtime-v2
+approval executes the durable proposal bundle rather than the cached plan, while
+runtime v1 remains pinned to cached-plan interpretation. Customer-facing replies
+now carry both request and task identity through the sink and persistence
+boundaries, including pending and unknown delivery rows. Durable approval
+execution writes `PlanExecution.taskId` and `PlanExecution.proposalId`; legacy
+plans continue to leave both null. Still open: the task budget is limits without
+complete meters. The attempt's active time is
 charged on settle, but nothing reserves model calls or spend against a support
 task, so `modelCallLimit` and `spendNanoUsdLimit` are recorded and unenforced.
 The bounded failure replan keeps its own turn identity, so its actions reach the
@@ -2164,15 +2194,17 @@ No prompt, tool description, or model surface changed, so no eval run is owed.
 Rollback is reverting this commit; there is no schema change, and legacy plans
 without task/proposal identity retain their existing interpretation.
 
-Still not done on the proposal side. The proposal is not yet what authorizes the
-write — approval and refusal are both recorded against it, and the bundle that
-executes is still the cached plan's, which Package 6's cutover owns. A dismissal
-is recorded against the proposal but is not an `AgentRequest` either, so it
-shares the answer's crash window. And `claimContinuedAgentTask` deliberately does
-not apply the operator-thread condition `authorizeAgentProposal` adds for a
-member-scoped proposal, which is the rule the answer side already shipped: ending
-a wait is tenant membership plus the recorded scope, and approving additionally
-requires the thread still be that member's own.
+The proposal-side authorization gap is closed for runtime v2. Approval reads the
+immutable instruction, canonical actions, proposal hash, task revision, and
+source request from the durable proposal/task records; the execution claim
+revalidates them under the task lock, and provider dispatch no longer depends on
+`Thread.cachedPlan`. Runtime v1 deliberately retains cached-plan interpretation.
+A dismissal is recorded against the proposal but is not an `AgentRequest`, so it
+still shares the answer's crash window. `claimContinuedAgentTask` deliberately
+does not apply the operator-thread condition `authorizeAgentProposal` adds for a
+member-scoped proposal, which is the rule the answer side already shipped:
+ending a wait is tenant membership plus the recorded scope, while approving
+additionally requires the thread still be that member's own.
 
 The sixth Package 5 contract starts the first retained capability row at the
 delivery end. `executeAgentTurn` now places its server-owned request and task IDs
@@ -2202,11 +2234,46 @@ records its citation; the real plan cache and autonomy boundary execute the
 resulting safe reply; and the gateway delivery hop receives the request/task
 IDs. The two database-backed cases also prove each task completes, and the order
 case proves its successful `send_reply` action names the same request and task.
-They pass alone with the gateway typecheck, targeted lint, and the
-structure/document-reference gate. Still owed before this capability row is
-complete: product-catalog coverage, the order-read and KB/product
-missing-information and revised-instruction conversation cases, and the
-compatibility proof that pins legacy proposals.
+Product-catalog coverage, missing order information, missing policy evidence,
+and revised-instruction cases now run through the same host suite. The six-case
+database-backed suite passes and proves task-attributed delivery or the intended
+wait for each result.
+
+The first cutover-spine contract landed beside that matrix. New tasks persist a
+single runtime version selected at creation. Runtime v1 retains cached-plan
+interpretation; runtime v2 enables proposal suspension from the task's immutable
+version. `AgentProposal` now persists the instruction already covered by its
+hash, and authorization returns that instruction, the canonical actions and the
+proposal hash from the locked snapshot. V2 provider execution and its
+`PlanExecution` identity use those returned fields, and the execution claim
+validates the approved proposal/task/revision under the task lock rather than
+validating its executable hash against `Thread.cachedPlan`. V1 claims retain the
+cache validation. Safe read-and-reply plans no longer receive a spurious
+post-write composition call merely because their task uses v2.
+The additive
+`packages/db/prisma/migrations/20260920150000_add_agent_proposal_instruction`
+migration backfills the instruction from the owning task before enforcing the
+new non-null proposal field.
+
+Verified by the agent and gateway typechecks; the runtime-routing unit test; 135
+database-backed agent cases across task persistence, proposal approval, plan
+execution and execution-ledger concurrency; and 15 gateway host cases covering
+the support task and order/KB/product matrix. Runtime-v2 approval now enters
+directly from an exact durable proposal ID: it reconstructs the executable plan
+from the proposal, resolves its source message from the recorded requests, and
+still executes when the thread cache has been removed. Home, walkthrough,
+conversation, and inbox quick-approval surfaces submit that exact ID; v1 callers
+without it retain the cache path. Cache consumption also checks the plan ID so
+an older completion cannot erase a newer projection. The focused execution
+suite has 49 passing database-backed cases and the dashboard quick-approve route
+has 7. Bounded discovery now follows the claimed task's runtime version through
+initial planning, merchant-answer continuation, and bounded failure replanning;
+the legacy environment flag remains only for taskless/manual compatibility.
+The gateway order/KB/product and merchant-continuation suites have 15 passing
+database-backed cases with both legacy process flags off. This completes the
+first safe-read capability row. The v1 compatibility proof, v2 executable-
+envelope proof, cache-independent entry proof, and persisted discovery-routing
+proof are explicit.
 
 For each capability, complete the following row before marking it migrated:
 
@@ -2232,8 +2299,8 @@ Move automatic audit notes/status consequences to the successful-receipt path wi
   fulfillment uses the same boundary but remains isolated from default support
   selection. The conversation runtime those capabilities migrate onto now exists
   for support — every inbound message is a durable request on a claimed task —
-  and the first row's durable delivery attribution now holds, but no capability
-  has completed every item in the evidence table above.
+  and the order-status plus policy/product safe-read row now completes the
+  evidence table. Mutative capability rows remain incomplete.
 - [ ] Support multiple requests, task switching, terse follow-ups, explicit preferences, and resumption after waiting for the merchant or customer. Resumption after waiting for the merchant now holds for support on both kinds of wait: a parked question names who may answer it and a parked card names who may approve it, and an answer or a revision from any bound member ends that wait and continues the same task from either surface. The rest does not — a conversation still runs one task, and neither the answer nor the dismissal is itself an accepted request.
 - [ ] Stop new actions on cancellation or superseding instructions. Revalidate pending approvals and stale evidence when work resumes. Partial completion: an approval wait now ends at the ledger however it ends — approved, declined, revised, stopped, or superseded by a later customer message — and a proposal that is no longer current records that, so a card held on another device cannot be approved after the fact. Revalidating stale *evidence* on resume does not exist.
 - [ ] Move audit notes and other mechanical bookkeeping out of the model tool surface where they are consequences of execution.

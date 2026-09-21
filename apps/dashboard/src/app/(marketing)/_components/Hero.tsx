@@ -5,8 +5,8 @@ import { HeroMedia } from "./HeroMedia";
 
 const integrationRoles = [
   { name: "Instagram, email, website chat", role: "Customer messages", logo: "/logos/instagram-logo.png" },
-  { name: "iMessage", role: "Your approvals", logo: "/logos/imessage.svg" },
-  { name: "Shopify", role: "Order work", logo: "/logos/shopify.svg" },
+  { name: "iMessage & the dashboard", role: "Talk to your agent", logo: "/logos/imessage.svg" },
+  { name: "Shopify", role: "Orders, products & sales", logo: "/logos/shopify.svg" },
 ] as const;
 
 function rise(delayMs: number) {
@@ -18,29 +18,30 @@ function rise(delayMs: number) {
 
 export function Hero() {
   return (
-    <section className="relative isolate px-5 pb-20 pt-12 text-center sm:px-6 sm:pt-16 md:pb-28">
+    <section className="relative isolate px-5 pb-4 pt-12 text-center sm:px-6 sm:pt-16 md:pb-8">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[600px] [background:radial-gradient(58%_52%_at_50%_40%,rgba(249,245,238,0.95)_0%,rgba(249,245,238,0.55)_42%,transparent_72%)]"
       />
 
       <p className="m-kicker mb-5" style={rise(0)}>
-        An AI support operator for your Shopify store
+        An AI agent that works in your Shopify store
       </p>
 
       <h1
         className="m-display mx-auto mb-6 max-w-[min(820px,94vw)] text-[clamp(2.55rem,6vw,5rem)]"
         style={rise(0)}
       >
-        Answers the DM. Fixes the order. Asks before spending your money.
+        A shopkeeper you can text.
       </h1>
 
       <p
         className="mx-auto mb-8 max-w-[620px] text-[17px] leading-[1.6] text-stone-600 sm:text-[18px]"
         style={rise(80)}
       >
-        You get to your DMs at 11pm. Order #3102 already has a size swap waiting,
-        checked against live stock. Shopkeeper wrote the reply — it just needs your yes.
+        Check stock. Change an order. Run a weekend sale. Tell Shopkeeper what you
+        need through iMessage or the dashboard, and it does the work in Shopify.
+        It also handles customer messages using your products, policies, and order history.
       </p>
 
       <div className="mb-9" style={rise(160)}>
@@ -48,8 +49,8 @@ export function Hero() {
           <GlassLink href="/signup" variant="primary" className="min-h-12 justify-center px-6 py-3">
             {PRIMARY_CTA_LABEL}
           </GlassLink>
-          <GlassLink href="#demo" variant="outline" className="min-h-12 justify-center px-6 py-3">
-            See Shopkeeper work
+          <GlassLink href="#workflow" variant="outline" className="min-h-12 justify-center px-6 py-3">
+            See what you can ask
           </GlassLink>
         </div>
         <p className="mt-3 text-[13px] text-stone-500">
@@ -58,7 +59,7 @@ export function Hero() {
       </div>
 
       <div
-        className="mx-auto mb-14 grid max-w-[760px] divide-y divide-stone-900/10 border-y border-stone-900/10 text-left sm:grid-cols-3 sm:divide-x sm:divide-y-0"
+        className="mx-auto grid max-w-[760px] divide-y divide-stone-900/10 border-y border-stone-900/10 text-left sm:grid-cols-3 sm:divide-x sm:divide-y-0"
         style={rise(210)}
         aria-label="How Shopkeeper connects"
       >
@@ -77,15 +78,23 @@ export function Hero() {
         ))}
       </div>
 
+    </section>
+  );
+}
+
+export function CustomerWorkflow() {
+  return (
+    <section aria-label="Customer request walkthrough" className="relative isolate px-5 py-14 sm:px-6">
       <div id="demo" style={rise(260)} className="relative mx-auto mt-2 max-w-6xl scroll-mt-28">
         <div className="mb-7 text-center">
-          <p className="m-kicker">Example workflow · demo data</p>
+          <p className="m-kicker">When a customer writes first · example workflow</p>
           <h2 className="m-display mx-auto mt-4 max-w-[18ch] text-[clamp(1.9rem,4vw,3.25rem)]">
-            One message. The order gets handled.
+            From a customer’s DM to a change in Shopify.
           </h2>
           <p className="mx-auto mt-4 max-w-[52ch] text-[15px] leading-relaxed text-stone-600">
-            The third step is the one that matters. Shopkeeper has the swap ready and
-            stops anyway, because changing order #3102 is your call.
+            Maya wants a different size. Shopkeeper finds her order, checks stock,
+            prepares the change, and asks you to approve it. Then it updates the order
+            and replies to her on Instagram.
           </p>
         </div>
 

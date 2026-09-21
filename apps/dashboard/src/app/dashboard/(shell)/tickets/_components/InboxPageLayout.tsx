@@ -76,12 +76,13 @@ interface InboxPageLayoutActions {
   onRetrySend: ConversationViewProps["onRetrySend"]
   onReview: (id: string) => void
   onSearchChange: (value: string) => void
-  onSend: (id: string) => void
+  onSend: (id: string, planId?: string | null) => void
   onSendMessage: ConversationViewProps["onSend"]
   onActionError: ConversationViewProps["onActionError"]
   onTicketRefresh: ConversationViewProps["onTicketRefresh"]
   onToggleClosed: () => void
   onTrust: (id: string) => void
+  onRetryConversationLoad: () => void
 }
 
 interface InboxPageLayoutProps {
@@ -190,7 +191,11 @@ function InboxDialogBody({ snapshot }: { snapshot: InboxDialogSnapshot }) {
           />
         </div>
       ) : activeThreadError ? (
-        <ConversationLoadState error={activeThreadError} compact />
+        <ConversationLoadState
+          error={activeThreadError}
+          compact
+          onRetry={actions.onRetryConversationLoad}
+        />
       ) : (
         <ConversationBodySkeleton />
       )}

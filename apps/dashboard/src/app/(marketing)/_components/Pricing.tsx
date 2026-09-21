@@ -51,7 +51,7 @@ export function Pricing() {
       <Reveal>
         <SectionLabel>what it costs</SectionLabel>
         <h2 className="mx-auto mb-5 max-w-[20ch] text-[clamp(36px,5vw,68px)] font-bold leading-[1] tracking-[0.03em] [font-family:var(--m-hand)]">
-          Costs less than <em className="italic text-[var(--m-quill)]">a part-time hire.</em>
+          The whole product, <em className="italic text-[var(--m-quill)]">on either plan.</em>
         </h2>
         <p className="mx-auto mb-8 max-w-[48ch] text-[16px] leading-relaxed text-stone-700">
           <span className="relative inline-block whitespace-nowrap">
@@ -66,8 +66,9 @@ export function Pricing() {
         </p>
 
         <p className="mx-auto mb-12 max-w-[62ch] rounded-xl border border-stone-900/10 bg-[#fdfbf7]/80 px-5 py-4 text-[15px] leading-relaxed text-stone-700">
-          Both plans are the same product. Refunds, swaps, address fixes, approvals from
-          your phone, your voice, your limits. The price is about how much you use it.
+          Both plans include the merchant agent, customer inbox, supported Shopify
+          actions, sales and stock tools, iMessage, store memory, and briefings.
+          Choose based on customer conversation volume and the number of people using the workspace.
         </p>
       </Reveal>
 
@@ -139,7 +140,7 @@ export function Pricing() {
       </div>
 
       <p className="mx-auto mt-8 max-w-[58ch] text-[14px] leading-relaxed text-stone-600">
-        A conversation is one customer thread in a month, however long it runs. Your own
+        A conversation is a new customer thread opened in the calendar month, however long it runs. Your own
         messages to Shopkeeper don’t count.
       </p>
     </section>

@@ -78,7 +78,7 @@ export function Footer() {
         </nav>
 
         <div className="pt-6 text-[13px] text-stone-500">
-          © {COPYRIGHT_YEAR} Shopkeeper · AI support operator for Shopify stores.
+          © {COPYRIGHT_YEAR} Shopkeeper · An AI agent for your Shopify store.
         </div>
 
         {/* Giant wordmark outro, descenders cropped by the page edge */}

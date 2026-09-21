@@ -8,7 +8,7 @@ const { findOwnedRequest, findOwnedTask, findOwnedThread, sendEmail, sendReply }
   sendReply: vi.fn(),
 }));
 
-vi.mock('@/lib/agent/tools/thread', () => ({ sendEmail, sendReply }));
+vi.mock('@/lib/agent/thread-io/send', () => ({ sendEmail, sendReply }));
 vi.mock('@shopkeeper/db', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@shopkeeper/db')>();
   return {

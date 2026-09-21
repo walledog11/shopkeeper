@@ -137,6 +137,7 @@ describe('purgeFilteredThreads', () => {
     } });
     const proposal = await db.agentProposal.create({ data: {
       organizationId: orgId!, taskId: task.id, taskRevision: 0, schemaVersion: 1,
+      instruction: 'Private objective',
       canonicalActions: [], dependencies: [], sourceRequestIds: [request.id], proposalHash: 'b'.repeat(64),
       approverScopeKind: 'system', approverScopeKey: 'retention-test',
     } });

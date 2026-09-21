@@ -115,6 +115,7 @@ describe('POST /webhooks/shopify — mandatory compliance topics', () => {
     } });
     const durableProposal = await db.agentProposal.create({ data: {
       organizationId: org.id, taskId: durableTask.id, taskRevision: 0, schemaVersion: 1,
+      instruction: 'Private request',
       canonicalActions: [], dependencies: [], sourceRequestIds: [durableRequest.id], proposalHash: 'b'.repeat(64),
       approverScopeKind: 'member', approverScopeKey: 'member:*',
     } });

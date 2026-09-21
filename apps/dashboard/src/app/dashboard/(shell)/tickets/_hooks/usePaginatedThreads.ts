@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
 import useSWRInfinite from "swr/infinite";
 import { fetcher } from "@/lib/api/fetcher";
 import { REALTIME_ENABLED } from "@/lib/realtime/config";
+import { useDocumentVisible } from "@/hooks/useDocumentVisible";
 import type { Thread } from "@/types";
 
 const PAGINATED_LIMIT = 25;
@@ -12,20 +13,6 @@ export type ThreadListQuery = {
   /** `all` interleaves open and closed under one cursor. */
   status?: "open" | "closed" | "all"
   filterStatus?: "filtered"
-}
-
-function useIsDocumentVisible() {
-  const [isVisible, setIsVisible] = useState(
-    typeof document !== "undefined" ? document.visibilityState === "visible" : true
-  );
-
-  useEffect(() => {
-    const handler = () => setIsVisible(document.visibilityState === "visible");
-    document.addEventListener("visibilitychange", handler);
-    return () => document.removeEventListener("visibilitychange", handler);
-  }, []);
-
-  return isVisible;
 }
 
 function buildThreadListUrl(query: ThreadListQuery, pageIndex: number, previousPageData: ThreadsPage | null, preview: boolean) {
@@ -46,7 +33,7 @@ export function usePaginatedThreads(
   preview = false,
   enabled = true,
 ) {
-  const isVisible = useIsDocumentVisible();
+  const isVisible = useDocumentVisible();
   const isPrimary = !query.filterStatus;
   const baseInterval = REALTIME_ENABLED
     ? (isPrimary ? 60000 : 120000)

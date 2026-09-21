@@ -18,12 +18,12 @@ export function useTicketListRowActions({
 }: UseTicketListRowActionsProps) {
   const [approvingTicketId, setApprovingTicketId] = useState<string | null>(null)
 
-  const handleQuickApproveFromList = useCallback(async (threadId: string) => {
+  const handleQuickApproveFromList = useCallback(async (threadId: string, planId?: string | null) => {
     if (approvingTicketId) return
 
     setApprovingTicketId(threadId)
     try {
-      const result = await quickApproveCachedPlan(threadId)
+      const result = await quickApproveCachedPlan(threadId, planId)
       if (!result.ok) {
         showToast(result.error, "error")
         return

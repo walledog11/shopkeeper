@@ -13,14 +13,14 @@ const STEPS = [
   {
     id: "connect",
     title: "Connect Shopify",
-    desc: "It reads your store on its own — every product, your refund policy, every past order.",
+    desc: "Connect your store for product information, policies, and access to orders. Add the store notes and voice guidance you want the agent to use.",
     aria: "Connecting a Shopify store. Products, policies, orders, FAQs, and about your store sync one by one.",
     duration: 10500,
   },
   {
     id: "channels",
     title: "Pick your channels",
-    desc: "Instagram, email, and chat on your store so customers reach it. iMessage so it can reach you.",
+    desc: "Connect customer channels for incoming messages. Link iMessage to give the agent work and receive approvals, or use the dashboard. Set your trust level and action limits before handing work over.",
     aria: "Turning on Instagram, email, website chat, and iMessage.",
     duration: 8000,
   },
@@ -97,8 +97,8 @@ export function Onboarding() {
         <Reveal>
           <SectionLabel>day one</SectionLabel>
           <h2 className="mx-auto mb-10 max-w-[18ch] text-center text-[clamp(36px,5vw,68px)] font-bold leading-[1] tracking-[0.03em] [font-family:var(--m-hand)]">
-            From install to live{" "}
-            <em className="italic text-[var(--m-quill)]">in minutes.</em>
+            Your store. Your instructions.{" "}
+            <em className="italic text-[var(--m-quill)]">Your shopkeeper.</em>
           </h2>
         </Reveal>
 

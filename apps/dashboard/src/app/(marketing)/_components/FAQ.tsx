@@ -6,8 +6,20 @@ import { SectionLabel } from "./SectionLabel";
 
 const faqs = [
   {
+    q: "Can I ask it to do things, or does it only answer customers?",
+    a: "You can give it work directly through iMessage or the dashboard. Ask it to look up a customer, check stock, edit an eligible order, create a timed sale, update a product variant’s price, or email a customer. Incoming customer support is another part of the same product.",
+  },
+  {
+    q: "What does “run a sale” actually do?",
+    a: "It creates an automatic percentage discount in Shopify for your whole catalog or specified variants, with an end time. Regular product prices stay unchanged. You can ask it to list or end active sales. Permanent price changes are a separate action on specific variants. These actions require the relevant Shopify permissions.",
+  },
+  {
     q: "Will it email a customer without me seeing it?",
-    a: "That’s yours to set. On Draft only, never — it can’t send anything at all. On Ask first, the default, routine replies can go out on their own. Order changes, money, and anything unusual wait for you. Trusted is opt-in, and only for simple replies.",
+    a: "For incoming support, Draft only prepares replies for review. In Ask first, the default, routine information replies can go out automatically, while order changes, money, and exceptions wait for you. Separately, you can instruct the merchant agent to send a message yourself. Actions remain subject to your settings and account permissions.",
+  },
+  {
+    q: "Do I need to use iMessage?",
+    a: "No. You can talk to the agent, review proposed actions, answer its questions, and manage conversations in the dashboard. Linking iMessage lets you do that work from your phone, including receiving the optional daily briefing.",
   },
   {
     q: "Will it sound like me, or like a robot?",
@@ -23,11 +35,11 @@ const faqs = [
   },
   {
     q: "Where do my customers actually reach it?",
-    a: "On Instagram, Gmail, forwarded support email, or the chat on your store. You review and approve on iMessage, or in the dashboard.",
+    a: "Through Gmail, forwarded support email, website chat, or an available Instagram connection. Instagram requires a Professional account. Check your workspace’s Integrations page for channel availability. Your own iMessage conversation is with your agent; customer conversations stay in their support channels.",
   },
   {
     q: "What if it doesn’t know the answer?",
-    a: "It asks you for the missing policy or the judgment call. If the action changes an order or moves money, it pauses for your approval. If it’s outside your rules, it stops and hands you the thread. It never improvises.",
+    a: "If a missing store fact or judgment call would unblock a customer request, it asks you. If the request is outside its limits or it cannot complete the action, it hands the thread to you. You can inspect the context, correct the reply, and take over. Use Draft only while you evaluate its customer replies.",
   },
   {
     q: "Can another store see my customers?",
@@ -72,10 +84,10 @@ export function FAQ() {
   return (
     <section id="faq" className="mx-auto max-w-6xl scroll-mt-24 px-6 py-12 text-center">
       <Reveal>
-        <SectionLabel>before you hire</SectionLabel>
+        <SectionLabel>how it works in practice</SectionLabel>
         <h2 className="mx-auto mb-12 max-w-[20ch] text-[clamp(36px,5vw,68px)] font-bold leading-[1] tracking-[0.03em] [font-family:var(--m-hand)]">
-          Things people ask{" "}
-          <em className="italic text-[var(--m-quill)]">before they trust an AI.</em>
+          What you can ask.{" "}
+          <em className="italic text-[var(--m-quill)]">What happens next.</em>
         </h2>
       </Reveal>
 

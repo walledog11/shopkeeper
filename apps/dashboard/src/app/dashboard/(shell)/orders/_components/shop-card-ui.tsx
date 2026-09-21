@@ -3,7 +3,7 @@
 import { cn } from "@/lib/ui/cn"
 import { timeAgoCard } from "@/lib/messaging/customer-display"
 import { needsYouMetaPillShellClassName } from "@/app/dashboard/_components/home/needs-you-card-styles"
-import type { TicketCardMetaStatusTone } from "@/app/dashboard/_components/home/needs-you-card-ui"
+import type { TicketCardMetaStatusTone } from "@/app/dashboard/_components/home/needs-you-card-meta"
 
 const META_PILL_HEIGHT_CLASS = "h-9 sm:h-10"
 const ORDER_PILL_CLASS_NAME = "bg-[#f5ebe0] text-[#1a1a1a]"

@@ -1,35 +1,57 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useSWRConfig } from "swr"
 import { GATEWAY_EVENTS_URL, REALTIME_ENABLED } from "@/lib/realtime/config"
+import {
+  RealtimeConnectionProvider,
+  type RealtimeConnectionStatus,
+} from "./RealtimeConnectionContext"
 
 // Keys whose data reflects inbound thread activity. A pushed event just says
 // "something changed" — we revalidate these through SWR's normal authenticated
 // fetch rather than trusting any payload.
 function shouldRevalidate(key: unknown): boolean {
-  return typeof key === "string"
-    && (key.startsWith("/api/threads") || key === "/api/home-summary")
+  if (typeof key === "string") {
+    return key.startsWith("/api/threads")
+      || key.startsWith("/api/search")
+      || key === "/api/home-summary"
+  }
+  if (Array.isArray(key)) {
+    return key.some(part => typeof part === "string" && shouldRevalidate(part))
+  }
+  return false
 }
 
 // One EventSource per tab. Bridges gateway-published thread events into SWR cache
 // revalidation; reconnects with backoff and a fresh token; catches up on focus.
-export default function RealtimeProvider() {
+export default function RealtimeProvider({ children }: { children?: React.ReactNode }) {
   const { mutate } = useSWRConfig()
+  const [status, setStatus] = useState<RealtimeConnectionStatus>(
+    REALTIME_ENABLED ? "connecting" : "disabled",
+  )
 
   useEffect(() => {
-    if (!REALTIME_ENABLED) return
-    if (typeof window === "undefined" || typeof EventSource === "undefined") return
+    if (!REALTIME_ENABLED) {
+      setStatus("disabled")
+      return
+    }
+    if (typeof window === "undefined" || typeof EventSource === "undefined") {
+      setStatus("disabled")
+      return
+    }
 
     let source: EventSource | null = null
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
     let backoff = 1000
     let closed = false
+    let hasConnectedOnce = false
 
     const revalidate = () => { void mutate(shouldRevalidate) }
 
     const scheduleReconnect = () => {
       if (closed || reconnectTimer) return
+      setStatus(hasConnectedOnce ? "reconnecting" : "connecting")
       reconnectTimer = setTimeout(() => {
         reconnectTimer = null
         void connect()
@@ -39,6 +61,7 @@ export default function RealtimeProvider() {
 
     async function connect() {
       if (closed) return
+      setStatus(hasConnectedOnce ? "reconnecting" : "connecting")
 
       let token: string
       try {
@@ -55,7 +78,9 @@ export default function RealtimeProvider() {
       source = es
 
       es.onopen = () => {
+        hasConnectedOnce = true
         backoff = 1000
+        setStatus("live")
         revalidate()
       }
       es.addEventListener("thread", revalidate)
@@ -81,5 +106,9 @@ export default function RealtimeProvider() {
     }
   }, [mutate])
 
-  return null
+  return (
+    <RealtimeConnectionProvider status={status}>
+      {children ?? null}
+    </RealtimeConnectionProvider>
+  )
 }

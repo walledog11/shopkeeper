@@ -37,7 +37,7 @@ import { usesCapabilityDiscovery } from "./runtime-modes.js";
 import { TOKEN_BUDGET, DEFAULT_MAX_ITERATIONS } from "./run-policy.js";
 import { resolveAgentSettings } from "./settings.js";
 import { enforceSpendCap } from "./spend.js";
-import { selectAgentTools } from "./tools/registry/index.js";
+import { selectAgentTools, TOOL_CATEGORIES } from "./tools/registry/index.js";
 import {
   DISCOVERY_TOOL_NAME,
   NAMESPACE_MISS_TOOL_NAME,
@@ -67,6 +67,8 @@ export interface PlanAgentOptions {
   // would describe has not happened yet. Absent for every legacy caller, whose
   // plans keep the terminal-tool requirement and its single re-prompt.
   suspendAtProposal?: boolean;
+  /** Persisted task runtime selects bounded discovery for durable attempts. */
+  runtimeVersion?: number;
 }
 
 
@@ -123,7 +125,7 @@ export async function planAgent(
     storefrontMode: Boolean(storefrontTools),
     merchantAnswerReplan,
     merchantInstruction: options?.merchantInstruction === true,
-    capabilityDiscovery: usesCapabilityDiscovery(),
+    capabilityDiscovery: usesCapabilityDiscovery(options?.runtimeVersion),
   });
   // Read off the selection rather than the flag: these two are what the model
   // was actually offered, and only one of them can be present.
@@ -402,6 +404,13 @@ export async function planAgent(
     warnings: signals.length > 0 ? signals.map(signal => signal.message) : undefined,
     routingEvidence,
     namespaceMiss: namespaceMiss || undefined,
-    suspendedAtProposal: suspendAtProposal || undefined,
+    // The runtime may enable proposal suspension for the whole task, but a
+    // read-and-reply plan did not suspend on a write. Marking every such plan
+    // as suspended made safe replies run an unnecessary receipt-composition
+    // turn even though there was no write receipt to compose from.
+    suspendedAtProposal: (
+      suspendAtProposal
+      && rawToolCalls.some((call) => TOOL_CATEGORIES[call.name] === "action")
+    ) || undefined,
   };
 }

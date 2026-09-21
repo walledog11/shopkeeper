@@ -113,6 +113,11 @@ describe("quality panel review model", () => {
     expect(REVIEW_FILTERS[0].query).toEqual({})
     expect(REVIEW_FILTERS.find(filter => filter.id === "attention")?.query.attention).toBe(true)
     expect(REVIEW_FILTERS.find(filter => filter.id === "store")?.query.tools).toContain("create_refund")
+    expect(REVIEW_FILTERS.find(filter => filter.id === "approved")?.query).toEqual({
+      modes: ["human_approved"],
+      excludeOperator: true,
+    })
+    expect(REVIEW_FILTERS.find(filter => filter.id === "auto")?.query.excludeOperator).toBe(true)
   })
 
   it("extracts the strongest preview text from outputs before summaries", () => {

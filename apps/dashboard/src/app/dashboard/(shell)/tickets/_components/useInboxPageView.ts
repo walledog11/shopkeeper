@@ -142,7 +142,11 @@ export function useInboxPageView({
   const listLoading = stream.isLoading && stream.threads.length === 0 && !isSearchMode
 
   if (stream.error && stream.threads.length === 0 && !isSearchMode) {
-    return { kind: "error" as const }
+    return {
+      kind: "error" as const,
+      error: stream.error,
+      onRetry: () => { void stream.mutate() },
+    }
   }
 
   return {
@@ -212,6 +216,7 @@ export function useInboxPageView({
         onTicketRefresh: revalidateThreadCaches,
         onToggleClosed: () => setIncludeClosed(current => !current),
         onTrust: handleRecover,
+        onRetryConversationLoad: () => { void mutateActiveThread() },
       },
     },
   }

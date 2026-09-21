@@ -21,9 +21,9 @@ export type Partner = {
 
 export const productCards: ProductCard[] = [
   {
-    href: "/product/order-operations",
-    title: "Order operations",
-    subtitle: "See the Shopify work Shopkeeper can prepare and complete.",
+    href: "/#workflow",
+    title: "Your merchant agent",
+    subtitle: "Check stock, run sales, change orders, and work through the inbox by text.",
     icon: Store,
   },
   {

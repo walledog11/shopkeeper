@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { db } from "@shopkeeper/db";
+import { db, Prisma } from "@shopkeeper/db";
 import {
   cleanupTestData,
   createTestCustomer,
@@ -242,7 +242,7 @@ async function seedThreadWithPlan(options: {
 // A support conversation whose parked card is also a durable proposal: the
 // planning job accepts the customer's message, runs an attempt, and settles on
 // whatever `supportAttemptSettlement` reads back out of the cached plan.
-async function seedSupportCardParkedOnTask() {
+async function seedSupportCardParkedOnTask(runtimeVersion = 1) {
   const plan = threeStepPlan();
   const settings = resolveAgentSettings({ autonomyTier: "guarded", maxRefundAmount: 100 });
   const seeded = await seedThreadWithPlan({ plan, settings });
@@ -253,7 +253,7 @@ async function seedSupportCardParkedOnTask() {
     organizationId: seeded.org.id, threadId: seeded.thread.id, sourceMessageId: seeded.message.id,
     objective: plan.instruction,
     budget: {
-      runtimeVersion: 1, modelCallLimit: 20,
+      runtimeVersion, modelCallLimit: 20,
       activeTimeMsLimit: 120000, spendNanoUsdLimit: 1000000000n,
     },
   });
@@ -616,6 +616,133 @@ describe("executeCurrentCachedHomePlan guards", () => {
 });
 
 describe("executeCurrentCachedHomePlan execution", () => {
+  it("executes a v2 proposal by exact durable identity after its cache projection is gone", async () => {
+    const support = await seedSupportCardParkedOnTask(2);
+    const proposal = await db.agentProposal.findUniqueOrThrow({
+      where: { id: support.cache.planId! },
+    });
+    await db.thread.update({
+      where: { id: support.thread.id },
+      data: { cachedPlan: Prisma.DbNull, cachedPlanMessageId: null },
+    });
+    const runAgent = vi.fn(async () => okResult);
+
+    await executeCurrentCachedHomePlan({
+      orgId: support.org.id,
+      threadId: support.thread.id,
+      settings: support.settings,
+      executionIntent: "merchant_approved",
+      failureRoute: "test",
+      approver: { clerkUserId: support.member.clerkUserId, displayName: null },
+      expectedIdentity: {
+        planId: proposal.id,
+        sourceMessageId: support.message.id,
+        planHash: proposal.proposalHash,
+        instructionHash: hashInstruction(proposal.instruction),
+      },
+    }, makeDeps({ runAgent }));
+
+    expect(runAgent.mock.calls[0]?.[1]).toBe(proposal.instruction);
+    expect(runAgent.mock.calls[0]?.[2]).toEqual(proposal.canonicalActions);
+    expect(await db.planExecution.findUnique({
+      where: {
+        organizationId_planId: {
+          organizationId: support.org.id,
+          planId: proposal.id,
+        },
+      },
+    })).toMatchObject({ proposalId: proposal.id, taskId: support.task.id });
+  });
+
+  it("does not consume a newer cache projection after exact v2 proposal execution", async () => {
+    const support = await seedSupportCardParkedOnTask(2);
+    const proposal = await db.agentProposal.findUniqueOrThrow({
+      where: { id: support.cache.planId! },
+    });
+    const replacementPlanId = randomUUID();
+    await db.thread.update({
+      where: { id: support.thread.id },
+      data: {
+        cachedPlanMessageId: support.message.id,
+        cachedPlan: { ...support.cache, planId: replacementPlanId },
+      },
+    });
+
+    await executeCurrentCachedHomePlan({
+      orgId: support.org.id,
+      threadId: support.thread.id,
+      settings: support.settings,
+      executionIntent: "merchant_approved",
+      failureRoute: "test",
+      approver: { clerkUserId: support.member.clerkUserId, displayName: null },
+      expectedIdentity: { planId: proposal.id },
+    }, makeDeps());
+
+    const thread = await db.thread.findUniqueOrThrow({ where: { id: support.thread.id } });
+    expect(readAgentPlanCache(thread.cachedPlan)?.planId).toBe(replacementPlanId);
+  });
+
+  it("uses the immutable proposal envelope for a v2 execution", async () => {
+    const support = await seedSupportCardParkedOnTask(2);
+    const runAgent = vi.fn(async () => okResult);
+
+    await executeCurrentCachedHomePlan({
+      orgId: support.org.id,
+      threadId: support.thread.id,
+      settings: support.settings,
+      executionIntent: "merchant_approved",
+      failureRoute: "test",
+      approver: { clerkUserId: support.member.clerkUserId, displayName: null },
+    }, makeDeps({ runAgent }));
+
+    const proposal = await db.agentProposal.findUniqueOrThrow({
+      where: { id: support.cache.planId! },
+    });
+    const execution = await db.planExecution.findUniqueOrThrow({
+      where: {
+        organizationId_planId: {
+          organizationId: support.org.id,
+          planId: support.cache.planId!,
+        },
+      },
+    });
+    expect(execution).toMatchObject({
+      proposalId: proposal.id,
+      taskId: support.task.id,
+      planHash: proposal.proposalHash,
+      instructionHash: hashInstruction(proposal.instruction),
+    });
+    expect(runAgent.mock.calls[0]?.[1]).toBe(proposal.instruction);
+    expect(runAgent.mock.calls[0]?.[2]).toEqual(proposal.canonicalActions);
+    // The cached plan hash includes presentation steps. A v2 execution instead
+    // records the proposal's executable-envelope hash, proving which record
+    // authorized the provider inputs.
+    expect(execution.planHash).not.toBe(hashPlan(support.plan));
+  });
+
+  it("keeps a v1 durable approval pinned to cached-plan interpretation", async () => {
+    const support = await seedSupportCardParkedOnTask(1);
+
+    await executeCurrentCachedHomePlan({
+      orgId: support.org.id,
+      threadId: support.thread.id,
+      settings: support.settings,
+      executionIntent: "merchant_approved",
+      failureRoute: "test",
+      approver: { clerkUserId: support.member.clerkUserId, displayName: null },
+    }, makeDeps());
+
+    const execution = await db.planExecution.findUniqueOrThrow({
+      where: {
+        organizationId_planId: {
+          organizationId: support.org.id,
+          planId: support.cache.planId!,
+        },
+      },
+    });
+    expect(execution.planHash).toBe(hashPlan(support.plan));
+  });
+
   it("executes an escalation only after explicit merchant approval", async () => {
     const { org, thread, settings } = await seedThreadWithPlan({ plan: escalationPlan() });
     const executed = await executeCurrentCachedHomePlan({
@@ -977,7 +1104,7 @@ describe("maybeAutoExecuteCurrentCachedHomePlan", () => {
 describe("bounded failure replan", () => {
   it("replans once after a definite partial failure and completes remaining work", async () => {
     const settings = resolveAgentSettings({ autonomyTier: "trusted", autoExecuteMode: "live" });
-    const { org, thread } = await seedThreadWithPlan({ plan: threeStepPlan(), settings });
+    const { org, thread, message } = await seedThreadWithPlan({ plan: threeStepPlan(), settings });
     const partialResult: AgentResult = {
       summary: "Refund failed",
       actionsPerformed: [
@@ -1013,6 +1140,53 @@ describe("bounded failure replan", () => {
 
     const threadAfter = await db.thread.findUniqueOrThrow({ where: { id: thread.id } });
     expect(threadAfter.cachedPlan).toBeNull();
+  });
+
+  it("keeps bounded failure-replan execution attributed to the durable task", async () => {
+    const settings = resolveAgentSettings({ autonomyTier: "trusted", autoExecuteMode: "live" });
+    const { org, thread, message } = await seedThreadWithPlan({ plan: threeStepPlan(), settings });
+    const partialResult: AgentResult = {
+      summary: "Refund failed",
+      actionsPerformed: [
+        { tool: "add_shopify_customer_note", result: "Noted", status: "success" },
+        { tool: "create_refund", result: "Rejected", status: "error" },
+      ],
+    };
+    const runAgent = vi.fn()
+      .mockResolvedValueOnce(partialResult)
+      .mockResolvedValueOnce(okResult);
+    const { request, task } = await acceptCustomerAgentRequest({
+      organizationId: org.id,
+      threadId: thread.id,
+      sourceMessageId: message.id,
+      objective: "Resolve the request",
+      budget: {
+        runtimeVersion: 2,
+        modelCallLimit: 20,
+        activeTimeMsLimit: 120000,
+        spendNanoUsdLimit: 1000000000n,
+      },
+    });
+    const durableTurn = { requestId: request.id, taskId: task.id, runtimeVersion: 2 };
+
+    await executeCurrentCachedHomePlan({
+      orgId: org.id,
+      threadId: thread.id,
+      settings,
+      executionIntent: "automatic",
+      failureRoute: "test",
+      allowMutativeAutoExecute: true,
+      durableTurn,
+    }, makeDeps({ runAgent, planAgent: vi.fn(async () => quickReplyPlan()) }));
+
+    expect(runAgent).toHaveBeenCalledTimes(2);
+    expect(runAgent.mock.calls[1]?.[4]).toMatchObject({
+      turnId: durableTurn.requestId,
+    });
+    expect(runAgent.mock.calls[1]?.[0]).toMatchObject({
+      agentRequestId: durableTurn.requestId,
+      agentTaskId: durableTurn.taskId,
+    });
   });
 
   // The dashboard ticket card posts the reviewed tool calls back to /api/agent.

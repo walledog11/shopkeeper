@@ -288,4 +288,91 @@ describe("POST /api/agent/quick-approve", () => {
     expect(res.status).toBe(400);
     expect(mockExecuteAgentTurn).not.toHaveBeenCalled();
   });
+
+  // The card sends the planId of the proposal it rendered. Without it the route
+  // executes whatever is cached on the thread now, which is the stale-plan race
+  // this identity check exists to close.
+  async function storedPlanId(threadId: string): Promise<string> {
+    const row = await db.thread.findUnique({
+      where: { id: threadId },
+      select: { cachedPlan: true },
+    });
+    const planId = (row?.cachedPlan as { planId?: string } | null)?.planId;
+    if (!planId) throw new Error("cached plan carries no planId");
+    return planId;
+  }
+
+  it("rejects a planId that is not the current plan", async () => {
+    const { thread } = await createThreadWithCachedPlan(quickReplyPlan);
+
+    const res = await POST(new Request("http://localhost:3000/api/agent/quick-approve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ threadId: thread.id, planId: crypto.randomUUID() }),
+    }));
+
+    expect(res.status).toBe(409);
+    expect(mockExecuteAgentTurn).not.toHaveBeenCalled();
+  });
+
+  it("executes when the planId matches the current plan", async () => {
+    const { thread } = await createThreadWithCachedPlan(quickReplyPlan);
+
+    const res = await POST(new Request("http://localhost:3000/api/agent/quick-approve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ threadId: thread.id, planId: await storedPlanId(thread.id) }),
+    }));
+
+    expect(res.status).toBe(200);
+    expect(mockExecuteAgentTurn).toHaveBeenCalledWith(
+      expect.objectContaining({ threadId: thread.id }),
+      expect.anything(),
+    );
+  });
+
+  it("executes without a planId, leaving the identity check unarmed", async () => {
+    const { thread } = await createThreadWithCachedPlan(quickReplyPlan);
+
+    const res = await POST(new Request("http://localhost:3000/api/agent/quick-approve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ threadId: thread.id }),
+    }));
+
+    // Deliberate: planId is optional at every layer, so an omitting caller still
+    // executes. Asserted so that making it required is a visible test change.
+    expect(res.status).toBe(200);
+    expect(mockExecuteAgentTurn).toHaveBeenCalled();
+  });
+
+  it("rejects a non-string planId before execution", async () => {
+    const { thread } = await createThreadWithCachedPlan(quickReplyPlan);
+
+    const res = await POST(new Request("http://localhost:3000/api/agent/quick-approve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ threadId: thread.id, planId: 123 }),
+    }));
+
+    expect(res.status).toBe(400);
+    expect(mockExecuteAgentTurn).not.toHaveBeenCalled();
+  });
+
+  it("treats a whitespace planId as a mismatch, not a malformed field", async () => {
+    const { thread } = await createThreadWithCachedPlan(quickReplyPlan);
+
+    const res = await POST(new Request("http://localhost:3000/api/agent/quick-approve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ threadId: thread.id, planId: "   " }),
+    }));
+
+    // The local requireNonEmptyString in lib/agent/api/validation.ts checks
+    // length only, while the shared one in lib/api/validation.ts checks trim().
+    // So whitespace survives validation and fails the identity check instead.
+    // Asserted as-is so that unifying the two helpers shows up as a test change.
+    expect(res.status).toBe(409);
+    expect(mockExecuteAgentTurn).not.toHaveBeenCalled();
+  });
 });
