@@ -1376,7 +1376,10 @@ describe('durable order-status host path', () => {
       !JSON.stringify(body).includes('has been refunded'))).toBe(true);
   });
 
-  it('opens an approved return once and reports only the confirmed return outcome', async () => {
+  it.each([
+    { returnableAfterApproval: 1 },
+    { returnableAfterApproval: 0 },
+  ])('handles an approved return when $returnableAfterApproval item remains returnable', async ({ returnableAfterApproval }) => {
     anthropicCreate.mockReset();
     anthropicCreate
       .mockResolvedValueOnce(toolUse('discover-return', 'discover_capabilities', {
@@ -1390,6 +1393,7 @@ describe('durable order-status host path', () => {
       }));
 
     let returnCreateCalls = 0;
+    let currentReturnableQuantity = 1;
     providerFetch.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
       if (url.includes('/orders.json')) {
@@ -1402,7 +1406,7 @@ describe('durable order-status host path', () => {
             order: { id: 'gid://shopify/Order/9000001001' },
             returnableFulfillments: { edges: [{ node: { returnableFulfillmentLineItems: {
               edges: [{ node: {
-                quantity: 1,
+                quantity: currentReturnableQuantity,
                 fulfillmentLineItem: {
                   id: 'gid://shopify/FulfillmentLineItem/7001',
                   lineItem: { name: 'Black shirt', variant: { id: 'gid://shopify/ProductVariant/8001' } },
@@ -1456,6 +1460,7 @@ describe('durable order-status host path', () => {
       sourceMessageId: sourceMessage.id,
     });
     expect(generated.plan?.rawToolCalls.map(call => call.name)).toEqual(['create_return']);
+    currentReturnableQuantity = returnableAfterApproval;
 
     const executed = await executeCurrentCachedHomePlan({
       orgId: org.id,
@@ -1465,6 +1470,22 @@ describe('durable order-status host path', () => {
       failureRoute: 'test:return-host',
       approver: { clerkUserId: member.clerkUserId, displayName: 'Test Merchant' },
     }, buildGatewayPlanExecutionDeps());
+
+    if (returnableAfterApproval === 0) {
+      expect(returnCreateCalls).toBe(0);
+      const blocked = await db.agentAction.findFirstOrThrow({
+        where: { organizationId: org.id, tool: 'create_return' },
+      });
+      expect(blocked).toMatchObject({
+        proposalId: generated.identity!.planId,
+        status: 'policy_block',
+        receiptVersion: 1,
+        receipt: { outcome: 'rejected', code: 'no_returnable_items' },
+      });
+      expect(postDashboardInternal.mock.calls.every(([, body]) =>
+        !JSON.stringify(body).includes('return for order #1001 is open'))).toBe(true);
+      return;
+    }
 
     expect(returnCreateCalls).toBe(1);
     expect(executed.execution.status, JSON.stringify(executed.result.actionsPerformed)).toBe('committed');
@@ -1498,7 +1519,11 @@ describe('durable order-status host path', () => {
       .toBe('completed');
   });
 
-  it('executes an approved exchange with a confirmed return and no invented payment effect', async () => {
+  it.each([
+    { change: 'none', returnableAfterApproval: 1, replacementPriceAfterApproval: '42.00' },
+    { change: 'returned item no longer returnable', returnableAfterApproval: 0, replacementPriceAfterApproval: '42.00' },
+    { change: 'replacement becomes more expensive', returnableAfterApproval: 1, replacementPriceAfterApproval: '52.00' },
+  ])('handles an approved exchange after $change', async ({ returnableAfterApproval, replacementPriceAfterApproval }) => {
     anthropicCreate.mockReset();
     anthropicCreate
       .mockResolvedValueOnce(toolUse('discover-exchange', 'discover_capabilities', {
@@ -1512,6 +1537,8 @@ describe('durable order-status host path', () => {
       }));
 
     let returnCreateCalls = 0;
+    let currentReturnableQuantity = 1;
+    let currentReplacementPrice = '42.00';
     providerFetch.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
       if (url.includes('/orders.json')) {
@@ -1524,7 +1551,7 @@ describe('durable order-status host path', () => {
             order: { id: 'gid://shopify/Order/9000001001' },
             returnableFulfillments: { edges: [{ node: { returnableFulfillmentLineItems: {
               edges: [{ node: {
-                quantity: 1,
+                quantity: currentReturnableQuantity,
                 fulfillmentLineItem: {
                   id: 'gid://shopify/FulfillmentLineItem/7001',
                   lineItem: { name: 'Black shirt', variant: { id: 'gid://shopify/ProductVariant/8001' } },
@@ -1536,7 +1563,7 @@ describe('durable order-status host path', () => {
         if (body.query.includes('query variantPrices')) {
           return new Response(JSON.stringify({ data: { nodes: [
             { id: 'gid://shopify/ProductVariant/8001', price: '42.00', title: 'Black / Medium', product: { title: 'Shirt' } },
-            { id: 'gid://shopify/ProductVariant/8002', price: '42.00', title: 'Black / Large', product: { title: 'Shirt' } },
+            { id: 'gid://shopify/ProductVariant/8002', price: currentReplacementPrice, title: 'Black / Large', product: { title: 'Shirt' } },
           ] } }), { status: 200 });
         }
         if (body.query.includes('mutation returnCreate')) {
@@ -1587,6 +1614,8 @@ describe('durable order-status host path', () => {
       sourceMessageId: sourceMessage.id,
     });
     expect(generated.plan?.rawToolCalls.map(call => call.name)).toEqual(['create_exchange']);
+    currentReturnableQuantity = returnableAfterApproval;
+    currentReplacementPrice = replacementPriceAfterApproval;
     const executed = await executeCurrentCachedHomePlan({
       orgId: org.id,
       threadId: thread.id,
@@ -1595,6 +1624,25 @@ describe('durable order-status host path', () => {
       failureRoute: 'test:exchange-host',
       approver: { clerkUserId: member.clerkUserId, displayName: 'Test Merchant' },
     }, buildGatewayPlanExecutionDeps());
+
+    if (returnableAfterApproval === 0 || replacementPriceAfterApproval !== '42.00') {
+      expect(returnCreateCalls).toBe(0);
+      const blocked = await db.agentAction.findFirstOrThrow({
+        where: { organizationId: org.id, tool: 'create_exchange' },
+      });
+      expect(blocked).toMatchObject({
+        proposalId: generated.identity!.planId,
+        status: 'policy_block',
+        receiptVersion: 1,
+        receipt: {
+          outcome: 'rejected',
+          code: returnableAfterApproval === 0 ? 'variant_not_returnable' : 'replacement_price_higher',
+        },
+      });
+      expect(postDashboardInternal.mock.calls.every(([, body]) =>
+        !JSON.stringify(body).includes('opened an exchange'))).toBe(true);
+      return;
+    }
 
     expect(executed.execution.status, JSON.stringify(executed.result.actionsPerformed)).toBe('committed');
     expect(returnCreateCalls).toBe(1);
