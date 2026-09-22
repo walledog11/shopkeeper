@@ -157,6 +157,10 @@ No live-model or real-provider gate is claimed by the local fake-provider tests.
   typed receipt. This is the intended human reconciliation handoff. Delivery
   retry is a shared message-row boundary independent of the preceding effect;
   its host test never re-enters the effect executor.
+- `npm run verify:pr` passed on `e8662502` after this recovery batch: static
+  checks, workspace tests, 12 browser smoke tests, coverage gates, and production
+  builds all completed. The first attempt was stopped only by the sandbox's
+  local-listener `EPERM`; the permitted socket-enabled rerun passed.
 - `npm run verify:pr` passed after the delivery changes, partial-refund host
   case, and test fixes: static checks, unit tests,
   browser smoke (12 passed), coverage, and builds. The first full run hit the
