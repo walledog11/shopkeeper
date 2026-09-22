@@ -1413,9 +1413,10 @@ describe('durable order-status host path', () => {
   });
 
   it.each([
-    { returnableAfterApproval: 1 },
-    { returnableAfterApproval: 0 },
-  ])('handles an approved return when $returnableAfterApproval item remains returnable', async ({ returnableAfterApproval }) => {
+    { change: 'one item remains returnable', returnableAfterApproval: 1, createOutcome: 'confirmed' },
+    { change: 'no item remains returnable', returnableAfterApproval: 0, createOutcome: 'confirmed' },
+    { change: 'the provider omits the created return', returnableAfterApproval: 1, createOutcome: 'unknown' },
+  ] as const)('handles an approved return when $change', async ({ returnableAfterApproval, createOutcome }) => {
     anthropicCreate.mockReset();
     anthropicCreate
       .mockResolvedValueOnce(toolUse('discover-return', 'discover_capabilities', {
@@ -1454,7 +1455,9 @@ describe('durable order-status host path', () => {
         if (body.query.includes('mutation returnCreate')) {
           returnCreateCalls += 1;
           return new Response(JSON.stringify({ data: { returnCreate: {
-            return: { id: 'gid://shopify/Return/9901', name: '#1001-R1', status: 'REQUESTED' },
+            return: createOutcome === 'confirmed'
+              ? { id: 'gid://shopify/Return/9901', name: '#1001-R1', status: 'REQUESTED' }
+              : null,
             userErrors: [],
           } } }), { status: 200 });
         }
@@ -1524,6 +1527,28 @@ describe('durable order-status host path', () => {
     }
 
     expect(returnCreateCalls).toBe(1);
+    if (createOutcome === 'unknown') {
+      expect(executed.execution.status).toBe('unknown');
+      expect(executed.result.actionsPerformed).toMatchObject([
+        { tool: 'create_return', status: 'unknown' },
+      ]);
+      expect(executed.result.actionsPerformed).toHaveLength(1);
+      const action = await db.agentAction.findFirstOrThrow({
+        where: { organizationId: org.id, tool: 'create_return' },
+      });
+      expect(action).toMatchObject({
+        taskId: expect.any(String),
+        proposalId: generated.identity!.planId,
+        status: 'unknown',
+        dispatchState: 'unknown',
+        receiptVersion: 1,
+        receipt: { outcome: 'unknown', code: 'provider_return_missing' },
+      });
+      expect(postDashboardInternal).not.toHaveBeenCalled();
+      expect((await db.agentTask.findUniqueOrThrow({ where: { id: action.taskId! } })).status)
+        .toBe('reconciling');
+      return;
+    }
     expect(executed.execution.status, JSON.stringify(executed.result.actionsPerformed)).toBe('committed');
     const action = await db.agentAction.findFirstOrThrow({
       where: { organizationId: org.id, tool: 'create_return' },
