@@ -454,8 +454,8 @@ function checkpointSourceRequestIds(value: unknown): string[] {
 
 function continuityMatches(current: TaskContinuityHint, prior: TaskContinuityHint): boolean {
   if (current.ask !== prior.ask) return false;
-  if (current.order && prior.order) return current.order === prior.order;
-  if (current.subject && prior.subject) return current.subject === prior.subject;
+  if (current.order && prior.order && current.order !== prior.order) return false;
+  if (current.subject && prior.subject && current.subject !== prior.subject) return false;
   // One side may be the focused follow-up that supplies the entity the first
   // turn was missing. The caller still requires this to be the sole match.
   return true;

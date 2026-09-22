@@ -785,6 +785,41 @@ describe("support conversation request boundary", () => {
     ]);
   });
 
+  it("keeps two items on the same order separate and resumes only the named item", async () => {
+    const input = await seedSupport();
+    const first = await acceptCustomerAgentRequest({
+      ...input,
+      continuity: { ask: "return", order: "#1001", subject: "blue shirt" },
+    });
+    const secondMessage = await createTestMessage(input.threadId, "I also need to return the black shoes from that order");
+    const second = await acceptCustomerAgentRequest({
+      ...input,
+      sourceMessageId: secondMessage.id,
+      continuity: { ask: "return", order: "#1001", subject: "black shoes" },
+    });
+    expect(second.task.id).not.toBe(first.task.id);
+
+    const followUp = await createTestMessage(input.threadId, "About the blue shirt on order 1001");
+    const resumed = await acceptCustomerAgentRequest({
+      ...input,
+      sourceMessageId: followUp.id,
+      continuity: { ask: "return", order: "#1001", subject: "blue shirt" },
+    });
+    expect(resumed.task.id).toBe(first.task.id);
+    expect(resumed.task.revision).toBe(1);
+    expect((await db.agentTask.findUniqueOrThrow({ where: { id: second.task.id } })).revision).toBe(0);
+
+    const terse = await createTestMessage(input.threadId, "Yes, that one");
+    const ambiguous = await acceptCustomerAgentRequest({
+      ...input,
+      sourceMessageId: terse.id,
+      continuityMode: "classified",
+      continuity: { ask: "return", order: "#1001", subject: null },
+    });
+    expect(ambiguous.task.id).not.toBe(first.task.id);
+    expect(ambiguous.task.id).not.toBe(second.task.id);
+  });
+
   it("does not choose between two tasks for an ambiguous terse follow-up", async () => {
     const input = await seedSupport();
     const first = await acceptCustomerAgentRequest({

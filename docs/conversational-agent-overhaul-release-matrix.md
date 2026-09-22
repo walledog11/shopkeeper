@@ -32,7 +32,7 @@ operation has a distinct provider precondition or recovery mode.
 
 | Gate | Evidence recorded | Next release evidence |
 | --- | --- | --- |
-| Distinct pending tasks | Classified topic/entity matching and return to a single match | Clear “that one,” ambiguous “yes” asks a useful question, cross-channel switch |
+| Distinct pending tasks | Classified topic/entity matching and return to a single match; two items on the same order remain separate and a named item resumes only its task | Clear “that one” from conversation context, ambiguous “yes” asks a useful question, cross-channel switch |
 | Wait continuation | Merchant answer, revision, decline are accepted requests on the exact task | Customer wait and return; explicit preferences; another-device answer |
 | Stop and supersession | Old approval invalidated; cancellation before dispatch ordered at task row | Stop after dispatch records actual/unknown effect; no later action |
 | Stale approval | Shipped cancellation, revoked Shopify write grant, changed cancellation policy, lost member authority, and full-refund balance shrink refuse the effect | Partial-refund balance and address/return preconditions |
@@ -120,6 +120,11 @@ No live-model or real-provider gate is claimed by the local fake-provider tests.
   success reply. The exchange host case also refuses a depleted returnable item
   and a replacement variant that became more expensive. All 25 cases in the
   gateway host file passed.
+- Task continuity now rejects a match when either known order or known subject
+  conflicts, so two return tasks for different items on one order stay separate.
+  A named follow-up resumes only its matching task, while a terse follow-up
+  matching both opens separate work without superseding either. All 59 task-
+  ledger integration cases passed.
 - `npm run verify:pr` passed after the delivery changes, partial-refund host
   case, and test fixes: static checks, unit tests,
   browser smoke (12 passed), coverage, and builds. The first full run hit the
