@@ -125,6 +125,12 @@ No live-model or real-provider gate is claimed by the local fake-provider tests.
   A named follow-up resumes only its matching task, while a terse follow-up
   matching both opens separate work without superseding either. All 59 task-
   ledger integration cases passed.
+- Local implementation revisions: `d05d720e` (durable release batch and
+  delivery recovery), `f3b91b5c` (address host cases), `06eafec3` (return and
+  exchange host cases), and `4b027b66` (same-order continuity). A full
+  `npm run verify:pr` passed on `4b027b66`, including static checks, unit tests,
+  12 browser smoke tests, coverage, and builds. This gate does not include
+  live-model evaluation or a real-provider/customer-delivery exercise.
 - `npm run verify:pr` passed after the delivery changes, partial-refund host
   case, and test fixes: static checks, unit tests,
   browser smoke (12 passed), coverage, and builds. The first full run hit the
