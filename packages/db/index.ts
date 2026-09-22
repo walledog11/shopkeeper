@@ -6,6 +6,7 @@ export {
 } from './billing-write-gate.js';
 export {
   createMessage,
+  createInternalNoteOnce,
   createMessageInTransaction,
   type CreateMessageInput,
 } from './messages.js';

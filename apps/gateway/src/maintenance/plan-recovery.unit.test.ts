@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
-import { resolveAgentSettings } from '@shopkeeper/agent/settings';
+import {
+  testQuickReplyPlanCache,
+  testRefundOnlyPlanCache,
+} from '../test-fixtures/agent-plan-cache-fixtures.js';
 
 const { findMany } = vi.hoisted(() => ({ findMany: vi.fn() }));
 
@@ -20,46 +22,6 @@ import { recoverMissingPlans } from './plan-recovery.js';
 const NOW = new Date('2026-08-13T16:00:00.000Z');
 
 const CUSTOMER_MESSAGE_ID = '33333333-3333-4333-8333-333333333333';
-
-function quickReplyPlanCache() {
-  return buildAgentPlanCacheRecord({
-    instruction: 'Answer the question',
-    lastCustomerMessageId: CUSTOMER_MESSAGE_ID,
-    settings: resolveAgentSettings(null),
-    plan: {
-      instruction: 'Answer the question',
-      steps: [{
-        id: 'reply',
-        tool: 'send_reply',
-        label: 'Reply',
-        description: 'Reply',
-        category: 'communication',
-        enabled: true,
-      }],
-      rawToolCalls: [{ id: 'reply', name: 'send_reply', input: { text: 'Here you go.' } }],
-    },
-  });
-}
-
-function reviewPlanCache() {
-  return buildAgentPlanCacheRecord({
-    instruction: 'Issue refund',
-    lastCustomerMessageId: CUSTOMER_MESSAGE_ID,
-    settings: resolveAgentSettings(null),
-    plan: {
-      instruction: 'Issue refund',
-      steps: [{
-        id: 'refund',
-        tool: 'create_refund',
-        label: 'Refund',
-        description: 'Refund',
-        category: 'action',
-        enabled: true,
-      }],
-      rawToolCalls: [{ id: 'refund', name: 'create_refund', input: { order_id: '1', amount: '10.00' } }],
-    },
-  });
-}
 
 function candidate(overrides: Record<string, unknown> = {}) {
   return {
@@ -111,7 +73,7 @@ describe('recoverMissingPlans', () => {
   });
 
   it('does not enqueue a thread that already has an approval-owned plan', async () => {
-    const cache = reviewPlanCache();
+    const cache = testRefundOnlyPlanCache(CUSTOMER_MESSAGE_ID);
     findMany.mockResolvedValue([candidate({
       cachedPlan: cache,
       cachedPlanMessageId: CUSTOMER_MESSAGE_ID,
@@ -123,7 +85,7 @@ describe('recoverMissingPlans', () => {
   });
 
   it('re-enqueues a stranded safe reply even when a cached quick-reply plan exists', async () => {
-    const cache = quickReplyPlanCache();
+    const cache = testQuickReplyPlanCache(CUSTOMER_MESSAGE_ID);
     findMany.mockResolvedValue([candidate({
       cachedPlan: cache,
       cachedPlanMessageId: CUSTOMER_MESSAGE_ID,
@@ -154,7 +116,7 @@ describe('recoverMissingPlans', () => {
 });
 
 it('continues beyond a full page of approval-owned plans', async () => {
-  const cache = reviewPlanCache();
+  const cache = testRefundOnlyPlanCache(CUSTOMER_MESSAGE_ID);
   findMany.mockResolvedValueOnce(Array.from({ length: 100 }, (_, index) => candidate({
     id: `thread-${index}`, cachedPlan: cache, cachedPlanMessageId: CUSTOMER_MESSAGE_ID,
   }))).mockResolvedValueOnce([candidate()]);

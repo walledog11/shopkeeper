@@ -22,6 +22,7 @@ import {
 import { recordEmailSendFailure } from "@/lib/messaging/provider-send-failures";
 import {
   markAgentMessageSendFailed,
+  markLogicalResponseAttempted,
   markPendingAgentMessageSendUnknown,
 } from "@/lib/messaging/dispatch-message-common";
 import { captureDashboardOutboundReplySent } from "@/lib/server/product-analytics";
@@ -287,6 +288,7 @@ export async function sendEmail(
     sendStatus: 'pending',
     integrationId: emailIntegration.id,
   });
+  await markLogicalResponseAttempted(pendingMessage.id);
   const recorded = await recordOutboundCall({
     source: "agent_send_email",
     provider,
@@ -354,4 +356,3 @@ export async function sendEmail(
       : `Email sent to ${input.to} and a new ticket was opened.`,
   );
 }
-

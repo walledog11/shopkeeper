@@ -2,13 +2,25 @@ import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { db, ThreadFilterStatus } from '@shopkeeper/db';
 import { cleanupTestData, createTestCustomer, createTestMessage, createTestOrg, createTestThread } from '@shopkeeper/db/test-helpers';
 import type { SupportStatsSummary } from '@shopkeeper/agent/support-stats';
-import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
-import { resolveAgentSettings } from '@shopkeeper/agent/settings';
+import {
+  testRefundAndReplyPlanCache,
+  testReplyPlanCache,
+} from '../test-fixtures/agent-plan-cache-fixtures.js';
+import {
+  DIGEST_FIXTURE_HOUR_MS,
+  DIGEST_FIXTURE_NOW,
+  digestFactsClassifierSignals,
+  digestFiledSince,
+  digestNoRequestClassifierSignals,
+  makeDigestThreadRow,
+  pinMessageSentAtMinutesAgo,
+} from '../test-fixtures/digest-thread-fixtures.js';
+import { seedSarahReplyPendingPlan } from '../test-fixtures/operator-pending-plan-fixtures.js';
 import { bucketDigestThreads, buildOrgDigest, digestWindowKey, formatDigestMessage, formatWeeklySummaryLine } from './digest.js';
 import type { BriefingItem } from './digest-briefing/index.js';
 import { buildConversationBrief } from './digest-briefing/conversation.js';
 import { renderOperatorLedger } from '../message-handlers/operator/operator-ledger.js';
-import { selectPendingPlan, updateContext, type PendingPlan } from '../operator-context.js';
+import { selectPendingPlan } from '../operator-context.js';
 
 const { create } = vi.hoisted(() => ({ create: vi.fn() }));
 vi.mock('@shopkeeper/agent/ai', () => ({ anthropic: { messages: { create } } }));
@@ -18,161 +30,18 @@ beforeEach(() => {
   create.mockRejectedValue(new Error('provider unavailable'));
 });
 
-const NOW = new Date('2026-04-29T12:00:00Z');
-const HOUR = 3_600_000;
-// Stands in for the last-briefing cursor: the spam count reports what was filed
-// since then, not every filtered thread still sitting open.
-const FILED_SINCE = new Date(NOW.getTime() - 24 * HOUR);
-
-async function sarahPlan(orgId: string): Promise<PendingPlan> {
-  const customer = await createTestCustomer(orgId, 'sarah@example.com', { name: 'Sarah Jones' });
-  const thread = await createTestThread(orgId, customer.id, 'email');
-  const source = await createTestMessage(thread.id, 'Does the lavender candle contain paraffin?');
-  await db.thread.update({ where: { id: thread.id }, data: { requestSourceMessageId: source.id } });
-  const plan: PendingPlan = {
-    threadId: thread.id,
-    planId: '11111111-1111-4111-8111-111111111111',
-    sourceMessageId: source.id,
-    instruction: 'Answer the product question',
-    customerName: 'Sarah Jones',
-    rawToolCalls: [{
-      id: 'reply',
-      name: 'send_reply',
-      input: { text: 'The lavender candle is made with soy wax and contains no paraffin.' },
-    }],
-  };
-  await updateContext(orgId, 'member-test', { pendingPlan: plan });
-  return plan;
-}
-
-function makeThread(overrides: Partial<{
-  id: string;
-  filterStatus: 'genuine' | 'questionable' | 'filtered';
-  ageHours: number;
-  filterDecidedAt: Date | null;
-  tag: string | null;
-  customerName: string | null;
-  channelType: string;
-  aiTitle: string | null;
-  aiSummary: string | null;
-  requestSummary: string | null;
-  filterReason: string | null;
-  escalatedAt: Date | null;
-  noRequest: boolean;
-}> = {}) {
-  const ageHours = overrides.ageHours ?? 1;
-  return {
-    id: overrides.id ?? `t-${Math.random().toString(16).slice(2)}`,
-    updatedAt: new Date(NOW.getTime() - ageHours * HOUR),
-    tag: overrides.tag === undefined ? 'Support' : overrides.tag,
-    channelType: overrides.channelType ?? 'email',
-    aiTitle: overrides.aiTitle ?? null,
-    filterStatus: (overrides.filterStatus ?? ThreadFilterStatus.genuine) as 'genuine' | 'questionable' | 'filtered',
-    filterDecidedAt: overrides.filterDecidedAt === undefined
-      ? new Date(NOW.getTime() - ageHours * HOUR)
-      : overrides.filterDecidedAt,
-    aiSummary: overrides.aiSummary ?? null,
-    requestSummary: overrides.requestSummary ?? null,
-    filterReason: overrides.filterReason ?? null,
-    escalatedAt: overrides.escalatedAt ?? null,
-    requestSourceMessageId: null,
-    customer: { name: overrides.customerName === undefined ? 'Jane' : overrides.customerName },
-    cachedPlan: null,
-    cachedPlanMessageId: null,
-    messages: [],
-    classifierSignals: overrides.noRequest
-      ? { version: 3, language: 'en', intents: { no_request: true } }
-      : null,
-  };
-}
-
-// What the classifier persists for "hello" / "yo" / "Test": a real person who
-// has not said what they want yet.
-const NO_REQUEST_SIGNALS = { version: 3, language: 'en', intents: { no_request: true } };
-
-// A v5 row carrying only the fields a test cares about; the rest are absent,
-// which is what the classifier writes when it could not read them.
-function factsSignals(facts: {
-  ask: string;
-  subject?: string;
-  order?: string;
-  deadline?: string;
-  deadlineText?: string;
-}) {
-  return {
-    version: 5,
-    language: 'en',
-    intents: {},
-    requestFacts: {
-      ask: facts.ask,
-      subject: facts.subject ?? null,
-      order: facts.order ?? null,
-      deadline: facts.deadline ?? null,
-      deadlineText: facts.deadlineText ?? null,
-      alternative: null,
-    },
-  };
-}
-
-// createTestMessage stamps sentAt from the clock, so two messages written in the
-// same millisecond fall back to the `id desc` tiebreak — a random UUID order,
-// which decides whether a thread reads as answered or as blocked. Any fixture
-// with more than one message has to pin the order it means.
-async function sentAtMinutesAgo(messageId: string, minutes: number) {
-  await db.message.update({
-    where: { id: messageId },
-    data: { sentAt: new Date(NOW.getTime() - minutes * 60_000) },
-  });
-}
-
-function replyPlanCache(instruction: string, lastCustomerMessageId: string) {
-  return buildAgentPlanCacheRecord({
-    instruction,
-    plan: {
-      instruction,
-      steps: [{
-        id: 'step-1',
-        tool: 'send_reply',
-        label: 'Send reply',
-        description: 'Send reply',
-        category: 'communication',
-        enabled: true,
-      }],
-      rawToolCalls: [{ id: 'step-1', name: 'send_reply', input: { text: 'On its way.' } }],
-    },
-    lastCustomerMessageId,
-    settings: resolveAgentSettings(null),
-  });
-}
-
-function refundPlanCache(instruction: string, lastCustomerMessageId: string) {
-  return buildAgentPlanCacheRecord({
-    instruction,
-    plan: {
-      instruction,
-      steps: [
-        { id: 'refund-1', tool: 'create_refund', label: 'Refund', description: 'Issue refund', category: 'action', enabled: true },
-        { id: 'send-1', tool: 'send_reply', label: 'Send reply', description: 'Confirm refund', category: 'communication', enabled: true },
-      ],
-      rawToolCalls: [
-        { id: 'refund-1', name: 'create_refund', input: { order_id: '1001', amount: 12, currency: 'USD' } },
-        { id: 'send-1', name: 'send_reply', input: { text: 'I issued your refund.' } },
-      ],
-    },
-    lastCustomerMessageId,
-    settings: resolveAgentSettings(null),
-  });
-}
-
+const NOW = DIGEST_FIXTURE_NOW;
+const HOUR = DIGEST_FIXTURE_HOUR_MS;
+const FILED_SINCE = digestFiledSince(NOW);
 
 describe('bucketDigestThreads', () => {
   it('splits threads into genuine / questionable / filtered buckets', () => {
     const threads = [
-      makeThread({ filterStatus: 'genuine' }),
-      makeThread({ filterStatus: 'genuine' }),
-      makeThread({ filterStatus: 'questionable' }),
-      makeThread({ filterStatus: 'filtered' }),
-      makeThread({ filterStatus: 'filtered' }),
+      makeDigestThreadRow(NOW, { filterStatus: 'genuine' }),
+      makeDigestThreadRow(NOW, { filterStatus: 'genuine' }),
+      makeDigestThreadRow(NOW, { filterStatus: 'questionable' }),
+      makeDigestThreadRow(NOW, { filterStatus: 'filtered' }),
+      makeDigestThreadRow(NOW, { filterStatus: 'filtered' }),
     ];
     const b = bucketDigestThreads(threads, NOW, FILED_SINCE);
     expect(b.genuine).toHaveLength(2);
@@ -182,11 +51,11 @@ describe('bucketDigestThreads', () => {
 
   it('counts urgent / stale / fresh only against genuine threads', () => {
     const threads = [
-      makeThread({ filterStatus: 'genuine', ageHours: 30 }),  // urgent
-      makeThread({ filterStatus: 'genuine', ageHours: 10 }),  // stale
-      makeThread({ filterStatus: 'genuine', ageHours: 1 }),   // fresh
-      makeThread({ filterStatus: 'questionable', ageHours: 30 }), // does NOT count
-      makeThread({ filterStatus: 'filtered', ageHours: 30 }),     // does NOT count
+      makeDigestThreadRow(NOW, { filterStatus: 'genuine', ageHours: 30 }),  // urgent
+      makeDigestThreadRow(NOW, { filterStatus: 'genuine', ageHours: 10 }),  // stale
+      makeDigestThreadRow(NOW, { filterStatus: 'genuine', ageHours: 1 }),   // fresh
+      makeDigestThreadRow(NOW, { filterStatus: 'questionable', ageHours: 30 }), // does NOT count
+      makeDigestThreadRow(NOW, { filterStatus: 'filtered', ageHours: 30 }),     // does NOT count
     ];
     const b = bucketDigestThreads(threads, NOW, FILED_SINCE);
     expect(b.urgent).toBe(1);
@@ -196,10 +65,10 @@ describe('bucketDigestThreads', () => {
 
   it('builds top tags from genuine threads only, sorted desc', () => {
     const threads = [
-      makeThread({ filterStatus: 'genuine', tag: 'Refund' }),
-      makeThread({ filterStatus: 'genuine', tag: 'Refund' }),
-      makeThread({ filterStatus: 'genuine', tag: 'Shipping' }),
-      makeThread({ filterStatus: 'questionable', tag: 'Spam' }), // ignored for tags
+      makeDigestThreadRow(NOW, { filterStatus: 'genuine', tag: 'Refund' }),
+      makeDigestThreadRow(NOW, { filterStatus: 'genuine', tag: 'Refund' }),
+      makeDigestThreadRow(NOW, { filterStatus: 'genuine', tag: 'Shipping' }),
+      makeDigestThreadRow(NOW, { filterStatus: 'questionable', tag: 'Spam' }), // ignored for tags
     ];
     const b = bucketDigestThreads(threads, NOW, FILED_SINCE);
     expect(b.topTags).toBe('Refund (2) · Shipping (1)');
@@ -209,12 +78,12 @@ describe('bucketDigestThreads', () => {
     // Nothing closes a filtered thread, so without the window the same spam is
     // re-reported every morning and the number ratchets up all week.
     const threads = [
-      makeThread({ filterStatus: 'filtered', ageHours: 2 }),
-      makeThread({ filterStatus: 'filtered', ageHours: 40 }),
-      makeThread({ filterStatus: 'filtered', ageHours: 70 }),
+      makeDigestThreadRow(NOW, { filterStatus: 'filtered', ageHours: 2 }),
+      makeDigestThreadRow(NOW, { filterStatus: 'filtered', ageHours: 40 }),
+      makeDigestThreadRow(NOW, { filterStatus: 'filtered', ageHours: 70 }),
       // Filtered before the classifier recorded a decision: not evidence of
       // recent work, so not claimed as any.
-      makeThread({ filterStatus: 'filtered', ageHours: 2, filterDecidedAt: null }),
+      makeDigestThreadRow(NOW, { filterStatus: 'filtered', ageHours: 2, filterDecidedAt: null }),
     ];
     expect(bucketDigestThreads(threads, NOW, FILED_SINCE).filteredCount).toBe(1);
   });
@@ -320,7 +189,7 @@ describe('formatDigestMessage', () => {
   });
 
   it('reports completed work without narrating quiet threads', () => {
-    const buckets = bucketDigestThreads([makeThread({ filterStatus: 'filtered' })], NOW, FILED_SINCE);
+    const buckets = bucketDigestThreads([makeDigestThreadRow(NOW, { filterStatus: 'filtered' })], NOW, FILED_SINCE);
     const msg = formatDigestMessage(buckets, null, {
       needsYou: [item()],
       handledSection: 'Since your last briefing I replied to Bob.',
@@ -352,7 +221,7 @@ describe('formatDigestMessage', () => {
   });
 
   it('mentions spam filing only when something was filed', () => {
-    const filed = bucketDigestThreads([makeThread({ filterStatus: 'filtered' })], NOW, FILED_SINCE);
+    const filed = bucketDigestThreads([makeDigestThreadRow(NOW, { filterStatus: 'filtered' })], NOW, FILED_SINCE);
     expect(formatDigestMessage(filed, null, { needsYou: [item()] })).toContain('I also marked one message as spam.');
     expect(formatDigestMessage(bucketDigestThreads([], NOW, FILED_SINCE), null, { needsYou: [item()] }))
       .not.toContain('spam');
@@ -466,11 +335,11 @@ describe('buildOrgDigest — inbox scope', () => {
     await createTestMessage(emptyThread.id, 'New order #1026 was placed.', 'note');
 
     const answeredThread = await createTestThread(org.id, answered.id, 'email');
-    await sentAtMinutesAgo(
+    await pinMessageSentAtMinutesAgo(
       (await createTestMessage(answeredThread.id, 'Do you ship to Ireland?')).id,
       20,
     );
-    await sentAtMinutesAgo(
+    await pinMessageSentAtMinutesAgo(
       (await createTestMessage(answeredThread.id, 'We do, three to five days.', 'agent')).id,
       10,
     );
@@ -492,7 +361,7 @@ describe('buildOrgDigest — inbox scope', () => {
       where: { id: thread.id },
       data: {
         escalatedAt: NOW,
-        classifierSignals: factsSignals({ ask: 'order_status', subject: 'the delayed order' }),
+        classifierSignals: digestFactsClassifierSignals({ ask: 'order_status', subject: 'the delayed order' }),
       },
     });
 
@@ -656,10 +525,10 @@ describe('buildOrgDigest — inbox scope', () => {
     await db.thread.update({
       where: { id: approvalThread.id },
       data: {
-        cachedPlan: refundPlanCache('Refund the chipped bowl', approvalMessage.id),
+        cachedPlan: testRefundAndReplyPlanCache('Refund the chipped bowl', approvalMessage.id),
         cachedPlanMessageId: approvalMessage.id,
         requestSourceMessageId: approvalMessage.id,
-        classifierSignals: factsSignals({ ask: 'refund', subject: 'the chipped bowl' }),
+        classifierSignals: digestFactsClassifierSignals({ ask: 'refund', subject: 'the chipped bowl' }),
         updatedAt: new Date(NOW.getTime() - 4 * HOUR),
       },
     });
@@ -761,7 +630,7 @@ describe('buildOrgDigest — inbox scope', () => {
         filterStatus: ThreadFilterStatus.questionable,
         filterDecidedAt: NOW,
         updatedAt: new Date(NOW.getTime() - 6 * HOUR),
-        classifierSignals: factsSignals({
+        classifierSignals: digestFactsClassifierSignals({
           ask: 'refund',
           subject: 'the linen napkins',
           deadline: '2026-04-30',
@@ -778,7 +647,7 @@ describe('buildOrgDigest — inbox scope', () => {
         filterStatus: ThreadFilterStatus.questionable,
         filterDecidedAt: NOW,
         updatedAt: new Date(NOW.getTime() - 1 * HOUR),
-        classifierSignals: factsSignals({ ask: 'return', subject: 'a wool throw' }),
+        classifierSignals: digestFactsClassifierSignals({ ask: 'return', subject: 'a wool throw' }),
       },
     });
 
@@ -797,15 +666,15 @@ describe('buildOrgDigest — inbox scope', () => {
     ]);
 
     for (const [customer, facts] of [
-      [undated, factsSignals({ ask: 'refund', subject: 'a chipped bowl' })],
-      [dated, factsSignals({ ask: 'refund', subject: 'a cracked vase', deadline: '2026-04-30' })],
+      [undated, digestFactsClassifierSignals({ ask: 'refund', subject: 'a chipped bowl' })],
+      [dated, digestFactsClassifierSignals({ ask: 'refund', subject: 'a cracked vase', deadline: '2026-04-30' })],
     ] as const) {
       const thread = await createTestThread(org.id, customer.id, 'email');
       const message = await createTestMessage(thread.id, 'Please refund this.');
       await db.thread.update({
         where: { id: thread.id },
         data: {
-          cachedPlan: refundPlanCache('Refund the order', message.id),
+          cachedPlan: testRefundAndReplyPlanCache('Refund the order', message.id),
           cachedPlanMessageId: message.id,
           classifierSignals: facts,
           updatedAt: new Date(NOW.getTime() - 4 * HOUR),
@@ -837,7 +706,7 @@ describe('buildOrgDigest — inbox scope', () => {
         filterStatus: ThreadFilterStatus.questionable,
         filterDecidedAt: NOW,
         aiTitle: 'SEO service proposal',
-        classifierSignals: factsSignals({ ask: 'other', subject: 'an SEO service proposal' }),
+        classifierSignals: digestFactsClassifierSignals({ ask: 'other', subject: 'an SEO service proposal' }),
       },
     });
 
@@ -849,7 +718,7 @@ describe('buildOrgDigest — inbox scope', () => {
         filterStatus: ThreadFilterStatus.questionable,
         filterDecidedAt: NOW,
         aiSummary: 'Visitor wrote a single word: "yo".',
-        classifierSignals: NO_REQUEST_SIGNALS,
+        classifierSignals: digestNoRequestClassifierSignals,
       },
     });
 
@@ -884,10 +753,10 @@ describe('buildOrgDigest — inbox scope', () => {
       where: { id: waitingThread.id },
       data: {
         aiTitle: 'Damaged Mug Refund',
-        cachedPlan: refundPlanCache('Refund the damaged mug', waitingMessage.id),
+        cachedPlan: testRefundAndReplyPlanCache('Refund the damaged mug', waitingMessage.id),
         cachedPlanMessageId: waitingMessage.id,
         updatedAt: new Date(NOW.getTime() - 4 * HOUR),
-        classifierSignals: factsSignals({ ask: 'refund', subject: 'the damaged mug' }),
+        classifierSignals: digestFactsClassifierSignals({ ask: 'refund', subject: 'the damaged mug' }),
       },
     });
 
@@ -910,14 +779,14 @@ describe('buildOrgDigest — inbox scope', () => {
     // visitor never came back, and a thousand of these a week is what storefront
     // chat looks like — none of it is the merchant's to answer.
     const visitorThread = await createTestThread(org.id, visitor.id, 'shopify_chat');
-    await sentAtMinutesAgo((await createTestMessage(visitorThread.id, 'hello')).id, 20);
-    await sentAtMinutesAgo(
+    await pinMessageSentAtMinutesAgo((await createTestMessage(visitorThread.id, 'hello')).id, 20);
+    await pinMessageSentAtMinutesAgo(
       (await createTestMessage(visitorThread.id, 'Hi! What can I help you find?', 'agent')).id,
       10,
     );
     await db.thread.update({
       where: { id: visitorThread.id },
-      data: { aiTitle: 'Unclear One Word Message', classifierSignals: NO_REQUEST_SIGNALS },
+      data: { aiTitle: 'Unclear One Word Message', classifierSignals: digestNoRequestClassifierSignals },
     });
 
     // Pending customer message, no plan, and nothing that will make one — but
@@ -926,7 +795,7 @@ describe('buildOrgDigest — inbox scope', () => {
     await createTestMessage(walleThread.id, 'Test');
     await db.thread.update({
       where: { id: walleThread.id },
-      data: { aiTitle: 'Unclear One Word Message', classifierSignals: NO_REQUEST_SIGNALS },
+      data: { aiTitle: 'Unclear One Word Message', classifierSignals: digestNoRequestClassifierSignals },
     });
 
     // The handoff that is real: a substantive question, no plan for it.
@@ -945,7 +814,7 @@ describe('buildOrgDigest — inbox scope', () => {
       where: { id: freshThread.id },
       data: {
         aiTitle: 'Shipping To Ireland',
-        cachedPlan: replyPlanCache('Answer the shipping question', freshMessage.id),
+        cachedPlan: testReplyPlanCache('Answer the shipping question', freshMessage.id),
         cachedPlanMessageId: freshMessage.id,
       },
     });
@@ -1083,7 +952,7 @@ describe('conversation briefing pipeline', () => {
   });
 
   it('shows a questionable sender with a pending draft only once, as an approval', async () => {
-    const plan = await sarahPlan(org.id);
+    const plan = await seedSarahReplyPendingPlan(org.id);
     await db.thread.update({
       where: { id: plan.threadId },
       data: { filterStatus: ThreadFilterStatus.questionable },
@@ -1097,7 +966,7 @@ describe('conversation briefing pipeline', () => {
   });
 
   it('loads the actual source and draft, writes natural copy, and keeps a mixed briefing actionable', async () => {
-    const plan = await sarahPlan(org.id);
+    const plan = await seedSarahReplyPendingPlan(org.id);
     const james = await createTestCustomer(org.id, 'james@example.com', { name: 'James' });
     const thread = await createTestThread(org.id, james.id, 'email');
     await db.thread.update({ where: { id: thread.id }, data: { escalatedAt: NOW } });
@@ -1158,7 +1027,7 @@ describe('conversation briefing pipeline', () => {
   });
 
   it('does not revive an old approval after a new customer request supersedes it', async () => {
-    const plan = await sarahPlan(org.id);
+    const plan = await seedSarahReplyPendingPlan(org.id);
     const next = await createTestMessage(plan.threadId, 'Actually, please cancel my order.');
     await db.thread.update({ where: { id: plan.threadId }, data: { requestSourceMessageId: next.id } });
     const digest = (await buildOrgDigest(org.id, NOW))!;
@@ -1168,7 +1037,7 @@ describe('conversation briefing pipeline', () => {
   });
 
   it('honors the stored spend cap for an on-demand briefing and still shows the draft', async () => {
-    await sarahPlan(org.id);
+    await seedSarahReplyPendingPlan(org.id);
     await db.organization.update({ where: { id: org.id }, data: { settings: { dailyLLMSpendCapUsd: 0 } } });
     const digest = (await buildOrgDigest(org.id, NOW))!;
     expect(create).not.toHaveBeenCalled();

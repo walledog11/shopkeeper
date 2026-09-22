@@ -59,6 +59,20 @@ describe('runOutboundSendSweep', () => {
     expect(after?.sendError).toBeTruthy();
   });
 
+  it('keeps a stale synchronous provider attempt unknown instead of offering a duplicate send', async () => {
+    const message = await createMessage(threadId, 'pending', ELEVEN_MINUTES_AGO());
+    await db.message.update({
+      where: { id: message.id },
+      data: { sendAttemptedAt: ELEVEN_MINUTES_AGO() },
+    });
+
+    await runOutboundSendSweep();
+
+    const after = await db.message.findUniqueOrThrow({ where: { id: message.id } });
+    expect(after.sendStatus).toBe('unknown');
+    expect(after.sendError).toContain('Do not retry');
+  });
+
   it('leaves a recently created pending message alone', async () => {
     const message = await createMessage(threadId, 'pending', ONE_MINUTE_AGO());
 

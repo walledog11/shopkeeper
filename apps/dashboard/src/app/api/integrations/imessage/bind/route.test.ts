@@ -102,7 +102,7 @@ describe('/api/integrations/imessage/bind', () => {
     const res = await POST();
 
     expect(res.status).toBe(409);
-    await expect(db.orgMemberBindToken.count()).resolves.toBe(0);
+    await expect(db.orgMemberBindToken.count({ where: { organizationId: org!.id } })).resolves.toBe(0);
   });
 
   it('mints a scoped single-use bind token once a line is connected', async () => {

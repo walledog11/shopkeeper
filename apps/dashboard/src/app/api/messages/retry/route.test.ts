@@ -83,6 +83,20 @@ describe('POST /api/messages/retry', () => {
     expect(after?.sendError).toBeNull();
   });
 
+  it('lets only one concurrent retry claim a failed message', async () => {
+    mockEnqueue.mockResolvedValue('enqueued');
+    const { message } = await seedFailedMessage();
+
+    const responses = await Promise.all([
+      callRetry({ messageId: message.id }),
+      callRetry({ messageId: message.id }),
+    ]);
+
+    expect(responses.filter(response => response.status === 200)).toHaveLength(1);
+    expect(responses.filter(response => response.status === 400 || response.status === 409)).toHaveLength(1);
+    expect(mockEnqueue).toHaveBeenCalledOnce();
+  });
+
   it('reverts to failed when the enqueue hop fails', async () => {
     mockEnqueue.mockResolvedValue('failed');
     const { message } = await seedFailedMessage();

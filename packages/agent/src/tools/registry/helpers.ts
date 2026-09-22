@@ -1,7 +1,7 @@
 import type { BaseAgentContext, SupportContext } from "../../agent-context.js";
 import type { ReturnWatchToolData } from "../../shopify/returns.js";
 import logger from "../../logger.js";
-import { toolError, type ToolResult } from "../result.js";
+import { toolError, toolPolicyBlock, type ToolResult } from "../result.js";
 import { unmetScopes } from "../../shopify/integration-health.js";
 import type { AgentToolDefinition, ShopifyToolContext, ToolCapability, ToolExecutionDeps } from "./types.js";
 
@@ -68,7 +68,7 @@ export function unmetToolCapability(
   if (ctx.shopify && definition.requiredScopes.length > 0) {
     const unmet = unmetScopes(ctx.shopify.grantedScopes, definition.requiredScopes);
     if (unmet.length > 0) {
-      return toolError(
+      return toolPolicyBlock(
         `Error: this store's Shopify connection does not grant ${unmet.join(", ")}. `
         + "Reconnect Shopify from Settings to enable this action.",
       );

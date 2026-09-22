@@ -2,13 +2,14 @@ import { createHash, randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@shopkeeper/db';
 import {
-  cleanupTestData,
   createTestCustomer,
   createTestIntegration,
   createTestMessage,
   createTestOrg,
   createTestThread,
 } from '@shopkeeper/db/test-helpers';
+import { stubDurableAgentRuntimeEnv } from '../../test-fixtures/support-plan-test-fixtures.js';
+import { createTestOrgTracker } from '../../test-fixtures/test-org-tracker.js';
 
 const {
   anthropicCreate,
@@ -60,7 +61,7 @@ import { executeCurrentCachedHomePlan } from '@shopkeeper/agent/plan-execution';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { buildGatewayPlanExecutionDeps } from '../operator/agent-turn-deps.js';
 
-const orgIds: string[] = [];
+const testOrgs = createTestOrgTracker();
 let providerFetch: ReturnType<typeof vi.fn>;
 
 const order = {
@@ -107,12 +108,7 @@ function toolUse(id: string, name: string, input: Record<string, unknown>) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.stubEnv('AGENT_RUNTIME_VERSION', '2');
-  // Task routing owns both behaviors even while the legacy process flags stay
-  // off, which is the production-compatible rollout shape.
-  vi.stubEnv('AGENT_CAPABILITY_DISCOVERY_MODE', 'off');
-  vi.stubEnv('AGENT_PROPOSAL_SUSPENSION_MODE', 'off');
-  vi.stubEnv('PLAN_EXECUTION_LEDGER_MODE', 'enforce');
+  stubDurableAgentRuntimeEnv();
 
   anthropicCreate
     .mockResolvedValueOnce(toolUse('read-order', 'get_order_by_name', { order_name: '#1001' }))
@@ -179,13 +175,13 @@ beforeEach(() => {
 afterEach(async () => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
-  for (const id of orgIds.splice(0)) await cleanupTestData(id);
+  await testOrgs.cleanupAll();
 });
 
 describe('durable order-status host path', () => {
   it('reads the order and sends a task-attributed reply through the gateway host', async () => {
     const org = await createTestOrg();
-    orgIds.push(org.id);
+    testOrgs.track(org.id);
     await db.organization.update({
       where: { id: org.id },
       data: {
@@ -288,7 +284,7 @@ describe('durable order-status host path', () => {
       }));
 
     const org = await createTestOrg();
-    orgIds.push(org.id);
+    testOrgs.track(org.id);
     await db.organization.update({
       where: { id: org.id },
       data: {
@@ -376,7 +372,7 @@ describe('durable order-status host path', () => {
       }));
 
     const org = await createTestOrg();
-    orgIds.push(org.id);
+    testOrgs.track(org.id);
     await db.organization.update({
       where: { id: org.id },
       data: { settings: { autonomyTier: 'guarded', autoExecuteMode: 'off' } },
@@ -454,7 +450,7 @@ describe('durable order-status host path', () => {
     }));
 
     const org = await createTestOrg();
-    orgIds.push(org.id);
+    testOrgs.track(org.id);
     await db.organization.update({
       where: { id: org.id },
       data: { settings: { autonomyTier: 'guarded', autoExecuteMode: 'off' } },
@@ -509,7 +505,7 @@ describe('durable order-status host path', () => {
       }));
 
     const org = await createTestOrg();
-    orgIds.push(org.id);
+    testOrgs.track(org.id);
     await db.organization.update({
       where: { id: org.id },
       data: { settings: { autonomyTier: 'guarded', autoExecuteMode: 'off' } },
@@ -565,7 +561,7 @@ describe('durable order-status host path', () => {
       }));
 
     const org = await createTestOrg();
-    orgIds.push(org.id);
+    testOrgs.track(org.id);
     await db.organization.update({
       where: { id: org.id },
       data: { settings: { autonomyTier: 'guarded', autoExecuteMode: 'off' } },
@@ -691,7 +687,7 @@ describe('durable order-status host path', () => {
     });
 
     const org = await createTestOrg();
-    orgIds.push(org.id);
+    testOrgs.track(org.id);
     const settings = { autonomyTier: 'guarded' as const, autoExecuteMode: 'off' as const };
     await db.organization.update({ where: { id: org.id }, data: { settings } });
     await createTestIntegration(org.id, {
@@ -785,7 +781,9 @@ describe('durable order-status host path', () => {
       .toBe('completed');
   });
 
-  it('executes an approved cancellation once and grounds the reply in confirmed Shopify state', async () => {
+  it.each(['sent', 'failed', 'unknown'] as const)(
+    'executes an approved cancellation once when customer delivery is %s',
+    async (delivery) => {
     anthropicCreate.mockReset();
     anthropicCreate
       .mockResolvedValueOnce(toolUse('discover-cancel', 'discover_capabilities', {
@@ -839,7 +837,7 @@ describe('durable order-status host path', () => {
     });
 
     const org = await createTestOrg();
-    orgIds.push(org.id);
+    testOrgs.track(org.id);
     const settings = { autonomyTier: 'guarded' as const, autoExecuteMode: 'off' as const };
     await db.organization.update({ where: { id: org.id }, data: { settings } });
     await createTestIntegration(org.id, {
@@ -872,6 +870,11 @@ describe('durable order-status host path', () => {
       sourceMessageId: sourceMessage.id,
     });
     expect(generated.plan?.rawToolCalls.map(call => call.name)).toEqual(['cancel_order']);
+    if (delivery !== 'sent') {
+      postDashboardInternal.mockResolvedValueOnce({
+        ok: false, status: 503, responseBody: 'delivery unavailable', outcome: delivery,
+      });
+    }
 
     const executed = await executeCurrentCachedHomePlan({
       orgId: org.id,
@@ -883,7 +886,9 @@ describe('durable order-status host path', () => {
     }, buildGatewayPlanExecutionDeps());
 
     expect(cancelCalls).toBe(1);
-    expect(executed.execution.status).toBe('committed');
+    expect(executed.execution.status).toBe(
+      delivery === 'sent' ? 'committed' : delivery === 'failed' ? 'partial' : 'unknown',
+    );
     expect(executed.result.actionsPerformed.map(action => action.tool)).toEqual([
       'cancel_order', 'send_reply',
     ]);
@@ -914,7 +919,651 @@ describe('durable order-status host path', () => {
       }),
       expect.anything(),
     );
+    const reply = await db.agentAction.findFirstOrThrow({
+      where: { organizationId: org.id, tool: 'send_reply' },
+    });
+    expect(reply).toMatchObject({
+      taskId: cancellation.taskId,
+      status: delivery === 'sent' ? 'success' : delivery === 'failed' ? 'error' : 'unknown',
+      receipt: { outcome: delivery === 'sent' ? 'succeeded' : delivery },
+    });
     expect((await db.agentTask.findUniqueOrThrow({ where: { id: cancellation.taskId! } })).status)
+      .toBe(delivery === 'sent' ? 'completed' : delivery === 'failed' ? 'failed' : 'reconciling');
+    },
+  );
+
+  it.each([
+    { fulfillment: 'fulfilled' },
+    { fulfillment: 'partial' },
+  ])('rejects a stale cancellation approval when the order becomes $fulfillment during the wait', async ({ fulfillment }) => {
+    anthropicCreate.mockReset();
+    anthropicCreate
+      .mockResolvedValueOnce(toolUse('discover-cancel', 'discover_capabilities', {
+        capability: 'cancel an unfulfilled order',
+      }))
+      .mockResolvedValueOnce(toolUse('cancel', 'cancel_order', {
+        order_id: '9000001001', reason: 'customer',
+      }))
+      .mockResolvedValueOnce(toolUse('reply', 'send_reply', {
+        text: 'Order #1001 has shipped, so I could not cancel it.',
+      }));
+
+    let fulfillmentStatus: string | null = null;
+    let cancelCalls = 0;
+    providerFetch.mockImplementation(async (input: string | URL | Request) => {
+      const url = String(input);
+      const currentOrder = { ...order, fulfillment_status: fulfillmentStatus, cancelled_at: null };
+      if (url.includes('/orders/9000001001/cancel.json')) {
+        cancelCalls += 1;
+        throw new Error('A stale approved action must not reach Shopify cancellation.');
+      }
+      if (url.includes('/orders/9000001001.json')) {
+        return new Response(JSON.stringify({ order: currentOrder }), { status: 200 });
+      }
+      if (url.includes('/orders.json')) {
+        return new Response(JSON.stringify({ orders: [currentOrder] }), { status: 200 });
+      }
+      throw new Error(`Unexpected external request: ${url}`);
+    });
+
+    const org = await createTestOrg();
+    testOrgs.track(org.id);
+    const settings = { autonomyTier: 'guarded' as const, autoExecuteMode: 'off' as const };
+    await db.organization.update({ where: { id: org.id }, data: { settings } });
+    await createTestIntegration(org.id, {
+      platform: 'shopify', externalAccountId: 'test-store.myshopify.com', accessToken: 'shpat_test',
+      metadata: { oauthScopes: ['read_orders', 'write_orders'] },
+    });
+    const member = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: randomUUID() },
+    });
+    const customer = await createTestCustomer(org.id, `${randomUUID()}@example.com`);
+    const thread = await createTestThread(org.id, customer.id, 'ig_dm', { shopifyCustomerId: '1234' });
+    const sourceMessage = await createTestMessage(thread.id, 'Please cancel order #1001.');
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        requestSummary: 'Cancel unfulfilled order #1001.',
+        requestSourceMessageId: sourceMessage.id,
+        classifierSignals: {
+          version: 5, language: 'en', intents: { mutative_request: true },
+          requestFacts: { ask: 'cancel', order: '#1001' },
+        },
+      },
+    });
+
+    const generated = await generateThreadPlan(org.id, thread.id, false, {
+      sourceMessageId: sourceMessage.id,
+    });
+    expect(generated.plan?.rawToolCalls.map(call => call.name)).toEqual(['cancel_order']);
+    fulfillmentStatus = fulfillment;
+
+    await executeCurrentCachedHomePlan({
+      orgId: org.id,
+      threadId: thread.id,
+      settings: resolveAgentSettings(settings),
+      executionIntent: 'merchant_approved',
+      failureRoute: 'test:stale-cancellation-host',
+      approver: { clerkUserId: member.clerkUserId, displayName: 'Test Merchant' },
+    }, buildGatewayPlanExecutionDeps());
+
+    expect(cancelCalls).toBe(0);
+    const cancellation = await db.agentAction.findFirstOrThrow({
+      where: { organizationId: org.id, tool: 'cancel_order' },
+    });
+    expect(cancellation).toMatchObject({
+      proposalId: generated.identity!.planId,
+      status: 'policy_block',
+      receiptVersion: 1,
+      receipt: { outcome: 'rejected', code: 'order_already_fulfilled' },
+    });
+    expect(postDashboardInternal.mock.calls.every(([, body]) =>
+      !JSON.stringify(body).includes('has been canceled'))).toBe(true);
+  });
+
+  it.each([
+    { change: 'Shopify write grant is revoked', reason: 'write_orders' },
+    { change: 'workspace cancellation policy is disabled', reason: 'cancellations are disabled' },
+  ])('refuses an approved cancellation if $change during the wait', async ({ reason }) => {
+    anthropicCreate.mockReset();
+    anthropicCreate
+      .mockResolvedValueOnce(toolUse('discover-cancel', 'discover_capabilities', {
+        capability: 'cancel an unfulfilled order',
+      }))
+      .mockResolvedValueOnce(toolUse('cancel', 'cancel_order', {
+        order_id: '9000001001', reason: 'customer',
+      }))
+      .mockResolvedValueOnce(toolUse('reply', 'send_reply', {
+        text: 'I could not cancel order #1001 because the store connection needs permission.',
+      }));
+
+    const cancellable = { ...order, fulfillment_status: null, cancelled_at: null };
+    let cancelCalls = 0;
+    providerFetch.mockImplementation(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes('/orders/9000001001/cancel.json')) {
+        cancelCalls += 1;
+        throw new Error('A revoked write grant must not reach Shopify cancellation.');
+      }
+      if (url.includes('/orders.json')) {
+        return new Response(JSON.stringify({ orders: [cancellable] }), { status: 200 });
+      }
+      if (url.includes('/orders/9000001001.json')) {
+        return new Response(JSON.stringify({ order: cancellable }), { status: 200 });
+      }
+      throw new Error(`Unexpected external request: ${url}`);
+    });
+
+    const org = await createTestOrg();
+    testOrgs.track(org.id);
+    const settings = { autonomyTier: 'guarded' as const, autoExecuteMode: 'off' as const };
+    await db.organization.update({ where: { id: org.id }, data: { settings } });
+    const integration = await createTestIntegration(org.id, {
+      platform: 'shopify', externalAccountId: 'test-store.myshopify.com', accessToken: 'shpat_test',
+      metadata: { oauthScopes: ['read_orders', 'write_orders'] },
+    });
+    const member = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: randomUUID() },
+    });
+    const customer = await createTestCustomer(org.id, `${randomUUID()}@example.com`);
+    const thread = await createTestThread(org.id, customer.id, 'ig_dm', { shopifyCustomerId: '1234' });
+    const sourceMessage = await createTestMessage(thread.id, 'Please cancel order #1001.');
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        requestSummary: 'Cancel unfulfilled order #1001.',
+        requestSourceMessageId: sourceMessage.id,
+        classifierSignals: {
+          version: 5, language: 'en', intents: { mutative_request: true },
+          requestFacts: { ask: 'cancel', order: '#1001' },
+        },
+      },
+    });
+
+    const generated = await generateThreadPlan(org.id, thread.id, false, {
+      sourceMessageId: sourceMessage.id,
+    });
+    expect(generated.plan?.rawToolCalls.map(call => call.name)).toEqual(['cancel_order']);
+    if (reason === 'write_orders') {
+      await db.integration.update({
+        where: { id: integration.id },
+        data: { metadata: { oauthScopes: ['read_orders'] } },
+      });
+    } else {
+      await db.organization.update({
+        where: { id: org.id },
+        data: { settings: { ...settings, blockCancellations: true } },
+      });
+    }
+
+    const approve = () => executeCurrentCachedHomePlan({
+      orgId: org.id,
+      threadId: thread.id,
+      settings: resolveAgentSettings({
+        ...settings,
+        ...(reason === 'write_orders' ? {} : { blockCancellations: true }),
+      }),
+      executionIntent: 'merchant_approved',
+      failureRoute: 'test:stale-approval-policy-host',
+      approver: { clerkUserId: member.clerkUserId, displayName: 'Test Merchant' },
+    }, buildGatewayPlanExecutionDeps());
+
+    if (reason === 'write_orders') {
+      await approve();
+    } else {
+      await expect(approve()).rejects.toThrow('Only current approved plans can be executed');
+    }
+
+    expect(cancelCalls).toBe(0);
+    if (reason === 'write_orders') {
+      const cancellation = await db.agentAction.findFirstOrThrow({
+        where: { organizationId: org.id, tool: 'cancel_order' },
+      });
+      expect(cancellation).toMatchObject({ proposalId: generated.identity!.planId });
+      expect({ status: cancellation.status, output: cancellation.output }).toEqual({
+        status: 'policy_block', output: expect.stringContaining(reason),
+      });
+    } else {
+      expect(await db.agentAction.count({
+        where: { organizationId: org.id, tool: 'cancel_order' },
+      })).toBe(0);
+    }
+    expect(postDashboardInternal.mock.calls.every(([, body]) =>
+      !JSON.stringify(body).includes('has been canceled'))).toBe(true);
+  });
+
+  it('rejects an approved full refund if Shopify reduces the refundable balance during the wait', async () => {
+    anthropicCreate.mockReset();
+    anthropicCreate
+      .mockResolvedValueOnce(toolUse('discover-refund', 'discover_capabilities', {
+        capability: 'issue a full order refund',
+      }))
+      .mockResolvedValueOnce(toolUse('refund', 'create_refund', {
+        order_id: '9000001001', amount: '42.00', currency: 'USD',
+      }))
+      .mockResolvedValueOnce(toolUse('reply', 'send_reply', {
+        text: 'I could not refund order #1001 because the refundable amount changed.',
+      }));
+
+    const refundableOrder = {
+      ...order,
+      financial_status: 'paid',
+      refunds: [],
+      line_items: [{ ...order.line_items[0], id: 7001, current_quantity: 1 }],
+    };
+    let refundMutationCalls = 0;
+    providerFetch.mockImplementation(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes('/graphql.json')) {
+        refundMutationCalls += 1;
+        throw new Error('A stale refund amount must not reach Shopify refundCreate.');
+      }
+      if (url.includes('/refunds/calculate.json')) {
+        return new Response(JSON.stringify({ refund: {
+          currency: 'USD',
+          refund_line_items: [{ line_item_id: 7001, quantity: 1, restock_type: 'no_restock' }],
+          transactions: [{
+            kind: 'suggested_refund', gateway: 'shopify_payments', parent_id: 222,
+            amount: '20.00', maximum_refundable: '20.00',
+          }],
+        } }), { status: 200 });
+      }
+      if (url.includes('/orders/9000001001.json')) {
+        return new Response(JSON.stringify({ order: refundableOrder }), { status: 200 });
+      }
+      if (url.includes('/orders.json')) {
+        return new Response(JSON.stringify({ orders: [refundableOrder] }), { status: 200 });
+      }
+      throw new Error(`Unexpected external request: ${url}`);
+    });
+
+    const org = await createTestOrg();
+    testOrgs.track(org.id);
+    const settings = { autonomyTier: 'guarded' as const, autoExecuteMode: 'off' as const };
+    await db.organization.update({ where: { id: org.id }, data: { settings } });
+    await createTestIntegration(org.id, {
+      platform: 'shopify', externalAccountId: 'test-store.myshopify.com', accessToken: 'shpat_test',
+      metadata: { oauthScopes: ['read_orders', 'write_orders'] },
+    });
+    const member = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: randomUUID() },
+    });
+    const customer = await createTestCustomer(org.id, `${randomUUID()}@example.com`);
+    const thread = await createTestThread(org.id, customer.id, 'ig_dm', { shopifyCustomerId: '1234' });
+    const sourceMessage = await createTestMessage(thread.id, 'Please refund all $42.00 of order #1001.');
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        requestSummary: 'Refund the full $42.00 for order #1001.',
+        requestSourceMessageId: sourceMessage.id,
+        classifierSignals: {
+          version: 5, language: 'en', intents: { mutative_request: true },
+          requestFacts: { ask: 'refund', order: '#1001' },
+        },
+      },
+    });
+
+    const generated = await generateThreadPlan(org.id, thread.id, false, {
+      sourceMessageId: sourceMessage.id,
+    });
+    expect(generated.plan?.rawToolCalls.map(call => call.name)).toEqual(['create_refund']);
+
+    await executeCurrentCachedHomePlan({
+      orgId: org.id,
+      threadId: thread.id,
+      settings: resolveAgentSettings(settings),
+      executionIntent: 'merchant_approved',
+      failureRoute: 'test:stale-refund-balance-host',
+      approver: { clerkUserId: member.clerkUserId, displayName: 'Test Merchant' },
+    }, buildGatewayPlanExecutionDeps());
+
+    expect(refundMutationCalls).toBe(0);
+    const refund = await db.agentAction.findFirstOrThrow({
+      where: { organizationId: org.id, tool: 'create_refund' },
+    });
+    expect(refund).toMatchObject({
+      proposalId: generated.identity!.planId,
+      status: 'policy_block',
+      receiptVersion: 1,
+      receipt: { outcome: 'rejected', code: 'amount_mismatch' },
+      output: expect.stringContaining('refundable balance'),
+    });
+    expect(postDashboardInternal.mock.calls.every(([, body]) =>
+      !JSON.stringify(body).includes('has been refunded'))).toBe(true);
+  });
+
+  it('rejects an approved partial refund when another refund consumes the items during the wait', async () => {
+    anthropicCreate.mockReset();
+    anthropicCreate
+      .mockResolvedValueOnce(toolUse('discover-partial-refund', 'discover_capabilities', {
+        capability: 'refund one damaged item from an order',
+      }))
+      .mockResolvedValueOnce(toolUse('partial-refund', 'create_partial_refund', {
+        order_id: '9000001001', items: [{ line_item_id: '7001', quantity: 1 }],
+      }))
+      .mockResolvedValueOnce(toolUse('reply', 'send_reply', {
+        text: 'I could not refund the item because the order changed while we waited.',
+      }));
+
+    const changedOrder = {
+      ...order,
+      refunds: [{ id: 991, refund_line_items: [{ line_item_id: 7001, quantity: 1 }] }],
+      line_items: [{ ...order.line_items[0], current_quantity: 0 }],
+    };
+    let refundMutationCalls = 0;
+    providerFetch.mockImplementation(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes('/graphql.json')) {
+        refundMutationCalls += 1;
+        throw new Error('A stale partial refund must not reach Shopify refundCreate.');
+      }
+      if (url.includes('/orders/9000001001.json')) {
+        return new Response(JSON.stringify({ order: changedOrder }), { status: 200 });
+      }
+      if (url.includes('/orders.json')) {
+        return new Response(JSON.stringify({ orders: [order] }), { status: 200 });
+      }
+      throw new Error(`Unexpected external request: ${url}`);
+    });
+
+    const org = await createTestOrg();
+    testOrgs.track(org.id);
+    const settings = { autonomyTier: 'guarded' as const, autoExecuteMode: 'off' as const };
+    await db.organization.update({ where: { id: org.id }, data: { settings } });
+    await createTestIntegration(org.id, {
+      platform: 'shopify', externalAccountId: 'test-store.myshopify.com', accessToken: 'shpat_test',
+      metadata: { oauthScopes: ['read_orders', 'write_orders'] },
+    });
+    const member = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: randomUUID() },
+    });
+    const customer = await createTestCustomer(org.id, `${randomUUID()}@example.com`);
+    const thread = await createTestThread(org.id, customer.id, 'ig_dm', { shopifyCustomerId: '1234' });
+    const sourceMessage = await createTestMessage(thread.id, 'Please refund the damaged black shirt from order #1001.');
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        requestSummary: 'Refund the damaged black shirt from order #1001.',
+        requestSourceMessageId: sourceMessage.id,
+        classifierSignals: {
+          version: 5, language: 'en', intents: { mutative_request: true },
+          requestFacts: { ask: 'refund', order: '#1001' },
+        },
+      },
+    });
+
+    const generated = await generateThreadPlan(org.id, thread.id, false, {
+      sourceMessageId: sourceMessage.id,
+    });
+    expect(generated.plan?.rawToolCalls.map(call => call.name)).toEqual(['create_partial_refund']);
+
+    await executeCurrentCachedHomePlan({
+      orgId: org.id,
+      threadId: thread.id,
+      settings: resolveAgentSettings(settings),
+      executionIntent: 'merchant_approved',
+      failureRoute: 'test:stale-partial-refund-host',
+      approver: { clerkUserId: member.clerkUserId, displayName: 'Test Merchant' },
+    }, buildGatewayPlanExecutionDeps());
+
+    expect(refundMutationCalls).toBe(0);
+    const refund = await db.agentAction.findFirstOrThrow({
+      where: { organizationId: org.id, tool: 'create_partial_refund' },
+    });
+    expect(refund).toMatchObject({
+      proposalId: generated.identity!.planId,
+      status: 'policy_block',
+      receiptVersion: 1,
+      receipt: { outcome: 'rejected', code: 'prior_refund' },
+    });
+    expect(postDashboardInternal.mock.calls.every(([, body]) =>
+      !JSON.stringify(body).includes('has been refunded'))).toBe(true);
+  });
+
+  it('opens an approved return once and reports only the confirmed return outcome', async () => {
+    anthropicCreate.mockReset();
+    anthropicCreate
+      .mockResolvedValueOnce(toolUse('discover-return', 'discover_capabilities', {
+        capability: 'open a return for delivered goods',
+      }))
+      .mockResolvedValueOnce(toolUse('return', 'create_return', {
+        order_id: '9000001001', variant_id: '8001', reason: 'unwanted',
+      }))
+      .mockResolvedValueOnce(toolUse('reply', 'send_reply', {
+        text: 'Your return for order #1001 is open. No refund has been issued yet.',
+      }));
+
+    let returnCreateCalls = 0;
+    providerFetch.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('/orders.json')) {
+        return new Response(JSON.stringify({ orders: [order] }), { status: 200 });
+      }
+      if (url.includes('/graphql.json')) {
+        const body = JSON.parse(String(init?.body)) as { query: string };
+        if (body.query.includes('query returnableFulfillments')) {
+          return new Response(JSON.stringify({ data: {
+            order: { id: 'gid://shopify/Order/9000001001' },
+            returnableFulfillments: { edges: [{ node: { returnableFulfillmentLineItems: {
+              edges: [{ node: {
+                quantity: 1,
+                fulfillmentLineItem: {
+                  id: 'gid://shopify/FulfillmentLineItem/7001',
+                  lineItem: { name: 'Black shirt', variant: { id: 'gid://shopify/ProductVariant/8001' } },
+                },
+              } }],
+            } } }] },
+          } }), { status: 200 });
+        }
+        if (body.query.includes('mutation returnCreate')) {
+          returnCreateCalls += 1;
+          return new Response(JSON.stringify({ data: { returnCreate: {
+            return: { id: 'gid://shopify/Return/9901', name: '#1001-R1', status: 'REQUESTED' },
+            userErrors: [],
+          } } }), { status: 200 });
+        }
+      }
+      throw new Error(`Unexpected external request: ${url}`);
+    });
+
+    const org = await createTestOrg();
+    testOrgs.track(org.id);
+    const settings = { autonomyTier: 'guarded' as const, autoExecuteMode: 'off' as const };
+    await db.organization.update({ where: { id: org.id }, data: { settings } });
+    await createTestIntegration(org.id, {
+      platform: 'shopify',
+      externalAccountId: 'test-store.myshopify.com',
+      accessToken: 'shpat_test',
+      metadata: { oauthScopes: ['read_orders', 'write_returns'] },
+    });
+    const member = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: randomUUID() },
+    });
+    const customer = await createTestCustomer(org.id, `${randomUUID()}@example.com`);
+    const thread = await createTestThread(org.id, customer.id, 'ig_dm', { shopifyCustomerId: '1234' });
+    const sourceMessage = await createTestMessage(thread.id, 'I received order #1001 and want to return the black shirt.');
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        requestSummary: 'Open a return for the black shirt on order #1001.',
+        requestSourceMessageId: sourceMessage.id,
+        classifierSignals: {
+          version: 5,
+          language: 'en',
+          intents: { mutative_request: true },
+          requestFacts: { ask: 'return', order: '#1001' },
+        },
+      },
+    });
+
+    const generated = await generateThreadPlan(org.id, thread.id, false, {
+      sourceMessageId: sourceMessage.id,
+    });
+    expect(generated.plan?.rawToolCalls.map(call => call.name)).toEqual(['create_return']);
+
+    const executed = await executeCurrentCachedHomePlan({
+      orgId: org.id,
+      threadId: thread.id,
+      settings: resolveAgentSettings(settings),
+      executionIntent: 'merchant_approved',
+      failureRoute: 'test:return-host',
+      approver: { clerkUserId: member.clerkUserId, displayName: 'Test Merchant' },
+    }, buildGatewayPlanExecutionDeps());
+
+    expect(returnCreateCalls).toBe(1);
+    expect(executed.execution.status, JSON.stringify(executed.result.actionsPerformed)).toBe('committed');
+    const action = await db.agentAction.findFirstOrThrow({
+      where: { organizationId: org.id, tool: 'create_return' },
+    });
+    expect(action).toMatchObject({
+      taskId: expect.any(String),
+      proposalId: generated.identity!.planId,
+      status: 'success',
+      dispatchState: 'settled',
+      receiptVersion: 1,
+    });
+    expect(action.receipt).toMatchObject({
+      outcome: 'succeeded',
+      providerReference: 'gid://shopify/Return/9901',
+      facts: {
+        orderId: '9000001001',
+        returnName: '#1001-R1',
+        status: 'REQUESTED',
+        lineItems: [{ fulfillmentLineItemId: 'gid://shopify/FulfillmentLineItem/7001', quantity: 1 }],
+        refundIssued: false,
+      },
+    });
+    expect(postDashboardInternal).toHaveBeenCalledWith(
+      '/api/agent/io-send-internal',
+      expect.objectContaining({ agentTaskId: action.taskId }),
+      expect.anything(),
+    );
+    expect((await db.agentTask.findUniqueOrThrow({ where: { id: action.taskId! } })).status)
+      .toBe('completed');
+  });
+
+  it('executes an approved exchange with a confirmed return and no invented payment effect', async () => {
+    anthropicCreate.mockReset();
+    anthropicCreate
+      .mockResolvedValueOnce(toolUse('discover-exchange', 'discover_capabilities', {
+        capability: 'exchange a delivered product for a different variant',
+      }))
+      .mockResolvedValueOnce(toolUse('exchange', 'create_exchange', {
+        order_id: '9000001001', variant_id: '8001', exchange_variant_id: '8002', quantity: 1,
+      }))
+      .mockResolvedValueOnce(toolUse('reply', 'send_reply', {
+        text: 'We have opened an exchange for order #1001.',
+      }));
+
+    let returnCreateCalls = 0;
+    providerFetch.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('/orders.json')) {
+        return new Response(JSON.stringify({ orders: [order] }), { status: 200 });
+      }
+      if (url.includes('/graphql.json')) {
+        const body = JSON.parse(String(init?.body)) as { query: string; variables: Record<string, unknown> };
+        if (body.query.includes('query returnableFulfillments')) {
+          return new Response(JSON.stringify({ data: {
+            order: { id: 'gid://shopify/Order/9000001001' },
+            returnableFulfillments: { edges: [{ node: { returnableFulfillmentLineItems: {
+              edges: [{ node: {
+                quantity: 1,
+                fulfillmentLineItem: {
+                  id: 'gid://shopify/FulfillmentLineItem/7001',
+                  lineItem: { name: 'Black shirt', variant: { id: 'gid://shopify/ProductVariant/8001' } },
+                },
+              } }],
+            } } }] },
+          } }), { status: 200 });
+        }
+        if (body.query.includes('query variantPrices')) {
+          return new Response(JSON.stringify({ data: { nodes: [
+            { id: 'gid://shopify/ProductVariant/8001', price: '42.00', title: 'Black / Medium', product: { title: 'Shirt' } },
+            { id: 'gid://shopify/ProductVariant/8002', price: '42.00', title: 'Black / Large', product: { title: 'Shirt' } },
+          ] } }), { status: 200 });
+        }
+        if (body.query.includes('mutation returnCreate')) {
+          returnCreateCalls += 1;
+          expect(body.variables.returnInput).toMatchObject({
+            exchangeLineItems: [{ variantId: 'gid://shopify/ProductVariant/8002', quantity: 1 }],
+          });
+          return new Response(JSON.stringify({ data: { returnCreate: {
+            return: { id: 'gid://shopify/Return/9902', name: '#1001-R2', status: 'REQUESTED' },
+            userErrors: [],
+          } } }), { status: 200 });
+        }
+      }
+      throw new Error(`Unexpected external request: ${url}`);
+    });
+
+    const org = await createTestOrg();
+    testOrgs.track(org.id);
+    const settings = { autonomyTier: 'guarded' as const, autoExecuteMode: 'off' as const };
+    await db.organization.update({ where: { id: org.id }, data: { settings } });
+    await createTestIntegration(org.id, {
+      platform: 'shopify',
+      externalAccountId: 'test-store.myshopify.com',
+      accessToken: 'shpat_test',
+      metadata: { oauthScopes: ['read_orders', 'read_products', 'write_returns'] },
+    });
+    const member = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: randomUUID() },
+    });
+    const customer = await createTestCustomer(org.id, `${randomUUID()}@example.com`);
+    const thread = await createTestThread(org.id, customer.id, 'ig_dm', { shopifyCustomerId: '1234' });
+    const sourceMessage = await createTestMessage(thread.id, 'I received order #1001. Can I exchange the black shirt for a large?');
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        requestSummary: 'Exchange the shirt on order #1001 for a large.',
+        requestSourceMessageId: sourceMessage.id,
+        classifierSignals: {
+          version: 5,
+          language: 'en',
+          intents: { mutative_request: true },
+          requestFacts: { ask: 'exchange', order: '#1001' },
+        },
+      },
+    });
+
+    const generated = await generateThreadPlan(org.id, thread.id, false, {
+      sourceMessageId: sourceMessage.id,
+    });
+    expect(generated.plan?.rawToolCalls.map(call => call.name)).toEqual(['create_exchange']);
+    const executed = await executeCurrentCachedHomePlan({
+      orgId: org.id,
+      threadId: thread.id,
+      settings: resolveAgentSettings(settings),
+      executionIntent: 'merchant_approved',
+      failureRoute: 'test:exchange-host',
+      approver: { clerkUserId: member.clerkUserId, displayName: 'Test Merchant' },
+    }, buildGatewayPlanExecutionDeps());
+
+    expect(executed.execution.status, JSON.stringify(executed.result.actionsPerformed)).toBe('committed');
+    expect(returnCreateCalls).toBe(1);
+    const action = await db.agentAction.findFirstOrThrow({
+      where: { organizationId: org.id, tool: 'create_exchange' },
+    });
+    expect(action).toMatchObject({
+      taskId: expect.any(String), proposalId: generated.identity!.planId,
+      status: 'success', dispatchState: 'settled', receiptVersion: 1,
+    });
+    expect(action.receipt).toMatchObject({
+      outcome: 'succeeded', providerReference: 'gid://shopify/Return/9902',
+      facts: {
+        orderId: '9000001001', returnName: '#1001-R2', status: 'REQUESTED',
+        returnedItems: [{ variantId: 'gid://shopify/ProductVariant/8001', quantity: 1 }],
+        replacementItems: [{ variantId: 'gid://shopify/ProductVariant/8002', quantity: 1 }],
+        financialConsequence: null,
+      },
+    });
+    expect(postDashboardInternal).toHaveBeenCalledWith(
+      '/api/agent/io-send-internal',
+      expect.objectContaining({ agentTaskId: action.taskId }),
+      expect.anything(),
+    );
+    expect((await db.agentTask.findUniqueOrThrow({ where: { id: action.taskId! } })).status)
       .toBe('completed');
   });
 });

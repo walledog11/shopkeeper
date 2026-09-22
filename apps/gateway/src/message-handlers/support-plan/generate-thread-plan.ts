@@ -2,7 +2,7 @@ import { db } from '@shopkeeper/db';
 import { requireOrgThread, getLatestConversationMessage } from '@shopkeeper/agent/thread-auth';
 import { buildContext } from '@shopkeeper/agent/build-context';
 import { planAgent, suspendsAtProposal } from '@shopkeeper/agent/planner';
-import { resolveAgentRuntimeVersion } from '@shopkeeper/agent/runtime-modes';
+import { resolveAgentRuntimeVersionForOrg } from '@shopkeeper/agent/runtime-modes';
 import { decideAutonomy } from '@shopkeeper/agent/autonomy';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import {
@@ -231,12 +231,15 @@ export async function generateThreadPlan(
   // sender, a superseded job, an answered thread and an unroutable mailbox each
   // leave before a request exists, because none of them is a request the agent
   // accepted. From here the customer's message is durable work.
+  const selectedRuntimeVersion = resolveAgentRuntimeVersionForOrg(organizationId);
   const durableResult = await openDurableSupportTask({
     organizationId,
     threadId,
     sourceMessageId: pendingCustomerMessageId,
     objective: instruction,
     continuity: parseClassifierSignals(thread.classifierSignals)?.requestFacts,
+    runtimeVersion: selectedRuntimeVersion,
+    ...(selectedRuntimeVersion >= 2 ? { continuityMode: 'classified' as const } : {}),
   });
   const scope: PlanAttemptScope = {
     organizationId, threadId, allowAutoExecute, instruction, thread, settings,
@@ -533,12 +536,11 @@ async function buildAutoExecutionResult(
 // lease covers the whole thing rather than one model call, because the planning
 // job is the only worker that will ever hold this task.
 const SUPPORT_TASK_LEASE_MS = 300_000;
-// Limits, not yet meters: the attempt's active time is charged on settle, and
-// nothing reserves model calls or spend against a support task. The shared LLM
-// spend cap still applies, as it does today.
-function supportTaskBudget() {
+// Planning and bounded replanning reserve model calls and record measured usage
+// against these persisted task limits. Active time is charged on settlement.
+function supportTaskBudget(runtimeVersion: number) {
   return {
-    runtimeVersion: resolveAgentRuntimeVersion(),
+    runtimeVersion,
     modelCallLimit: 20,
     activeTimeMsLimit: 300_000,
     spendNanoUsdLimit: 1_000_000_000n,
@@ -568,10 +570,12 @@ async function openDurableSupportTask(input: {
   threadId: string;
   sourceMessageId: string;
   objective: string;
+  runtimeVersion: number;
   continuity?: { ask: string; order: string | null; subject: string | null };
+  continuityMode?: 'classified';
 }): Promise<{ kind: 'claimed'; claim: DurableSupportTask } | { kind: 'not_owned' }> {
   const { request, task } = await acceptCustomerAgentRequest({
-    ...input, budget: supportTaskBudget(),
+    ...input, budget: supportTaskBudget(input.runtimeVersion),
   });
   const claimed = await claimAgentTask({
     organizationId: input.organizationId,

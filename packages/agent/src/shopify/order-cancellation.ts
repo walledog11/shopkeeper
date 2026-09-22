@@ -134,7 +134,7 @@ export async function cancelOrder(
   try {
     const orderId = requireNumericId(input.order_id, "order_id");
     const before = await shopifyRestJson<{ order?: ShopifyOrder }>(ctx, `orders/${orderId}.json`, {
-      query: { fields: "id,name,cancelled_at,cancel_reason,financial_status" },
+      query: { fields: "id,name,cancelled_at,cancel_reason,financial_status,fulfillment_status" },
     });
     if (!before.order) {
       return cancellationNoEffect(
@@ -152,6 +152,15 @@ export async function cancelOrder(
         toolPolicyBlock(`Error: failed to cancel order - order ${before.order.name ?? orderId} is already cancelled.`),
         "rejected",
         "already_cancelled",
+      );
+    }
+    if (before.order.fulfillment_status && before.order.fulfillment_status !== "unfulfilled") {
+      return cancellationNoEffect(
+        ctx,
+        orderId,
+        toolPolicyBlock(`Error: failed to cancel order - order ${before.order.name ?? orderId} has already shipped or partially shipped.`),
+        "rejected",
+        "order_already_fulfilled",
       );
     }
 

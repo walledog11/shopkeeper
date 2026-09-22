@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import express from 'express';
 import { ChannelType, LlmBudgetUnavailableError, SenderType, SpendCapError, db, usdToNanoDollars } from '@shopkeeper/db';
@@ -191,6 +192,36 @@ describe('durable dashboard agent requests', () => {
       .toMatchObject({ runtimeVersion: 1 });
   });
 
+  it('routes only a selected workspace to v2 and leaves duplicate tasks pinned', async () => {
+    vi.stubEnv('AGENT_RUNTIME_VERSION', '1');
+    vi.stubEnv('AGENT_RUNTIME_V2_ORG_IDS', org.id);
+    const body = {
+      organizationId: org.id,
+      clerkUserId: 'usr_desk',
+      clientRequestId: randomUUID(),
+      instruction: 'check order 1003',
+    };
+    const first = await request(app).post('/internal/operator/requests')
+      .set('x-internal-secret', SECRET).send(body);
+    expect(first.status).toBe(202);
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: first.body.taskId } }))
+      .toMatchObject({ runtimeVersion: 2 });
+
+    vi.stubEnv('AGENT_RUNTIME_V2_ORG_IDS', 'some-other-workspace');
+    const duplicate = await request(app).post('/internal/operator/requests')
+      .set('x-internal-secret', SECRET).send(body);
+    expect(duplicate.body.taskId).toBe(first.body.taskId);
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: first.body.taskId } }))
+      .toMatchObject({ runtimeVersion: 2 });
+
+    const afterRollback = await request(app).post('/internal/operator/requests')
+      .set('x-internal-secret', SECRET)
+      .send({ ...body, clientRequestId: randomUUID(), instruction: 'check order 1004' });
+    expect(afterRollback.status).toBe(202);
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: afterRollback.body.taskId } }))
+      .toMatchObject({ runtimeVersion: 1 });
+  });
+
   it('returns 409 when one client identity is reused for changed work', async () => {
     const base = { organizationId: org.id, clerkUserId: 'usr_desk', clientRequestId: requestId };
     await request(app).post('/internal/operator/requests').set('x-internal-secret', SECRET)
@@ -251,6 +282,7 @@ describe('durable dashboard agent requests', () => {
 
 afterEach(async () => {
   await cleanupTestData(org?.id);
+  vi.unstubAllEnvs();
   if (originalSecret === undefined) delete process.env.INTERNAL_API_SECRET;
   else process.env.INTERNAL_API_SECRET = originalSecret;
   if (originalDashboardUrl === undefined) delete process.env.DASHBOARD_URL;

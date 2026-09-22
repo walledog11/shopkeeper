@@ -57,29 +57,76 @@ dashboard send boundary rejects identity from another tenant or thread. The
 order-status and KB/product host matrix now covers catalog reads, missing
 information, revised instructions, delivery, and bounded discovery selected by
 the persisted runtime version.
-Created 2026-09-11; last updated 2026-09-20.
+Since that first row, support planning and bounded failure replanning charge
+model calls and measured usage to the claimed task. Classified topic/entity
+matching can keep independent pending tasks on one thread and return to the
+relevant one; missing or ambiguous runtime-v2 classification opens separate
+work rather than superseding an unrelated wait. Merchant answers, revisions,
+and proposal dismissals are accepted as durable requests. Address change,
+cancellation, return, and exchange each have a database-backed fake-provider
+approval-to-receipt-to-gateway-send host case. A delayed cancellation approval also
+rejects an order that shipped during the wait without sending a cancellation
+POST. A merchant-supplied return-label URL now continues its parked task through
+approval, typed receipt, and gateway send. Turn-journal notes have an idempotent
+identity, while ordinary action
+auditing is no longer a required model tool step. These are incremental Package
+5 results, not completion of its capability or conversational matrix.
+Created 2026-09-11; last updated 2026-09-21.
 
 Current checkpoint:
+
+The concise [release evidence matrix](conversational-agent-overhaul-release-matrix.md)
+tracks the remaining capability, conversation, and cutover gates by row.
 
 - [x] Packages 0–4 are implemented, with the real-store Package 3 release
   exercise still required before production cutover.
 - [x] The common Package 5 support-task spine is durable from request intake
   through task claim, waits, approval, action authority, settlement, and
   attributed reply persistence.
+- [x] Support planning and failure replanning reserve task model calls and
+  record measured tokens/spend against the durable claim.
 - [x] The first Package 5 capability row — order status and policy/product
   questions — satisfies the availability-through-compatibility evidence table.
-- [ ] Package 5 mutative rows remain: address changes, cancellation, basic
-  returns, and retained merchant operations must each pass the same host matrix.
-- [ ] Package 5 continuity remains: independent tasks in one conversation,
-  task switching, terse/ambiguous follow-ups, customer waits, and accepted
-  request records for merchant answers, revisions, and dismissals.
-- [ ] Package 5 bookkeeping cleanup remains: move automatic notes and status
-  consequences out of the model tool surface where they follow from receipts.
+- [ ] Package 5 mutative rows remain: address change, cancellation, return, and
+  exchange now have fake-provider approval-to-gateway-send host cases. Return-label
+  continuation now has an approval-to-receipt-to-gateway-send host case after
+  a merchant answer. Remaining stale-provider-state cases and retained merchant
+  operations still need the same matrix before any row is declared complete.
+- [ ] Package 5 continuity remains: classified topic/entity matches keep
+  independent tasks and resume a matching one, while missing or ambiguous
+  runtime-v2 classification preserves parked work. Merchant answers, revisions,
+  and dismissals have accepted request records. Clear referents, customer waits,
+  and switching across channels still need acceptance evidence.
+- [ ] Package 5 bookkeeping cleanup remains: turn audit notes now have a stable,
+  idempotent identity, and the model is no longer instructed to add a routine
+  note after each action. Receipt-driven status consequences and the remaining
+  automatic-note surface need review before marking this complete.
+- [x] A delayed cancellation approval rechecks live fulfillment state before
+  provider dispatch; a shipped or partially shipped order produces a rejected
+  receipt, preserves its policy-block action status, and sends no cancellation
+  POST. A revoked Shopify write grant now records a policy-block action without
+  dispatch, and a changed workspace cancellation policy rejects the approval
+  before an action starts. Lost membership also refuses approval at the durable
+  proposal boundary. A full refund whose provider-calculated balance shrank
+  during the wait now records a rejected receipt and sends no refund mutation;
+  this exposed and fixed a policy-block path that dropped typed receipts.
+  A cancellation host case now runs sent, definite-failed, and unknown customer
+  delivery outcomes; all three retain one confirmed cancellation effect, with
+  separate reply action and task states. Delivery retry remains unproved.
+  Partial-refund balance and other operation preconditions still need host-level
+  review.
 - [x] The Package 6 code path can pin new tasks to runtime v1 or v2 and lets an
-  exact v2 proposal authorize execution without `Thread.cachedPlan`.
+  exact v2 proposal authorize execution without `Thread.cachedPlan`. New support
+  and dashboard tasks can now select v2 for named workspaces via
+  `AGENT_RUNTIME_V2_ORG_IDS` while other new tasks stay v1.
 - [ ] Package 6 operational work remains: controlled real-provider exercise,
   old/new comparison, staged routing, rollback rehearsal, persisted-state
   inventory, and deletion of superseded active paths.
+- [x] `npm run verify:pr` passed after these local changes, and the new
+  database-backed concurrent journal-note test passed separately. Live-model
+  evals and a controlled real-provider/customer-delivery exercise were not run;
+  the local environment had no model API key, and no controlled provider
+  workspace/destination was selected.
 
 Implementation detail expanded 2026-09-11 against the current repository. Names marked **proposed** describe work to implement, not APIs or tables that already exist. This document authorizes no production operation by itself.
 
@@ -2275,6 +2322,33 @@ first safe-read capability row. The v1 compatibility proof, v2 executable-
 envelope proof, cache-independent entry proof, and persisted discovery-routing
 proof are explicit.
 
+2026-09-21 incremental evidence: the gateway host suite now includes approved
+address update, cancellation, return, and exchange effects, each with a
+provider-confirmed version-1 receipt, task/proposal attribution, and an
+assertion at the mocked gateway delivery hop. The return case exposed a
+reply-grounding false positive for “no refund has been issued”; the shared
+guard now treats that negated effect as non-completion while still checking any
+positive claim in the same sentence. The cancellation adapter now re-reads
+fulfillment immediately before dispatch and rejects a fully or partially
+shipped order. Its host case changes Shopify state *after* proposal creation
+and confirms no cancellation POST; the rejected receipt remains a
+`policy_block` action even when the runtime
+also escalates it. Agent adapter/grounding unit cases and the 11-case gateway
+order/KB/product/mutation host file pass. This proves selected paths, not the
+complete availability-through-compatibility row for those mutations.
+
+Continuity evidence now covers two pending classified topics on one thread,
+return to a single matching ask/entity, and a terse or unclassified follow-up
+that chooses neither ambiguous task. The latter opens separate work and leaves
+older proposals intact; it does not yet demonstrate a useful clarification or
+customer-wait resumption. Merchant answers, revisions, and proposal dismissals
+now create idempotent accepted member requests tied to the exact wait/task.
+Support planning and its bounded failure replan use the claimed task's durable
+model-call and usage budget. Automatic turn-journal notes use an idempotent
+`agent-audit:<turnId>` identity; a concurrent database test proves one note for
+three retries. The support prompt no longer directs the model to add a routine
+note after an action, while explicit merchant-requested notes remain available.
+
 For each capability, complete the following row before marking it migrated:
 
 | Item | Evidence required |
@@ -2294,16 +2368,18 @@ Move automatic audit notes/status consequences to the successful-receipt path wi
 
 - [ ] Move order status, policy/product questions, address changes, cancellation,
   basic returns, and retained merchant operations onto the same runtime
-  contracts. Partial completion: cancellation, return, exchange, and
-  return-label attachment now use the Package 1 receipt/dispatch boundary;
-  fulfillment uses the same boundary but remains isolated from default support
-  selection. The conversation runtime those capabilities migrate onto now exists
-  for support — every inbound message is a durable request on a claimed task —
-  and the order-status plus policy/product safe-read row now completes the
-  evidence table. Mutative capability rows remain incomplete.
-- [ ] Support multiple requests, task switching, terse follow-ups, explicit preferences, and resumption after waiting for the merchant or customer. Resumption after waiting for the merchant now holds for support on both kinds of wait: a parked question names who may answer it and a parked card names who may approve it, and an answer or a revision from any bound member ends that wait and continues the same task from either surface. The rest does not — a conversation still runs one task, and neither the answer nor the dismissal is itself an accepted request.
-- [ ] Stop new actions on cancellation or superseding instructions. Revalidate pending approvals and stale evidence when work resumes. Partial completion: an approval wait now ends at the ledger however it ends — approved, declined, revised, stopped, or superseded by a later customer message — and a proposal that is no longer current records that, so a card held on another device cannot be approved after the fact. Revalidating stale *evidence* on resume does not exist.
-- [ ] Move audit notes and other mechanical bookkeeping out of the model tool surface where they are consequences of execution.
+  contracts. Order status plus policy/product answers complete the safe-read
+  evidence row. Address update, cancellation, return, and exchange now pass
+  approval-to-gateway-send fake-provider host cases; cancellation also passes a
+  stale-fulfillment rejection case. Return-label attachment now has a
+  merchant-answer continuation host cases through approval and typed receipt:
+  confirmed attachment reaches the gateway send, while an ambiguous provider
+  outcome leaves the task reconciling and sends no label link.
+  Retained merchant operations and the remaining matrix cells are still open;
+  fulfillment remains isolated from default support selection.
+- [ ] Support multiple requests, task switching, terse follow-ups, explicit preferences, and resumption after waiting for the merchant or customer. Classified ask/entity matching now keeps distinct pending tasks and can return to a single match. An unclassified or ambiguous runtime-v2 follow-up preserves the pending tasks rather than guessing. Merchant answers and revisions from an authorized member continue the exact wait/task and are accepted requests; dismissals are accepted requests that end their proposal wait. Clear-referent handling, useful ambiguity clarification, explicit preferences, customer waits, and cross-channel task switching remain unproved.
+- [ ] Stop new actions on cancellation or superseding instructions. Revalidate pending approvals and stale evidence when work resumes. An approval wait ends at the ledger on approval, decline, revision, stop, or superseding customer instruction; stale cards cannot approve a replacement proposal. Cancellation now rechecks live fulfillment before dispatch and records a rejected receipt without a provider POST when the order shipped during the wait. Host cases also cover revoked Shopify write grant, changed workspace cancellation policy, lost member authority, and reduced full-refund balance. Ownership, partial-refund balance, and the remaining operation-specific evidence transitions still need host coverage.
+- [ ] Move audit notes and other mechanical bookkeeping out of the model tool surface where they are consequences of execution. Turn-journal notes are now written once per turn identity, and routine action-note prompting is removed. Receipt-driven status consequences and any remaining automatic note/status calls still need review; explicit requested notes remain a separate capability.
 - [ ] Remove obsolete speculative completion-draft behavior as each path gains receipt-based composition. Keep any residual prose checks explicitly labeled as heuristics, not guarantees.
 
 Acceptance: the agent handles the conversational matrix below across relevant channels. Task memory improves continuity without leaking tenant/customer data or silently changing authority.

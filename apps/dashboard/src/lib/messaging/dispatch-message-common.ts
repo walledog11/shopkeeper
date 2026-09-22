@@ -108,6 +108,15 @@ export function markLogicalResponseSent(
   })
 }
 
+/** Mark the durable boundary before a synchronous provider request can start. */
+export async function markLogicalResponseAttempted(messageId: string) {
+  const result = await db.message.updateMany({
+    where: { id: messageId, sendStatus: "pending", sendAttemptedAt: null },
+    data: { sendAttemptedAt: new Date() },
+  })
+  if (result.count !== 1) throw new Error("Logical response is no longer pending for dispatch")
+}
+
 export function markAgentMessageSendFailed(messageId: string, sendError: string) {
   return db.message.update({
     where: { id: messageId },

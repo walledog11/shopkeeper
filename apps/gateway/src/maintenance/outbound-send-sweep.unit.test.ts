@@ -20,8 +20,8 @@ vi.mock('../logger.js', () => ({
 
 import { runOutboundSendSweep } from './outbound-send-sweep.js';
 
-function sweepCounts(pending = 0, unattempted = 0, attempted = 0) {
-  return [{ count: pending }, { count: unattempted }, { count: attempted }];
+function sweepCounts(pending = 0, unattempted = 0, attempted = 0, pendingAttempted = 0) {
+  return [{ count: pending }, { count: pendingAttempted }, { count: unattempted }, { count: attempted }];
 }
 
 beforeEach(() => {
@@ -120,6 +120,17 @@ describe('runOutboundSendSweep', () => {
 
     expect(errorLog).toHaveBeenCalledWith(
       expect.objectContaining({ opsAlert: true, failedCount: 0, unknownCount: 4 }),
+      expect.anything(),
+    );
+  });
+
+  it('includes interrupted synchronous attempts in the unknown count', async () => {
+    transaction.mockResolvedValueOnce(sweepCounts(0, 0, 0, 2));
+
+    await runOutboundSendSweep();
+
+    expect(errorLog).toHaveBeenCalledWith(
+      expect.objectContaining({ opsAlert: true, failedCount: 0, unknownCount: 2 }),
       expect.anything(),
     );
   });

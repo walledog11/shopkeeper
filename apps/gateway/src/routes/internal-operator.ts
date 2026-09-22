@@ -24,7 +24,7 @@ import { internalJsonParser } from './body-parsers.js';
 import { authorizeInternalRequest } from './internal-auth.js';
 import type { OperatorMessageContext } from './operator-message.js';
 import { ensureAgentTaskEnqueued } from '../agent-task-ingest.js';
-import { resolveAgentRuntimeVersion } from '@shopkeeper/agent/runtime-modes';
+import { resolveAgentRuntimeVersionForOrg } from '@shopkeeper/agent/runtime-modes';
 
 const DASHBOARD_TASK_LIMITS = {
   modelCallLimit: 20,
@@ -32,10 +32,10 @@ const DASHBOARD_TASK_LIMITS = {
   spendNanoUsdLimit: 1_000_000_000n,
 } as const;
 
-function dashboardTaskBudget() {
+function dashboardTaskBudget(organizationId: string) {
   return {
     ...DASHBOARD_TASK_LIMITS,
-    runtimeVersion: resolveAgentRuntimeVersion(),
+    runtimeVersion: resolveAgentRuntimeVersionForOrg(organizationId),
   };
 }
 
@@ -96,7 +96,7 @@ export function registerInternalOperatorRoutes(router: Router): void {
         threadId: thread.id,
         dedupeKey: clientRequestId,
         instruction,
-        budget: dashboardTaskBudget(),
+        budget: dashboardTaskBudget(organizationId),
       });
       if (!accepted.task) throw new Error('Accepted dashboard request has no task.');
       try {

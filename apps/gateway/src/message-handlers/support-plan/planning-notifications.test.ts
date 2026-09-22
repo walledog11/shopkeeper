@@ -1,12 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChannelType, db, SenderType } from '@shopkeeper/db';
+import { ChannelType, SenderType } from '@shopkeeper/db';
 import {
-  cleanupTestData,
   createTestCustomer,
   createTestMessage,
   createTestOrg,
   createTestThread,
 } from '@shopkeeper/db/test-helpers';
+import {
+  operatorPlanNotificationIdentity,
+  seedLegacyClassifierV4Thread,
+} from '../../test-fixtures/support-plan-test-fixtures.js';
+import { cleanupSingleTestOrg } from '../../test-fixtures/test-org-tracker.js';
 
 // One person with two bound devices: the fan-out sends twice but parks once.
 const ORG_MEMBER_ID = '00000000-0000-4000-8000-0000000000aa';
@@ -624,7 +628,7 @@ describe('getConversationStage', () => {
   let orgId: string | null = null;
 
   afterEach(async () => {
-    await cleanupTestData(orgId);
+    await cleanupSingleTestOrg(orgId);
     orgId = null;
   });
 
@@ -663,18 +667,9 @@ describe('sendOperatorPlanNotification', () => {
   let orgId: string | null = null;
 
   afterEach(async () => {
-    await cleanupTestData(orgId);
+    await cleanupSingleTestOrg(orgId);
     orgId = null;
   });
-
-  function planIdentity(sourceMessageId: string) {
-    return {
-      planId: '00000000-0000-4000-8000-0000000000c1',
-      sourceMessageId,
-      planHash: 'c'.repeat(64),
-      instructionHash: 'd'.repeat(64),
-    };
-  }
 
   // A thread on a classifier version older than requestFacts. Production still
   // held two of these at the 2026-08-23 inventory, and every one of them renders
@@ -682,19 +677,10 @@ describe('sendOperatorPlanNotification', () => {
   async function seedLegacyThread(sourceText: string | null) {
     const org = await createTestOrg();
     orgId = org.id;
-    const customer = await createTestCustomer(org.id, `legacy_${Date.now()}`, { name: 'Dana Reyes' });
-    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
-    const message = sourceText === null ? null : await createTestMessage(thread.id, sourceText);
-    await db.thread.update({
-      where: { id: thread.id },
-      data: {
-        classifierSignals: { version: 4, language: 'en', intents: {} } as never,
-        requestSourceMessageId: message?.id ?? null,
-      },
-    });
+    const { thread, messageId } = await seedLegacyClassifierV4Thread(org.id, sourceText);
     listOperatorBindingsSpy.mockResolvedValue([TELEGRAM_BINDING]);
     notifyOperatorSpy.mockResolvedValue({ channel: 'telegram', chatId: 'chat_1' });
-    return { org, thread, messageId: message?.id ?? null };
+    return { org, thread, messageId };
   }
 
   // The wiring, not the formatter: nothing is handed in, so the send path has to
@@ -712,7 +698,7 @@ describe('sendOperatorPlanNotification', () => {
       'Needs a refund',
       plan,
       'Handle refund request',
-      { identity: planIdentity(messageId!) },
+      { identity: operatorPlanNotificationIdentity(messageId!) },
     );
 
     const [, , body] = notifyOperatorSpy.mock.calls[0] ?? [];
@@ -755,7 +741,7 @@ describe('sendOperatorPlanNotification', () => {
       'Needs a refund',
       plan,
       'Handle refund request',
-      { identity: planIdentity(stale.id) },
+      { identity: operatorPlanNotificationIdentity(stale.id) },
     );
 
     const [, , body] = notifyOperatorSpy.mock.calls[0] ?? [];
@@ -1058,7 +1044,7 @@ describe('sendOperatorQuestionNotification', () => {
       // The question's own thread plan is dropped; the unrelated thread survives.
       expect((await getContext(org.id, 'chat_1')).pendingPlans.map((plan) => plan.planId)).toEqual(['plan-other']);
     } finally {
-      await cleanupTestData(org.id);
+      await cleanupSingleTestOrg(org.id);
     }
   });
 });

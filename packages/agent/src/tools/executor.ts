@@ -500,11 +500,20 @@ export async function executeToolWithStatus(
   const policyError = await enforceToolPolicy(prepared.definition, prepared.input, ctx, settings);
   if (policyError) return { result: policyError, status: "policy_block" };
   const capabilityError = unmetToolCapability(prepared.definition, ctx);
-  if (capabilityError) return { result: capabilityError.message, status: "error" };
+  if (capabilityError) {
+    return {
+      result: capabilityError.message,
+      status: capabilityError.status === "policy_block" ? "policy_block" : "error",
+    };
+  }
 
   const executed = await executePreparedTool(prepared.definition, prepared.input, ctx, settings);
   if (executed.policyBlocked) {
-    return { result: executed.result.message, status: "policy_block" };
+    return {
+      result: executed.result.message,
+      status: "policy_block",
+      ...(executed.result.receipt ? { receipt: executed.result.receipt } : {}),
+    };
   }
   return {
     result: executed.result.message,

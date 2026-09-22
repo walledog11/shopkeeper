@@ -435,6 +435,24 @@ describe("shared proposal approval boundary", () => {
     expect(await authorizeAgentProposal(approval(other, support.planId))).toBeNull();
   });
 
+  it("refuses a formerly bound member whose membership ended during the approval wait", async () => {
+    const support = await seedSupportWaitingApproval();
+    const formerMember = await db.orgMember.findFirstOrThrow({
+      where: {
+        organizationId: support.organizationId,
+        clerkUserId: support.input.clerkUserId,
+      },
+    });
+    await db.orgMember.delete({ where: { id: formerMember.id } });
+
+    await expect(authorizeAgentProposal(approval(support.input, support.planId)))
+      .rejects.toBeInstanceOf(ForbiddenError);
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: support.taskId } }))
+      .toMatchObject({ status: "waiting_approval", activeProposalId: support.planId });
+    expect(await db.agentProposal.findUniqueOrThrow({ where: { id: support.planId } }))
+      .toMatchObject({ status: "ready" });
+  });
+
   it("gives two different members approving one support card a single effect", async () => {
     const support = await seedSupportWaitingApproval();
     const second = await db.orgMember.create({

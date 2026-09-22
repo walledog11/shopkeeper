@@ -7,8 +7,11 @@ import {
   createTestOrg,
   createTestThread,
 } from '@shopkeeper/db/test-helpers';
-import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
-import { resolveAgentSettings } from '@shopkeeper/agent/settings';
+import {
+  testAskOperatorPlanCache,
+  testReplyPlanCache,
+} from '../test-fixtures/agent-plan-cache-fixtures.js';
+import { DIGEST_FIXTURE_NOW } from '../test-fixtures/digest-thread-fixtures.js';
 import type { RequestFacts } from '@shopkeeper/agent/classifier-signals';
 import {
   DIGEST_CURSOR_KEY,
@@ -25,51 +28,7 @@ import type { BriefingItem } from './digest-briefing/types.js';
 import { appendPendingPlan, updateContext } from '../operator-context.js';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
-const NOW = new Date('2026-04-29T12:00:00Z');
-
-// A cached plan that classifies as needing merchant input, so the thread
-// qualifies for "Waiting on you" once it goes stale.
-function staleReviewPlanCache(lastCustomerMessageId: string) {
-  return buildAgentPlanCacheRecord({
-    instruction: 'Refund policy question',
-    plan: {
-      instruction: 'Refund policy question',
-      steps: [{
-        id: 'step-1',
-        tool: 'ask_operator',
-        label: 'Ask operator',
-        description: 'Ask operator',
-        category: 'internal',
-        enabled: true,
-      }],
-      rawToolCalls: [{ id: 'step-1', name: 'ask_operator', input: { question: 'Can we refund?' } }],
-    },
-    lastCustomerMessageId,
-    settings: resolveAgentSettings(null),
-  });
-}
-
-// A cached plan whose only move is a customer-facing reply, so it classifies as
-// `quick_reply` — the shape the stale scan used to drop on the floor.
-function staleQuickReplyPlanCache(lastCustomerMessageId: string) {
-  return buildAgentPlanCacheRecord({
-    instruction: 'Answer the shipping question',
-    plan: {
-      instruction: 'Answer the shipping question',
-      steps: [{
-        id: 'step-1',
-        tool: 'send_reply',
-        label: 'Send reply',
-        description: 'Send reply',
-        category: 'communication',
-        enabled: true,
-      }],
-      rawToolCalls: [{ id: 'step-1', name: 'send_reply', input: { text: 'We ship worldwide.' } }],
-    },
-    lastCustomerMessageId,
-    settings: resolveAgentSettings(null),
-  });
-}
+const NOW = DIGEST_FIXTURE_NOW;
 
 beforeEach(async () => {
   org = await createTestOrg();
@@ -589,7 +548,7 @@ describe('loadWaitingOnYouItems', () => {
     await db.thread.update({
       where: { id: thread.id },
       data: {
-        cachedPlan: staleReviewPlanCache(message.id),
+        cachedPlan: testAskOperatorPlanCache(message.id),
         cachedPlanMessageId: message.id,
         updatedAt: new Date(NOW.getTime() - 4 * 3_600_000),
         classifierSignals: {
@@ -615,7 +574,7 @@ describe('loadWaitingOnYouItems', () => {
     await db.thread.update({
       where: { id: thread.id },
       data: {
-        cachedPlan: staleReviewPlanCache(message.id),
+        cachedPlan: testAskOperatorPlanCache(message.id),
         cachedPlanMessageId: message.id,
         requestSourceMessageId: message.id,
         updatedAt: new Date(NOW.getTime() - 4 * 3_600_000),
@@ -645,7 +604,7 @@ describe('loadWaitingOnYouItems', () => {
       where: { id: evictedThread.id },
       data: {
         aiSummary: 'Asking whether we ship to Ireland.',
-        cachedPlan: staleQuickReplyPlanCache(evictedMessage.id),
+        cachedPlan: testReplyPlanCache('Answer the shipping question', evictedMessage.id),
         cachedPlanMessageId: evictedMessage.id,
         updatedAt: new Date(NOW.getTime() - 4 * 3_600_000),
       },
@@ -654,7 +613,7 @@ describe('loadWaitingOnYouItems', () => {
       where: { id: keptThread.id },
       data: {
         aiSummary: 'Wants a refund on a damaged order.',
-        cachedPlan: staleReviewPlanCache(keptMessage.id),
+        cachedPlan: testAskOperatorPlanCache(keptMessage.id),
         cachedPlanMessageId: keptMessage.id,
         updatedAt: new Date(NOW.getTime() - 4 * 3_600_000),
       },
@@ -731,7 +690,7 @@ describe('loadWaitingOnYouItems', () => {
       await db.thread.update({
         where: { id: thread.id },
         data: {
-          cachedPlan: staleReviewPlanCache(message.id),
+          cachedPlan: testAskOperatorPlanCache(message.id),
           cachedPlanMessageId: message.id,
           updatedAt: new Date(NOW.getTime() - 4 * 3_600_000),
         },

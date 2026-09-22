@@ -34,8 +34,8 @@ export const POST = withOrgRoute(
       snapshotIntegrationId: message.integrationId,
     });
 
-    await db.message.update({
-      where: { id: messageId },
+    const claimed = await db.message.updateMany({
+      where: { id: messageId, organizationId: org.id, sendStatus: 'failed' },
       data: {
         sendStatus: 'pending',
         sendClaimToken: null,
@@ -46,18 +46,21 @@ export const POST = withOrgRoute(
         integrationId: integration.id,
       },
     });
+    if (claimed.count !== 1) {
+      throw new ApiError('Message is no longer in a failed state', 409);
+    }
 
     const enqueued = await enqueueOutboundEmail({
       organizationId: org.id,
       messageId,
       threadId: message.threadId,
       integrationId: integration.id,
-      source: 'dispatch_message',
+      source: message.agentTaskId ? 'agent_send_reply' : 'dispatch_message',
     });
 
     if (enqueued === 'failed') {
-      await db.message.update({
-        where: { id: messageId },
+      await db.message.updateMany({
+        where: { id: messageId, organizationId: org.id, sendStatus: 'pending', sendAttemptedAt: null },
         data: {
           sendStatus: 'failed',
           sendClaimToken: null,

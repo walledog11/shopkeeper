@@ -26,6 +26,18 @@ export function resolveAgentRuntimeVersion(
   throw new Error("AGENT_RUNTIME_VERSION must be 1 or 2");
 }
 
+/** Selects the version only when a new task is created. The persisted task wins thereafter. */
+export function resolveAgentRuntimeVersionForOrg(
+  organizationId: string,
+  globalVersion: string | undefined = process.env.AGENT_RUNTIME_VERSION,
+  v2OrgIds: string | undefined = process.env.AGENT_RUNTIME_V2_ORG_IDS,
+): AgentRuntimeVersion {
+  const fallback = resolveAgentRuntimeVersion(globalVersion);
+  const selected = v2OrgIds?.split(",").map(id => id.trim()).filter(Boolean) ?? [];
+  if (selected.length === 0) return fallback;
+  return selected.includes(organizationId) ? DURABLE_AGENT_RUNTIME_VERSION : LEGACY_AGENT_RUNTIME_VERSION;
+}
+
 export type ProposalSuspensionMode = "off" | "compose_from_receipt";
 
 /**

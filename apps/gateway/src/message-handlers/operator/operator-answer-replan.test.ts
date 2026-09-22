@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { createHash } from 'node:crypto';
 import { db, SenderType } from '@shopkeeper/db';
 import {
   createTestOrg,
   createTestCustomer,
+  createTestIntegration,
   createTestThread,
   createTestMessage,
   cleanupTestData,
@@ -15,10 +17,26 @@ import {
 } from '@shopkeeper/agent/task-ledger';
 import { randomUUID } from 'node:crypto';
 
-const { planAgentSpy, sendOperatorPlanNotificationSpy } = vi.hoisted(() => ({
+const { planAgentSpy, sendOperatorPlanNotificationSpy, anthropicCreate, postDashboardInternal } = vi.hoisted(() => ({
   planAgentSpy: vi.fn(),
   sendOperatorPlanNotificationSpy: vi.fn(),
+  anthropicCreate: vi.fn(),
+  postDashboardInternal: vi.fn(),
 }));
+
+vi.mock('@anthropic-ai/sdk', () => ({
+  default: class Anthropic {
+    messages = { create: anthropicCreate };
+  },
+}));
+
+vi.mock('../../clients/agent-runtime.js', () => ({
+  getGatewayLockProvider: () => ({
+    acquire: vi.fn(async () => ({ isLost: () => false, release: vi.fn(async () => {}) })),
+  }),
+}));
+
+vi.mock('../../clients/dashboard-internal.js', () => ({ postDashboardInternal }));
 
 vi.mock('@shopkeeper/agent/planner', async (importOriginal) => ({
   ...await importOriginal<typeof import('@shopkeeper/agent/planner')>(),
@@ -35,6 +53,8 @@ vi.mock('../support-plan/planning-notifications.js', async (importOriginal) => {
 
 import { applyOperatorAnswerReplan } from './operator-answer-replan.js';
 import { getContext, updateContext } from '../../operator-context.js';
+import { executeCurrentCachedHomePlan } from '@shopkeeper/agent/plan-execution';
+import { buildGatewayPlanExecutionDeps } from './agent-turn-deps.js';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
 // Operator state is keyed to the person, so every transport in these cases writes
@@ -47,11 +67,14 @@ const CLERK_USER_ID = 'user_operator_answer_replan';
 beforeEach(async () => {
   org = await createTestOrg();
   planAgentSpy.mockReset();
+  anthropicCreate.mockReset();
+  postDashboardInternal.mockReset();
   sendOperatorPlanNotificationSpy.mockReset();
   sendOperatorPlanNotificationSpy.mockResolvedValue(undefined);
 });
 
 afterEach(async () => {
+  vi.unstubAllGlobals();
   await db.operatorContext.deleteMany({ where: { organizationId: org.id } }).catch(() => undefined);
   await cleanupTestData(org?.id);
 });
@@ -217,13 +240,20 @@ describe('applyOperatorAnswerReplan', () => {
     // A support conversation waiting on the merchant, the way the inbound
     // planning job leaves one: the customer's message is an accepted request on
     // a task parked with a question any bound member may answer.
-    async function seedWaitingSupportTask(options: { pending: boolean }) {
+    async function seedWaitingSupportTask(options: {
+      pending: boolean;
+      customerText?: string;
+      objective?: string;
+      question?: string;
+    }) {
       const member = await db.orgMember.create({
         data: { organizationId: org.id, clerkUserId: randomUUID() },
       });
       const customer = await createTestCustomer(org.id, 'cust@example.com', { name: 'Jane Doe' });
       const thread = await createTestThread(org.id, customer.id, 'email', { tag: 'Support' });
-      const custMsg = await createTestMessage(thread.id, 'Can I get a refund?', SenderType.customer);
+      const custMsg = await createTestMessage(
+        thread.id, options.customerText ?? 'Can I get a refund?', SenderType.customer,
+      );
       if (!options.pending) {
         await createTestMessage(thread.id, 'Looking into it!', SenderType.agent);
       }
@@ -232,12 +262,12 @@ describe('applyOperatorAnswerReplan', () => {
         data: {
           cachedPlanMessageId: custMsg.id,
           aiSummary: 'Refund request',
-          requestSummary: 'Refund request',
+          requestSummary: options.objective ?? 'Refund request',
         },
       });
       const { request, task } = await acceptCustomerAgentRequest({
         organizationId: org.id, threadId: thread.id, sourceMessageId: custMsg.id,
-        objective: 'Refund request', budget,
+        objective: options.objective ?? 'Refund request', budget,
       });
       const claim = await claimAgentTask({
         organizationId: org.id, taskId: task.id, expectedRevision: task.revision,
@@ -246,7 +276,7 @@ describe('applyOperatorAnswerReplan', () => {
         organizationId: org.id, taskId: task.id, expectedRevision: task.revision,
         claimToken: claim!.claimToken, requestId: request.id,
         settlement: {
-          status: 'waiting_input', question: 'Is this one within policy?',
+          status: 'waiting_input', question: options.question ?? 'Is this one within policy?',
           answerer: { kind: 'member', key: ANY_MEMBER_ACTOR_KEY },
         },
       });
@@ -417,6 +447,140 @@ describe('applyOperatorAnswerReplan', () => {
       expect(settled.activeProposalId).toBe(planId);
       expect(await db.agentProposal.findUniqueOrThrow({ where: { id: settled.activeProposalId! } }))
         .toMatchObject({ taskId, status: 'ready', approverScopeKey: ANY_MEMBER_ACTOR_KEY });
+    });
+
+    it.each([
+      { providerOutcome: 'confirmed' as const },
+      { providerOutcome: 'ambiguous' as const },
+    ])('continues a return-label question through approval with a $providerOutcome provider outcome', async ({ providerOutcome }) => {
+      const labelUrl = 'https://labels.example.com/return-1001.pdf';
+      const { member, thread, taskId } = await seedWaitingSupportTask({
+        pending: true,
+        customerText: 'Please send me a label for my open return on order #1001.',
+        objective: 'Attach the merchant-provided label to the open return for order #1001.',
+        question: 'What return label URL should I use for order #1001?',
+      });
+      await createTestIntegration(org.id, {
+        platform: 'shopify',
+        externalAccountId: `test-store-${org.id}.myshopify.com`,
+        accessToken: 'shpat_test',
+        metadata: { oauthScopes: ['write_returns', 'read_orders'] },
+      });
+      const providerFetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes('/orders.json')) {
+          return new Response(JSON.stringify({ orders: [] }), { status: 200 });
+        }
+        if (url.includes('/graphql.json')) {
+          const body = JSON.parse(String(init?.body ?? '{}')) as { query?: string };
+          if (body.query?.includes('reverseDeliveryCreateWithShipping')) {
+            if (providerOutcome === 'ambiguous') {
+              return new Response(JSON.stringify({ errors: 'upstream timeout' }), { status: 503 });
+            }
+            return new Response(JSON.stringify({ data: {
+              reverseDeliveryCreateWithShipping: {
+                reverseDelivery: { id: 'gid://shopify/ReverseDelivery/501' }, userErrors: [],
+              },
+            } }), { status: 200 });
+          }
+          return new Response(JSON.stringify({ data: { order: { returns: { edges: [{ node: {
+            id: 'gid://shopify/Return/401', name: '#1001-R1', status: 'OPEN',
+            reverseFulfillmentOrders: { edges: [{ node: { id: 'gid://shopify/ReverseFulfillmentOrder/301' } }] },
+          } }] } } } }), { status: 200 });
+        }
+        throw new Error(`Unexpected provider request: ${url}`);
+      });
+      vi.stubGlobal('fetch', providerFetch);
+      planAgentSpy.mockResolvedValue({
+        instruction: 'Attach the return label for order #1001.',
+        steps: [{
+          id: 'label', tool: 'attach_return_label', category: 'action', enabled: true,
+          label: 'Attach return label', description: 'Attach the approved label',
+        }],
+        rawToolCalls: [{
+          id: 'label', name: 'attach_return_label', input: { order_id: '9000001001', label_url: labelUrl },
+        }],
+        suspendedAtProposal: true,
+        routingEvidence: { classifierState: 'not_applicable', codes: [] },
+        validation: { status: 'valid', issues: [] },
+        warnings: [],
+      } satisfies AgentPlan);
+      anthropicCreate.mockResolvedValue({
+        stop_reason: 'tool_use',
+        content: [{ type: 'tool_use', id: 'reply', name: 'send_reply', input: {
+          text: `Your return label is ready: ${labelUrl}`,
+        } }],
+        usage: { input_tokens: 10, output_tokens: 5 },
+      });
+      postDashboardInternal.mockImplementation(async (_path: string, body: {
+        operationId: string; executionId: string; threadId: string; input: { text: string };
+      }) => ({
+        ok: true,
+        data: {
+          status: 'ok', message: 'Reply accepted.',
+          receipt: {
+            version: 1, operationId: body.operationId, executionId: body.executionId,
+            tool: 'send_reply', target: { kind: 'thread', id: body.threadId },
+            observedAt: new Date().toISOString(), outcome: 'succeeded',
+            providerReference: 'provider-message-501',
+            facts: {
+              logicalResponseId: 'provider-message-501', messageId: 'provider-message-501',
+              threadId: body.threadId, destination: { kind: 'thread', id: body.threadId },
+              contentSha256: createHash('sha256').update(body.input.text).digest('hex'),
+              deliveryState: 'sent', providerMessageId: 'provider-message-501',
+            },
+          },
+        },
+      }));
+
+      await applyOperatorAnswerReplan({
+        organizationId: org.id,
+        memberKey: `member:${member.id}`,
+        clerkUserId: member.clerkUserId,
+        threadId: thread.id,
+        answer: labelUrl,
+        endsWait: 'question',
+        deliveryRef: 'telegram:chat_9',
+      });
+      const parked = await db.agentTask.findUniqueOrThrow({ where: { id: taskId } });
+      expect(parked).toMatchObject({ status: 'waiting_approval', activeProposalId: expect.any(String) });
+
+      const executed = await executeCurrentCachedHomePlan({
+        orgId: org.id,
+        threadId: thread.id,
+        settings: resolveAgentSettings(null),
+        executionIntent: 'merchant_approved',
+        failureRoute: 'test:return-label-continuation-host',
+        approver: { clerkUserId: member.clerkUserId, displayName: 'Test Merchant' },
+      }, buildGatewayPlanExecutionDeps());
+
+      expect(executed.execution.status).toBe(providerOutcome === 'confirmed' ? 'committed' : 'unknown');
+      const labelAction = await db.agentAction.findFirstOrThrow({
+        where: { organizationId: org.id, taskId, tool: 'attach_return_label' },
+      });
+      expect(labelAction).toMatchObject(providerOutcome === 'confirmed' ? {
+        proposalId: parked.activeProposalId, status: 'success', receiptVersion: 1,
+        receipt: { outcome: 'succeeded', facts: {
+          orderId: '9000001001', returnId: 'gid://shopify/Return/401',
+          reverseDeliveryId: 'gid://shopify/ReverseDelivery/501', attachmentState: 'attached',
+        } },
+      } : {
+        proposalId: parked.activeProposalId, status: 'unknown', receiptVersion: 1,
+        receipt: { outcome: 'unknown', code: 'ambiguous_provider_response' },
+      });
+      expect(providerFetch.mock.calls.filter(([input]) =>
+        String(input).includes('/graphql.json'))).toHaveLength(2);
+      if (providerOutcome === 'confirmed') {
+        expect(postDashboardInternal).toHaveBeenCalledWith(
+          '/api/agent/io-send-internal',
+          expect.objectContaining({ agentTaskId: taskId, input: { text: `Your return label is ready: ${labelUrl}` } }),
+          expect.anything(),
+        );
+      } else {
+        expect(postDashboardInternal).not.toHaveBeenCalled();
+      }
+      expect(await db.agentTask.findUniqueOrThrow({ where: { id: taskId } }))
+        .toMatchObject({ status: providerOutcome === 'confirmed' ? 'completed' : 'reconciling' });
     });
 
     it('closes the task when the ticket was already handled', async () => {

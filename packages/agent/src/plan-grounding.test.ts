@@ -4,6 +4,7 @@ import {
   detectUngroundedEscalationReasons,
   detectUngroundedReplyText,
   renderReplyCompletionClaims,
+  unsupportedReplyCompletionClaims,
 } from "./plan-grounding.js";
 
 describe("escalation materialization", () => {
@@ -28,6 +29,24 @@ describe("escalation materialization", () => {
 });
 
 describe("plan grounding", () => {
+  it("allows a denied refund while still checking a later positive return claim", () => {
+    const facts = [{
+      action: "return" as const,
+      target: { kind: "order" as const, id: "123", aliases: ["#1001"] },
+      outcome: "success" as const,
+      executionReference: "return_1",
+      sourceTool: "create_return",
+    }];
+    expect(unsupportedReplyCompletionClaims({
+      name: "send_reply",
+      input: { text: "No refund has been issued yet. We've opened a return for order #1001." },
+    }, facts)).toEqual([]);
+    expect(unsupportedReplyCompletionClaims({
+      name: "send_reply",
+      input: { text: "No refund has been issued, and we've canceled order #1001." },
+    }, facts)).toEqual(["No refund has been issued, and we've canceled order #1001."]);
+  });
+
   it.each([
     ["return", "We've created your return.", "A return has been created for order #1001."],
     ["exchange", "We've created your exchange.", "An exchange has been created for order #1001."],

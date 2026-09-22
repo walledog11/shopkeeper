@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { createMessage } from "@shopkeeper/db";
+import { createInternalNoteOnce, createMessage } from "@shopkeeper/db";
 import { resolveAgentSettings } from "./settings.js";
 import { serializeAgentTurn } from "./turns.js";
 import { ConflictError } from "./errors.js";
@@ -169,9 +169,10 @@ export async function executeAgentTurn(
     }
 
     if ((params.persistAuditNote ?? true) && ((params.persistAuditNoteWhenNoActions ?? true) || result.actionsPerformed.length > 0)) {
-      await createMessage({
+      await createInternalNoteOnce({
         threadId: params.threadId,
         senderType: "note",
+        externalMessageId: `agent-audit:${turnId}`,
         ...(params.agentRequestId ? { agentRequestId: params.agentRequestId } : {}),
         ...(params.agentTaskId ? { agentTaskId: params.agentTaskId } : {}),
         contentText: serializeAgentTurn({

@@ -76,7 +76,12 @@ const GENERIC_ORDER_ACTIONS = new Set<CompletionAction>(["fulfillment", "order_c
 // them, and a global regex there would carry lastIndex between sentences. Clone
 // per scan instead, so collecting spans cannot disturb those callers.
 function allMatches(pattern: RegExp, text: string): string[] {
-  return [...text.matchAll(new RegExp(pattern.source, `${pattern.flags}g`))].map((m) => m[0]);
+  return [...text.matchAll(new RegExp(pattern.source, `${pattern.flags}g`))]
+    // A negative statement about an effect is not a claim that it happened.
+    // Keep scanning the rest of the sentence: "No refund was issued, and we
+    // opened a return" still has a return claim to verify.
+    .filter((match) => !/\bno\s+$/i.test(text.slice(0, match.index)))
+    .map((match) => match[0]);
 }
 
 /**

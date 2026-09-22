@@ -7,6 +7,7 @@ import {
   createPendingLogicalResponse,
   createSentAgentMessage,
   markAgentMessageSendFailed,
+  markLogicalResponseAttempted,
   markLogicalResponseSent,
   markPendingAgentMessageSendUnknown,
 } from "./dispatch-message-common"
@@ -133,6 +134,8 @@ export async function dispatchMessage(
         agentTaskId: options.agentTaskId,
       })
     : null
+
+  if (pendingResponse) await markLogicalResponseAttempted(pendingResponse.id)
 
   const providerResult = thread.channelType === CHANNEL_TYPE.IG_DM
     ? await dispatchInstagramDirect(thread, org, text, source)

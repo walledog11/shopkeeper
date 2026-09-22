@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { randomUUID } from 'node:crypto';
 import { db } from '@shopkeeper/db';
-import {
-  cleanupTestData, createTestCustomer, createTestMessage, createTestOrg, createTestThread,
-} from '@shopkeeper/db/test-helpers';
+import { createTestMessage } from '@shopkeeper/db/test-helpers';
 import { ANY_MEMBER_ACTOR_KEY } from '@shopkeeper/agent/task-ledger';
-import { TOOL_CATEGORIES } from '@shopkeeper/agent/tools';
-import type { AgentPlan, RawToolCall } from '@shopkeeper/agent/types';
+import type { RawToolCall } from '@shopkeeper/agent/types';
+import {
+  agentPlanFromRawToolCalls,
+  seedGuardedRefundSupportThread,
+} from '../../test-fixtures/support-plan-test-fixtures.js';
+import { createTestOrgTracker } from '../../test-fixtures/test-org-tracker.js';
 
 const { mockPlanAgent, mockBuildContext, mockMaybeAutoExecute } = vi.hoisted(() => ({
   mockPlanAgent: vi.fn(),
@@ -41,37 +42,12 @@ const refund: RawToolCall = {
 };
 const reply: RawToolCall = { id: 'reply', name: 'send_reply', input: { text: 'Refunded.' } };
 
-function plan(calls: RawToolCall[], overrides: Partial<AgentPlan> = {}): AgentPlan {
-  return {
-    instruction: 'Handle this customer\'s latest request',
-    rawToolCalls: calls,
-    steps: calls
-      .filter(call => TOOL_CATEGORIES[call.name] !== 'read')
-      .map(call => ({
-        id: call.id, tool: call.name, label: call.name,
-        description: call.name, category: TOOL_CATEGORIES[call.name] ?? 'internal',
-        enabled: true,
-      })),
-    validation: { status: 'valid', issues: [] },
-    routingEvidence: { classifierState: 'aligned', codes: [] },
-    ...overrides,
-  };
-}
-
-const orgIds: string[] = [];
+const testOrgs = createTestOrgTracker();
 
 async function seedThread() {
-  const org = await createTestOrg();
-  orgIds.push(org.id);
-  await db.organization.update({
-    where: { id: org.id },
-    // Guarded: a refund is the merchant's to approve, never auto-executed.
-    data: { settings: { autonomyTier: 'guarded', autoExecuteMode: 'off', maxRefundAmount: 100 } },
-  });
-  const customer = await createTestCustomer(org.id, randomUUID());
-  const thread = await createTestThread(org.id, customer.id, 'ig_dm');
-  const message = await createTestMessage(thread.id, 'Can I get a refund?');
-  return { organizationId: org.id, threadId: thread.id, customerId: customer.id, messageId: message.id };
+  const seed = await seedGuardedRefundSupportThread();
+  testOrgs.track(seed.organizationId);
+  return seed;
 }
 
 function taskFor(organizationId: string) {
@@ -86,13 +62,36 @@ beforeEach(() => {
   mockMaybeAutoExecute.mockResolvedValue(null);
 });
 afterEach(async () => {
-  for (const id of orgIds.splice(0)) await cleanupTestData(id);
+  await testOrgs.cleanupAll();
+  vi.unstubAllEnvs();
 });
 
 describe('durable support task', () => {
+  it('selects v2 only for the rollout workspace when accepting customer work', async () => {
+    const selected = await seedThread();
+    const other = await seedThread();
+    vi.stubEnv('AGENT_RUNTIME_VERSION', '1');
+    vi.stubEnv('AGENT_RUNTIME_V2_ORG_IDS', selected.organizationId);
+    mockPlanAgent.mockResolvedValue(agentPlanFromRawToolCalls([refund, reply]));
+
+    await generateThreadPlan(selected.organizationId, selected.threadId, false);
+    await generateThreadPlan(other.organizationId, other.threadId, false);
+
+    const selectedTask = await taskFor(selected.organizationId);
+    expect(selectedTask).toMatchObject({ runtimeVersion: 2 });
+    expect(await taskFor(other.organizationId)).toMatchObject({ runtimeVersion: 1 });
+
+    vi.stubEnv('AGENT_RUNTIME_V2_ORG_IDS', other.organizationId);
+    await createTestMessage(selected.threadId, 'Actually, keep working on the refund.');
+    await generateThreadPlan(selected.organizationId, selected.threadId, false);
+    expect(await taskFor(selected.organizationId)).toMatchObject({
+      id: selectedTask.id, runtimeVersion: 2,
+    });
+  });
+
   it('records the customer message as a request and parks the proposal on its task', async () => {
     const seed = await seedThread();
-    mockPlanAgent.mockResolvedValue(plan([refund, reply]));
+    mockPlanAgent.mockResolvedValue(agentPlanFromRawToolCalls([refund, reply]));
 
     const generated = await generateThreadPlan(seed.organizationId, seed.threadId, false);
     expect(generated.plan).not.toBeNull();
@@ -131,7 +130,7 @@ describe('durable support task', () => {
 
   it('settles a plan with nothing to approve as done', async () => {
     const seed = await seedThread();
-    mockPlanAgent.mockResolvedValue(plan([
+    mockPlanAgent.mockResolvedValue(agentPlanFromRawToolCalls([
       { id: 'esc', name: 'escalate_to_human', input: { reason: 'Needs a human' } },
     ]));
 
@@ -156,7 +155,7 @@ describe('durable support task', () => {
         cacheCreation1hInputTokens: 0,
         cacheReadInputTokens: 0,
       }, 'claude-sonnet-5');
-      return plan([{ id: 'esc', name: 'escalate_to_human', input: { reason: 'Needs a human' } }]);
+      return agentPlanFromRawToolCalls([{ id: 'esc', name: 'escalate_to_human', input: { reason: 'Needs a human' } }]);
     });
 
     await generateThreadPlan(seed.organizationId, seed.threadId, false);
@@ -172,7 +171,7 @@ describe('durable support task', () => {
 
   it('parks a merchant question on the members who can answer it', async () => {
     const seed = await seedThread();
-    mockPlanAgent.mockResolvedValue(plan([
+    mockPlanAgent.mockResolvedValue(agentPlanFromRawToolCalls([
       { id: 'ask', name: 'ask_operator', input: { question: 'Do we refund past 30 days?' } },
     ]));
 
@@ -189,12 +188,12 @@ describe('durable support task', () => {
 
   it('supersedes the parked proposal when the customer writes again', async () => {
     const seed = await seedThread();
-    mockPlanAgent.mockResolvedValue(plan([refund, reply]));
+    mockPlanAgent.mockResolvedValue(agentPlanFromRawToolCalls([refund, reply]));
     await generateThreadPlan(seed.organizationId, seed.threadId, false);
     const first = await taskFor(seed.organizationId);
 
     await createTestMessage(seed.threadId, 'Actually, just cancel it');
-    mockPlanAgent.mockResolvedValue(plan([
+    mockPlanAgent.mockResolvedValue(agentPlanFromRawToolCalls([
       { id: 'cancel', name: 'cancel_order', input: { order_id: '1', reason: 'customer' } },
       reply,
     ]));
@@ -222,7 +221,7 @@ describe('durable support task', () => {
         },
       } },
     });
-    mockPlanAgent.mockResolvedValue(plan([refund, reply]));
+    mockPlanAgent.mockResolvedValue(agentPlanFromRawToolCalls([refund, reply]));
     await generateThreadPlan(seed.organizationId, seed.threadId, false);
     const first = await taskFor(seed.organizationId);
     expect(first.checkpoint).toMatchObject({
@@ -245,7 +244,7 @@ describe('durable support task', () => {
         },
       },
     });
-    mockPlanAgent.mockResolvedValue(plan([reply]));
+    mockPlanAgent.mockResolvedValue(agentPlanFromRawToolCalls([reply]));
     await generateThreadPlan(seed.organizationId, seed.threadId, false);
 
     const tasks = await db.agentTask.findMany({
@@ -276,7 +275,7 @@ describe('durable support task', () => {
 
   it('leaves the second job for one message to report the same plan untracked', async () => {
     const seed = await seedThread();
-    mockPlanAgent.mockResolvedValue(plan([refund, reply]));
+    mockPlanAgent.mockResolvedValue(agentPlanFromRawToolCalls([refund, reply]));
     await generateThreadPlan(seed.organizationId, seed.threadId, false);
     const parked = await taskFor(seed.organizationId);
 
@@ -297,7 +296,7 @@ describe('durable support task', () => {
   // so settling the task can claim them without a second identity to keep in step.
   it('links what the execution recorded to the task that authorized it', async () => {
     const seed = await seedThread();
-    mockPlanAgent.mockResolvedValue(plan([reply]));
+    mockPlanAgent.mockResolvedValue(agentPlanFromRawToolCalls([reply]));
     mockMaybeAutoExecute.mockImplementation(async (params) => {
       const turnId = params.durableTurn!.requestId;
       await db.agentAction.create({ data: {
@@ -327,7 +326,7 @@ describe('durable support task', () => {
 
   it('names the request on the execution of the plan it authorized', async () => {
     const seed = await seedThread();
-    mockPlanAgent.mockResolvedValue(plan([reply]));
+    mockPlanAgent.mockResolvedValue(agentPlanFromRawToolCalls([reply]));
     mockMaybeAutoExecute.mockImplementation(async (params) => {
       expect(params.durableTurn).toMatchObject({
         requestId: (await db.agentRequest.findFirstOrThrow({

@@ -219,7 +219,7 @@ describe("runAgent policy enforcement", () => {
     expect(result.actionsPerformed).toHaveLength(1);
     expect(result.actionsPerformed[0]).toMatchObject({
       tool: "cancel_order",
-      status: "escalated",
+      status: "policy_block",
     });
     expect(result.summary).toBe("Escalated to merchant: order cancellations are disabled by the workspace owner.");
   });
@@ -344,7 +344,7 @@ describe("runAgent policy enforcement", () => {
     expect(result.actionsPerformed).toHaveLength(1);
     expect(result.actionsPerformed[0]).toMatchObject({
       tool: "create_refund",
-      status: "escalated",
+      status: "policy_block",
     });
     expect(result.summary).toBe("Escalated to merchant: daily compensation cap of $100 reached (shared across refunds and gift cards); $10.00 remaining today.");
     expect(mockCommitDailyRefundSpendReservation).not.toHaveBeenCalled();
@@ -362,7 +362,7 @@ describe("runAgent policy enforcement", () => {
     expect(result.actionsPerformed).toHaveLength(1);
     expect(result.actionsPerformed[0]).toMatchObject({
       tool: "create_refund",
-      status: "escalated",
+      status: "policy_block",
     });
     expect(result.summary).toBe("Escalated to merchant: refund amount $200.00 exceeds the workspace limit of $50.");
     expect(mockReserveDailyRefundSpend).not.toHaveBeenCalled();
@@ -379,7 +379,7 @@ describe("runAgent policy enforcement", () => {
     expect(mockEscalateToHuman).toHaveBeenCalledWith(
       expect.stringContaining("invalid arguments for create_refund"),
     );
-    expect(result.actionsPerformed).toMatchObject([{ tool: "create_refund", status: "escalated" }]);
+    expect(result.actionsPerformed).toMatchObject([{ tool: "create_refund", status: "policy_block" }]);
     expect(mockReserveDailyRefundSpend).not.toHaveBeenCalled();
   });
 
@@ -394,7 +394,7 @@ describe("runAgent policy enforcement", () => {
     expect(mockEscalateToHuman).toHaveBeenCalledWith(
       expect.stringContaining("invalid arguments for create_gift_card"),
     );
-    expect(result.actionsPerformed).toMatchObject([{ tool: "create_gift_card", status: "escalated" }]);
+    expect(result.actionsPerformed).toMatchObject([{ tool: "create_gift_card", status: "policy_block" }]);
     expect(mockReserveDailyRefundSpend).not.toHaveBeenCalled();
   });
 
@@ -410,7 +410,7 @@ describe("runAgent policy enforcement", () => {
     expect(result.actionsPerformed).toHaveLength(1);
     expect(result.actionsPerformed[0]).toMatchObject({
       tool: "issue_discount",
-      status: "escalated",
+      status: "policy_block",
     });
     expect(result.summary).toBe("Escalated to merchant: issue_discount is retired and cannot create a new provider action. Escalate this request to the merchant.");
   });
@@ -426,7 +426,7 @@ describe("runAgent policy enforcement", () => {
     expect(mockEscalateToHuman).toHaveBeenCalledWith(
       "issue_store_credit is retired and cannot create a new provider action. Escalate this request to the merchant.",
     );
-    expect(result.actionsPerformed).toMatchObject([{ tool: "issue_store_credit", status: "escalated" }]);
+    expect(result.actionsPerformed).toMatchObject([{ tool: "issue_store_credit", status: "policy_block" }]);
     expect(mockReserveDailyRefundSpend).not.toHaveBeenCalled();
   });
 
@@ -499,7 +499,7 @@ describe("runAgent policy enforcement", () => {
       AGENT_SETTINGS_DEFAULTS,
     );
 
-    expect(result.actionsPerformed).toMatchObject([{ tool: "create_refund", status: "escalated" }]);
+    expect(result.actionsPerformed).toMatchObject([{ tool: "create_refund", status: "policy_block" }]);
     expect(mockEscalateToHuman).toHaveBeenCalledWith(expect.stringContaining("does not equal Shopify's complete refundable balance"));
     expect(mockReleaseDailyRefundSpendReservation).toHaveBeenCalledWith(
       "reservation_1",

@@ -74,3 +74,21 @@ export async function createMessage(
     return message;
   });
 }
+
+/** Keep one internal turn-journal note even when a settled turn is retried. */
+export async function createInternalNoteOnce(
+  data: CreateMessageInput & { senderType: typeof SenderType.note; externalMessageId: string },
+): Promise<Message> {
+  const resolvedData = await resolveMessageOrganizationId(db, data);
+  await db.message.createMany({ data: resolvedData, skipDuplicates: true });
+  const note = await db.message.findFirstOrThrow({
+    where: {
+      organizationId: resolvedData.organizationId,
+      externalMessageId: data.externalMessageId,
+    },
+  });
+  if (note.threadId !== data.threadId || note.senderType !== SenderType.note) {
+    throw new Error('Internal note identity is already bound to another message.');
+  }
+  return note;
+}

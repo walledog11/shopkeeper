@@ -740,6 +740,24 @@ describe("support conversation request boundary", () => {
     expect((await db.agentTask.findUniqueOrThrow({ where: { id: first.task.id } })).revision).toBe(0);
   });
 
+  it("does not supersede a parked task when runtime-v2 classification is absent", async () => {
+    const input = await seedSupport();
+    const first = await acceptCustomerAgentRequest({
+      ...input,
+      continuityMode: "classified",
+      continuity: { ask: "return", order: "#1001", subject: null },
+    });
+    const terseMessage = await createTestMessage(input.threadId, "Yes, that one");
+    const terse = await acceptCustomerAgentRequest({
+      ...input,
+      sourceMessageId: terseMessage.id,
+      continuityMode: "classified",
+    });
+
+    expect(terse.task.id).not.toBe(first.task.id);
+    expect((await db.agentTask.findUniqueOrThrow({ where: { id: first.task.id } })).revision).toBe(0);
+  });
+
   it("returns to the one task matching the classified topic and entity", async () => {
     const input = await seedSupport();
     const first = await acceptCustomerAgentRequest({

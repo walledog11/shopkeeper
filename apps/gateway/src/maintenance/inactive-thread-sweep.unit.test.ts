@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
+import { testRefundOnlyPlanCache } from '../test-fixtures/agent-plan-cache-fixtures.js';
 import {
   CLOSE_AFTER_QUIET_DAYS,
   classifyInactiveThreadClose,
@@ -17,26 +17,6 @@ const emptyContext = {
   pendingExecutionThreadIds: new Set<string>(),
   openWatchThreadIds: new Set<string>(),
 };
-
-function reviewPlanCache(customerMessageId: string) {
-  return buildAgentPlanCacheRecord({
-    instruction: 'Issue refund',
-    plan: {
-      instruction: 'Issue refund',
-      steps: [{
-        id: 'step-1',
-        tool: 'create_refund',
-        label: 'Issue refund',
-        description: 'Issue refund',
-        category: 'action',
-        enabled: true,
-      }],
-      rawToolCalls: [{ id: 'step-1', name: 'create_refund', input: { amount: 20 } }],
-    },
-    lastCustomerMessageId: customerMessageId,
-    settings: resolveAgentSettings(null),
-  });
-}
 
 describe('classifyInactiveThreadClose', () => {
   const base: InactiveThreadSweepRow = {
@@ -139,7 +119,7 @@ describe('classifyInactiveThreadClose', () => {
     expect(classifyInactiveThreadClose(
       {
         ...base,
-        cachedPlan: reviewPlanCache(customerId),
+        cachedPlan: testRefundOnlyPlanCache(customerId),
         cachedPlanMessageId: customerId,
         messages: [
           { id: customerId, senderType: 'customer', sentAt: QUIET_AGED },

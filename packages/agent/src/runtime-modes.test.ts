@@ -3,6 +3,7 @@ import {
   DURABLE_AGENT_RUNTIME_VERSION,
   LEGACY_AGENT_RUNTIME_VERSION,
   resolveAgentRuntimeVersion,
+  resolveAgentRuntimeVersionForOrg,
   suspendsAtProposal,
   usesCapabilityDiscovery,
 } from "./runtime-modes.js";
@@ -15,6 +16,19 @@ describe("agent runtime routing", () => {
     expect(resolveAgentRuntimeVersion("1")).toBe(LEGACY_AGENT_RUNTIME_VERSION);
     expect(resolveAgentRuntimeVersion("2")).toBe(DURABLE_AGENT_RUNTIME_VERSION);
     expect(() => resolveAgentRuntimeVersion("latest")).toThrow(/must be 1 or 2/);
+  });
+
+  it("can route only a named workspace to v2 while the global default stays v1", () => {
+    expect(resolveAgentRuntimeVersionForOrg("org-a", "1", " org-a,org-b "))
+      .toBe(DURABLE_AGENT_RUNTIME_VERSION);
+    expect(resolveAgentRuntimeVersionForOrg("org-c", "1", " org-a,org-b "))
+      .toBe(LEGACY_AGENT_RUNTIME_VERSION);
+    expect(resolveAgentRuntimeVersionForOrg("org-a", "1", "org-aa"))
+      .toBe(LEGACY_AGENT_RUNTIME_VERSION);
+    expect(resolveAgentRuntimeVersionForOrg("org-c", "2", "org-a"))
+      .toBe(LEGACY_AGENT_RUNTIME_VERSION);
+    expect(resolveAgentRuntimeVersionForOrg("org-c", "2", ""))
+      .toBe(DURABLE_AGENT_RUNTIME_VERSION);
   });
 
   it("derives proposal suspension from the persisted task version", () => {

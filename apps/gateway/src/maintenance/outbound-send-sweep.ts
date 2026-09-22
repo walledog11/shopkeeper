@@ -23,10 +23,14 @@ const UNKNOWN_SWEEP_ERROR = 'Delivery could not be confirmed after the provider 
 export async function runOutboundSendSweep(): Promise<void> {
   const cutoff = new Date(Date.now() - STALE_PENDING_MS);
 
-  const [pending, unattempted, attempted] = await retryAfterDbReconnect(() => db.$transaction([
+  const [pending, pendingAttempted, unattempted, attempted] = await retryAfterDbReconnect(() => db.$transaction([
     db.message.updateMany({
-      where: { sendStatus: 'pending', sentAt: { lt: cutoff } },
+      where: { sendStatus: 'pending', sentAt: { lt: cutoff }, sendAttemptedAt: null },
       data: { sendStatus: 'failed', sendClaimToken: null, sendError: SWEEP_ERROR },
+    }),
+    db.message.updateMany({
+      where: { sendStatus: 'pending', sentAt: { lt: cutoff }, sendAttemptedAt: { not: null } },
+      data: { sendStatus: 'unknown', sendClaimToken: null, sendError: UNKNOWN_SWEEP_ERROR },
     }),
     db.message.updateMany({
       where: {
@@ -47,9 +51,10 @@ export async function runOutboundSendSweep(): Promise<void> {
   ]));
 
   const failedCount = pending.count + unattempted.count;
-  if (failedCount > 0 || attempted.count > 0) {
+  const unknownCount = attempted.count + pendingAttempted.count;
+  if (failedCount > 0 || unknownCount > 0) {
     logger.error(
-      { opsAlert: true, failedCount, unknownCount: attempted.count },
+      { opsAlert: true, failedCount, unknownCount },
       '[OutboundSendSweep] Reconciled orphaned outbound send claims',
     );
   }

@@ -404,7 +404,10 @@ export async function executeAgentToolCall(
     const reason = result.replace(/^Error:\s*/, "").trim() || "Action blocked by policy.";
     await ctx.escalate(reason);
     result = reason;
-    status = "escalated";
+    // The escalation is a consequence of the rejection, not a rewrite of the
+    // provider outcome. A rejected receipt must persist with policy_block so
+    // recovery and the action ledger retain the actual result.
+    setEscalationReason(reason);
   }
 
   if (!threw && (status === "error" || status === "unknown")) {

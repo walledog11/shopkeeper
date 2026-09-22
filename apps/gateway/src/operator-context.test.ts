@@ -24,17 +24,8 @@ import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
 import { hashInstruction, hashPlan } from '@shopkeeper/agent/agent-actions';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import type { AgentPlan } from '@shopkeeper/agent/types';
+import { pendingPlanFor } from './test-fixtures/operator-pending-plan-fixtures.js';
 import logger from './logger.js';
-
-function planFor(threadId: string, planId: string, overrides: Partial<PendingPlan> = {}): PendingPlan {
-  return {
-    threadId,
-    instruction: `handle ${threadId}`,
-    rawToolCalls: [{ id: `tc-${planId}`, name: 'create_refund' }],
-    planId,
-    ...overrides,
-  };
-}
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
 
@@ -356,9 +347,9 @@ describe('updateContext slot isolation', () => {
 
 describe('appendPendingPlan (queue)', () => {
   it('stacks plans across threads, newest last', async () => {
-    await appendPendingPlan(org.id, 'q1', planFor('thread-a', 'plan-a'), 3);
-    await appendPendingPlan(org.id, 'q1', planFor('thread-b', 'plan-b'), 3);
-    await appendPendingPlan(org.id, 'q1', planFor('thread-c', 'plan-c'), 3);
+    await appendPendingPlan(org.id, 'q1', pendingPlanFor('thread-a', 'plan-a'), 3);
+    await appendPendingPlan(org.id, 'q1', pendingPlanFor('thread-b', 'plan-b'), 3);
+    await appendPendingPlan(org.id, 'q1', pendingPlanFor('thread-c', 'plan-c'), 3);
 
     const ctx = await getContext(org.id, 'q1');
     expect(ctx.pendingPlans.map((plan) => plan.planId)).toEqual(['plan-a', 'plan-b', 'plan-c']);
@@ -367,18 +358,18 @@ describe('appendPendingPlan (queue)', () => {
   });
 
   it('trims the oldest once the depth cap is exceeded', async () => {
-    await appendPendingPlan(org.id, 'q2', planFor('thread-a', 'plan-a'), 2);
-    await appendPendingPlan(org.id, 'q2', planFor('thread-b', 'plan-b'), 2);
-    await appendPendingPlan(org.id, 'q2', planFor('thread-c', 'plan-c'), 2);
+    await appendPendingPlan(org.id, 'q2', pendingPlanFor('thread-a', 'plan-a'), 2);
+    await appendPendingPlan(org.id, 'q2', pendingPlanFor('thread-b', 'plan-b'), 2);
+    await appendPendingPlan(org.id, 'q2', pendingPlanFor('thread-c', 'plan-c'), 2);
 
     const ctx = await getContext(org.id, 'q2');
     expect(ctx.pendingPlans.map((plan) => plan.planId)).toEqual(['plan-b', 'plan-c']);
   });
 
   it('upserts by threadId — a new plan for the same thread replaces the old one', async () => {
-    await appendPendingPlan(org.id, 'q3', planFor('thread-a', 'plan-a1'), 3);
-    await appendPendingPlan(org.id, 'q3', planFor('thread-b', 'plan-b'), 3);
-    await appendPendingPlan(org.id, 'q3', planFor('thread-a', 'plan-a2'), 3);
+    await appendPendingPlan(org.id, 'q3', pendingPlanFor('thread-a', 'plan-a1'), 3);
+    await appendPendingPlan(org.id, 'q3', pendingPlanFor('thread-b', 'plan-b'), 3);
+    await appendPendingPlan(org.id, 'q3', pendingPlanFor('thread-a', 'plan-a2'), 3);
 
     const ctx = await getContext(org.id, 'q3');
     // thread-a has one entry (the newer plan), moved to the end; thread-b intact.
@@ -386,7 +377,7 @@ describe('appendPendingPlan (queue)', () => {
   });
 
   it('is idempotent under retry — re-appending the same plan yields one entry', async () => {
-    const plan = planFor('thread-a', 'plan-a');
+    const plan = pendingPlanFor('thread-a', 'plan-a');
     await appendPendingPlan(org.id, 'q4', plan, 3);
     await appendPendingPlan(org.id, 'q4', plan, 3);
     await appendPendingPlan(org.id, 'q4', plan, 3);
@@ -398,8 +389,8 @@ describe('appendPendingPlan (queue)', () => {
 
   it('lands both concurrent appends for different threads (row-lock serialization)', async () => {
     await Promise.all([
-      appendPendingPlan(org.id, 'q5', planFor('thread-a', 'plan-a'), 5),
-      appendPendingPlan(org.id, 'q5', planFor('thread-b', 'plan-b'), 5),
+      appendPendingPlan(org.id, 'q5', pendingPlanFor('thread-a', 'plan-a'), 5),
+      appendPendingPlan(org.id, 'q5', pendingPlanFor('thread-b', 'plan-b'), 5),
     ]);
 
     const ctx = await getContext(org.id, 'q5');
@@ -407,10 +398,10 @@ describe('appendPendingPlan (queue)', () => {
   });
 
   it('removes only the acted plan from a multi-plan queue, leaving siblings', async () => {
-    await appendPendingPlan(org.id, 'q6', planFor('thread-a', 'plan-a'), 3);
-    await appendPendingPlan(org.id, 'q6', planFor('thread-b', 'plan-b'), 3);
+    await appendPendingPlan(org.id, 'q6', pendingPlanFor('thread-a', 'plan-a'), 3);
+    await appendPendingPlan(org.id, 'q6', pendingPlanFor('thread-b', 'plan-b'), 3);
 
-    await resolvePendingPlanContexts(org.id, 'q6', planFor('thread-a', 'plan-a'));
+    await resolvePendingPlanContexts(org.id, 'q6', pendingPlanFor('thread-a', 'plan-a'));
 
     const ctx = await getContext(org.id, 'q6');
     expect(ctx.pendingPlans.map((plan) => plan.planId)).toEqual(['plan-b']);
@@ -418,8 +409,8 @@ describe('appendPendingPlan (queue)', () => {
 });
 
 describe('selectPendingPlan', () => {
-  const a = planFor('thread-a', 'plan-a', { customerName: 'Sarah Chen' });
-  const b = planFor('thread-b', 'plan-b', { customerName: 'Jake Long' });
+  const a = pendingPlanFor('thread-a', 'plan-a', { customerName: 'Sarah Chen' });
+  const b = pendingPlanFor('thread-b', 'plan-b', { customerName: 'Jake Long' });
 
   it('errors when nothing is pending', () => {
     expect(selectPendingPlan([])).toEqual({ error: expect.stringContaining('no plan'), code: 'none_pending' });

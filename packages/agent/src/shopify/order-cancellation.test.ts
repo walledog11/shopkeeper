@@ -228,4 +228,29 @@ describe("cancelOrder", () => {
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it.each(["fulfilled", "partial"])('rechecks %s fulfillment before a delayed approval can cancel', async (fulfillmentStatus) => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
+      order: {
+        id: 123,
+        name: "#1001",
+        cancelled_at: null,
+        fulfillment_status: fulfillmentStatus,
+      },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await cancelOrder({ order_id: "123" }, ctx);
+
+    expect(result).toMatchObject({
+      status: "policy_block",
+      receipt: {
+        version: 1,
+        tool: "cancel_order",
+        outcome: "rejected",
+        code: "order_already_fulfilled",
+      },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });

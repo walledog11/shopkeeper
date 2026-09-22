@@ -195,6 +195,36 @@ describe('dispatchMessage', () => {
     expect(saved?.integrationId).not.toBeNull();
   });
 
+  it('records the provider attempt before a synchronous agent reply reaches email', async () => {
+    const emailAddress = `support_attempt_${org.id.slice(0, 8)}@example.com`;
+    await createTestIntegration(org.id, {
+      platform: ChannelType.email,
+      externalAccountId: emailAddress,
+      fromEmail: emailAddress,
+    });
+    const customer = await createTestCustomer(org.id, 'agent-attempt@example.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+    mockPostmarkSend.mockImplementationOnce(async () => {
+      const pending = await db.message.findFirstOrThrow({
+        where: { threadId: thread.id, senderType: SenderType.agent },
+      });
+      expect(pending.sendStatus).toBe('pending');
+      expect(pending.sendAttemptedAt).not.toBeNull();
+      return { MessageID: 'agent-attempt-message-id' };
+    });
+
+    const result = await dispatchMessage({ ...thread, customer }, org, 'We handled it.', {
+      source: 'agent_send_reply',
+    });
+
+    expect(result).toMatchObject({ ok: true });
+    const sent = await db.message.findFirstOrThrow({
+      where: { threadId: thread.id, senderType: SenderType.agent },
+    });
+    expect(sent.sendStatus).toBe('sent');
+    expect(sent.sendAttemptedAt).not.toBeNull();
+  });
+
   it('records email provider failures without persisting an agent message', async () => {
     mockPostmarkSend.mockRejectedValueOnce(new Error('postmark down'));
     const emailAddress = `support_fail_${org.id.slice(0, 8)}@example.com`;

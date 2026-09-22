@@ -552,6 +552,7 @@ describe("Shopify scope gating", () => {
     it("refuses with the scope named and a way out", () => {
       const refusal = unmetToolCapability(scopedTool, shopifyCtx(["read_products"]));
 
+      expect(refusal?.status).toBe("policy_block");
       expect(refusal?.message).toContain("write_products");
       expect(refusal?.message).toContain("Reconnect Shopify");
     });

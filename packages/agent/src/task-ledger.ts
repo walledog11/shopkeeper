@@ -334,9 +334,11 @@ async function advanceOrOpenThreadTask(
     organizationId: string; threadId: string; actorKey: string;
     objective: string; budget: TaskBudget; requestId: string;
     continuity?: TaskContinuityHint;
+    continuityMode?: "classified";
   },
 ) {
   const continuity = normalizedContinuityHint(input.continuity);
+  const matchByContinuity = input.continuityMode === "classified" || continuity !== null;
   const openTasks = await tx.agentTask.findMany({
     where: {
       organizationId: input.organizationId, threadId: input.threadId,
@@ -347,12 +349,12 @@ async function advanceOrOpenThreadTask(
     },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     select: { id: true, status: true, activeProposalId: true, checkpoint: true },
-    take: continuity ? 20 : 1,
+    take: matchByContinuity ? 20 : 1,
   });
-  const candidates = continuity
+  const candidates = matchByContinuity
     ? openTasks.filter(task => {
         const prior = checkpointContinuity(task.checkpoint);
-        return prior ? continuityMatches(continuity, prior) : false;
+        return continuity && prior ? continuityMatches(continuity, prior) : false;
       })
     : openTasks;
   // Runtime-v2 relevance is fail-closed: no match or more than one match opens
@@ -411,6 +413,8 @@ export interface CustomerRequestInput {
   budget: TaskBudget;
   /** Classifier-derived relevance hint. It selects no authority by itself. */
   continuity?: TaskContinuityHint;
+  /** Runtime-v2 relevance fails closed when classification is absent or unusable. */
+  continuityMode?: "classified";
 }
 
 export interface TaskContinuityHint {
@@ -521,6 +525,7 @@ export async function acceptCustomerAgentRequest(input: CustomerRequestInput) {
       organizationId: input.organizationId, threadId: input.threadId,
       actorKey: actor.actorKey, objective, budget: input.budget, requestId: request.id,
       ...(input.continuity ? { continuity: input.continuity } : {}),
+      ...(input.continuityMode ? { continuityMode: input.continuityMode } : {}),
     });
     request = await tx.agentRequest.update({
       where: { id: request.id, organizationId: input.organizationId },
