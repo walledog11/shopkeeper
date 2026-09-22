@@ -17,10 +17,10 @@ operation has a distinct provider precondition or recovery mode.
 | --- | --- | --- |
 | Order status, policy, product answers | Full safe-read row; task-attributed gateway delivery | Keep in comparison and holdout eval |
 | Full and partial refunds | Durable reference slice, typed receipts, live model with fake provider; full-refund balance shrink and a partial-refund selection consumed by another refund during approval preserve rejected receipts and send no refund mutation | Real-store approval/effect/delivery; partial-refund calculated amount changes without a prior refund; delivery recovery |
-| Address change | Approved fake-provider receipt and gateway send; full/partial fulfillment or changed order customer during approval records a rejected receipt without an order address PUT; customer-profile refusal after the order update preserves a typed partial outcome and prevents a success reply | Delivery retry |
+| Address change | Approved fake-provider receipt and gateway send; full/partial fulfillment or changed order customer during approval records a rejected receipt without an order address PUT; customer-profile refusal after the order update preserves a typed partial outcome and prevents a success reply; shared task-attributed delivery recovery retries the response row without invoking the effect executor | Controlled real-provider exercise |
 | Cancellation | Approved fake-provider receipt and gateway send; shipped and partially shipped order, revoked-grant, and changed-workspace-policy waits refuse provider dispatch; a lost provider response after a committed cancellation is confirmed by a fresh read; an unconfirmed provider result leaves one unknown cancellation, stops the success reply, and keeps the task reconciling; failed/unknown customer send leaves one committed cancellation; retrying a definite failed attributed email sends the same response row without repeating cancellation | Provider reconciliation for unknown delivery |
-| Return and exchange | Approved fake-provider receipt and gateway send; a return or exchange whose returnable quantity falls to zero during approval records a rejected receipt without return creation; an exchange whose replacement price rises is also refused; an incomplete return or exchange creation response records an unknown receipt, stops the customer success reply, and leaves the task reconciling | Reconciliation probe, revised instruction, delivery retry |
-| Return-label attachment | Typed receipt/dispatch boundary; merchant answer continues the parked task through approval and provider receipt; confirmed attachment gets an attributed gateway send, while an ambiguous provider outcome leaves the task reconciling and sends no label link | Recovery handoff and delivery retry after a confirmed attachment |
+| Return and exchange | Approved fake-provider receipt and gateway send; a return or exchange whose returnable quantity falls to zero during approval records a rejected receipt without return creation; an exchange whose replacement price rises is also refused; an incomplete return or exchange creation response records an unknown receipt, stops the customer success reply, and leaves the task reconciling; probes observe provider state but preserve the handoff when required receipt facts cannot be rebuilt; shared attributed delivery recovery does not invoke the effect executor | Revised instruction; controlled real-provider exercise |
+| Return-label attachment | Typed receipt/dispatch boundary; merchant answer continues the parked task through approval and provider receipt; confirmed attachment gets an attributed gateway send, while an ambiguous provider outcome leaves the task reconciling and sends no label link; shared attributed delivery recovery retries the response row without invoking the effect executor | Recovery handoff; controlled real-provider exercise |
 | Customer updates and explicit notes | Typed receipts | Claimed-task approval, grant/identity changes, provider outcome and delivery |
 | Order creation and editing | Typed receipts | Isolated merchant selection, approval, operation-specific stale state and recovery |
 | Gift card and fulfillment | Typed receipts; isolated from default support selection | Merchant-only path, approval, financial/fulfillment preflight, recovery and delivery |
@@ -150,6 +150,13 @@ No live-model or real-provider gate is claimed by the local fake-provider tests.
   exchange return: one `returnCreate` attempt, one typed unknown action, no
   customer success reply, and a reconciling task. All 28 gateway order-status
   host cases passed.
+- Existing database-backed unknown-outcome reconciliation cases were rerun for
+  return, exchange, fulfillment, return-label, order-edit, address, and customer
+  updates (7 passed). Return and exchange probes can observe the provider commit,
+  but lifecycle actions stay unknown when the probe cannot reconstruct the full
+  typed receipt. This is the intended human reconciliation handoff. Delivery
+  retry is a shared message-row boundary independent of the preceding effect;
+  its host test never re-enters the effect executor.
 - `npm run verify:pr` passed after the delivery changes, partial-refund host
   case, and test fixes: static checks, unit tests,
   browser smoke (12 passed), coverage, and builds. The first full run hit the

@@ -71,7 +71,7 @@ approval, typed receipt, and gateway send. Turn-journal notes have an idempotent
 identity, while ordinary action
 auditing is no longer a required model tool step. These are incremental Package
 5 results, not completion of its capability or conversational matrix.
-Created 2026-09-11; last updated 2026-09-21.
+Created 2026-09-11; last updated 2026-09-22.
 
 Current checkpoint:
 
@@ -88,10 +88,11 @@ tracks the remaining capability, conversation, and cutover gates by row.
 - [x] The first Package 5 capability row — order status and policy/product
   questions — satisfies the availability-through-compatibility evidence table.
 - [ ] Package 5 mutative rows remain: address change, cancellation, return, and
-  exchange now have fake-provider approval-to-gateway-send host cases. Return-label
-  continuation now has an approval-to-receipt-to-gateway-send host case after
-  a merchant answer. Remaining stale-provider-state cases and retained merchant
-  operations still need the same matrix before any row is declared complete.
+  exchange now cover approval, typed outcomes, stale provider state, unknown
+  outcomes, reply suppression, and shared delivery recovery in deterministic
+  host tests. Return-label continuation has an approval-to-receipt-to-gateway-send
+  host case after a merchant answer. Revised-instruction variants, retained
+  merchant operations, and the controlled provider exercise remain.
 - [ ] Package 5 continuity remains: classified topic/entity matches keep
   independent tasks and resume a matching one, while missing or ambiguous
   runtime-v2 classification preserves parked work. Merchant answers, revisions,
@@ -112,9 +113,11 @@ tracks the remaining capability, conversation, and cutover gates by row.
   this exposed and fixed a policy-block path that dropped typed receipts.
   A cancellation host case now runs sent, definite-failed, and unknown customer
   delivery outcomes; all three retain one confirmed cancellation effect, with
-  separate reply action and task states. Delivery retry remains unproved.
-  Partial-refund balance and other operation preconditions still need host-level
-  review.
+  separate reply action and task states. A cross-boundary recovery test retries
+  the same failed attributed message through the real dashboard route and gateway
+  worker without repeating cancellation. Partial-refund approval when Shopify's
+  calculated amount changes without a prior refund remains an open contract
+  question.
 - [x] The Package 6 code path can pin new tasks to runtime v1 or v2 and lets an
   exact v2 proposal authorize execution without `Thread.cachedPlan`. New support
   and dashboard tasks can now select v2 for named workspaces via
