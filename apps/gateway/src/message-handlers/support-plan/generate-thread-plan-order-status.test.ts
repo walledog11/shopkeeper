@@ -1581,10 +1581,11 @@ describe('durable order-status host path', () => {
   });
 
   it.each([
-    { change: 'none', returnableAfterApproval: 1, replacementPriceAfterApproval: '42.00' },
-    { change: 'returned item no longer returnable', returnableAfterApproval: 0, replacementPriceAfterApproval: '42.00' },
-    { change: 'replacement becomes more expensive', returnableAfterApproval: 1, replacementPriceAfterApproval: '52.00' },
-  ])('handles an approved exchange after $change', async ({ returnableAfterApproval, replacementPriceAfterApproval }) => {
+    { change: 'none', returnableAfterApproval: 1, replacementPriceAfterApproval: '42.00', createOutcome: 'confirmed' },
+    { change: 'returned item no longer returnable', returnableAfterApproval: 0, replacementPriceAfterApproval: '42.00', createOutcome: 'confirmed' },
+    { change: 'replacement becomes more expensive', returnableAfterApproval: 1, replacementPriceAfterApproval: '52.00', createOutcome: 'confirmed' },
+    { change: 'the provider omits the created exchange return', returnableAfterApproval: 1, replacementPriceAfterApproval: '42.00', createOutcome: 'unknown' },
+  ] as const)('handles an approved exchange after $change', async ({ returnableAfterApproval, replacementPriceAfterApproval, createOutcome }) => {
     anthropicCreate.mockReset();
     anthropicCreate
       .mockResolvedValueOnce(toolUse('discover-exchange', 'discover_capabilities', {
@@ -1633,7 +1634,9 @@ describe('durable order-status host path', () => {
             exchangeLineItems: [{ variantId: 'gid://shopify/ProductVariant/8002', quantity: 1 }],
           });
           return new Response(JSON.stringify({ data: { returnCreate: {
-            return: { id: 'gid://shopify/Return/9902', name: '#1001-R2', status: 'REQUESTED' },
+            return: createOutcome === 'confirmed'
+              ? { id: 'gid://shopify/Return/9902', name: '#1001-R2', status: 'REQUESTED' }
+              : null,
             userErrors: [],
           } } }), { status: 200 });
         }
@@ -1705,8 +1708,30 @@ describe('durable order-status host path', () => {
       return;
     }
 
-    expect(executed.execution.status, JSON.stringify(executed.result.actionsPerformed)).toBe('committed');
     expect(returnCreateCalls).toBe(1);
+    if (createOutcome === 'unknown') {
+      expect(executed.execution.status).toBe('unknown');
+      expect(executed.result.actionsPerformed).toMatchObject([
+        { tool: 'create_exchange', status: 'unknown' },
+      ]);
+      expect(executed.result.actionsPerformed).toHaveLength(1);
+      const action = await db.agentAction.findFirstOrThrow({
+        where: { organizationId: org.id, tool: 'create_exchange' },
+      });
+      expect(action).toMatchObject({
+        taskId: expect.any(String),
+        proposalId: generated.identity!.planId,
+        status: 'unknown',
+        dispatchState: 'unknown',
+        receiptVersion: 1,
+        receipt: { outcome: 'unknown', code: 'provider_return_missing' },
+      });
+      expect(postDashboardInternal).not.toHaveBeenCalled();
+      expect((await db.agentTask.findUniqueOrThrow({ where: { id: action.taskId! } })).status)
+        .toBe('reconciling');
+      return;
+    }
+    expect(executed.execution.status, JSON.stringify(executed.result.actionsPerformed)).toBe('committed');
     const action = await db.agentAction.findFirstOrThrow({
       where: { organizationId: org.id, tool: 'create_exchange' },
     });
