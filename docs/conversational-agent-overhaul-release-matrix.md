@@ -17,7 +17,7 @@ operation has a distinct provider precondition or recovery mode.
 | --- | --- | --- |
 | Order status, policy, product answers | Full safe-read row; task-attributed gateway delivery | Keep in comparison and holdout eval |
 | Full and partial refunds | Durable reference slice, typed receipts, live model with fake provider; full-refund balance shrink and a partial-refund selection consumed by another refund during approval preserve rejected receipts and send no refund mutation | Real-store approval/effect/delivery; partial-refund calculated amount changes without a prior refund; delivery recovery |
-| Address change | Approved fake-provider receipt and gateway send | Shipped order, changed customer/order ownership, partial order/customer outcome, delivery retry |
+| Address change | Approved fake-provider receipt and gateway send; full/partial fulfillment or changed order customer during approval records a rejected receipt without an order address PUT; customer-profile refusal after the order update preserves a typed partial outcome and prevents a success reply | Delivery retry |
 | Cancellation | Approved fake-provider receipt and gateway send; shipped and partially shipped order, revoked-grant, and changed-workspace-policy waits refuse provider dispatch; failed/unknown customer send leaves one committed cancellation | Provider unknown, delivery retry/reconciliation |
 | Return and exchange | Approved fake-provider receipt and gateway send | Returnable quantity/state changes, unknown probe, revised instruction, delivery retry |
 | Return-label attachment | Typed receipt/dispatch boundary; merchant answer continues the parked task through approval and provider receipt; confirmed attachment gets an attributed gateway send, while an ambiguous provider outcome leaves the task reconciling and sends no label link | Recovery handoff and delivery retry after a confirmed attachment |
@@ -110,6 +110,11 @@ No live-model or real-provider gate is claimed by the local fake-provider tests.
   fulfilled orders. In each case approval records a rejected typed receipt and
   sends no cancellation POST. All 18 gateway host cases passed after local test
   services were restarted.
+- The approved address-change host case now also covers fully and partially
+  fulfilled orders and changed order ownership at execution. All refuse the
+  order update with a rejected receipt. A definite customer-profile refusal
+  after the order update preserves both outcomes in an unknown receipt and
+  sends no success claim. All 22 cases in that gateway host file passed.
 - `npm run verify:pr` passed after the delivery changes, partial-refund host
   case, and test fixes: static checks, unit tests,
   browser smoke (12 passed), coverage, and builds. The first full run hit the

@@ -613,7 +613,13 @@ describe('durable order-status host path', () => {
     expect(String(providerFetch.mock.calls[0]?.[0])).toContain('/graphql.json');
   });
 
-  it('executes an approved address change from the durable proposal and replies from its receipt', async () => {
+  it.each([
+    { change: 'none', fulfillmentAfterApproval: null, customerAfterApproval: 1234, customerSyncFails: false },
+    { change: 'fulfilled', fulfillmentAfterApproval: 'fulfilled', customerAfterApproval: 1234, customerSyncFails: false },
+    { change: 'partially fulfilled', fulfillmentAfterApproval: 'partial', customerAfterApproval: 1234, customerSyncFails: false },
+    { change: 'different order customer', fulfillmentAfterApproval: null, customerAfterApproval: 9999, customerSyncFails: false },
+    { change: 'customer profile sync failure', fulfillmentAfterApproval: null, customerAfterApproval: 1234, customerSyncFails: true },
+  ])('handles an approved address change after $change', async ({ fulfillmentAfterApproval, customerAfterApproval, customerSyncFails }) => {
     anthropicCreate.mockReset();
     anthropicCreate
       .mockResolvedValueOnce(toolUse('discover-address', 'discover_capabilities', {
@@ -658,17 +664,24 @@ describe('durable order-status host path', () => {
       customer: { id: 1234 },
       shipping_address: oldAddress,
     };
+    let currentFulfillment: string | null = null;
+    let currentCustomerId = 1234;
+    let orderUpdateCalls = 0;
     providerFetch.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
       const method = init?.method ?? 'GET';
       if (url.includes('/orders/9000001001.json')) {
+        if (method === 'PUT') orderUpdateCalls += 1;
         return new Response(JSON.stringify({
           order: method === 'PUT'
             ? { ...addressOrder, shipping_address: newAddress }
-            : addressOrder,
+            : { ...addressOrder, fulfillment_status: currentFulfillment, customer: { id: currentCustomerId } },
         }), { status: 200, headers: { 'content-type': 'application/json' } });
       }
       if (url.includes('/customers/1234/addresses/789.json')) {
+        if (customerSyncFails && method === 'PUT') {
+          return new Response(JSON.stringify({ errors: 'Address rejected' }), { status: 422 });
+        }
         return new Response(JSON.stringify({ customer_address: newAddress }), {
           status: 200, headers: { 'content-type': 'application/json' },
         });
@@ -728,6 +741,8 @@ describe('durable order-status host path', () => {
     ]);
     expect(await db.agentTask.findFirstOrThrow({ where: { organizationId: org.id } }))
       .toMatchObject({ status: 'waiting_approval', activeProposalId: generated.identity!.planId });
+    currentFulfillment = fulfillmentAfterApproval;
+    currentCustomerId = customerAfterApproval;
 
     const executed = await executeCurrentCachedHomePlan({
       orgId: org.id,
@@ -737,6 +752,47 @@ describe('durable order-status host path', () => {
       failureRoute: 'test:address-host',
       approver: { clerkUserId: member.clerkUserId, displayName: 'Test Merchant' },
     }, buildGatewayPlanExecutionDeps());
+
+    if (fulfillmentAfterApproval || customerAfterApproval !== 1234) {
+      expect(orderUpdateCalls).toBe(0);
+      const blocked = await db.agentAction.findFirstOrThrow({
+        where: { organizationId: org.id, tool: 'update_shopify_order_address' },
+      });
+      expect(blocked).toMatchObject({
+        proposalId: generated.identity!.planId,
+        status: 'policy_block',
+        receiptVersion: 1,
+        receipt: {
+          outcome: 'rejected',
+          code: fulfillmentAfterApproval ? 'order_already_fulfilled' : 'customer_order_mismatch',
+        },
+      });
+      expect(postDashboardInternal.mock.calls.every(([, body]) =>
+        !JSON.stringify(body).includes('has been updated'))).toBe(true);
+      return;
+    }
+    if (customerSyncFails) {
+      expect(orderUpdateCalls).toBe(1);
+      const partial = await db.agentAction.findFirstOrThrow({
+        where: { organizationId: org.id, tool: 'update_shopify_order_address' },
+      });
+      expect(partial).toMatchObject({
+        proposalId: generated.identity!.planId,
+        status: 'unknown',
+        receiptVersion: 1,
+        receipt: {
+          outcome: 'unknown',
+          code: 'customer_sync_failed_after_order_update',
+          facts: {
+            orderAddress: { outcome: 'updated' },
+            customerDefaultAddress: { outcome: 'failed' },
+          },
+        },
+      });
+      expect(postDashboardInternal.mock.calls.every(([, body]) =>
+        !JSON.stringify(body).includes('has been updated'))).toBe(true);
+      return;
+    }
 
     expect(executed.execution.status).toBe('committed');
     expect(executed.result.actionsPerformed.map(action => action.tool)).toEqual([
