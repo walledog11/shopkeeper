@@ -837,9 +837,14 @@ describe('durable order-status host path', () => {
       .toBe('completed');
   });
 
-  it.each(['sent', 'failed', 'unknown'] as const)(
-    'executes an approved cancellation once when customer delivery is %s',
-    async (delivery) => {
+  it.each([
+    { label: 'sent', delivery: 'sent', providerOutcome: 'confirmed_after_timeout' },
+    { label: 'failed', delivery: 'failed', providerOutcome: 'direct' },
+    { label: 'unknown', delivery: 'unknown', providerOutcome: 'direct' },
+    { label: 'skipped after an unresolved provider result', delivery: null, providerOutcome: 'unresolved' },
+  ] as const)(
+    'executes an approved cancellation once when customer delivery is $label',
+    async ({ delivery, providerOutcome }) => {
     anthropicCreate.mockReset();
     anthropicCreate
       .mockResolvedValueOnce(toolUse('discover-cancel', 'discover_capabilities', {
@@ -870,7 +875,7 @@ describe('durable order-status host path', () => {
       const method = init?.method ?? 'GET';
       if (url.includes('/orders/9000001001/cancel.json')) {
         cancelCalls += 1;
-        if (delivery === 'sent') {
+        if (providerOutcome !== 'direct') {
           return new Response(JSON.stringify({ errors: 'response lost after commit' }), { status: 503 });
         }
         return new Response(JSON.stringify({ order: cancelled }), {
@@ -878,7 +883,10 @@ describe('durable order-status host path', () => {
         });
       }
       if (url.includes('/orders/9000001001.json')) {
-        return new Response(JSON.stringify({ order: cancelCalls > 0 ? cancelled : cancellable }), {
+        const currentOrder = cancelCalls > 0 && providerOutcome !== 'unresolved'
+          ? cancelled
+          : cancellable;
+        return new Response(JSON.stringify({ order: currentOrder }), {
           status: 200, headers: { 'content-type': 'application/json' },
         });
       }
@@ -929,7 +937,7 @@ describe('durable order-status host path', () => {
       sourceMessageId: sourceMessage.id,
     });
     expect(generated.plan?.rawToolCalls.map(call => call.name)).toEqual(['cancel_order']);
-    if (delivery !== 'sent') {
+    if (delivery !== null && delivery !== 'sent') {
       postDashboardInternal.mockResolvedValueOnce({
         ok: false, status: 503, responseBody: 'delivery unavailable', outcome: delivery,
       });
@@ -945,6 +953,28 @@ describe('durable order-status host path', () => {
     }, buildGatewayPlanExecutionDeps());
 
     expect(cancelCalls).toBe(1);
+    if (providerOutcome === 'unresolved') {
+      expect(executed.execution.status).toBe('unknown');
+      expect(executed.result.actionsPerformed).toMatchObject([
+        { tool: 'cancel_order', status: 'unknown' },
+      ]);
+      expect(executed.result.actionsPerformed).toHaveLength(1);
+      const cancellation = await db.agentAction.findFirstOrThrow({
+        where: { organizationId: org.id, tool: 'cancel_order' },
+      });
+      expect(cancellation).toMatchObject({
+        taskId: expect.any(String),
+        proposalId: generated.identity!.planId,
+        status: 'unknown',
+        dispatchState: 'unknown',
+        receiptVersion: 1,
+        receipt: { outcome: 'unknown', code: 'reconciliation_not_confirmed' },
+      });
+      expect(postDashboardInternal).not.toHaveBeenCalled();
+      expect((await db.agentTask.findUniqueOrThrow({ where: { id: cancellation.taskId! } })).status)
+        .toBe('reconciling');
+      return;
+    }
     expect(executed.execution.status).toBe(
       delivery === 'sent' ? 'committed' : delivery === 'failed' ? 'partial' : 'unknown',
     );
@@ -970,7 +1000,7 @@ describe('durable order-status host path', () => {
         financialStatus: 'refunded',
       },
     });
-    if (delivery === 'sent') {
+    if (providerOutcome === 'confirmed_after_timeout') {
       expect(cancellation.output).toContain('confirmed after an interrupted provider response');
     }
     expect(postDashboardInternal).toHaveBeenCalledWith(
