@@ -18,7 +18,7 @@ operation has a distinct provider precondition or recovery mode.
 | Order status, policy, product answers | Full safe-read row; task-attributed gateway delivery | Keep in comparison and holdout eval |
 | Full and partial refunds | Durable reference slice, typed receipts, live model with fake provider; full-refund balance shrink and a partial-refund selection consumed by another refund during approval preserve rejected receipts and send no refund mutation | Real-store approval/effect/delivery; partial-refund calculated amount changes without a prior refund; delivery recovery |
 | Address change | Approved fake-provider receipt and gateway send; full/partial fulfillment or changed order customer during approval records a rejected receipt without an order address PUT; customer-profile refusal after the order update preserves a typed partial outcome and prevents a success reply | Delivery retry |
-| Cancellation | Approved fake-provider receipt and gateway send; shipped and partially shipped order, revoked-grant, and changed-workspace-policy waits refuse provider dispatch; failed/unknown customer send leaves one committed cancellation | Provider unknown, delivery retry/reconciliation |
+| Cancellation | Approved fake-provider receipt and gateway send; shipped and partially shipped order, revoked-grant, and changed-workspace-policy waits refuse provider dispatch; a lost provider response after a committed cancellation is confirmed by a fresh read; failed/unknown customer send leaves one committed cancellation | Unresolved provider unknown, delivery retry/reconciliation |
 | Return and exchange | Approved fake-provider receipt and gateway send; a return or exchange whose returnable quantity falls to zero during approval records a rejected receipt without return creation; an exchange whose replacement price rises is also refused | Unknown probe, revised instruction, delivery retry |
 | Return-label attachment | Typed receipt/dispatch boundary; merchant answer continues the parked task through approval and provider receipt; confirmed attachment gets an attributed gateway send, while an ambiguous provider outcome leaves the task reconciling and sends no label link | Recovery handoff and delivery retry after a confirmed attachment |
 | Customer updates and explicit notes | Typed receipts | Claimed-task approval, grant/identity changes, provider outcome and delivery |
@@ -131,6 +131,10 @@ No live-model or real-provider gate is claimed by the local fake-provider tests.
   `npm run verify:pr` passed on `4b027b66`, including static checks, unit tests,
   12 browser smoke tests, coverage, and builds. This gate does not include
   live-model evaluation or a real-provider/customer-delivery exercise.
+- The cancellation host now injects a lost Shopify response after the provider
+  committed, then confirms the cancellation through a fresh order read before
+  sending the customer a success reply. One cancellation POST and one typed
+  success receipt remain. All 25 gateway host cases passed.
 - `npm run verify:pr` passed after the delivery changes, partial-refund host
   case, and test fixes: static checks, unit tests,
   browser smoke (12 passed), coverage, and builds. The first full run hit the

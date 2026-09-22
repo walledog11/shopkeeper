@@ -870,6 +870,9 @@ describe('durable order-status host path', () => {
       const method = init?.method ?? 'GET';
       if (url.includes('/orders/9000001001/cancel.json')) {
         cancelCalls += 1;
+        if (delivery === 'sent') {
+          return new Response(JSON.stringify({ errors: 'response lost after commit' }), { status: 503 });
+        }
         return new Response(JSON.stringify({ order: cancelled }), {
           status: 200, headers: { 'content-type': 'application/json' },
         });
@@ -967,6 +970,9 @@ describe('durable order-status host path', () => {
         financialStatus: 'refunded',
       },
     });
+    if (delivery === 'sent') {
+      expect(cancellation.output).toContain('confirmed after an interrupted provider response');
+    }
     expect(postDashboardInternal).toHaveBeenCalledWith(
       '/api/agent/io-send-internal',
       expect.objectContaining({
