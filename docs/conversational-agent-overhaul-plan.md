@@ -95,8 +95,9 @@ tracks the remaining capability, conversation, and cutover gates by row.
   host tests. Return-label continuation has an approval-to-receipt-to-gateway-send
   host case after a merchant answer. Runtime-v2 partial refunds now bind and
   display Shopify's calculated amount at proposal time, then re-quote and reject
-  before reservation or dispatch if it changed. Revised-instruction variants, retained
-  merchant operations, and the controlled provider exercise remain.
+  before reservation or dispatch if it changed. Return and exchange revisions now
+  supersede the old proposal and execute only the replacement card's exact inputs.
+  Retained merchant operations and the controlled provider exercise remain.
 - [ ] Package 5 continuity remains: classified topic/entity matches keep
   independent tasks and resume a matching one, while missing or ambiguous
   runtime-v2 classification preserves parked work. Merchant answers, revisions,
@@ -2396,7 +2397,12 @@ Move automatic audit notes/status consequences to the successful-receipt path wi
   stale-fulfillment rejection case. Return-label attachment now has a
   merchant-answer continuation host cases through approval and typed receipt:
   confirmed attachment reaches the gateway send, while an ambiguous provider
-  outcome leaves the task reconciling and sends no label link.
+  outcome leaves the task reconciling and sends no label link. The ambiguous
+  return-label case also enters the reconciliation boundary, remains a deliberate
+  handoff when its receipt cannot be rebuilt, and does not repeat the provider
+  mutation. Revised return and exchange cards supersede their original proposal;
+  approval executes one provider mutation carrying only the replacement item,
+  reason, or variant and completes the same durable task.
   Retained merchant operations and the remaining matrix cells are still open;
   fulfillment remains isolated from default support selection.
 - [ ] Support multiple requests, task switching, terse follow-ups, explicit preferences, and resumption after waiting for the merchant or customer. Classified ask/entity matching now keeps distinct pending tasks and can return to a single match. An unclassified or ambiguous runtime-v2 follow-up preserves the pending tasks rather than guessing. Merchant answers and revisions from an authorized member continue the exact wait/task and are accepted requests; dismissals are accepted requests that end their proposal wait. A successfully delivered customer question records that customer as the durable answerer, and their next message resumes the exact task even without a classifier hint. Active merchant preferences have source/scope policy coverage, and any authorized organization member can answer a merchant wait from another device or supported surface. The classifier prompt now resolves a prior referent only when exactly one candidate fits and emits deliberately unresolved facts when several fit. Live-model proof that the resulting clear and ambiguous conversations are useful, plus broader channel-switch acceptance evidence, remains.

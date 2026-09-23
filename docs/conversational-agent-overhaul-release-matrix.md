@@ -19,8 +19,8 @@ operation has a distinct provider precondition or recovery mode.
 | Full and partial refunds | Durable reference slice, typed receipts, live model with fake provider; full-refund balance shrink and a partial-refund selection consumed by another refund during approval preserve rejected receipts and send no refund mutation; runtime-v2 partial-refund proposals bind Shopify's quoted amount/currency, display it, and reject a changed execution-time quote before reservation or dispatch; shared attributed-delivery recovery is proved independently of the commercial effect | Controlled real-provider approval/effect/delivery |
 | Address change | Approved fake-provider receipt and gateway send; full/partial fulfillment or changed order customer during approval records a rejected receipt without an order address PUT; customer-profile refusal after the order update preserves a typed partial outcome and prevents a success reply; shared task-attributed delivery recovery retries the response row without invoking the effect executor | Controlled real-provider exercise only |
 | Cancellation | Approved fake-provider receipt and gateway send; shipped and partially shipped order, revoked-grant, and changed-workspace-policy waits refuse provider dispatch; a lost provider response after a committed cancellation is confirmed by a fresh read; an unconfirmed provider result leaves one unknown cancellation, stops the success reply, and keeps the task reconciling; failed/unknown customer send leaves one committed cancellation; retrying a definite failed attributed email sends the same response row without repeating cancellation | Provider reconciliation for unknown delivery |
-| Return and exchange | Approved fake-provider receipt and gateway send; a return or exchange whose returnable quantity falls to zero during approval records a rejected receipt without return creation; an exchange whose replacement price rises is also refused; an incomplete return or exchange creation response records an unknown receipt, stops the customer success reply, and leaves the task reconciling; probes observe provider state but preserve the handoff when required receipt facts cannot be rebuilt; shared attributed delivery recovery does not invoke the effect executor | Revised instruction; controlled real-provider exercise |
-| Return-label attachment | Typed receipt/dispatch boundary; merchant answer continues the parked task through approval and provider receipt; confirmed attachment gets an attributed gateway send, while an ambiguous provider outcome leaves the task reconciling and sends no label link; shared attributed delivery recovery retries the response row without invoking the effect executor | Recovery handoff; controlled real-provider exercise |
+| Return and exchange | Approved fake-provider receipt and gateway send; a return or exchange whose returnable quantity falls to zero during approval records a rejected receipt without return creation; an exchange whose replacement price rises is also refused; an incomplete return or exchange creation response records an unknown receipt, stops the customer success reply, and leaves the task reconciling; probes observe provider state but preserve the handoff when required receipt facts cannot be rebuilt; shared attributed delivery recovery does not invoke the effect executor; revising either operation supersedes the old proposal and approval executes one mutation with only the replacement card's exact inputs | Controlled real-provider exercise only |
+| Return-label attachment | Typed receipt/dispatch boundary; merchant answer continues the parked task through approval and provider receipt; confirmed attachment gets an attributed gateway send, while an ambiguous provider outcome leaves the task reconciling and sends no label link; the host case hands that unknown action to reconciliation, preserves it for review when the receipt cannot be rebuilt, and does not repeat the mutation; shared attributed delivery recovery retries the response row without invoking the effect executor | Controlled real-provider exercise only |
 | Customer updates and explicit notes | Typed receipts | Claimed-task approval, grant/identity changes, provider outcome and delivery |
 | Order creation and editing | Typed receipts | Isolated merchant selection, approval, operation-specific stale state and recovery |
 | Gift card and fulfillment | Typed receipts; isolated from default support selection | Merchant-only path, approval, financial/fulfillment preflight, recovery and delivery |
@@ -195,3 +195,17 @@ No live-model or real-provider gate is claimed by the local fake-provider tests.
   current-runtime release set, not the still-open v1/v2 comparison or dedicated
   clear/ambiguous-referent live variants.
 - No controlled runtime workspace or provider/customer destination is selected.
+
+## 2026-09-23 local evidence
+
+- A database-backed operator continuation host case now revises both a return
+  and an exchange proposal. The original proposal becomes superseded, the same
+  task advances to the replacement card, approval sends exactly one Shopify
+  mutation, and its line item, reason, and replacement variant come only from
+  the revised inputs. The attributed customer reply completes that task.
+- The ambiguous return-label continuation now crosses the real reconciliation
+  boundary in the host case. Because its typed success facts cannot be rebuilt,
+  it remains unknown/reconciling for review, does not repeat the reverse-delivery
+  mutation, and sends no customer label link.
+- All 13 `operator-answer-replan.test.ts` cases passed with the local database,
+  followed by gateway typecheck, lint, and `git diff --check`.

@@ -55,6 +55,7 @@ import { applyOperatorAnswerReplan } from './operator-answer-replan.js';
 import { getContext, updateContext } from '../../operator-context.js';
 import { executeCurrentCachedHomePlan } from '@shopkeeper/agent/plan-execution';
 import { buildGatewayPlanExecutionDeps } from './agent-turn-deps.js';
+import { reconcileUnknownAgentAction } from '@shopkeeper/agent/unknown-outcome-reconciliation';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
 // Operator state is keyed to the person, so every transport in these cases writes
@@ -309,31 +310,41 @@ describe('applyOperatorAnswerReplan', () => {
     // The same conversation waiting on a *card* rather than a question: the
     // attempt parked a proposal any bound member may approve, which is what the
     // merchant's revision guidance supersedes.
-    async function seedCardedSupportTask() {
+    async function seedCardedSupportTask(options?: {
+      customerText?: string;
+      objective?: string;
+      plan?: AgentPlan;
+    }) {
+      const objective = options?.objective ?? 'Refund request';
+      const plan = options?.plan ?? refundPlan();
       const member = await db.orgMember.create({
         data: { organizationId: org.id, clerkUserId: randomUUID() },
       });
       const customer = await createTestCustomer(org.id, 'cust@example.com', { name: 'Jane Doe' });
       const thread = await createTestThread(org.id, customer.id, 'email', { tag: 'Support' });
-      const custMsg = await createTestMessage(thread.id, 'Can I get a refund?', SenderType.customer);
+      const custMsg = await createTestMessage(
+        thread.id,
+        options?.customerText ?? 'Can I get a refund?',
+        SenderType.customer,
+      );
       const cacheRecord = buildAgentPlanCacheRecord({
-        instruction: 'Refund request',
+        instruction: objective,
         lastCustomerMessageId: custMsg.id,
         settings: resolveAgentSettings(null),
-        plan: refundPlan(),
+        plan,
       });
       await db.thread.update({
         where: { id: thread.id },
         data: {
           cachedPlan: cacheRecord as object,
           cachedPlanMessageId: custMsg.id,
-          aiSummary: 'Refund request',
-          requestSummary: 'Refund request',
+          aiSummary: objective,
+          requestSummary: objective,
         },
       });
       const { request, task } = await acceptCustomerAgentRequest({
         organizationId: org.id, threadId: thread.id, sourceMessageId: custMsg.id,
-        objective: 'Refund request', budget,
+        objective, budget,
       });
       const claim = await claimAgentTask({
         organizationId: org.id, taskId: task.id, expectedRevision: task.revision,
@@ -345,14 +356,33 @@ describe('applyOperatorAnswerReplan', () => {
           status: 'waiting_approval',
           proposal: {
             proposalId: cacheRecord.planId!,
-            instruction: 'Refund request',
-            rawToolCalls: refundPlan().rawToolCalls,
+            instruction: objective,
+            rawToolCalls: plan.rawToolCalls,
             sourceRequestIds: [request.id],
           },
           approver: { kind: 'member', key: ANY_MEMBER_ACTOR_KEY },
         },
       });
       return { member, thread, taskId: task.id, proposalId: cacheRecord.planId! };
+    }
+
+    function actionPlan(
+      instruction: string,
+      tool: 'create_return' | 'create_exchange',
+      input: Record<string, unknown>,
+    ): AgentPlan {
+      return {
+        instruction,
+        steps: [{
+          id: 'action_1', tool, label: tool === 'create_return' ? 'Open return' : 'Open exchange',
+          description: instruction, category: 'action', enabled: true,
+        }],
+        rawToolCalls: [{ id: 'action_1', name: tool, input }],
+        suspendedAtProposal: true,
+        routingEvidence: { classifierState: 'not_applicable', codes: [] },
+        validation: { status: 'valid', issues: [] },
+        warnings: [],
+      };
     }
 
     it('continues the task the card it revised was parked on', async () => {
@@ -386,6 +416,181 @@ describe('applyOperatorAnswerReplan', () => {
       // that follows from falling back to the path that predates them.
       expect(settled.activeProposalId).toBe((cached.cachedPlan as { planId?: string }).planId);
       expect(await db.agentTask.count({ where: { threadId: thread.id } })).toBe(1);
+    });
+
+    it.each([
+      {
+        capability: 'return',
+        tool: 'create_return' as const,
+        originalInput: { order_id: '9000001001', variant_id: '8001', reason: 'unwanted' },
+        revisedInput: { order_id: '9000001001', variant_id: '8003', reason: 'defective' },
+        guidance: 'Return the red shirt instead because it is defective.',
+      },
+      {
+        capability: 'exchange',
+        tool: 'create_exchange' as const,
+        originalInput: {
+          order_id: '9000001001', variant_id: '8001', exchange_variant_id: '8002', quantity: 1,
+        },
+        revisedInput: {
+          order_id: '9000001001', variant_id: '8003', exchange_variant_id: '8004', quantity: 1,
+        },
+        guidance: 'Exchange the red shirt for the extra-large variant instead.',
+      },
+    ])('executes only the revised $capability inputs after the replacement card is approved', async ({
+      capability, tool, originalInput, revisedInput, guidance,
+    }) => {
+      const objective = `${capability === 'return' ? 'Return' : 'Exchange'} an item from order #1001.`;
+      const originalPlan = actionPlan(objective, tool, originalInput);
+      const revisedPlan = actionPlan(objective, tool, revisedInput);
+      const { member, thread, taskId, proposalId: originalProposalId } = await seedCardedSupportTask({
+        customerText: `Please ${capability} the black shirt from order #1001.`,
+        objective,
+        plan: originalPlan,
+      });
+      await createTestIntegration(org.id, {
+        platform: 'shopify',
+        externalAccountId: `test-store-${org.id}.myshopify.com`,
+        accessToken: 'shpat_test',
+        metadata: { oauthScopes: ['write_returns', 'read_orders', 'read_products'] },
+      });
+
+      const mutationInputs: Record<string, unknown>[] = [];
+      const providerFetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes('/orders.json')) {
+          return new Response(JSON.stringify({ orders: [] }), { status: 200 });
+        }
+        if (url.includes('/graphql.json')) {
+          const body = JSON.parse(String(init?.body ?? '{}')) as {
+            query?: string;
+            variables?: { returnInput?: Record<string, unknown> };
+          };
+          if (body.query?.includes('query returnableFulfillments')) {
+            return new Response(JSON.stringify({ data: {
+              order: { id: 'gid://shopify/Order/9000001001' },
+              returnableFulfillments: { edges: [{ node: { returnableFulfillmentLineItems: {
+                edges: [{ node: {
+                  quantity: 1,
+                  fulfillmentLineItem: {
+                    id: 'gid://shopify/FulfillmentLineItem/7003',
+                    lineItem: {
+                      name: 'Red shirt', variant: { id: 'gid://shopify/ProductVariant/8003' },
+                    },
+                  },
+                } }],
+              } } }] },
+            } }), { status: 200 });
+          }
+          if (body.query?.includes('query variantPrices')) {
+            return new Response(JSON.stringify({ data: { nodes: [
+              {
+                id: 'gid://shopify/ProductVariant/8003', price: '42.00', title: 'Red / Medium',
+                product: { title: 'Shirt' },
+              },
+              {
+                id: 'gid://shopify/ProductVariant/8004', price: '42.00', title: 'Red / Extra Large',
+                product: { title: 'Shirt' },
+              },
+            ] } }), { status: 200 });
+          }
+          if (body.query?.includes('mutation returnCreate')) {
+            mutationInputs.push(body.variables?.returnInput ?? {});
+            return new Response(JSON.stringify({ data: { returnCreate: {
+              return: {
+                id: `gid://shopify/Return/${tool === 'create_return' ? '9101' : '9102'}`,
+                name: tool === 'create_return' ? '#1001-R1' : '#1001-R2',
+                status: 'REQUESTED',
+              },
+              userErrors: [],
+            } } }), { status: 200 });
+          }
+        }
+        throw new Error(`Unexpected provider request: ${url}`);
+      });
+      vi.stubGlobal('fetch', providerFetch);
+      planAgentSpy.mockResolvedValue(revisedPlan);
+      anthropicCreate.mockResolvedValue({
+        stop_reason: 'tool_use',
+        content: [{ type: 'tool_use', id: 'reply', name: 'send_reply', input: {
+          text: `The revised ${capability} for order #1001 is open.`,
+        } }],
+        usage: { input_tokens: 10, output_tokens: 5 },
+      });
+      postDashboardInternal.mockImplementation(async (_path: string, body: {
+        operationId: string; executionId: string; threadId: string; input: { text: string };
+      }) => ({
+        ok: true,
+        data: {
+          status: 'ok', message: 'Reply accepted.',
+          receipt: {
+            version: 1, operationId: body.operationId, executionId: body.executionId,
+            tool: 'send_reply', target: { kind: 'thread', id: body.threadId },
+            observedAt: new Date().toISOString(), outcome: 'succeeded',
+            providerReference: `provider-message-${capability}`,
+            facts: {
+              logicalResponseId: `provider-message-${capability}`,
+              messageId: `provider-message-${capability}`,
+              threadId: body.threadId, destination: { kind: 'thread', id: body.threadId },
+              contentSha256: createHash('sha256').update(body.input.text).digest('hex'),
+              deliveryState: 'sent', providerMessageId: `provider-message-${capability}`,
+            },
+          },
+        },
+      }));
+
+      await applyOperatorAnswerReplan({
+        organizationId: org.id,
+        memberKey: `member:${member.id}`,
+        clerkUserId: member.clerkUserId,
+        threadId: thread.id,
+        answer: guidance,
+        endsWait: 'proposal',
+        deliveryRef: 'telegram:chat_9',
+      });
+
+      expect(await db.agentProposal.findUniqueOrThrow({ where: { id: originalProposalId } }))
+        .toMatchObject({ status: 'superseded' });
+      const revisedTask = await db.agentTask.findUniqueOrThrow({ where: { id: taskId } });
+      expect(revisedTask).toMatchObject({
+        status: 'waiting_approval', revision: 1, activeProposalId: expect.any(String),
+      });
+      expect(revisedTask.activeProposalId).not.toBe(originalProposalId);
+
+      const executed = await executeCurrentCachedHomePlan({
+        orgId: org.id,
+        threadId: thread.id,
+        settings: resolveAgentSettings(null),
+        executionIntent: 'merchant_approved',
+        failureRoute: `test:revised-${capability}-host`,
+        approver: { clerkUserId: member.clerkUserId, displayName: 'Test Merchant' },
+      }, buildGatewayPlanExecutionDeps());
+
+      expect(executed.execution.status).toBe('committed');
+      expect(mutationInputs).toHaveLength(1);
+      expect(mutationInputs[0]).toMatchObject({
+        returnLineItems: [{
+          fulfillmentLineItemId: 'gid://shopify/FulfillmentLineItem/7003', quantity: 1,
+        }],
+        ...(tool === 'create_exchange' ? {
+          exchangeLineItems: [{ variantId: 'gid://shopify/ProductVariant/8004', quantity: 1 }],
+        } : {}),
+      });
+      const action = await db.agentAction.findFirstOrThrow({
+        where: { organizationId: org.id, taskId, tool },
+      });
+      expect(action).toMatchObject({
+        proposalId: revisedTask.activeProposalId,
+        status: 'success', dispatchState: 'settled', receiptVersion: 1,
+      });
+      expect(await db.agentAction.count({ where: { organizationId: org.id, taskId, tool } })).toBe(1);
+      expect(postDashboardInternal).toHaveBeenCalledWith(
+        '/api/agent/io-send-internal',
+        expect.objectContaining({ agentTaskId: taskId }),
+        expect.anything(),
+      );
+      expect(await db.agentTask.findUniqueOrThrow({ where: { id: taskId } }))
+        .toMatchObject({ status: 'completed' });
     });
 
     it('leaves the card parked when the guidance comes from outside the organization', async () => {
@@ -577,6 +782,22 @@ describe('applyOperatorAnswerReplan', () => {
           expect.anything(),
         );
       } else {
+        expect(postDashboardInternal).not.toHaveBeenCalled();
+        const handoff = await reconcileUnknownAgentAction({
+          actionId: labelAction.id,
+          organizationId: org.id,
+          executionId: labelAction.executionId,
+          providerOperationKey: labelAction.providerOperationKey,
+          tool: labelAction.tool,
+          input: labelAction.input,
+          shopify: { shop: `test-store-${org.id}.myshopify.com`, accessToken: 'shpat_test' },
+        });
+        expect(handoff).toBe('still_unknown');
+        expect(await db.agentAction.findUniqueOrThrow({ where: { id: labelAction.id } }))
+          .toMatchObject({ status: 'unknown', dispatchState: 'unknown' });
+        expect(providerFetch.mock.calls.filter(([, init]) =>
+          String((init as RequestInit | undefined)?.body ?? '')
+            .includes('reverseDeliveryCreateWithShipping'))).toHaveLength(1);
         expect(postDashboardInternal).not.toHaveBeenCalled();
       }
       expect(await db.agentTask.findUniqueOrThrow({ where: { id: taskId } }))
