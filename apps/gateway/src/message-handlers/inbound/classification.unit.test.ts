@@ -227,6 +227,12 @@ function promptText(blocks: { text: string }[]): string {
 }
 
 describe('classifierSystemPrompt', () => {
+  it('resolves one clear conversational referent and refuses an ambiguous one', () => {
+    expect(CLASSIFIER_SYSTEM_PROMPT).toContain('exactly one prior request/entity fits');
+    expect(CLASSIFIER_SYSTEM_PROMPT).toContain('do not guess');
+    expect(CLASSIFIER_SYSTEM_PROMPT).toContain('ask "other" with null subject/order');
+  });
+
   it('caches the shared prefix on every channel', () => {
     const [stable] = classifierSystemPrompt('email');
     expect(stable?.text).toBe(CLASSIFIER_SYSTEM_PROMPT);

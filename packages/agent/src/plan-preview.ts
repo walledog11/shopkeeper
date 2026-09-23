@@ -13,6 +13,7 @@ export function merchantRoutingQuestionFromCustomerMessage(
 
 const ACTION_TOOL_PRIORITY = [
   "create_refund",
+  "create_partial_refund",
   "cancel_order",
   "create_exchange",
   "attach_return_label",
@@ -268,6 +269,22 @@ function buildHomeActionDisplayFromTool(
       if (typeof amount === "string" || typeof amount === "number") {
         const normalized = String(amount).replace(/^\$/, "").trim()
         chipLabel = normalized ? `Issue $${normalized} refund` : "Issue refund"
+      }
+      if (typeof input.reason === "string" && input.reason.trim()) {
+        detailLines = [input.reason.trim()]
+      }
+      break
+    }
+    case "create_partial_refund": {
+      const amount = input.approval_amount
+      const currency = typeof input.approval_currency === "string"
+        ? input.approval_currency.trim().toUpperCase()
+        : ""
+      if (typeof amount === "string" || typeof amount === "number") {
+        const normalized = String(amount).replace(/^\$/, "").trim()
+        chipLabel = normalized
+          ? `Issue ${currency && currency !== "USD" ? `${currency} ` : "$"}${normalized} partial refund`
+          : "Issue partial refund"
       }
       if (typeof input.reason === "string" && input.reason.trim()) {
         detailLines = [input.reason.trim()]

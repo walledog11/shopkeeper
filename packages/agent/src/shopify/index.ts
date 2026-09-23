@@ -58,6 +58,7 @@ export {
 export {
   createPartialRefund,
   parseRefundItems,
+  quotePartialRefundForApproval,
   unrefundableItems,
 } from "./partial-refunds.js";
 export {

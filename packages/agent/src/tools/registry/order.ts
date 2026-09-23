@@ -163,6 +163,8 @@ export const ORDER_TOOL_DEFINITIONS = [
         { required: true, minItems: 1 },
       ),
       reason: stringArg("Reason for the refund (e.g. 'One napkin arrived torn')."),
+      approval_amount: stringArg("Runtime-supplied Shopify quote for approval. Always omit this field."),
+      approval_currency: stringArg("Runtime-supplied quote currency for approval. Always omit this field."),
     },
     category: "action",
     group: "order",

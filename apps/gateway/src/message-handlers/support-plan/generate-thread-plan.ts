@@ -609,6 +609,25 @@ async function settleDurableSupportTask(
   generated: GeneratedThreadPlan,
 ): Promise<void> {
   try {
+    const waitingReply = generated.plan?.rawToolCalls.find(call => (
+      call.name === 'send_reply'
+      && call.input
+      && typeof call.input === 'object'
+      && !Array.isArray(call.input)
+      && (call.input as { await_response?: unknown }).await_response === true
+    ));
+    const waitingReplyText = waitingReply?.input
+      && typeof waitingReply.input === 'object'
+      && !Array.isArray(waitingReply.input)
+      && typeof (waitingReply.input as { text?: unknown }).text === 'string'
+      ? (waitingReply.input as { text: string }).text.trim()
+      : '';
+    const customerQuestion = generated.autoExecuted
+      && generated.autoExecutionActions?.some(action => (
+        action.tool === 'send_reply' && action.status === 'success'
+      ))
+      ? waitingReplyText || null
+      : null;
     const settled = await settleAgentTaskClaim({
       organizationId: durable.organizationId,
       taskId: durable.taskId,
@@ -621,6 +640,7 @@ async function settleDurableSupportTask(
         settings: scope.settings,
         allowMutativeAutoExecute: scope.allowAutoExecute,
         merchantQuestion: generated.merchantQuestion ?? null,
+        customerQuestion,
         sourceRequestIds: [durable.requestId],
       }),
     });

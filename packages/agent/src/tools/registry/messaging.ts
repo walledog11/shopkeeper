@@ -1,5 +1,5 @@
 import { noThread } from "./helpers.js";
-import { defineTool, stringArg } from "./schema.js";
+import { booleanArg, defineTool, stringArg } from "./schema.js";
 import type { SendEmailInput, SendReplyInput } from "./types.js";
 
 export const MESSAGING_TOOL_DEFINITIONS = [
@@ -9,6 +9,7 @@ export const MESSAGING_TOOL_DEFINITIONS = [
       "Send a message to the customer on their channel (Instagram DM, email, etc.).",
     fields: {
       text: stringArg("The message text to send.", { required: true, nonBlank: true }),
+      await_response: booleanArg("Set true only when this reply asks the customer for information required to continue the current task."),
     },
     category: "communication",
     group: "messaging",

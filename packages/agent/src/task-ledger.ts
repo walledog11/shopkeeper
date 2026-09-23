@@ -348,15 +348,25 @@ async function advanceOrOpenThreadTask(
       actions: { none: { dispatchState: { in: DISPATCHED_STATES } } },
     },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    select: { id: true, status: true, activeProposalId: true, checkpoint: true },
+    select: {
+      id: true, status: true, activeProposalId: true, checkpoint: true,
+      pendingAnswererKind: true, pendingAnswererKey: true,
+    },
     take: matchByContinuity ? 20 : 1,
   });
-  const candidates = matchByContinuity
-    ? openTasks.filter(task => {
+  const exactCustomerWaits = openTasks.filter(task => (
+    task.status === "waiting_input"
+    && task.pendingAnswererKind === "customer"
+    && task.pendingAnswererKey === input.actorKey
+  ));
+  const candidates = exactCustomerWaits.length > 0
+    ? exactCustomerWaits
+    : matchByContinuity
+      ? openTasks.filter(task => {
         const prior = checkpointContinuity(task.checkpoint);
         return continuity && prior ? continuityMatches(continuity, prior) : false;
       })
-    : openTasks;
+      : openTasks;
   // Runtime-v2 relevance is fail-closed: no match or more than one match opens
   // separate work. The model can then ask a focused question without either
   // pending task or proposal being silently invalidated.

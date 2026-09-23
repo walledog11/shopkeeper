@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsonResponse } from "../testing/json-response.js";
-import { createPartialRefund, parseRefundItems, unrefundableItems } from "./partial-refunds.js";
+import {
+  createPartialRefund,
+  parseRefundItems,
+  quotePartialRefundForApproval,
+  unrefundableItems,
+} from "./partial-refunds.js";
 import { resolveAgentSettings } from "../settings.js";
 import { toolPolicyBlock, toolUnknown, type CompensationReservation } from "../tools/result.js";
 import type { ShopifyContext } from "./client.js";
@@ -116,6 +121,41 @@ describe("unrefundableItems", () => {
 });
 
 describe("createPartialRefund", () => {
+  it("binds Shopify's current amount and currency into an approval proposal", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(jsonResponse(order()))
+      .mockResolvedValueOnce(jsonResponse(calculation("16.00"))));
+
+    await expect(quotePartialRefundForApproval(
+      { order_id: "2001", items: [{ line_item_id: "9001", quantity: 1 }] },
+      ctx,
+    )).resolves.toMatchObject({ approval_amount: "16.00", approval_currency: "USD" });
+  });
+
+  it("refuses a changed provider amount before reserving or dispatching", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(order()))
+      .mockResolvedValueOnce(jsonResponse(calculation("18.00")));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await createPartialRefund(
+      {
+        order_id: "2001",
+        items: [{ line_item_id: "9001", quantity: 1 }],
+        approval_amount: "16.00",
+        approval_currency: "USD",
+      },
+      ctx,
+      SETTINGS,
+    );
+
+    expect(result.status).toBe("policy_block");
+    expect(result.receipt).toMatchObject({ outcome: "rejected", code: "amount_mismatch" });
+    expect(result.message).toContain("not the approved USD 16.00");
+    expect(reserveCompensation).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("refunds what Shopify calculated for the chosen items", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse(order()))

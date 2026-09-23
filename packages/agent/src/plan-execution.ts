@@ -355,6 +355,7 @@ export async function supportAttemptSettlement(params: {
   settings: OrgSettings;
   allowMutativeAutoExecute?: boolean;
   merchantQuestion: string | null;
+  customerQuestion?: string | null;
   sourceRequestIds: string[];
 }): Promise<TaskSettlement> {
   if (params.merchantQuestion) {
@@ -362,6 +363,18 @@ export async function supportAttemptSettlement(params: {
       status: "waiting_input",
       question: params.merchantQuestion,
       answerer: { kind: "member", key: ANY_MEMBER_ACTOR_KEY },
+    };
+  }
+  if (params.customerQuestion) {
+    const thread = await db.thread.findFirst({
+      where: { id: params.threadId, organizationId: params.orgId },
+      select: { customerId: true },
+    });
+    if (!thread) throw new BadRequestError("Thread not found.");
+    return {
+      status: "waiting_input",
+      question: params.customerQuestion,
+      answerer: { kind: "customer", key: `customer:${thread.customerId}` },
     };
   }
   const proposal = await readParkedProposalForThread(params);

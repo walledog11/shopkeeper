@@ -65,15 +65,15 @@ export interface CreateRefundInput {
   reason?: string;
 }
 
-/**
- * Item and quantity selection only. There is deliberately no amount field: the
- * model chooses what comes back, Shopify prices it, and the cap applies to
- * Shopify's figure.
- */
+/** Item and quantity selection. Approval fields are runtime-authored. */
 export interface CreatePartialRefundInput {
   order_id: string;
   items: { line_item_id: string; quantity: number }[];
   reason?: string;
+  /** Shopify quote shown to the approver; never trusted from model output. */
+  approval_amount?: string;
+  /** Currency paired with approval_amount. */
+  approval_currency?: string;
 }
 
 export interface CancelOrderInput {
@@ -109,6 +109,8 @@ export interface AddInternalNoteInput {
 
 export interface SendReplyInput {
   text: string;
+  /** True only when this question must be answered to continue the current task. */
+  await_response?: boolean;
 }
 
 export interface SendEmailInput {

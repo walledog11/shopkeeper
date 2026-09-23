@@ -758,6 +758,44 @@ describe("support conversation request boundary", () => {
     expect((await db.agentTask.findUniqueOrThrow({ where: { id: first.task.id } })).revision).toBe(0);
   });
 
+  it("continues the exact task when its customer answers a durable question", async () => {
+    const input = await seedSupport();
+    const first = await acceptCustomerAgentRequest({
+      ...input,
+      continuityMode: "classified",
+      continuity: { ask: "address_change", order: "#1001", subject: null },
+    });
+    const claim = await claimAgentTask({
+      organizationId: input.organizationId,
+      taskId: first.task.id,
+      expectedRevision: first.task.revision,
+    });
+    await settleAgentTaskClaim({
+      organizationId: input.organizationId,
+      taskId: first.task.id,
+      expectedRevision: first.task.revision,
+      claimToken: claim!.claimToken,
+      requestId: first.request.id,
+      settlement: {
+        status: "waiting_input",
+        question: "What is the full postal code?",
+        answerer: { kind: "customer", key: first.task.initiatingActorKey },
+      },
+    });
+
+    const answer = await createTestMessage(input.threadId, "It is 94107");
+    const resumed = await acceptCustomerAgentRequest({
+      ...input,
+      sourceMessageId: answer.id,
+      continuityMode: "classified",
+    });
+
+    expect(resumed.task.id).toBe(first.task.id);
+    expect(resumed.task).toMatchObject({ status: "queued", revision: 1 });
+    expect((resumed.task.checkpoint as { sourceRequestIds: string[] }).sourceRequestIds)
+      .toEqual([first.request.id, resumed.request.id]);
+  });
+
   it("returns to the one task matching the classified topic and entity", async () => {
     const input = await seedSupport();
     const first = await acceptCustomerAgentRequest({

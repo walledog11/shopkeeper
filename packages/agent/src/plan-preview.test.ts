@@ -548,6 +548,36 @@ describe("buildHomeActionDisplay", () => {
     })
   })
 
+  it("shows the provider-bound amount on a partial-refund approval", () => {
+    const display = buildHomeActionDisplay(plan({
+      steps: [{
+        id: "partial_1",
+        tool: "create_partial_refund",
+        label: "Issue partial refund",
+        description: "Refund the damaged napkin",
+        category: "action",
+        enabled: true,
+      }],
+      rawToolCalls: [{
+        id: "partial_1",
+        name: "create_partial_refund",
+        input: {
+          order_id: "9000",
+          items: [{ line_item_id: "11", quantity: 1 }],
+          reason: "One napkin arrived torn",
+          approval_amount: "8.50",
+          approval_currency: "USD",
+        },
+      }],
+    }))
+
+    expect(display).toEqual({
+      chipLabel: "Issue $8.50 partial refund",
+      orderRef: null,
+      detailLines: ["One napkin arrived torn"],
+    })
+  })
+
   it("reads order_number from action tools when building plan orderRef", () => {
     const preview = buildPlanPreview(plan({
       steps: [{

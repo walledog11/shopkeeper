@@ -36,8 +36,15 @@ export {
 import { usesCapabilityDiscovery } from "./runtime-modes.js";
 import { TOKEN_BUDGET, DEFAULT_MAX_ITERATIONS } from "./run-policy.js";
 import { resolveAgentSettings } from "./settings.js";
+import { quotePartialRefundForApproval } from "./shopify/partial-refunds.js";
 import { enforceSpendCap } from "./spend.js";
-import { selectAgentTools, TOOL_CATEGORIES } from "./tools/registry/index.js";
+import {
+  parseToolInput,
+  selectAgentTools,
+  TOOL_CATEGORIES,
+  ToolInputValidationError,
+  type CreatePartialRefundInput,
+} from "./tools/registry/index.js";
 import {
   DISCOVERY_TOOL_NAME,
   NAMESPACE_MISS_TOOL_NAME,
@@ -69,6 +76,28 @@ export interface PlanAgentOptions {
   suspendAtProposal?: boolean;
   /** Persisted task runtime selects bounded discovery for durable attempts. */
   runtimeVersion?: number;
+}
+
+async function bindProviderApprovalFacts(
+  ctx: AgentContext,
+  rawToolCalls: AgentPlan["rawToolCalls"],
+): Promise<AgentPlan["rawToolCalls"]> {
+  const shopify = ctx.shopify;
+  if (!shopify) return rawToolCalls;
+  return Promise.all(rawToolCalls.map(async (call) => {
+    if (call.name !== "create_partial_refund") return call;
+    let parsed: CreatePartialRefundInput;
+    try {
+      parsed = parseToolInput(call.name, call.input) as CreatePartialRefundInput;
+    } catch (error) {
+      // Plan validation owns malformed model input. Do not turn its useful
+      // invalid-plan evidence into an unrelated provider-preflight failure.
+      if (error instanceof ToolInputValidationError) return call;
+      throw error;
+    }
+    const input = await quotePartialRefundForApproval(parsed, shopify);
+    return { ...call, input };
+  }));
 }
 
 
@@ -275,6 +304,12 @@ export async function planAgent(
   });
   let validation = authoredValidation;
   let rawToolCalls = [...loop.rawToolCalls];
+  if (suspendAtProposal) {
+    // Financial approval binds the amount the merchant is shown, even when the
+    // model selects only line items and Shopify owns pricing. Execution quotes
+    // again and refuses a changed amount before dispatch.
+    rawToolCalls = await bindProviderApprovalFacts(ctx, rawToolCalls);
+  }
 
   const signalCodes: ProducedPlanSignalCode[] = [];
   appendInitialPlanningSignals({ ctx, operatorMode, codes: signalCodes });

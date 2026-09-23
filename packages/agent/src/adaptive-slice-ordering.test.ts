@@ -502,8 +502,8 @@ describe("a compound task: read the order and the policy, refund one line, repor
     tags: [],
   };
 
-  // The proposal the merchant approves: one napkin, no amount. This tool takes
-  // line items and quantities, so there is no figure for the model to get wrong.
+  // The model proposes one napkin without naming money. Capture mode asks
+  // Shopify for the quote and binds it into the immutable approval proposal.
   const PARTIAL_REFUND_PROPOSAL = {
     id: "t3",
     name: "create_partial_refund",
@@ -637,6 +637,10 @@ describe("a compound task: read the order and the policy, refund one line, repor
     expect(plan.rawToolCalls.map(call => call.name))
       .toEqual(["get_order_by_name", "search_kb", "create_partial_refund"]);
     expect(plan.suspendedAtProposal).toBe(true);
+    expect(proposedActions(plan)[0]?.input).toMatchObject({
+      approval_amount: "8.50",
+      approval_currency: "USD",
+    });
 
     const result = await runAgent(ctx, instruction, proposedActions(plan), LIVE_SETTINGS, {
       composeFromReceipt: true,
@@ -648,6 +652,8 @@ describe("a compound task: read the order and the policy, refund one line, repor
       "model:plan_2",
       "read:policy",
       "model:plan_3",
+      "provider:read_order",
+      "provider:calculate_refund",
       "provider:read_order",
       "provider:calculate_refund",
       "provider:commit_refund",
@@ -706,8 +712,8 @@ describe("a compound task: read the order and the policy, refund one line, repor
       composeFromReceipt: true,
     });
 
-    // The superseded proposal named one napkin and never priced or committed
-    // anything; the money that moved is the revised selection's.
+    // The superseded proposal named and quoted one napkin but never committed
+    // anything; the money that moved is the revised selection's approved quote.
     expect(proposedActions(first)[0]?.input).toMatchObject({ items: [{ line_item_id: "11", quantity: 1 }] });
     expect(events.filter(event => event === "provider:commit_refund")).toHaveLength(1);
     expect(committedRefund?.refundLineItems)

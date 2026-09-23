@@ -16,8 +16,8 @@ operation has a distinct provider precondition or recovery mode.
 | Row | Evidence recorded | Next release evidence |
 | --- | --- | --- |
 | Order status, policy, product answers | Full safe-read row; task-attributed gateway delivery | Keep in comparison and holdout eval |
-| Full and partial refunds | Durable reference slice, typed receipts, live model with fake provider; full-refund balance shrink and a partial-refund selection consumed by another refund during approval preserve rejected receipts and send no refund mutation | Real-store approval/effect/delivery; partial-refund calculated amount changes without a prior refund; delivery recovery |
-| Address change | Approved fake-provider receipt and gateway send; full/partial fulfillment or changed order customer during approval records a rejected receipt without an order address PUT; customer-profile refusal after the order update preserves a typed partial outcome and prevents a success reply; shared task-attributed delivery recovery retries the response row without invoking the effect executor | Controlled real-provider exercise |
+| Full and partial refunds | Durable reference slice, typed receipts, live model with fake provider; full-refund balance shrink and a partial-refund selection consumed by another refund during approval preserve rejected receipts and send no refund mutation; runtime-v2 partial-refund proposals bind Shopify's quoted amount/currency, display it, and reject a changed execution-time quote before reservation or dispatch; shared attributed-delivery recovery is proved independently of the commercial effect | Controlled real-provider approval/effect/delivery |
+| Address change | Approved fake-provider receipt and gateway send; full/partial fulfillment or changed order customer during approval records a rejected receipt without an order address PUT; customer-profile refusal after the order update preserves a typed partial outcome and prevents a success reply; shared task-attributed delivery recovery retries the response row without invoking the effect executor | Controlled real-provider exercise only |
 | Cancellation | Approved fake-provider receipt and gateway send; shipped and partially shipped order, revoked-grant, and changed-workspace-policy waits refuse provider dispatch; a lost provider response after a committed cancellation is confirmed by a fresh read; an unconfirmed provider result leaves one unknown cancellation, stops the success reply, and keeps the task reconciling; failed/unknown customer send leaves one committed cancellation; retrying a definite failed attributed email sends the same response row without repeating cancellation | Provider reconciliation for unknown delivery |
 | Return and exchange | Approved fake-provider receipt and gateway send; a return or exchange whose returnable quantity falls to zero during approval records a rejected receipt without return creation; an exchange whose replacement price rises is also refused; an incomplete return or exchange creation response records an unknown receipt, stops the customer success reply, and leaves the task reconciling; probes observe provider state but preserve the handoff when required receipt facts cannot be rebuilt; shared attributed delivery recovery does not invoke the effect executor | Revised instruction; controlled real-provider exercise |
 | Return-label attachment | Typed receipt/dispatch boundary; merchant answer continues the parked task through approval and provider receipt; confirmed attachment gets an attributed gateway send, while an ambiguous provider outcome leaves the task reconciling and sends no label link; shared attributed delivery recovery retries the response row without invoking the effect executor | Recovery handoff; controlled real-provider exercise |
@@ -33,10 +33,10 @@ operation has a distinct provider precondition or recovery mode.
 | Gate | Evidence recorded | Next release evidence |
 | --- | --- | --- |
 | Distinct pending tasks | Classified topic/entity matching and return to a single match; two items on the same order remain separate and a named item resumes only its task | Clear “that one” from conversation context, ambiguous “yes” asks a useful question, cross-channel switch |
-| Wait continuation | Merchant answer, revision, decline are accepted requests on the exact task | Customer wait and return; explicit preferences; another-device answer |
-| Stop and supersession | Old approval invalidated; cancellation before dispatch ordered at task row | Stop after dispatch records actual/unknown effect; no later action |
-| Stale approval | Shipped cancellation, revoked Shopify write grant, changed cancellation policy, lost member authority, and full-refund balance shrink refuse the effect | Partial-refund balance and address/return preconditions |
-| Bookkeeping | Idempotent turn journal note | Receipt-driven status consequences; inspect residual automatic note/status calls |
+| Wait continuation | Merchant answer, revision, decline are accepted requests on the exact task; a delivered customer question records that customer as the durable answerer and their next message resumes the exact task even when classification is absent; active merchant preferences already load with source/scope policy tests; any authorized member can answer the org-scoped merchant wait | Live conversational evidence for clear/ambiguous referents and channel switching |
+| Stop and supersession | Old approval invalidated; cancellation before dispatch is ordered at the task row; cancellation after dispatch preserves a committed outcome or leaves submitted work reconciling, and prevents later work | No remaining deterministic runtime case; retain in held-out conversation/release evaluation |
+| Stale approval | Shipped/partially shipped cancellation, revoked Shopify write grant, changed cancellation policy, lost member authority, full-refund balance shrink, changed address ownership/fulfillment, depleted return quantity, invalidated exchange replacement, and changed partial-refund quote all refuse the effect | Keep in controlled real-provider and holdout evaluation |
+| Bookkeeping | Idempotent runtime turn journal; no routine action-note prompt; retained note/status/tag tools are explicit operations; runtime-v2 receipt composition replaces speculative completion drafting | Keep the v1-only draft path until Package 6 persisted-state inventory permits deletion |
 | Completion wording | Receipt-based composition and negated-refund grounding case | Holdout paraphrases and unsupported-claim checks across effect rows |
 
 ## Package 6: release gate
@@ -101,11 +101,12 @@ No live-model or real-provider gate is claimed by the local fake-provider tests.
   admission; a concurrent retry test admits one enqueue. The retry keeps the
   existing message identity and selects the agent reply source for an attributed
   task. This does not yet prove the full effect-to-delivery host retry gate.
-- A database-backed gateway host case now parks a partial refund for approval,
-  observes a prior refund on the same item at execution, records a rejected
-  typed receipt, and sends no Shopify refund mutation. All 17 cases in
-  `generate-thread-plan-order-status.test.ts` passed. A changed calculated
-  amount without a prior refund remains a separate approval-contract question.
+- A database-backed gateway host case parks a partial refund for approval,
+  binds Shopify's calculated amount/currency into the proposal, displays that
+  amount, and re-quotes immediately before execution. A changed amount records
+  a rejected typed receipt before reservation or dispatch and sends no Shopify
+  refund mutation. A separate case observes a prior refund on the selected item
+  and also refuses the mutation.
 - The cancellation stale-approval host case now covers both fully and partially
   fulfilled orders. In each case approval records a rejected typed receipt and
   sends no cancellation POST. All 18 gateway host cases passed after local test
@@ -170,3 +171,27 @@ No live-model or real-provider gate is claimed by the local fake-provider tests.
   this passing rerun. The partially shipped cancellation variant was added
   afterward and passed its targeted database-backed host file. Live-model and
   real-provider gates remain unrun.
+- Customer questions can now opt into a durable customer-scoped wait only after
+  their reply action succeeds. The next message from that exact customer resumes
+  the task even without a classifier hint; ambiguous multiple customer waits
+  still fail closed. Focused agent integration tests and the 29-case gateway
+  order-status host file passed.
+- The inbound classifier now receives an explicit exactly-one-referent rule:
+  copy prior request facts only for a unique conversational referent, otherwise
+  return deliberately unresolved facts so planning asks a focused question.
+  Its 36 unit tests passed. This is deterministic prompt/ledger evidence, not
+  the still-required live-model conversational acceptance evidence.
+- `npm run verify:pr` passed after the amount-binding, customer-wait, and
+  referent-classification batch: static checks, workspace tests, 12 browser
+  smoke tests, coverage gates, and production builds completed.
+- The one-repeat live-model release gate completed with fresh result evidence
+  under a cumulative $0.90/150-call authorization. The initial dashboard run
+  passed all 48 completed hard fixtures (including `refund-partial`) before its
+  sub-limit stopped the last fixture; that isolated fixture then passed 1/1 for
+  $0.0438 and 4 calls. Across both dashboard runs all 49 fixtures passed, using
+  $0.7669 and 92 calls. The gateway `clear-fraud-multi-signal` hard case passed
+  1/1, and its post-suite assertion kept that run within $0.05 and 6 calls. The
+  combined run stayed below the cumulative authorization. This certifies the
+  current-runtime release set, not the still-open v1/v2 comparison or dedicated
+  clear/ambiguous-referent live variants.
+- No controlled runtime workspace or provider/customer destination is selected.

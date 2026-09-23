@@ -275,6 +275,24 @@ async function seedSupportCardParkedOnTask(runtimeVersion = 1) {
 }
 
 describe("plan execution helpers", () => {
+  it("records a delivered customer question as a wait on that customer", async () => {
+    const { org, thread, message, settings } = await seedThreadWithPlan();
+    const settlement = await supportAttemptSettlement({
+      orgId: org.id,
+      threadId: thread.id,
+      settings,
+      merchantQuestion: null,
+      customerQuestion: "What is the full postal code?",
+      sourceRequestIds: [message.id],
+    });
+
+    expect(settlement).toEqual({
+      status: "waiting_input",
+      question: "What is the full postal code?",
+      answerer: { kind: "customer", key: `customer:${thread.customerId}` },
+    });
+  });
+
   it("dismisses only the exact cached plan identity", async () => {
     const { org, thread, cache } = await seedThreadWithPlan();
 

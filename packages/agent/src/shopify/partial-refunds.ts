@@ -183,6 +183,117 @@ function partialRefundNoEffect(
   return { ...result, refundedCents: null, ...(receipt ? { receipt } : {}) };
 }
 
+interface PreparedPartialRefund {
+  orderId: string;
+  items: RequestedRefundItem[];
+  note: string;
+  currency: string;
+  calculatedCents: number;
+  suggested: { amount?: string; gateway?: string; parent_id?: number; kind?: string }[];
+}
+
+async function preparePartialRefund(
+  input: CreatePartialRefundInput,
+  ctx: ShopifyContext,
+): Promise<PreparedPartialRefund | RefundToolResult> {
+  const orderId = requireNumericId(input.order_id, "order_id");
+  const items = parseRefundItems(input.items);
+  const note = typeof input.reason === "string" ? input.reason.trim() : "";
+  const orderData = await shopifyRestJson<{ order?: ShopifyOrder }>(
+    ctx,
+    `orders/${orderId}.json`,
+    { query: { fields: "id,name,currency,line_items,financial_status,refunds" } },
+  );
+  const order = orderData.order;
+  if (!order) {
+    return partialRefundNoEffect(ctx, orderId, toolPolicyBlock(
+      `Error: refund policy blocked - order ${orderId} could not be resolved at Shopify.`,
+      { code: "order_unresolved" },
+    ), "rejected", "order_unresolved");
+  }
+
+  const financialStatus = order.financial_status?.toLowerCase() ?? "unknown";
+  if (financialStatus !== "paid") {
+    return partialRefundNoEffect(ctx, orderId, toolPolicyBlock(
+      `Error: refund policy blocked - order ${orderId} has financial status "${financialStatus}"; only a fully paid order can be partially refunded by the agent.`,
+      { code: "order_not_paid", financialStatus },
+    ), "rejected", "order_not_paid");
+  }
+  if ((order.refunds?.length ?? 0) > 0) {
+    return partialRefundNoEffect(ctx, orderId, toolPolicyBlock(
+      `Error: refund policy blocked - order ${orderId} already has a refund record and requires merchant review.`,
+      { code: "prior_refund" },
+    ), "rejected", "prior_refund");
+  }
+  const problems = unrefundableItems(order, items);
+  if (problems.length > 0) {
+    return partialRefundNoEffect(ctx, orderId, toolPolicyBlock(
+      `Error: refund policy blocked - ${problems.join("; ")}.`,
+      { code: "line_items_unrefundable" },
+    ), "rejected", "line_items_unrefundable");
+  }
+
+  const calculation = await shopifyRestJson<PartialRefundCalculation>(
+    ctx,
+    `orders/${orderId}/refunds/calculate.json`,
+    {
+      method: "POST",
+      body: {
+        refund: {
+          shipping: { full_refund: false },
+          refund_line_items: items.map((item) => ({
+            line_item_id: item.lineItemId,
+            quantity: item.quantity,
+            restock_type: "no_restock",
+          })),
+        },
+      },
+    },
+  );
+  const currency = calculation.refund?.currency?.toUpperCase()
+    ?? order.currency?.toUpperCase();
+  if (!currency) {
+    return partialRefundNoEffect(ctx, orderId, toolPolicyBlock(
+      "Error: refund policy blocked - Shopify returned no refund currency.",
+      { code: "currency_missing" },
+    ), "rejected", "currency_missing");
+  }
+  const suggested = calculation.refund?.transactions
+    ?? calculation.refund?.suggested_transactions
+    ?? [];
+  if (suggested.length === 0) {
+    return partialRefundNoEffect(ctx, orderId, toolPolicyBlock(
+      "Error: refund policy blocked - Shopify calculated no refundable amount for those items.",
+      { code: "no_refundable_balance" },
+    ), "rejected", "no_refundable_balance");
+  }
+  const calculatedCents = suggested.reduce(
+    (total, transaction) => total + moneyToCents(transaction.amount ?? "0"),
+    0,
+  );
+  if (calculatedCents <= 0) {
+    return partialRefundNoEffect(ctx, orderId, toolPolicyBlock(
+      "Error: refund policy blocked - Shopify calculated a zero refund for those items.",
+      { code: "no_refundable_balance" },
+    ), "rejected", "no_refundable_balance");
+  }
+  return { orderId, items, note, currency, calculatedCents, suggested };
+}
+
+/** Bind the current Shopify quote into the immutable proposal shown for approval. */
+export async function quotePartialRefundForApproval(
+  input: CreatePartialRefundInput,
+  ctx: ShopifyContext,
+): Promise<CreatePartialRefundInput> {
+  const prepared = await preparePartialRefund(input, ctx);
+  if ("status" in prepared) throw new ShopifyInputError(prepared.message);
+  return {
+    ...input,
+    approval_amount: centsToMoney(prepared.calculatedCents),
+    approval_currency: prepared.currency,
+  };
+}
+
 export async function createPartialRefund(
   input: CreatePartialRefundInput,
   ctx: ShopifyContext,
@@ -191,96 +302,28 @@ export async function createPartialRefund(
   let mutationStarted = false;
   let orderId = "";
   try {
-    orderId = requireNumericId(input.order_id, "order_id");
-    const items = parseRefundItems(input.items);
-    const note = typeof input.reason === "string" ? input.reason.trim() : "";
+    const prepared = await preparePartialRefund(input, ctx);
+    if ("status" in prepared) return prepared;
+    const { items, note, currency, calculatedCents, suggested } = prepared;
+    orderId = prepared.orderId;
 
-    const orderData = await shopifyRestJson<{ order?: ShopifyOrder }>(
-      ctx,
-      `orders/${orderId}.json`,
-      { query: { fields: "id,name,currency,line_items,financial_status,refunds" } },
-    );
-    const order = orderData.order;
-    if (!order) {
+    const approvedAmount = input.approval_amount?.trim();
+    const approvedCurrency = input.approval_currency?.trim().toUpperCase();
+    if ((approvedAmount || approvedCurrency) && (!approvedAmount || !approvedCurrency)) {
       return partialRefundNoEffect(ctx, orderId, toolPolicyBlock(
-          `Error: refund policy blocked - order ${orderId} could not be resolved at Shopify.`,
-          { code: "order_unresolved" },
-        ), "rejected", "order_unresolved");
+        "Error: refund policy blocked - the approved partial-refund quote is incomplete; ask for approval again.",
+        { code: "approval_quote_missing" },
+      ), "rejected", "approval_quote_missing");
     }
-
-    const financialStatus = order.financial_status?.toLowerCase() ?? "unknown";
-    if (financialStatus !== "paid") {
+    if (
+      approvedAmount
+      && approvedCurrency
+      && (moneyToCents(approvedAmount) !== calculatedCents || approvedCurrency !== currency)
+    ) {
       return partialRefundNoEffect(ctx, orderId, toolPolicyBlock(
-          `Error: refund policy blocked - order ${orderId} has financial status "${financialStatus}"; only a fully paid order can be partially refunded by the agent.`,
-          { code: "order_not_paid", financialStatus },
-        ), "rejected", "order_not_paid");
-    }
-
-    // A prior refund is escalated rather than stacked. Two refunds on one order
-    // is also what would make the reconciliation probe ambiguous, so this guard
-    // is what keeps an unknown outcome answerable.
-    if ((order.refunds?.length ?? 0) > 0) {
-      return partialRefundNoEffect(ctx, orderId, toolPolicyBlock(
-          `Error: refund policy blocked - order ${orderId} already has a refund record and requires merchant review.`,
-          { code: "prior_refund" },
-        ), "rejected", "prior_refund");
-    }
-
-    const problems = unrefundableItems(order, items);
-    if (problems.length > 0) {
-      return partialRefundNoEffect(ctx, orderId, toolPolicyBlock(
-          `Error: refund policy blocked - ${problems.join("; ")}.`,
-          { code: "line_items_unrefundable" },
-        ), "rejected", "line_items_unrefundable");
-    }
-
-    // Shopify prices the selection. Shipping is not refunded: a partial return
-    // of goods does not undo the delivery that was already performed.
-    const calculation = await shopifyRestJson<PartialRefundCalculation>(
-      ctx,
-      `orders/${orderId}/refunds/calculate.json`,
-      {
-        method: "POST",
-        body: {
-          refund: {
-            shipping: { full_refund: false },
-            refund_line_items: items.map((item) => ({
-              line_item_id: item.lineItemId,
-              quantity: item.quantity,
-              restock_type: "no_restock",
-            })),
-          },
-        },
-      },
-    );
-
-    const currency = calculation.refund?.currency?.toUpperCase()
-      ?? order.currency?.toUpperCase();
-    if (!currency) {
-      return partialRefundNoEffect(ctx, orderId, toolPolicyBlock(
-          "Error: refund policy blocked - Shopify returned no refund currency.",
-          { code: "currency_missing" },
-        ), "rejected", "currency_missing");
-    }
-    const suggested = calculation.refund?.transactions
-      ?? calculation.refund?.suggested_transactions
-      ?? [];
-    if (suggested.length === 0) {
-      return partialRefundNoEffect(ctx, orderId, toolPolicyBlock(
-          "Error: refund policy blocked - Shopify calculated no refundable amount for those items.",
-          { code: "no_refundable_balance" },
-        ), "rejected", "no_refundable_balance");
-    }
-
-    const calculatedCents = suggested.reduce(
-      (total, transaction) => total + moneyToCents(transaction.amount ?? "0"),
-      0,
-    );
-    if (calculatedCents <= 0) {
-      return partialRefundNoEffect(ctx, orderId, toolPolicyBlock(
-          "Error: refund policy blocked - Shopify calculated a zero refund for those items.",
-          { code: "no_refundable_balance" },
-        ), "rejected", "no_refundable_balance");
+        `Error: refund policy blocked - Shopify now calculates ${currency} ${centsToMoney(calculatedCents)}, not the approved ${approvedCurrency} ${approvedAmount}; ask for approval again.`,
+        { code: "amount_mismatch" },
+      ), "rejected", "amount_mismatch");
     }
 
     // The cap applies to Shopify's figure, because that is the only amount that

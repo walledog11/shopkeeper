@@ -28,6 +28,7 @@ export function mayParkMerchantWork(
 export interface AgentActionResult {
   tool: string;
   result: string;
+  status?: 'success' | 'error' | 'policy_block' | 'escalated' | 'unknown';
 }
 
 export interface PlanIdentity {

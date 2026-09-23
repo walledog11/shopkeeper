@@ -447,6 +447,7 @@ describe('durable order-status host path', () => {
     anthropicCreate.mockReset();
     anthropicCreate.mockResolvedValueOnce(toolUse('reply', 'send_reply', {
       text: 'What is the order number?',
+      await_response: true,
     }));
 
     const org = await createTestOrg();
@@ -477,18 +478,26 @@ describe('durable order-status host path', () => {
     });
 
     expect(generated.plan?.rawToolCalls).toEqual([
-      expect.objectContaining({ name: 'send_reply', input: { text: 'What is the order number?' } }),
+      expect.objectContaining({
+        name: 'send_reply',
+        input: { text: 'What is the order number?', await_response: true },
+      }),
     ]);
     expect(providerFetch).not.toHaveBeenCalled();
     const request = await db.agentRequest.findFirstOrThrow({
       where: { organizationId: org.id, sourceMessageId: sourceMessage.id },
     });
     expect(await db.agentTask.findUniqueOrThrow({ where: { id: request.taskId! } }))
-      .toMatchObject({ status: 'completed' });
+      .toMatchObject({
+        status: 'waiting_input',
+        pendingQuestion: 'What is the order number?',
+        pendingAnswererKind: 'customer',
+        pendingAnswererKey: `customer:${customer.id}`,
+      });
     expect(postDashboardInternal).toHaveBeenCalledWith(
       '/api/agent/io-send-internal',
       expect.objectContaining({
-        input: { text: 'What is the order number?' },
+        input: { text: 'What is the order number?', await_response: true },
         agentRequestId: request.id,
         agentTaskId: request.taskId,
       }),
@@ -1343,14 +1352,23 @@ describe('durable order-status host path', () => {
       line_items: [{ ...order.line_items[0], current_quantity: 0 }],
     };
     let refundMutationCalls = 0;
+    let approvalGranted = false;
     providerFetch.mockImplementation(async (input: string | URL | Request) => {
       const url = String(input);
       if (url.includes('/graphql.json')) {
         refundMutationCalls += 1;
         throw new Error('A stale partial refund must not reach Shopify refundCreate.');
       }
+      if (url.includes('/refunds/calculate.json')) {
+        return new Response(JSON.stringify({ refund: {
+          currency: 'USD',
+          transactions: [{
+            kind: 'suggested_refund', gateway: 'shopify_payments', parent_id: 222, amount: '16.00',
+          }],
+        } }), { status: 200 });
+      }
       if (url.includes('/orders/9000001001.json')) {
-        return new Response(JSON.stringify({ order: changedOrder }), { status: 200 });
+        return new Response(JSON.stringify({ order: approvalGranted ? changedOrder : order }), { status: 200 });
       }
       if (url.includes('/orders.json')) {
         return new Response(JSON.stringify({ orders: [order] }), { status: 200 });
@@ -1388,6 +1406,10 @@ describe('durable order-status host path', () => {
       sourceMessageId: sourceMessage.id,
     });
     expect(generated.plan?.rawToolCalls.map(call => call.name)).toEqual(['create_partial_refund']);
+    expect(generated.plan?.rawToolCalls[0]?.input).toMatchObject({
+      approval_amount: '16.00', approval_currency: 'USD',
+    });
+    approvalGranted = true;
 
     await executeCurrentCachedHomePlan({
       orgId: org.id,
@@ -1407,6 +1429,101 @@ describe('durable order-status host path', () => {
       status: 'policy_block',
       receiptVersion: 1,
       receipt: { outcome: 'rejected', code: 'prior_refund' },
+    });
+    expect(postDashboardInternal.mock.calls.every(([, body]) =>
+      !JSON.stringify(body).includes('has been refunded'))).toBe(true);
+  });
+
+  it('rejects an approved partial refund when Shopify recalculates a different amount', async () => {
+    anthropicCreate.mockReset();
+    anthropicCreate
+      .mockResolvedValueOnce(toolUse('discover-partial-refund', 'discover_capabilities', {
+        capability: 'refund one damaged item from an order',
+      }))
+      .mockResolvedValueOnce(toolUse('partial-refund', 'create_partial_refund', {
+        order_id: '9000001001', items: [{ line_item_id: '7001', quantity: 1 }],
+      }))
+      .mockResolvedValueOnce(toolUse('reply', 'send_reply', {
+        text: 'I could not refund the item because the approved amount changed.',
+      }));
+
+    let approvalGranted = false;
+    let refundMutationCalls = 0;
+    providerFetch.mockImplementation(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes('/graphql.json')) {
+        refundMutationCalls += 1;
+        throw new Error('A changed approved amount must not reach Shopify refundCreate.');
+      }
+      if (url.includes('/refunds/calculate.json')) {
+        return new Response(JSON.stringify({ refund: {
+          currency: 'USD',
+          transactions: [{
+            kind: 'suggested_refund', gateway: 'shopify_payments', parent_id: 222,
+            amount: approvalGranted ? '18.00' : '16.00',
+          }],
+        } }), { status: 200 });
+      }
+      if (url.includes('/orders/9000001001.json')) {
+        return new Response(JSON.stringify({ order }), { status: 200 });
+      }
+      if (url.includes('/orders.json')) {
+        return new Response(JSON.stringify({ orders: [order] }), { status: 200 });
+      }
+      throw new Error(`Unexpected external request: ${url}`);
+    });
+
+    const org = await createTestOrg();
+    testOrgs.track(org.id);
+    const settings = { autonomyTier: 'guarded' as const, autoExecuteMode: 'off' as const };
+    await db.organization.update({ where: { id: org.id }, data: { settings } });
+    await createTestIntegration(org.id, {
+      platform: 'shopify', externalAccountId: 'test-store.myshopify.com', accessToken: 'shpat_test',
+      metadata: { oauthScopes: ['read_orders', 'write_orders'] },
+    });
+    const member = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: randomUUID() },
+    });
+    const customer = await createTestCustomer(org.id, `${randomUUID()}@example.com`);
+    const thread = await createTestThread(org.id, customer.id, 'ig_dm', { shopifyCustomerId: '1234' });
+    const sourceMessage = await createTestMessage(thread.id, 'Refund the damaged black shirt from order #1001.');
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        requestSummary: 'Refund the damaged black shirt from order #1001.',
+        requestSourceMessageId: sourceMessage.id,
+        classifierSignals: {
+          version: 5, language: 'en', intents: { mutative_request: true },
+          requestFacts: { ask: 'refund', order: '#1001' },
+        },
+      },
+    });
+
+    const generated = await generateThreadPlan(org.id, thread.id, false, {
+      sourceMessageId: sourceMessage.id,
+    });
+    expect(generated.plan?.rawToolCalls[0]?.input).toMatchObject({
+      approval_amount: '16.00', approval_currency: 'USD',
+    });
+    approvalGranted = true;
+
+    await executeCurrentCachedHomePlan({
+      orgId: org.id,
+      threadId: thread.id,
+      settings: resolveAgentSettings(settings),
+      executionIntent: 'merchant_approved',
+      failureRoute: 'test:changed-partial-refund-amount-host',
+      approver: { clerkUserId: member.clerkUserId, displayName: 'Test Merchant' },
+    }, buildGatewayPlanExecutionDeps());
+
+    expect(refundMutationCalls).toBe(0);
+    expect(await db.agentAction.findFirstOrThrow({
+      where: { organizationId: org.id, tool: 'create_partial_refund' },
+    })).toMatchObject({
+      proposalId: generated.identity!.planId,
+      status: 'policy_block',
+      receiptVersion: 1,
+      receipt: { outcome: 'rejected', code: 'amount_mismatch' },
     });
     expect(postDashboardInternal.mock.calls.every(([, body]) =>
       !JSON.stringify(body).includes('has been refunded'))).toBe(true);
