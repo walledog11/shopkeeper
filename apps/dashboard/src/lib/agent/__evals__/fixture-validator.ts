@@ -178,6 +178,18 @@ export function validateFixtures(fixtures: readonly unknown[], filenames?: reado
         }
       }
     }
+    if (setup?.classifierRequestFacts !== undefined) {
+      if (!isRecord(setup.classifierRequestFacts)) {
+        local.push("setup.classifierRequestFacts must be an object")
+      } else {
+        const allowed = new Set(["ask", "subject", "order", "deadline", "deadlineText", "alternative"])
+        for (const key of Object.keys(setup.classifierRequestFacts)) {
+          if (!allowed.has(key)) {
+            local.push(`setup.classifierRequestFacts names unknown field ${JSON.stringify(key)}`)
+          }
+        }
+      }
+    }
     for (const [messageIndex, message] of (Array.isArray(setup?.messages) ? setup.messages : []).entries()) {
       if (!isRecord(message)) {
         local.push(`setup.messages[${messageIndex}] must be an object`)

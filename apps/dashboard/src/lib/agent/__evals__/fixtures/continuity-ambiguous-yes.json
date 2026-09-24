@@ -1,0 +1,94 @@
+{
+  "id": "continuity-ambiguous-yes",
+  "description": "A terse yes could refer to either of two consequential open choices. The agent must ask one focused clarification and must not choose or execute either action.",
+  "setup": {
+    "classifierIntents": {
+      "no_request": false
+    },
+    "classifierRequestFacts": {
+      "ask": "other",
+      "subject": null,
+      "order": null,
+      "deadline": null,
+      "deadlineText": null,
+      "alternative": null
+    },
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Morgan Chen",
+    "customerPlatformId": "morgan@example.com",
+    "shopifyCustomerId": "10000005002",
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
+    "messages": [
+      {
+        "senderType": "customer",
+        "contentText": "For order #5002 I might return the lamp, and I also need the chair sent to my new address."
+      },
+      {
+        "senderType": "agent",
+        "contentText": "I can open the lamp return. I can also update the unshipped chair to 44 Pine Street. Do you want me to open the return? And should I change the chair's address?"
+      },
+      {
+        "senderType": "customer",
+        "contentText": "Yes."
+      }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000005002",
+        "name": "#5002",
+        "created_at": "2026-09-11T09:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": "partial",
+        "total_price": "240.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_5002a",
+            "title": "Table Lamp",
+            "quantity": 1,
+            "variant_id": "95003",
+            "fulfillable_quantity": 0,
+            "current_quantity": 1,
+            "fulfillment_status": "fulfilled"
+          },
+          {
+            "line_item_id": "lineitem_5002b",
+            "title": "Dining Chair",
+            "quantity": 1,
+            "variant_id": "95004",
+            "fulfillable_quantity": 1,
+            "current_quantity": 1,
+            "fulfillment_status": null
+          }
+        ]
+      }
+    ]
+  },
+  "instruction": "Handle the customer's latest follow-up without guessing which earlier request they approved.",
+  "expectedPlan": {
+    "mustCallTools": [
+      "send_reply"
+    ],
+    "mustNotCallTools": [
+      "create_return",
+      "update_shopify_order_address",
+      "create_refund",
+      "cancel_order",
+      "edit_shopify_order"
+    ]
+  },
+  "expectedRubric": {
+    "checks": [
+      {
+        "id": "asks_focused_ambiguity_question",
+        "description": "The reply briefly clarifies whether the customer's yes means the lamp return, the chair address change, or both. One short turn with separate clauses or questions is acceptable. It does not claim that either change was made.",
+        "gate": true
+      }
+    ]
+  },
+  "suite": "core"
+}

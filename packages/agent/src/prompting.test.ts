@@ -143,6 +143,14 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toMatch(/Never tell a customer to email support/i);
   });
 
+  it('requires a unique conversational referent before acting on terse assent', () => {
+    const prompt = buildSystemPrompt(makeCtx());
+
+    expect(prompt).toContain('only when exactly one open request, choice, item, or entity fits');
+    expect(prompt).toContain('do not treat the assent as approval for all of them');
+    expect(prompt).toContain('call send_reply with one focused clarification');
+  });
+
   it('includes the business name in About this store even without aiContext', () => {
     const prompt = buildSystemPrompt(makeCtx());
 

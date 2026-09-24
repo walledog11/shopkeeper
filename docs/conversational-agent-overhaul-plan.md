@@ -1,6 +1,7 @@
 # Conversational agent overhaul plan
 
-Status: in progress. Packages 0 and 1 are complete. Package 1 now covers the
+Status: in progress. Packages 0 through 5 are complete; Package 6 certification,
+rollout, and legacy deletion remain. Package 1 covers the
 shared receipt boundary, durable action dispatch/recovery lifecycle, all retained
 Shopify writes, retained internal-thread writes, and durable communication
 outcomes. Package 2 now has additive persistence, ownership helpers, durable
@@ -27,7 +28,7 @@ runtime-v2 tasks now select bounded discovery from their immutable task version;
 `AGENT_CAPABILITY_DISCOVERY_MODE` remains only for taskless/manual and v1
 compatibility callers. The same live run is the first time a model planned
 against discovery, and it found the capability it needed by name on its second
-call. Package 5 has started with the
+call. Package 5 began with the
 contract every one
 of its rows is written against: a support conversation now accepts each inbound
 customer message as a durable request and runs it as a claimed task, which also
@@ -71,12 +72,16 @@ rejects an order that shipped during the wait without sending a cancellation
 POST. A merchant-supplied return-label URL now continues its parked task through
 approval, typed receipt, and gateway send. Turn-journal notes have an idempotent
 identity, while ordinary action
-auditing is no longer a required model tool step. These are incremental Package
-5 results, not completion of its capability or conversational matrix. Customer
+auditing is no longer a required model tool step. Customer
 profile updates and explicit customer notes now also cover claimed runtime-v2
 revision and approval, current-grant and linked-customer revalidation, confirmed
 and ambiguous provider outcomes, and task-attributed reply delivery in the
-database-backed host matrix.
+database-backed host matrix. Package 5 closed on 2026-09-23 after the remaining
+retained merchant rows were re-audited against the shared claimed-task, receipt,
+recovery, and delivery contracts; unknown merchant-task outcomes were made to
+remain reconciling; and live-model clear- and ambiguous-referent cases passed.
+Real-provider exercises remain Package 6 release evidence rather than Package 5
+implementation work.
 Created 2026-09-11; last updated 2026-09-23.
 
 Current checkpoint:
@@ -93,7 +98,7 @@ tracks the remaining capability, conversation, and cutover gates by row.
   record measured tokens/spend against the durable claim.
 - [x] The first Package 5 capability row — order status and policy/product
   questions — satisfies the availability-through-compatibility evidence table.
-- [ ] Package 5 mutative rows remain: address change, cancellation, return, and
+- [x] Package 5 mutative rows are complete: address change, cancellation, return, and
   exchange now cover approval, typed outcomes, stale provider state, unknown
   outcomes, reply suppression, and shared delivery recovery in deterministic
   host tests. Return-label continuation has an approval-to-receipt-to-gateway-send
@@ -103,16 +108,22 @@ tracks the remaining capability, conversation, and cutover gates by row.
   supersede the old proposal and execute only the replacement card's exact inputs.
   Customer profile updates and explicit notes now cover claimed-task approval,
   bounded discovery, revoked-grant and changed-linked-customer refusal, confirmed
-  task-attributed delivery, and unknown-outcome reply suppression. Other retained
-  merchant operations and the controlled provider exercise remain.
-- [ ] Package 5 continuity remains: classified topic/entity matches keep
+  task-attributed delivery, and unknown-outcome reply suppression. The remaining
+  retained merchant operations compose the same claimed-task authority and
+  delivery boundary with their Package 1 typed-receipt and adapter-specific
+  recovery suites. Unknown outcomes from a durable merchant task now settle the
+  task as reconciling instead of completed. Controlled real-provider evidence
+  remains a Package 6 release gate.
+- [x] Package 5 continuity is complete: classified topic/entity matches keep
   independent tasks and resume a matching one, while missing or ambiguous
   runtime-v2 classification preserves parked work. Merchant answers, revisions,
   and dismissals have accepted request records. Delivered customer questions
   record a customer-scoped wait and resume the exact task on the next answer.
-  The classifier is instructed to resolve exactly one conversational referent
-  and to request clarification rather than choose among several. Live-model
-  clear/ambiguous-referent evidence and broader channel-switch evidence remain.
+  The classifier and planner resolve a conversational referent only when exactly
+  one candidate fits. A classified ambiguous terse follow-up is limited to
+  `send_reply`, so discovery cannot widen it into a consequential action.
+  Live-model clear- and ambiguous-referent cases passed; the existing durable
+  dashboard/operator continuation cases cover channel switching.
 - [x] Package 5 bookkeeping cleanup is complete: turn audit notes have a stable,
   idempotent identity, the model is no longer instructed to add a routine note
   after each action, and the retained note/status/tag tools are deliberate
@@ -153,7 +164,8 @@ tracks the remaining capability, conversation, and cutover gates by row.
   $0.05/6-call guard. The dashboard runs used $0.7669 and 92 calls; the gateway
   budget assertion proves its additional spend/calls stayed at or below
   $0.05/6. This certifies the current-runtime release set, not the still-open
-  v1/v2 comparison or clear/ambiguous-referent conversational variants. A
+  v1/v2 comparison. The later Package 5 closeout added passing targeted live
+  cases for clear and ambiguous conversational referents. A
   controlled real-provider/customer-delivery exercise also remains unrun; no
   controlled runtime workspace, provider destination, or bounded effect budget
   was selected.
@@ -2396,7 +2408,7 @@ Add continuity after the common task lookup is present: two independent open tas
 
 Move automatic audit notes/status consequences to the successful-receipt path with idempotent bookkeeping identity. Keep an explicit merchant-requested note capability if the inventory retains that user-facing operation; automatic journaling and deliberate note-taking are different behaviors.
 
-- [ ] Move order status, policy/product questions, address changes, cancellation,
+- [x] Move order status, policy/product questions, address changes, cancellation,
   basic returns, and retained merchant operations onto the same runtime
   contracts. Order status plus policy/product answers complete the safe-read
   evidence row. Address update, cancellation, return, and exchange now pass
@@ -2413,11 +2425,18 @@ Move automatic audit notes/status consequences to the successful-receipt path wi
   Customer profile updates and explicit notes also pass claimed runtime-v2
   revision/approval host cases for confirmed and ambiguous provider outcomes,
   revoked write authority, changed linked-customer identity, and attributed
-  delivery. Other retained merchant operations and the remaining matrix cells
-  are still open;
-  fulfillment remains isolated from default support selection.
-- [ ] Support multiple requests, task switching, terse follow-ups, explicit preferences, and resumption after waiting for the merchant or customer. Classified ask/entity matching now keeps distinct pending tasks and can return to a single match. An unclassified or ambiguous runtime-v2 follow-up preserves the pending tasks rather than guessing. Merchant answers and revisions from an authorized member continue the exact wait/task and are accepted requests; dismissals are accepted requests that end their proposal wait. A successfully delivered customer question records that customer as the durable answerer, and their next message resumes the exact task even without a classifier hint. Active merchant preferences have source/scope policy coverage, and any authorized organization member can answer a merchant wait from another device or supported surface. The classifier prompt now resolves a prior referent only when exactly one candidate fits and emits deliberately unresolved facts when several fit. Live-model proof that the resulting clear and ambiguous conversations are useful, plus broader channel-switch acceptance evidence, remains.
-- [ ] Stop new actions on cancellation or superseding instructions. Revalidate pending approvals and stale evidence when work resumes. An approval wait ends at the ledger on approval, decline, revision, stop, or superseding customer instruction; stale cards cannot approve a replacement proposal. Cancellation now rechecks live fulfillment before dispatch and records a rejected receipt without a provider POST when the order shipped during the wait. Host cases also cover revoked Shopify write grant, changed workspace cancellation policy, lost member authority, reduced full-refund balance, changed address ownership/fulfillment, depleted return quantity, invalidated exchange replacement, and a changed partial-refund quote. Remaining operation-specific evidence transitions stay tracked per capability row.
+  delivery. Other retained merchant operations use the same claimed-task
+  authority and task-attributed action boundary, combined with their Package 1
+  typed receipts, preflights, partial/unknown outcomes, and provider recovery
+  suites. Fulfillment remains isolated from default support selection. Unknown
+  provider or delivery actions leave a durable merchant task reconciling and
+  clear any stale wait.
+- [x] Support multiple requests, task switching, terse follow-ups, explicit preferences, and resumption after waiting for the merchant or customer. Classified ask/entity matching keeps distinct pending tasks and can return to a single match. An unclassified or ambiguous runtime-v2 follow-up preserves the pending tasks rather than guessing. Merchant answers and revisions from an authorized member continue the exact wait/task and are accepted requests; dismissals are accepted requests that end their proposal wait. A successfully delivered customer question records that customer as the durable answerer, and their next message resumes the exact task even without a classifier hint. Active merchant preferences have source/scope policy coverage, and any authorized organization member can answer a merchant wait from another device or supported surface. The classifier and planner resolve a prior referent only when exactly one candidate fits. A classified ambiguous terse follow-up receives only `send_reply`, so capability discovery cannot widen it into an action. Targeted live-model clear- and ambiguous-referent cases passed, and the durable cross-surface continuation cases cover channel switching.
+- [x] Stop new actions on cancellation or superseding instructions. Revalidate pending approvals and stale evidence when work resumes. An approval wait ends at the ledger on approval, decline, revision, stop, or superseding customer instruction; stale cards cannot approve a replacement proposal. Cancellation rechecks live fulfillment before dispatch and records a rejected receipt without a provider POST when the order shipped during the wait. Host cases also cover revoked Shopify write grant, changed workspace cancellation policy, lost member authority, reduced full-refund balance, changed address ownership/fulfillment, depleted return quantity, invalidated exchange replacement, and a changed partial-refund quote. Adapter-specific suites cover the remaining retained-operation preconditions and conservative recovery behavior.
+
+Package 5 closure verification passed `npm run verify:pr`: repository structure
+and lint, all workspace typechecks and unit suites, 73 Node contract tests, 12
+browser smoke tests, every coverage gate, and all production builds completed.
 - [x] Move audit notes and other mechanical bookkeeping out of the model tool surface where they are consequences of execution. Turn-journal notes are written once per turn identity, routine action-note prompting is removed, and review found no remaining automatic note/status call: the retained note/status/tag tools are explicit operations. Delivery state remains owned by its durable sender boundary.
 - [x] Remove speculative completion drafting from runtime v2 in favor of receipt-based composition. The forced terminal-draft behavior remains only in the pinned v1 compatibility path until Package 6 deletion; residual prose checks are labeled as heuristics, not guarantees.
 

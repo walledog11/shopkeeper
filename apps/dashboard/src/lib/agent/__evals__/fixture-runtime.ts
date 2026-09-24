@@ -84,7 +84,7 @@ function buildContext(
             version: 5,
             language: "en",
             intents: { ...emptyIntents(), ...setup.classifierIntents },
-            requestFacts: emptyRequestFacts(),
+            requestFacts: { ...emptyRequestFacts(), ...setup.classifierRequestFacts },
           },
         }
       : {}),

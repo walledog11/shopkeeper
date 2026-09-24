@@ -255,6 +255,31 @@ describe("planAgent capture loop", () => {
     });
   });
 
+  it("offers only a reply for an unresolved terse customer follow-up", async () => {
+    const injectedLogger = makeLogger();
+    installAgentLogger(injectedLogger);
+    mockCreate.mockResolvedValueOnce(singleToolUse("send_reply", {
+      text: "Which request would you like me to handle?",
+    }));
+
+    await planAgent(makeCtx({
+      recentMessages: [
+        { senderType: "agent", contentText: "Would you like a return or an exchange?" },
+        { senderType: "customer", contentText: "Yes" },
+      ],
+      classifierSignals: {
+        ...classifierSignalsFor({ no_request: false }),
+        requestFacts: { ...emptyRequestFacts(), ask: "other" },
+      },
+    }), "Handle the customer's latest request");
+
+    expect(toolNamesForCall(0)).toEqual(["send_reply"]);
+    expect(completeLogPayload(injectedLogger)).toMatchObject({
+      toolSelectionBucket: "clarification",
+      toolSelectionNarrowed: true,
+    });
+  });
+
   // The Instagram case: the sender is a real customer, but nothing links them to
   // a Shopify record and nothing on that channel ever will, so an order question
   // has to be answerable from a read that discloses no personal detail.

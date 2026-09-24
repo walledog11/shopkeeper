@@ -22,18 +22,18 @@ operation has a distinct provider precondition or recovery mode.
 | Return and exchange | Approved fake-provider receipt and gateway send; a return or exchange whose returnable quantity falls to zero during approval records a rejected receipt without return creation; an exchange whose replacement price rises is also refused; an incomplete return or exchange creation response records an unknown receipt, stops the customer success reply, and leaves the task reconciling; probes observe provider state but preserve the handoff when required receipt facts cannot be rebuilt; shared attributed delivery recovery does not invoke the effect executor; revising either operation supersedes the old proposal and approval executes one mutation with only the replacement card's exact inputs | Controlled real-provider exercise only |
 | Return-label attachment | Typed receipt/dispatch boundary; merchant answer continues the parked task through approval and provider receipt; confirmed attachment gets an attributed gateway send, while an ambiguous provider outcome leaves the task reconciling and sends no label link; the host case hands that unknown action to reconciliation, preserves it for review when the receipt cannot be rebuilt, and does not repeat the mutation; shared attributed delivery recovery retries the response row without invoking the effect executor | Controlled real-provider exercise only |
 | Customer updates and explicit notes | Typed receipts; bounded discovery only for explicit customer-record requests; claimed runtime-v2 revision and approval; revoked write grant and changed linked-customer identity refuse provider dispatch; confirmed outcomes produce grounded task-attributed delivery; ambiguous outcomes remain reconciling and suppress replies | Controlled real-provider exercise only |
-| Order creation and editing | Typed receipts | Isolated merchant selection, approval, operation-specific stale state and recovery |
-| Gift card and fulfillment | Typed receipts; isolated from default support selection | Merchant-only path, approval, financial/fulfillment preflight, recovery and delivery |
-| Internal thread updates and communication | Typed receipts and shared send boundary; failed/unknown send after cancellation is separate from the committed commercial effect; synchronous agent reply records its provider-attempt boundary, stale attempted sends become unknown, and concurrent definite-failure retries have one claimant; the real retry route and outbound worker deliver the same failed task-attributed response while preserving one committed cancellation action | Receipt-driven automatic status consequences; provider reconciliation for unknown sends |
-| Operator shop operations: flash sale create/end, variant prices | Typed receipts | Claimed-task authority, partial/unknown outcomes, provider reconciliation and merchant delivery |
-| Operator inbox operations: ticket reply, spam, reads | Ticket reply has durable send boundary | Exact task attribution, tenant/authority, failure and delivery recovery where applicable |
+| Order creation and editing | Typed receipts; isolated merchant discovery; shared claimed-task authority; operation-specific validation, partial/unknown outcomes, deterministic order-create reconciliation, and conservative order-edit recovery | Keep in Package 6 controlled-provider exercise and v1/v2 comparison |
+| Gift card and fulfillment | Typed receipts; isolated from default support selection; shared claimed-task authority; financial/fulfillment preflight and conservative recovery | Keep in Package 6 controlled-provider exercise and v1/v2 comparison |
+| Internal thread updates and communication | Typed receipts and shared claimed-task/send boundary; failed/unknown sends stay separate from committed commercial effects; synchronous replies record their provider-attempt boundary; stale attempted sends become unknown; concurrent definite-failure retries have one claimant; the real retry route and outbound worker deliver the same failed task-attributed response without repeating the effect | Provider reconciliation for unknown sends remains Package 6 operational evidence |
+| Operator shop operations: flash sale create/end, variant prices | Typed receipts; operator-only selection; claimed-task dispatch; conditional scope checks; partial/unknown outcomes and conservative in-call/provider recovery | Keep in Package 6 controlled-provider exercise and v1/v2 comparison |
+| Operator inbox operations: ticket reply, spam, reads | Exact tenant authority; claimed-task dispatch; ticket reply has a durable send receipt and failed/unknown distinction; spam has an observed transition receipt | Keep in Package 6 controlled delivery exercise and v1/v2 comparison |
 
 ## Package 5: conversation and safety
 
 | Gate | Evidence recorded | Next release evidence |
 | --- | --- | --- |
-| Distinct pending tasks | Classified topic/entity matching and return to a single match; two items on the same order remain separate and a named item resumes only its task | Clear “that one” from conversation context, ambiguous “yes” asks a useful question, cross-channel switch |
-| Wait continuation | Merchant answer, revision, decline are accepted requests on the exact task; a delivered customer question records that customer as the durable answerer and their next message resumes the exact task even when classification is absent; active merchant preferences already load with source/scope policy tests; any authorized member can answer the org-scoped merchant wait | Live conversational evidence for clear/ambiguous referents and channel switching |
+| Distinct pending tasks | Classified topic/entity matching and return to a single match; two items on the same order remain separate and a named item resumes only its task; live clear-referent case passed; a classified ambiguous terse follow-up is restricted to customer clarification and its live case passed | Keep as held-out Package 6 comparison evidence |
+| Wait continuation | Merchant answer, revision, decline are accepted requests on the exact task; a delivered customer question records that customer as the durable answerer and their next message resumes the exact task even when classification is absent; active merchant preferences load with source/scope policy tests; any authorized member can answer the org-scoped merchant wait from the dashboard or an operator channel | Keep broader channel switching in Package 6 holdout evaluation |
 | Stop and supersession | Old approval invalidated; cancellation before dispatch is ordered at the task row; cancellation after dispatch preserves a committed outcome or leaves submitted work reconciling, and prevents later work | No remaining deterministic runtime case; retain in held-out conversation/release evaluation |
 | Stale approval | Shipped/partially shipped cancellation, revoked Shopify write grant, changed cancellation policy, lost member authority, full-refund balance shrink, changed address ownership/fulfillment, depleted return quantity, invalidated exchange replacement, and changed partial-refund quote all refuse the effect | Keep in controlled real-provider and holdout evaluation |
 | Bookkeeping | Idempotent runtime turn journal; no routine action-note prompt; retained note/status/tag tools are explicit operations; runtime-v2 receipt composition replaces speculative completion drafting | Keep the v1-only draft path until Package 6 persisted-state inventory permits deletion |
@@ -227,3 +227,22 @@ No live-model or real-provider gate is claimed by the local fake-provider tests.
   workspace tests, 12 browser smoke tests, every coverage gate (including 1,448
   gateway tests and 1,455 agent tests), and all production builds. This is local
   fake-provider evidence; the controlled real-provider exercise remains unrun.
+- The durable member-task worker now treats any typed action with an unknown
+  outcome as a reconciling settlement, even if planning subsequently asks a
+  question or proposes an action. Its stale wait is cleared and the durable
+  failure code records `unknown_provider_outcome`; the worker unit suite passed
+  9 cases and the database-backed task-ledger integration file passed 61.
+- Continuity now has explicit live-model cases for a clear prior referent and an
+  ambiguous terse “yes.” The clear case selected the one supported exchange;
+  the ambiguous case was deterministically narrowed to `send_reply`, preventing
+  capability discovery from converting assent into either pending mutation.
+  Both cases passed their final bounded live runs. The focused planner/prompt
+  suites passed 121 cases and the fixture validator passed 13.
+- Package 5 is complete. The retained-operation audit, reconciliation fix,
+  cross-surface continuation coverage, and live referent results close its
+  implementation and conversational gates. Controlled real-provider execution,
+  runtime-v1/v2 comparison, rollout, and legacy deletion remain Package 6 work.
+- `npm run verify:pr` passed after the Package 5 closure batch: repository
+  structure and lint, all workspace typechecks and unit suites, 73 Node contract
+  tests, 12 browser smoke tests, every coverage gate, and all production builds
+  completed successfully.

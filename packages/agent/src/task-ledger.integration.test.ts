@@ -151,6 +151,48 @@ describe("durable dashboard persistence foundation", () => {
     expect(stored.messages[0]?.agentRequestId).toBe(request.id);
   });
 
+  it("settles an unknown provider outcome as reconciling without leaving a stale wait", async () => {
+    const { request, task } = await seedTask();
+    const claim = await claimAgentTask({
+      organizationId: task.organizationId,
+      taskId: task.id,
+      expectedRevision: task.revision,
+    });
+    expect(claim).not.toBeNull();
+    await db.agentTask.update({
+      where: { id: task.id },
+      data: {
+        pendingQuestionId: randomUUID(),
+        pendingQuestion: "Try the operation again?",
+        pendingAnswererKind: "member",
+        pendingAnswererKey: task.initiatingActorKey,
+      },
+    });
+
+    await expect(settleAgentTaskClaim({
+      organizationId: task.organizationId,
+      taskId: task.id,
+      expectedRevision: task.revision,
+      claimToken: claim!.claimToken,
+      requestId: request.id,
+      settlement: {
+        status: "reconciling",
+        failureCode: "unknown_provider_outcome",
+      },
+    })).resolves.toBe(true);
+
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: task.id } }))
+      .toMatchObject({
+        status: "reconciling",
+        failureCode: "unknown_provider_outcome",
+        activeProposalId: null,
+        pendingQuestionId: null,
+        pendingQuestion: null,
+        pendingAnswererKey: null,
+        completedAt: null,
+      });
+  });
+
   it("preserves the cumulative budget across a crashed attempt", async () => {
     const { input, request, task } = await seedTask();
     const identity = { organizationId: input.organizationId, taskId: task.id, expectedRevision: 0 };

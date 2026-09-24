@@ -140,4 +140,51 @@ describe('processAgentTaskJob', () => {
       requestId: 'request-1', taskId: 'task-1', claimToken: 'claim-1',
     }));
   });
+
+  it('keeps a task reconciling when a provider or delivery outcome is unknown', async () => {
+    runTurn.mockResolvedValue({
+      summary: 'I could not confirm whether the operation completed.',
+      actionsPerformed: [{
+        tool: 'create_shopify_order',
+        result: 'Unknown provider result',
+        status: 'unknown',
+      }],
+    });
+
+    await processAgentTaskJob(job);
+
+    expect(settle).toHaveBeenCalledWith(expect.objectContaining({
+      requestId: 'request-1',
+      taskId: 'task-1',
+      claimToken: 'claim-1',
+      settlement: {
+        status: 'reconciling',
+        failureCode: 'unknown_provider_outcome',
+      },
+    }));
+  });
+
+  it('does not park later work over an operation whose outcome is unknown', async () => {
+    runTurn.mockResolvedValue({
+      summary: 'The send may have completed.',
+      actionsPerformed: [{
+        tool: 'send_ticket_reply',
+        result: 'Unknown delivery result',
+        status: 'unknown',
+      }],
+    });
+    getContext.mockResolvedValue({
+      ...IDLE_CONTEXT,
+      pendingQuestion: { threadId: 'thread-1', question: 'Try again?' },
+    });
+
+    await processAgentTaskJob(job);
+
+    expect(settle).toHaveBeenCalledWith(expect.objectContaining({
+      settlement: {
+        status: 'reconciling',
+        failureCode: 'unknown_provider_outcome',
+      },
+    }));
+  });
 });

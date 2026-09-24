@@ -122,7 +122,7 @@ export async function processAgentTaskJob(data: AgentTaskJobData): Promise<void>
       memberKey,
       await getContext(data.organizationId, memberKey),
     );
-    await runOperatorFreeFormTurn({
+    const result = await runOperatorFreeFormTurn({
       organizationId: data.organizationId,
       clerkUserId: member.clerkUserId,
       requestId: request.id,
@@ -151,21 +151,24 @@ export async function processAgentTaskJob(data: AgentTaskJobData): Promise<void>
     const after = await getContext(data.organizationId, memberKey);
     // The parked queue is the merchant-facing projection; the task records the
     // same wait durably, so a trimmed card cannot lose what was asked.
-    const settlement: TaskSettlement = after.pendingQuestion
-      ? { status: 'waiting_input', question: after.pendingQuestion.question }
-      : after.pendingPlan
-        ? {
-            status: 'waiting_approval',
-            proposal: {
-              // The parked card's plan ID becomes the proposal's ID, so an
-              // approval from any surface names the exact durable snapshot.
-              ...(after.pendingPlan.planId ? { proposalId: after.pendingPlan.planId } : {}),
-              instruction: after.pendingPlan.instruction,
-              rawToolCalls: normalizeApprovedToolCalls(after.pendingPlan.rawToolCalls),
-              sourceRequestIds: [request.id],
-            },
-          }
-        : { status: 'completed' };
+    const hasUnknownOutcome = result.actionsPerformed.some((action) => action.status === 'unknown');
+    const settlement: TaskSettlement = hasUnknownOutcome
+      ? { status: 'reconciling', failureCode: 'unknown_provider_outcome' }
+      : after.pendingQuestion
+        ? { status: 'waiting_input', question: after.pendingQuestion.question }
+        : after.pendingPlan
+          ? {
+              status: 'waiting_approval',
+              proposal: {
+                // The parked card's plan ID becomes the proposal's ID, so an
+                // approval from any surface names the exact durable snapshot.
+                ...(after.pendingPlan.planId ? { proposalId: after.pendingPlan.planId } : {}),
+                instruction: after.pendingPlan.instruction,
+                rawToolCalls: normalizeApprovedToolCalls(after.pendingPlan.rawToolCalls),
+                sourceRequestIds: [request.id],
+              },
+            }
+          : { status: 'completed' };
     const settled = await settleAgentTaskClaim({
       ...claim,
       requestId: request.id,

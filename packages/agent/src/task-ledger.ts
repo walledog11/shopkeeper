@@ -745,6 +745,7 @@ export interface ProposalSnapshot {
  */
 export type TaskSettlement =
   | { status: "completed" }
+  | { status: "reconciling"; failureCode: string }
   | { status: "waiting_input"; question: string; answerer?: TaskAnswerer }
   | { status: "waiting_approval"; proposal: ProposalSnapshot; approver?: TaskAnswerer };
 
@@ -1106,7 +1107,9 @@ async function suspensionWrite(
   },
   settlement: TaskSettlement,
 ) {
-  if (settlement.status === "completed") return NO_SUSPENSION;
+  if (settlement.status === "completed" || settlement.status === "reconciling") {
+    return NO_SUSPENSION;
+  }
   if (settlement.status === "waiting_input") {
     const question = settlement.question.trim();
     if (!question) throw new BadRequestError("A parked question must have text.");
@@ -1189,7 +1192,15 @@ export async function settleAgentTaskClaim(input: TaskClaimIdentity & {
         activeCheckpointAt: null,
         lastProgressAt: now,
         ...(status === "completed" ? { completedAt: now } : {}),
-        ...(status === "reconciling" ? { failureCode: "cancelled_after_dispatch" } : {}),
+        ...(status === "reconciling"
+          ? {
+              failureCode: ownedTask.cancelledAt
+                ? "cancelled_after_dispatch"
+                : input.settlement.status === "reconciling"
+                  ? input.settlement.failureCode
+                  : "reconciliation_required",
+            }
+          : {}),
         activeTimeMsUsed: { increment: activeTimeMs },
       },
     });

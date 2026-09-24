@@ -20,7 +20,7 @@ test('release budget reserves the bounded gateway cost without starving dashboar
     result.stdout,
     /allocations dashboard=\$0\.7000\/114calls gateway=\$0\.0500\/6calls/,
   );
-  assert.match(result.stdout, /calls=114\/120/);
+  assert.match(result.stdout, /calls=118\/120/);
 });
 
 test('release preflight rejects the call ceiling exhausted by the observed suite', () => {
@@ -37,7 +37,7 @@ test('release preflight rejects the call ceiling exhausted by the observed suite
   });
 
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /Estimated 114 calls exceeds the approved 100-call ceiling/);
+  assert.match(result.stderr, /Estimated 118 calls exceeds the approved 100-call ceiling/);
 });
 
 test('targeted preflight accounts for isolated cold-cache cost and planner call bounds', () => {

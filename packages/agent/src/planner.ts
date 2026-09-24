@@ -78,6 +78,27 @@ export interface PlanAgentOptions {
   runtimeVersion?: number;
 }
 
+const TERSE_REFERENT = /^(?:yes|yeah|yep|yup|ok(?:ay)?|sure|go ahead|do it|that one|it)[.!?\s]*$/i;
+
+function isAmbiguousCustomerFollowUp(ctx: AgentContext): boolean {
+  const facts = ctx.classifierSignals?.requestFacts;
+  if (
+    !facts
+    || facts.ask !== "other"
+    || facts.subject !== null
+    || facts.order !== null
+    || facts.alternative !== null
+  ) {
+    return false;
+  }
+  const latestCustomerText = [...ctx.recentMessages]
+    .reverse()
+    .find((message) => message.senderType === "customer")
+    ?.contentText
+    ?.trim();
+  return Boolean(latestCustomerText && TERSE_REFERENT.test(latestCustomerText));
+}
+
 async function bindProviderApprovalFacts(
   ctx: AgentContext,
   rawToolCalls: AgentPlan["rawToolCalls"],
@@ -155,6 +176,7 @@ export async function planAgent(
     merchantAnswerReplan,
     merchantInstruction: options?.merchantInstruction === true,
     capabilityDiscovery: usesCapabilityDiscovery(options?.runtimeVersion),
+    ambiguousCustomerFollowUp: isAmbiguousCustomerFollowUp(ctx),
   });
   // Read off the selection rather than the flag: these two are what the model
   // was actually offered, and only one of them can be present.

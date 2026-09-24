@@ -44,6 +44,21 @@ function names(selection: ReturnType<typeof select>): string[] {
 }
 
 describe("selectPlanningTools", () => {
+  it("offers only a customer clarification for a classified ambiguous terse follow-up", () => {
+    const selection = select({
+      classifierSignals: signals(),
+      capabilityDiscovery: true,
+      ambiguousCustomerFollowUp: true,
+    });
+
+    expect(selection).toMatchObject({
+      bucket: "clarification",
+      reason: "ambiguous_customer_follow_up",
+      narrowed: true,
+    });
+    expect(names(selection)).toEqual(["send_reply"]);
+  });
+
   it.each([
     ["operator", { operatorMode: true }],
     ["storefront_policy", { storefrontMode: true }],

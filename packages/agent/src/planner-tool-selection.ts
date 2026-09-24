@@ -62,6 +62,7 @@ type PlanningToolSelectionReason =
   | "storefront_policy"
   | "merchant_answer_replan"
   | "merchant_instruction"
+  | "ambiguous_customer_follow_up"
   | "no_classifier_signals"
   | "classifier_unaligned"
   | "unclassified_request"
@@ -94,6 +95,10 @@ interface SelectPlanningToolsInput {
   // and a narrowed set carries discovery rather than the namespace-miss retry.
   // Absent for every legacy caller, which keeps both full-registry fallbacks.
   capabilityDiscovery?: boolean;
+  // The classifier resolved a terse follow-up to no unique conversational
+  // referent. This is a clarification turn, so it may answer the customer but
+  // may not widen into an action the customer did not unambiguously select.
+  ambiguousCustomerFollowUp?: boolean;
 }
 
 const CONTROL_TOOL_NAMES = [
@@ -253,6 +258,14 @@ export function selectPlanningTools(input: SelectPlanningToolsInput): PlanningTo
   }
   if (input.merchantInstruction) {
     return fullSelection(input.availableTools, "merchant_instruction");
+  }
+  if (input.ambiguousCustomerFollowUp) {
+    return {
+      tools: input.availableTools.filter((tool) => tool.name === "send_reply"),
+      bucket: "clarification",
+      reason: "ambiguous_customer_follow_up",
+      narrowed: true,
+    };
   }
 
   // Everything below is a classification failure. The legacy runtime answers

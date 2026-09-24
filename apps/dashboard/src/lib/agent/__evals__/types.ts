@@ -6,7 +6,7 @@ import type {
   ShopifyOrderSummary,
   VerifiedOrderRef,
 } from "@shopkeeper/agent/context";
-import type { ClassifierIntents } from "@shopkeeper/agent/classifier-signals";
+import type { ClassifierIntents, RequestFacts } from "@shopkeeper/agent/classifier-signals";
 import type { AutonomyKind } from "@shopkeeper/agent/autonomy";
 import type { PlanValidationIssueCode } from "@shopkeeper/agent/types";
 
@@ -68,6 +68,8 @@ export interface ThreadSetup {
    * so a fixture without this cannot exercise the low-tier path.
    */
   classifierIntents?: Partial<Record<ClassifierIntentKey, boolean>>;
+  /** Structured current-request facts emitted by the classifier. */
+  classifierRequestFacts?: Partial<RequestFacts>;
 }
 
 export interface ToolInputExpectation {
