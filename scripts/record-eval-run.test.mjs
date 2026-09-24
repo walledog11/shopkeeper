@@ -15,6 +15,7 @@ test('records accepted eval configuration without secrets', () => {
       EVAL_FIXTURE: 'fixture-a',
       EVAL_REPEATS: '2',
       RUN_JUDGE_EVALS: '0',
+      EVAL_AGENT_RUNTIME_VERSION: '2',
       EVAL_MAX_USD: '0.10',
       EVAL_MAX_MODEL_CALLS: '8',
       CI: 'true',
@@ -25,6 +26,7 @@ test('records accepted eval configuration without secrets', () => {
     assert.equal(row.label, 'targeted-test');
     assert.equal(row.fixtures, 'fixture-a');
     assert.equal(row.maxUsd, '0.10');
+    assert.equal(row.agentRuntimeVersion, '2');
     assert.equal(row.githubRunId, '123');
     assert.equal('ANTHROPIC_API_KEY' in row, false);
   } finally {

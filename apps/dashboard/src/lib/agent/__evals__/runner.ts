@@ -29,6 +29,7 @@ import type {
   FixtureRunSummary,
   PhaseUsage,
 } from "./types"
+import { requestedEvalAgentRuntimeVersion } from "./selection"
 
 export {
   compareToBaseline,
@@ -193,9 +194,12 @@ async function runFixture(
     const simulated = buildSimulatedToolResults(fixture)
     simulatedToolResults.current = simulated.size > 0 ? simulated : null
     const resolvedSettings = resolveAgentSettings(fixture.setup.orgSettings ?? null)
+    const runtimeVersion = requestedEvalAgentRuntimeVersion()
     currentPhase = usage.plannerUsage
     const plan = await planAgent(environment.ctx, fixture.instruction, resolvedSettings, {
       merchantInstruction: fixture.merchantInstruction === true,
+      ...(runtimeVersion !== undefined ? { runtimeVersion } : {}),
+      ...(runtimeVersion === 2 ? { suspendAtProposal: true } : {}),
     })
     currentPhase = null
 

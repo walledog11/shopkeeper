@@ -21,6 +21,7 @@ export function recordEvalInvocation(label, env = process.env) {
     fixtures: env.EVAL_FIXTURE ?? null,
     repeats: env.EVAL_REPEATS ?? '1',
     judges: env.RUN_JUDGE_EVALS ?? null,
+    agentRuntimeVersion: env.EVAL_AGENT_RUNTIME_VERSION ?? 'current',
     maxUsd: env.EVAL_MAX_USD ?? null,
     maxModelCalls: env.EVAL_MAX_MODEL_CALLS ?? null,
     ci: env.CI === 'true',

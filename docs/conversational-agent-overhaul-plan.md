@@ -88,6 +88,8 @@ Current checkpoint:
 
 The concise [release evidence matrix](conversational-agent-overhaul-release-matrix.md)
 tracks the remaining capability, conversation, and cutover gates by row.
+Package 6 execution evidence and stop conditions are recorded in the
+[Package 6 release evidence](conversational-agent-overhaul-p6-release-evidence.md).
 
 - [x] Packages 0–4 are implemented, with the real-store Package 3 release
   exercise still required before production cutover.

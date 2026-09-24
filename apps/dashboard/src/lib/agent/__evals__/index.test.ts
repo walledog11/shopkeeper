@@ -37,6 +37,7 @@ import { validateFixtures } from "./fixture-validator";
 import { readCachedPassingSummary, writePassingSummary } from "./result-cache";
 import {
   evalsEnabled,
+  requestedEvalAgentRuntimeVersion,
   requestedEvalSuite,
   requestedFixtureIds,
   selectFixtures,
@@ -102,6 +103,9 @@ describe.sequential("agent evals", () => {
 
   mkdirSync(dirname(EVAL_REPORT_PATH), { recursive: true });
   writeFileSync(EVAL_REPORT_PATH, "");
+  writeEvalReportLine(
+    `[eval:runtime] agent=${requestedEvalAgentRuntimeVersion() ?? "current"}`,
+  );
 
   const repeats = evalRepeats();
   const confirmations = hardFailureConfirmations();

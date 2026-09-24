@@ -23,6 +23,16 @@ fixture run must include both ceilings:
 EVAL_MAX_USD=0.10 EVAL_MAX_MODEL_CALLS=20 EVAL_FIXTURE=fixture-id npm run test:evals:fixture -w apps/dashboard
 ```
 
+Package 6 runtime comparisons must additionally set
+`EVAL_AGENT_RUNTIME_VERSION=1` or `2`. The dashboard runner passes that version
+through the same planner options used by persisted tasks; version 2 also stops
+planning at a write proposal. The unset value, or `current`, preserves the
+historical eval behavior. Run v1 and v2 from the same commit with identical
+fixture selection, repeats, judges, models, and budgets. Keep
+`AGENT_CAPABILITY_DISCOVERY_MODE=off` and
+`AGENT_PROPOSAL_SUSPENSION_MODE=off` during the comparison so compatibility
+flags do not alter the explicitly selected v1 arm.
+
 ## Release semantics
 
 A release passes only when the dashboard core set and gateway hard case both
@@ -67,7 +77,7 @@ cannot silently diverge. Both paths reject models without a committed price.
 ## Reuse and evidence
 
 Passing per-fixture results are cached only for the exact commit SHA, repeat
-count, and judge mode. Failed jobs save partial passing evidence, so rerunning
+count, judge mode, and selected agent runtime. Failed jobs save partial passing evidence, so rerunning
 the same workflow attempt spends only on unfinished fixtures. A code change
 produces a different SHA and cannot reuse the old certification.
 

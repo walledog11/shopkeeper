@@ -1,6 +1,7 @@
 import type { Fixture } from "./types"
 
 export type EvalSuite = "core" | "full"
+export type EvalAgentRuntimeVersion = 1 | 2
 
 export function requestedEvalSuite(value: string | undefined = process.env.EVAL_SUITE): EvalSuite {
   const normalized = value?.trim().toLowerCase() ?? "full"
@@ -8,6 +9,23 @@ export function requestedEvalSuite(value: string | undefined = process.env.EVAL_
     throw new Error(`Invalid EVAL_SUITE ${JSON.stringify(normalized)}`)
   }
   return normalized
+}
+
+/**
+ * Pins a paid comparison run to the same runtime choice that production stores
+ * on a newly-created task. Unset/"current" preserves the pre-Package-6 eval
+ * behavior so ordinary release gates do not silently change semantics.
+ */
+export function requestedEvalAgentRuntimeVersion(
+  value: string | undefined = process.env.EVAL_AGENT_RUNTIME_VERSION,
+): EvalAgentRuntimeVersion | undefined {
+  const normalized = value?.trim().toLowerCase()
+  if (normalized === undefined || normalized === "" || normalized === "current") {
+    return undefined
+  }
+  if (normalized === "1") return 1
+  if (normalized === "2") return 2
+  throw new Error(`Invalid EVAL_AGENT_RUNTIME_VERSION ${JSON.stringify(normalized)}`)
 }
 
 /**

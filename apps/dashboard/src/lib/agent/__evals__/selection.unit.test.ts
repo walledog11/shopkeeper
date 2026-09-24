@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest"
-import { requestedEvalSuite, requestedFixtureIds, selectFixtures } from "./selection"
+import {
+  requestedEvalAgentRuntimeVersion,
+  requestedEvalSuite,
+  requestedFixtureIds,
+  selectFixtures,
+} from "./selection"
 import type { Fixture } from "./types"
 
 function fixture(id: string, suite: "core" | "extended"): Fixture {
@@ -33,5 +38,13 @@ describe("eval selection", () => {
   it("rejects unknown and out-of-suite fixture names", () => {
     expect(() => selectFixtures(fixtures, "full", new Set(["missing"]))).toThrow(/missing/)
     expect(() => selectFixtures(fixtures, "core", new Set(["extended-a"]))).toThrow(/extended-a/)
+  })
+
+  it("parses an explicit comparison runtime without changing the default", () => {
+    expect(requestedEvalAgentRuntimeVersion(undefined)).toBeUndefined()
+    expect(requestedEvalAgentRuntimeVersion("current")).toBeUndefined()
+    expect(requestedEvalAgentRuntimeVersion(" 1 ")).toBe(1)
+    expect(requestedEvalAgentRuntimeVersion("2")).toBe(2)
+    expect(() => requestedEvalAgentRuntimeVersion("3")).toThrow(/EVAL_AGENT_RUNTIME_VERSION/)
   })
 })

@@ -41,6 +41,9 @@ operation has a distinct provider precondition or recovery mode.
 
 ## Package 6: release gate
 
+Execution evidence is recorded in the
+[Package 6 release evidence](conversational-agent-overhaul-p6-release-evidence.md).
+
 1. Select one controlled workspace with `AGENT_RUNTIME_V2_ORG_IDS` while the
    default remains v1. Both support and dashboard requests now use this
    selector at task creation; existing tasks keep their persisted version.

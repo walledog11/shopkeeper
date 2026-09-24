@@ -27,6 +27,11 @@ on:
         type: choice
         options: [release, targeted, drift, baseline]
         default: release
+      runtime_version:
+        description: 'Agent runtime for Package 6 comparison; current preserves historical eval behavior'
+        type: choice
+        options: [current, '1', '2']
+        default: current
       fixtures:
         description: 'Comma-separated fixture IDs (required for targeted mode)'
         type: string
@@ -118,11 +123,12 @@ jobs:
         # Dispatch inputs reach the shell through env, never through `${{ }}` in
         # the script body: an expression is substituted before bash parses the
         # line, so a quote inside `fixtures` ends the string and the rest of the
-        # input runs as shell. `mode`, `repeats` and `judges` are choice inputs
+        # input runs as shell. `mode`, `runtime_version`, `repeats` and `judges` are choice inputs
         # that GitHub constrains, but they travel the same way so the rule holds
         # with no exception to remember.
         env:
           MODE: ${{ inputs.mode }}
+          RUNTIME_VERSION: ${{ inputs.runtime_version }}
           REPEATS: ${{ inputs.repeats }}
           JUDGES: ${{ inputs.judges }}
           FIXTURES: ${{ inputs.fixtures }}
@@ -145,6 +151,7 @@ jobs:
       - name: Record approved maximums
         env:
           MODE: ${{ inputs.mode }}
+          RUNTIME_VERSION: ${{ inputs.runtime_version }}
           ESTIMATED_CALLS: ${{ steps.budget.outputs.estimated_calls }}
           ESTIMATED_USD: ${{ steps.budget.outputs.estimated_usd }}
           MAX_USD: ${{ inputs.max_usd }}
@@ -153,6 +160,7 @@ jobs:
           {
             echo '## Paid eval authorization'
             printf -- '- Mode: `%s`\n' "$MODE"
+            printf -- '- Agent runtime: `%s`\n' "$RUNTIME_VERSION"
             printf -- '- Expected: **%s calls / $%s**\n' "$ESTIMATED_CALLS" "$ESTIMATED_USD"
             printf -- '- Hard allocation: **%s calls / $%s**\n' "$MAX_MODEL_CALLS" "$MAX_USD"
             echo '- No paid rerun is automatic.'
@@ -170,6 +178,9 @@ jobs:
       EVAL_REPEATS: ${{ inputs.repeats }}
       RUN_JUDGE_EVALS: ${{ inputs.judges == 'on' && '1' || '0' }}
       EVAL_CONFIRM_HARD_FAILURES: '0'
+      EVAL_AGENT_RUNTIME_VERSION: ${{ inputs.runtime_version }}
+      AGENT_CAPABILITY_DISCOVERY_MODE: 'off'
+      AGENT_PROPOSAL_SUSPENSION_MODE: 'off'
       EVAL_MAX_USD: ${{ needs.budget-preflight.outputs.dashboard_max_usd }}
       EVAL_MAX_MODEL_CALLS: ${{ needs.budget-preflight.outputs.dashboard_max_calls }}
       EVAL_RESULT_CACHE_DIR: test-results/eval-cache
@@ -181,8 +192,8 @@ jobs:
       - uses: actions/cache/restore@v4
         with:
           path: test-results/eval-cache
-          key: eval-results-${{ runner.os }}-${{ github.sha }}-targeted-r${{ inputs.repeats }}-j${{ inputs.judges }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: eval-results-${{ runner.os }}-${{ github.sha }}-targeted-r${{ inputs.repeats }}-j${{ inputs.judges }}-
+          key: eval-results-${{ runner.os }}-${{ github.sha }}-targeted-rv${{ inputs.runtime_version }}-r${{ inputs.repeats }}-j${{ inputs.judges }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: eval-results-${{ runner.os }}-${{ github.sha }}-targeted-rv${{ inputs.runtime_version }}-r${{ inputs.repeats }}-j${{ inputs.judges }}-
       - name: Require model credentials
         run: test -n "$ANTHROPIC_API_KEY" && test "$ANTHROPIC_API_KEY" != test-anthropic-key
       - run: npm ci
@@ -197,7 +208,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: test-results/eval-cache
-          key: eval-results-${{ runner.os }}-${{ github.sha }}-targeted-r${{ inputs.repeats }}-j${{ inputs.judges }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: eval-results-${{ runner.os }}-${{ github.sha }}-targeted-rv${{ inputs.runtime_version }}-r${{ inputs.repeats }}-j${{ inputs.judges }}-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Upload complete targeted evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -223,6 +234,9 @@ jobs:
       EVAL_REPEATS: '1'
       RUN_JUDGE_EVALS: '0'
       EVAL_CONFIRM_HARD_FAILURES: '2'
+      EVAL_AGENT_RUNTIME_VERSION: ${{ inputs.runtime_version }}
+      AGENT_CAPABILITY_DISCOVERY_MODE: 'off'
+      AGENT_PROPOSAL_SUSPENSION_MODE: 'off'
       EVAL_MAX_USD: ${{ needs.budget-preflight.outputs.dashboard_max_usd }}
       EVAL_MAX_MODEL_CALLS: ${{ needs.budget-preflight.outputs.dashboard_max_calls }}
       EVAL_RESULT_CACHE_DIR: test-results/eval-cache
@@ -234,8 +248,8 @@ jobs:
       - uses: actions/cache/restore@v4
         with:
           path: test-results/eval-cache
-          key: eval-results-${{ runner.os }}-${{ github.sha }}-release-r1-jgated-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: eval-results-${{ runner.os }}-${{ github.sha }}-release-r1-jgated-
+          key: eval-results-${{ runner.os }}-${{ github.sha }}-release-rv${{ inputs.runtime_version }}-r1-jgated-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: eval-results-${{ runner.os }}-${{ github.sha }}-release-rv${{ inputs.runtime_version }}-r1-jgated-
       - name: Require model credentials
         run: test -n "$ANTHROPIC_API_KEY" && test "$ANTHROPIC_API_KEY" != test-anthropic-key
       - run: npm ci
@@ -255,7 +269,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: test-results/eval-cache
-          key: eval-results-${{ runner.os }}-${{ github.sha }}-release-r1-jgated-${{ github.run_id }}-${{ github.run_attempt }}
+          key: eval-results-${{ runner.os }}-${{ github.sha }}-release-rv${{ inputs.runtime_version }}-r1-jgated-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Upload complete dashboard evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -279,6 +293,7 @@ jobs:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       EVAL_REPEATS: '1'
       EVAL_RETRY_HARD: '1'
+      EVAL_AGENT_RUNTIME_VERSION: ${{ inputs.runtime_version }}
       EVAL_MAX_USD: ${{ needs.budget-preflight.outputs.gateway_max_usd }}
       EVAL_MAX_MODEL_CALLS: ${{ needs.budget-preflight.outputs.gateway_max_calls }}
       REQUIRE_MODEL_EVALS: '1'
@@ -325,11 +340,13 @@ jobs:
           GATEWAY_RESULT: ${{ needs.release-gateway.result }}
           MAX_USD: ${{ inputs.max_usd }}
           MAX_MODEL_CALLS: ${{ inputs.max_model_calls }}
+          RUNTIME_VERSION: ${{ inputs.runtime_version }}
         run: |
           {
             echo '## Release eval conclusion'
             echo "- Dashboard: $DASHBOARD_RESULT"
             echo "- Gateway: $GATEWAY_RESULT"
+            echo "- Agent runtime: $RUNTIME_VERSION"
             printf -- '- Approved maximum: %s / %s calls\n' "$MAX_USD" "$MAX_MODEL_CALLS"
             echo '- A failure is a blocker or targeted-diagnosis input; it does not trigger another paid run.'
           } >> "$GITHUB_STEP_SUMMARY"
@@ -347,6 +364,9 @@ jobs:
       EVAL_REPEATS: '3'
       RUN_JUDGE_EVALS: '1'
       EVAL_CONFIRM_HARD_FAILURES: '0'
+      EVAL_AGENT_RUNTIME_VERSION: ${{ inputs.runtime_version }}
+      AGENT_CAPABILITY_DISCOVERY_MODE: 'off'
+      AGENT_PROPOSAL_SUSPENSION_MODE: 'off'
       EVAL_MAX_USD: ${{ needs.budget-preflight.outputs.dashboard_max_usd }}
       EVAL_MAX_MODEL_CALLS: ${{ needs.budget-preflight.outputs.dashboard_max_calls }}
       EVAL_RESULT_CACHE_DIR: test-results/eval-cache
@@ -358,8 +378,8 @@ jobs:
       - uses: actions/cache/restore@v4
         with:
           path: test-results/eval-cache
-          key: eval-results-${{ runner.os }}-${{ github.sha }}-drift-r3-jall-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: eval-results-${{ runner.os }}-${{ github.sha }}-drift-r3-jall-
+          key: eval-results-${{ runner.os }}-${{ github.sha }}-drift-rv${{ inputs.runtime_version }}-r3-jall-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: eval-results-${{ runner.os }}-${{ github.sha }}-drift-rv${{ inputs.runtime_version }}-r3-jall-
       - run: test -n "$ANTHROPIC_API_KEY" && test "$ANTHROPIC_API_KEY" != test-anthropic-key
       - run: npm ci
       - run: npm run test:services:up
@@ -372,7 +392,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: test-results/eval-cache
-          key: eval-results-${{ runner.os }}-${{ github.sha }}-drift-r3-jall-${{ github.run_id }}-${{ github.run_attempt }}
+          key: eval-results-${{ runner.os }}-${{ github.sha }}-drift-rv${{ inputs.runtime_version }}-r3-jall-${{ github.run_id }}-${{ github.run_attempt }}
       - if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -395,6 +415,7 @@ jobs:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       EVAL_REPEATS: '3'
       EVAL_RETRY_HARD: '0'
+      EVAL_AGENT_RUNTIME_VERSION: ${{ inputs.runtime_version }}
       EVAL_MAX_USD: ${{ needs.budget-preflight.outputs.gateway_max_usd }}
       EVAL_MAX_MODEL_CALLS: ${{ needs.budget-preflight.outputs.gateway_max_calls }}
       REQUIRE_MODEL_EVALS: '1'
@@ -449,6 +470,9 @@ jobs:
       RUN_JUDGE_EVALS: '1'
       UPDATE_EVAL_BASELINE: '1'
       EVAL_CONFIRM_HARD_FAILURES: '0'
+      EVAL_AGENT_RUNTIME_VERSION: ${{ inputs.runtime_version }}
+      AGENT_CAPABILITY_DISCOVERY_MODE: 'off'
+      AGENT_PROPOSAL_SUSPENSION_MODE: 'off'
       EVAL_MAX_USD: ${{ needs.budget-preflight.outputs.dashboard_max_usd }}
       EVAL_MAX_MODEL_CALLS: ${{ needs.budget-preflight.outputs.dashboard_max_calls }}
       REQUIRE_MODEL_EVALS: '1'
@@ -494,6 +518,7 @@ jobs:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       EVAL_REPEATS: '3'
       EVAL_RETRY_HARD: '0'
+      EVAL_AGENT_RUNTIME_VERSION: ${{ inputs.runtime_version }}
       EVAL_MAX_USD: ${{ needs.budget-preflight.outputs.gateway_max_usd }}
       EVAL_MAX_MODEL_CALLS: ${{ needs.budget-preflight.outputs.gateway_max_calls }}
       REQUIRE_MODEL_EVALS: '1'

@@ -1,13 +1,15 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { isJudgeEnabled } from "./fixture-runtime"
+import { requestedEvalAgentRuntimeVersion } from "./selection"
 import type { Fixture, FixtureRunSummary } from "./types"
 
 function cachePath(fixture: Fixture, repeats: number): string | null {
   const directory = process.env.EVAL_RESULT_CACHE_DIR?.trim()
   if (!directory || process.env.UPDATE_EVAL_BASELINE === "1") return null
   const judgeMode = isJudgeEnabled() ? "all-judges" : "gated-judges"
-  return join(directory, `${fixture.id}.r${repeats}.${judgeMode}.json`)
+  const runtimeVersion = requestedEvalAgentRuntimeVersion() ?? "current"
+  return join(directory, `${fixture.id}.runtime-${runtimeVersion}.r${repeats}.${judgeMode}.json`)
 }
 
 export function readCachedPassingSummary(
