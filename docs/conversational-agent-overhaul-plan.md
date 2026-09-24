@@ -72,8 +72,12 @@ POST. A merchant-supplied return-label URL now continues its parked task through
 approval, typed receipt, and gateway send. Turn-journal notes have an idempotent
 identity, while ordinary action
 auditing is no longer a required model tool step. These are incremental Package
-5 results, not completion of its capability or conversational matrix.
-Created 2026-09-11; last updated 2026-09-22.
+5 results, not completion of its capability or conversational matrix. Customer
+profile updates and explicit customer notes now also cover claimed runtime-v2
+revision and approval, current-grant and linked-customer revalidation, confirmed
+and ambiguous provider outcomes, and task-attributed reply delivery in the
+database-backed host matrix.
+Created 2026-09-11; last updated 2026-09-23.
 
 Current checkpoint:
 
@@ -97,7 +101,10 @@ tracks the remaining capability, conversation, and cutover gates by row.
   display Shopify's calculated amount at proposal time, then re-quote and reject
   before reservation or dispatch if it changed. Return and exchange revisions now
   supersede the old proposal and execute only the replacement card's exact inputs.
-  Retained merchant operations and the controlled provider exercise remain.
+  Customer profile updates and explicit notes now cover claimed-task approval,
+  bounded discovery, revoked-grant and changed-linked-customer refusal, confirmed
+  task-attributed delivery, and unknown-outcome reply suppression. Other retained
+  merchant operations and the controlled provider exercise remain.
 - [ ] Package 5 continuity remains: classified topic/entity matches keep
   independent tasks and resume a matching one, while missing or ambiguous
   runtime-v2 classification preserves parked work. Merchant answers, revisions,
@@ -2403,7 +2410,11 @@ Move automatic audit notes/status consequences to the successful-receipt path wi
   mutation. Revised return and exchange cards supersede their original proposal;
   approval executes one provider mutation carrying only the replacement item,
   reason, or variant and completes the same durable task.
-  Retained merchant operations and the remaining matrix cells are still open;
+  Customer profile updates and explicit notes also pass claimed runtime-v2
+  revision/approval host cases for confirmed and ambiguous provider outcomes,
+  revoked write authority, changed linked-customer identity, and attributed
+  delivery. Other retained merchant operations and the remaining matrix cells
+  are still open;
   fulfillment remains isolated from default support selection.
 - [ ] Support multiple requests, task switching, terse follow-ups, explicit preferences, and resumption after waiting for the merchant or customer. Classified ask/entity matching now keeps distinct pending tasks and can return to a single match. An unclassified or ambiguous runtime-v2 follow-up preserves the pending tasks rather than guessing. Merchant answers and revisions from an authorized member continue the exact wait/task and are accepted requests; dismissals are accepted requests that end their proposal wait. A successfully delivered customer question records that customer as the durable answerer, and their next message resumes the exact task even without a classifier hint. Active merchant preferences have source/scope policy coverage, and any authorized organization member can answer a merchant wait from another device or supported surface. The classifier prompt now resolves a prior referent only when exactly one candidate fits and emits deliberately unresolved facts when several fit. Live-model proof that the resulting clear and ambiguous conversations are useful, plus broader channel-switch acceptance evidence, remains.
 - [ ] Stop new actions on cancellation or superseding instructions. Revalidate pending approvals and stale evidence when work resumes. An approval wait ends at the ledger on approval, decline, revision, stop, or superseding customer instruction; stale cards cannot approve a replacement proposal. Cancellation now rechecks live fulfillment before dispatch and records a rejected receipt without a provider POST when the order shipped during the wait. Host cases also cover revoked Shopify write grant, changed workspace cancellation policy, lost member authority, reduced full-refund balance, changed address ownership/fulfillment, depleted return quantity, invalidated exchange replacement, and a changed partial-refund quote. Remaining operation-specific evidence transitions stay tracked per capability row.

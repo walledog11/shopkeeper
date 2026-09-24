@@ -448,6 +448,41 @@ describe("actionAuthorityBlock", () => {
   });
 });
 
+describe("customer-record execution identity", () => {
+  const linkedSupportCtx = {
+    orgId: "org_1",
+    orgName: "Test Store",
+    recentMessages: [],
+    shopify: {
+      shop: "test.myshopify.com",
+      accessToken: "token",
+      grantedScopes: ["write_customers"],
+    },
+    escalate: vi.fn(),
+    thread: {
+      id: "thread_1", status: "open", channelType: "email", tag: null,
+      aiSummary: null, shopifyCustomerId: "1234",
+    },
+    customer: { id: "customer_1", name: "Jane", platformId: "jane@example.com" },
+    openThreadCount: 1,
+    recentOrders: [],
+    linkedShopifyCustomerName: "Jane",
+    kbArticles: [],
+    merchantPreferences: [],
+  } as BaseAgentContext;
+
+  it.each([
+    ["update_shopify_customer_info", { customer_id: "9999", email: "other@example.com" }],
+    ["add_shopify_customer_note", { customer_id: "9999", note: "Wrong customer" }],
+  ])("refuses %s when the conversation is now linked to another customer", async (tool, input) => {
+    const result = await executeToolWithStatus(tool, input, linkedSupportCtx);
+
+    expect(result).toMatchObject({ status: "policy_block" });
+    expect(result.result).toContain("linked to this conversation changed");
+    expect(result.result).toContain("9999");
+  });
+});
+
 // Selection decides what the model is offered; execution decides what may run.
 // Discovery makes the first set smaller and expandable, which is only safe
 // because the second check is independent of it — so a tool call the selection

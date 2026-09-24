@@ -47,7 +47,7 @@ import {
   type ToolResult,
   type ToolStatus,
 } from "./result.js";
-import type { BaseAgentContext } from "../agent-context.js";
+import type { BaseAgentContext, SupportContext } from "../agent-context.js";
 import type {
   AgentToolDefinition,
   KnowledgeBaseToolArticle,
@@ -68,6 +68,11 @@ type PreparedToolCall =
 
 function formatPolicyError(message: string): string {
   return `Error: ${message}`;
+}
+
+function supportContext(ctx: BaseAgentContext): SupportContext | null {
+  const candidate = ctx as Partial<SupportContext>;
+  return candidate.thread ? candidate as SupportContext : null;
 }
 
 /**
@@ -142,6 +147,23 @@ async function enforceToolPolicy(
     verifiedOrders: ctx.verifiedOrders,
   });
   if (staticResult.blocked) return formatPolicyError(staticResult.reason);
+
+  const support = supportContext(ctx);
+  if (
+    (definition.name === "update_shopify_customer_info"
+      || definition.name === "add_shopify_customer_note")
+    && support?.thread.shopifyCustomerId
+  ) {
+    const requestedCustomerId = (input as { customer_id?: unknown }).customer_id;
+    if (
+      typeof requestedCustomerId !== "string"
+      || requestedCustomerId !== support.thread.shopifyCustomerId
+    ) {
+      return formatPolicyError(
+        `the Shopify customer linked to this conversation changed; customer ${String(requestedCustomerId ?? "unknown")} is no longer authorized for this task.`,
+      );
+    }
+  }
 
   return null;
 }

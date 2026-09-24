@@ -21,7 +21,7 @@ operation has a distinct provider precondition or recovery mode.
 | Cancellation | Approved fake-provider receipt and gateway send; shipped and partially shipped order, revoked-grant, and changed-workspace-policy waits refuse provider dispatch; a lost provider response after a committed cancellation is confirmed by a fresh read; an unconfirmed provider result leaves one unknown cancellation, stops the success reply, and keeps the task reconciling; failed/unknown customer send leaves one committed cancellation; retrying a definite failed attributed email sends the same response row without repeating cancellation | Provider reconciliation for unknown delivery |
 | Return and exchange | Approved fake-provider receipt and gateway send; a return or exchange whose returnable quantity falls to zero during approval records a rejected receipt without return creation; an exchange whose replacement price rises is also refused; an incomplete return or exchange creation response records an unknown receipt, stops the customer success reply, and leaves the task reconciling; probes observe provider state but preserve the handoff when required receipt facts cannot be rebuilt; shared attributed delivery recovery does not invoke the effect executor; revising either operation supersedes the old proposal and approval executes one mutation with only the replacement card's exact inputs | Controlled real-provider exercise only |
 | Return-label attachment | Typed receipt/dispatch boundary; merchant answer continues the parked task through approval and provider receipt; confirmed attachment gets an attributed gateway send, while an ambiguous provider outcome leaves the task reconciling and sends no label link; the host case hands that unknown action to reconciliation, preserves it for review when the receipt cannot be rebuilt, and does not repeat the mutation; shared attributed delivery recovery retries the response row without invoking the effect executor | Controlled real-provider exercise only |
-| Customer updates and explicit notes | Typed receipts | Claimed-task approval, grant/identity changes, provider outcome and delivery |
+| Customer updates and explicit notes | Typed receipts; bounded discovery only for explicit customer-record requests; claimed runtime-v2 revision and approval; revoked write grant and changed linked-customer identity refuse provider dispatch; confirmed outcomes produce grounded task-attributed delivery; ambiguous outcomes remain reconciling and suppress replies | Controlled real-provider exercise only |
 | Order creation and editing | Typed receipts | Isolated merchant selection, approval, operation-specific stale state and recovery |
 | Gift card and fulfillment | Typed receipts; isolated from default support selection | Merchant-only path, approval, financial/fulfillment preflight, recovery and delivery |
 | Internal thread updates and communication | Typed receipts and shared send boundary; failed/unknown send after cancellation is separate from the committed commercial effect; synchronous agent reply records its provider-attempt boundary, stale attempted sends become unknown, and concurrent definite-failure retries have one claimant; the real retry route and outbound worker deliver the same failed task-attributed response while preserving one committed cancellation action | Receipt-driven automatic status consequences; provider reconciliation for unknown sends |
@@ -209,3 +209,21 @@ No live-model or real-provider gate is claimed by the local fake-provider tests.
   mutation, and sends no customer label link.
 - All 13 `operator-answer-replan.test.ts` cases passed with the local database,
   followed by gateway typecheck, lint, and `git diff --check`.
+- Customer profile updates and explicit customer notes now run through the same
+  claimed runtime-v2 continuation boundary. Eight database-backed host cases
+  cover confirmed and ambiguous provider outcomes, a revoked `write_customers`
+  grant, and a conversation whose linked Shopify customer changes during the
+  approval wait. Confirmed receipts ground a task-attributed customer reply;
+  ambiguous receipts leave the task reconciling and suppress that reply; both
+  authority changes refuse the provider mutation.
+- The shared executor now revalidates a customer-record action against the
+  conversation's current linked Shopify customer immediately before dispatch.
+  Threadless and explicitly targeted merchant operations retain their prior
+  behavior. Planner-selection tests also prove that both tools are discoverable
+  for explicit requests and that ordinary order-status help does not expose the
+  note tool.
+- All 21 `operator-answer-replan.test.ts` host cases passed after adding the
+  eight customer-record variants. `npm run verify:pr` then passed static checks,
+  workspace tests, 12 browser smoke tests, every coverage gate (including 1,448
+  gateway tests and 1,455 agent tests), and all production builds. This is local
+  fake-provider evidence; the controlled real-provider exercise remains unrun.

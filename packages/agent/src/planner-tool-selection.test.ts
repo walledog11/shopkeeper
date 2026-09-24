@@ -283,6 +283,15 @@ describe("discoverCapabilityTools", () => {
     expect(discovered(MERCHANT_TOOLS, "how support is doing this week")).toContain("get_support_stats");
   });
 
+  it("discovers customer-record writes only from explicit customer capabilities", () => {
+    expect(discovered(SUPPORT_TOOLS, "update the linked customer's email address"))
+      .toContain("update_shopify_customer_info");
+    expect(discovered(SUPPORT_TOOLS, "append an explicit note to the Shopify customer record"))
+      .toContain("add_shopify_customer_note");
+    expect(discovered(SUPPORT_TOOLS, "where is this customer's order"))
+      .not.toContain("add_shopify_customer_note");
+  });
+
   it("never discovers customer or order data for an anonymous storefront visitor", () => {
     for (const capability of [
       "refund my order",
