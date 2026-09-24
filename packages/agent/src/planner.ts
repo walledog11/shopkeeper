@@ -238,7 +238,11 @@ export async function planAgent(
     maxTokensPerCall: 4096,
     settings,
     usageTotals,
-    captureReprompt: !operatorMode && !suspendAtProposal,
+    // Proposal suspension only ends the loop when a write is captured. Reads
+    // still need the normal one-time terminal reprompt when the model ends its
+    // turn without send_reply/ask_operator/escalate_to_human; otherwise a v2
+    // read-and-reply task can strand the customer after the lookup succeeds.
+    captureReprompt: !operatorMode,
     captureSuspendAtProposal: suspendAtProposal,
     captureStopToolNames: tools.some((tool) => tool.name === NAMESPACE_MISS_TOOL_NAME)
       ? [NAMESPACE_MISS_TOOL_NAME]

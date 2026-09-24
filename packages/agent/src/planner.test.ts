@@ -535,17 +535,25 @@ describe("planAgent capture loop", () => {
     expect(plan.suspendedAtProposal).toBe(true);
   });
 
-  it("does not ask that path for a terminal tool when nothing was proposed", async () => {
+  it("re-prompts the suspension path when no write or terminal tool was proposed", async () => {
     const injectedLogger = makeLogger();
     installAgentLogger(injectedLogger);
-    mockCreate.mockResolvedValueOnce(endTurn("I'll take a look."));
+    mockCreate
+      .mockResolvedValueOnce(singleToolUse("search_shopify_products", { query: "Pencil Half Zip" }, "tu_product"))
+      .mockResolvedValueOnce(endTurn("The medium is available."))
+      .mockResolvedValueOnce(singleToolUse("send_reply", { text: "The medium is available." }, "tu_reply"));
 
-    await planAgent(makeCtx(), "Where is my order?", AGENT_SETTINGS_DEFAULTS, {
+    const plan = await planAgent(makeCtx(), "Is the navy Pencil Half Zip available in medium?", AGENT_SETTINGS_DEFAULTS, {
       suspendAtProposal: true,
     });
 
-    expect(mockCreate).toHaveBeenCalledTimes(1);
-    expect(completeLogPayload(injectedLogger)).toMatchObject({ reprompted: false });
+    expect(mockCreate).toHaveBeenCalledTimes(3);
+    expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual([
+      "search_shopify_products",
+      "send_reply",
+    ]);
+    expect(plan.suspendedAtProposal).toBeUndefined();
+    expect(completeLogPayload(injectedLogger)).toMatchObject({ iterations: 3, reprompted: true });
   });
 
   it("re-prompts once for a terminal tool when a support turn stalls", async () => {

@@ -104,6 +104,21 @@ Comparison attempt notes:
 - `ffa00508` is preliminary v1 evidence, not the final comparison arm, because
   the assertion repair changes the evidence-producing commit. Both arms must be
   rerun from the repair commit before Gate B can pass.
+- Commit `81732848`, runtime v1: all 51 dashboard fixtures passed with runtime
+  `1` recorded, using $0.5024 and 106 model calls under the $0.85/114 dashboard
+  allocation. The bounded gateway hard control passed.
+- Commit `81732848`, runtime v2: the run was stopped after
+  `storefront-guest-product-search` failed both confirmation attempts. The
+  planner performed the product read but emitted no `send_reply`, causing
+  autonomy to fall back to review. The v2 gateway control was not run after the
+  dashboard blocker. Because the process was interrupted immediately, it did
+  not emit a trustworthy aggregate spend/call summary; both hard caps remained
+  active throughout the run.
+- Root cause: proposal suspension also disabled the normal one-time terminal
+  reprompt for read-and-reply support turns. The repair keeps immediate write
+  suspension while restoring that reprompt whenever no write or terminal tool
+  was proposed. This code change requires another same-commit comparison; no
+  pre-repair arm is final Gate B evidence.
 
 ## Gate C — controlled real-provider and delivery exercise
 
@@ -188,3 +203,5 @@ architecture/product documentation describes the single active runtime.
 | 2026-09-24 | First runtime-v2 comparison attempt | Stopped on an evaluator contract mismatch: v2 correctly suspended at the write proposal while the fixture still demanded a speculative reply. No production/provider action occurred |
 | 2026-09-24 | Runtime-v2 assertion repair verification | `npm run verify:pr` passed static checks, all unit and Node contract tests, 12 browser smoke tests, coverage gates, and all production builds; the dashboard suite includes 810 unit tests and the proposal-specific focused tests passed |
 | 2026-09-24 | Controlled-target read-only preflight | Supplied organization is active with exactly one active Shopify integration; the redacted customer identity resolves to exactly one non-deleted local record and one provider customer. The provider note before-state is empty; no mutation performed |
+| 2026-09-24 | Same-commit comparison attempt on `81732848` | Runtime v1 dashboard passed 51/51 at $0.5024 and 106 calls; gateway control passed. Runtime v2 exposed a confirmed read-and-reply regression and was stopped before completion or gateway. No production/provider action occurred |
+| 2026-09-24 | Runtime-v2 read-and-reply repair verification | Focused planner/eval tests passed, followed by full `npm run verify:pr`: static checks, typechecks, all unit and Node contract tests, 12 browser smoke tests, coverage gates, and production builds passed |
