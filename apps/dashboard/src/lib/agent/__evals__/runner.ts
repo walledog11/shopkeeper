@@ -203,7 +203,9 @@ async function runFixture(
     })
     currentPhase = null
 
-    const planCheck = collectPlanExpectationFailures(fixture, plan)
+    const planCheck = collectPlanExpectationFailures(fixture, plan, {
+      allowSuspendedWriteProposal: runtimeVersion === 2,
+    })
     failures.push(...planCheck.failures)
     if (planCheck.failures.length > 0) failureKind = "model_behavior"
     const rubricChecks = fixture.expectedRubric && planCheck.replyText.length > 0
@@ -238,7 +240,9 @@ async function runFixture(
       }
     }
 
-    const expectedActions = fixture.expectedPlan.expectedAgentActions
+    const expectedActions = planCheck.suspendedWriteProposal
+      ? fixture.expectedPlan.expectedAgentActions?.filter(action => action.tool !== "send_reply")
+      : fixture.expectedPlan.expectedAgentActions
     if (expectedActions) {
       const runMode = inferRunMode(expectedActions)
       currentPhase = usage.runUsage

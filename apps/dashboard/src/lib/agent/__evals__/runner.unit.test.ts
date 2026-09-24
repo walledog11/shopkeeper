@@ -185,3 +185,45 @@ describe("classification expectations", () => {
     ]);
   });
 });
+
+describe("runtime-v2 proposal expectations", () => {
+  const fixture: Fixture = {
+    id: "suspended-proposal",
+    description: "v2 stops at a write proposal",
+    suite: "core",
+    setup: { channelType: "email", messages: [] },
+    instruction: "Change the address",
+    expectedPlan: {
+      mustCallTools: ["update_shopify_order_address", "send_reply"],
+      mustCallToolsInOrder: ["update_shopify_order_address", "send_reply"],
+      replyMustInclude: ["updated"],
+    },
+  };
+  const proposal: AgentPlan = {
+    instruction: "Change the address",
+    steps: [],
+    rawToolCalls: [{
+      id: "write-1",
+      name: "update_shopify_order_address",
+      input: { order_id: "order-1" },
+    }],
+  };
+
+  it("keeps the legacy reply requirement by default", () => {
+    const result = collectPlanExpectationFailures(fixture, proposal);
+    expect(result.suspendedWriteProposal).toBe(false);
+    expect(result.failures).toContain(
+      'expected tool "send_reply" to be called; called: [update_shopify_order_address({"order_id":"order-1"})]',
+    );
+  });
+
+  it("compares a v2 write proposal without requiring speculative reply text", () => {
+    expect(collectPlanExpectationFailures(fixture, proposal, {
+      allowSuspendedWriteProposal: true,
+    })).toEqual({
+      failures: [],
+      replyText: "",
+      suspendedWriteProposal: true,
+    });
+  });
+});

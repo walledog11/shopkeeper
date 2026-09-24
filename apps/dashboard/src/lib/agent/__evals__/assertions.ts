@@ -70,7 +70,8 @@ export function mutativeIntentActionFailures(params: {
 export function collectPlanExpectationFailures(
   fixture: Fixture,
   plan: AgentPlan,
-): { failures: string[]; replyText: string } {
+  options?: { allowSuspendedWriteProposal?: boolean },
+): { failures: string[]; replyText: string; suspendedWriteProposal: boolean } {
   const failures: string[] = []
   const calledTools = plan.rawToolCalls.map(toolCall => toolCall.name)
   const calledToolDetails = plan.rawToolCalls
@@ -84,6 +85,9 @@ export function collectPlanExpectationFailures(
     ? String((sendReplyCall.input as { text?: unknown }).text ?? "")
     : ""
   const expected = fixture.expectedPlan
+  const suspendedWriteProposal = options?.allowSuspendedWriteProposal === true
+    && plan.rawToolCalls.some(toolCall => TOOL_CATEGORIES[toolCall.name] === "action")
+    && !calledToolSet.has("send_reply")
 
   if (expected.mustBeValid === true && plan.validation?.status !== "valid") {
     failures.push(`expected an explicitly valid plan; got ${plan.validation?.status ?? "legacy/unknown"}`)
@@ -102,6 +106,7 @@ export function collectPlanExpectationFailures(
   }
 
   for (const tool of expected.mustCallTools ?? []) {
+    if (suspendedWriteProposal && tool === "send_reply") continue
     if (!calledToolSet.has(tool)) {
       failures.push(`expected tool "${tool}" to be called; called: [${calledToolDetails}]`)
     }
@@ -113,7 +118,12 @@ export function collectPlanExpectationFailures(
   }
   if (
     expected.mustCallToolsInOrder?.length
-    && !isSubsequence(expected.mustCallToolsInOrder, calledTools)
+    && !isSubsequence(
+      suspendedWriteProposal
+        ? expected.mustCallToolsInOrder.filter(tool => tool !== "send_reply")
+        : expected.mustCallToolsInOrder,
+      calledTools,
+    )
   ) {
     failures.push(
       `expected tool order [${expected.mustCallToolsInOrder.join(", ")}] not found as subsequence; called: [${calledTools.join(", ")}]`,
@@ -158,17 +168,17 @@ export function collectPlanExpectationFailures(
       )
     }
   }
-  for (const phrase of expected.replyMustInclude ?? []) {
+  for (const phrase of suspendedWriteProposal ? [] : expected.replyMustInclude ?? []) {
     if (!replyText.toLowerCase().includes(phrase.toLowerCase())) {
       failures.push(`reply missing "${phrase}"; reply was: "${replyText}"`)
     }
   }
-  for (const phrase of expected.replyMustNotInclude ?? []) {
+  for (const phrase of suspendedWriteProposal ? [] : expected.replyMustNotInclude ?? []) {
     if (replyText.toLowerCase().includes(phrase.toLowerCase())) {
       failures.push(`reply contained forbidden "${phrase}"; reply was: "${replyText}"`)
     }
   }
-  return { failures, replyText }
+  return { failures, replyText, suspendedWriteProposal }
 }
 
 export function isAgentActionSubsequence(

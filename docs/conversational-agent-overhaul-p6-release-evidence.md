@@ -85,6 +85,26 @@ Record workflow run IDs and artifact names here. A local or CI result is not a
 pass unless the runtime version appears in the ledger/report and every selected
 fixture reaches a conclusive result.
 
+Comparison attempt notes:
+
+- Commit `ffa00508`, runtime v1: all 51 dashboard core fixtures passed in one
+  repeat, using $0.8428 and 104 model calls under the $0.85/114 dashboard
+  allocation. The gateway hard control also passed under its $0.05/6
+  allocation.
+- The first runtime-v2 attempt was stopped after the first mutative mismatch.
+  The model correctly suspended at `update_shopify_order_address`; the legacy
+  fixture incorrectly required the speculative `send_reply` that runtime v2 is
+  designed to omit. The run was interrupted rather than spending the rest of
+  its budget on structurally invalid assertions.
+- The runner now treats a v2 action-only plan as a suspended write proposal:
+  proposal inputs and forbidden actions remain gated, while speculative reply
+  and reply-action expectations are omitted. Provider/execution correctness
+  remains covered by deterministic receipt and host tests rather than being
+  conflated with this model-decision comparison.
+- `ffa00508` is preliminary v1 evidence, not the final comparison arm, because
+  the assertion repair changes the evidence-producing commit. Both arms must be
+  rerun from the repair commit before Gate B can pass.
+
 ## Gate C — controlled real-provider and delivery exercise
 
 Preconditions:
@@ -164,3 +184,6 @@ architecture/product documentation describes the single active runtime.
 | 2026-09-24 | Production read-only inventory, complete UTC window 2026-09-10 through 2026-09-23 | No unknown action, stale claim, duplicate operation key, or unresolved reservation. Compatibility inventory: 37 cached plans, 10 pending executions, 247 actions without execution IDs, 730 without operation keys; one failed and one unknown historical email delivery remain |
 | 2026-09-24 | `npm run verify:pr` with local socket access | Passed static checks, all unit and Node contract tests, 12 browser smoke tests, coverage gates, and production builds. The first attempt stopped at browser startup only because local services had been shut down and sandbox socket access was denied |
 | 2026-09-24 | Release-owner authorization | Controlled organization/customer/destination selected; one non-financial customer-note mutation approved; v1 and v2 comparison arms approved at $0.90 / 120 calls each |
+| 2026-09-24 | Preliminary runtime-v1 release eval on `ffa00508` | Dashboard 51/51, $0.8428, 104 calls; gateway hard control passed. Superseded as final comparison evidence by the v2 assertion repair |
+| 2026-09-24 | First runtime-v2 comparison attempt | Stopped on an evaluator contract mismatch: v2 correctly suspended at the write proposal while the fixture still demanded a speculative reply. No production/provider action occurred |
+| 2026-09-24 | Runtime-v2 assertion repair verification | `npm run verify:pr` passed static checks, all unit and Node contract tests, 12 browser smoke tests, coverage gates, and all production builds; the dashboard suite includes 810 unit tests and the proposal-specific focused tests passed |
