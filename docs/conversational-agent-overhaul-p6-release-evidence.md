@@ -123,6 +123,18 @@ Comparison attempt notes:
   `storefront-guest-product-search` fixture passed 1/1 with runtime `2`
   recorded, using $0.0072 and 2 model calls under the approved $0.07/20 ceiling.
   A fresh commit-specific result cache prevented reuse of pre-fix evidence.
+- Commit `6fa7d9ae`, runtime-v1 comparison attempt: 50 fixture tests completed
+  successfully and one plan chose `create_return` instead of the explicitly
+  requested `create_refund`. The evaluator then attempted to execute that
+  already-invalid plan, reached an intentionally unsimulated tool, and
+  reclassified the model miss as infrastructure instead of applying the two-run
+  confirmation policy. The arm stopped at $0.8294 and 101 calls under its
+  $0.85/114 dashboard allocation; gateway and runtime v2 were not run.
+- The evaluator now executes expected AgentAction checks only after plan-shape
+  assertions pass. An invalid plan remains model-behavior evidence eligible for
+  confirmation, and an unexpected action cannot fall through to a provider
+  adapter. Full free verification passed after this repair. This code change
+  again requires both final comparison arms to use a new matching commit.
 
 ## Gate C — controlled real-provider and delivery exercise
 
@@ -210,3 +222,5 @@ architecture/product documentation describes the single active runtime.
 | 2026-09-24 | Same-commit comparison attempt on `81732848` | Runtime v1 dashboard passed 51/51 at $0.5024 and 106 calls; gateway control passed. Runtime v2 exposed a confirmed read-and-reply regression and was stopped before completion or gateway. No production/provider action occurred |
 | 2026-09-24 | Runtime-v2 read-and-reply repair verification | Focused planner/eval tests passed, followed by full `npm run verify:pr`: static checks, typechecks, all unit and Node contract tests, 12 browser smoke tests, coverage gates, and production builds passed |
 | 2026-09-24 | Targeted runtime-v2 repair check on `c772602f` | `storefront-guest-product-search` passed 1/1 with runtime `2`, $0.0072 spend, and 2 model calls. No confirmation retry, production action, or provider mutation occurred |
+| 2026-09-24 | Runtime-v1 comparison attempt on `6fa7d9ae` | Stopped after one plan-shape miss was misclassified as infrastructure by executing an unexpected unsimulated tool. $0.8294 and 101 dashboard calls used; no gateway, runtime-v2, production, or provider action followed |
+| 2026-09-24 | Invalid-plan execution guard | Focused tests and full `npm run verify:pr` passed; invalid eval plans are no longer executed and remain eligible for the documented model-failure confirmation policy |

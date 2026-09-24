@@ -129,6 +129,16 @@ function createEvalUsage(): EvalUsage {
   }
 }
 
+export function shouldVerifyExpectedActions(
+  expectedActions: Fixture["expectedPlan"]["expectedAgentActions"],
+  planFailureCount: number,
+): expectedActions is NonNullable<Fixture["expectedPlan"]["expectedAgentActions"]> {
+  // A plan-shape failure is already conclusive model behavior. Executing that
+  // invalid plan can reach an unexpected, intentionally unsimulated tool and
+  // misclassify the model miss as infrastructure, bypassing confirmations.
+  return Boolean(expectedActions) && planFailureCount === 0
+}
+
 function recordJudgeUsage(usage: EvalUsage, judged: {
   usage: PhaseUsage
 }) {
@@ -243,7 +253,7 @@ async function runFixture(
     const expectedActions = planCheck.suspendedWriteProposal
       ? fixture.expectedPlan.expectedAgentActions?.filter(action => action.tool !== "send_reply")
       : fixture.expectedPlan.expectedAgentActions
-    if (expectedActions) {
+    if (shouldVerifyExpectedActions(expectedActions, planCheck.failures.length)) {
       const runMode = inferRunMode(expectedActions)
       currentPhase = usage.runUsage
       await executeRunForFixture({

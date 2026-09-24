@@ -7,6 +7,7 @@ import {
   hardFailureConfirmations,
   mutativeIntentActionFailures,
   selectBaselineFixtures,
+  shouldVerifyExpectedActions,
   summarizeGates,
   summarizeResults,
 } from "./runner";
@@ -225,5 +226,22 @@ describe("runtime-v2 proposal expectations", () => {
       replyText: "",
       suspendedWriteProposal: true,
     });
+  });
+});
+
+describe("fixture action verification", () => {
+  const expectedActions: NonNullable<Fixture["expectedPlan"]["expectedAgentActions"]> = [{
+    tool: "create_refund",
+    status: "success",
+    mode: "auto_executed",
+  }];
+
+  it("does not execute a plan that already failed its shape assertions", () => {
+    expect(shouldVerifyExpectedActions(expectedActions, 1)).toBe(false);
+  });
+
+  it("verifies expected action rows only after the plan shape passes", () => {
+    expect(shouldVerifyExpectedActions(expectedActions, 0)).toBe(true);
+    expect(shouldVerifyExpectedActions(undefined, 0)).toBe(false);
   });
 });
