@@ -119,6 +119,10 @@ Comparison attempt notes:
   suspension while restoring that reprompt whenever no write or terminal tool
   was proposed. This code change requires another same-commit comparison; no
   pre-repair arm is final Gate B evidence.
+- Commit `c772602f`, targeted runtime-v2 repair check: the previously failing
+  `storefront-guest-product-search` fixture passed 1/1 with runtime `2`
+  recorded, using $0.0072 and 2 model calls under the approved $0.07/20 ceiling.
+  A fresh commit-specific result cache prevented reuse of pre-fix evidence.
 
 ## Gate C — controlled real-provider and delivery exercise
 
@@ -205,3 +209,4 @@ architecture/product documentation describes the single active runtime.
 | 2026-09-24 | Controlled-target read-only preflight | Supplied organization is active with exactly one active Shopify integration; the redacted customer identity resolves to exactly one non-deleted local record and one provider customer. The provider note before-state is empty; no mutation performed |
 | 2026-09-24 | Same-commit comparison attempt on `81732848` | Runtime v1 dashboard passed 51/51 at $0.5024 and 106 calls; gateway control passed. Runtime v2 exposed a confirmed read-and-reply regression and was stopped before completion or gateway. No production/provider action occurred |
 | 2026-09-24 | Runtime-v2 read-and-reply repair verification | Focused planner/eval tests passed, followed by full `npm run verify:pr`: static checks, typechecks, all unit and Node contract tests, 12 browser smoke tests, coverage gates, and production builds passed |
+| 2026-09-24 | Targeted runtime-v2 repair check on `c772602f` | `storefront-guest-product-search` passed 1/1 with runtime `2`, $0.0072 spend, and 2 model calls. No confirmation retry, production action, or provider mutation occurred |
