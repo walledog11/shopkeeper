@@ -175,6 +175,11 @@ function acquireShopToken(shop: string): Promise<void> {
   });
 }
 
+export function resetShopRequestPacingForTests(): void {
+  for (const bucket of shopBuckets.values()) clearTimeout(bucket.timer);
+  shopBuckets.clear();
+}
+
 async function fetchWithTimeout(
   url: string,
   init: RequestInit,
