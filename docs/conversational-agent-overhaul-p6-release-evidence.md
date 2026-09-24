@@ -135,6 +135,18 @@ Comparison attempt notes:
   confirmation, and an unexpected action cannot fall through to a provider
   adapter. Full free verification passed after this repair. This code change
   again requires both final comparison arms to use a new matching commit.
+- Commit `7725cf0e`, runtime-v1 comparison attempt: the free preflight and
+  gateway hard control passed. The dashboard completed every fixture, but the
+  semantic judge rejected both confirmations of `continuity-ambiguous-yes`.
+  The model safely asked which action the customer wanted and executed neither;
+  the fixture transcript had asked two independent yes/no questions, so the
+  judge reasonably read a single “Yes” as approval for both while the rubric
+  required clarification. Runtime v2 was cancelled after its free preflight and
+  before either paid job. The fixture now presents an actual either/or question;
+  both comparison arms must run from the corrected matching commit. The fixture
+  validator passed all 13 cases and `npm run verify:pr` passed after local test
+  services were restored, including 12 browser smoke tests, coverage gates, and
+  production builds.
 
 ## Gate C — controlled real-provider and delivery exercise
 
@@ -224,3 +236,5 @@ architecture/product documentation describes the single active runtime.
 | 2026-09-24 | Targeted runtime-v2 repair check on `c772602f` | `storefront-guest-product-search` passed 1/1 with runtime `2`, $0.0072 spend, and 2 model calls. No confirmation retry, production action, or provider mutation occurred |
 | 2026-09-24 | Runtime-v1 comparison attempt on `6fa7d9ae` | Stopped after one plan-shape miss was misclassified as infrastructure by executing an unexpected unsimulated tool. $0.8294 and 101 dashboard calls used; no gateway, runtime-v2, production, or provider action followed |
 | 2026-09-24 | Invalid-plan execution guard | Focused tests and full `npm run verify:pr` passed; invalid eval plans are no longer executed and remain eligible for the documented model-failure confirmation policy |
+| 2026-09-24 | Runtime-v1 comparison attempt on `7725cf0e` | Free preflight and gateway passed; dashboard stopped at 51/53 because both confirmations of `continuity-ambiguous-yes` exposed a contradictory transcript/rubric rather than an unsafe action. Runtime v2 was cancelled before paid jobs; the shared fixture was corrected before another comparison |
+| 2026-09-24 | Ambiguous-continuation fixture repair | Fixture validation passed 13/13, then `npm run verify:pr` passed static checks, all unit and Node contract tests, 12 browser smoke tests, coverage gates, and production builds after the stopped local test services were restored |

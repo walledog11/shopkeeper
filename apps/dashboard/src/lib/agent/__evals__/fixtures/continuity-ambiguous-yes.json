@@ -25,11 +25,11 @@
     "messages": [
       {
         "senderType": "customer",
-        "contentText": "For order #5002 I might return the lamp, and I also need the chair sent to my new address."
+        "contentText": "For order #5002, I'm considering either returning the lamp or having the chair sent to 44 Pine Street."
       },
       {
         "senderType": "agent",
-        "contentText": "I can open the lamp return. I can also update the unshipped chair to 44 Pine Street. Do you want me to open the return? And should I change the chair's address?"
+        "contentText": "I can help with either option. Should I open the lamp return, or update the unshipped chair's address to 44 Pine Street?"
       },
       {
         "senderType": "customer",
