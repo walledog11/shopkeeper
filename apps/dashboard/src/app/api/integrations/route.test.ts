@@ -18,6 +18,12 @@ vi.mock('@clerk/nextjs/server', () => ({
   clerkClient: vi.fn(),
 }));
 
+// An unclaimed probe slot skips the live Shopify health probe; without the mock
+// the unreachable test Upstash host costs ~4.3s of client retry backoff.
+vi.mock('@/lib/server/redis', () => ({
+  getRedis: vi.fn(() => ({ set: vi.fn(async () => null) })),
+}));
+
 import { auth } from '@clerk/nextjs/server';
 import { GET, POST } from './route';
 

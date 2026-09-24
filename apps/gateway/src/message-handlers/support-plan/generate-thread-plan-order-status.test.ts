@@ -64,6 +64,15 @@ import { buildGatewayPlanExecutionDeps } from '../operator/agent-turn-deps.js';
 const testOrgs = createTestOrgTracker();
 let providerFetch: ReturnType<typeof vi.fn>;
 
+// The Shopify client paces requests with an in-process token bucket per shop
+// that is never reset, so a shared domain drains its burst early in the file
+// and every later mocked request waits ~500ms for a refill.
+const shopDomain = () => `fixture-${randomUUID()}.myshopify.com`;
+
+// Context pre-fetches the customer's name and tolerates any failure. A thrown
+// fetch is retried after a 500ms sleep; a 404 is not.
+const customerNotFound = () => new Response(JSON.stringify({ errors: 'Not Found' }), { status: 404 });
+
 const order = {
   id: 9000001001,
   name: '#1001',
@@ -167,6 +176,7 @@ beforeEach(() => {
         headers: { 'content-type': 'application/json' },
       });
     }
+    if (url.includes('/customers/1234.json')) return customerNotFound();
     throw new Error(`Unexpected external request: ${url}`);
   });
   vi.stubGlobal('fetch', providerFetch);
@@ -193,7 +203,7 @@ describe('durable order-status host path', () => {
     });
     await createTestIntegration(org.id, {
       platform: 'shopify',
-      externalAccountId: 'test-store.myshopify.com',
+      externalAccountId: shopDomain(),
       accessToken: 'shpat_test',
       metadata: { oauthScopes: ['read_orders'] },
     });
@@ -379,7 +389,7 @@ describe('durable order-status host path', () => {
     });
     await createTestIntegration(org.id, {
       platform: 'shopify',
-      externalAccountId: 'test-store.myshopify.com',
+      externalAccountId: shopDomain(),
       accessToken: 'shpat_test',
       metadata: { oauthScopes: ['read_products'] },
     });
@@ -577,7 +587,7 @@ describe('durable order-status host path', () => {
     });
     await createTestIntegration(org.id, {
       platform: 'shopify',
-      externalAccountId: 'test-store.myshopify.com',
+      externalAccountId: shopDomain(),
       accessToken: 'shpat_test',
       metadata: { oauthScopes: ['read_orders', 'read_products'] },
     });
@@ -714,7 +724,7 @@ describe('durable order-status host path', () => {
     await db.organization.update({ where: { id: org.id }, data: { settings } });
     await createTestIntegration(org.id, {
       platform: 'shopify',
-      externalAccountId: 'test-store.myshopify.com',
+      externalAccountId: shopDomain(),
       accessToken: 'shpat_test',
       metadata: { oauthScopes: ['read_orders', 'write_orders', 'read_customers', 'write_customers'] },
     });
@@ -918,7 +928,7 @@ describe('durable order-status host path', () => {
     await db.organization.update({ where: { id: org.id }, data: { settings } });
     await createTestIntegration(org.id, {
       platform: 'shopify',
-      externalAccountId: 'test-store.myshopify.com',
+      externalAccountId: shopDomain(),
       accessToken: 'shpat_test',
       metadata: { oauthScopes: ['read_orders', 'write_orders'] },
     });
@@ -1064,6 +1074,7 @@ describe('durable order-status host path', () => {
       if (url.includes('/orders.json')) {
         return new Response(JSON.stringify({ orders: [currentOrder] }), { status: 200 });
       }
+      if (url.includes('/customers/1234.json')) return customerNotFound();
       throw new Error(`Unexpected external request: ${url}`);
     });
 
@@ -1072,7 +1083,7 @@ describe('durable order-status host path', () => {
     const settings = { autonomyTier: 'guarded' as const, autoExecuteMode: 'off' as const };
     await db.organization.update({ where: { id: org.id }, data: { settings } });
     await createTestIntegration(org.id, {
-      platform: 'shopify', externalAccountId: 'test-store.myshopify.com', accessToken: 'shpat_test',
+      platform: 'shopify', externalAccountId: shopDomain(), accessToken: 'shpat_test',
       metadata: { oauthScopes: ['read_orders', 'write_orders'] },
     });
     const member = await db.orgMember.create({
@@ -1152,6 +1163,7 @@ describe('durable order-status host path', () => {
       if (url.includes('/orders/9000001001.json')) {
         return new Response(JSON.stringify({ order: cancellable }), { status: 200 });
       }
+      if (url.includes('/customers/1234.json')) return customerNotFound();
       throw new Error(`Unexpected external request: ${url}`);
     });
 
@@ -1160,7 +1172,7 @@ describe('durable order-status host path', () => {
     const settings = { autonomyTier: 'guarded' as const, autoExecuteMode: 'off' as const };
     await db.organization.update({ where: { id: org.id }, data: { settings } });
     const integration = await createTestIntegration(org.id, {
-      platform: 'shopify', externalAccountId: 'test-store.myshopify.com', accessToken: 'shpat_test',
+      platform: 'shopify', externalAccountId: shopDomain(), accessToken: 'shpat_test',
       metadata: { oauthScopes: ['read_orders', 'write_orders'] },
     });
     const member = await db.orgMember.create({
@@ -1275,6 +1287,7 @@ describe('durable order-status host path', () => {
       if (url.includes('/orders.json')) {
         return new Response(JSON.stringify({ orders: [refundableOrder] }), { status: 200 });
       }
+      if (url.includes('/customers/1234.json')) return customerNotFound();
       throw new Error(`Unexpected external request: ${url}`);
     });
 
@@ -1283,7 +1296,7 @@ describe('durable order-status host path', () => {
     const settings = { autonomyTier: 'guarded' as const, autoExecuteMode: 'off' as const };
     await db.organization.update({ where: { id: org.id }, data: { settings } });
     await createTestIntegration(org.id, {
-      platform: 'shopify', externalAccountId: 'test-store.myshopify.com', accessToken: 'shpat_test',
+      platform: 'shopify', externalAccountId: shopDomain(), accessToken: 'shpat_test',
       metadata: { oauthScopes: ['read_orders', 'write_orders'] },
     });
     const member = await db.orgMember.create({
@@ -1373,6 +1386,7 @@ describe('durable order-status host path', () => {
       if (url.includes('/orders.json')) {
         return new Response(JSON.stringify({ orders: [order] }), { status: 200 });
       }
+      if (url.includes('/customers/1234.json')) return customerNotFound();
       throw new Error(`Unexpected external request: ${url}`);
     });
 
@@ -1381,7 +1395,7 @@ describe('durable order-status host path', () => {
     const settings = { autonomyTier: 'guarded' as const, autoExecuteMode: 'off' as const };
     await db.organization.update({ where: { id: org.id }, data: { settings } });
     await createTestIntegration(org.id, {
-      platform: 'shopify', externalAccountId: 'test-store.myshopify.com', accessToken: 'shpat_test',
+      platform: 'shopify', externalAccountId: shopDomain(), accessToken: 'shpat_test',
       metadata: { oauthScopes: ['read_orders', 'write_orders'] },
     });
     const member = await db.orgMember.create({
@@ -1470,6 +1484,7 @@ describe('durable order-status host path', () => {
       if (url.includes('/orders.json')) {
         return new Response(JSON.stringify({ orders: [order] }), { status: 200 });
       }
+      if (url.includes('/customers/1234.json')) return customerNotFound();
       throw new Error(`Unexpected external request: ${url}`);
     });
 
@@ -1478,7 +1493,7 @@ describe('durable order-status host path', () => {
     const settings = { autonomyTier: 'guarded' as const, autoExecuteMode: 'off' as const };
     await db.organization.update({ where: { id: org.id }, data: { settings } });
     await createTestIntegration(org.id, {
-      platform: 'shopify', externalAccountId: 'test-store.myshopify.com', accessToken: 'shpat_test',
+      platform: 'shopify', externalAccountId: shopDomain(), accessToken: 'shpat_test',
       metadata: { oauthScopes: ['read_orders', 'write_orders'] },
     });
     const member = await db.orgMember.create({
@@ -1579,6 +1594,7 @@ describe('durable order-status host path', () => {
           } } }), { status: 200 });
         }
       }
+      if (url.includes('/customers/1234.json')) return customerNotFound();
       throw new Error(`Unexpected external request: ${url}`);
     });
 
@@ -1588,7 +1604,7 @@ describe('durable order-status host path', () => {
     await db.organization.update({ where: { id: org.id }, data: { settings } });
     await createTestIntegration(org.id, {
       platform: 'shopify',
-      externalAccountId: 'test-store.myshopify.com',
+      externalAccountId: shopDomain(),
       accessToken: 'shpat_test',
       metadata: { oauthScopes: ['read_orders', 'write_returns'] },
     });
@@ -1758,6 +1774,7 @@ describe('durable order-status host path', () => {
           } } }), { status: 200 });
         }
       }
+      if (url.includes('/customers/1234.json')) return customerNotFound();
       throw new Error(`Unexpected external request: ${url}`);
     });
 
@@ -1767,7 +1784,7 @@ describe('durable order-status host path', () => {
     await db.organization.update({ where: { id: org.id }, data: { settings } });
     await createTestIntegration(org.id, {
       platform: 'shopify',
-      externalAccountId: 'test-store.myshopify.com',
+      externalAccountId: shopDomain(),
       accessToken: 'shpat_test',
       metadata: { oauthScopes: ['read_orders', 'read_products', 'write_returns'] },
     });
