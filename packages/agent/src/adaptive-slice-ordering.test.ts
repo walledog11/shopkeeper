@@ -376,11 +376,29 @@ describe("composing an approved proposal's completion from its receipt", () => {
       content: [{ type: "tool_use", id: "t2", name: "create_refund" }],
     });
     const outcome = composingMessages.at(-1);
+    // The result arrives with the composing call's job stated: the write is done,
+    // reply to the customer — not a request still waiting for a tool.
     expect(outcome).toMatchObject({
       role: "user",
-      content: [{ type: "tool_result", tool_use_id: "t2" }],
+      content: [
+        { type: "tool_result", tool_use_id: "t2" },
+        { type: "text", text: expect.stringContaining("reply to the customer with send_reply") },
+      ],
     });
     expect(JSON.stringify(outcome?.content)).toContain("20.00");
+  });
+
+  it("tells the merchant when the committed write went unreported to the customer", async () => {
+    mockCreate.mockImplementation(async () => (
+      { stop_reason: "end_turn", content: [{ type: "text", text: "Done." }], usage: USAGE }
+    ));
+
+    const result = await runAgent(supportCtx(), "Handle the refund request.", [APPROVED_REFUND], LIVE_SETTINGS, {
+      composeFromReceipt: true,
+    });
+
+    expect(result.actionsPerformed.map(action => action.tool)).toEqual(["create_refund"]);
+    expect(result.summary).toContain("I didn't send the customer a reply");
   });
 
   it("cannot commit a second write while reporting the first", async () => {
