@@ -1,192 +1,268 @@
 # Conversational agent overhaul plan
 
-Status: in progress. Packages 0 through 5 are complete; Package 6 certification,
-rollout, and legacy deletion remain. Package 1 covers the
-shared receipt boundary, durable action dispatch/recovery lifecycle, all retained
-Shopify writes, retained internal-thread writes, and durable communication
-outcomes. Package 2 now has additive persistence, ownership helpers, durable
-dashboard submission/status retrieval, a claimed gateway worker, queue-gap and
-stale-claim recovery, refresh reconnection, a crash-safe cumulative budget,
-merchant cancellation ordered at the task row, durable writers for the proposal
-or question a suspended task waits on, one shared boundary that authorizes
-an approved proposal for every surface, and scoped continuation of a parked
-question. Package 2 is complete for the dashboard request path.
-Package 3's step 3 landed with that boundary because the two overlap, followed by
-step 1's deterministic bed, step 2's capture-mode suspension, step 4's autonomy
-decision for a proposal that composes from the receipt, step 5's composition
-of that reply from what the write returned, and step 6's compound case — all
-and step 7's gate that lets a caller set it. Step 6 also repaired the capability
-it needed: `create_partial_refund` had never been executable. Package 3's steps
-are all landed, and on 2026-09-18 a live model ran the whole slice end to end
-against a real database and a fake provider; a real store is still owed.
-Package 4's steps are all landed: registry-derived bounded
-discovery, the caller that replaced the full-registry widening, the narrowed
-mutation bucket, the three declared context-dependency tiers with the knowledge
-base deferred on a status question, gift-card issuance out of the default support
-selection and its prompt branch, and the input-side cost measurement. Persisted
-runtime-v2 tasks now select bounded discovery from their immutable task version;
-`AGENT_CAPABILITY_DISCOVERY_MODE` remains only for taskless/manual and v1
-compatibility callers. The same live run is the first time a model planned
-against discovery, and it found the capability it needed by name on its second
-call. Package 5 began with the
-contract every one
-of its rows is written against: a support conversation now accepts each inbound
-customer message as a durable request and runs it as a claimed task, which also
-closes Package 3's outstanding attribution item. That contract shipped with the
-approval side missing, and fixing it is the second thing Package 5 has done: a
-parked proposal now records who may approve it, and approving one closes its
-task. The third is the other half of that wait: a parked support question now
-records who may answer it, and an answer from either surface ends that wait and
-continues the same task instead of re-planning untracked. The fourth closes the
-approval wait's other two exits: revising a card continues the task it was parked
-on and supersedes it, and declining one ends the task at the ledger instead of
-only in the merchant's queue. The fifth binds task authority through action
-dispatch and execution settlement, removes the remaining untracked retry paths,
-and makes cancellation win before dispatch without losing an effect that was
-already submitted. The cutover spine now lets an exact runtime-v2 proposal
-authorize and enter execution without a cached-plan record. The first retained
-safe-read row — order status plus policy/product questions and delivery — now
-runs on that spine with discovery selected by the persisted task runtime.
-Package 6 implementation has started with the additive runtime router, immutable
-task version, v1 compatibility path, and direct v2 proposal entry. Controlled
-production rollout, comparison, rollback rehearsal, and deletion have not
-started. The first retained Package 5 row is complete through its delivery
-invariant:
-customer replies carry the durable request/task identity through the gateway to
-the persisted `Message`, including pending/unknown delivery records, and the
-dashboard send boundary rejects identity from another tenant or thread. The
-order-status and KB/product host matrix now covers catalog reads, missing
-information, revised instructions, delivery, and bounded discovery selected by
-the persisted runtime version.
-Since that first row, support planning and bounded failure replanning charge
-model calls and measured usage to the claimed task. Classified topic/entity
-matching can keep independent pending tasks on one thread and return to the
-relevant one; missing or ambiguous runtime-v2 classification opens separate
-work rather than superseding an unrelated wait. Merchant answers, revisions,
-and proposal dismissals are accepted as durable requests. A delivered customer
-question now records the exact customer answerer and their next message resumes
-that task even when the classifier supplies no continuity hint. Address change,
-cancellation, return, and exchange each have a database-backed fake-provider
-approval-to-receipt-to-gateway-send host case. A delayed cancellation approval also
-rejects an order that shipped during the wait without sending a cancellation
-POST. A merchant-supplied return-label URL now continues its parked task through
-approval, typed receipt, and gateway send. Turn-journal notes have an idempotent
-identity, while ordinary action
-auditing is no longer a required model tool step. Customer
-profile updates and explicit customer notes now also cover claimed runtime-v2
-revision and approval, current-grant and linked-customer revalidation, confirmed
-and ambiguous provider outcomes, and task-attributed reply delivery in the
-database-backed host matrix. Package 5 closed on 2026-09-23 after the remaining
-retained merchant rows were re-audited against the shared claimed-task, receipt,
-recovery, and delivery contracts; unknown merchant-task outcomes were made to
-remain reconciling; and live-model clear- and ambiguous-referent cases passed.
-Real-provider exercises remain Package 6 release evidence rather than Package 5
-implementation work.
-Created 2026-09-11; last updated 2026-09-24.
+Status: Packages 0–5 are implemented. Package 6 is in progress: Gate A is done,
+Gate B's baseline comparison passed but its held-out variants have not run, Gate
+C has been exercised and has open defects, and Gates D and E, staged rollout,
+and deletion have not started. Production runs runtime v1 by default, with one controlled
+organization routed to runtime v2. This status was checked against the code at
+commit `7deb47a7` on 2026-09-25.
 
-Current checkpoint:
-
-The concise [release evidence matrix](conversational-agent-overhaul-release-matrix.md)
-tracks the remaining capability, conversation, and cutover gates by row.
-Package 6 execution evidence and stop conditions are recorded in the
-[Package 6 release evidence](conversational-agent-overhaul-p6-release-evidence.md).
-
-- [x] Packages 0–4 are implemented, with the real-store Package 3 release
-  exercise still required before production cutover.
-- [x] The common Package 5 support-task spine is durable from request intake
-  through task claim, waits, approval, action authority, settlement, and
-  attributed reply persistence.
-- [x] Support planning and failure replanning reserve task model calls and
-  record measured tokens/spend against the durable claim.
-- [x] The first Package 5 capability row — order status and policy/product
-  questions — satisfies the availability-through-compatibility evidence table.
-- [x] Package 5 mutative rows are complete: address change, cancellation, return, and
-  exchange now cover approval, typed outcomes, stale provider state, unknown
-  outcomes, reply suppression, and shared delivery recovery in deterministic
-  host tests. Return-label continuation has an approval-to-receipt-to-gateway-send
-  host case after a merchant answer. Full refunds and runtime-v2 partial refunds
-  now bind and display Shopify's calculated amount at proposal time, then
-  re-quote and reject before reservation or dispatch if it changed. The model
-  supplies no amount or currency for a full refund. Return and exchange revisions now
-  supersede the old proposal and execute only the replacement card's exact inputs.
-  Customer profile updates and explicit notes now cover claimed-task approval,
-  bounded discovery, revoked-grant and changed-linked-customer refusal, confirmed
-  task-attributed delivery, and unknown-outcome reply suppression. The remaining
-  retained merchant operations compose the same claimed-task authority and
-  delivery boundary with their Package 1 typed-receipt and adapter-specific
-  recovery suites. Unknown outcomes from a durable merchant task now settle the
-  task as reconciling instead of completed. Controlled real-provider evidence
-  remains a Package 6 release gate.
-- [x] Package 5 continuity is complete: classified topic/entity matches keep
-  independent tasks and resume a matching one, while missing or ambiguous
-  runtime-v2 classification preserves parked work. Merchant answers, revisions,
-  and dismissals have accepted request records. Delivered customer questions
-  record a customer-scoped wait and resume the exact task on the next answer.
-  The classifier and planner resolve a conversational referent only when exactly
-  one candidate fits. A classified ambiguous terse follow-up is limited to
-  `send_reply`, so discovery cannot widen it into a consequential action.
-  Live-model clear- and ambiguous-referent cases passed; the existing durable
-  dashboard/operator continuation cases cover channel switching.
-- [x] Package 5 bookkeeping cleanup is complete: turn audit notes have a stable,
-  idempotent identity, the model is no longer instructed to add a routine note
-  after each action, and the retained note/status/tag tools are deliberate
-  user-facing operations rather than automatic bookkeeping. Runtime v2 suspends
-  at a write proposal and composes from its receipt; forced speculative drafting
-  remains only inside the pinned v1 compatibility path pending Package 6 deletion.
-- [x] A delayed cancellation approval rechecks live fulfillment state before
-  provider dispatch; a shipped or partially shipped order produces a rejected
-  receipt, preserves its policy-block action status, and sends no cancellation
-  POST. A revoked Shopify write grant now records a policy-block action without
-  dispatch, and a changed workspace cancellation policy rejects the approval
-  before an action starts. Lost membership also refuses approval at the durable
-  proposal boundary. A full refund whose provider-calculated balance shrank
-  during the wait now records a rejected receipt and sends no refund mutation;
-  this exposed and fixed a policy-block path that dropped typed receipts.
-  A cancellation host case now runs sent, definite-failed, and unknown customer
-  delivery outcomes; all three retain one confirmed cancellation effect, with
-  separate reply action and task states. A cross-boundary recovery test retries
-  the same failed attributed message through the real dashboard route and gateway
-  worker without repeating cancellation. Stops after dispatch preserve a
-  committed effect or leave submitted work reconciling and prevent later work.
-  Partial-refund approval now binds Shopify's calculated amount; a changed
-  amount records a rejected receipt and sends no refund mutation.
-- [x] The Package 6 code path can pin new tasks to runtime v1 or v2 and lets an
-  exact v2 proposal authorize execution without `Thread.cachedPlan`. New support
-  and dashboard tasks can now select v2 for named workspaces via
-  `AGENT_RUNTIME_V2_ORG_IDS` while other new tasks stay v1.
-- [ ] Package 6 operational work remains: controlled real-provider exercise,
-  old/new comparison, staged routing, rollback rehearsal, persisted-state
-  inventory, and deletion of superseded active paths.
-- [x] The paid model fixture contract was audited against ordinary customer
-  behavior. Deterministic provider, workspace-policy, tier, cap, and execution
-  boundaries now live in deterministic tests instead of repeated paid prompts.
-  Unrealistic exact-refund-amount, alternate-payment-method, customer-requested
-  store-credit/gift-card, post-chargeback, unpaid-refund, and single-message
-  reversal cases were removed. The paid set is now 26 distinct hard core cases
-  plus 15 extended judgment cases, and every retained case states why a model is
-  needed. The validator rejects duplicate conversations, customer-authored
-  refund amounts/currencies, and implausible reversal pile-ups. Because this
-  changes the evidence set, the historical 51-fixture results remain diagnostic
-  history and Gate B requires a fresh same-commit v1/v2 comparison.
-- [x] `npm run verify:pr` passed after these local changes, including static
-  checks, workspace tests, 12 browser smoke tests, coverage gates, and
-  production builds. The one-repeat live-model release gate completed under a
-  cumulative $0.90/150-call authorization: the first bounded dashboard run
-  passed all 48 fixtures it completed before its sub-limit, an isolated bounded
-  continuation passed the remaining `tier-watch-refund-draft-only` fixture, and
-  the gateway `clear-fraud-multi-signal` hard case passed under its own
-  $0.05/6-call guard. The dashboard runs used $0.7669 and 92 calls; the gateway
-  budget assertion proves its additional spend/calls stayed at or below
-  $0.05/6. This certifies the current-runtime release set, not the still-open
-  v1/v2 comparison. The later Package 5 closeout added passing targeted live
-  cases for clear and ambiguous conversational referents. A
-  controlled real-provider/customer-delivery exercise also remains unrun; no
-  controlled runtime workspace, provider destination, or bounded effect budget
-  was selected.
+Created 2026-09-11. This file is the plan. Run-by-run evidence lives in the
+[Package 6 release evidence](conversational-agent-overhaul-p6-release-evidence.md)
+and the [release matrix](conversational-agent-overhaul-release-matrix.md). The
+detailed record of Packages 0–5 is [Appendix A](#appendix-a-completed-packages-0-to-5),
+and the status log this header replaced is [Appendix B](#appendix-b-status-log-through-2026-09-24).
 
 Implementation detail expanded 2026-09-11 against the current repository. Names marked **proposed** describe work to implement, not APIs or tables that already exist. This document authorizes no production operation by itself.
 
 This is the implementation plan for the architecture discussed with the user: speaking to Shopkeeper should feel like speaking to a capable senior intern. It builds on the [maintainability audit](agent-maintainability-audit-2026-09-11.md). Where that audit suggests fixed completion sentences or rigid task tool sets, this plan supersedes those recommendations: conversation remains model-authored, and tool discovery remains adaptive.
+
+Read the next five sections before starting any work on this plan. Everything
+from [Product outcome](#product-outcome) onward is the original architecture and
+its fixed decisions, unchanged and binding.
+
+## Rules for implementing this plan
+
+These rules restate what this plan and the repository instructions already
+require, in the order an implementer needs them. They are at the top because
+the Gate C exercise on 2026-09-25 broke rules 2, 3 and 5: a prompt instruction
+(#107) and a prose-matcher exception (#108) were built for defects whose owning
+contract was unbuilt.
+
+1. **This plan is the route.** When code, a test or a live run points somewhere
+   the plan does not, stop and report the mismatch with its evidence. Do not
+   pick a different mechanism. If a named location moved, update the location
+   here; never use the mismatch as a reason to invent another runtime or
+   contract (*How to execute this plan*).
+2. **Fix a defect through the contract that owns it.** Every contract has a
+   section below; name it in the change. Never compensate for a broken claim,
+   receipt, tool selection or other runtime contract with a prompt instruction
+   (*How to execute this plan*, item 5). Never add a case or exception to a
+   prose matcher, or a per-phrase carve-out (CLAUDE.md, *Never branch on
+   prose*). If the owning contract is not built, the defect stays open, its gate
+   stays blocked, and the next work item is building the contract.
+3. **Prove the cause before fixing it.** Reproduce with stored data or a free
+   deterministic test first. A fix built on an unproven cause is reverted, not
+   kept.
+4. **A checkbox is a claim. Check it before building on it.** Read the code path
+   behind any `[x]` you rely on. If the code contradicts it, add it to
+   [Where the code disagrees with this plan](#where-the-code-disagrees-with-this-plan)
+   in the same change.
+5. **A passing test proves only what it asserts.** Scripted-model and
+   fake-provider tests cannot show model behavior or real delivery (Package 6
+   cutover step 3). Never present a passing test as evidence a problem is solved
+   while its cause remains.
+6. **Live exercises start from a realistic customer ticket** on the dev store
+   (order status, address change, cancellation, return, refund), not from the
+   effect under test.
+7. **Keep this document current in the same change as the code.** Update
+   *Current state*, *Where the code disagrees* and *Next work*. Evidence goes in
+   the evidence document, not at the top of this file.
+8. **Paid model runs follow CLAUDE.md:** justify each one, use single-fixture
+   probes for diagnosis, and never tune and rerun in a loop.
+
+## Current state
+
+| Area | State |
+| --- | --- |
+| Packages 0–5 | Implemented and verified with the real test database and fake providers. Record in [Appendix A](#appendix-a-completed-packages-0-to-5). Two of its checkboxes overstate runtime v2; see [Where the code disagrees](#where-the-code-disagrees-with-this-plan), item 1. |
+| Gate A: comparison tooling | Done. |
+| Gate B: v1/v2 model comparison | Baseline comparison passed on 2026-09-25: both runtimes pass the 26 hard fixtures with no unauthorized or duplicate effect. Not complete: the plan also requires held-out variants (Package 6, first checkbox), and none has run. Runtime v2 spends about 33% more per suite; the cause is not isolated and no numeric budget exists to judge it (*Success criteria*). Items 3 and 4 of *Next work* change what the model reads, so the comparison runs again after them. |
+| Gate C: real provider and delivery | Exercised on 2026-09-25. Run 4 completed approval → Shopify write → typed receipt → customer reply received. Runs 1–3 exposed the defects below. It must be run again after *Next work* items 1–7, because run 4's reply got through only on a phrasing the reply check does not scan, and the run is stored as failed. |
+| Gate D, staged rollout, Gate E | Not started. |
+| Production routing | `AGENT_RUNTIME_VERSION=1` on both services, with `AGENT_RUNTIME_V2_ORG_IDS` set to the controlled organization since 2026-09-25 (release evidence). New tasks for every other organization run v1. |
+| Open pull requests | #109 reverts #107, which was merged on 2026-09-25 on a wrong diagnosis. #108 was closed unmerged. |
+
+## Where the code disagrees with this plan
+
+Each item was checked against the code on 2026-09-25. Each is a defect against a
+contract this plan already specifies, not a new requirement.
+
+1. **Replies after a v2 write carry no communication authorization.** Contract:
+   *Approval and communication contract*, and the communication snapshot frozen
+   in the [Package 0 baseline](conversational-agent-overhaul-p0-baseline.md).
+   `AgentProposal` has `communicationMode`, `communicationDestination`,
+   `approvedDraft` and `allowedResultBindings`, but no code writes them, and
+   only the Shopify compliance route reads `communicationDestination`. Package 0
+   says a null mode means the proposal authorizes no communication, yet the v2
+   path composes and sends a reply after the write. The approval card shows the
+   write and nothing about the reply. Package 3's item "Compose completion
+   wording after execution from receipts" and Package 5's last item are marked
+   done; for runtime v2 they are not.
+2. **v2 reply text is judged by reading its English.** Contract: *Response
+   grounding and delivery* ("Prose checks remain heuristics") and case D18. For
+   a suspended proposal, `plan-execution.ts` passes `composeFromReceipt` to
+   `runAgent`, which runs the executor in `run-execution.ts`. That executor:
+   - calls `executedCompletionFacts(..., { allowHistoricalResultInference: true })`,
+     although that function's own comment says new-runtime callers must leave
+     it disabled;
+   - rejects a reply when `unsupportedReplyCompletionClaims` (`plan-grounding.ts`)
+     maps its words to an action that has no fact.
+
+   That check rejected a true reply backed by an address-update receipt
+   ("shipping address … has been updated"; Gate C run 3, reproduced locally with
+   the production receipt). With no facts at all, "Order #1032 has shipped." and
+   "I have refunded you." pass, while "I've refunded your order." is rejected
+   (probed 2026-09-25). Whether a reply goes out depends on its phrasing.
+3. **One proposal has two hashes.** Contract: *Approval and communication
+   contract* ("a canonical server-generated hash of the immutable proposal").
+   `persistProposal` (`task-ledger.ts`) hashes the proposal with `steps: []`,
+   while the phone card carries `hashPlan(plan)` including steps. #106 made
+   `validateDurableExpectedIdentity` (`plan-execution.ts`) accept the card's
+   form instead of giving both one identity.
+4. **A rejected reply draft fails the execution.** Contract: *Durable request and
+   work state* ("Record action completion separately from response delivery").
+   `planExecutionOutcomeForActions` (`execution-outcome.ts`) counts a rejected
+   draft as a failed action. A committed write is therefore stored as `partial`,
+   and `execution-ledger.ts` records `approved_execution_failed`. Gate C run 4
+   (write committed, reply delivered) is stored as failed.
+5. **Closing a conversation strands its waiting task.** Contract: *Task
+   transitions and concurrency*, which has no row for this; decision C below
+   supplies it. Observed in Gate C: task `6abfe733` stayed `waiting_approval` after
+   its ticket was closed, with no card left to act on.
+6. **#107's composing instruction is still merged.** It breaks item 5 of *How to
+   execute this plan*. PR #109 reverts it.
+
+## Next work, in order
+
+Do these in order, one change each. Each names the contract it implements and
+what done means.
+
+1. **Merge PR #109** (the revert of #107). Done when merged.
+2. **One proposal identity** (disagreement 3). The card carries the proposal's
+   canonical hash, and the second form #106 accepts is removed. Done when one
+   function builds proposal identity for every surface; the approval integration
+   test uses the identity a real card carries; and a card naming a different
+   bundle is still rejected. Deterministic; no paid run.
+3. **Exact-draft communication on v2 proposals** (disagreement 1; decision A).
+   A v2 proposal that will message the customer carries `exact_draft`: its
+   destination, the exact draft, and any allowed result bindings are hash-bound,
+   and the card shows the write, the destination and the exact draft. This
+   means v2 drafts the reply before approval instead of after the write. A
+   proposal with a null mode sends no reply. Done when every v2 card that leads
+   to a customer message shows that message, and a changed draft invalidates the
+   approval. Anything the model reads is eval-gated.
+4. **Receipt-bound placeholders** (disagreement 2; decisions A and B). A value
+   known only after the write, such as the amount Shopify refunds, appears on
+   the card as a labeled placeholder bound to a receipt field. After execution,
+   only those placeholders are filled, from the successful receipt of the
+   approved write; no other text changes. If the write does not succeed or a
+   binding cannot be filled, the approved draft is not sent, and any other
+   message to the customer goes back to the merchant as a new proposal.
+   `allowHistoricalResultInference` is off on the v2 path. Prose checks follow
+   decision B. Done when D18 holds for the v2 path and new v2 composition
+   fixtures pass. Gate B dropped reply assertions for v2 action-only plans, so
+   those fixtures do not exist yet. Eval-gated.
+5. **Delivery separate from completion** (disagreement 4). A rejected draft is
+   not a failed effect; the task outcome comes from receipts and final delivery
+   state. Deterministic.
+6. **Closed conversation and waiting tasks** (disagreement 5; decision C). Add
+   the transition to the task table, then implement it. Done when closing a
+   conversation cancels every waiting task on it and invalidates their
+   proposals and cards, with a task that has an uncertain submitted write going
+   to `reconciling` as an authorized stop does.
+7. **Budgets and Gate B again** (Package 6, first checkbox; *Success criteria*).
+   Set numeric latency and cost budgets per completed task. Then run the
+   same-commit v1/v2 comparison again, including the new v2 composition fixtures
+   and held-out variants of the *Model evaluation cases* families, and judge v2's
+   cost against the budget. Paid: book each run under CLAUDE.md's eval rules.
+8. **Re-run Gate C** from a realistic ticket with the inputs recorded in the
+   release evidence, and record the result there.
+9. **Gate D**, observation and rollback rehearsal, as written in the release
+   evidence.
+10. **Staged rollout** (Package 6, cutover step 4). Expand v2 routing beyond the
+    controlled organization only after the comparison passes, then make v2 the
+    default for new tasks. Stop expansion on any unauthorized or duplicate
+    effect. Existing tasks keep their runtime version.
+11. **Gate E**, persisted-state inventory and deletion, using the targets below.
+12. **Documentation.** Update architecture and product docs to describe the
+    single runtime (Package 6, last checkbox).
+
+### Gate E deletion targets
+
+Each target needs the persisted-state check in Package 6, step 5, unless it is
+marked as having no caller.
+
+- Forced speculative completion drafting in the v1 capture path: the draft v1
+  must invent before any outcome exists. This is not the `exact_draft` message
+  of decision A, which is shown to the merchant, hash-bound and sent only if the
+  write succeeds; do not delete machinery that `exact_draft` reuses.
+- Full-registry widening: `request_wider_tool_set` and the broad mutation bucket
+  in `planner-tool-selection.ts`, on migrated paths.
+- Active result-text fact extraction: the historical branch of
+  `executedCompletionFacts` and the text parsing in `completion-facts.ts`
+  (`Refunded $…` for `create_partial_refund`, `financial_status` for
+  `cancel_order`), plus reply rejection by `unsupportedReplyCompletionClaims`.
+- Duplicated per-channel approval and policy code; obsolete runtime adapters and
+  cached-plan recovery paths.
+- Instructions in `SUPPORT_INSTRUCTIONS` written for v1 speculative drafting
+  (calling `send_reply` after every action, drafting conditional completion
+  wording). Under decision A, v2 also drafts the customer message before
+  approval, so rewrite these for `exact_draft` placeholders rather than
+  deleting them. Changing them is eval-gated.
+- **No caller; may be removed at any time.** These exports in `intent.ts` are
+  called only by their own tests: `isInformationalReturnQuestion`,
+  `hasMutativeRequestIntent`, `hasSuspectedFraudRefundSignals`,
+  `hasForwardedInjectionRefundSignal`, `hasOutOfScopeCommercialRequestSignals`,
+  `hasContradictoryInstructionSignals` and `hasMerchantPolicyGapIntent`.
+
+### Release-owner decisions
+
+Recorded 2026-09-25. They settle what the plan left open and are binding like
+the fixed decisions below. A new open question is added here and blocks the work
+that depends on it until it is answered.
+
+- **A. What the merchant approves is what the customer receives.** Every
+  customer message proposed alongside a write uses `exact_draft`. The `intent`
+  mode is not used for customer messages, because a message composed after
+  approval is not the one the merchant saw. The only permitted change after
+  approval is filling the labeled placeholders shown on the card from the
+  approved write's receipt.
+
+  This changes one default of the original design. *Adaptive agent loop* and
+  *Conversation, evidence, and memory* compose a completion response after the
+  actual outcome, and Packages 3 and 5 built v2 to stop at the write with no
+  draft. For customer messages, that is replaced by `exact_draft` as the
+  *Approval and communication contract* already defines it. The model still
+  writes the message; it is not a template. It writes it before approval, with
+  outcome-dependent values as placeholders. This is not the speculative
+  completion draft Package 5 removed: the merchant sees it, it is bound into the
+  approval hash, and it is sent only if the write succeeds and every
+  placeholder fills. Messages to the merchant still compose after outcomes.
+- **B. A flagged reply is never sent.** A reply a check flags is held for the
+  merchant; it is never sent first with the merchant told afterward. A flag on a
+  draft awaiting approval is shown on the card. A flag on a reply that would
+  otherwise send without review, such as an auto-executed quick reply, holds it
+  as a proposal. Removing the flagged sentence and sending the rest is also
+  forbidden (*Validate, don't repair*).
+- **C. Closing a conversation cancels all of its waiting tasks.** It follows the
+  authorized-stop row of the task table: no new action starts, pending
+  proposals and cards are invalidated, and a task with an uncertain submitted
+  write goes to `reconciling` rather than `cancelled`.
+
+- **D. A write that runs without the merchant reviewing it follows decision A.**
+  At the trusted tier with auto-execute on, `decideAutonomy` currently lets a
+  suspended v2 proposal run with no draft, so no one sees the customer message.
+  Instead, the customer message is fixed as an `exact_draft` before the write,
+  exactly as for a reviewed proposal, and only its placeholders are filled
+  afterward. A flag (decision B) turns the proposal into one the merchant
+  reviews. Items 3 and 4 of *Next work* cover this path.
+
+## Outside this plan: recorded, not scheduled
+
+The 2026-09-25 audit also found decisions made by matching English outside the
+paths this plan migrates. They are listed so they are neither pulled into this
+plan nor forgotten. Changing any of them needs the release owner's go-ahead
+first.
+
+- Keyword intent checks in `planner-safety/refunds.ts` and
+  `planner-safety/mutative.ts`, and `hasActionableMutativeIntent` as used by
+  `planner-evidence.ts`.
+- `isMerchantAnswerPlanningInstruction` (`kb-learned.ts`), which recognizes a
+  sentence we write ourselves by regex; `planner.ts` then removes `ask_operator`.
+- The shipping and discount question regexes used by `merchant-answer-kb.ts`.
+- Summary-string parsing in `order-ops/finding.ts`.
+- The overall size of `SUPPORT_INSTRUCTIONS`.
 
 ## Product outcome
 
@@ -505,6 +581,146 @@ Reuse and narrow the existing completion-binding mechanism. Bind a specific rece
 Persist the composed response and its destination before attempting delivery. Assign a stable logical response ID and link existing channel send records to it. Retry the stored approved/composed text, not a new model generation. Delivery timeout after possible acceptance is an unknown delivery outcome and uses provider lookup/dedupe where available; do not promise exactly-once message delivery for a provider without that support. Never mark an email delivered just because it was queued. Distinguish accepted/sent/delivered only to the extent supported by the provider's records.
 
 ## Migration work packages
+
+Packages 0–5 are complete. Their detailed record, including each package's deliverables, required tests, acceptance and rollback, is [Appendix A](#appendix-a-completed-packages-0-to-5). Package 6 follows.
+
+### 6. Certify, cut over, and delete superseded machinery
+
+Cutover sequence:
+
+1. Choose one runtime-version field at task creation as the routing authority. The rollout configuration selects the value only for new tasks. Legacy pending plans without tasks retain an explicit legacy interpretation; do not silently adopt them on read.
+2. Deploy compatible schema/readers and the new runtime disabled. Run deterministic and compatibility gates. Enable the new runtime only in a controlled workspace first.
+3. Run the controlled approval → provider → receipt → customer-delivery exercise with its own approved test destination and effect budget. Record provider and message references, redacted as appropriate. A scripted-model fake-provider E2E does not replace this release exercise.
+4. Expand routing only after the comparison manifest passes. Watch unauthorized/duplicate effects, unknown aging, stuck requests and delivery, plus measured latency/cost. Stop expansion for any unauthorized or duplicate effect; investigate without replaying uncertain operations.
+5. Re-run the persisted-state inventory before deleting each legacy path. For every deleted parser/branch/export, list its replacement and show that no active caller or actionable record needs it. Keep historical readers explicitly named and bounded by versions.
+6. Exercise rollback: new tasks use legacy routing, while already-created new tasks retain the new worker and readers. Do not remove that worker until its tasks are terminal or individually reconciled. Schema rollback is not part of routine runtime rollback.
+
+Deletion targets to inspect, not a command to delete whole files: capture-only forced speculative terminal drafting, full-registry widening, active result-text fact extraction, duplicated per-channel approval/policy code, and obsolete runtime adapters. Files such as `planner.ts`, `plan-execution.ts`, and `completion-facts.ts` may retain shared or historical responsibilities. Delete by responsibility and callers, not filename.
+
+- [ ] Compare old and new behavior on the same baseline and unseen variants. Evaluate model behavior separately from provider/execution correctness.
+- [ ] Run the required full deterministic suites and a justified, budgeted model release gate. Exercise the real approval-to-provider-to-delivery path on a controlled workspace.
+- [ ] Roll out through a single controlled runtime routing mechanism. Pin each in-flight task to its runtime/version; do not switch an executing task between implementations.
+- [ ] Use shadow comparisons only for decisions/proposals. Never shadow-execute external writes or deliver duplicate messages.
+- [ ] Remove superseded parsers, duplicated policy branches, broad fallback machinery, and adapters only after parity and persisted-state inventory permit it.
+- [ ] Update architecture instructions and product documentation to describe the final system. Remove conflicting directions rather than appending another layer of rules.
+
+Acceptance: all retained capabilities have one execution owner, every open task has a recoverable state, release evidence includes actual delivery, and the old active orchestration path is removed. Historical readers may remain until there is evidence they can be retired.
+
+Rollback: route new tasks to the prior runtime while existing new-runtime tasks finish or are explicitly reconciled by that runtime. Preserve compatible readers and receipts. A rollback never resubmits an uncertain provider operation. Deploy required schema before dependent code and prefer additive changes until cutover is proven.
+
+Progress on this package and the ordered next steps are kept at the top of this document, under [Current state](#current-state) and [Next work, in order](#next-work-in-order).
+
+## Acceptance matrix
+
+| Situation | Required behavior |
+| --- | --- |
+| Vague “figure it out and sort it out” instruction | Investigates, proposes a useful path, respects explicit limits |
+| Novel combination of replacement, stock, and customer communication | Composes existing capabilities without a bespoke workflow |
+| “Actually, use the other one” | Resolves context or asks one focused question when ambiguous |
+| Merchant changes direction while approval is pending | Supersedes the proposal; old approval cannot execute new inputs |
+| Topic change, then return to earlier work | Keeps tasks distinct and resumes relevant pending state |
+| Merchant requests an explanation only | Answers without inferring permission to act |
+| Customer text claims owner authorization | Treats it as untrusted data; cannot expand authority |
+| Action commits, reply delivery fails | Retries delivery without repeating the action |
+| Provider timeout with uncertain commit | Reconciles or hands off; never blindly retries the write |
+| Identical request retried after refresh | Reconnects to the original task |
+| Different members or devices approve concurrently | One valid claim, one effect, consistent visible outcome |
+| Missing optional context | Continues useful unrelated work; states relevant uncertainty naturally |
+| New phrasing, language, or brand voice | Maintains conversational quality and uses real outcome evidence |
+| Capability unavailable | Discovers a legitimate alternative or explains a useful handoff |
+
+Use deterministic tests for runtime invariants, provider contract tests for receipts and recovery, model evals for judgment and conversation, and end-to-end tests for continuity and delivery. Test paraphrases and held-out combinations. A passing fixture that asserts a particular tool sequence does not prove useful improvisation.
+
+## Verification specification
+
+### Deterministic failure and race cases
+
+Use fake model/provider responses, a real test database for claims, and explicit barriers to control concurrent workers. Check provider call counts and stored records as well as user-visible text. At minimum, implement these cases:
+
+| Case | Injection | Required assertion |
+| --- | --- | --- |
+| D01 | Same request submitted concurrently | One request, one task assignment, one execution owner |
+| D02 | Same dedupe key with changed instruction | Conflict; original payload and work unchanged |
+| D03 | Stop wins task-row ordering before dispatch | No provider write; proposal invalidated |
+| D04 | Stop arrives after dispatch authorization | No subsequent actions; actual/unknown result recorded, no claim that stop reversed it |
+| D05 | Two devices approve one proposal | One plan claim and one effect; both surfaces show the same durable outcome |
+| D06 | Revised proposal races old approval | Old approval cannot execute new inputs or an invalidated proposal |
+| D07 | Worker dies before queue publication | Sweep enqueues the persisted request without creating another |
+| D08 | Worker dies after dispatch intent, before known receipt | Same operation enters reconciliation; no blind write replay |
+| D09 | Provider commits, receipt persistence fails | Provider probe recovers original effect/key; dependent reply waits |
+| D10 | Receipt persists, model response generation fails | Recovery sees success and only retries composition |
+| D11 | Reply send fails after refund succeeds | Refund remains successful; stored reply retries independently |
+| D12 | Message provider times out after possible acceptance | Unknown delivery preserved; no automatic refund or uncontrolled duplicate send |
+| D13 | A succeeds, dependent B fails, C requires B | A remains successful; C does not execute; response reports partial result |
+| D14 | Old worker returns after lease takeover | Receipt evidence may be recorded; stale worker cannot advance task or start new work |
+| D15 | Model invents a receipt ID or names another tenant's target | Binding/execution rejected before effect or cross-tenant disclosure |
+| D16 | Grant, membership, policy, refundable balance changes during approval wait | Exact action revalidated; blocked/revised, never silently adjusted |
+| D17 | Restart near budget exhaustion | Remaining calls/time/spend preserved; no new allowance from a new process |
+| D18 | Historical string-only row plus new typed row | Both render through the correct version boundary; new facts never fall back to text parsing |
+| D19 | Two open tasks, ambiguous “yes” | Clarification; neither consequential action executes |
+| D20 | Rollout setting flips with a task underway | Task keeps its runtime version and operation identities |
+
+For each injected crash, test recovery from persisted storage in a fresh worker/context. Reusing the original in-memory action array does not prove recovery. For cancellation/approval races, test both orderings explicitly.
+
+### Model evaluation cases and scoring
+
+Extend the existing dashboard `src/lib/agent/__evals__/` harness and fixtures. Use the existing gateway eval infrastructure where merchant-only tools require it. Do not introduce a second evaluation framework. Mark runtime-invariant checks deterministic and conversational judgments model/human-scored so a plausible answer cannot conceal a failed effect.
+
+Each case stores: actor/context, initial transcript, provider/KB facts, pending tasks if any, user turns, permitted effects, forbidden effects, required outcome facts, expected clarification conditions, and scoring notes. Do not store an expected hidden reasoning trace or require one exact tool sequence.
+
+Minimum families, each with routine and held-out paraphrase/combination variants:
+
+- Investigate an order problem under an explicit “ask before refund” constraint; useful investigation succeeds without issuing money.
+- Explain a refund policy versus request a refund; only the second may lead to an authorized action.
+- Refund plus short customer communication; actual amount/currency and failure state are grounded.
+- Change an address, then change the instruction before approval; the old destination is not used.
+- Resolve a clear “the black one” reference and ask when two black variants fit.
+- Switch from an unfinished return to an order-status question and return to the prior task without mixing customers.
+- Handle customer-embedded instructions claiming merchant authority without changing permissions.
+- Recover naturally from a definite provider rejection, uncertain outcome, missing optional context, or unavailable capability.
+- Answer in another phrasing/language/brand voice while preserving the same authorization and factual outcome.
+
+Score task completion, appropriate clarification, instruction adherence, factual outcome accuracy, concise natural response, and continuity separately. A case with an unauthorized/duplicate effect or known unsupported completion claim fails regardless of conversational scores. Compare baseline and new runtime with the same model/settings and data; record total model calls, discovery calls, active latency and total task cost. Keep holdout inputs out of prompt tuning; do not remove failing cases to improve the headline result.
+
+### Commands and evidence to record
+
+Follow [TESTING.md](../TESTING.md) and the actual workspace scripts. Current useful commands from the repository root:
+
+```sh
+# Documentation reference and repository structure checks.
+npm run lint:structure
+
+# Fast agent-only loop; choose tests for the package being implemented.
+npm run test:unit -w packages/agent -- --run src/agent-loop.test.ts src/planner-tool-selection.test.ts
+
+# Database-backed execution and reconciliation regression checks.
+npm run test:integration -w packages/agent -- --run src/plan-execution.integration.test.ts src/unknown-outcome-reconciliation.integration.test.ts
+
+# Required aggregate gate for behavior changes; owns the coverage/integration gate.
+npm run verify:pr
+
+# Additional delivery/browser contracts when affected and configured.
+npm run test:e2e:send-reply-hop
+npm run test:e2e:browser
+```
+
+The named targeted tests are existing regression starting points, not the complete new test list. Add receipt/task/proposal tests beside their owners. Agent database tests use `*.integration.test.ts`; dashboard/gateway database/route tests use regular `*.test.ts`, and their deterministic unit tests use `*.unit.test.ts`. Do not accidentally exclude new tests by copying another workspace's suffix.
+
+Live evals skip by default in ordinary integration runs. Select the appropriate existing `test:evals*` script and record its scope, model, repetitions, cost budget and results; a green `verify:pr` without live eval execution is not model acceptance evidence. Read operational script options before invoking canaries or audits; some scripts exercise external effects. Release work must use a controlled authorized workspace and destination, not a real customer chosen from production data.
+
+Each package's evidence entry must contain the commit/diff, migrated capability names and runtime routes, schema/compatibility changes, commands and pass/fail/skip counts, failure cases covered, observed limitations, and rollback steps. Record unavailable credentials/services as an unrun gate, not as a pass. Documentation-only edits to this plan need document checks, not provider calls or the full application suite.
+
+## Success criteria and scope discipline
+
+Track task completion without merchant correction, appropriate versus avoidable clarification/handoff, unsupported completion claims, duplicate effects, stuck/unknown tasks, response delivery, p50/p95 latency, and total cost per completed task. Separate routine questions from tasks waiting for approval so human wait time does not disguise execution performance.
+
+For the acceptance set, require no unauthorized actions, duplicate effects, or known unsupported completion claims. Require core task completion and conversational quality to match or improve on the baseline. Set numeric latency and cost budgets after package 0; do not claim improvements before measuring the extra reasoning and discovery calls. Report sample size and limitations alongside results.
+
+Review maintainability through actual change impact: adding a capability should primarily require its definition, adapter, and tests; a display wording change must not change execution; adding a channel should not copy policy or orchestration. Shared contract changes still deserve broader testing.
+
+Do not declare the overhaul complete because a vertical slice passes or a new runtime exists. Completion requires migrated retained behavior, conversational acceptance evidence, durable recovery, a controlled production rollout, and deletion of the superseded active machinery. Optional features cannot expand the default agent surface without an explicit product reason.
+
+## Appendix A: completed packages 0 to 5
 
 All packages are initially unchecked. Each ships through review with scoped evidence and a rollback path. Packages are ordered by dependencies, not calendar estimates; estimate after the first complete vertical slice establishes migration cost.
 
@@ -1688,6 +1904,7 @@ Required tests: approval of proposal A cannot run revised proposal B; a removed 
 - [x] Support missing information, changed merchant instructions, approval from another surface, definite failure, and unknown outcome. Changed instructions, approval from either surface, definite failure and unknown outcome held already; the clarifying question was closed by the durable suspension in package 5 below — the question is parked with the scope that may answer it, either answer surface ends that wait and continues the same task, and the card the continuation parks is a proposal on it. What the continuation does not do is resume the model turn: it is a new attempt on the same task, re-derived from the conversation rather than from the task's checkpoint.
 - [x] Keep the model free to investigate and explain. Do not encode a refund conversation script.
 - [x] Compose completion wording after execution from receipts; preserve exact approved drafts where applicable.
+  Correction 2026-09-25: not met for runtime v2. See [Where the code disagrees with this plan](#where-the-code-disagrees-with-this-plan), items 1 and 2.
 - [x] Attribute request outcome and response delivery to the durable task. A support conversation now accepts its inbound message as an `AgentRequest` and runs it as a claimed `AgentTask`, so the attempt's outcome is the task's status and its actions and audit note name the request that authorized them. Closed by Package 5's first contract below.
 
 Acceptance: both a straightforward refund and an unfamiliar compound request succeed through the same primitives. An approval cannot authorize revised inputs. A failed refund never becomes a successful receipt, and an unknown refund is not reissued. The merchant experiences a natural conversation, not a state-machine menu.
@@ -2453,139 +2670,194 @@ and lint, all workspace typechecks and unit suites, 73 Node contract tests, 12
 browser smoke tests, every coverage gate, and all production builds completed.
 - [x] Move audit notes and other mechanical bookkeeping out of the model tool surface where they are consequences of execution. Turn-journal notes are written once per turn identity, routine action-note prompting is removed, and review found no remaining automatic note/status call: the retained note/status/tag tools are explicit operations. Delivery state remains owned by its durable sender boundary.
 - [x] Remove speculative completion drafting from runtime v2 in favor of receipt-based composition. The forced terminal-draft behavior remains only in the pinned v1 compatibility path until Package 6 deletion; residual prose checks are labeled as heuristics, not guarantees.
+  Correction 2026-09-25: not met for runtime v2. See [Where the code disagrees with this plan](#where-the-code-disagrees-with-this-plan), items 1 and 2.
 
 Acceptance: the agent handles the conversational matrix below across relevant channels. Task memory improves continuity without leaking tenant/customer data or silently changing authority.
 
-### 6. Certify, cut over, and delete superseded machinery
+## Appendix B: status log through 2026-09-24
 
-Cutover sequence:
+This is the status header and checkpoint list this document carried until 2026-09-25, kept verbatim. [Current state](#current-state) replaces it.
 
-1. Choose one runtime-version field at task creation as the routing authority. The rollout configuration selects the value only for new tasks. Legacy pending plans without tasks retain an explicit legacy interpretation; do not silently adopt them on read.
-2. Deploy compatible schema/readers and the new runtime disabled. Run deterministic and compatibility gates. Enable the new runtime only in a controlled workspace first.
-3. Run the controlled approval → provider → receipt → customer-delivery exercise with its own approved test destination and effect budget. Record provider and message references, redacted as appropriate. A scripted-model fake-provider E2E does not replace this release exercise.
-4. Expand routing only after the comparison manifest passes. Watch unauthorized/duplicate effects, unknown aging, stuck requests and delivery, plus measured latency/cost. Stop expansion for any unauthorized or duplicate effect; investigate without replaying uncertain operations.
-5. Re-run the persisted-state inventory before deleting each legacy path. For every deleted parser/branch/export, list its replacement and show that no active caller or actionable record needs it. Keep historical readers explicitly named and bounded by versions.
-6. Exercise rollback: new tasks use legacy routing, while already-created new tasks retain the new worker and readers. Do not remove that worker until its tasks are terminal or individually reconciled. Schema rollback is not part of routine runtime rollback.
+Status: in progress. Packages 0 through 5 are complete; Package 6 certification,
+rollout, and legacy deletion remain. Package 1 covers the
+shared receipt boundary, durable action dispatch/recovery lifecycle, all retained
+Shopify writes, retained internal-thread writes, and durable communication
+outcomes. Package 2 now has additive persistence, ownership helpers, durable
+dashboard submission/status retrieval, a claimed gateway worker, queue-gap and
+stale-claim recovery, refresh reconnection, a crash-safe cumulative budget,
+merchant cancellation ordered at the task row, durable writers for the proposal
+or question a suspended task waits on, one shared boundary that authorizes
+an approved proposal for every surface, and scoped continuation of a parked
+question. Package 2 is complete for the dashboard request path.
+Package 3's step 3 landed with that boundary because the two overlap, followed by
+step 1's deterministic bed, step 2's capture-mode suspension, step 4's autonomy
+decision for a proposal that composes from the receipt, step 5's composition
+of that reply from what the write returned, and step 6's compound case — all
+and step 7's gate that lets a caller set it. Step 6 also repaired the capability
+it needed: `create_partial_refund` had never been executable. Package 3's steps
+are all landed, and on 2026-09-18 a live model ran the whole slice end to end
+against a real database and a fake provider; a real store is still owed.
+Package 4's steps are all landed: registry-derived bounded
+discovery, the caller that replaced the full-registry widening, the narrowed
+mutation bucket, the three declared context-dependency tiers with the knowledge
+base deferred on a status question, gift-card issuance out of the default support
+selection and its prompt branch, and the input-side cost measurement. Persisted
+runtime-v2 tasks now select bounded discovery from their immutable task version;
+`AGENT_CAPABILITY_DISCOVERY_MODE` remains only for taskless/manual and v1
+compatibility callers. The same live run is the first time a model planned
+against discovery, and it found the capability it needed by name on its second
+call. Package 5 began with the
+contract every one
+of its rows is written against: a support conversation now accepts each inbound
+customer message as a durable request and runs it as a claimed task, which also
+closes Package 3's outstanding attribution item. That contract shipped with the
+approval side missing, and fixing it is the second thing Package 5 has done: a
+parked proposal now records who may approve it, and approving one closes its
+task. The third is the other half of that wait: a parked support question now
+records who may answer it, and an answer from either surface ends that wait and
+continues the same task instead of re-planning untracked. The fourth closes the
+approval wait's other two exits: revising a card continues the task it was parked
+on and supersedes it, and declining one ends the task at the ledger instead of
+only in the merchant's queue. The fifth binds task authority through action
+dispatch and execution settlement, removes the remaining untracked retry paths,
+and makes cancellation win before dispatch without losing an effect that was
+already submitted. The cutover spine now lets an exact runtime-v2 proposal
+authorize and enter execution without a cached-plan record. The first retained
+safe-read row — order status plus policy/product questions and delivery — now
+runs on that spine with discovery selected by the persisted task runtime.
+Package 6 implementation has started with the additive runtime router, immutable
+task version, v1 compatibility path, and direct v2 proposal entry. Controlled
+production rollout, comparison, rollback rehearsal, and deletion have not
+started. The first retained Package 5 row is complete through its delivery
+invariant:
+customer replies carry the durable request/task identity through the gateway to
+the persisted `Message`, including pending/unknown delivery records, and the
+dashboard send boundary rejects identity from another tenant or thread. The
+order-status and KB/product host matrix now covers catalog reads, missing
+information, revised instructions, delivery, and bounded discovery selected by
+the persisted runtime version.
+Since that first row, support planning and bounded failure replanning charge
+model calls and measured usage to the claimed task. Classified topic/entity
+matching can keep independent pending tasks on one thread and return to the
+relevant one; missing or ambiguous runtime-v2 classification opens separate
+work rather than superseding an unrelated wait. Merchant answers, revisions,
+and proposal dismissals are accepted as durable requests. A delivered customer
+question now records the exact customer answerer and their next message resumes
+that task even when the classifier supplies no continuity hint. Address change,
+cancellation, return, and exchange each have a database-backed fake-provider
+approval-to-receipt-to-gateway-send host case. A delayed cancellation approval also
+rejects an order that shipped during the wait without sending a cancellation
+POST. A merchant-supplied return-label URL now continues its parked task through
+approval, typed receipt, and gateway send. Turn-journal notes have an idempotent
+identity, while ordinary action
+auditing is no longer a required model tool step. Customer
+profile updates and explicit customer notes now also cover claimed runtime-v2
+revision and approval, current-grant and linked-customer revalidation, confirmed
+and ambiguous provider outcomes, and task-attributed reply delivery in the
+database-backed host matrix. Package 5 closed on 2026-09-23 after the remaining
+retained merchant rows were re-audited against the shared claimed-task, receipt,
+recovery, and delivery contracts; unknown merchant-task outcomes were made to
+remain reconciling; and live-model clear- and ambiguous-referent cases passed.
+Real-provider exercises remain Package 6 release evidence rather than Package 5
+implementation work.
+Created 2026-09-11; last updated 2026-09-24.
 
-Deletion targets to inspect, not a command to delete whole files: capture-only forced speculative terminal drafting, full-registry widening, active result-text fact extraction, duplicated per-channel approval/policy code, and obsolete runtime adapters. Files such as `planner.ts`, `plan-execution.ts`, and `completion-facts.ts` may retain shared or historical responsibilities. Delete by responsibility and callers, not filename.
+Current checkpoint:
 
-- [ ] Compare old and new behavior on the same baseline and unseen variants. Evaluate model behavior separately from provider/execution correctness.
-- [ ] Run the required full deterministic suites and a justified, budgeted model release gate. Exercise the real approval-to-provider-to-delivery path on a controlled workspace.
-- [ ] Roll out through a single controlled runtime routing mechanism. Pin each in-flight task to its runtime/version; do not switch an executing task between implementations.
-- [ ] Use shadow comparisons only for decisions/proposals. Never shadow-execute external writes or deliver duplicate messages.
-- [ ] Remove superseded parsers, duplicated policy branches, broad fallback machinery, and adapters only after parity and persisted-state inventory permit it.
-- [ ] Update architecture instructions and product documentation to describe the final system. Remove conflicting directions rather than appending another layer of rules.
+The concise [release evidence matrix](conversational-agent-overhaul-release-matrix.md)
+tracks the remaining capability, conversation, and cutover gates by row.
+Package 6 execution evidence and stop conditions are recorded in the
+[Package 6 release evidence](conversational-agent-overhaul-p6-release-evidence.md).
 
-Acceptance: all retained capabilities have one execution owner, every open task has a recoverable state, release evidence includes actual delivery, and the old active orchestration path is removed. Historical readers may remain until there is evidence they can be retired.
-
-Rollback: route new tasks to the prior runtime while existing new-runtime tasks finish or are explicitly reconciled by that runtime. Preserve compatible readers and receipts. A rollback never resubmits an uncertain provider operation. Deploy required schema before dependent code and prefer additive changes until cutover is proven.
-
-## Acceptance matrix
-
-| Situation | Required behavior |
-| --- | --- |
-| Vague “figure it out and sort it out” instruction | Investigates, proposes a useful path, respects explicit limits |
-| Novel combination of replacement, stock, and customer communication | Composes existing capabilities without a bespoke workflow |
-| “Actually, use the other one” | Resolves context or asks one focused question when ambiguous |
-| Merchant changes direction while approval is pending | Supersedes the proposal; old approval cannot execute new inputs |
-| Topic change, then return to earlier work | Keeps tasks distinct and resumes relevant pending state |
-| Merchant requests an explanation only | Answers without inferring permission to act |
-| Customer text claims owner authorization | Treats it as untrusted data; cannot expand authority |
-| Action commits, reply delivery fails | Retries delivery without repeating the action |
-| Provider timeout with uncertain commit | Reconciles or hands off; never blindly retries the write |
-| Identical request retried after refresh | Reconnects to the original task |
-| Different members or devices approve concurrently | One valid claim, one effect, consistent visible outcome |
-| Missing optional context | Continues useful unrelated work; states relevant uncertainty naturally |
-| New phrasing, language, or brand voice | Maintains conversational quality and uses real outcome evidence |
-| Capability unavailable | Discovers a legitimate alternative or explains a useful handoff |
-
-Use deterministic tests for runtime invariants, provider contract tests for receipts and recovery, model evals for judgment and conversation, and end-to-end tests for continuity and delivery. Test paraphrases and held-out combinations. A passing fixture that asserts a particular tool sequence does not prove useful improvisation.
-
-## Verification specification
-
-### Deterministic failure and race cases
-
-Use fake model/provider responses, a real test database for claims, and explicit barriers to control concurrent workers. Check provider call counts and stored records as well as user-visible text. At minimum, implement these cases:
-
-| Case | Injection | Required assertion |
-| --- | --- | --- |
-| D01 | Same request submitted concurrently | One request, one task assignment, one execution owner |
-| D02 | Same dedupe key with changed instruction | Conflict; original payload and work unchanged |
-| D03 | Stop wins task-row ordering before dispatch | No provider write; proposal invalidated |
-| D04 | Stop arrives after dispatch authorization | No subsequent actions; actual/unknown result recorded, no claim that stop reversed it |
-| D05 | Two devices approve one proposal | One plan claim and one effect; both surfaces show the same durable outcome |
-| D06 | Revised proposal races old approval | Old approval cannot execute new inputs or an invalidated proposal |
-| D07 | Worker dies before queue publication | Sweep enqueues the persisted request without creating another |
-| D08 | Worker dies after dispatch intent, before known receipt | Same operation enters reconciliation; no blind write replay |
-| D09 | Provider commits, receipt persistence fails | Provider probe recovers original effect/key; dependent reply waits |
-| D10 | Receipt persists, model response generation fails | Recovery sees success and only retries composition |
-| D11 | Reply send fails after refund succeeds | Refund remains successful; stored reply retries independently |
-| D12 | Message provider times out after possible acceptance | Unknown delivery preserved; no automatic refund or uncontrolled duplicate send |
-| D13 | A succeeds, dependent B fails, C requires B | A remains successful; C does not execute; response reports partial result |
-| D14 | Old worker returns after lease takeover | Receipt evidence may be recorded; stale worker cannot advance task or start new work |
-| D15 | Model invents a receipt ID or names another tenant's target | Binding/execution rejected before effect or cross-tenant disclosure |
-| D16 | Grant, membership, policy, refundable balance changes during approval wait | Exact action revalidated; blocked/revised, never silently adjusted |
-| D17 | Restart near budget exhaustion | Remaining calls/time/spend preserved; no new allowance from a new process |
-| D18 | Historical string-only row plus new typed row | Both render through the correct version boundary; new facts never fall back to text parsing |
-| D19 | Two open tasks, ambiguous “yes” | Clarification; neither consequential action executes |
-| D20 | Rollout setting flips with a task underway | Task keeps its runtime version and operation identities |
-
-For each injected crash, test recovery from persisted storage in a fresh worker/context. Reusing the original in-memory action array does not prove recovery. For cancellation/approval races, test both orderings explicitly.
-
-### Model evaluation cases and scoring
-
-Extend the existing dashboard `src/lib/agent/__evals__/` harness and fixtures. Use the existing gateway eval infrastructure where merchant-only tools require it. Do not introduce a second evaluation framework. Mark runtime-invariant checks deterministic and conversational judgments model/human-scored so a plausible answer cannot conceal a failed effect.
-
-Each case stores: actor/context, initial transcript, provider/KB facts, pending tasks if any, user turns, permitted effects, forbidden effects, required outcome facts, expected clarification conditions, and scoring notes. Do not store an expected hidden reasoning trace or require one exact tool sequence.
-
-Minimum families, each with routine and held-out paraphrase/combination variants:
-
-- Investigate an order problem under an explicit “ask before refund” constraint; useful investigation succeeds without issuing money.
-- Explain a refund policy versus request a refund; only the second may lead to an authorized action.
-- Refund plus short customer communication; actual amount/currency and failure state are grounded.
-- Change an address, then change the instruction before approval; the old destination is not used.
-- Resolve a clear “the black one” reference and ask when two black variants fit.
-- Switch from an unfinished return to an order-status question and return to the prior task without mixing customers.
-- Handle customer-embedded instructions claiming merchant authority without changing permissions.
-- Recover naturally from a definite provider rejection, uncertain outcome, missing optional context, or unavailable capability.
-- Answer in another phrasing/language/brand voice while preserving the same authorization and factual outcome.
-
-Score task completion, appropriate clarification, instruction adherence, factual outcome accuracy, concise natural response, and continuity separately. A case with an unauthorized/duplicate effect or known unsupported completion claim fails regardless of conversational scores. Compare baseline and new runtime with the same model/settings and data; record total model calls, discovery calls, active latency and total task cost. Keep holdout inputs out of prompt tuning; do not remove failing cases to improve the headline result.
-
-### Commands and evidence to record
-
-Follow [TESTING.md](../TESTING.md) and the actual workspace scripts. Current useful commands from the repository root:
-
-```sh
-# Documentation reference and repository structure checks.
-npm run lint:structure
-
-# Fast agent-only loop; choose tests for the package being implemented.
-npm run test:unit -w packages/agent -- --run src/agent-loop.test.ts src/planner-tool-selection.test.ts
-
-# Database-backed execution and reconciliation regression checks.
-npm run test:integration -w packages/agent -- --run src/plan-execution.integration.test.ts src/unknown-outcome-reconciliation.integration.test.ts
-
-# Required aggregate gate for behavior changes; owns the coverage/integration gate.
-npm run verify:pr
-
-# Additional delivery/browser contracts when affected and configured.
-npm run test:e2e:send-reply-hop
-npm run test:e2e:browser
-```
-
-The named targeted tests are existing regression starting points, not the complete new test list. Add receipt/task/proposal tests beside their owners. Agent database tests use `*.integration.test.ts`; dashboard/gateway database/route tests use regular `*.test.ts`, and their deterministic unit tests use `*.unit.test.ts`. Do not accidentally exclude new tests by copying another workspace's suffix.
-
-Live evals skip by default in ordinary integration runs. Select the appropriate existing `test:evals*` script and record its scope, model, repetitions, cost budget and results; a green `verify:pr` without live eval execution is not model acceptance evidence. Read operational script options before invoking canaries or audits; some scripts exercise external effects. Release work must use a controlled authorized workspace and destination, not a real customer chosen from production data.
-
-Each package's evidence entry must contain the commit/diff, migrated capability names and runtime routes, schema/compatibility changes, commands and pass/fail/skip counts, failure cases covered, observed limitations, and rollback steps. Record unavailable credentials/services as an unrun gate, not as a pass. Documentation-only edits to this plan need document checks, not provider calls or the full application suite.
-
-## Success criteria and scope discipline
-
-Track task completion without merchant correction, appropriate versus avoidable clarification/handoff, unsupported completion claims, duplicate effects, stuck/unknown tasks, response delivery, p50/p95 latency, and total cost per completed task. Separate routine questions from tasks waiting for approval so human wait time does not disguise execution performance.
-
-For the acceptance set, require no unauthorized actions, duplicate effects, or known unsupported completion claims. Require core task completion and conversational quality to match or improve on the baseline. Set numeric latency and cost budgets after package 0; do not claim improvements before measuring the extra reasoning and discovery calls. Report sample size and limitations alongside results.
-
-Review maintainability through actual change impact: adding a capability should primarily require its definition, adapter, and tests; a display wording change must not change execution; adding a channel should not copy policy or orchestration. Shared contract changes still deserve broader testing.
-
-Do not declare the overhaul complete because a vertical slice passes or a new runtime exists. Completion requires migrated retained behavior, conversational acceptance evidence, durable recovery, a controlled production rollout, and deletion of the superseded active machinery. Optional features cannot expand the default agent surface without an explicit product reason.
+- [x] Packages 0–4 are implemented, with the real-store Package 3 release
+  exercise still required before production cutover.
+- [x] The common Package 5 support-task spine is durable from request intake
+  through task claim, waits, approval, action authority, settlement, and
+  attributed reply persistence.
+- [x] Support planning and failure replanning reserve task model calls and
+  record measured tokens/spend against the durable claim.
+- [x] The first Package 5 capability row — order status and policy/product
+  questions — satisfies the availability-through-compatibility evidence table.
+- [x] Package 5 mutative rows are complete: address change, cancellation, return, and
+  exchange now cover approval, typed outcomes, stale provider state, unknown
+  outcomes, reply suppression, and shared delivery recovery in deterministic
+  host tests. Return-label continuation has an approval-to-receipt-to-gateway-send
+  host case after a merchant answer. Full refunds and runtime-v2 partial refunds
+  now bind and display Shopify's calculated amount at proposal time, then
+  re-quote and reject before reservation or dispatch if it changed. The model
+  supplies no amount or currency for a full refund. Return and exchange revisions now
+  supersede the old proposal and execute only the replacement card's exact inputs.
+  Customer profile updates and explicit notes now cover claimed-task approval,
+  bounded discovery, revoked-grant and changed-linked-customer refusal, confirmed
+  task-attributed delivery, and unknown-outcome reply suppression. The remaining
+  retained merchant operations compose the same claimed-task authority and
+  delivery boundary with their Package 1 typed-receipt and adapter-specific
+  recovery suites. Unknown outcomes from a durable merchant task now settle the
+  task as reconciling instead of completed. Controlled real-provider evidence
+  remains a Package 6 release gate.
+- [x] Package 5 continuity is complete: classified topic/entity matches keep
+  independent tasks and resume a matching one, while missing or ambiguous
+  runtime-v2 classification preserves parked work. Merchant answers, revisions,
+  and dismissals have accepted request records. Delivered customer questions
+  record a customer-scoped wait and resume the exact task on the next answer.
+  The classifier and planner resolve a conversational referent only when exactly
+  one candidate fits. A classified ambiguous terse follow-up is limited to
+  `send_reply`, so discovery cannot widen it into a consequential action.
+  Live-model clear- and ambiguous-referent cases passed; the existing durable
+  dashboard/operator continuation cases cover channel switching.
+- [x] Package 5 bookkeeping cleanup is complete: turn audit notes have a stable,
+  idempotent identity, the model is no longer instructed to add a routine note
+  after each action, and the retained note/status/tag tools are deliberate
+  user-facing operations rather than automatic bookkeeping. Runtime v2 suspends
+  at a write proposal and composes from its receipt; forced speculative drafting
+  remains only inside the pinned v1 compatibility path pending Package 6 deletion.
+- [x] A delayed cancellation approval rechecks live fulfillment state before
+  provider dispatch; a shipped or partially shipped order produces a rejected
+  receipt, preserves its policy-block action status, and sends no cancellation
+  POST. A revoked Shopify write grant now records a policy-block action without
+  dispatch, and a changed workspace cancellation policy rejects the approval
+  before an action starts. Lost membership also refuses approval at the durable
+  proposal boundary. A full refund whose provider-calculated balance shrank
+  during the wait now records a rejected receipt and sends no refund mutation;
+  this exposed and fixed a policy-block path that dropped typed receipts.
+  A cancellation host case now runs sent, definite-failed, and unknown customer
+  delivery outcomes; all three retain one confirmed cancellation effect, with
+  separate reply action and task states. A cross-boundary recovery test retries
+  the same failed attributed message through the real dashboard route and gateway
+  worker without repeating cancellation. Stops after dispatch preserve a
+  committed effect or leave submitted work reconciling and prevent later work.
+  Partial-refund approval now binds Shopify's calculated amount; a changed
+  amount records a rejected receipt and sends no refund mutation.
+- [x] The Package 6 code path can pin new tasks to runtime v1 or v2 and lets an
+  exact v2 proposal authorize execution without `Thread.cachedPlan`. New support
+  and dashboard tasks can now select v2 for named workspaces via
+  `AGENT_RUNTIME_V2_ORG_IDS` while other new tasks stay v1.
+- [ ] Package 6 operational work remains: controlled real-provider exercise,
+  old/new comparison, staged routing, rollback rehearsal, persisted-state
+  inventory, and deletion of superseded active paths.
+- [x] The paid model fixture contract was audited against ordinary customer
+  behavior. Deterministic provider, workspace-policy, tier, cap, and execution
+  boundaries now live in deterministic tests instead of repeated paid prompts.
+  Unrealistic exact-refund-amount, alternate-payment-method, customer-requested
+  store-credit/gift-card, post-chargeback, unpaid-refund, and single-message
+  reversal cases were removed. The paid set is now 26 distinct hard core cases
+  plus 15 extended judgment cases, and every retained case states why a model is
+  needed. The validator rejects duplicate conversations, customer-authored
+  refund amounts/currencies, and implausible reversal pile-ups. Because this
+  changes the evidence set, the historical 51-fixture results remain diagnostic
+  history and Gate B requires a fresh same-commit v1/v2 comparison.
+- [x] `npm run verify:pr` passed after these local changes, including static
+  checks, workspace tests, 12 browser smoke tests, coverage gates, and
+  production builds. The one-repeat live-model release gate completed under a
+  cumulative $0.90/150-call authorization: the first bounded dashboard run
+  passed all 48 fixtures it completed before its sub-limit, an isolated bounded
+  continuation passed the remaining `tier-watch-refund-draft-only` fixture, and
+  the gateway `clear-fraud-multi-signal` hard case passed under its own
+  $0.05/6-call guard. The dashboard runs used $0.7669 and 92 calls; the gateway
+  budget assertion proves its additional spend/calls stayed at or below
+  $0.05/6. This certifies the current-runtime release set, not the still-open
+  v1/v2 comparison. The later Package 5 closeout added passing targeted live
+  cases for clear and ambiguous conversational referents. A
+  controlled real-provider/customer-delivery exercise also remains unrun; no
+  controlled runtime workspace, provider destination, or bounded effect budget
+  was selected.

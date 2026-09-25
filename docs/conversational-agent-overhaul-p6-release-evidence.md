@@ -227,7 +227,9 @@ reconciliation; never retry the write merely to make the exercise green.
 
 ### Gate C result — 2026-09-25
 
-Passed on the fourth production run, with two open follow-ups. Both services ran
+Run 4 completed the whole path. The gate is run again after the plan's *Next
+work* items 1–7, because run 4's reply got through only on a phrasing the reply
+guard does not scan, and the run is stored as failed. Both services ran
 `AGENT_RUNTIME_VERSION=1` with the controlled organization allowlisted; every task
 below persisted `runtimeVersion=2`. Customer email arrived through the Gmail
 inbox; approvals were sent from the merchant's bound iMessage.
@@ -249,13 +251,17 @@ Defects found and fixed during the exercise:
 - #106 — phone approval of any v2 proposal was refused as stale.
 - `14ed5576` — an inbound email overwrote the Shopify-matched customer name with
   the sender's display name ("Rajbir" for Walle Walson).
-- #108 — the completion-claim guard read "shipping address" as a shipment and
-  rejected every true address-change reply. Run 3's escalation and run 4's two
-  rejected drafts are this defect; run 4 reached the customer on a phrasing the
-  guard does not scan.
+Defects found and **not** fixed:
+
+- The completion-claim guard read "shipping address" as a shipment and rejected
+  every true address-change reply. Run 3's escalation and run 4's two rejected
+  drafts are this defect; run 4 reached the customer on a phrasing the guard
+  does not scan. #108 added a phrase exception to the guard and was closed
+  unmerged, because the owning contract (receipt-bound composition under the
+  plan's communication contract) is unbuilt. See the plan's *Next work*, items 3
+  and 4.
 - #107 was merged on a wrong diagnosis (that the composing call misread the
-  request). Its "no reply was sent" notice is useful; its composing instruction
-  addressed a cause that was not the defect.
+  request). PR #109 reverts it in full.
 
 Open before Gate D:
 
@@ -330,4 +336,4 @@ architecture/product documentation describes the single active runtime.
 | 2026-09-25 | Post-audit comparison attempt on `7a0fc011` | Gateway control passed on both arms. Dashboard v1 25/25 conclusive ($0.5370, 55 calls) and v2 24/24 conclusive ($0.7157, 58 calls), but the refund fixtures failed as infrastructure because the eval harness did not simulate the planner's pre-approval Shopify refund quote. No production/provider action occurred |
 | 2026-09-25 | Targeted refund reruns on `a12ca5f8` | `refund-full-order` passed on v1 and v2. v2 `refund-partial` escalated after an unsimulated redundant `get_shopify_orders` lookup failed; one unconfirmed sample, no unsafe action. No production/provider action occurred |
 | 2026-09-25 | Runtime-v2 `refund-partial` confirmation on `a12ca5f8` | 2/2 passed, $0.0169, 3 calls. Gate B comparison table filled; no unauthorized or duplicate effect on either runtime |
-| 2026-09-25 | Gate C production exercise, four runs | Run 4 passed approval → Shopify write → receipt → task-attributed customer reply received. Defects fixed: #106, `14ed5576`, #108. Open: rejected reply draft marks the task failed; closed ticket leaves its task waiting |
+| 2026-09-25 | Gate C production exercise, four runs | Run 4 passed approval → Shopify write → receipt → task-attributed customer reply received. Defects fixed: #106, `14ed5576`. Not fixed: the reply guard's false rejection (#108 closed unmerged). Open: rejected reply draft marks the task failed; closed ticket leaves its task waiting |
