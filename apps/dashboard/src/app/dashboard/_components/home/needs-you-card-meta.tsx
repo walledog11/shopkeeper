@@ -285,8 +285,12 @@ function NeedsYouTicketMetaPill({ item }: { item: HomeNeedsAttentionItem }) {
     </div>
   )
 
+  const headline = item.headline?.trim() || null
+
+  // On desktop, with a headline, the customer hugs its name and the headline
+  // takes the remaining width. On mobile the headline gets the second row.
   const customerPill = (
-    <MetaPill className="min-w-0 flex-1 gap-1.5 px-3">
+    <MetaPill className={cn("min-w-0 flex-1 gap-1.5 px-3", headline && "sm:max-w-[16rem] sm:flex-none sm:shrink")}>
       {customerLabel && (
         isEmail ? (
           <span className="min-w-0 truncate text-sm font-semibold leading-tight text-[#1a1a1a]">
@@ -307,8 +311,19 @@ function NeedsYouTicketMetaPill({ item }: { item: HomeNeedsAttentionItem }) {
     </MetaPill>
   )
 
+  const headlinePill = headline ? (
+    <MetaPill className="min-w-0 flex-1 px-3">
+      <span className="truncate text-sm font-medium leading-tight text-[#6b5d4f]">{headline}</span>
+    </MetaPill>
+  ) : null
+
   const topicPill = (
-    <MetaPill className={cn("shrink-0 px-3 sm:max-w-none", topicPillClassName, "min-w-0 flex-1 sm:flex-none sm:shrink-0")}>
+    <MetaPill className={cn(
+      "shrink-0 px-3 sm:max-w-none",
+      topicPillClassName,
+      !headline && "min-w-0 flex-1 sm:flex-none sm:shrink-0",
+    )}
+    >
       <span className="truncate text-xs font-bold tabular-nums leading-none sm:max-w-[5.5rem]">
         {topicLabel}
       </span>
@@ -331,6 +346,7 @@ function NeedsYouTicketMetaPill({ item }: { item: HomeNeedsAttentionItem }) {
       <div className="hidden w-full min-w-0 items-center gap-2 sm:flex">
         {channelPill}
         {customerPill}
+        {headlinePill}
         {topicPill}
         {datePill}
       </div>
@@ -341,6 +357,7 @@ function NeedsYouTicketMetaPill({ item }: { item: HomeNeedsAttentionItem }) {
           {customerPill}
         </div>
         <div className="flex min-w-0 items-center gap-2">
+          {headlinePill}
           {topicPill}
           {datePill}
         </div>

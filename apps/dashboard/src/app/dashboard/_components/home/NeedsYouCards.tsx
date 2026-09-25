@@ -118,7 +118,6 @@ export function NeedsYouCard({
       </NeedsYouCardHeader>
 
       <NeedsYouCardBody>
-        {item.headline && <p className="truncate text-sm font-semibold text-[#1a1a1a]">{item.headline}</p>}
         {item.customerMessage && <NeedsYouBubble tone="customer">{item.customerMessage}</NeedsYouBubble>}
         <div className="flex flex-col gap-3">{content}</div>
       </NeedsYouCardBody>
