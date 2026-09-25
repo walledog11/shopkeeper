@@ -62,7 +62,7 @@ export function NeedsYouCard({
 
   let content: ReactNode
   let primary: ReactNode = null
-  let secondary: ReactNode = <SideBySide>{viewTicket("View Ticket")}{closeTicket}</SideBySide>
+  let secondary: ReactNode = <SideBySide>{viewTicket("View ticket")}{closeTicket}</SideBySide>
 
   if (item.kind === "invalid") {
     content = (

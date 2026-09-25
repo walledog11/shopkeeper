@@ -82,20 +82,15 @@ export default function MerchantAnswerForm({ threadId, question, onAnswered }: P
     <>
       <div className="flex flex-col gap-3">
         {question && (
-          <div className="flex flex-col gap-1">
-            <span className="self-start text-[11px] font-semibold text-amber-700/70">
-              {AGENT_DISPLAY_NAME} needs your input
-            </span>
-            <div className="rounded-2xl border border-amber-600/20 bg-amber-600/[0.09] px-4 py-3">
-              <p className="text-sm font-medium text-foreground/85 leading-relaxed">{question}</p>
-            </div>
+          <div className="rounded-2xl border border-amber-600/20 bg-amber-600/[0.09] px-4 py-3">
+            <p className="text-sm font-medium text-foreground/85 leading-relaxed">{question}</p>
           </div>
         )}
 
         <Textarea
           value={answer}
           onChange={event => updateState({ answer: event.target.value })}
-          placeholder={`Tell ${AGENT_DISPLAY_NAME} the answer. It drafts the reply for you to approve before anything is sent.`}
+          placeholder="Your answer…"
           rows={3}
           disabled={isSubmitting || succeeded}
           className="rounded-2xl bg-foreground/[0.03] min-h-[88px]"
