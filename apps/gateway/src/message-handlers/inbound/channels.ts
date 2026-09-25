@@ -34,7 +34,7 @@ import {
 import { processInboundMessage } from './inbound-persistence.js';
 import { deliverInboundProcessing } from './inbound-processing.js';
 import { recordConversationAttributionSafely } from './conversation-attribution.js';
-import { lookupShopifyCustomerName } from './channels/shopify-customer.js';
+import { lookupShopifyCustomerName, resolveEmailCustomerName } from './channels/shopify-customer.js';
 
 function isInstagramInboundAttachment(value: unknown): value is InstagramInboundAttachment {
   return isRecord(value)
@@ -390,18 +390,12 @@ export async function handleEmailJob(job: Job<InboundJobData>, aiSummaryQueue: Q
         : classified;
     }
 
-    const emailLocal = senderEmail!.split('@')[0];
-    const existingNameIsEmailLike = !existingCustomer?.name
-      || existingCustomer.name === senderEmail
-      || existingCustomer.name === emailLocal;
-
-    let resolvedName: string | null = senderName?.trim() || null;
-    if (!resolvedName && existingNameIsEmailLike) {
-      resolvedName = await lookupShopifyCustomerName(organizationId, senderEmail!);
-    }
-    if (!resolvedName && !existingCustomer) {
-      resolvedName = emailLocal;
-    }
+    const resolvedName = await resolveEmailCustomerName({
+      senderEmail: senderEmail!,
+      senderName,
+      existingName: existingCustomer?.name,
+      lookupShopifyName: () => lookupShopifyCustomerName(organizationId, senderEmail!),
+    });
 
     const { accepted: budgetedAttachments } = applyInboundAttachmentBudget(job.data.attachments ?? []);
     const attachmentUrls = (await mapWithConcurrency(
