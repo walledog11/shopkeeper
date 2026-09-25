@@ -90,13 +90,6 @@ export function hasSuspectedFraudRefundSignals(...texts: string[]): boolean {
     }
 
     if (wantsRefund) {
-      const alternatePaymentRefund = (
-        /\b(different|another|alternate|other)\s+(card|payment|account|method)\b/.test(lower)
-        || /\bnot the (one|card) i paid with\b/.test(lower)
-        || (/\bending\s+\d{4}\b/.test(lower) && /\b(card|account)\b/.test(lower))
-      );
-      if (alternatePaymentRefund) return true;
-
       const nonReceipt = /\b(never received|didn't receive|did not receive|not received|non-?receipt)\b/.test(lower);
       const urgent = /\b(right now|immediately|asap|urgent(?:ly)?)\b/.test(lower);
       if (nonReceipt && urgent) return true;

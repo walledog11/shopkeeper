@@ -37,6 +37,7 @@ import { usesCapabilityDiscovery } from "./runtime-modes.js";
 import { TOKEN_BUDGET, DEFAULT_MAX_ITERATIONS } from "./run-policy.js";
 import { resolveAgentSettings } from "./settings.js";
 import { quotePartialRefundForApproval } from "./shopify/partial-refunds.js";
+import { quoteFullRefundForApproval } from "./shopify/refunds.js";
 import { enforceSpendCap } from "./spend.js";
 import {
   parseToolInput,
@@ -44,6 +45,7 @@ import {
   TOOL_CATEGORIES,
   ToolInputValidationError,
   type CreatePartialRefundInput,
+  type CreateRefundInput,
 } from "./tools/registry/index.js";
 import {
   DISCOVERY_TOOL_NAME,
@@ -105,21 +107,33 @@ function isAmbiguousCustomerFollowUp(ctx: AgentContext): boolean {
 async function bindProviderApprovalFacts(
   ctx: AgentContext,
   rawToolCalls: AgentPlan["rawToolCalls"],
+  includePartialRefund: boolean,
 ): Promise<AgentPlan["rawToolCalls"]> {
   const shopify = ctx.shopify;
   if (!shopify) return rawToolCalls;
   return Promise.all(rawToolCalls.map(async (call) => {
-    if (call.name !== "create_partial_refund") return call;
-    let parsed: CreatePartialRefundInput;
+    if (call.name !== "create_refund" && !(includePartialRefund && call.name === "create_partial_refund")) return call;
+    if (
+      call.name === "create_refund"
+      && typeof (call.input as { amount?: unknown })?.amount === "string"
+      && (call.input as { amount: string }).amount.trim()
+    ) {
+      // Compatibility for legacy/model-authored plans. New prompts omit this;
+      // execution still re-quotes and refuses any mismatch.
+      return call;
+    }
+    let parsed: CreatePartialRefundInput | CreateRefundInput;
     try {
-      parsed = parseToolInput(call.name, call.input) as CreatePartialRefundInput;
+      parsed = parseToolInput(call.name, call.input) as CreatePartialRefundInput | CreateRefundInput;
     } catch (error) {
       // Plan validation owns malformed model input. Do not turn its useful
       // invalid-plan evidence into an unrelated provider-preflight failure.
       if (error instanceof ToolInputValidationError) return call;
       throw error;
     }
-    const input = await quotePartialRefundForApproval(parsed, shopify);
+    const input = call.name === "create_refund"
+      ? await quoteFullRefundForApproval(parsed as CreateRefundInput, shopify)
+      : await quotePartialRefundForApproval(parsed as CreatePartialRefundInput, shopify);
     return { ...call, input };
   }));
 }
@@ -349,12 +363,10 @@ export async function planAgent(
   });
   let validation = authoredValidation;
   let rawToolCalls = [...loop.rawToolCalls];
-  if (suspendAtProposal) {
-    // Financial approval binds the amount the merchant is shown, even when the
-    // model selects only line items and Shopify owns pricing. Execution quotes
-    // again and refuses a changed amount before dispatch.
-    rawToolCalls = await bindProviderApprovalFacts(ctx, rawToolCalls);
-  }
+  // Shopify owns a full refund's balance on both runtimes. Runtime v2 also
+  // binds item-refund pricing into its suspended proposal. Execution quotes
+  // again and refuses a changed amount before dispatch.
+  rawToolCalls = await bindProviderApprovalFacts(ctx, rawToolCalls, suspendAtProposal);
 
   const signalCodes: ProducedPlanSignalCode[] = [];
   appendInitialPlanningSignals({ ctx, operatorMode, codes: signalCodes });

@@ -13,7 +13,7 @@ export type ClassifierIntents = {
   mutative_request: boolean; // asks to cancel/refund/return/exchange/edit
   policy_question: boolean; // shipping coverage, returns policy, discounts
   order_status: boolean;
-  fraud_signals: boolean; // chargeback, alternate-card refund, urgency + non-receipt
+  fraud_signals: boolean; // chargeback/dispute language or urgency + non-receipt
   contradiction: boolean; // mutually exclusive asks in one message
   out_of_scope_commercial: boolean; // wholesale/bulk/B2B
   forwarded_injection: boolean; // forwarded "owner authorized refund" pattern

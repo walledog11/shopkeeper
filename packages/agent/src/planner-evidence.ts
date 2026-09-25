@@ -43,7 +43,7 @@ export interface BuiltPlanRoutingEvidence {
 const ESCALATION_REASONS: Record<PlanRoutingEvidenceCode, string | undefined> = {
   classifier_unavailable: undefined,
   classifier_unaligned: undefined,
-  fraud_risk: "Possible fraud signals (chargeback, alternate-card refund, or urgent non-receipt) — needs human review.",
+  fraud_risk: "Possible fraud signals (chargeback/dispute language or urgent non-receipt) — needs human review.",
   forwarded_prompt_injection: "Message claims a prior authorization for a refund — needs human verification.",
   contradictory_request: "Customer made contradictory requests in one message — needs a human to clarify.",
   out_of_scope_commercial_request: "Wholesale, bulk, or B2B inquiry — out of scope for automated support.",

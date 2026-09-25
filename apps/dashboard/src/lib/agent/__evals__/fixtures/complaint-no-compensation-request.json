@@ -1,6 +1,7 @@
 {
   "id": "complaint-no-compensation-request",
   "description": "Customer reports a minor late delivery but asks for no compensation. The agent replies normally and never invents money, credit, a gift card, or a discount.",
+  "whyModelNeeded": "The model must respond empathetically without converting a complaint into an unrequested financial action.",
   "suite": "core",
   "setup": {
     "classifierIntents": {},
@@ -11,7 +12,7 @@
     "shopifyCustomerId": "10000003030",
     "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
     "messages": [
-      { "senderType": "customer", "contentText": "Just so you know, order #3030 arrived four days late. It is fine and I am keeping it, but the delay was frustrating." }
+      { "senderType": "customer", "contentText": "Order #3030 finally arrived four days late. I needed it for Saturday, so that was really frustrating. The item itself is fine." }
     ],
     "recentOrders": [
       {

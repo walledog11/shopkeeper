@@ -82,7 +82,7 @@ recovery, and delivery contracts; unknown merchant-task outcomes were made to
 remain reconciling; and live-model clear- and ambiguous-referent cases passed.
 Real-provider exercises remain Package 6 release evidence rather than Package 5
 implementation work.
-Created 2026-09-11; last updated 2026-09-23.
+Created 2026-09-11; last updated 2026-09-24.
 
 Current checkpoint:
 
@@ -104,9 +104,10 @@ Package 6 execution evidence and stop conditions are recorded in the
   exchange now cover approval, typed outcomes, stale provider state, unknown
   outcomes, reply suppression, and shared delivery recovery in deterministic
   host tests. Return-label continuation has an approval-to-receipt-to-gateway-send
-  host case after a merchant answer. Runtime-v2 partial refunds now bind and
-  display Shopify's calculated amount at proposal time, then re-quote and reject
-  before reservation or dispatch if it changed. Return and exchange revisions now
+  host case after a merchant answer. Full refunds and runtime-v2 partial refunds
+  now bind and display Shopify's calculated amount at proposal time, then
+  re-quote and reject before reservation or dispatch if it changed. The model
+  supplies no amount or currency for a full refund. Return and exchange revisions now
   supersede the old proposal and execute only the replacement card's exact inputs.
   Customer profile updates and explicit notes now cover claimed-task approval,
   bounded discovery, revoked-grant and changed-linked-customer refusal, confirmed
@@ -156,6 +157,17 @@ Package 6 execution evidence and stop conditions are recorded in the
 - [ ] Package 6 operational work remains: controlled real-provider exercise,
   old/new comparison, staged routing, rollback rehearsal, persisted-state
   inventory, and deletion of superseded active paths.
+- [x] The paid model fixture contract was audited against ordinary customer
+  behavior. Deterministic provider, workspace-policy, tier, cap, and execution
+  boundaries now live in deterministic tests instead of repeated paid prompts.
+  Unrealistic exact-refund-amount, alternate-payment-method, customer-requested
+  store-credit/gift-card, post-chargeback, unpaid-refund, and single-message
+  reversal cases were removed. The paid set is now 26 distinct hard core cases
+  plus 15 extended judgment cases, and every retained case states why a model is
+  needed. The validator rejects duplicate conversations, customer-authored
+  refund amounts/currencies, and implausible reversal pile-ups. Because this
+  changes the evidence set, the historical 51-fixture results remain diagnostic
+  history and Gate B requires a fresh same-commit v1/v2 comparison.
 - [x] `npm run verify:pr` passed after these local changes, including static
   checks, workspace tests, 12 browser smoke tests, coverage gates, and
   production builds. The one-repeat live-model release gate completed under a

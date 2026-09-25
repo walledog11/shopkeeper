@@ -11,6 +11,7 @@ function fixture(id: string, suite: "core" | "extended"): Fixture {
   return {
     id,
     description: id,
+    whyModelNeeded: "test",
     suite,
     setup: { channelType: "email", messages: [] },
     instruction: "test",

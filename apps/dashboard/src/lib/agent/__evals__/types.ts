@@ -129,6 +129,8 @@ export interface ExpectedRubric {
 export interface Fixture {
   id: string;
   description: string;
+  /** The conversational judgment this paid model call measures. */
+  whyModelNeeded: string;
   setup: ThreadSetup;
   instruction: string;
   // The instruction is one the merchant typed rather than one derived from the

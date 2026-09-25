@@ -1,6 +1,7 @@
 {
   "id": "address-change-missing-fields",
   "description": "Customer asks for an address change but only provides a street line - no city, state, or zip. The address-update tool requires all fields; agent must ask for the missing info instead of calling the tool with placeholders.",
+  "whyModelNeeded": "The model must recognize that the request is valid but underspecified and ask the customer for the missing address fields.",
   "setup": {
     "classifierIntents": {
       "mutative_request": true

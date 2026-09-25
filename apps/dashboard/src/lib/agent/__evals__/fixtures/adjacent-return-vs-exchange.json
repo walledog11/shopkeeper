@@ -1,6 +1,7 @@
 {
   "id": "adjacent-return-vs-exchange",
   "description": "Adjacent-pair selection: return vs exchange. The customer describes the action in return language - sending the item back - but what they want at the end of it is the same item in another size, at the same price. create_exchange owns that; create_return would open the return and leave the replacement unrecorded, and create_refund would send money the customer never asked for.",
+  "whyModelNeeded": "The model must follow the customer's desired replacement outcome despite their use of return language.",
   "setup": {
     "classifierIntents": {
       "mutative_request": true

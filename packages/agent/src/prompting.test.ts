@@ -90,7 +90,7 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('Telegram, iMessage, or the dashboard');
     expect(prompt).toMatch(/ask them one short clarifying question/i);
     expect(prompt).toMatch(/Never escalate the operator conversation/i);
-    expect(prompt).toMatch(/compensation limit blocked it/i);
+    expect(prompt).toMatch(/Runtime policy enforces a maximum single compensation/i);
     expect(prompt).not.toMatch(/call escalate_to_human/i);
   });
 
@@ -106,7 +106,7 @@ describe('buildSystemPrompt', () => {
       { maxRefundAmount: 50 },
     );
     for (const prompt of [support, operator]) {
-      expect(prompt).toMatch(/maximum single compensation you may issue is \$50/i);
+      expect(prompt).toMatch(/Runtime policy enforces a maximum single compensation of \$50/i);
       expect(prompt).toMatch(/Cancelling an unfulfilled order is not compensation/i);
     }
   });
@@ -437,7 +437,7 @@ describe('support action approval guidance', () => {
 
     expect(prompt).toMatch(/approval happens after the plan is captured/i);
     expect(prompt).toMatch(/never call escalate_to_human merely because an in-policy action requires merchant approval/i);
-    expect(prompt).toMatch(/fixed-value store-credit request for one damaged item/i);
+    expect(prompt).toMatch(/gift cards are a merchant-directed goodwill action/i);
     expect(prompt).toMatch(/remove an item from an unfulfilled order[\s\S]*not a reason to escalate or ask for approval/i);
   });
 });
@@ -658,7 +658,7 @@ describe('gift-card issuance follows the runtime that offers it', () => {
   it('names create_gift_card while the legacy mutation bucket still loads it', () => {
     const prompt = buildSystemPrompt(makeCtx());
 
-    expect(prompt).toContain('Call create_gift_card with the exact amount and customer_id');
+    expect(prompt).toContain('Call create_gift_card only when the merchant instruction explicitly directs a fixed amount');
     expect(prompt).not.toContain('discover the capability first');
   });
 
@@ -666,13 +666,10 @@ describe('gift-card issuance follows the runtime that offers it', () => {
     vi.stubEnv('AGENT_CAPABILITY_DISCOVERY_MODE', 'discover');
     const prompt = buildSystemPrompt(makeCtx());
 
-    expect(prompt).not.toContain('Call create_gift_card with the exact amount and customer_id');
-    expect(prompt).toContain('Gift-card issuance is not in your default tool list');
-    // Still an enumerated allowed case, not a removed capability: the inventory
-    // retains it, and a tree that drops the case turns an explicit store-credit
-    // request into a refund.
-    expect(prompt).toContain('Fixed-value gift card: only when the customer or merchant explicitly requests');
-    expect(prompt).toContain('this is the escalate case, not a refund in its place');
+    expect(prompt).not.toContain('Call create_gift_card only when the merchant instruction explicitly directs a fixed amount');
+    expect(prompt).toContain('discover the gift-card capability');
+    expect(prompt).toContain('Only when the merchant instruction explicitly directs a fixed amount');
+    expect(prompt).toContain('escalate rather than substituting a refund');
   });
 
   it('leaves the rest of the compensation tree identical between runtimes', () => {
@@ -685,7 +682,7 @@ describe('gift-card issuance follows the runtime that offers it', () => {
     const differing = legacy.split('\n')
       .filter((line, index) => line !== discovery.split('\n')[index]);
     expect(differing).toHaveLength(1);
-    expect(differing[0]).toContain('Fixed-value gift card');
+    expect(differing[0]).toContain('Gift cards are a merchant-directed goodwill action');
     expect(legacy.split('\n')).toHaveLength(discovery.split('\n').length);
   });
 });

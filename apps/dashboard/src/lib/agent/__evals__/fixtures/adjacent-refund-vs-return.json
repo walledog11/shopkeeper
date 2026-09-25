@@ -1,6 +1,7 @@
 {
   "id": "adjacent-refund-vs-return",
-  "description": "Adjacent-pair selection: refund vs return. A delivered order, and the customer asks for their money back while saying the item is going back in the post. Money moving back is the outcome, but the goods are coming back first, so the tool that owns this is create_return - create_refund is for the case where the customer keeps what they received. Guards the boundary the two descriptions now draw.",
+  "description": "A customer with a delivered order asks how to send an unwanted item back. The agent should open a return, not infer that money has already been authorized or refunded.",
+  "whyModelNeeded": "The model must distinguish opening a physical return from immediately issuing money back.",
   "setup": {
     "classifierIntents": {
       "mutative_request": true
@@ -17,7 +18,7 @@
     "messages": [
       {
         "senderType": "customer",
-        "contentText": "The linen throw from order #7010 turned up but it's not the colour I expected. I'd like my money back on it - I'm dropping it at the post office tomorrow either way."
+        "contentText": "The linen throw from order #7010 isn't the colour I expected. How do I send it back?"
       }
     ],
     "recentOrders": [

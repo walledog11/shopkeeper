@@ -1,6 +1,7 @@
 {
   "id": "brand-voice-no-overapology",
   "description": "Brand voice forbids over-apologetic phrases. Customer complains about a delayed order; agent must reply without banned apology phrases (objective substring gate, no LLM judge).",
+  "whyModelNeeded": "The model authors the customer-facing response and must follow the merchant's voice constraint under pressure.",
   "setup": {
     "classifierIntents": {
       "order_status": true

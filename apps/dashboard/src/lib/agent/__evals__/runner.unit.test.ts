@@ -156,6 +156,7 @@ describe("classification expectations", () => {
     return {
       id: "classification-test",
       description: "classification expectation test",
+      whyModelNeeded: "test",
       suite: "core",
       setup: {
         channelType: "email",
@@ -191,6 +192,7 @@ describe("runtime-v2 proposal expectations", () => {
   const fixture: Fixture = {
     id: "suspended-proposal",
     description: "v2 stops at a write proposal",
+    whyModelNeeded: "test",
     suite: "core",
     setup: { channelType: "email", messages: [] },
     instruction: "Change the address",

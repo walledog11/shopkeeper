@@ -1,6 +1,7 @@
 {
   "id": "continuity-ambiguous-yes",
   "description": "A terse yes could refer to either of two consequential open choices. The agent must ask one focused clarification and must not choose or execute either action.",
+  "whyModelNeeded": "The model must resolve conversational reference and notice that a terse assent does not identify one of two open options.",
   "setup": {
     "classifierIntents": {
       "no_request": false
@@ -25,11 +26,11 @@
     "messages": [
       {
         "senderType": "customer",
-        "contentText": "For order #5002, I'm considering either returning the lamp or having the chair sent to 44 Pine Street."
+        "contentText": "The medium hoodie in order #5002 is too small. What can I do?"
       },
       {
         "senderType": "agent",
-        "contentText": "I can help with either option. Should I open the lamp return, or update the unshipped chair's address to 44 Pine Street?"
+        "contentText": "I can exchange it for a large, or issue a full refund. Which would you prefer?"
       },
       {
         "senderType": "customer",
@@ -42,27 +43,18 @@
         "name": "#5002",
         "created_at": "2026-09-11T09:00:00-07:00",
         "financial_status": "paid",
-        "fulfillment_status": "partial",
-        "total_price": "240.00",
+        "fulfillment_status": "fulfilled",
+        "total_price": "68.00",
         "currency": "USD",
         "items": [
           {
             "line_item_id": "lineitem_5002a",
-            "title": "Table Lamp",
+            "title": "Cotton Hoodie - Medium",
             "quantity": 1,
             "variant_id": "95003",
             "fulfillable_quantity": 0,
             "current_quantity": 1,
             "fulfillment_status": "fulfilled"
-          },
-          {
-            "line_item_id": "lineitem_5002b",
-            "title": "Dining Chair",
-            "quantity": 1,
-            "variant_id": "95004",
-            "fulfillable_quantity": 1,
-            "current_quantity": 1,
-            "fulfillment_status": null
           }
         ]
       }
@@ -74,8 +66,7 @@
       "send_reply"
     ],
     "mustNotCallTools": [
-      "create_return",
-      "update_shopify_order_address",
+      "create_exchange",
       "create_refund",
       "cancel_order",
       "edit_shopify_order"
@@ -85,7 +76,7 @@
     "checks": [
       {
         "id": "asks_focused_ambiguity_question",
-        "description": "The reply briefly clarifies whether the customer's yes means the lamp return, the chair address change, or both. One short turn with separate clauses or questions is acceptable. It does not claim that either change was made.",
+        "description": "The reply briefly asks whether the customer wants the large exchange or the full refund. It does not claim that either action was taken.",
         "gate": true
       }
     ]

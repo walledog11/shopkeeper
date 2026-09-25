@@ -1344,7 +1344,7 @@ describe('durable order-status host path', () => {
       status: 'policy_block',
       receiptVersion: 1,
       receipt: { outcome: 'rejected', code: 'amount_mismatch' },
-      output: expect.stringContaining('refundable balance'),
+      output: expect.stringContaining('Shopify now calculates 20.00 USD'),
     });
     expect(postDashboardInternal.mock.calls.every(([, body]) =>
       !JSON.stringify(body).includes('has been refunded'))).toBe(true);

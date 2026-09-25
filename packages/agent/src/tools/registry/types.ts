@@ -60,7 +60,9 @@ export interface GetOrderFulfillmentStatusInput {
 
 export interface CreateRefundInput {
   order_id: string;
-  amount: string;
+  /** Shopify quote shown to the approver; never trusted from model output. */
+  amount?: string;
+  /** Currency paired with amount. Runtime-authored with the Shopify quote. */
   currency?: string;
   reason?: string;
 }

@@ -1,6 +1,7 @@
 {
   "id": "adjacent-cancel-vs-refund",
   "description": "Adjacent-pair selection: cancel vs refund. The customer asks for a refund, but nothing on the order has shipped, so the whole order can simply be stopped. cancel_order owns an unfulfilled order the customer no longer wants; create_refund would move money on an order Shopify is about to settle itself, and reaching for both is the duplicate-compensation failure.",
+  "whyModelNeeded": "The model must infer the customer's desired outcome and select cancellation rather than duplicate money movement.",
   "setup": {
     "classifierIntents": {
       "mutative_request": true

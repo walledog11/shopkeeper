@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsonResponse as sharedJsonResponse } from "../testing/json-response.js";
-import { createRefund } from "./refunds.js";
+import { createRefund, quoteFullRefundForApproval } from "./refunds.js";
 
 const ctx = {
   shop: "test-store.myshopify.com",
@@ -92,6 +92,24 @@ afterEach(() => {
 // Every accepted call uses the full line-item and shipping path. The supplied
 // amount is an assertion against Shopify's complete refundable balance.
 describe("createRefund full-refund input", () => {
+  it("binds Shopify's current balance and currency without a customer-authored amount", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(orderResponse())
+      .mockResolvedValueOnce(calculationResponse());
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(quoteFullRefundForApproval(
+      { order_id: "456", reason: "Wrong size" },
+      ctx,
+    )).resolves.toEqual({
+      order_id: "456",
+      reason: "Wrong size",
+      amount: "20.00",
+      currency: "USD",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   async function fullRefundVariables() {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(orderResponse())

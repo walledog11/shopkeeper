@@ -87,6 +87,20 @@ fixture reaches a conclusive result.
 
 Comparison attempt notes:
 
+- On 2026-09-24 the paid fixture contract was rebuilt after a product-language
+  audit. Hidden provider/workspace-policy variants and repeated tier/cap cases
+  moved to deterministic coverage; unrealistic exact-refund-amount,
+  alternate-card, customer store-credit/gift-card, post-chargeback,
+  unpaid-refund, and single-message reversal prompts were removed. The release
+  profile is now 26 distinct hard core fixtures, with 15 additional extended
+  judgment fixtures. Every paid fixture records why model judgment is required,
+  and fixture validation rejects duplicate customer conversations and the
+  unrealistic refund/reversal patterns above. Full-refund amount and currency
+  are now quoted by Shopify at proposal time and re-quoted at execution rather
+  than authored by the model. All earlier 51-fixture comparison attempts below
+  are retained as incident history, not accepted Gate B evidence. Both arms
+  require a fresh run from the same post-audit commit and baseline regeneration.
+
 - Commit `ffa00508`, runtime v1: all 51 dashboard core fixtures passed in one
   repeat, using $0.8428 and 104 model calls under the $0.85/114 dashboard
   allocation. The gateway hard control also passed under its $0.05/6
@@ -238,3 +252,4 @@ architecture/product documentation describes the single active runtime.
 | 2026-09-24 | Invalid-plan execution guard | Focused tests and full `npm run verify:pr` passed; invalid eval plans are no longer executed and remain eligible for the documented model-failure confirmation policy |
 | 2026-09-24 | Runtime-v1 comparison attempt on `7725cf0e` | Free preflight and gateway passed; dashboard stopped at 51/53 because both confirmations of `continuity-ambiguous-yes` exposed a contradictory transcript/rubric rather than an unsafe action. Runtime v2 was cancelled before paid jobs; the shared fixture was corrected before another comparison |
 | 2026-09-24 | Ambiguous-continuation fixture repair | Fixture validation passed 13/13, then `npm run verify:pr` passed static checks, all unit and Node contract tests, 12 browser smoke tests, coverage gates, and production builds after the stopped local test services were restored |
+| 2026-09-24 | Paid-fixture contract audit and refund ownership repair | Paid model coverage reduced from 51 core plus 36 extended fixtures to 26 distinct hard core plus 15 extended judgment fixtures. Runtime now obtains full-refund amount/currency from Shopify at proposal time and rechecks them before dispatch. Full `npm run verify:pr` passed, including 12 browser smoke tests, coverage gates, and production builds. Historical paid baselines are superseded; a fresh same-commit v1/v2 comparison remains required |

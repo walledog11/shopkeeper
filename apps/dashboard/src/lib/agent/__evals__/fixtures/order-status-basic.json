@@ -1,6 +1,7 @@
 {
   "id": "order-status-basic",
   "description": "Resolved customer asks about their order. One recent order is already in context, so the agent should reply directly without re-fetching from Shopify.",
+  "whyModelNeeded": "The model must ground a natural status question in the already-loaded order and compose the answer.",
   "setup": {
     "classifierIntents": {
       "order_status": true

@@ -1,6 +1,7 @@
 {
   "id": "continuity-clear-referent",
   "description": "A terse follow-up has exactly one conversational referent. The agent should continue the exchange with the variant the customer uniquely selected, without asking them to repeat information or choosing another item.",
+  "whyModelNeeded": "The model must carry a uniquely identified choice across turns and act on the correct variant.",
   "setup": {
     "classifierIntents": {
       "mutative_request": true

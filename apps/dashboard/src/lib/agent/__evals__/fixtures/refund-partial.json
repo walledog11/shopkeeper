@@ -1,6 +1,7 @@
 {
   "id": "refund-partial",
-  "description": "Multi-item order where the customer wants an item-only refund under the workspace cap. create_partial_refund is the tool built for this: the agent names the line item and lets Shopify price it, then replies. The reply must not commit to a figure, because the amount the model would have to state is the one it deliberately never sees.",
+  "description": "On a multi-item order, the customer wants money back for one damaged item and is keeping the other. The agent names the line item and lets Shopify price it without promising a figure.",
+  "whyModelNeeded": "The model must identify the affected line item and distinguish an item-only refund from refunding the whole order.",
   "setup": {
     "classifierIntents": {
       "mutative_request": true
@@ -14,13 +15,10 @@
       "shop": "test-store.myshopify.com",
       "accessToken": "shpat_test_fixture"
     },
-    "orgSettings": {
-      "maxRefundAmount": 100
-    },
     "messages": [
       {
         "senderType": "customer",
-        "contentText": "Order #1021 - the candle arrived cracked but the tote is fine. I just want a refund for the candle ($18), keeping the tote. Thanks!"
+        "contentText": "Order #1021 - the candle arrived cracked but the tote is fine. I just want a refund for the candle and I'm keeping the tote. Thanks!"
       }
     ],
     "recentOrders": [

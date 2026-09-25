@@ -3,6 +3,19 @@ import { resolveAgentSettings } from "../settings.js";
 import { checkStaticToolPolicy } from "./static-policy.js";
 
 describe("deterministic compensation policy matrix", () => {
+  it("decides cancellation availability from workspace policy, not model phrasing", () => {
+    expect(checkStaticToolPolicy(
+      "cancel_order",
+      { order_id: "1001" },
+      resolveAgentSettings({ blockCancellations: false }),
+    )).toEqual({ blocked: false });
+    expect(checkStaticToolPolicy(
+      "cancel_order",
+      { order_id: "1001" },
+      resolveAgentSettings({ blockCancellations: true }),
+    )).toMatchObject({ blocked: true, reason: expect.stringContaining("disabled") });
+  });
+
   it.each([
     ["guarded", 50],
     ["trusted", 100],

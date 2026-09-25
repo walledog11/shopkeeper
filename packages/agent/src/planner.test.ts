@@ -504,6 +504,61 @@ describe("planAgent capture loop", () => {
     expect(mockCreate).toHaveBeenCalledTimes(2);
   });
 
+  it("binds Shopify's full-refund quote when the model supplies only the order", async () => {
+    installAgentLogger(makeLogger());
+    mockCreate.mockResolvedValueOnce(toolUses([
+      {
+        id: "tu_refund",
+        name: "create_refund",
+        input: { order_id: "9000004003", reason: "Wrong size" },
+      },
+      {
+        id: "tu_reply",
+        name: "send_reply",
+        input: { text: "I can arrange the full refund." },
+      },
+    ]));
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        order: {
+          id: 9000004003,
+          currency: "USD",
+          financial_status: "paid",
+          refunds: [],
+          line_items: [{ id: 11, title: "Tee", quantity: 1, current_quantity: 1 }],
+        },
+      }), { status: 200, headers: { "content-type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        refund: {
+          currency: "USD",
+          transactions: [{
+            kind: "suggested_refund",
+            gateway: "shopify_payments",
+            parent_id: 222,
+            amount: "42.00",
+            maximum_refundable: "42.00",
+          }],
+        },
+      }), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const plan = await planAgent(makeCtx({
+      recentOrders: [FULFILLED_ORDER_4003],
+    }), "Please give me a full refund for order #4003", AGENT_SETTINGS_DEFAULTS);
+
+    expect(plan.rawToolCalls).toContainEqual(expect.objectContaining({
+      id: "tu_refund",
+      name: "create_refund",
+      input: {
+        order_id: "9000004003",
+        reason: "Wrong size",
+        amount: "42.00",
+        currency: "USD",
+      },
+    }));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("reads the suspension mode from the environment, off unless asked for", () => {
     expect(resolveProposalSuspensionMode(undefined)).toBe("off");
     expect(resolveProposalSuspensionMode("")).toBe("off");

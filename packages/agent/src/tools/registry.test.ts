@@ -271,11 +271,11 @@ describe("agent tool registry", () => {
     },
   );
 
-  it("requires create_refund amount in both schema and parser", () => {
+  it("leaves create_refund pricing for the runtime to bind", () => {
     const definition = definitionFor("create_refund");
 
-    expect(definition.inputSchema.required).toEqual(["order_id", "amount"]);
-    expect(() => definition.parse({ order_id: "2001" })).toThrow(/input.amount is required/);
+    expect(definition.inputSchema.required).toEqual(["order_id"]);
+    expect(definition.parse({ order_id: "2001" })).toEqual({ order_id: "2001" });
   });
 
   it("requires create_gift_card customer delivery identity", () => {

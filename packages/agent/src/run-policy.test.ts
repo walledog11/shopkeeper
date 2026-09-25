@@ -368,7 +368,7 @@ describe("runAgent policy enforcement", () => {
     expect(mockReserveDailyRefundSpend).not.toHaveBeenCalled();
   });
 
-  it("escalates a cached refund plan with missing exact financial inputs", async () => {
+  it("refuses a cached refund plan that predates the runtime-bound quote", async () => {
     const result = await runAgent(
       makeCtx(),
       "Refund the order",
@@ -377,7 +377,7 @@ describe("runAgent policy enforcement", () => {
     );
 
     expect(mockEscalateToHuman).toHaveBeenCalledWith(
-      expect.stringContaining("invalid arguments for create_refund"),
+      expect.stringContaining("compensation amount must be a positive currency amount"),
     );
     expect(result.actionsPerformed).toMatchObject([{ tool: "create_refund", status: "policy_block" }]);
     expect(mockReserveDailyRefundSpend).not.toHaveBeenCalled();
@@ -500,10 +500,10 @@ describe("runAgent policy enforcement", () => {
     );
 
     expect(result.actionsPerformed).toMatchObject([{ tool: "create_refund", status: "policy_block" }]);
-    expect(mockEscalateToHuman).toHaveBeenCalledWith(expect.stringContaining("does not equal Shopify's complete refundable balance"));
+    expect(mockEscalateToHuman).toHaveBeenCalledWith(expect.stringContaining("Shopify now calculates 42.00 USD"));
     expect(mockReleaseDailyRefundSpendReservation).toHaveBeenCalledWith(
       "reservation_1",
-      expect.stringContaining("requested amount 20.00 USD"),
+      expect.stringContaining("approved 20.00 USD"),
     );
     expect(mockCommitDailyRefundSpendReservation).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledTimes(2);

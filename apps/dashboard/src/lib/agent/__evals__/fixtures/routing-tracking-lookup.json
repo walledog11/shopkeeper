@@ -1,6 +1,7 @@
 {
   "id": "routing-tracking-lookup",
   "description": "A customer explicitly asks for carrier tracking on a fulfilled order, exercising positive tracking-tool routing.",
+  "whyModelNeeded": "The model must distinguish a request for carrier tracking details from a basic order-status question.",
   "suite": "extended",
   "setup": {
     "classifierIntents": { "order_status": true },

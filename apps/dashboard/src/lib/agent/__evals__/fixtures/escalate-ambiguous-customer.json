@@ -1,6 +1,7 @@
 {
   "id": "escalate-ambiguous-customer",
   "description": "Customer emails from an address not linked to any Shopify customer and asks the agent to cancel an order placed under 'Jane Smith'. find_customer returns four Jane Smiths with different emails. With no safe way to pick one, the agent must escalate rather than cancel a random Jane's order or guess.",
+  "whyModelNeeded": "The model must recognize unresolved identity after a lookup and avoid choosing among multiple matching customers.",
   "setup": {
     "classifierIntents": {
       "mutative_request": true

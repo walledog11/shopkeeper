@@ -1,6 +1,7 @@
 {
   "id": "cancel-allowed",
-  "description": "Customer requests cancellation on an unfulfilled order in a workspace that allows cancellations. Agent should cancel and reply.",
+  "description": "Customer requests cancellation of one identified unfulfilled order. The agent should propose that single action and reply.",
+  "whyModelNeeded": "The model must map an ordinary cancellation request to the correct order action and customer response.",
   "setup": {
     "classifierIntents": {
       "mutative_request": true
@@ -13,9 +14,6 @@
     "shopify": {
       "shop": "test-store.myshopify.com",
       "accessToken": "shpat_test_fixture"
-    },
-    "orgSettings": {
-      "blockCancellations": false
     },
     "messages": [
       {

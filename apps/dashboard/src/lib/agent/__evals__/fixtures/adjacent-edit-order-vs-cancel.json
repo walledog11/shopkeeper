@@ -1,6 +1,7 @@
 {
   "id": "adjacent-edit-order-vs-cancel",
   "description": "Adjacent-pair selection: edit-order vs cancel. The customer says 'cancel', but names one item out of two on an unshipped order and asks for the rest to still come. The order goes ahead with different contents, which is edit_shopify_order with remove_variant_id; cancel_order would stop the item they are still waiting for.",
+  "whyModelNeeded": "The model must understand that canceling one line item is an order edit, not cancellation of the whole order.",
   "setup": {
     "classifierIntents": {
       "mutative_request": true

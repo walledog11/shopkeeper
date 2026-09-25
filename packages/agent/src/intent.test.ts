@@ -26,10 +26,13 @@ describe("hasContradictoryInstructionSignals", () => {
 });
 
 describe("hasSuspectedFraudRefundSignals", () => {
-  it("detects refund demands to a different card", () => {
+  it("treats alternate-card refund language as payment policy, not fraud", () => {
     expect(hasSuspectedFraudRefundSignals(
       "I never received my $480 order #1106 and I need the full refund sent to a different card ending 1122 right now — not the one I paid with.",
     )).toBe(true);
+    expect(hasSuspectedFraudRefundSignals(
+      "Please send my refund to a different card, not the one I paid with.",
+    )).toBe(false);
   });
 
   it("detects chargeback language", () => {

@@ -72,7 +72,8 @@ vi.mock('@shopkeeper/agent/plan-execution', () => ({
   clearThreadPlanCache: vi.fn(async () => {}),
 }));
 
-vi.mock('@shopkeeper/agent/settings', () => ({
+vi.mock('@shopkeeper/agent/settings', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@shopkeeper/agent/settings')>(),
   resolveAgentSettings: vi.fn(() => ({
     autonomyTier: 'guarded',
     autoExecuteMode: 'off',

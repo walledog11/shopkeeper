@@ -42,8 +42,51 @@ function sortedValue(value: unknown): unknown {
 }
 
 function effectiveFixture(fixture: Fixture): string {
-  const { id: _id, description: _description, suite: _suite, advisory: _advisory, ...effective } = fixture
+  const { id: _id, description: _description, whyModelNeeded: _why, suite: _suite, advisory: _advisory, ...effective } = fixture
   return JSON.stringify(sortedValue(effective))
+}
+
+function normalizedConversation(fixture: Fixture): string {
+  return (fixture.setup.messages ?? [])
+    .map(message => `${message.senderType}:${message.contentText.toLowerCase()}`)
+    .join(" ")
+    .replace(/#[a-z0-9-]+/g, "#order")
+    .replace(/\b\d{4,}\b/g, "id")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+function expectsRefundAction(fixture: Fixture): boolean {
+  const tools = [
+    ...(fixture.expectedPlan.mustCallTools ?? []),
+    ...(fixture.expectedPlan.mustCallToolsInOrder ?? []),
+    ...(fixture.expectedPlan.mustCallToolsWithInput ?? []).map(expectation => expectation.tool),
+  ]
+  return tools.includes("create_refund") || tools.includes("create_partial_refund")
+}
+
+function validateRealisticCustomerLanguage(fixture: Fixture, failures: string[]): void {
+  const customerMessages = (fixture.setup.messages ?? [])
+    .filter(message => message.senderType === "customer")
+    .map(message => message.contentText)
+  if (
+    expectsRefundAction(fixture)
+    && customerMessages.some(text => /(?:[$€£]\s*\d|\b\d+(?:\.\d{1,2})?\s*(?:usd|cad|eur|gbp)\b)/i.test(text))
+  ) {
+    failures.push("customer refund request must not supply an exact amount or currency; Shopify owns the quote")
+  }
+  for (const text of customerMessages) {
+    const actionCount = [
+      /\bcancel\b/i,
+      /\brefund\b/i,
+      /\b(?:change|update|redirect).{0,30}\baddress\b/i,
+      /\breturn\b/i,
+      /\bexchange\b|\bswap\b/i,
+    ].filter(pattern => pattern.test(text)).length
+    if (actionCount >= 3 && /\b(?:actually|scratch|wait|instead)\b/i.test(text)) {
+      failures.push("customer message contains an implausible pile-up of reversed actions; model the changes across turns")
+    }
+  }
 }
 
 function expectationFor(fixture: Fixture, tool: string): ToolInputExpectation | undefined {
@@ -128,6 +171,7 @@ export function validateFixtures(fixtures: readonly unknown[], filenames?: reado
   const failures: string[] = []
   const ids = new Set<string>()
   const effective = new Map<string, string>()
+  const customerTranscripts = new Map<string, string>()
 
   fixtures.forEach((rawFixture, index) => {
     const label = filenames?.[index] ?? `fixture[${index}]`
@@ -139,6 +183,9 @@ export function validateFixtures(fixtures: readonly unknown[], filenames?: reado
     const fixture = rawFixture as unknown as Fixture
     if (typeof fixture.id !== "string" || fixture.id.trim() === "") local.push("id is required")
     if (typeof fixture.description !== "string" || fixture.description.trim() === "") local.push("description is required")
+    if (typeof fixture.whyModelNeeded !== "string" || fixture.whyModelNeeded.trim() === "") {
+      local.push("whyModelNeeded is required for every paid fixture")
+    }
     if (typeof fixture.instruction !== "string" || fixture.instruction.trim() === "") local.push("instruction is required")
     if (!SUITES.has(fixture.suite)) local.push("suite must be core or extended")
     if (fixture.suite === "core" && fixture.advisory === true) {
@@ -266,11 +313,20 @@ export function validateFixtures(fixtures: readonly unknown[], filenames?: reado
     validateFinancialExpectation(fixture, "create_refund", local)
     validateFinancialExpectation(fixture, "create_gift_card", local)
     validateUsefulNegativeOutcome(fixture, local)
+    validateRealisticCustomerLanguage(fixture, local)
 
     const fingerprint = effectiveFixture(fixture)
     const duplicate = effective.get(fingerprint)
     if (duplicate) local.push(`is effectively identical to ${JSON.stringify(duplicate)}`)
     else effective.set(fingerprint, fixture.id)
+
+    const transcript = normalizedConversation(fixture)
+    const transcriptDuplicate = transcript ? customerTranscripts.get(transcript) : undefined
+    if (transcriptDuplicate) {
+      local.push(`repeats the same normalized customer conversation as ${JSON.stringify(transcriptDuplicate)}`)
+    } else if (transcript) {
+      customerTranscripts.set(transcript, fixture.id)
+    }
 
     failures.push(...local.map(message => `${label}: ${message}`))
   })

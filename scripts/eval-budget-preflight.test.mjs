@@ -20,7 +20,8 @@ test('release budget reserves the bounded gateway cost without starving dashboar
     result.stdout,
     /allocations dashboard=\$0\.7000\/114calls gateway=\$0\.0500\/6calls/,
   );
-  assert.match(result.stdout, /calls=118\/120/);
+  assert.match(result.stdout, /mode=release fixtures=26 repeats=1 judges=8/);
+  assert.match(result.stdout, /calls=62\/120/);
 });
 
 test('release preflight rejects the call ceiling exhausted by the observed suite', () => {
@@ -30,21 +31,21 @@ test('release preflight rejects the call ceiling exhausted by the observed suite
     '--repeats', '1',
     '--judges', 'off',
     '--max-usd', '0.75',
-    '--max-calls', '100',
+    '--max-calls', '60',
   ], {
     cwd: process.cwd(),
     encoding: 'utf8',
   });
 
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /Estimated 118 calls exceeds the approved 100-call ceiling/);
+  assert.match(result.stderr, /Estimated 62 calls exceeds the approved 60-call ceiling/);
 });
 
 test('targeted preflight accounts for isolated cold-cache cost and planner call bounds', () => {
   const threeFixtures = [
-    'tier-trusted-refund-over-cap',
-    'tier-trusted-refund-under-cap',
-    'tier-watch-refund-draft-only',
+    'refund-full-order',
+    'continuity-ambiguous-yes',
+    'return-label-ask-merchant',
   ].join(',');
   const undersized = spawnSync(process.execPath, [
     'scripts/eval-budget-preflight.mjs',
@@ -64,7 +65,7 @@ test('targeted preflight accounts for isolated cold-cache cost and planner call 
   const exhausted = spawnSync(process.execPath, [
     'scripts/eval-budget-preflight.mjs',
     '--mode', 'targeted',
-    '--fixtures', 'tier-watch-refund-draft-only',
+    '--fixtures', 'return-label-ask-merchant',
     '--repeats', '1',
     '--judges', 'off',
     '--max-usd', '0.03',
@@ -79,7 +80,7 @@ test('targeted preflight accounts for isolated cold-cache cost and planner call 
   const callExhausted = spawnSync(process.execPath, [
     'scripts/eval-budget-preflight.mjs',
     '--mode', 'targeted',
-    '--fixtures', 'tier-watch-refund-draft-only',
+    '--fixtures', 'return-label-ask-merchant',
     '--repeats', '1',
     '--judges', 'off',
     '--max-usd', '0.10',
@@ -94,7 +95,7 @@ test('targeted preflight accounts for isolated cold-cache cost and planner call 
   const bounded = spawnSync(process.execPath, [
     'scripts/eval-budget-preflight.mjs',
     '--mode', 'targeted',
-    '--fixtures', 'tier-watch-refund-draft-only',
+    '--fixtures', 'return-label-ask-merchant',
     '--repeats', '1',
     '--judges', 'off',
     '--max-usd', '0.10',

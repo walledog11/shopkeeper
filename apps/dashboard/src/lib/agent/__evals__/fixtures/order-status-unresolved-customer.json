@@ -1,6 +1,7 @@
 {
   "id": "order-status-unresolved-customer",
   "description": "Support thread with no Shopify customer linked and no orders in context. The agent must ask the customer for identifying order details directly; missing customer-provided data is not a merchant escalation.",
+  "whyModelNeeded": "The model must identify which missing customer detail would unlock the request and ask for it directly.",
   "setup": {
     "classifierIntents": {
       "order_status": true

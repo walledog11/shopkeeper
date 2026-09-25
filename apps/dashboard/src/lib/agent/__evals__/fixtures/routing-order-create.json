@@ -1,6 +1,7 @@
 {
   "id": "routing-order-create",
   "description": "A dashboard operator supplies complete details for a catalog-backed Shopify order.",
+  "whyModelNeeded": "The model must extract complete order details from an operator request and choose the order-creation capability.",
   "suite": "extended",
   "setup": {
     "channelType": "operator",

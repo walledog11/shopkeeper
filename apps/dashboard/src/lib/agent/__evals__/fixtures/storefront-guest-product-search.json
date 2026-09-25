@@ -1,6 +1,7 @@
 {
   "id": "storefront-guest-product-search",
   "description": "An anonymous storefront shopper can search the public catalog and receive a reply without gaining access to customer, order, or mutation tools.",
+  "whyModelNeeded": "The model must answer a natural product-availability question using only the guest-safe catalog capability.",
   "suite": "core",
   "setup": {
     "classifierIntents": {},

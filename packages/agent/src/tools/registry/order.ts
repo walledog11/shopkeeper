@@ -122,11 +122,11 @@ export const ORDER_TOOL_DEFINITIONS = [
   defineTool({
     name: "create_refund",
     description:
-      "Use when the customer or merchant explicitly requests an exact full-order refund and does not also explicitly ask to send the delivered items back. Do not infer a return merely because the item was damaged, unwanted, or the wrong size: an explicit full-refund request controls unless the customer also says the goods are being returned. Pass the identified paid order, its complete current refundable balance, and its currency. Partial, item-only, vague, mismatched, previously refunded, chargeback, and non-paid requests must be escalated instead. If the customer explicitly asks to send delivered items back or open a return, use create_return. If nothing has shipped and the whole order should be stopped, use cancel_order.",
+      "Use when the customer or merchant explicitly requests all available money back for one identified order and does not also explicitly ask to send delivered items back. Pass the order_id and reason only: Shopify supplies the current refundable balance and currency for approval, so never calculate or copy an amount yourself. Do not infer a return merely because the item was damaged, unwanted, or the wrong size. Item-only refunds use create_partial_refund; a physical return uses create_return; an unshipped order that should be stopped uses cancel_order.",
     fields: {
       order_id: stringArg("Shopify order ID (numeric).", { required: true }),
-      amount: stringArg("Amount to refund in the store's currency (e.g. '19.99'). For a full refund, use the order's total from context. Always provide this.", { required: true }),
-      currency: stringArg("Three-letter store currency from the identified order (for example 'USD')."),
+      amount: stringArg("Runtime-supplied Shopify quote for approval. Always omit this field."),
+      currency: stringArg("Runtime-supplied quote currency for approval. Always omit this field."),
       reason: stringArg("Reason for the refund (e.g. 'Item not received', 'Wrong item sent')."),
     },
     category: "action",
@@ -372,7 +372,7 @@ export const ORDER_TOOL_DEFINITIONS = [
   defineTool({
     name: "create_gift_card",
     description:
-      "Create a fixed-value Shopify gift card only when the customer or merchant explicitly requested a gift card, store credit, or other fixed-value non-cash compensation. A resolved Shopify customer is required so Shopify can deliver the code. Never substitute this for an explicit refund and never invent it proactively. The amount uses the workspace compensation limits.",
+      "Create a fixed-value Shopify gift card only when the merchant explicitly directs it as a goodwill action. A resolved Shopify customer is required so Shopify can deliver the code. Never infer this from a customer complaint or substitute it for a refund. The amount uses the workspace compensation limits.",
     fields: {
       amount: stringArg("Gift card value in the store's currency (e.g. '25.00'). Must be within the workspace compensation limit.", { required: true }),
       customer_id: stringArg("Resolved Shopify customer ID (numeric). Required so Shopify delivers the gift card code to this customer.", { required: true }),

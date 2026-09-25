@@ -1,6 +1,7 @@
 {
   "id": "routing-support-stats",
   "description": "A dashboard operator asks for seven-day support metrics, exercising the support-stats tool.",
+  "whyModelNeeded": "The model must map a natural analytics request and time window to the support-stats capability.",
   "suite": "extended",
   "setup": {
     "channelType": "operator",

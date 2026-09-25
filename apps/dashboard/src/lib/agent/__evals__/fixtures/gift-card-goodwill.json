@@ -1,6 +1,7 @@
 {
   "id": "gift-card-goodwill",
   "description": "Merchant instructs the agent (via the ticket instruction) to send the customer a $20 gift card for a botched embroidery job. The agent must create the gift card with the customer attached (so Shopify emails them the code - the planned reply cannot contain a code that does not exist yet) and reply about the gesture without refunding.",
+  "whyModelNeeded": "The model must distinguish an explicit merchant-directed goodwill action from an ordinary customer complaint.",
   "setup": {
     "classifierIntents": {
       "mutative_request": true

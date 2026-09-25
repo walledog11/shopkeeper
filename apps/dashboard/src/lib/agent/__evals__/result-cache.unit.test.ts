@@ -8,6 +8,7 @@ import type { Fixture, FixtureRunSummary } from "./types"
 const fixture: Fixture = {
   id: "cache-test",
   description: "cache test",
+  whyModelNeeded: "test",
   suite: "core",
   setup: { channelType: "email", messages: [] },
   instruction: "test",

@@ -61,6 +61,7 @@ export {
   quotePartialRefundForApproval,
   unrefundableItems,
 } from "./partial-refunds.js";
+export { createRefund, quoteFullRefundForApproval } from "./refunds.js";
 export {
   INVENTORY_STATUS_QUERY,
   formatInventoryStatusLine,
@@ -78,7 +79,6 @@ export { updateShopifyOrderAddress } from "./order-address.js";
 export { cancelOrder } from "./order-cancellation.js";
 export { createShopifyOrder, type CreateShopifyOrderOptions } from "./order-creation.js";
 export { editShopifyOrder } from "./order-edit.js";
-export { createRefund } from "./refunds.js";
 export { createReturn, fetchReturnableLineItems } from "./returns.js";
 export { createExchange } from "./exchanges.js";
 export { issueStoreCredit } from "./store-credit.js";

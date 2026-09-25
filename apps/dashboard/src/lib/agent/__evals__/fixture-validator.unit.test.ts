@@ -10,6 +10,7 @@ function fixture(overrides: Partial<Fixture> = {}): Fixture {
   return {
     id: "valid-fixture",
     description: "A valid fixture",
+    whyModelNeeded: "The model must distinguish a requested full refund from adjacent actions.",
     suite: "core",
     setup: {
       channelType: "email",
@@ -137,6 +138,40 @@ describe("validateFixtures", () => {
     const first = fixture()
     const second = fixture({ id: "second", description: "Different prose" })
     expect(() => validateFixtures([first, second])).toThrow(/effectively identical/)
+  })
+
+  it("requires a model-judgment rationale and rejects repeated customer conversations", () => {
+    const missingRationale = fixture({ whyModelNeeded: "" })
+    expect(() => validateFixtures([missingRationale])).toThrow(/whyModelNeeded is required/)
+
+    const first = fixture()
+    const second = fixture({
+      id: "second",
+      setup: {
+        ...first.setup,
+        orgSettings: { blockCancellations: true },
+      },
+    })
+    expect(() => validateFixtures([first, second])).toThrow(/repeats the same normalized customer conversation/)
+  })
+
+  it("rejects customer-authored refund quotes and implausible single-message reversals", () => {
+    const quotedRefund = fixture({
+      setup: {
+        channelType: "email",
+        messages: [{ senderType: "customer", contentText: "Refund exactly $20 USD on order #1001." }],
+      },
+    })
+    expect(() => validateFixtures([quotedRefund])).toThrow(/Shopify owns the quote/)
+
+    const reversals = fixture({
+      expectedPlan: { mustCallTools: ["send_reply"] },
+      setup: {
+        channelType: "email",
+        messages: [{ senderType: "customer", contentText: "Cancel it. Actually change the address. Wait, refund it, or return it instead." }],
+      },
+    })
+    expect(() => validateFixtures([reversals])).toThrow(/model the changes across turns/)
   })
 
   it("rejects negative financial fixtures without a useful outcome", () => {

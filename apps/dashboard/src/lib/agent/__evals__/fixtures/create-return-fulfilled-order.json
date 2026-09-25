@@ -1,6 +1,7 @@
 {
   "id": "create-return-fulfilled-order",
   "description": "Customer wants to send back a delivered item from a fulfilled order. The agent should open a return with create_return (no refund yet - the items must come back first) and notify the customer, not refund, cancel, or escalate. Advisory: simulated tool execution; the gated property is that a fulfilled order is handled with a return rather than a premature refund or a hollow escalation.",
+  "whyModelNeeded": "The model must interpret a natural return request and distinguish it from cancellation and immediate refunding.",
   "advisory": true,
   "setup": {
     "classifierIntents": {
