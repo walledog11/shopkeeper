@@ -47,6 +47,28 @@ describe("plan grounding", () => {
     }, facts)).toEqual(["No refund has been issued, and we've canceled order #1001."]);
   });
 
+  it("grounds a shipping-address change on the address update, not a shipment", () => {
+    const facts = [{
+      action: "address_update" as const,
+      target: { kind: "order" as const, id: "6163969081578", aliases: ["#1032"] },
+      outcome: "success" as const,
+      executionReference: "operation_1",
+      sourceTool: "update_shopify_order_address",
+    }];
+    // The two replies blocked in production after the address change committed.
+    for (const text of [
+      "Hi Walle, good news - order #1032's shipping address has been updated to 350 5th Ave, New York, NY 10118.",
+      "Hi Walle, done! We've updated the shipping address on order #1032 to 350 5th Ave, New York, NY 10118.",
+    ]) {
+      expect(unsupportedReplyCompletionClaims({ name: "send_reply", input: { text } }, facts)).toEqual([]);
+    }
+    // An address update still cannot ground a claim that the order shipped.
+    expect(unsupportedReplyCompletionClaims({
+      name: "send_reply",
+      input: { text: "Order #1032 has been shipped to your new shipping address." },
+    }, facts)).toEqual(["Order #1032 has been shipped to your new shipping address."]);
+  });
+
   it.each([
     ["return", "We've created your return.", "A return has been created for order #1001."],
     ["exchange", "We've created your exchange.", "An exchange has been created for order #1001."],

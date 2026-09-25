@@ -66,7 +66,12 @@ const SPECIFIC_CLAIM_ACTIONS: readonly [RegExp, ReadonlySet<CompletionAction>][]
   [/\baddress(?:es)?\b/i, new Set(["address_update"])],
   [/\b(?:customer (?:info|information|profile)|email address|phone number|customer name)\b/i, new Set(["customer_update"])],
   [/\b(?:customer notes?|notes?)\b/i, new Set(["customer_note"])],
-  [/\b(?:shipments?|shipped|shipping|fulfilled|fulfilling)\b/i, new Set(["fulfillment"])],
+  // "Shipping address" names an address, not a shipment. Reading it as one
+  // demanded a fulfillment behind every true address-change reply and blocked
+  // them (Gate C, 2026-09-25). An exception in a prose matcher, which the
+  // architecture law forbids growing; the structural replacement is composing
+  // v2 claims from receipt fields (Package 6 deletion target).
+  [/\b(?:shipments?|shipped|shipping(?!\s+(?:address(?:es)?|details|info(?:rmation)?)\b)|fulfilled|fulfilling)\b/i, new Set(["fulfillment"])],
   [/\bdiscounts?\b/i, new Set(["discount"])],
   [/\bprices?\b/i, new Set(["price_update"])],
 ];
