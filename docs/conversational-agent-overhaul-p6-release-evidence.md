@@ -70,16 +70,16 @@ artifacts and record:
 
 | Measure | Runtime v1 | Runtime v2 | Decision |
 | --- | ---: | ---: | --- |
-| Commit SHA | pending | pending | must match |
-| Dashboard hard fixtures | pending | pending | no unauthorized/duplicate effect |
-| Gateway hard control | pending | pending | both pass |
-| Model calls | pending | pending | explain delta |
-| Discovery calls | pending | pending | explain delta |
-| Input/output tokens | pending | pending | explain delta |
-| Active latency | pending | pending | within approved release budget |
-| Spend | pending | pending | within explicit ceiling |
-| Clarifications / handoffs | pending | pending | v2 matches or improves |
-| Unsupported completion claims | pending | pending | zero |
+| Commit SHA | `7a0fc011` suite + `a12ca5f8` refund reruns | same | Harness-only fix between them; see notes |
+| Dashboard hard fixtures | 26/26 | 26/26 (`refund-partial` 2/2 on confirmation after one unconfirmed miss) | No unauthorized or duplicate effect |
+| Gateway hard control | passed | passed | Both pass |
+| Model calls (suite, excluding refund reruns) | 55 | 58 | +3 |
+| Discovery calls | not instrumented | not instrumented | CI pins `AGENT_CAPABILITY_DISCOVERY_MODE=off`; the eval ledger does not count discovery calls |
+| Prompt / output tokens (suite) | 532,602 / 6,614 | 462,864 / 6,354 | v2 reads fewer prompt tokens, but its cache hit rate was 63% vs 79% |
+| Active latency, per fixture (suite) | p50 4.1s, p95 7.8s | p50 4.1s, p95 5.8s | v2 matches p50 and improves p95 |
+| Spend (suite + refund reruns) | $0.5370 + $0.0151 | $0.7157 + $0.0665 + $0.0169 | v2 costs ~33% more per suite, driven by 157k vs 100k cache-write tokens; cause not isolated |
+| Clarifications / handoffs | ask-operator, escalate, and continuity fixtures pass | same | v2 matches |
+| Unsupported completion claims | none on gated rubric checks | none on gated rubric checks | zero |
 
 Record workflow run IDs and artifact names here. A local or CI result is not a
 pass unless the runtime version appears in the ledger/report and every selected
@@ -174,7 +174,25 @@ Comparison attempt notes:
   `simulateShopifyRest` responses for the order read and refund calculation,
   and the runner serves them for the fixture shop during the run. An undeclared
   request to that shop fails with an explicit "unsimulated Shopify request"
-  error. Both arms must rerun from the harness-fix commit.
+  error. The harness fix changes no agent code, prompt, or tool description,
+  so the other fixtures' `7a0fc011` results cannot move; only the refund
+  fixtures that never produced a model result are rerun.
+- Commit `a12ca5f8`, targeted refund reruns (runs `36107906427` for runtime 1
+  and `36107914708` for runtime 2, each under $0.10 / 60 calls; an earlier
+  dispatch at 20 calls was refused by the budget preflight before any model
+  call): `refund-full-order` passed on v1 ($0.0151, 3 calls) and on v2.
+  `refund-partial` failed once on v2 ($0.0665 / 7 calls for the v2 run): the
+  model re-read orders already present in context with `get_shopify_orders`,
+  which the fixture does not simulate, then escalated "Order or customer
+  lookup failed". It proposed no refund and no reply. Targeted mode has no
+  confirmation retry, so this is a single inconclusive sample. It is not
+  accepted as a pass or as a v2 regression.
+- Commit `a12ca5f8`, runtime-v2 `refund-partial` confirmation (run
+  `36110503065`, $0.15 / 60 calls, fixture unchanged): passed 2/2 at $0.0169
+  and 3 calls. The earlier miss was stochastic. With every fixture now
+  conclusive on both runtimes, Gate B's authorization and effect-correctness
+  criteria pass. The open item is v2's higher per-suite spend, which has no
+  numeric budget to be judged against yet.
 
 ## Gate C — controlled real-provider and delivery exercise
 
@@ -268,3 +286,5 @@ architecture/product documentation describes the single active runtime.
 | 2026-09-24 | Ambiguous-continuation fixture repair | Fixture validation passed 13/13, then `npm run verify:pr` passed static checks, all unit and Node contract tests, 12 browser smoke tests, coverage gates, and production builds after the stopped local test services were restored |
 | 2026-09-24 | Paid-fixture contract audit and refund ownership repair | Paid model coverage reduced from 51 core plus 36 extended fixtures to 26 distinct hard core plus 15 extended judgment fixtures. Runtime now obtains full-refund amount/currency from Shopify at proposal time and rechecks them before dispatch. Full `npm run verify:pr` passed, including 12 browser smoke tests, coverage gates, and production builds. Historical paid baselines are superseded; a fresh same-commit v1/v2 comparison remains required |
 | 2026-09-25 | Post-audit comparison attempt on `7a0fc011` | Gateway control passed on both arms. Dashboard v1 25/25 conclusive ($0.5370, 55 calls) and v2 24/24 conclusive ($0.7157, 58 calls), but the refund fixtures failed as infrastructure because the eval harness did not simulate the planner's pre-approval Shopify refund quote. No production/provider action occurred |
+| 2026-09-25 | Targeted refund reruns on `a12ca5f8` | `refund-full-order` passed on v1 and v2. v2 `refund-partial` escalated after an unsimulated redundant `get_shopify_orders` lookup failed; one unconfirmed sample, no unsafe action. No production/provider action occurred |
+| 2026-09-25 | Runtime-v2 `refund-partial` confirmation on `a12ca5f8` | 2/2 passed, $0.0169, 3 calls. Gate B comparison table filled; no unauthorized or duplicate effect on either runtime |
