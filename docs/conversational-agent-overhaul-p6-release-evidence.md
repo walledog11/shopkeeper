@@ -30,12 +30,12 @@ or customer from production data merely because it is available.
 | Input | Selected value | Required before |
 | --- | --- | --- |
 | Release owner | Rajbir Sambi | Any production change |
-| Controlled Clerk organization ID | selected by release owner; exact value held outside the repository | Runtime-v2 allowlist |
+| Controlled organization | selected by release owner; the allowlist takes the internal `Organization.id` UUID, not the Clerk ID (`resolveAgentRuntimeVersionForOrg` compares `organizationId`) | Runtime-v2 allowlist |
 | Controlled Shopify store | organization-owned test store; verify connection before use | Real-provider exercise |
 | Test order/customer owned by operator | Walle Walson; exact provider identity held outside the repository | Real-provider exercise |
 | Delivery channel and destination | operator-controlled email address; exact address held outside the repository | Actual delivery |
-| Permitted commercial effect | append one explicit canary note to the selected test customer | Provider dispatch |
-| Maximum commercial amount/count | one customer-note mutation; no financial effect | Provider dispatch |
+| Permitted commercial effect | writes on the organization's Shopify **dev store**, driven by a realistic customer ticket (the first attempt's customer-note canary was replaced by an address change on an unfulfilled order) | Provider dispatch |
+| Maximum commercial amount/count | dev-store test data; no real merchant or customer | Provider dispatch |
 | v1 eval ceiling | $0.90 / 120 model calls | Paid v1 comparison |
 | v2 eval ceiling | $0.90 / 120 model calls | Paid v2 comparison |
 | Rollout observation window and operator | pending | Routing change |
@@ -225,6 +225,48 @@ amount, an unsupported success claim, an unexplained unknown outcome, or a
 response lacking the task identity. Preserve uncertain operations for
 reconciliation; never retry the write merely to make the exercise green.
 
+### Gate C result — 2026-09-25
+
+Passed on the fourth production run, with two open follow-ups. Both services ran
+`AGENT_RUNTIME_VERSION=1` with the controlled organization allowlisted; every task
+below persisted `runtimeVersion=2`. Customer email arrived through the Gmail
+inbox; approvals were sent from the merchant's bound iMessage.
+
+| Run | Ticket | Outcome |
+| --- | --- | --- |
+| 1 | Customer-note canary | Approval refused before dispatch: the phone card's `planHash` includes steps, the v2 proposal hash does not. No effect. Fixed in #106. The refusal also removed the card, stranding task `6abfe733` in `waiting_approval` |
+| 2 | Customer-note canary | Note committed with a v1 receipt; reply-composition escalated "no tool available" and no customer reply went out |
+| 3 | Address change, #1032 | Address committed; two correct replies rejected by the completion-claim guard, then a false "no tool available" escalation |
+| 4 | Address change, #1032 | Approved once; Shopify shows the new address; a task-attributed reply was sent and **received in the operator-controlled inbox**; iMessage confirmation correct |
+
+Run 4 evidence: task `6a40e7cb`, proposal `50a3d6e1` (approved hash equals proposal
+hash), execution `8470ce94`, action `872fba5a` with operation and provider key
+`940f7891`, reply message `7a19b5f4` (`sendStatus=sent`, `agentTaskId=6a40e7cb`).
+No duplicate effect across all runs.
+
+Defects found and fixed during the exercise:
+
+- #106 — phone approval of any v2 proposal was refused as stale.
+- `14ed5576` — an inbound email overwrote the Shopify-matched customer name with
+  the sender's display name ("Rajbir" for Walle Walson).
+- #108 — the completion-claim guard read "shipping address" as a shipment and
+  rejected every true address-change reply. Run 3's escalation and run 4's two
+  rejected drafts are this defect; run 4 reached the customer on a phrasing the
+  guard does not scan.
+- #107 was merged on a wrong diagnosis (that the composing call misread the
+  request). Its "no reply was sent" notice is useful; its composing instruction
+  addressed a cause that was not the defect.
+
+Open before Gate D:
+
+- A rejected reply draft marks the execution and task `failed`
+  (`approved_execution_failed`) even when the write committed and a later reply
+  was delivered, so run 4 is recorded as failed. Gate D counts would be wrong.
+- Closing a ticket does not end its waiting task (`6abfe733` remains
+  `waiting_approval` with no reachable card).
+- The approval card shows only the write; the merchant cannot see that a
+  customer reply will follow. Card content is a release-owner decision.
+
 ## Gate D — observation and rollback rehearsal
 
 During the agreed observation window, record at least:
@@ -288,3 +330,4 @@ architecture/product documentation describes the single active runtime.
 | 2026-09-25 | Post-audit comparison attempt on `7a0fc011` | Gateway control passed on both arms. Dashboard v1 25/25 conclusive ($0.5370, 55 calls) and v2 24/24 conclusive ($0.7157, 58 calls), but the refund fixtures failed as infrastructure because the eval harness did not simulate the planner's pre-approval Shopify refund quote. No production/provider action occurred |
 | 2026-09-25 | Targeted refund reruns on `a12ca5f8` | `refund-full-order` passed on v1 and v2. v2 `refund-partial` escalated after an unsimulated redundant `get_shopify_orders` lookup failed; one unconfirmed sample, no unsafe action. No production/provider action occurred |
 | 2026-09-25 | Runtime-v2 `refund-partial` confirmation on `a12ca5f8` | 2/2 passed, $0.0169, 3 calls. Gate B comparison table filled; no unauthorized or duplicate effect on either runtime |
+| 2026-09-25 | Gate C production exercise, four runs | Run 4 passed approval → Shopify write → receipt → task-attributed customer reply received. Defects fixed: #106, `14ed5576`, #108. Open: rejected reply draft marks the task failed; closed ticket leaves its task waiting |
