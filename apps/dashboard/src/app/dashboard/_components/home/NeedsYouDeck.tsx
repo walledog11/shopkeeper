@@ -51,14 +51,14 @@ export function NeedsYouDeck({ items, onApproved }: Props) {
         renderCard={(item, context) => (
           <NeedsYouCard
             item={item}
-            onSent={() => dismiss(item.threadId, context.activeIndex, context.flyOff)}
+            onResolved={() => dismiss(item.threadId, context.activeIndex, context.flyOff)}
             onAnswered={onApproved}
           />
         )}
         renderPeekCard={(item) => (
           <NeedsYouCard
             item={item}
-            onSent={() => undefined}
+            onResolved={() => undefined}
             onAnswered={() => undefined}
           />
         )}

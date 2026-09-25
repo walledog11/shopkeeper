@@ -1,13 +1,14 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
 import { AlertCircle, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import AgentAvatar from "@/components/agent/AgentAvatar"
 import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import { AgentMessageMarkdown } from "@/components/agent/AgentMessageMarkdown"
 import type { WalkthroughItem } from "@/lib/agent/panel"
+import { canQuickApprove } from "@/lib/home/walkthrough"
+import { useNeedsYouActions } from "@/app/dashboard/_components/home/useNeedsYouActions"
 import { buildWalkthroughBriefing } from "./walkthrough-briefing-logic"
 
 // Opening, per-item outcome, and closing lines. Rendered inside the walkthrough
@@ -33,6 +34,7 @@ export function WalkthroughCard({
   total,
   disabled,
   onApproved,
+  onClosed,
   onSkip,
 }: {
   item: WalkthroughItem
@@ -40,44 +42,13 @@ export function WalkthroughCard({
   total: number
   disabled: boolean
   onApproved: () => void
+  onClosed: () => void
   onSkip: () => void
 }) {
-  const [isApproving, setIsApproving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [confirming, setConfirming] = useState(false)
+  const actions = useNeedsYouActions(item, { onApproved, onClosed })
+  const busy = disabled || actions.pending !== null
+  const approvable = canQuickApprove(item)
   const isConsequential = item.kind === "needs_review"
-
-  const approve = async () => {
-    if (isApproving) return
-    setIsApproving(true)
-    setError(null)
-    try {
-      const response = await fetch("/api/agent/quick-approve", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ threadId: item.threadId, planId: item.planId }),
-      })
-      const data = await response.json().catch(() => null) as { error?: string } | null
-      if (!response.ok) {
-        setError(data?.error ?? "Could not complete this action.")
-        return
-      }
-      onApproved()
-    } catch {
-      setError("Network error. Try again.")
-    } finally {
-      setIsApproving(false)
-      setConfirming(false)
-    }
-  }
-
-  const onApproveClick = () => {
-    if (isConsequential && !confirming) {
-      setConfirming(true)
-      return
-    }
-    void approve()
-  }
 
   return (
     <div className="flex items-start gap-3">
@@ -92,7 +63,7 @@ export function WalkthroughCard({
         </div>
 
         <div className={
-          isConsequential
+          isConsequential || !approvable
             ? "bg-amber-600/[0.07] border border-amber-600/25 text-foreground text-sm rounded-2xl rounded-tl-sm px-4 py-2.5 shadow-sm"
             : "bg-green-600/20 border border-border text-foreground text-sm rounded-2xl rounded-tl-sm px-4 py-2.5 shadow-sm"
         }>
@@ -100,9 +71,15 @@ export function WalkthroughCard({
         </div>
 
         <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+          {item.headline && (
+            <>
+              <span className="font-medium text-foreground/70 truncate min-w-0">{item.headline}</span>
+              <span className="shrink-0 text-foreground/25">·</span>
+            </>
+          )}
           {item.customerName && (
             <>
-              <span className="font-medium text-foreground/70 truncate min-w-0">{item.customerName}</span>
+              <span className="truncate min-w-0">{item.customerName}</span>
               <span className="shrink-0 text-foreground/25">·</span>
             </>
           )}
@@ -118,30 +95,32 @@ export function WalkthroughCard({
         )}
 
         <div className="mt-2.5 flex flex-wrap gap-2">
-          <Button
-            type="button"
-            size="sm"
-            disabled={disabled || isApproving}
-            onClick={onApproveClick}
-            className={
-              confirming
-                ? "rounded-full bg-amber-600 hover:bg-amber-700 text-foreground"
-                : isConsequential
-                  ? "rounded-full bg-green-600 hover:bg-green-700 text-primary-foreground ring-2 ring-amber-500/60 ring-offset-1 ring-offset-background"
-                  : "rounded-full bg-green-600 hover:bg-green-700 text-primary-foreground"
-            }
-          >
-            {isApproving && <Loader2 className="size-3.5 animate-spin" />}
-            {isApproving ? "Approving" : confirming ? "Confirm approve" : "Approve"}
-          </Button>
+          {approvable && (
+            <Button
+              type="button"
+              size="sm"
+              disabled={busy}
+              onClick={actions.approve}
+              className={
+                actions.confirming
+                  ? "rounded-full bg-amber-600 hover:bg-amber-700 text-foreground"
+                  : isConsequential
+                    ? "rounded-full bg-green-600 hover:bg-green-700 text-primary-foreground ring-2 ring-amber-500/60 ring-offset-1 ring-offset-background"
+                    : "rounded-full bg-green-600 hover:bg-green-700 text-primary-foreground"
+              }
+            >
+              {actions.pending === "approve" && <Loader2 className="size-3.5 animate-spin" />}
+              {actions.pending === "approve" ? "Approving" : actions.confirming ? "Confirm approve" : "Approve"}
+            </Button>
+          )}
 
-          {confirming ? (
+          {actions.confirming ? (
             <Button
               type="button"
               size="sm"
               variant="outline"
-              disabled={isApproving}
-              onClick={() => setConfirming(false)}
+              disabled={busy}
+              onClick={actions.cancelConfirm}
               className="rounded-full"
             >
               Cancel
@@ -152,11 +131,22 @@ export function WalkthroughCard({
                 type="button"
                 size="sm"
                 variant="outline"
-                disabled={disabled || isApproving}
+                disabled={busy}
                 onClick={onSkip}
                 className="rounded-full"
               >
                 Skip
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                onClick={actions.close}
+                className="rounded-full"
+              >
+                {actions.pending === "close" && <Loader2 className="size-3.5 animate-spin" />}
+                Close ticket
               </Button>
               <Button asChild size="sm" variant="ghost" className="rounded-full text-muted-foreground">
                 <Link href={`/dashboard/tickets?thread=${item.threadId}`}>Open ticket</Link>
@@ -165,10 +155,10 @@ export function WalkthroughCard({
           )}
         </div>
 
-        {error && (
+        {actions.error && (
           <p className="mt-2 flex items-center gap-1.5 text-xs text-red-600">
             <AlertCircle aria-hidden className="size-3 shrink-0" />
-            {error}
+            {actions.error}
           </p>
         )}
       </div>

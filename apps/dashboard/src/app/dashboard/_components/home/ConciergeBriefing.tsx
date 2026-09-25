@@ -22,9 +22,8 @@ import { needsYouSecondaryButtonClassName } from "./needs-you-card-styles"
 interface Props {
   greeting: string
   userName: string
+  /** Every ticket in the NeedsYou deck, in walkthrough order. */
   walkthroughItems: WalkthroughItem[]
-  walkthroughCount: number
-  needsYouCount: number
   overnightClearedCount: number
   briefingChannels: string[]
   refundsPending: number
@@ -57,8 +56,6 @@ export default function ConciergeBriefing({
   greeting,
   userName,
   walkthroughItems,
-  walkthroughCount,
-  needsYouCount,
   overnightClearedCount,
   briefingChannels,
   refundsPending,
@@ -67,6 +64,7 @@ export default function ConciergeBriefing({
   isLoading = false,
 }: Props) {
   const { open } = useAgentPanel()
+  const needsYouCount = walkthroughItems.length
   const briefingInput = {
     needsYouCount,
     overnightClearedCount,
@@ -116,17 +114,17 @@ export default function ConciergeBriefing({
                 className="min-w-0 flex-1 text-sm sm:text-base"
                 onClick={() =>
                   open(
-                    walkthroughCount > 0
+                    needsYouCount > 0
                       ? { source: "home", walkthrough: { items: walkthroughItems } }
                       : { source: "home" },
                   )
                 }
               >
-                {walkthroughCount > 0 ? (
+                {needsYouCount > 0 ? (
                   <>
-                    <span className="sm:hidden">{walkthroughCount} to review</span>
+                    <span className="sm:hidden">{needsYouCount} to review</span>
                     <span className="hidden sm:inline">
-                      Walk me through {walkthroughCount} ticket{walkthroughCount === 1 ? "" : "s"}
+                      Walk me through {needsYouCount} ticket{needsYouCount === 1 ? "" : "s"}
                     </span>
                   </>
                 ) : (

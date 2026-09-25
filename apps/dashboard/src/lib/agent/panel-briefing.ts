@@ -46,18 +46,16 @@ export function buildBriefingNarrativeSegments(input: BriefingCopyInput): Briefi
   } = input
   const channelText = formatChannelList(briefingChannels)
 
+  // overnightClearedCount is what the agent resolved, not what arrived, so these
+  // branches must not claim anything about new tickets.
   if (overnightClearedCount === 0 && needsYouCount === 0) {
     return [
-      {
-        kind: "text",
-        value: "You're all caught up — no new tickets since yesterday. I'm on duty for anything that comes in.",
-      },
+      { kind: "text", value: "You're all caught up. I'm on duty for anything that comes in." },
     ]
   }
 
   if (overnightClearedCount === 0) {
     return [
-      { kind: "text", value: "Nothing new since yesterday, but " },
       { kind: "strong", value: String(needsYouCount) },
       { kind: "text", value: ` ticket${needsYouCount === 1 ? "" : "s"} need${needsYouCount === 1 ? "s" : ""} your eye.` },
     ]

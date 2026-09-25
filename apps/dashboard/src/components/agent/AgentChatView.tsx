@@ -225,6 +225,7 @@ export function AgentChatView({
               total={walkthroughItems.length}
               disabled={isRunning}
               onApproved={() => handleWalkthroughDecision(currentWalkthroughItem, "approved")}
+              onClosed={() => handleWalkthroughDecision(currentWalkthroughItem, "closed")}
               onSkip={() => handleWalkthroughDecision(currentWalkthroughItem, "skipped")}
             />
           )}

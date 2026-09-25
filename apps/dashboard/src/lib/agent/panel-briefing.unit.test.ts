@@ -52,7 +52,8 @@ describe("buildBriefingNarrativeSegments", () => {
     })
 
     expect(segments.some(segment => segment.kind === "strong" && segment.value === "2")).toBe(true)
-    expect(segments.map(segment => ("value" in segment ? segment.value : "")).join("")).toContain("2 tickets")
+    const text = segments.map(segment => ("value" in segment ? segment.value : "")).join("")
+    expect(text).toBe("2 tickets need your eye.")
   })
 
   it("mentions overnight work and remaining approvals", () => {

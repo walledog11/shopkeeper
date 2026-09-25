@@ -8,7 +8,6 @@ import {
   type HomeSummary,
 } from "@/lib/home/summary-contract"
 import { buildHomeSummaryView } from "@/lib/home/summary-view"
-import { selectWalkthroughItems } from "@/lib/home/walkthrough"
 import { CHANNEL_TYPE } from "@shopkeeper/agent/thread-constants"
 import { useIntegrations } from "@/hooks/useIntegrations"
 import { useOperatorChannels } from "@/hooks/useOperatorChannels"
@@ -62,11 +61,6 @@ export function useHomeData(
   const summary = summaryData ?? createEmptyHomeSummary()
   const isInitialSummaryLoading = isSummaryLoading && !hasSummary
   const home = useMemo(() => buildHomeSummaryView(summary), [summary])
-  const walkthroughItems = useMemo(
-    () => selectWalkthroughItems(summary.needsAttention),
-    [summary],
-  )
-  const walkthroughCount = walkthroughItems.length
 
   const ordersToShip = summary.ordersToShip
 
@@ -97,8 +91,6 @@ export function useHomeData(
 
   return {
     ...home,
-    walkthroughItems,
-    walkthroughCount,
     ordersToShip,
     hasShopify,
     hasEmailForwarding,

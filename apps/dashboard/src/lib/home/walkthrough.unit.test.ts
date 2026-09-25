@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { HomeNeedsAttentionItem } from "@/lib/home/summary-contract"
-import { selectWalkthroughItems, walkthroughPriority } from "@/lib/home/walkthrough"
+import { canQuickApprove, orderWalkthroughItems, walkthroughPriority } from "@/lib/home/walkthrough"
 
 function item(overrides: Partial<HomeNeedsAttentionItem> = {}): HomeNeedsAttentionItem {
   return {
@@ -27,35 +27,24 @@ function item(overrides: Partial<HomeNeedsAttentionItem> = {}): HomeNeedsAttenti
   }
 }
 
-describe("selectWalkthroughItems", () => {
-  it("excludes routine quick replies", () => {
+describe("orderWalkthroughItems", () => {
+  it("keeps every ticket, including routine quick replies", () => {
     const routine = item({ threadId: "routine", kind: "quick_reply", tag: "Shipping" })
-    expect(selectWalkthroughItems([routine])).toEqual([])
+    const question = item({ threadId: "question", kind: "needs_merchant_input" })
+    expect(orderWalkthroughItems([routine, question]).map(i => i.threadId)).toEqual(["routine", "question"])
   })
 
-  it("includes a VIP even when the reply is routine", () => {
-    const vip = item({ threadId: "vip", kind: "quick_reply", isVip: true })
-    const selected = selectWalkthroughItems([vip])
-    expect(selected.map(i => i.threadId)).toEqual(["vip"])
-  })
-
-  it("includes Returns tickets", () => {
-    const ret = item({ threadId: "ret", kind: "quick_reply", tag: "Returns" })
-    const selected = selectWalkthroughItems([ret])
-    expect(selected.map(i => i.threadId)).toEqual(["ret"])
-  })
-
-  it("orders needs_review and Returns ahead of VIP, then by age", () => {
+  it("orders needs_review and Returns ahead of VIP ahead of routine, then oldest first", () => {
     const items = [
-      item({ threadId: "vip", kind: "quick_reply", isVip: true, timeAgo: "2h ago" }),
-      item({ threadId: "review-new", kind: "needs_review", timeAgo: "3m ago" }),
-      item({ threadId: "routine", kind: "quick_reply", tag: "Shipping" }),
-      item({ threadId: "returns-old", kind: "quick_reply", tag: "Returns", timeAgo: "1d ago" }),
+      item({ threadId: "vip", isVip: true, lastMessageAt: "2026-06-14T10:00:00.000Z" }),
+      item({ threadId: "review-new", kind: "needs_review", lastMessageAt: "2026-06-14T11:57:00.000Z" }),
+      item({ threadId: "routine", tag: "Shipping" }),
+      item({ threadId: "returns-old", tag: "Returns", lastMessageAt: "2026-06-13T12:00:00.000Z" }),
     ]
 
-    const selected = selectWalkthroughItems(items)
+    const ordered = orderWalkthroughItems(items)
 
-    expect(selected.map(i => i.threadId)).toEqual(["returns-old", "review-new", "vip"])
+    expect(ordered.map(i => i.threadId)).toEqual(["returns-old", "review-new", "vip", "routine"])
   })
 
   it("does not mutate the input array", () => {
@@ -63,8 +52,21 @@ describe("selectWalkthroughItems", () => {
       item({ threadId: "vip", isVip: true }),
       item({ threadId: "review", kind: "needs_review" }),
     ]
-    selectWalkthroughItems(items)
+    orderWalkthroughItems(items)
     expect(items.map(i => i.threadId)).toEqual(["vip", "review"])
+  })
+})
+
+describe("canQuickApprove", () => {
+  it("allows drafted replies and reviewed actions", () => {
+    expect(canQuickApprove(item({ kind: "quick_reply" }))).toBe(true)
+    expect(canQuickApprove(item({ kind: "needs_review" }))).toBe(true)
+  })
+
+  it("refuses questions, invalid drafts, and reply-less escalations", () => {
+    expect(canQuickApprove(item({ kind: "needs_merchant_input" }))).toBe(false)
+    expect(canQuickApprove(item({ kind: "invalid" }))).toBe(false)
+    expect(canQuickApprove(item({ kind: "needs_review", isEscalationOnly: true }))).toBe(false)
   })
 })
 

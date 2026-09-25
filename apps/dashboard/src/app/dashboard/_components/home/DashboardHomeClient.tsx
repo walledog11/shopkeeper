@@ -13,6 +13,7 @@ import { cn } from "@/lib/ui/cn"
 import type { HomeChannelState, HomeSummary } from "@/lib/home/summary-contract"
 import { useHomeData } from "./useHomeData"
 import { SAMPLE_NEEDS_YOU_ITEMS } from "./sample-needs-you-items"
+import { orderWalkthroughItems } from "@/lib/home/walkthrough"
 
 interface Props {
   userName: string
@@ -39,6 +40,9 @@ export default function DashboardHomeClient({
     if (process.env.NODE_ENV === "development") return SAMPLE_NEEDS_YOU_ITEMS
     return data.needsYouItems
   }, [data.needsYouItems])
+  // One list feeds the briefing count, the walkthrough, and the deck, so the
+  // three can never disagree about how many tickets need the merchant.
+  const walkthroughItems = useMemo(() => orderWalkthroughItems(needsYouItems), [needsYouItems])
   const proposedPreferences = data.proposedPreferences ?? []
 
   if (data.isSummaryPending) {
@@ -69,9 +73,7 @@ export default function DashboardHomeClient({
             <ConciergeBriefing
               greeting={greeting}
               userName={userName}
-              walkthroughItems={data.walkthroughItems}
-              walkthroughCount={data.walkthroughCount}
-              needsYouCount={needsYouItems.length}
+              walkthroughItems={walkthroughItems}
               overnightClearedCount={data.overnightClearedCount}
               briefingChannels={data.briefingChannels}
               refundsPending={data.refundsPending}
