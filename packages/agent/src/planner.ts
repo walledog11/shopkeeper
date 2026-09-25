@@ -1,7 +1,7 @@
 import { buildSplitCachedSystemPrompt } from "./ai/anthropic.js";
 import { pickModel } from "./ai/index.js";
 import type { AgentContext } from "./agent-context.js";
-import { runAgentLoop } from "./agent-loop.js";
+import { runAgentLoop, type RunAgentLoopParams } from "./agent-loop.js";
 import {
   hasUnresolvedShopifyCustomer,
   isGuestOnlyTool,
@@ -18,7 +18,7 @@ import {
   appendPlanningReadSignals,
 } from "./planner-read-tools.js";
 import { applyEscalationRouting } from "./escalation-materialization.js";
-import { buildPlanRoutingEvidence } from "./planner-evidence.js";
+import { buildPlanRoutingEvidence, kbMissNeedsMerchant } from "./planner-evidence.js";
 import { decideAutonomy } from "./autonomy.js";
 import { recordMerchantPreferenceUsage } from "./merchant-preferences.js";
 import { validatePlan } from "./plan-validation.js";
@@ -77,6 +77,9 @@ export interface PlanAgentOptions {
   /** Persisted task runtime selects bounded discovery for durable attempts. */
   runtimeVersion?: number;
 }
+
+const KB_MISS_REPLY_REFUSAL =
+  "Not sent. Your knowledge base search found nothing on this, so you have no store information to answer from. Do not answer from general knowledge. Call ask_operator with the specific fact you need from the merchant, or escalate_to_human.";
 
 const TERSE_REFERENT = /^(?:yes|yeah|yep|yup|ok(?:ay)?|sure|go ahead|do it|that one|it)[.!?\s]*$/i;
 
@@ -224,6 +227,21 @@ export async function planAgent(
   // replay the discarded attempt's half-finished turns into the next model and
   // the API rejects the sequence ("tool_use ids without tool_result blocks").
   const planningSignal = AbortSignal.timeout(120_000);
+  // A reply drafted after the knowledge base came up empty is written from
+  // nothing the store told us. Refuse it inside the turn so the model asks the
+  // merchant for the missing fact, rather than parking a draft behind a question
+  // the model never wrote.
+  const refuseUngroundedReply: RunAgentLoopParams["captureRefuseReply"] = (proposal) => (
+    kbMissNeedsMerchant({
+      ctx,
+      instruction,
+      rawToolCalls: proposal.rawToolCalls,
+      readBlocks: proposal.readBlocks,
+      readStatusMap: proposal.readStatus,
+    })
+      ? KB_MISS_REPLY_REFUSAL
+      : null
+  );
   const runLoop = (model: string, tools = toolSelection.tools) => runAgentLoop({
     ctx,
     mode: "capture",
@@ -243,6 +261,7 @@ export async function planAgent(
     // turn without send_reply/ask_operator/escalate_to_human; otherwise a v2
     // read-and-reply task can strand the customer after the lookup succeeds.
     captureReprompt: !operatorMode,
+    captureRefuseReply: operatorMode ? undefined : refuseUngroundedReply,
     captureSuspendAtProposal: suspendAtProposal,
     captureStopToolNames: tools.some((tool) => tool.name === NAMESPACE_MISS_TOOL_NAME)
       ? [NAMESPACE_MISS_TOOL_NAME]

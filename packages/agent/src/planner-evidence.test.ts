@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AgentContext } from "./agent-context.js";
 import { emptyIntents, emptyRequestFacts } from "./classifier-signals.js";
-import { buildPlanRoutingEvidence } from "./planner-evidence.js";
+import { buildPlanRoutingEvidence, kbMissNeedsMerchant } from "./planner-evidence.js";
 import { resolveAgentSettings } from "./settings.js";
 
 function context(overrides: Partial<AgentContext> = {}): AgentContext {
@@ -132,5 +132,47 @@ describe("buildPlanRoutingEvidence", () => {
       settings: resolveAgentSettings({ maxRefundAmount: 50 }),
     }).evidence;
     expect(evidence).toMatchObject({ codes: ["compensation_over_cap"] });
+  });
+
+  it("asks about the knowledge-base search that missed, not the customer's words", () => {
+    const ctx = context({
+      recentMessages: [{ senderType: "customer", contentText: "Any tips for making the candle burn evenly?" }],
+      classifierSignals: { version: 2, language: "en", intents: emptyIntents(), requestFacts: emptyRequestFacts() },
+    });
+    const evidence = buildPlanRoutingEvidence({
+      ctx,
+      instruction: "Handle it",
+      rawToolCalls: [{ id: "reply", name: "send_reply", input: { text: "Trim the wick." } }],
+      readBlocks: [{ type: "tool_use", id: "kb", name: "search_kb", input: { query: "candle burn tips" } }],
+      readStatusMap: new Map([["kb", "not_found"]]),
+      readResultsMap: new Map(),
+    }).evidence;
+
+    expect(evidence.codes).toContain("kb_gap");
+    expect(evidence.question).toBe(
+      'I searched your knowledge base for "candle burn tips" and found nothing, so I haven\'t replied. What should I tell the customer?',
+    );
+  });
+});
+
+describe("kbMissNeedsMerchant", () => {
+  const missed = {
+    readBlocks: [{ type: "tool_use" as const, id: "kb", name: "search_kb", input: { query: "care" } }],
+    readStatusMap: new Map([["kb", "not_found" as const]]),
+  };
+  const reply = { id: "reply", name: "send_reply", input: { text: "Hi." } };
+
+  it("holds a reply drafted after an empty search", () => {
+    expect(kbMissNeedsMerchant({ ctx: context(), instruction: "Handle it", rawToolCalls: [reply], ...missed }))
+      .toBe(true);
+  });
+
+  it("lets the reply through once the merchant has answered", () => {
+    expect(kbMissNeedsMerchant({
+      ctx: context(),
+      instruction: "Handle it",
+      rawToolCalls: [reply, { id: "ask", name: "ask_operator", input: { question: "?" } }],
+      ...missed,
+    })).toBe(false);
   });
 });

@@ -113,6 +113,16 @@ export interface RunAgentLoopParams {
       activeToolNames: ReadonlySet<string>,
     ) => { tools: Anthropic.Tool[]; content: string };
   };
+  // capture: consulted when the model proposes send_reply, with the plan as it
+  // would stand. A returned message refuses the reply — it is neither recorded
+  // nor terminal, and the message goes back as its tool error so the model can
+  // take another route. Refuses once per attempt; a repeat is recorded and left
+  // to routing.
+  captureRefuseReply?: (proposal: {
+    rawToolCalls: readonly RawToolCall[];
+    readBlocks: readonly Anthropic.ToolUseBlock[];
+    readStatus: ReadonlyMap<string, ToolStatus>;
+  }) => string | null;
 }
 
 // Executes reads for real (preserving the structured ToolStatus that plan
@@ -132,9 +142,11 @@ async function handleCaptureBlocks(
     captureStopToolNames?: readonly string[];
     captureSuspendAtProposal?: boolean;
     captureDiscovery?: RunAgentLoopParams["captureDiscovery"];
+    captureRefuseReply?: RunAgentLoopParams["captureRefuseReply"];
+    replyRefused: boolean;
     activeToolNames: ReadonlySet<string>;
   },
-): Promise<{ terminalReached: boolean; discoveredTools: Anthropic.Tool[] }> {
+): Promise<{ terminalReached: boolean; discoveredTools: Anthropic.Tool[]; replyRefused: boolean }> {
   const discoveryToolName = state.captureDiscovery?.toolName;
   const discoveryBlocks = discoveryToolName
     ? blocks.filter((b) => b.name === discoveryToolName)
@@ -170,11 +182,27 @@ async function handleCaptureBlocks(
     for (const [id, status] of executed.readStatusMap) state.readStatus.set(id, status);
   }
 
-  for (const b of planBlocks) {
+  const refusals = new Map<string, string>();
+  if (state.captureRefuseReply && !state.replyRefused && planBlocks.some((b) => b.name === "send_reply")) {
+    const refusal = state.captureRefuseReply({
+      rawToolCalls: [
+        ...state.rawToolCalls,
+        ...planBlocks.map((b) => ({ id: b.id, name: b.name, input: b.input })),
+      ],
+      readBlocks: state.readBlocks,
+      readStatus: state.readStatus,
+    });
+    if (refusal) {
+      for (const b of planBlocks) if (b.name === "send_reply") refusals.set(b.id, refusal);
+    }
+  }
+  const proposedBlocks = planBlocks.filter((b) => !refusals.has(b.id));
+
+  for (const b of proposedBlocks) {
     state.rawToolCalls.push({ id: b.id, name: b.name, input: b.input });
   }
 
-  const terminalReached = planBlocks.some((b) => (
+  const terminalReached = proposedBlocks.some((b) => (
     TERMINAL_TOOL_NAMES.has(b.name)
     || state.captureStopToolNames?.includes(b.name)
     || (state.captureSuspendAtProposal && TOOL_CATEGORIES[b.name] === "action")
@@ -182,18 +210,22 @@ async function handleCaptureBlocks(
 
   // Only feed results back when the loop will continue; a terminal ends the turn.
   if (!terminalReached) {
-    const toolResults: Anthropic.ToolResultBlockParam[] = blocks.map((b) => ({
-      type: "tool_result",
-      tool_use_id: b.id,
-      content: discoveryContent.get(b.id)
-        ?? (TOOL_CATEGORIES[b.name] === "read"
-          ? (state.readResults.get(b.id) ?? CAPTURE_NOT_EXECUTED)
-          : CAPTURE_NOT_EXECUTED),
-    }));
+    const toolResults: Anthropic.ToolResultBlockParam[] = blocks.map((b) => {
+      const refusal = refusals.get(b.id);
+      if (refusal) return { type: "tool_result", tool_use_id: b.id, content: refusal, is_error: true };
+      return {
+        type: "tool_result",
+        tool_use_id: b.id,
+        content: discoveryContent.get(b.id)
+          ?? (TOOL_CATEGORIES[b.name] === "read"
+            ? (state.readResults.get(b.id) ?? CAPTURE_NOT_EXECUTED)
+            : CAPTURE_NOT_EXECUTED),
+      };
+    });
     state.messages.push({ role: "user", content: toolResults });
   }
 
-  return { terminalReached, discoveredTools };
+  return { terminalReached, discoveredTools, replyRefused: state.replyRefused || refusals.size > 0 };
 }
 
 export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoopResult> {
@@ -207,6 +239,7 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
   const readResults = new Map<string, string>();
   const readStatus = new Map<string, ToolStatus>();
   let reprompted = false;
+  let replyRefused = false;
 
   const done = (stop: AgentLoopStop, finalText: string | null, iterations: number): AgentLoopResult => ({
     stop,
@@ -321,8 +354,11 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
         captureStopToolNames: params.captureStopToolNames,
         captureSuspendAtProposal: params.captureSuspendAtProposal,
         captureDiscovery: params.captureDiscovery,
+        captureRefuseReply: params.captureRefuseReply,
+        replyRefused,
         activeToolNames: new Set(tools.map((tool) => tool.name)),
       });
+      replyRefused = captured.replyRefused;
       if (captured.discoveredTools.length > 0) tools = [...tools, ...captured.discoveredTools];
       if (captured.terminalReached) return done("terminal_captured", finalText, i + 1);
       return iterate(i + 1);

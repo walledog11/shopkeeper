@@ -95,7 +95,7 @@ export default function MerchantAnswerForm({ threadId, question, onAnswered }: P
         <Textarea
           value={answer}
           onChange={event => updateState({ answer: event.target.value })}
-          placeholder={`Answer ${AGENT_DISPLAY_NAME}…`}
+          placeholder={`Tell ${AGENT_DISPLAY_NAME} the answer. It drafts the reply for you to approve before anything is sent.`}
           rows={3}
           disabled={isSubmitting || succeeded}
           className="rounded-2xl bg-foreground/[0.03] min-h-[88px]"
@@ -137,7 +137,7 @@ export default function MerchantAnswerForm({ threadId, question, onAnswered }: P
           className="inline-flex items-center justify-center gap-2 w-full py-3.5 rounded-2xl text-base font-semibold bg-foreground text-background hover:bg-foreground/90 transition-colors disabled:opacity-40"
         >
           {isSubmitting && <Loader2 aria-hidden className="size-4 animate-spin" />}
-          {succeeded ? "Sent" : isSubmitting ? "Sending" : "Send answer"}
+          {succeeded ? "Reply drafted" : isSubmitting ? "Drafting reply" : "Draft reply"}
         </button>
       </div>
 

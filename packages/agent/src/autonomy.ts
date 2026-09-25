@@ -4,6 +4,7 @@ import {
   resolveAutoExecuteMode,
   TIERS_THAT_AUTO_EXECUTE,
 } from "./settings.js";
+import { merchantGapQuestion } from "./plan-preview.js";
 import { planSignals } from "./plan-signals.js";
 import { checkStaticToolPolicy } from "./tools/static-policy.js";
 import { TOOL_CATEGORIES } from "./tools/registry/index.js";
@@ -62,7 +63,7 @@ export type AutonomyVerdict =
       escalationReason: string | null
       toolCalls: RawToolCall[]
     })
-  | (VerdictBase & { kind: "needs_merchant_input"; question: string | null })
+  | (VerdictBase & { kind: "needs_merchant_input"; question: string })
   | (VerdictBase & {
       kind: "needs_review"
       approvalAllowed: boolean
@@ -238,7 +239,7 @@ export function decideAutonomy(
         : legacyKbGap
           ? ["kb_gap"]
           : evidence.codes.filter((code) => code === "policy_gap" || code === "kb_gap"),
-      question: questionText(askOperator) ?? evidence.question ?? null,
+      question: questionText(askOperator) ?? evidence.question ?? merchantGapQuestion(),
     };
   }
 

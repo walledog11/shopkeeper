@@ -258,3 +258,66 @@ describe("runAgentLoop durable task budget", () => {
     expect(mockCreate).not.toHaveBeenCalled();
   });
 });
+
+describe("runAgentLoop capture reply refusal", () => {
+  const usage = { input_tokens: 1, output_tokens: 1 };
+  const propose = (id: string, name: string, input: Record<string, unknown>) => ({
+    stop_reason: "tool_use",
+    content: [{ type: "tool_use", id, name, input }],
+    usage,
+  });
+  const runCapture = (refusal: string | null) => runAgentLoop({
+    ctx,
+    mode: "capture",
+    messages: [{ role: "user", content: "go" }],
+    systemPromptBlocks: [],
+    tools: [],
+    model: "test-model",
+    maxIterations: 10,
+    maxTokensPerCall: 4096,
+    usageTotals: createModelUsageMetrics(),
+    captureRefuseReply: () => refusal,
+  });
+
+  it("refuses the reply, returns the reason to the model, and records what it does instead", async () => {
+    mockCreate
+      .mockResolvedValueOnce(propose("tu_reply", "send_reply", { text: "Trim the wick." }))
+      .mockResolvedValueOnce(propose("tu_ask", "ask_operator", { question: "Do you recommend a first-burn time?" }));
+
+    const result = await runCapture("Not sent. Ask the merchant.");
+
+    expect(result.stop).toBe("terminal_captured");
+    expect(result.rawToolCalls.map((call) => call.name)).toEqual(["ask_operator"]);
+    // The loop mutates one messages array, so read it rather than a request snapshot.
+    const request = mockCreate.mock.calls[1][0] as { messages: { role: string; content: unknown }[] };
+    expect(request.messages).toContainEqual({
+      role: "user",
+      content: [{
+        type: "tool_result",
+        tool_use_id: "tu_reply",
+        content: "Not sent. Ask the merchant.",
+        is_error: true,
+      }],
+    });
+  });
+
+  it("refuses once, then records a repeated reply for routing to catch", async () => {
+    mockCreate
+      .mockResolvedValueOnce(propose("tu_1", "send_reply", { text: "First." }))
+      .mockResolvedValueOnce(propose("tu_2", "send_reply", { text: "Second." }));
+
+    const result = await runCapture("Not sent.");
+
+    expect(result.stop).toBe("terminal_captured");
+    expect(result.rawToolCalls.map((call) => call.id)).toEqual(["tu_2"]);
+  });
+
+  it("records the reply when the gate allows it", async () => {
+    mockCreate.mockResolvedValueOnce(propose("tu_1", "send_reply", { text: "Shipped Monday." }));
+
+    const result = await runCapture(null);
+
+    expect(result.rawToolCalls.map((call) => call.id)).toEqual(["tu_1"]);
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+  });
+});
