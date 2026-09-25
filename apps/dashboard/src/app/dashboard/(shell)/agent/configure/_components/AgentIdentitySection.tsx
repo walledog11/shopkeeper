@@ -17,9 +17,11 @@ export function AgentIdentitySection({ controller }: { controller: AgentTabContr
 
   return (
     <>
-      <SettingsTile label="Business name">
-        <div className="space-y-3">
-          <p>Shown in support emails and the replies Shopkeeper writes.</p>
+      <SettingsTile
+        label="Business name"
+        description="Shown in support emails and the replies Shopkeeper writes."
+      >
+        <div>
           <Input
             aria-label="Business name"
             value={businessName}
@@ -30,9 +32,11 @@ export function AgentIdentitySection({ controller }: { controller: AgentTabContr
         </div>
       </SettingsTile>
 
-      <SettingsTile label="About your store">
-        <div className="space-y-3">
-          <p>Optional. Policies, products, shipping — anything that should show up in replies.</p>
+      <SettingsTile
+        label="About your store"
+        description="Optional. Policies, products, shipping — anything that should show up in replies."
+      >
+        <div>
           <CharacterCountTextarea
             aria-label="About your store"
             value={settingsState.aiContext}
@@ -45,9 +49,11 @@ export function AgentIdentitySection({ controller }: { controller: AgentTabContr
         </div>
       </SettingsTile>
 
-      <SettingsTile label="Brand voice">
+      <SettingsTile
+        label="Brand voice"
+        description="How the agent should sound. Max 200 characters."
+      >
         <div className="space-y-3">
-          <p>How the agent should sound. Max 200 characters.</p>
           {proposal ? (
             <VoiceProposalCard
               brief={proposal.brief}

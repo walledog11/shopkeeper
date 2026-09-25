@@ -88,6 +88,7 @@ function PlanPicker() {
   return (
     <SettingsTile
       label="Choose a plan"
+      description="Every plan starts with 14 days free."
       action={
         <Button
           type="button"
@@ -100,7 +101,6 @@ function PlanPicker() {
       }
     >
       <div className="space-y-3">
-        <p>Every plan starts with 14 days free.</p>
         <div role="radiogroup" aria-label="Plan" className="space-y-2">
           {PLANS.map((plan) => {
             const selected = plan.tier === tier
@@ -255,9 +255,11 @@ export default function BillingTab() {
 
       {isAdmin && !isActive ? <PlanPicker /> : null}
 
-      <SettingsTile label="Invoice history">
+      <SettingsTile
+        label="Invoice history"
+        description="Download receipts and past invoice PDFs."
+      >
         <div className="space-y-3">
-          <p>Download receipts and past invoice PDFs.</p>
           {data.invoices.length === 0 ? (
             <p>No invoices yet.</p>
           ) : (

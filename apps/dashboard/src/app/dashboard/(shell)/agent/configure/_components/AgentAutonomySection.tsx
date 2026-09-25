@@ -22,9 +22,9 @@ export function AgentAutonomySection({ controller }: { controller: AgentTabContr
     <SettingsTile
       id="autonomy"
       label="Trust level"
+      description={`How much ${AGENT_DISPLAY_NAME} can do before asking you. Most stores stay on Ask first.`}
     >
       <div className="space-y-3">
-        <p>How much {AGENT_DISPLAY_NAME} can do before asking you. Most stores stay on Ask first.</p>
         <div
           role="radiogroup"
           aria-label="Trust level"

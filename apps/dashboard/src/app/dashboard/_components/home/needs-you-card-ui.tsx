@@ -237,6 +237,7 @@ export function NeedsYouPrimaryButton({
   className,
   confirming = false,
   disabled = false,
+  size = "default",
   onClick,
   ...props
 }: {
@@ -244,6 +245,7 @@ export function NeedsYouPrimaryButton({
   className?: string
   confirming?: boolean
   disabled?: boolean
+  size?: "default" | "compact"
   onClick?: () => void
 } & ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
@@ -253,7 +255,10 @@ export function NeedsYouPrimaryButton({
       disabled={disabled}
       {...props}
       className={cn(
-        "inline-flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-base font-semibold transition-all",
+        "inline-flex items-center justify-center gap-2 font-semibold transition-all",
+        size === "compact"
+          ? "w-auto shrink-0 whitespace-nowrap rounded-2xl px-4 py-2.5 text-sm"
+          : "w-full rounded-2xl py-3.5 text-base",
         "disabled:opacity-40 disabled:hover:translate-y-0",
         confirming
           ? "bg-gradient-to-b from-amber-600 to-amber-700 text-[#ffffff] shadow-md shadow-amber-600/20 hover:-translate-y-0.5 hover:from-amber-600 hover:to-amber-700/95"

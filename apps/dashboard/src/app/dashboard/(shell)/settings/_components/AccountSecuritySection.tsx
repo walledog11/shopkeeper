@@ -155,6 +155,7 @@ export function AccountSecuritySection({
 
       <SettingsTile
         label="Delete account"
+        description="Permanently delete your Shopkeeper account and sign out of every workspace."
         action={
           <Button
             type="button"
@@ -166,9 +167,7 @@ export function AccountSecuritySection({
             Delete account
           </Button>
         }
-      >
-        Permanently delete your Shopkeeper account and sign out of every workspace.
-      </SettingsTile>
+      />
 
       <DeleteAccountDialog
         confirmValue={user.primaryEmailAddress?.emailAddress ?? user.id}

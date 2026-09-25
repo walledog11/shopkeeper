@@ -16,6 +16,7 @@ export function WhenOnDutySection({
   return (
     <SettingsTile
       label={`When ${AGENT_DISPLAY_NAME} is on duty`}
+      description="Working hours and the away message customers get when you're closed."
       action={
         <Switch
           checked={settingsState.businessHoursEnabled}
@@ -24,10 +25,7 @@ export function WhenOnDutySection({
         />
       }
     >
-      <div className="space-y-4">
-        <p>Working hours and the away message customers get when you&apos;re closed.</p>
-        {settingsState.businessHoursEnabled ? <BusinessHoursSection controller={controller} /> : null}
-      </div>
+      {settingsState.businessHoursEnabled ? <BusinessHoursSection controller={controller} /> : null}
     </SettingsTile>
   )
 }

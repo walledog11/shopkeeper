@@ -49,6 +49,7 @@ function DataExportSection({ state }: { state: WorkspaceTabState }) {
     <SettingsTile
       id="privacy"
       label="Data export"
+      description="Download a JSON snapshot of all customers, tickets, messages, and memory. Useful for backups or migrating off Shopkeeper. Doesn't include integration tokens, billing data, or audit logs."
       action={
         <div className="flex w-full flex-col items-stretch gap-1 sm:items-start">
           <Button
@@ -64,10 +65,7 @@ function DataExportSection({ state }: { state: WorkspaceTabState }) {
           {exportError ? <p className="text-xs text-red-600">{exportError}</p> : null}
         </div>
       }
-    >
-      Download a JSON snapshot of all customers, tickets, messages, and memory. Useful for backups
-      or migrating off Shopkeeper. Doesn&apos;t include integration tokens, billing data, or audit logs.
-    </SettingsTile>
+    />
   )
 }
 
@@ -83,6 +81,7 @@ function GdprExportSection({ state }: { state: WorkspaceTabState }) {
   return (
     <SettingsTile
       label="Customer data export"
+      description="Download all support tickets and profile data for one customer as JSON."
       action={
         <Button
           type="button"
@@ -97,7 +96,6 @@ function GdprExportSection({ state }: { state: WorkspaceTabState }) {
       }
     >
       <div className="space-y-3">
-        <p>Download all support tickets and profile data for one customer as JSON.</p>
         <Input
           aria-label="Customer email for data export"
           type="email"
@@ -132,6 +130,7 @@ function DangerZone({ orgName, state }: { orgName: string; state: WorkspaceTabSt
       <SettingsTile
         id="danger"
         label="Clear all ticket history"
+        description="Permanently deletes all threads and messages for this workspace. This affects every member of the workspace."
         action={
           <Button
             type="button"
@@ -143,15 +142,18 @@ function DangerZone({ orgName, state }: { orgName: string; state: WorkspaceTabSt
           </Button>
         }
       >
-        <div className="space-y-1.5">
-          <p>Permanently deletes all threads and messages for this workspace. This affects every member of the workspace.</p>
-          {clearError ? <p className="text-xs text-red-600">{clearError}</p> : null}
-          {clearSuccess ? <p className="text-xs text-green-600">All ticket history has been cleared.</p> : null}
-        </div>
+        {clearError ? <p className="text-xs text-red-600">{clearError}</p> : null}
+        {clearSuccess ? <p className="text-xs text-green-600">All ticket history has been cleared.</p> : null}
       </SettingsTile>
 
       <SettingsTile
         label="Delete workspace"
+        description={
+          <>
+            Permanently delete <span className="font-medium text-strong">{orgName}</span> and all of its
+            data — tickets, customers, integrations, memory, and billing. Every member will lose access.
+          </>
+        }
         action={
           <Button
             type="button"
@@ -169,21 +171,15 @@ function DangerZone({ orgName, state }: { orgName: string; state: WorkspaceTabSt
           </Button>
         }
       >
-        <div className="space-y-1.5">
-          <p>
-            Permanently delete <span className="font-medium text-strong">{orgName}</span> and all of its
-            data — tickets, customers, integrations, memory, and billing. Every member will lose access.
+        {isOnlyWorkspace ? (
+          <p className="text-xs text-amber-600/80">
+            This is your only workspace. Create another workspace first, or delete your account from{" "}
+            <a href="/dashboard/account" className="font-semibold text-muted-foreground hover:text-strong">
+              account settings
+            </a>
+            .
           </p>
-          {isOnlyWorkspace ? (
-            <p className="text-xs text-amber-600/80">
-              This is your only workspace. Create another workspace first, or delete your account from{" "}
-              <a href="/dashboard/account" className="font-semibold text-muted-foreground hover:text-strong">
-                account settings
-              </a>
-              .
-            </p>
-          ) : null}
-        </div>
+        ) : null}
       </SettingsTile>
     </>
   )

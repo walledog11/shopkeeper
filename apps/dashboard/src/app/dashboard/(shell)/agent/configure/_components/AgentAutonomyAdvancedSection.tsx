@@ -92,9 +92,11 @@ export function AgentAutonomyAdvancedSection({
 
   return (
     <>
-      <SettingsTile label="Compensation limits">
+      <SettingsTile
+        label="Compensation limits"
+        description="Override the caps that come with your trust level. Leave blank to use the tier default."
+      >
         <div className="space-y-4">
-          <p>Override the caps that come with your trust level. Leave blank to use the tier default.</p>
           <div className="space-y-1.5">
             <MoneyInput
               label="Largest single compensation"
@@ -155,6 +157,7 @@ export function AgentAutonomyAdvancedSection({
 
       <SettingsTile
         label="Block order cancellations"
+        description="Prevent the agent from cancelling orders. Cancellations will require manual handling."
         action={
           <Switch
             checked={settingsState.blockCancellations}
@@ -164,7 +167,6 @@ export function AgentAutonomyAdvancedSection({
         }
       >
         <div className="space-y-1.5">
-          <p>Prevent the agent from cancelling orders. Cancellations will require manual handling.</p>
           <OverrideHint
             path="blockCancellations"
             tier={autonomyTier}

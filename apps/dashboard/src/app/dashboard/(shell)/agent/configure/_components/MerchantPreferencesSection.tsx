@@ -36,13 +36,11 @@ export function MerchantPreferencesSection({
   } = controller
 
   return (
-    <SettingsTile label="Merchant preferences">
+    <SettingsTile
+      label="Merchant preferences"
+      description="Saved judgment the agent can follow when drafting plans. Preferences are guidance only — they never override compensation caps, workspace policy, or approval rules."
+    >
       <div className="space-y-4">
-        <p>
-          Saved judgment the agent can follow when drafting plans. Preferences are guidance only —
-          they never override compensation caps, workspace policy, or approval rules.
-        </p>
-
         {proposed.map((preference) => (
           <ProposedPreferenceCard
             key={preference.id}
