@@ -24,6 +24,7 @@ import {
   readParkedProposalForThread,
 } from "./plan-execution.js";
 import { resolveAgentSettings } from "./settings.js";
+import { buildPlanSteps } from "./planner-steps.js";
 import { hashInstruction, hashPlan } from "./agent-actions.js";
 import { claimCurrentPlanExecution } from "./execution-ledger.js";
 import {
@@ -105,32 +106,9 @@ const refundCall: RawToolCall = {
 function threeStepPlan(): AgentPlan {
   return {
     instruction: "Note the request, issue the refund, and reply",
-    steps: [
-      {
-        id: "note_1",
-        tool: "add_shopify_customer_note",
-        label: "Add note",
-        description: "Note the request on the customer",
-        category: "action",
-        enabled: true,
-      },
-      {
-        id: "refund_1",
-        tool: "create_refund",
-        label: "Refund",
-        description: "Issue the refund",
-        category: "action",
-        enabled: true,
-      },
-      {
-        id: "send_1",
-        tool: "send_reply",
-        label: "Reply",
-        description: "Tell the customer",
-        category: "communication",
-        enabled: true,
-      },
-    ],
+    // Derived as the planner derives them, so a card identity built from this
+    // plan is the identity a real card carries.
+    steps: buildPlanSteps([noteCall, refundCall, sendReplyCall]),
     rawToolCalls: [noteCall, refundCall, sendReplyCall],
     routingEvidence: { classifierState: "not_applicable", codes: [] },
     validation: { status: "valid", issues: [] },
@@ -652,11 +630,12 @@ describe("executeCurrentCachedHomePlan execution", () => {
       executionIntent: "merchant_approved",
       failureRoute: "test",
       approver: { clerkUserId: support.member.clerkUserId, displayName: null },
+      // What a phone card carries: `planIdentity` hashes the rendered plan.
       expectedIdentity: {
         planId: proposal.id,
         sourceMessageId: support.message.id,
-        planHash: proposal.proposalHash,
-        instructionHash: hashInstruction(proposal.instruction),
+        planHash: hashPlan(support.cache.plan),
+        instructionHash: hashInstruction(support.cache.instruction),
       },
     }, makeDeps({ runAgent }));
 
@@ -670,6 +649,28 @@ describe("executeCurrentCachedHomePlan execution", () => {
         },
       },
     })).toMatchObject({ proposalId: proposal.id, taskId: support.task.id });
+  });
+
+  it("rejects a v2 card whose plan hash names a different bundle", async () => {
+    const support = await seedSupportCardParkedOnTask(2);
+    const runAgent = vi.fn(async () => okResult);
+
+    await expect(executeCurrentCachedHomePlan({
+      orgId: support.org.id,
+      threadId: support.thread.id,
+      settings: support.settings,
+      executionIntent: "merchant_approved",
+      failureRoute: "test",
+      approver: { clerkUserId: support.member.clerkUserId, displayName: null },
+      expectedIdentity: {
+        planId: support.cache.planId!,
+        sourceMessageId: support.message.id,
+        planHash: hashPlan({ ...support.cache.plan, rawToolCalls: [noteCall, sendReplyCall] }),
+        instructionHash: hashInstruction(support.cache.instruction),
+      },
+    }, makeDeps({ runAgent }))).rejects.toBeInstanceOf(ConflictError);
+    expect(runAgent).not.toHaveBeenCalled();
+    expect(await db.planExecution.count({ where: { organizationId: support.org.id } })).toBe(0);
   });
 
   it("does not consume a newer cache projection after exact v2 proposal execution", async () => {
