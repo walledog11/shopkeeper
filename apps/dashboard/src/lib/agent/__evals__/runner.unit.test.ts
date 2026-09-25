@@ -1,10 +1,16 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import {
+  quoteFullRefundForApproval,
+  quotePartialRefundForApproval,
+} from "@shopkeeper/agent/shopify";
 import type { AgentPlan } from "@/types";
 import { collectPlanExpectationFailures } from "./assertions";
 import {
   formatGateSummary,
   formatUsageDelta,
   hardFailureConfirmations,
+  installSimulatedShopifyRest,
   mutativeIntentActionFailures,
   selectBaselineFixtures,
   shouldVerifyExpectedActions,
@@ -245,5 +251,46 @@ describe("fixture action verification", () => {
   it("verifies expected action rows only after the plan shape passes", () => {
     expect(shouldVerifyExpectedActions(expectedActions, 0)).toBe(true);
     expect(shouldVerifyExpectedActions(undefined, 0)).toBe(false);
+  });
+});
+
+describe("installSimulatedShopifyRest", () => {
+  function loadFixture(id: string): Fixture {
+    return JSON.parse(readFileSync(new URL(`./fixtures/${id}.json`, import.meta.url), "utf8")) as Fixture;
+  }
+
+  it("prices the refund fixtures from their declared Shopify responses", async () => {
+    const full = loadFixture("refund-full-order");
+    const restoreFull = installSimulatedShopifyRest(full);
+    try {
+      await expect(quoteFullRefundForApproval({ order_id: "9000001010" }, full.setup.shopify!))
+        .resolves.toMatchObject({ amount: "42.00", currency: "USD" });
+    } finally {
+      restoreFull();
+    }
+
+    const partial = loadFixture("refund-partial");
+    const restorePartial = installSimulatedShopifyRest(partial);
+    try {
+      await expect(quotePartialRefundForApproval(
+        { order_id: "9000001021", items: [{ line_item_id: "lineitem_1021a", quantity: 1 }] },
+        partial.setup.shopify!,
+      )).resolves.toMatchObject({ approval_amount: "38.00", approval_currency: "USD" });
+    } finally {
+      restorePartial();
+    }
+  });
+
+  it("refuses an undeclared request to the fixture shop and restores fetch", async () => {
+    const original = globalThis.fetch;
+    const fixture = loadFixture("refund-full-order");
+    const restore = installSimulatedShopifyRest(fixture);
+    try {
+      await expect(fetch("https://test-store.myshopify.com/admin/api/2025-01/orders/1.json"))
+        .rejects.toThrow("unsimulated Shopify request GET orders/1.json in fixture refund-full-order");
+    } finally {
+      restore();
+    }
+    expect(globalThis.fetch).toBe(original);
   });
 });

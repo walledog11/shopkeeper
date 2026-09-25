@@ -31,6 +31,49 @@
         "result": "Reply sent to customer via email."
       }
     ],
+    "simulateShopifyRest": [
+      {
+        "path": "orders/9000001010.json",
+        "response": {
+          "order": {
+            "id": 9000001010,
+            "name": "#1010",
+            "currency": "USD",
+            "financial_status": "paid",
+            "total_price": "42.00",
+            "current_total_price": "42.00",
+            "refunds": [],
+            "line_items": [
+              {
+                "id": "lineitem_1010",
+                "title": "Cotton Tee",
+                "quantity": 1,
+                "current_quantity": 1,
+                "price": "42.00"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "method": "POST",
+        "path": "orders/9000001010/refunds/calculate.json",
+        "response": {
+          "refund": {
+            "currency": "USD",
+            "transactions": [
+              {
+                "kind": "suggested_refund",
+                "gateway": "shopify_payments",
+                "parent_id": 7000001,
+                "amount": "42.00",
+                "currency": "USD"
+              }
+            ]
+          }
+        }
+      }
+    ],
     "recentOrders": [
       {
         "id": "9000001010",

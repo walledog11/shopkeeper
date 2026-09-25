@@ -27,6 +27,17 @@ export interface SimulatedToolResult {
   result: string;
 }
 
+/**
+ * A Shopify Admin REST response served to the runtime itself, not to a tool.
+ * Planning asks Shopify to price a refund before approval; this answers that.
+ * `path` is relative to `/admin/api/<version>/`, without the query string.
+ */
+interface SimulatedShopifyRest {
+  method?: "GET" | "POST";
+  path: string;
+  response: unknown;
+}
+
 export interface ThreadSetup {
   channelType:
     | "ig_dm"
@@ -58,6 +69,7 @@ export interface ThreadSetup {
     guidance: string;
   }>;
   simulateToolResults?: SimulatedToolResult[];
+  simulateShopifyRest?: SimulatedShopifyRest[];
   /**
    * Intents the inbound classifier would have written for this ticket's customer
    * message. Only the true ones need listing; the rest default to false.

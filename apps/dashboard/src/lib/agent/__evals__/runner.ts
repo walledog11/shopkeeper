@@ -95,6 +95,35 @@ function buildSimulatedToolResults(fixture: Fixture): Map<string, string> {
   return results
 }
 
+/**
+ * Answers the runtime's own Shopify reads (the pre-approval refund quote) from
+ * the fixture while it runs, and restores `fetch` when disposed. Every request
+ * to the fixture's shop must be declared; other hosts pass through untouched.
+ */
+export function installSimulatedShopifyRest(fixture: Fixture): () => void {
+  const shop = fixture.setup.shopify?.shop
+  if (!shop) return () => {}
+  const host = new URL(`https://${shop}`).host
+  const responses = fixture.setup.simulateShopifyRest ?? []
+  const originalFetch = globalThis.fetch
+  const stubbed: typeof fetch = async (input, init) => {
+    const url = new URL(input instanceof Request ? input.url : String(input))
+    if (url.host !== host) return originalFetch(input, init)
+    const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase()
+    const path = url.pathname.replace(/^\/admin\/api\/[^/]+\//, "")
+    const match = responses.find(entry => (entry.method ?? "GET") === method && entry.path === path)
+    if (!match) throw new Error(`unsimulated Shopify request ${method} ${path} in fixture ${fixture.id}`)
+    return new Response(JSON.stringify(match.response), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    })
+  }
+  globalThis.fetch = stubbed
+  return () => {
+    if (globalThis.fetch === stubbed) globalThis.fetch = originalFetch
+  }
+}
+
 export async function runFixtureRepeated(
   fixture: Fixture,
   repeats: number,
@@ -164,6 +193,7 @@ async function runFixture(
   const startedAt = Date.now()
   let orgId: string | null = null
   let restoreModelClient: (() => void) | null = null
+  let restoreShopifyRest: (() => void) | null = null
 
   try {
     const environment = await createFixtureEnvironment(fixture, createdOrgId => {
@@ -203,6 +233,7 @@ async function runFixture(
 
     const simulated = buildSimulatedToolResults(fixture)
     simulatedToolResults.current = simulated.size > 0 ? simulated : null
+    restoreShopifyRest = installSimulatedShopifyRest(fixture)
     const resolvedSettings = resolveAgentSettings(fixture.setup.orgSettings ?? null)
     const runtimeVersion = requestedEvalAgentRuntimeVersion()
     currentPhase = usage.plannerUsage
@@ -280,6 +311,7 @@ async function runFixture(
     failureKind = error instanceof ModelSpendBudgetExceededError ? "budget" : "infrastructure"
   } finally {
     simulatedToolResults.current = null
+    restoreShopifyRest?.()
     restoreModelClient?.()
     if (orgId) await cleanupTestData(orgId).catch(() => {})
   }

@@ -51,6 +51,54 @@
           }
         ]
       }
+    ],
+    "simulateShopifyRest": [
+      {
+        "path": "orders/9000001021.json",
+        "response": {
+          "order": {
+            "id": 9000001021,
+            "name": "#1021",
+            "currency": "USD",
+            "financial_status": "paid",
+            "refunds": [],
+            "line_items": [
+              {
+                "id": "lineitem_1021a",
+                "title": "Soy Candle",
+                "quantity": 1,
+                "current_quantity": 1,
+                "price": "38.00"
+              },
+              {
+                "id": "lineitem_1021b",
+                "title": "Canvas Tote",
+                "quantity": 1,
+                "current_quantity": 1,
+                "price": "24.00"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "method": "POST",
+        "path": "orders/9000001021/refunds/calculate.json",
+        "response": {
+          "refund": {
+            "currency": "USD",
+            "transactions": [
+              {
+                "kind": "suggested_refund",
+                "gateway": "shopify_payments",
+                "parent_id": 7000001,
+                "amount": "38.00",
+                "currency": "USD"
+              }
+            ]
+          }
+        }
+      }
     ]
   },
   "instruction": "Reply to the customer and process their refund request.",

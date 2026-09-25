@@ -310,6 +310,15 @@ export function validateFixtures(fixtures: readonly unknown[], filenames?: reado
       assertToolName(result.tool, `setup.simulateToolResults[${resultIndex}].tool`, local)
       if (typeof result.result !== "string") local.push(`setup.simulateToolResults[${resultIndex}].result is required`)
     }
+    for (const [restIndex, rest] of (fixture.setup.simulateShopifyRest ?? []).entries()) {
+      const label = `setup.simulateShopifyRest[${restIndex}]`
+      if (!fixture.setup.shopify) local.push(`${label} requires setup.shopify`)
+      if (rest.method !== undefined && rest.method !== "GET" && rest.method !== "POST") local.push(`${label}.method must be GET or POST`)
+      if (typeof rest.path !== "string" || !/^[a-z_]+\/[\w./]+\.json$/.test(rest.path)) {
+        local.push(`${label}.path must be a relative Admin REST path such as orders/1.json`)
+      }
+      if (rest.response === undefined) local.push(`${label}.response is required`)
+    }
     validateFinancialExpectation(fixture, "create_refund", local)
     validateFinancialExpectation(fixture, "create_gift_card", local)
     validateUsefulNegativeOutcome(fixture, local)

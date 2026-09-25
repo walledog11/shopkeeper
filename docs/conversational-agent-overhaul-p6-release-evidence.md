@@ -161,6 +161,20 @@ Comparison attempt notes:
   validator passed all 13 cases and `npm run verify:pr` passed after local test
   services were restored, including 12 browser smoke tests, coverage gates, and
   production builds.
+- Commit `7a0fc011`, first post-audit comparison (runs `36104958333` for
+  runtime 1 and `36104967264` for runtime 2, each under $0.90 / 120 calls):
+  both gateway hard controls passed ($0.0089 / 2 calls and $0.0088 / 2 calls).
+  Runtime v1 passed 25/25 conclusive dashboard fixtures at $0.5370 / 55 calls;
+  runtime v2 passed 24/24 at $0.7157 / 58 calls. Neither arm is accepted: both
+  hit an infrastructure failure, not a model result. `refund-full-order` failed
+  on both runtimes and `refund-partial` on v2 with `Shopify request failed before
+  receiving a response`. The post-audit planner quotes the refund from Shopify
+  before approval, but the eval harness simulated only tool execution, so the
+  quote reached the fixture's non-existent shop. Fixtures now declare
+  `simulateShopifyRest` responses for the order read and refund calculation,
+  and the runner serves them for the fixture shop during the run. An undeclared
+  request to that shop fails with an explicit "unsimulated Shopify request"
+  error. Both arms must rerun from the harness-fix commit.
 
 ## Gate C — controlled real-provider and delivery exercise
 
@@ -253,3 +267,4 @@ architecture/product documentation describes the single active runtime.
 | 2026-09-24 | Runtime-v1 comparison attempt on `7725cf0e` | Free preflight and gateway passed; dashboard stopped at 51/53 because both confirmations of `continuity-ambiguous-yes` exposed a contradictory transcript/rubric rather than an unsafe action. Runtime v2 was cancelled before paid jobs; the shared fixture was corrected before another comparison |
 | 2026-09-24 | Ambiguous-continuation fixture repair | Fixture validation passed 13/13, then `npm run verify:pr` passed static checks, all unit and Node contract tests, 12 browser smoke tests, coverage gates, and production builds after the stopped local test services were restored |
 | 2026-09-24 | Paid-fixture contract audit and refund ownership repair | Paid model coverage reduced from 51 core plus 36 extended fixtures to 26 distinct hard core plus 15 extended judgment fixtures. Runtime now obtains full-refund amount/currency from Shopify at proposal time and rechecks them before dispatch. Full `npm run verify:pr` passed, including 12 browser smoke tests, coverage gates, and production builds. Historical paid baselines are superseded; a fresh same-commit v1/v2 comparison remains required |
+| 2026-09-25 | Post-audit comparison attempt on `7a0fc011` | Gateway control passed on both arms. Dashboard v1 25/25 conclusive ($0.5370, 55 calls) and v2 24/24 conclusive ($0.7157, 58 calls), but the refund fixtures failed as infrastructure because the eval harness did not simulate the planner's pre-approval Shopify refund quote. No production/provider action occurred |
