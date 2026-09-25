@@ -1,9 +1,6 @@
 import { getCurrentPlanForThread } from "@shopkeeper/agent/plan-cache-shape"
 import { decideAutonomy } from "@shopkeeper/agent/autonomy"
-import {
-  buildPlanPreview,
-  merchantRoutingQuestionFromCustomerMessage,
-} from "@shopkeeper/agent/plan-preview"
+import { buildPlanPreview } from "@shopkeeper/agent/plan-preview"
 import { SENDER_TYPE } from "@shopkeeper/agent/thread-constants"
 import type { TicketCardMeta } from "@/app/dashboard/_components/home/needs-you-card-meta"
 import { getChannelInfo } from "@/lib/messaging/channels"
@@ -111,10 +108,7 @@ function resolveMerchantQuestion(
   if (!plan) return null
 
   const verdict = decideAutonomy(plan, orgSettings, { filterStatus: ticket.filterStatus })
-  if (verdict.kind !== "needs_merchant_input") return null
-  if (verdict.question) return verdict.question
-
-  return merchantRoutingQuestionFromCustomerMessage(latestCustomerMessage(ticket)?.text)
+  return verdict.kind === "needs_merchant_input" ? verdict.question : null
 }
 
 function rowDecision(ticket: Ticket, orgSettings?: Partial<OrgSettings> | null): InboxRowDecision | null {

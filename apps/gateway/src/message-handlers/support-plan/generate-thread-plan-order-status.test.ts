@@ -515,12 +515,15 @@ describe('durable order-status host path', () => {
     );
   });
 
-  it('states that policy evidence is missing instead of inventing an answer', async () => {
+  it('asks the merchant instead of replying when policy evidence is missing', async () => {
     anthropicCreate.mockReset();
     anthropicCreate
       .mockResolvedValueOnce(toolUse('read-policy', 'search_kb', { query: 'international returns' }))
       .mockResolvedValueOnce(toolUse('reply', 'send_reply', {
         text: 'I could not find an international returns policy, so I need to check with the team.',
+      }))
+      .mockResolvedValueOnce(toolUse('ask', 'ask_operator', {
+        question: 'Do you accept returns on international orders?',
       }));
 
     const org = await createTestOrg();
@@ -555,10 +558,11 @@ describe('durable order-status host path', () => {
 
     expect(generated.plan?.rawToolCalls.map(call => call.name)).toEqual([
       'search_kb',
-      'send_reply',
+      'ask_operator',
     ]);
-    expect(JSON.stringify((anthropicCreate.mock.calls[1]?.[0] as { messages: unknown }).messages))
-      .toContain('No knowledge base articles found for that query.');
+    const transcript = JSON.stringify((anthropicCreate.mock.calls[2]?.[0] as { messages: unknown }).messages);
+    expect(transcript).toContain('No knowledge base articles found for that query.');
+    expect(transcript).toContain('Do not answer from general knowledge.');
     const request = await db.agentRequest.findFirstOrThrow({
       where: { organizationId: org.id, sourceMessageId: sourceMessage.id },
     });

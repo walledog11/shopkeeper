@@ -2,13 +2,16 @@ import type { AgentPlan, PlanStep, RawToolCall } from "./types.js"
 import { planSignals } from "./plan-signals.js"
 import { PLAN_STEP_LABELS } from "./tools/registry/index.js"
 
-export function merchantRoutingQuestionFromCustomerMessage(
-  latestCustomerMessage: string | null | undefined,
-): string {
-  const latest = latestCustomerMessage?.trim() ?? ""
-  if (!latest) return "What should I tell the customer?"
-  const quoted = latest.length > 120 ? `${latest.slice(0, 119)}…` : latest
-  return `What should I tell the customer about: "${quoted}"?`
+// Asked when a plan stopped for a gap but the model wrote no question of its
+// own. Names what was looked up and missed instead of echoing the customer,
+// whose message the merchant is already looking at.
+export function merchantGapQuestion(missedKbQueries: readonly string[] = []): string {
+  const queries = missedKbQueries.map(query => query.trim()).filter(Boolean)
+  if (queries.length === 0) {
+    return "I don't have the information to answer this, so I haven't replied. What should I tell the customer?"
+  }
+  const searched = queries.map(query => `"${query}"`).join(", ")
+  return `I searched your knowledge base for ${searched} and found nothing, so I haven't replied. What should I tell the customer?`
 }
 
 const ACTION_TOOL_PRIORITY = [

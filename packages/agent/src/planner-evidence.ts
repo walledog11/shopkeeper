@@ -2,7 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import type { AgentContext } from "./agent-context.js";
 import { customerMessageTexts, hasActionableMutativeIntent } from "./intent.js";
 import { isMerchantAnswerPlanningInstruction } from "./kb-learned.js";
-import { merchantRoutingQuestionFromCustomerMessage } from "./plan-preview.js";
+import { merchantGapQuestion } from "./plan-preview.js";
 import {
   hasAmbiguousCustomerSearchResult,
   hasCriticalPlanningReadErrorsForBlocks,
@@ -134,7 +134,22 @@ function classifierEscalationCodes(ctx: AgentContext): PlanRoutingEvidenceCode[]
   return codes;
 }
 
-function kbMissNeedsMerchant(input: BuildPlanRoutingEvidenceInput): boolean {
+type KbMissInput = Pick<
+  BuildPlanRoutingEvidenceInput,
+  "ctx" | "instruction" | "rawToolCalls" | "readBlocks" | "readStatusMap"
+>;
+
+function missedKbQueries(input: Pick<KbMissInput, "readBlocks" | "readStatusMap">): string[] {
+  return input.readBlocks
+    .filter((block) => block.name === "search_kb" && input.readStatusMap.get(block.id) === "not_found")
+    .map((block) => (block.input as { query?: unknown } | null)?.query)
+    .filter((query): query is string => typeof query === "string");
+}
+
+// A customer reply drafted after the knowledge base came up empty. The planning
+// loop refuses the reply while the turn is still open so the model asks the
+// merchant instead, and routing treats a reply that got through anyway as a gap.
+export function kbMissNeedsMerchant(input: KbMissInput): boolean {
   if (isMerchantAnswerPlanningInstruction(input.instruction)) return false;
   const searchedAndMissed = input.readBlocks.some(
     (block) => block.name === "search_kb" && input.readStatusMap.get(block.id) === "not_found",
@@ -198,14 +213,13 @@ export function buildPlanRoutingEvidence(
     .map((code) => ESCALATION_REASONS[code])
     .filter((reason): reason is string => Boolean(reason));
   const needsQuestion = uniqueCodes.includes("policy_gap") || uniqueCodes.includes("kb_gap");
-  const customerTexts = customerMessageTexts(input.ctx);
   return {
     evidence: {
       classifierState: state,
       codes: uniqueCodes,
       ...(escalationReasons.length > 0 ? { escalationReason: escalationReasons.join(" ") } : {}),
       ...(needsQuestion
-        ? { question: merchantRoutingQuestionFromCustomerMessage(customerTexts[customerTexts.length - 1]) }
+        ? { question: merchantGapQuestion(uniqueCodes.includes("kb_gap") ? missedKbQueries(input) : []) }
         : {}),
     },
     signalCodes: [...new Set(signalCodes)],

@@ -169,8 +169,10 @@ describe("decideAutonomy — info-only plans (existing behavior, default tier)",
 
   it("requires merchant input when KB search found nothing and the plan only drafts a reply", () => {
     const result = decideAutonomy(plan({ signals: signalsFor(["kb_no_match"]) }))
-    expect(result.kind).toBe("needs_merchant_input")
-    expect(result.question).toBeNull()
+    expect(result).toMatchObject({
+      kind: "needs_merchant_input",
+      question: "I don't have the information to answer this, so I haven't replied. What should I tell the customer?",
+    })
   })
 
   it("allows a missing Shopify customer when the reply does not depend on customer or order context", () => {
@@ -251,6 +253,18 @@ describe("decideAutonomy — Phase 3 routing", () => {
     }))
     expect(result.kind).toBe("needs_merchant_input")
     expect(result.question).toContain("Do you ship to Canada")
+  })
+
+  it("never parks a ticket on a blank question", () => {
+    const result = decideAutonomy(plan({
+      steps: [],
+      rawToolCalls: [],
+      routingEvidence: { classifierState: "aligned", codes: ["policy_gap"] },
+    }))
+    expect(result).toMatchObject({
+      kind: "needs_merchant_input",
+      question: "I don't have the information to answer this, so I haven't replied. What should I tell the customer?",
+    })
   })
 
   it("classifies an escalation plan explicitly", () => {
