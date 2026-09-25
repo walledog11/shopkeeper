@@ -107,18 +107,12 @@ export default function MerchantAnswerForm({ threadId, question, onAnswered }: P
           }}
         />
 
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex flex-col">
-            <span className="text-sm font-medium text-foreground/75">Save for next time</span>
-            <span className="text-xs text-foreground/40 leading-relaxed">
-              {AGENT_DISPLAY_NAME} remembers this so it won&apos;t ask again.
-            </span>
-          </div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-sm font-medium text-foreground/75">Save to knowledge base</span>
           <Switch
             checked={saveToKb}
             onChange={saveToKb => updateState({ saveToKb })}
             disabled={isSubmitting || succeeded}
-            className="mt-0.5"
             ariaLabel={saveToKb ? "Don't save this answer" : "Save this answer"}
           />
         </div>
