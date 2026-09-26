@@ -87,7 +87,7 @@ Standing rules for any change to agent behavior (promoted from the 2026-07 behav
 - **Customer-facing input stays in capture-mode planning** with deterministic adjudication.
 - **A new financial tool needs a prompt branch, not just a registry entry.** The compensation decision tree enumerates what is allowed and escalates the rest, so a tool absent from it is unreachable-to-unreliable whatever its description says. Adding to the shared registry also adds it to every support fixture's option set — grep the fixtures whose scenario the tool's own description claims *before* booking the gate.
 - **A validator rewrite that narrows what it inspects can loosen a safety check** while reading as a pure fix, and its own new tests will agree with it. Diff old against new verdicts on the same inputs; it costs nothing.
-- **The completion bar** for a milestone — outcome, compatibility, deterministic coverage, model evidence, production canary, rollback, documentation — and the relaxed pre-user standard that currently applies are recorded in `AGENT_AUDIT.md`. A green component test, paid eval, or one live message is not sufficient by itself.
+- **The completion bar** for agent overhaul milestones — outcome, compatibility, deterministic coverage, model evidence, production canary, rollback, documentation — is in [conversational-agent-overhaul-plan.md](../docs/conversational-agent-overhaul-plan.md) (*What is left*, Package 6) and the working gate in [conversational-agent-overhaul-release-matrix.md](../docs/conversational-agent-overhaul-release-matrix.md). Run evidence goes in [conversational-agent-overhaul-p6-release-evidence.md](../docs/conversational-agent-overhaul-p6-release-evidence.md). A green component test, paid eval, or one live message is not sufficient by itself.
 - **Order-ops** stays flag-and-notify-only: `runOrderOps` selects read tools plus `flag_order` only. It sits outside autonomy tiers (`flag_order` sets `policy.categoryPermission: false`). Before any mutating order action: shadow period, P1 execution-claim rollout verified, per-module cap enforcement proven, and a separate rollout gate from `ORDER_RISK_MONITOR_ENABLED`.
 
 ## Other entry points
@@ -99,9 +99,12 @@ Names live in each app's `.env.example`; values in Vercel/Railway.
 Both `DATABASE_URL`s append `?pgbouncer=true&connection_limit=1`. `TOKEN_ENCRYPTION_KEY` (AES-256-GCM, 32 raw bytes — hex64, base64, or 32 ASCII chars) encrypts `Integration.accessToken`/`refreshToken` at rest, applied transparently via Prisma `$extends`; same value in both apps; required in production.
 
 ## Architecture
-Design law, derived from the 2026-08-21 pipeline audit (`AGENT_AUDIT.md`, which holds the
-evidence and the phased work order). These describe the direction every change moves in,
-including changes that don't mention them. Moving away from one needs a reason in the diff.
+Design law is in the **Architecture** section below (2026-08-21 pipeline audit
+conclusions, kept here so agents read one file). Active agent architecture,
+contracts, and the ordered work queue live in
+[conversational-agent-overhaul-plan.md](../docs/conversational-agent-overhaul-plan.md).
+These bullets describe the direction every change moves in, including changes that don't
+mention them. Moving away from one needs a reason in the diff.
 
 - **Never branch on prose.** Control flow reads codes, enums, and typed fields; English is
   display-only. `warningBlocksQuickReply` used to decide whether the agent may act without a

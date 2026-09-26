@@ -15,7 +15,7 @@ import { join, basename } from 'node:path';
 
 const SOURCE_ROOTS = ['apps', 'packages', 'scripts', 'extensions'];
 const DOC_ROOTS = ['docs'];
-const EXTRA_DOCS = ['.claude/CLAUDE.md', 'AGENT_AUDIT.md', 'README.md'];
+const EXTRA_DOCS = ['.claude/CLAUDE.md', 'README.md'];
 const SKIP_DIRS = new Set(['node_modules', 'dist', '.next', '.next-e2e', '.git', 'coverage']);
 
 // A reference landing here resolved, but not onto anything a reader can use.
