@@ -144,7 +144,7 @@ export async function authorizeAgentProposal(
 ): Promise<AuthorizedProposal | null> {
   if (!input.proposalId || !UUID.test(input.proposalId)) return null;
   const approvedHash = hashPlan({
-    instruction: input.instruction, steps: [], rawToolCalls: input.approvedToolCalls,
+    instruction: input.instruction, rawToolCalls: input.approvedToolCalls,
   });
   return db.$transaction(async (tx) => {
     const named = await tx.agentProposal.findFirst({

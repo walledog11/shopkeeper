@@ -185,18 +185,13 @@ function validateExpectedIdentity(
   }
 }
 
-// A card's `planHash` is `hashPlan` of the plan it rendered, steps included. The
-// proposal's own hash omits steps, so comparing against it rejected every phone
-// approval of a runtime-v2 proposal. Steps are derived from the calls, so hashing
-// the plan rebuilt from the proposal is exactly as strict.
 function validateDurableExpectedIdentity(
   source: DurableProposalExecutionSource,
-  plan: AgentPlan,
   expected: ExpectedPlanIdentity,
 ): void {
   const mismatch = expected.planId !== source.proposalId
     || (expected.sourceMessageId && expected.sourceMessageId !== source.sourceMessageId)
-    || (expected.planHash && expected.planHash !== hashPlan(plan))
+    || (expected.planHash && expected.planHash !== source.proposalHash)
     || (expected.instructionHash && expected.instructionHash !== hashInstruction(source.instruction));
   if (mismatch) {
     throw new ConflictError("This plan is no longer current. Review the latest plan before approving it.");
@@ -277,6 +272,7 @@ async function loadExecutionSource(params: {
     : null;
   if (!durable) return loadCurrentCachedHomePlan(params);
 
+  validateDurableExpectedIdentity(durable, params.expectedIdentity!);
   const plan: AgentPlan = {
     planId: durable.proposalId,
     instruction: durable.instruction,
@@ -286,7 +282,6 @@ async function loadExecutionSource(params: {
     routingEvidence: { classifierState: "not_applicable", codes: [] },
     suspendedAtProposal: true,
   };
-  validateDurableExpectedIdentity(durable, plan, params.expectedIdentity!);
   return {
     channel: (await requireOrgThread(params.threadId, params.orgId)).channelType,
     instruction: durable.instruction,

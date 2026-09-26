@@ -1066,9 +1066,7 @@ async function persistProposal(
   if (snapshot.rawToolCalls.length === 0) {
     throw new BadRequestError("A proposal must contain at least one action.");
   }
-  const proposalHash = hashPlan({
-    instruction: snapshot.instruction, steps: [], rawToolCalls: snapshot.rawToolCalls,
-  });
+  const proposalHash = hashPlan(snapshot);
   const identity = {
     organizationId: task.organizationId, taskId: task.id,
     taskRevision: task.revision, proposalHash,

@@ -71,7 +71,7 @@ contract was unbuilt.
 | Gate C: real provider and delivery | Exercised on 2026-09-25. Run 4 completed approval → Shopify write → typed receipt → customer reply received. Runs 1–3 exposed the defects below. It must be run again after *Next work* items 1–7, because run 4's reply got through only on a phrasing the reply check does not scan, and the run is stored as failed. |
 | Gate D, staged rollout, Gate E | Not started. |
 | Production routing | `AGENT_RUNTIME_VERSION=1` on both services, with `AGENT_RUNTIME_V2_ORG_IDS` set to the controlled organization since 2026-09-25 (release evidence). New tasks for every other organization run v1. |
-| Open pull requests | #109 reverts #107, which was merged on 2026-09-25 on a wrong diagnosis. #108 was closed unmerged. |
+| Open pull requests | None for this plan. #109 reverted #107 on 2026-09-25; #108 was closed unmerged. |
 
 ## Where the code disagrees with this plan
 
@@ -104,12 +104,11 @@ contract this plan already specifies, not a new requirement.
    the production receipt). With no facts at all, "Order #1032 has shipped." and
    "I have refunded you." pass, while "I've refunded your order." is rejected
    (probed 2026-09-25). Whether a reply goes out depends on its phrasing.
-3. **One proposal has two hashes.** Contract: *Approval and communication
-   contract* ("a canonical server-generated hash of the immutable proposal").
-   `persistProposal` (`task-ledger.ts`) hashes the proposal with `steps: []`,
-   while the phone card carries `hashPlan(plan)` including steps. #106 made
-   `validateDurableExpectedIdentity` (`plan-execution.ts`) accept the card's
-   form instead of giving both one identity.
+3. *Resolved 2026-09-25.* One proposal had two hashes: `persistProposal`
+   hashed with `steps: []` while the phone card hashed the rendered steps, and
+   #106 made `validateDurableExpectedIdentity` accept the card's form. `hashPlan`
+   (`agent-actions.ts`) now covers the instruction and tool calls only and is the
+   single identity for the card, the proposal row and every check.
 4. **A rejected reply draft fails the execution.** Contract: *Durable request and
    work state* ("Record action completion separately from response delivery").
    `planExecutionOutcomeForActions` (`execution-outcome.ts`) counts a rejected
@@ -120,20 +119,18 @@ contract this plan already specifies, not a new requirement.
    transitions and concurrency*, which has no row for this; decision C below
    supplies it. Observed in Gate C: task `6abfe733` stayed `waiting_approval` after
    its ticket was closed, with no card left to act on.
-6. **#107's composing instruction is still merged.** It breaks item 5 of *How to
-   execute this plan*. PR #109 reverts it.
+6. *Resolved 2026-09-25.* #107's composing instruction was reverted by #109.
 
 ## Next work, in order
 
 Do these in order, one change each. Each names the contract it implements and
 what done means.
 
-1. **Merge PR #109** (the revert of #107). Done when merged.
-2. **One proposal identity** (disagreement 3). The card carries the proposal's
-   canonical hash, and the second form #106 accepts is removed. Done when one
-   function builds proposal identity for every surface; the approval integration
-   test uses the identity a real card carries; and a card naming a different
-   bundle is still rejected. Deterministic; no paid run.
+1. ~~**Merge PR #109**~~ Done 2026-09-25.
+2. ~~**One proposal identity**~~ Done 2026-09-25 (disagreement 3). Hashes
+   written before this change included steps, so a card, proposal or pending execution
+   created before it deploys is refused as no longer current and must be
+   regenerated; nothing executes on a mismatched identity.
 3. **Exact-draft communication on v2 proposals** (disagreement 1; decision A).
    A v2 proposal that will message the customer carries `exact_draft`: its
    destination, the exact draft, and any allowed result bindings are hash-bound,
