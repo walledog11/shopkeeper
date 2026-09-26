@@ -6,7 +6,8 @@ import { db, Prisma } from "@shopkeeper/db";
 import { BadRequestError, ConflictError, ForbiddenError } from "./errors.js";
 import { hashInstruction, hashPlan } from "./agent-actions.js";
 import { isOperatorChannel } from "./thread-constants.js";
-import type { RawToolCall } from "./types.js";
+import { communicationColumns } from "./proposal-communication.js";
+import type { ProposalCommunication, RawToolCall } from "./types.js";
 
 // A task whose actions reached any of these has touched a provider, so it is
 // never replayed from the top — claiming, settling, stopping, and resuming all
@@ -735,6 +736,8 @@ export interface ProposalSnapshot {
   proposalId?: string;
   instruction: string;
   rawToolCalls: RawToolCall[];
+  /** The message the card shows with the bundle. Absent on legacy plans. */
+  communication?: ProposalCommunication;
   sourceRequestIds: string[];
 }
 
@@ -1089,6 +1092,7 @@ async function persistProposal(
       approverScopeKind: approver.kind,
       approverScopeKey: approver.key,
       canonicalActions: snapshot.rawToolCalls as unknown as PrismaTypes.InputJsonValue,
+      ...communicationColumns(snapshot.communication),
       dependencies: [],
       sourceRequestIds: snapshot.sourceRequestIds,
     },

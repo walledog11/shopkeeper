@@ -8,15 +8,49 @@ import {
 } from '@shopkeeper/agent/person-name';
 import { lowerFirst } from '../../../lib/sentence-case.js';
 import { formatBlockedTicketLine } from '../../../maintenance/digest-briefing/ticket-lines.js';
+import type { ProposalCommunication } from '@shopkeeper/agent/types';
 import type { AgentPlan, PlanStep } from '../../../types.js';
 import { firstDraftExcerpt } from '../../operator/operator-ledger.js';
 import { requestDisplayHasContext, type RequestDisplay } from '../../shared/request-display.js';
 import { FRESH_STAGE } from './conversation-stage.js';
-import { endSentence, formatRequestHeaderLines } from './headers.js';
+import { channelRepliedPhrase, endSentence, formatRequestHeaderLines } from './headers.js';
 import type { ConversationStage, QueueNotice } from './types.js';
 
 function isSendStep(step: PlanStep): boolean {
   return step.tool === 'send_reply' || step.tool === 'send_email';
+}
+
+// Past this an exact draft is not shown in a text message, and a message that
+// cannot be shown is not one to approve from here.
+const EXACT_DRAFT_DISPLAY_LIMIT = 3000;
+
+type ExactDraft = Extract<ProposalCommunication, { mode: 'exact_draft' }>;
+
+function emailSubject(rawToolCalls: readonly { name: string; input?: unknown }[]): string | null {
+  const call = rawToolCalls.find((toolCall) => toolCall.name === 'send_email');
+  const subject = call?.input && typeof call.input === 'object'
+    ? (call.input as { subject?: unknown }).subject
+    : null;
+  return typeof subject === 'string' && subject.trim() ? subject.trim() : null;
+}
+
+// Where the approved message goes, as the lead-in to the message itself. The
+// merchant approves the destination along with the words.
+function exactDraftLead(
+  draft: ExactDraft,
+  person: PersonName,
+  rawToolCalls: readonly { name: string; input?: unknown }[],
+  replyOnly: boolean,
+): string {
+  if (draft.destination.kind === 'email') {
+    const subject = emailSubject(rawToolCalls);
+    const to = `${replyOnly ? "I'd email" : 'The email to'} ${draft.destination.id}`;
+    return subject ? `${to}, subject "${subject}":` : `${to}:`;
+  }
+  const where = channelRepliedPhrase(draft.destination.channel as DbChannelType);
+  return replyOnly
+    ? `I'd reply to ${personObject(person)} ${where}:`
+    : `The reply to ${personObject(person)}, ${where}:`;
 }
 
 // Why the plan escalated, so the card can say what the agent concluded instead
@@ -84,6 +118,9 @@ export function formatOperatorPlanMessage(
     // The customer's own words, for the threads whose structured request did not
     // survive. Only read when `requestDisplay` cannot ground the card itself.
     sourceMessageText?: string | null;
+    // The exact customer message this proposal binds. Shown whole, with where it
+    // goes, because it is what the approval sends.
+    communication?: ProposalCommunication;
   },
 ): string {
   const stage = options?.stage ?? FRESH_STAGE;
@@ -101,7 +138,17 @@ export function formatOperatorPlanMessage(
   const actionableSteps = steps.filter((step) => step.category !== 'read');
 
   // The actual draft the merchant is approving, so approval is not sight-unseen.
-  const draftBody = options?.rawToolCalls ? firstDraftExcerpt(options.rawToolCalls) : null;
+  // An exact draft is shown whole; a legacy draft keeps its excerpt.
+  const exactDraft = options?.communication?.mode === 'exact_draft' ? options.communication : null;
+  const exactDraftHidden = exactDraft !== null && exactDraft.draft.length > EXACT_DRAFT_DISPLAY_LIMIT;
+  const draftBody = exactDraft
+    ? (exactDraftHidden ? null : exactDraft.draft)
+    : options?.rawToolCalls ? firstDraftExcerpt(options.rawToolCalls) : null;
+  const draftLines = (replyOnly: boolean, legacyLead: string): string[] => {
+    if (!draftBody) return [];
+    if (!exactDraft) return replyOnly ? [legacyLead, `"${draftBody}"`] : [`${legacyLead} "${draftBody}"`];
+    return [exactDraftLead(exactDraft, person, options?.rawToolCalls ?? [], replyOnly), `"${draftBody}"`];
+  };
 
   // A thread still on a classifier version older than requestFacts renders no
   // structured request, but the customer's message is on the thread either way.
@@ -167,7 +214,7 @@ export function formatOperatorPlanMessage(
       ? `This one needs you: ${endSentence(reason)}`
       : "This one needs you — I can't answer it myself.");
   } else if (approvableSteps.length === 1 && isSendStep(approvableSteps[0]!) && draftBody) {
-    lines.push('', "I'd reply:", `"${draftBody}"`);
+    lines.push('', ...draftLines(true, "I'd reply:"));
   } else if (approvableSteps.length === 1) {
     // One step is not a list. Numbering a single item is the tell that a machine
     // wrote the card; say it as a sentence instead. parkedActionLabel already
@@ -175,7 +222,7 @@ export function formatOperatorPlanMessage(
     const only = parkedActionLabel(approvableSteps, person);
     const fallback = approvableSteps[0]!.label || approvableSteps[0]!.description;
     lines.push('', only ? `I'd ${only}.` : `I'd ${lowerFirst(fallback)}.`);
-    if (draftBody) lines.push('', `The reply: "${draftBody}"`);
+    if (draftBody) lines.push('', ...draftLines(false, 'The reply:'));
   } else if (approvableSteps.length > 0) {
     const stepLines = approvableSteps.map((step, index) => {
       if (step.tool === 'send_reply') return `${index + 1}. Reply to ${personObject(person)}`;
@@ -183,7 +230,7 @@ export function formatOperatorPlanMessage(
       return `${index + 1}. ${step.label || step.description}`;
     });
     lines.push('', "Here's what I'd do:", ...stepLines);
-    if (draftBody) lines.push('', `The reply: "${draftBody}"`);
+    if (draftBody) lines.push('', ...draftLines(false, 'The reply:'));
   }
 
   // The reply goes out and the thread still lands on them. Without this the
@@ -222,6 +269,10 @@ export function formatOperatorPlanMessage(
     // approves handing the merchant a thread they are already holding. Tell them
     // where it sits instead of asking them to authorise it.
     lines.push('', "Nothing's gone out — it's waiting on you.");
+  } else if (exactDraftHidden) {
+    // The same rule as an unshowable request: the approval would send words the
+    // merchant has not seen.
+    lines.push('', "The message is too long to show here — open the thread to read it before approving.");
   } else if (!canShowRequest) {
     // Never ask someone to approve what cannot be shown. The card still names
     // the action, because the plan is real even when the request rendering is

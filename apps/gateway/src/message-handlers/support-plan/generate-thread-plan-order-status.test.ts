@@ -761,6 +761,7 @@ describe('durable order-status host path', () => {
     expect(generated.identity?.planId).toEqual(expect.any(String));
     expect(generated.plan?.rawToolCalls.map(call => call.name)).toEqual([
       'update_shopify_order_address',
+      'send_reply',
     ]);
     expect(await db.agentTask.findFirstOrThrow({ where: { organizationId: org.id } }))
       .toMatchObject({ status: 'waiting_approval', activeProposalId: generated.identity!.planId });
@@ -959,7 +960,7 @@ describe('durable order-status host path', () => {
     const generated = await generateThreadPlan(org.id, thread.id, false, {
       sourceMessageId: sourceMessage.id,
     });
-    expect(generated.plan?.rawToolCalls.map(call => call.name)).toEqual(['cancel_order']);
+    expect(generated.plan?.rawToolCalls.map(call => call.name)).toEqual(['cancel_order', 'send_reply']);
     if (delivery !== null && delivery !== 'sent') {
       postDashboardInternal.mockResolvedValueOnce({
         ok: false, status: 503, responseBody: 'delivery unavailable', outcome: delivery,
@@ -978,10 +979,13 @@ describe('durable order-status host path', () => {
     expect(cancelCalls).toBe(1);
     if (providerOutcome === 'unresolved') {
       expect(executed.execution.status).toBe('unknown');
+      // The approved reply was written for the write succeeding, so an unknown
+      // outcome skips it without dispatch.
       expect(executed.result.actionsPerformed).toMatchObject([
         { tool: 'cancel_order', status: 'unknown' },
+        { tool: 'send_reply', status: 'unknown', result: expect.stringContaining('skipped send_reply') },
       ]);
-      expect(executed.result.actionsPerformed).toHaveLength(1);
+      expect(executed.result.actionsPerformed).toHaveLength(2);
       const cancellation = await db.agentAction.findFirstOrThrow({
         where: { organizationId: org.id, tool: 'cancel_order' },
       });
@@ -1111,7 +1115,7 @@ describe('durable order-status host path', () => {
     const generated = await generateThreadPlan(org.id, thread.id, false, {
       sourceMessageId: sourceMessage.id,
     });
-    expect(generated.plan?.rawToolCalls.map(call => call.name)).toEqual(['cancel_order']);
+    expect(generated.plan?.rawToolCalls.map(call => call.name)).toEqual(['cancel_order', 'send_reply']);
     fulfillmentStatus = fulfillment;
 
     await executeCurrentCachedHomePlan({
@@ -1200,7 +1204,7 @@ describe('durable order-status host path', () => {
     const generated = await generateThreadPlan(org.id, thread.id, false, {
       sourceMessageId: sourceMessage.id,
     });
-    expect(generated.plan?.rawToolCalls.map(call => call.name)).toEqual(['cancel_order']);
+    expect(generated.plan?.rawToolCalls.map(call => call.name)).toEqual(['cancel_order', 'send_reply']);
     if (reason === 'write_orders') {
       await db.integration.update({
         where: { id: integration.id },
@@ -1324,7 +1328,7 @@ describe('durable order-status host path', () => {
     const generated = await generateThreadPlan(org.id, thread.id, false, {
       sourceMessageId: sourceMessage.id,
     });
-    expect(generated.plan?.rawToolCalls.map(call => call.name)).toEqual(['create_refund']);
+    expect(generated.plan?.rawToolCalls.map(call => call.name)).toEqual(['create_refund', 'send_reply']);
 
     await executeCurrentCachedHomePlan({
       orgId: org.id,
@@ -1423,7 +1427,7 @@ describe('durable order-status host path', () => {
     const generated = await generateThreadPlan(org.id, thread.id, false, {
       sourceMessageId: sourceMessage.id,
     });
-    expect(generated.plan?.rawToolCalls.map(call => call.name)).toEqual(['create_partial_refund']);
+    expect(generated.plan?.rawToolCalls.map(call => call.name)).toEqual(['create_partial_refund', 'send_reply']);
     expect(generated.plan?.rawToolCalls[0]?.input).toMatchObject({
       approval_amount: '16.00', approval_currency: 'USD',
     });
@@ -1635,7 +1639,7 @@ describe('durable order-status host path', () => {
     const generated = await generateThreadPlan(org.id, thread.id, false, {
       sourceMessageId: sourceMessage.id,
     });
-    expect(generated.plan?.rawToolCalls.map(call => call.name)).toEqual(['create_return']);
+    expect(generated.plan?.rawToolCalls.map(call => call.name)).toEqual(['create_return', 'send_reply']);
     currentReturnableQuantity = returnableAfterApproval;
 
     const executed = await executeCurrentCachedHomePlan({
@@ -1666,10 +1670,13 @@ describe('durable order-status host path', () => {
     expect(returnCreateCalls).toBe(1);
     if (createOutcome === 'unknown') {
       expect(executed.execution.status).toBe('unknown');
+      // The approved reply was written for the write succeeding, so an unknown
+      // outcome skips it without dispatch.
       expect(executed.result.actionsPerformed).toMatchObject([
         { tool: 'create_return', status: 'unknown' },
+        { tool: 'send_reply', status: 'unknown', result: expect.stringContaining('skipped send_reply') },
       ]);
-      expect(executed.result.actionsPerformed).toHaveLength(1);
+      expect(executed.result.actionsPerformed).toHaveLength(2);
       const action = await db.agentAction.findFirstOrThrow({
         where: { organizationId: org.id, tool: 'create_return' },
       });
@@ -1815,7 +1822,7 @@ describe('durable order-status host path', () => {
     const generated = await generateThreadPlan(org.id, thread.id, false, {
       sourceMessageId: sourceMessage.id,
     });
-    expect(generated.plan?.rawToolCalls.map(call => call.name)).toEqual(['create_exchange']);
+    expect(generated.plan?.rawToolCalls.map(call => call.name)).toEqual(['create_exchange', 'send_reply']);
     currentReturnableQuantity = returnableAfterApproval;
     currentReplacementPrice = replacementPriceAfterApproval;
     const executed = await executeCurrentCachedHomePlan({
@@ -1849,10 +1856,13 @@ describe('durable order-status host path', () => {
     expect(returnCreateCalls).toBe(1);
     if (createOutcome === 'unknown') {
       expect(executed.execution.status).toBe('unknown');
+      // The approved reply was written for the write succeeding, so an unknown
+      // outcome skips it without dispatch.
       expect(executed.result.actionsPerformed).toMatchObject([
         { tool: 'create_exchange', status: 'unknown' },
+        { tool: 'send_reply', status: 'unknown', result: expect.stringContaining('skipped send_reply') },
       ]);
-      expect(executed.result.actionsPerformed).toHaveLength(1);
+      expect(executed.result.actionsPerformed).toHaveLength(2);
       const action = await db.agentAction.findFirstOrThrow({
         where: { organizationId: org.id, tool: 'create_exchange' },
       });

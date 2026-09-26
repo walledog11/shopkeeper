@@ -21,7 +21,7 @@ export function channelNoun(channelType: DbChannelType): string {
   return `${formatChannelLabel(channelType)} message`;
 }
 
-function channelRepliedPhrase(channelType: DbChannelType): string {
+export function channelRepliedPhrase(channelType: DbChannelType): string {
   if (channelType === CHANNEL.IG_DM) return 'on Instagram';
   if (channelType === CHANNEL.EMAIL) return 'by email';
   if (channelType === CHANNEL.TIKTOK) return 'on TikTok';

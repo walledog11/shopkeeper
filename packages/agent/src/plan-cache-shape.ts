@@ -1,6 +1,7 @@
 import { SENDER_TYPE } from "./thread-constants.js"
 import type { AgentPlan, ClassifierAlignmentState, PlanRoutingEvidence, PlanRoutingEvidenceCode, PlanSignal, PlanStep, PlanValidation, PlanValidationIssue, PlanValidationIssueCode, RawToolCall, ToolCategory } from "./types.js"
 import { isRecord } from "./guards.js"
+import { isProposalCommunication } from "./proposal-communication.js"
 export type PlanThreadMessage = {
   id: string
   senderType: string
@@ -36,6 +37,7 @@ const PLAN_VALIDATION_ISSUE_CODES: PlanValidationIssueCode[] = [
   "orphan_internal_note",
   "ungrounded_escalation_reason",
   "ungrounded_customer_reply",
+  "multiple_customer_messages",
 ]
 const CLASSIFIER_ALIGNMENT_STATES: ClassifierAlignmentState[] = ["aligned", "missing", "unaligned", "not_applicable"]
 const PLAN_ROUTING_EVIDENCE_CODES: PlanRoutingEvidenceCode[] = [
@@ -159,6 +161,7 @@ function isAgentPlan(value: unknown, requireCurrentFields: boolean): value is Ag
   if (requireCurrentFields && !isPlanRoutingEvidence(value.routingEvidence)) return false
   if (value.routingEvidence !== undefined && !isPlanRoutingEvidence(value.routingEvidence)) return false
   if (value.namespaceMiss !== undefined && typeof value.namespaceMiss !== "boolean") return false
+  if (value.communication !== undefined && !isProposalCommunication(value.communication)) return false
   if (value.suspendedAtProposal !== undefined && typeof value.suspendedAtProposal !== "boolean") return false
   if (value.routing !== undefined) {
     if (!isRecord(value.routing)) return false

@@ -191,6 +191,7 @@ const PLAN_VALIDATION_CODES = new Set<PlanValidationIssue['code']>([
   'orphan_internal_note',
   'ungrounded_escalation_reason',
   'ungrounded_customer_reply',
+  'multiple_customer_messages',
 ]);
 
 function readPlanValidationIssue(value: unknown): PlanValidationIssue | null {

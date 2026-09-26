@@ -21,7 +21,8 @@ import { hashInstruction, hashPlan } from "./agent-actions.js";
 import {
   ANY_MEMBER_ACTOR_KEY, actorMayEndWait, NO_SUSPENSION, requireMemberActorKey,
 } from "./task-ledger.js";
-import type { RawToolCall } from "./types.js";
+import { communicationFromColumns } from "./proposal-communication.js";
+import type { ProposalCommunication, RawToolCall } from "./types.js";
 
 export interface AuthorizedProposal {
   organizationId: string;
@@ -44,6 +45,7 @@ export interface DurableProposalExecutionSource {
   threadId: string;
   instruction: string;
   canonicalActions: RawToolCall[];
+  communication: ProposalCommunication;
   proposalHash: string;
   sourceMessageId: string;
 }
@@ -60,6 +62,14 @@ function canonicalActions(value: unknown): RawToolCall[] {
     throw new ConflictError("The durable proposal snapshot is invalid. Regenerate it before approving.");
   }
   return value as unknown as RawToolCall[];
+}
+
+function proposalCommunication(row: Parameters<typeof communicationFromColumns>[0]): ProposalCommunication {
+  const communication = communicationFromColumns(row);
+  if (!communication) {
+    throw new ConflictError("The durable proposal's customer message is invalid. Regenerate it before approving.");
+  }
+  return communication;
 }
 
 // Proposal IDs are UUIDs because the column is. A plan parked before durable
@@ -115,6 +125,7 @@ export async function readDurableProposalExecutionSource(input: {
     threadId: proposal.task.threadId,
     instruction: proposal.instruction,
     canonicalActions: canonicalActions(proposal.canonicalActions),
+    communication: proposalCommunication(proposal),
     proposalHash: proposal.proposalHash,
     sourceMessageId: source.sourceMessageId,
   };
@@ -129,6 +140,8 @@ export interface ProposalApprovalInput {
   proposalId?: string | undefined;
   instruction: string;
   approvedToolCalls: RawToolCall[];
+  /** The customer message the approving surface showed with those calls. */
+  communication?: ProposalCommunication;
   /** Durable execution cannot be authorized without an enforce-mode ledger. */
   executionLedgerEnforced?: boolean;
 }
@@ -145,6 +158,7 @@ export async function authorizeAgentProposal(
   if (!input.proposalId || !UUID.test(input.proposalId)) return null;
   const approvedHash = hashPlan({
     instruction: input.instruction, rawToolCalls: input.approvedToolCalls,
+    communication: input.communication,
   });
   return db.$transaction(async (tx) => {
     const named = await tx.agentProposal.findFirst({

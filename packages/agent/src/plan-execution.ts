@@ -42,6 +42,7 @@ import {
   type DurableProposalExecutionSource,
 } from "./task-approval.js";
 import { buildPlanSteps } from "./planner-steps.js";
+import { deriveProposalCommunication, planCommunication } from "./proposal-communication.js";
 
 export type PlanExecutionDeps = ExecuteAgentTurnDeps & {
   planAgent?: PlanAgentFn;
@@ -169,6 +170,27 @@ export function validateCustomerFacingApprovalSet(
   }
 }
 
+/**
+ * The customer message about to run must be the approved exact draft, to the
+ * same destination — and a proposal that authorizes no message may send none.
+ * The snapshot is derived again from the calls about to execute rather than
+ * trusted, so dropping, adding or editing a message step is refused here
+ * instead of sending something the merchant did not see.
+ */
+function validateApprovedCommunication(
+  plan: AgentPlan,
+  approvedToolCalls: RawToolCall[],
+  thread: { id: string; channelType: string },
+): void {
+  const approved = planCommunication(plan);
+  if (!approved) return;
+  if (!isDeepStrictEqual(deriveProposalCommunication(approvedToolCalls, thread), approved)) {
+    throw new ConflictError(
+      "The customer message no longer matches the one approved. Review the latest plan before approving it.",
+    );
+  }
+}
+
 function validateExpectedIdentity(
   current: CurrentCachedPlan & { plan: AgentPlan },
   expected: ExpectedPlanIdentity | undefined,
@@ -280,7 +302,7 @@ async function loadExecutionSource(params: {
     rawToolCalls: durable.canonicalActions,
     validation: { status: "valid", issues: [] },
     routingEvidence: { classifierState: "not_applicable", codes: [] },
-    suspendedAtProposal: true,
+    communication: durable.communication,
   };
   return {
     channel: (await requireOrgThread(params.threadId, params.orgId)).channelType,
@@ -327,6 +349,7 @@ export async function readParkedProposalForThread(params: {
     proposalId: current.planId,
     instruction: current.instruction,
     rawToolCalls: current.plan.rawToolCalls,
+    ...(current.plan.communication ? { communication: current.plan.communication } : {}),
     sourceRequestIds: [],
   };
 }
@@ -576,6 +599,7 @@ export async function executeCurrentCachedHomePlan(params: {
     ?? ("toolCalls" in verdict ? verdict.toolCalls : []);
   validateApprovedToolCalls(current.plan, requestedToolCalls);
   validateCustomerFacingApprovalSet(verdict, requestedToolCalls);
+  validateApprovedCommunication(current.plan, requestedToolCalls, thread);
   if (!requestedToolCalls.some((call) => {
     const category = TOOL_CATEGORIES[call.name];
     return Boolean(category && EXECUTABLE_CATEGORIES.has(category));
@@ -605,6 +629,7 @@ export async function executeCurrentCachedHomePlan(params: {
         proposalId: current.planId,
         instruction: current.instruction,
         approvedToolCalls: requestedToolCalls,
+        communication: current.plan.communication,
         executionLedgerEnforced: ledgerMode === "enforce",
       })
     : null;
@@ -709,9 +734,6 @@ export async function executeCurrentCachedHomePlan(params: {
         current.plan.rawToolCalls,
         current.plan.readResults,
       ),
-      // A plan that stopped at its proposal drafted no reply, so the run composes
-      // one from the receipts this execution produces.
-      ...(current.plan.suspendedAtProposal ? { composeFromReceipt: true } : {}),
       ...(approval ? { approval } : {}),
     }, deps);
     terminalExecutionStatus = terminalStatusForResult(result);

@@ -567,30 +567,73 @@ describe("planAgent capture loop", () => {
     expect(() => resolveProposalSuspensionMode("true")).toThrow(/AGENT_PROPOSAL_SUSPENSION_MODE/);
   });
 
-  it("stops at the proposal when the caller composes from the receipt", async () => {
+  it("drafts the reply with the write and binds it as the exact draft", async () => {
     installAgentLogger(makeLogger());
     mockCreate
       .mockResolvedValueOnce(singleToolUse("search_kb", { query: "refund policy" }, "tu_read"))
       .mockResolvedValueOnce(singleToolUse("create_refund", { order_id: "123", amount: "10.00" }, "tu_refund"))
-      // The draft the legacy path would have gone on to collect. Scripted so the
-      // assertion is that it was never asked for, rather than that the model ran
-      // out of scripted turns.
-      .mockResolvedValueOnce(singleToolUse("send_reply", { text: "Refund processed." }, "tu_reply"));
+      .mockResolvedValueOnce(singleToolUse("send_reply", { text: "Your refund is on its way." }, "tu_reply"));
 
     const plan = await planAgent(makeCtx(), "Please refund my order", AGENT_SETTINGS_DEFAULTS, {
-      suspendAtProposal: true,
+      exactDraftProposal: true,
     });
 
-    // The read still runs for real; the loop ends at the write rather than
-    // asking for a reply describing a refund that has not happened.
-    expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual(["search_kb", "create_refund"]);
-    expect(mockCreate).toHaveBeenCalledTimes(2);
-    // The marker autonomy reads to tell this plan's absent draft from a legacy
-    // plan's missing one.
-    expect(plan.suspendedAtProposal).toBe(true);
+    // The write does not end the turn: the message the merchant approves is
+    // written before approval, alongside it.
+    expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual(["search_kb", "create_refund", "send_reply"]);
+    expect(mockCreate).toHaveBeenCalledTimes(3);
+    expect(plan.communication).toEqual({
+      mode: "exact_draft",
+      destination: { kind: "thread", id: "thread_1", channel: "email" },
+      draft: "Your refund is on its way.",
+      allowedResultBindings: [],
+    });
+    expect(plan.suspendedAtProposal).toBeUndefined();
   });
 
-  it("re-prompts the suspension path when no write or terminal tool was proposed", async () => {
+  it("records a write the model sent no message with as authorizing none", async () => {
+    installAgentLogger(makeLogger());
+    mockCreate
+      .mockResolvedValueOnce(singleToolUse("create_refund", { order_id: "123", amount: "10.00" }, "tu_refund"))
+      .mockResolvedValueOnce(endTurn("Refund proposed."))
+      .mockResolvedValueOnce(endTurn("Refund proposed."));
+
+    const plan = await planAgent(makeCtx(), "Please refund my order", AGENT_SETTINGS_DEFAULTS, {
+      exactDraftProposal: true,
+    });
+
+    expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual(["create_refund"]);
+    expect(plan.communication).toEqual({ mode: "none" });
+  });
+
+  it("refuses two customer messages, which one exact draft cannot cover", async () => {
+    installAgentLogger(makeLogger());
+    mockCreate.mockResolvedValueOnce(toolUses([
+      { id: "tu_reply_1", name: "send_reply", input: { text: "Checking now." } },
+      { id: "tu_reply_2", name: "send_reply", input: { text: "All sorted." } },
+    ]));
+
+    const plan = await planAgent(makeCtx(), "Where is my order?", AGENT_SETTINGS_DEFAULTS, {
+      exactDraftProposal: true,
+    });
+
+    expect(plan.validation).toMatchObject({
+      status: "invalid",
+      issues: [expect.objectContaining({ code: "multiple_customer_messages", toolCallId: "tu_reply_2" })],
+    });
+    expect(plan.communication).toBeUndefined();
+  });
+
+  it("leaves legacy plans without a communication snapshot", async () => {
+    installAgentLogger(makeLogger());
+    mockCreate.mockResolvedValueOnce(singleToolUse("send_reply", { text: "Your order shipped." }, "tu_reply"));
+
+    const plan = await planAgent(makeCtx(), "Where is my order?", AGENT_SETTINGS_DEFAULTS);
+
+    expect(plan.communication).toBeUndefined();
+  });
+
+  it("re-prompts an exact-draft plan when no write or terminal tool was proposed", async () => {
     const injectedLogger = makeLogger();
     installAgentLogger(injectedLogger);
     mockCreate
@@ -599,7 +642,7 @@ describe("planAgent capture loop", () => {
       .mockResolvedValueOnce(singleToolUse("send_reply", { text: "The medium is available." }, "tu_reply"));
 
     const plan = await planAgent(makeCtx(), "Is the navy Pencil Half Zip available in medium?", AGENT_SETTINGS_DEFAULTS, {
-      suspendAtProposal: true,
+      exactDraftProposal: true,
     });
 
     expect(mockCreate).toHaveBeenCalledTimes(3);
@@ -607,7 +650,7 @@ describe("planAgent capture loop", () => {
       "search_shopify_products",
       "send_reply",
     ]);
-    expect(plan.suspendedAtProposal).toBeUndefined();
+    expect(plan.communication).toMatchObject({ mode: "exact_draft", draft: "The medium is available." });
     expect(completeLogPayload(injectedLogger)).toMatchObject({ iterations: 3, reprompted: true });
   });
 

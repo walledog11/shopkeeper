@@ -92,11 +92,6 @@ export interface RunAgentLoopParams {
   // Support planning sets this; operator planning does not (no customer to
   // reply to).
   captureReprompt?: boolean;
-  // capture: end the attempt at the first mutative proposal rather than running
-  // on until the model also drafts the reply. A turn that stops here has
-  // proposed the write and nothing else, which is the shape a runtime wants
-  // when the completion is written from the receipt instead of guessed at.
-  captureSuspendAtProposal?: boolean;
   // Planning-only control tools can end a narrowed attempt without becoming an
   // executable plan. The planner consumes the signal and retries from a clean
   // transcript with a wider registry.
@@ -140,7 +135,6 @@ async function handleCaptureBlocks(
     readResults: Map<string, string>;
     readStatus: Map<string, ToolStatus>;
     captureStopToolNames?: readonly string[];
-    captureSuspendAtProposal?: boolean;
     captureDiscovery?: RunAgentLoopParams["captureDiscovery"];
     captureRefuseReply?: RunAgentLoopParams["captureRefuseReply"];
     replyRefused: boolean;
@@ -205,7 +199,6 @@ async function handleCaptureBlocks(
   const terminalReached = proposedBlocks.some((b) => (
     TERMINAL_TOOL_NAMES.has(b.name)
     || state.captureStopToolNames?.includes(b.name)
-    || (state.captureSuspendAtProposal && TOOL_CATEGORIES[b.name] === "action")
   ));
 
   // Only feed results back when the loop will continue; a terminal ends the turn.
@@ -352,7 +345,6 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
         readResults,
         readStatus,
         captureStopToolNames: params.captureStopToolNames,
-        captureSuspendAtProposal: params.captureSuspendAtProposal,
         captureDiscovery: params.captureDiscovery,
         captureRefuseReply: params.captureRefuseReply,
         replyRefused,

@@ -596,6 +596,84 @@ describe('formatOperatorPlanMessage', () => {
   });
 });
 
+// Overhaul plan, Next work item 3: an exact-draft proposal's card shows the whole
+// message the approval sends and where it goes.
+describe('formatOperatorPlanMessage with an exact draft', () => {
+  const addressSteps = [
+    { category: 'action', tool: 'update_shopify_order_address', description: 'Update the address', label: 'Update shipping address', enabled: true },
+    { category: 'communication', tool: 'send_reply', description: 'Tell the customer', label: 'Reply', enabled: true },
+  ];
+  const longDraft = `Hi Jane, ${'your order is on its way. '.repeat(130)}`.trim();
+  const exact = (draft: string) => ({
+    mode: 'exact_draft' as const,
+    destination: { kind: 'thread' as const, id: THREAD_ID, channel: ChannelType.ig_dm },
+    draft,
+    allowedResultBindings: [] as [],
+  });
+
+  it('names where the reply goes and shows it whole', () => {
+    const draft = `Hi Jane, ${'we have updated the address on order #1043. '.repeat(16)}`.trim();
+    expect(draft.length).toBeGreaterThan(600);
+    const message = formatOperatorPlanMessage('Jane Doe', ChannelType.ig_dm, requestDisplay('Address change'), addressSteps, {
+      rawToolCalls: [
+        { name: 'update_shopify_order_address', input: {} },
+        { name: 'send_reply', input: { text: draft } },
+      ],
+      communication: exact(draft),
+    });
+
+    expect(message).toContain(`The reply to Jane, on Instagram:\n"${draft}"`);
+    expect(message).toContain('Sound good?');
+  });
+
+  it('names the address and subject of an exact email', () => {
+    const message = formatOperatorPlanMessage(
+      'Jane Doe',
+      ChannelType.email,
+      requestDisplay('Shipping delay'),
+      [{ category: 'communication', tool: 'send_email', description: 'Email the customer', label: 'Email', enabled: true }],
+      {
+        rawToolCalls: [{ name: 'send_email', input: { to: 'jane@x.com', subject: 'Your order', body: 'It ships Monday.' } }],
+        communication: {
+          mode: 'exact_draft',
+          destination: { kind: 'email', id: 'jane@x.com' },
+          draft: 'It ships Monday.',
+          allowedResultBindings: [],
+        },
+      },
+    );
+
+    expect(message).toContain(`I'd email jane@x.com, subject "Your order":\n"It ships Monday."`);
+    expect(message).toContain('Good to send?');
+  });
+
+  it('does not ask for approval of a message too long to show', () => {
+    expect(longDraft.length).toBeGreaterThan(3000);
+    const message = formatOperatorPlanMessage('Jane Doe', ChannelType.ig_dm, requestDisplay('Address change'), addressSteps, {
+      rawToolCalls: [
+        { name: 'update_shopify_order_address', input: {} },
+        { name: 'send_reply', input: { text: longDraft } },
+      ],
+      communication: exact(longDraft),
+    });
+
+    expect(message).not.toContain(longDraft.slice(0, 200));
+    expect(message).toContain('open the thread to read it before approving');
+    expect(message).not.toContain('Sound good?');
+  });
+
+  it('keeps the legacy excerpt for a plan without the snapshot', () => {
+    const message = formatOperatorPlanMessage('Jane Doe', ChannelType.ig_dm, requestDisplay('Address change'), addressSteps, {
+      rawToolCalls: [
+        { name: 'update_shopify_order_address', input: {} },
+        { name: 'send_reply', input: { text: 'All updated.' } },
+      ],
+    });
+
+    expect(message).toContain('The reply: "All updated."');
+  });
+});
+
 describe('formatOperatorDraftSummary', () => {
   it('uses the structured request snapshot and preserves actionable addresses', () => {
     const address = '88 Market Street, San Francisco, CA 94105';

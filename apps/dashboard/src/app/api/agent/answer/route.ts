@@ -16,7 +16,7 @@ import { saveMerchantAnswerToKb } from "@shopkeeper/agent/merchant-answer-kb";
 import { decideAutonomy } from "@shopkeeper/agent/autonomy";
 import { parseAgentAnswerBody } from "@/lib/agent/api/validation";
 import { buildContext, hashInstructionForLog, planAgent } from "@/lib/agent/runner";
-import { suspendsAtProposal } from "@shopkeeper/agent/planner";
+import { usesExactDraftProposals } from "@shopkeeper/agent/planner";
 import { ConflictError } from "@shopkeeper/shared/errors";
 import { resolveAgentSettings } from "@shopkeeper/agent/settings";
 import type { OrgSettings } from "@/types";
@@ -159,8 +159,8 @@ export const POST = withOrgRoute(
         planningInstruction,
         settings,
         {
-          ...(suspendsAtProposal(continuation?.runtimeVersion)
-            ? { suspendAtProposal: true }
+          ...(usesExactDraftProposals(continuation?.runtimeVersion)
+            ? { exactDraftProposal: true }
             : {}),
           ...(continuation?.runtimeVersion !== undefined
             ? { runtimeVersion: continuation.runtimeVersion }

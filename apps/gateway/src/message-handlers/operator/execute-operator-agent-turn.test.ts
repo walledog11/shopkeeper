@@ -123,14 +123,17 @@ describe('executeOperatorAgentTurn', () => {
     });
   });
 
-  // Package 3, step 7: the same suspended proposal reaching the operator approval
-  // surface — the card the merchant approves from Telegram or iMessage. It enters
-  // the shared boundary, so it owes the same composition the dashboard's does.
-  it('runs a suspended proposal approved from the operator card with composition', async () => {
+  // The operator approval surface — the card the merchant approves from Telegram
+  // or iMessage — enters the shared boundary, so an exact-draft proposal runs its
+  // write and then the exact reply the card showed, and nothing is composed.
+  it('runs an exact-draft proposal approved from the operator card with the reply it showed', async () => {
     const customer = await createTestCustomer(org.id, 'op-approve@test.com', { name: 'Owner' });
     const thread = await createTestThread(org.id, customer.id, ChannelType.operator);
     const message = await createTestMessage(thread.id, 'Refund the torn napkin');
-    const approvedToolCalls = [{ id: 'refund_1', name: 'create_refund', input: { order_id: '456', amount: '20.00' } }];
+    const approvedToolCalls = [
+      { id: 'refund_1', name: 'create_refund', input: { order_id: '456', amount: '20.00' } },
+      { id: 'reply_1', name: 'send_reply', input: { text: 'Your refund for the torn napkin is on its way.' } },
+    ];
     const plan: AgentPlan = {
       instruction: 'Refund the torn napkin',
       steps: [{
@@ -142,7 +145,12 @@ describe('executeOperatorAgentTurn', () => {
         enabled: true,
       }],
       rawToolCalls: approvedToolCalls,
-      suspendedAtProposal: true,
+      communication: {
+        mode: 'exact_draft',
+        destination: { kind: 'thread', id: thread.id, channel: ChannelType.operator },
+        draft: 'Your refund for the torn napkin is on its way.',
+        allowedResultBindings: [],
+      },
     };
     await db.thread.update({
       where: { id: thread.id },
@@ -165,7 +173,7 @@ describe('executeOperatorAgentTurn', () => {
     });
 
     expect(mockExecuteAgentTurn).toHaveBeenCalledWith(
-      expect.objectContaining({ composeFromReceipt: true }),
+      expect.objectContaining({ approvedToolCalls }),
       expect.anything(),
     );
   });
