@@ -1,4 +1,4 @@
-import type { ActionEntry, AgentResult } from "./agent-context.js";
+import type { ActionEntry, AgentResult, ApprovedMessageWithheld } from "./agent-context.js";
 import { TOOL_CATEGORIES } from "./tools/registry/index.js";
 import type { PlanExecutionOutcome } from "./types.js";
 
@@ -50,6 +50,29 @@ export function planExecutionOutcomeForActions(
 export function committedWithUnsentReply(actions: readonly OutcomeAction[]): boolean {
   return planExecutionOutcomeForActions(actions) === "committed"
     && actions.some((action) => actionCategory(action) === "communication" && isDefiniteFailure(action));
+}
+
+/**
+ * Why an approved exact draft left the customer untold, when that is what
+ * happened: an approved write definitely failed (execution stops there, so the
+ * message is never attempted), or the message was held back by the executor.
+ * Null when the message went out, when a provider failed to deliver a true
+ * message (a delivery retry, not a new proposal), and whenever any outcome is
+ * unknown — uncertainty is reconciled, never followed up.
+ */
+export function withheldApprovedMessage(
+  actions: readonly (OutcomeAction & Pick<ActionEntry, "withheld">)[],
+): ApprovedMessageWithheld | null {
+  if (actions.some((action) => action.status === "unknown")) return null;
+  if (actions.some((action) => actionCategory(action) === "communication" && action.status === "success")) {
+    return null;
+  }
+  const writeFailed = actions.some((action) => {
+    const category = actionCategory(action);
+    return category !== "communication" && category !== "read" && isDefiniteFailure(action);
+  });
+  if (writeFailed) return "approved_action_failed";
+  return actions.find((action) => action.withheld)?.withheld ?? null;
 }
 
 export function planExecutionOutcomeForResult(result: AgentResult): PlanExecutionOutcome {

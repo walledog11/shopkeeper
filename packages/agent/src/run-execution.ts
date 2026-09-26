@@ -5,6 +5,7 @@ import { TOOL_CATEGORIES, type AgentToolDefinition } from "./tools/registry/inde
 import { executeToolWithStatus } from "./tools/executor.js";
 import type {
   ActionEntry,
+  ApprovedMessageWithheld,
   AgentActionMode,
   AgentActionStatus,
   AgentResult,
@@ -101,7 +102,7 @@ function prepareApprovedMessage(
   toolCall: AgentToolCall,
   approved: ApprovedMessage,
   actionsPerformed: readonly ActionEntry[],
-): { call: AgentToolCall } | { refusal: string } {
+): { call: AgentToolCall } | { refusal: string; withheld?: ApprovedMessageWithheld } {
   const communication = approved.communication;
   const field = toolCall.name === "send_email" ? "body" : "text";
   const input = toolCall.input && typeof toolCall.input === "object"
@@ -114,11 +115,17 @@ function prepareApprovedMessage(
     actionsPerformed.find((action) => action.toolCallId === id)?.status !== "success"
   ));
   if (unfinished) {
-    return { refusal: `Error: skipped ${toolCall.name} because an approved action did not succeed, so the approved message is not true.` };
+    return {
+      refusal: `Error: skipped ${toolCall.name} because an approved action did not succeed, so the approved message is not true.`,
+      withheld: "approved_action_failed",
+    };
   }
   const filled = fillApprovedDraft(communication.draft, communication.allowedResultBindings, actionsPerformed);
   if (filled.status === "unfilled") {
-    return { refusal: `Error: skipped ${toolCall.name} because its ${filled.placeholder} placeholder has no value from a successful action receipt.` };
+    return {
+      refusal: `Error: skipped ${toolCall.name} because its ${filled.placeholder} placeholder has no value from a successful action receipt.`,
+      withheld: "placeholder_unfilled",
+    };
   }
   return { call: { ...toolCall, input: { ...input, [field]: filled.text } } };
 }
@@ -363,6 +370,7 @@ export async function executeAgentToolCall(
   let status: AgentActionStatus;
   let errorDetail: string | undefined;
   let receipt: ReceiptV1 | undefined;
+  let withheld: ApprovedMessageWithheld | undefined;
   let threw = false;
   const runtimeOperationId = !readOnly && category !== "read" ? randomUUID() : undefined;
   const providerOperationKey = runtimeOperationId && ctx.shopify
@@ -390,6 +398,7 @@ export async function executeAgentToolCall(
     result = approvedMessage.refusal;
     status = "error";
     errorDetail = result;
+    withheld = approvedMessage.withheld;
   } else if (
     legacyReplyFacts
     // Validate the exact receipt-bound text that will be dispatched. The model
@@ -504,6 +513,7 @@ export async function executeAgentToolCall(
     category,
     ...(errorDetail ? { errorDetail } : {}),
     ...(receipt ? { receipt } : {}),
+    ...(withheld ? { withheld } : {}),
   };
   actionsPerformed.push(action);
   if (actionDispatch) {

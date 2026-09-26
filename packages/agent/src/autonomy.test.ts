@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { decideAutonomy } from "./autonomy.js";
 import { buildPlanSteps } from "./planner-steps.js";
+import { buildPlanSignals } from "./plan-signals.js";
 import { resolveAgentSettings } from "./settings.js";
 import type { AgentPlan, OrgSettings, RawToolCall } from "./types.js";
 
@@ -104,6 +105,19 @@ describe("decideAutonomy", () => {
       signals: [{ code: "order_not_found", severity: "blocking", message: "missing" }],
     }), settings());
     expect(verdict.kind).toBe("needs_review");
+  });
+
+  // A follow-up to a withheld approved message is a reply-only plan, which the
+  // trusted tier would otherwise send unreviewed as a quick reply.
+  it("sends a withheld-message follow-up to the merchant at the trusted tier", () => {
+    const verdict = decideAutonomy(plan([reply], {
+      signals: buildPlanSignals(["approved_message_withheld"], [reply]),
+    }), settings());
+    expect(verdict).toMatchObject({
+      kind: "needs_review",
+      approvalAllowed: true,
+      reasons: ["approved_message_withheld"],
+    });
   });
 
   it("makes disabled communication tools non-approvable", () => {

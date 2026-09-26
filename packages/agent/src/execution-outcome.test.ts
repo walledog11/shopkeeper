@@ -5,6 +5,7 @@ import {
   isUnknownPlanExecution,
   ledgerStatusForPlanOutcome,
   planExecutionOutcomeForActions,
+  withheldApprovedMessage,
 } from "./execution-outcome.js";
 
 describe("planExecutionOutcomeForActions", () => {
@@ -47,6 +48,24 @@ describe("planExecutionOutcomeForActions", () => {
     expect(planExecutionOutcomeForActions([
       refund, { tool: "operator_message", category: "communication", status: "error" },
     ])).toBe("committed");
+  });
+
+  it("names why an approved message left the customer untold, and nothing else", () => {
+    const refund = { tool: "create_refund", status: "success" as const };
+    const declined = { tool: "create_refund", status: "error" as const };
+    const sent = { tool: "send_reply", status: "success" as const };
+    const unfilled = { tool: "send_reply", status: "error" as const, withheld: "placeholder_unfilled" as const };
+    const undelivered = { tool: "send_reply", status: "error" as const };
+
+    // Execution stops at a failed write, so the message is never attempted.
+    expect(withheldApprovedMessage([declined])).toBe("approved_action_failed");
+    expect(withheldApprovedMessage([refund, unfilled])).toBe("placeholder_unfilled");
+    expect(withheldApprovedMessage([refund, sent])).toBeNull();
+    // A true message the provider failed to deliver is retried, not redrafted.
+    expect(withheldApprovedMessage([refund, undelivered])).toBeNull();
+    // Uncertainty is reconciled, never followed up.
+    expect(withheldApprovedMessage([{ tool: "create_refund", status: "unknown" as const }])).toBeNull();
+    expect(withheldApprovedMessage([declined, { tool: "cancel_order", status: "unknown" as const }])).toBeNull();
   });
 
   it("maps partial failures to the failed ledger status", () => {

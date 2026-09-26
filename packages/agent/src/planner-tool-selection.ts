@@ -63,6 +63,7 @@ type PlanningToolSelectionReason =
   | "merchant_answer_replan"
   | "merchant_instruction"
   | "ambiguous_customer_follow_up"
+  | "withheld_message_follow_up"
   | "no_classifier_signals"
   | "classifier_unaligned"
   | "unclassified_request"
@@ -99,6 +100,11 @@ interface SelectPlanningToolsInput {
   // referent. This is a clarification turn, so it may answer the customer but
   // may not widen into an action the customer did not unambiguously select.
   ambiguousCustomerFollowUp?: boolean;
+  // An approved message was withheld because what it said did not happen. The
+  // attempt that follows tells the customer what did; it may read the order and
+  // draft or escalate, and may not propose a write — nothing here can repeat or
+  // retry one the approved run already committed or failed.
+  withheldMessageFollowUp?: boolean;
 }
 
 const CONTROL_TOOL_NAMES = [
@@ -117,6 +123,12 @@ const ORDER_READ_TOOL_NAMES = [
   "get_order_fulfillment_status",
   "get_order_tracking",
 ] as const;
+
+const WITHHELD_MESSAGE_FOLLOW_UP_TOOL_NAMES = new Set<string>([
+  "send_reply",
+  "escalate_to_human",
+  ...ORDER_READ_TOOL_NAMES,
+]);
 
 const MUTATION_COMMON_TOOL_NAMES = [
   "search_kb",
@@ -248,6 +260,16 @@ function addBucket(
  * protect those exact boundaries.
  */
 export function selectPlanningTools(input: SelectPlanningToolsInput): PlanningToolSelection {
+  // First: whatever else is true of the conversation, this attempt may not
+  // propose a write, so no later rule may hand it one.
+  if (input.withheldMessageFollowUp) {
+    return {
+      tools: input.availableTools.filter((tool) => WITHHELD_MESSAGE_FOLLOW_UP_TOOL_NAMES.has(tool.name)),
+      bucket: "withheld_message",
+      reason: "withheld_message_follow_up",
+      narrowed: true,
+    };
+  }
   // An actor's own authorized set, not an error fallback: an operator, a
   // storefront shopper and a merchant-authored instruction each plan against
   // everything they hold, so discovery has nothing to add to them.

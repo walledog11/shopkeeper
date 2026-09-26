@@ -2,6 +2,7 @@ import { Worker } from 'bullmq';
 import { db } from '@shopkeeper/db';
 import {
   claimAgentTask,
+  claimWithheldMessageFollowUp,
   failAgentTaskClaim,
   recordAgentTaskModelUsage,
   renewAgentTaskLease,
@@ -9,12 +10,13 @@ import {
   settleAgentTaskClaim,
 } from '@shopkeeper/agent/task-ledger';
 import { estimateModelUsageCostUsd, UnknownModelPriceError } from '@shopkeeper/agent/model-cost';
-import type { TaskSettlement } from '@shopkeeper/agent/task-ledger';
+import type { TaskClaimIdentity, TaskSettlement } from '@shopkeeper/agent/task-ledger';
 import type { TaskModelBudget } from '@shopkeeper/agent/context';
 import { QUEUE } from '../constants.js';
 import logger from '../logger.js';
 import { getContext, loadLiveOperatorContext, normalizeApprovedToolCalls } from '../operator-context.js';
 import { runOperatorFreeFormTurn } from '../message-handlers/operator/operator-free-form-turn.js';
+import { runWithheldMessageFollowUp } from '../message-handlers/support-plan/withheld-message-follow-up.js';
 import type { AgentTaskJobData } from '../types.js';
 import { registerJobFailureLogging } from './failure.js';
 import type { SharedGatewayWorkerOptions } from './resources.js';
@@ -22,7 +24,66 @@ import type { SharedGatewayWorkerOptions } from './resources.js';
 const LEASE_MS = 300_000;
 const RENEW_MS = 60_000;
 
+// Reserved before the provider is contacted and charged as soon as the
+// response is measured, so a crash costs at most one call's accounting and
+// never returns the task to a fresh allowance.
+function taskModelBudget(claim: TaskClaimIdentity & { claimToken: string }): TaskModelBudget {
+  return {
+    reserveModelCall: async () => {
+      const state = await reserveAgentTaskModelCall(claim);
+      if (state !== 'active') throw new Error(`Task stopped: ${state}.`);
+    },
+    recordModelUsage: async (usage, model) => {
+      let spentNanoUsd = 0n;
+      try {
+        spentNanoUsd = BigInt(Math.ceil(estimateModelUsageCostUsd(model, usage) * 1_000_000_000));
+      } catch (error) {
+        if (!(error instanceof UnknownModelPriceError)) throw error;
+        logger.warn({ model, taskId: claim.taskId }, '[AgentTask] Unpriced model; call counted without spend');
+      }
+      await recordAgentTaskModelUsage({
+        ...claim,
+        usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, spentNanoUsd },
+      });
+    },
+  };
+}
+
+// A support task whose approved message was withheld. Its approved writes ran,
+// so `claimAgentTask` rightly refuses it; this claim admits it only when every
+// write settled, and the attempt may only draft.
+async function processWithheldMessageFollowUp(data: AgentTaskJobData): Promise<boolean> {
+  const claimed = await claimWithheldMessageFollowUp({
+    organizationId: data.organizationId,
+    taskId: data.taskId,
+    expectedRevision: data.revision,
+    leaseMs: LEASE_MS,
+  });
+  if (!claimed) return false;
+  const request = await db.agentRequest.findFirst({
+    where: { organizationId: data.organizationId, taskId: data.taskId },
+    orderBy: [{ acceptedAt: 'desc' }, { id: 'desc' }],
+    select: { id: true },
+  });
+  const claim = {
+    organizationId: data.organizationId,
+    taskId: data.taskId,
+    expectedRevision: data.revision,
+    claimToken: claimed.claimToken,
+  };
+  await runWithheldMessageFollowUp({
+    ...claim,
+    threadId: claimed.task.threadId,
+    objective: claimed.task.objective,
+    runtimeVersion: claimed.task.runtimeVersion,
+    requestId: request?.id ?? data.taskId,
+    followUp: claimed.followUp,
+  }, taskModelBudget(claim));
+  return true;
+}
+
 export async function processAgentTaskJob(data: AgentTaskJobData): Promise<void> {
+  if (await processWithheldMessageFollowUp(data)) return;
   const claimed = await claimAgentTask({
     organizationId: data.organizationId,
     taskId: data.taskId,
@@ -81,28 +142,7 @@ export async function processAgentTaskJob(data: AgentTaskJobData): Promise<void>
     expectedRevision: data.revision,
     claimToken: claimed.claimToken,
   };
-  // Reserved before the provider is contacted and charged as soon as the
-  // response is measured, so a crash costs at most one call's accounting and
-  // never returns the task to a fresh allowance.
-  const taskBudget: TaskModelBudget = {
-    reserveModelCall: async () => {
-      const state = await reserveAgentTaskModelCall(claim);
-      if (state !== 'active') throw new Error(`Task stopped: ${state}.`);
-    },
-    recordModelUsage: async (usage, model) => {
-      let spentNanoUsd = 0n;
-      try {
-        spentNanoUsd = BigInt(Math.ceil(estimateModelUsageCostUsd(model, usage) * 1_000_000_000));
-      } catch (error) {
-        if (!(error instanceof UnknownModelPriceError)) throw error;
-        logger.warn({ model, taskId: data.taskId }, '[AgentTask] Unpriced model; call counted without spend');
-      }
-      await recordAgentTaskModelUsage({
-        ...claim,
-        usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, spentNanoUsd },
-      });
-    },
-  };
+  const taskBudget = taskModelBudget(claim);
 
   let leaseLost = false;
   const renewal = setInterval(() => {
