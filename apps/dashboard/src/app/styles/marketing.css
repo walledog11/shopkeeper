@@ -54,6 +54,171 @@ html:has(.m-paper-sheet) {
   to   { opacity: 1; transform: none; }
 }
 
+/* Hero flow panel — olive field that glistens: a slow drifting gradient,
+   a diagonal light sweep, and twinkling sparkles. All motion stops under
+   reduced-motion; the panel still reads as a static gradient. */
+.m-shimmer-panel {
+  isolation: isolate;
+  background:
+    radial-gradient(60% 55% at 20% 15%, rgba(255, 252, 214, 0.55) 0%, transparent 60%),
+    radial-gradient(50% 60% at 85% 30%, rgba(236, 228, 140, 0.55) 0%, transparent 65%),
+    radial-gradient(70% 60% at 50% 110%, rgba(150, 128, 38, 0.75) 0%, transparent 70%),
+    linear-gradient(180deg, #d4d07c 0%, #c9c164 48%, #b1a142 100%);
+  background-size: 180% 180%, 180% 180%, 140% 140%, 100% 100%;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    0 40px 90px -60px rgba(80, 64, 12, 0.7);
+  animation: m-shimmer-drift 14s ease-in-out infinite alternate;
+}
+
+.m-shimmer-sheen {
+  position: absolute;
+  inset: -50% -30%;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    105deg,
+    transparent 38%,
+    rgba(255, 255, 255, 0.08) 44%,
+    rgba(255, 253, 225, 0.38) 50%,
+    rgba(255, 255, 255, 0.08) 56%,
+    transparent 62%
+  );
+  transform: translateX(-60%);
+  animation: m-shimmer-sweep 6.5s ease-in-out infinite;
+}
+
+.m-sparkle {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: 9999px;
+  background: #fffef0;
+  box-shadow: 0 0 6px 2px rgba(255, 252, 220, 0.85), 0 0 14px 4px rgba(255, 248, 190, 0.4);
+  opacity: 0;
+  animation: m-sparkle 4.2s ease-in-out infinite;
+}
+
+.m-flow-step {
+  position: relative;
+  z-index: 1;
+  animation: m-rise 0.6s ease-out both;
+}
+
+.m-flow-card {
+  display: flex;
+  max-width: min(320px, 100%);
+  align-items: flex-start;
+  gap: 0.75rem;
+  border-radius: 0.875rem;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: rgba(255, 253, 232, 0.42);
+  padding: 0.95rem 1.1rem;
+  text-align: left;
+  font-size: 15px;
+  line-height: 1.5;
+  color: #2b2716;
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 12px 30px -20px rgba(70, 56, 10, 0.55);
+}
+
+.m-flow-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 9999px;
+  background: rgba(166, 152, 40, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  padding: 0.35rem 0.85rem;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #fffdf0;
+}
+
+.m-flow-chip svg {
+  animation: m-flow-spark 2.4s ease-in-out infinite;
+}
+
+.m-flow-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 9999px;
+  background: #fffef8;
+  padding: 0.4rem 0.9rem;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #2b2716;
+  box-shadow: 0 8px 22px -12px rgba(60, 48, 8, 0.6);
+}
+
+.m-flow-line {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 1px;
+  height: 2.25rem;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.m-flow-line.is-short {
+  height: 1.25rem;
+}
+
+.m-flow-line.is-fade {
+  height: 2.5rem;
+  background: linear-gradient(rgba(255, 255, 255, 0.55), transparent);
+}
+
+.m-flow-dot {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  background: #fffef0;
+}
+
+@keyframes m-shimmer-drift {
+  from { background-position: 0% 0%, 100% 0%, 50% 100%, 0 0; }
+  to   { background-position: 100% 60%, 0% 80%, 40% 90%, 0 0; }
+}
+
+@keyframes m-shimmer-sweep {
+  0%   { transform: translateX(-60%); }
+  60%, 100% { transform: translateX(60%); }
+}
+
+@keyframes m-sparkle {
+  0%, 100% { opacity: 0; transform: scale(0.4); }
+  50%      { opacity: 1; transform: scale(1); }
+}
+
+@keyframes m-flow-spark {
+  0%, 100% { transform: scale(1) rotate(0deg); opacity: 1; }
+  50%      { transform: scale(1.2) rotate(20deg); opacity: 0.75; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .m-shimmer-panel,
+  .m-shimmer-sheen,
+  .m-flow-step,
+  .m-flow-chip svg {
+    animation: none;
+  }
+
+  .m-shimmer-sheen {
+    display: none;
+  }
+
+  .m-sparkle {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
 /* Hero workflow graphic — scene-by-scene, fixed-size card. */
 .m-hero-stage {
   position: relative;
