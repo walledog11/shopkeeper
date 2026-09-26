@@ -76,7 +76,8 @@ export function CTA() {
             Give your shop a shopkeeper.
           </h2>
           <p className="mx-auto mb-8 max-w-[46ch] text-[clamp(22px,3vw,32px)] leading-[1.05] text-stone-600 [font-family:var(--m-hand)]">
-            Set it up tonight. Wake up to your first morning briefing.
+            Connect Shopify, add your store’s instructions, and give it its first job.
+            A stock check, an order change, or the customer inbox waiting for you.
           </p>
           <a
             href="/signup"
