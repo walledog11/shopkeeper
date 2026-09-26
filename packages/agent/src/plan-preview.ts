@@ -1,6 +1,7 @@
 import type { AgentPlan, PlanStep, RawToolCall } from "./types.js"
 import { planSignals } from "./plan-signals.js"
 import { PLAN_STEP_LABELS } from "./tools/registry/index.js"
+import { displayApprovedDraft } from "./reply-placeholders.js"
 
 // Asked when a plan stopped for a gap but the model wrote no question of its
 // own. Names what was looked up and missed instead of echoing the customer,
@@ -62,11 +63,13 @@ function replyTextFromToolCall(toolCall: RawToolCall | null): string | null {
   return typeof text === "string" && text.trim() ? text.trim() : null
 }
 
+// The reply as a merchant reads it: receipt placeholders are shown by what they
+// will hold, never as raw tokens.
 export function planReplyText(plan: AgentPlan | null): string | null {
   if (!plan) return null
   for (const name of REPLY_TOOL_NAMES) {
     const text = replyTextFromToolCall(plan.rawToolCalls.find(toolCall => toolCall.name === name) ?? null)
-    if (text) return text
+    if (text) return displayApprovedDraft(text)
   }
   return null
 }

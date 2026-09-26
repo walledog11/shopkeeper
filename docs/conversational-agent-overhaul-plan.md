@@ -1,6 +1,7 @@
 # Conversational agent overhaul plan
 
 Status: Packages 0–5 are implemented. Package 6 is in progress: Gate A is done,
+*Next work* items 1–4 are done in code (item 4's model evidence waits on item 7),
 Gate B's baseline comparison passed but its held-out variants have not run, Gate
 C has been exercised and has open defects, and Gates D and E, staged rollout,
 and deletion have not started. Production runs runtime v1 by default, with one controlled
@@ -86,24 +87,17 @@ contract this plan already specifies, not a new requirement.
    draft, `persistProposal` writes the four snapshot columns, and execution
    derives the snapshot again from the calls about to run and refuses on any
    difference. The compose-after-write path (`composeFromReceipt`) is removed.
-2. **v2 reply text is judged, and can be rewritten, by reading its English.**
-   Contract: *Response grounding and delivery* ("Prose checks remain
-   heuristics"), case D18, and decision A. The approved exact draft is sent by
-   the executor in `run-execution.ts`, which runs on every send:
-   - calls `executedCompletionFacts(..., { allowHistoricalResultInference: true })`,
-     although that function's own comment says new-runtime callers must leave
-     it disabled;
-   - passes the draft through `renderReplyCompletionClaims` (`plan-grounding.ts`),
-     which can replace a claiming sentence with a rendered one, so the text
-     sent can differ from the text the merchant approved;
-   - rejects a reply when `unsupportedReplyCompletionClaims` (`plan-grounding.ts`)
-     maps its words to an action that has no fact.
-
-   That check rejected a true reply backed by an address-update receipt
-   ("shipping address … has been updated"; Gate C run 3, reproduced locally with
-   the production receipt). With no facts at all, "Order #1032 has shipped." and
-   "I have refunded you." pass, while "I've refunded your order." is rejected
-   (probed 2026-09-25). Whether a reply goes out depends on its phrasing.
+2. *Resolved 2026-09-25 for v2.* v2 reply text was judged, and could be
+   rewritten, by reading its English: the executor ran every send through
+   `executedCompletionFacts(..., { allowHistoricalResultInference: true })`,
+   `renderReplyCompletionClaims` and `unsupportedReplyCompletionClaims`, which
+   rejected a true address-update reply (Gate C run 3). An approved v2 proposal
+   now hands its snapshot to the executor (`ApprovedMessage` in
+   `run-execution.ts`), which sends the approved draft unchanged except for its
+   receipt placeholders (`reply-placeholders.ts`), and only when every approved
+   write succeeded and every placeholder filled from the bound call's
+   successful receipt. It computes no completion facts and runs no prose check.
+   The legacy path is unchanged and remains a Gate E target.
 3. *Resolved 2026-09-25.* One proposal had two hashes: `persistProposal`
    hashed with `steps: []` while the phone card hashed the rendered steps, and
    #106 made `validateDurableExpectedIdentity` accept the card's form. `hashPlan`
@@ -144,7 +138,27 @@ what done means.
    v2 is held to the same reply fixtures as v1. No paid run was made for this
    item; item 7's comparison is its model evidence. Until item 4 lands, the
    executor can still rewrite or reject the approved draft (disagreement 2).
-4. **Receipt-bound placeholders** (disagreement 2; decisions A and B). A value
+4. ~~**Receipt-bound placeholders**~~ Code done 2026-09-25 (disagreement 2;
+   decisions A and B); model evidence is item 7's comparison, as for item 3.
+   The draft names an outcome value as `{{refund_amount}}`, `{{return_name}}`,
+   `{{order_name}}`, `{{gift_card_amount}}` or `{{tracking_number}}`
+   (`reply-placeholders.ts`). `deriveProposalCommunication` binds each one to
+   the single approved call that can fill it, so `allowedResultBindings` is part
+   of the hash; a placeholder no single call can fill, or any placeholder on a
+   legacy plan, makes the plan invalid (`unbound_reply_placeholder`). Both cards
+   show a placeholder by its label ("[refund amount]"). The planning prompt
+   offers placeholders only when `exactDraftProposal` is set, generated from the
+   same table the executor fills from. Decision B holds through planning-time
+   validation: `detectUngroundedReplyText` still invalidates a flagged draft
+   before approval, and nothing re-judges it afterwards. The eval harness now
+   executes a v2 plan with its snapshot, simulated tools can return receipts,
+   and `refund-partial-placeholder` (runtime v2 only) covers placeholder
+   authoring and filling; it has not been run. Not built: when the draft is
+   withheld, nothing is sent and no replacement proposal is created, and the
+   withheld draft still counts as a failed action until item 5 lands. The
+   original text of this item follows.
+
+   A value
    known only after the write, such as the amount Shopify refunds, appears on
    the card as a labeled placeholder bound to a receipt field. After execution,
    only those placeholders are filled, from the successful receipt of the

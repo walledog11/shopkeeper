@@ -154,7 +154,7 @@ export async function planAgent(
   const baseMessages = buildMessageHistory(historyWindow, modelInstruction, {
     segregateUntrusted: !operatorMode,
   });
-  const { stable, volatile } = buildSystemPromptParts(ctx, settings);
+  const { stable, volatile } = buildSystemPromptParts(ctx, settings, { exactDraftProposal });
   const systemPromptBlocks = buildSplitCachedSystemPrompt(stable, volatile);
   const resolvedSettings = resolveAgentSettings(settings);
 

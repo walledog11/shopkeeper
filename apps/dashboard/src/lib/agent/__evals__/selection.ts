@@ -56,10 +56,16 @@ export function selectFixtures(
   fixtures: readonly Fixture[],
   suite: EvalSuite,
   requested: ReadonlySet<string> | null,
+  runtimeVersion: EvalAgentRuntimeVersion | undefined = requestedEvalAgentRuntimeVersion(),
 ): Fixture[] {
+  // A fixture for behavior only one runtime has, such as a receipt placeholder
+  // in an exact draft, runs only when that runtime is pinned.
+  const onRuntime = fixtures.filter(fixture => (
+    fixture.runtimeVersion === undefined || fixture.runtimeVersion === runtimeVersion
+  ))
   const inSuite = suite === "core"
-    ? fixtures.filter(fixture => fixture.suite === "core")
-    : [...fixtures]
+    ? onRuntime.filter(fixture => fixture.suite === "core")
+    : onRuntime
   if (!requested) return inSuite
 
   const selected = inSuite.filter(fixture => requested.has(fixture.id))

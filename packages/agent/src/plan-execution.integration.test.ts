@@ -1067,6 +1067,50 @@ describe("exact-draft proposals", () => {
     expect(await db.planExecution.count({ where: { organizationId: support.org.id } })).toBe(0);
   });
 
+  it("binds a receipt placeholder into the proposal and hands the executor that exact snapshot", async () => {
+    const reply: RawToolCall = { ...sendReplyCall, input: { text: "We refunded {{refund_amount}}." } };
+    const authored: AgentPlan = {
+      instruction: "Issue the refund and tell the customer",
+      steps: buildPlanSteps([refundCall, reply]),
+      rawToolCalls: [refundCall, reply],
+      routingEvidence: { classifierState: "not_applicable", codes: [] },
+      validation: { status: "valid", issues: [] },
+    };
+    const support = await seedSupportCardParkedOnTask(2, authored);
+    const binding = { placeholder: "refund_amount", toolCallId: "refund_1", tool: "create_refund", field: "facts.amount" };
+    expect(await db.agentProposal.findUniqueOrThrow({ where: { id: support.cache.planId! } }))
+      .toMatchObject({ approvedDraft: "We refunded {{refund_amount}}.", allowedResultBindings: [binding] });
+    const runAgent = vi.fn(async () => okResult);
+
+    await executeCurrentCachedHomePlan({
+      orgId: support.org.id,
+      threadId: support.thread.id,
+      settings: support.settings,
+      executionIntent: "merchant_approved",
+      failureRoute: "test",
+      approver: { clerkUserId: support.member.clerkUserId, displayName: null },
+      expectedIdentity: cardIdentity(support, support.plan),
+    }, makeDeps({ runAgent }));
+
+    expect(runAgent.mock.calls[0]?.[4].approvedCommunication).toEqual(support.plan.communication);
+    expect(runAgent.mock.calls[0]?.[4].approvedCommunication).toMatchObject({ allowedResultBindings: [binding] });
+  });
+
+  it("gives a legacy plan's reply no approved snapshot, so it keeps the legacy grounding", async () => {
+    const { org, thread, settings } = await seedThreadWithPlan({ plan: mutativePlan() });
+    const runAgent = vi.fn(async () => okResult);
+
+    await executeCurrentCachedHomePlan({
+      orgId: org.id,
+      threadId: thread.id,
+      settings,
+      executionIntent: "merchant_approved",
+      failureRoute: "test",
+    }, makeDeps({ runAgent }));
+
+    expect(runAgent.mock.calls[0]?.[4].approvedCommunication).toBeUndefined();
+  });
+
   it("sends nothing on a proposal that authorizes no message", async () => {
     const writesOnly: AgentPlan = {
       instruction: "Note the request and issue the refund",

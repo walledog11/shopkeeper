@@ -9,6 +9,7 @@ import {
   type CompletionFactOutcome,
 } from "./completion-facts.js";
 import type { RawToolCall } from "./types.js";
+import { customerMoney } from "./reply-placeholders.js";
 
 const MUTATION_SUBJECT =
   "refunds?|returns?|exchanges?|cancellations?|gift cards?|store credit|replacements?|discounts?|prices?|orders?|address(?:es)?|customer (?:info|information|profile|notes?)|email address|phone number|customer name|notes?|labels?|shipments?";
@@ -302,15 +303,12 @@ function publicOrderLabel(fact: CompletionFact): string | null {
   return candidate.startsWith("#") ? candidate : `#${candidate}`;
 }
 
-// The customer reads this sentence, so money follows the same convention as the
-// merchant-facing copy in shopify/sales-pulse.ts — a symbol for USD, a trailing
-// ISO code otherwise. "USD 20.00" reads like a bank statement. Cents are kept
-// even when whole, because a refund total is exact.
+// Cents are kept even when whole, because a refund total is exact.
 function publicMoney(fact: CompletionFact): string | null {
   const amount = fact.amount ? canonicalAmount(fact.amount) : null;
-  const currency = fact.currency?.trim().toUpperCase();
+  const currency = fact.currency?.trim();
   if (!amount || !currency) return null;
-  return currency === "USD" ? `$${amount}` : `${amount} ${currency}`;
+  return customerMoney(amount, currency);
 }
 
 function renderCompletionFact(fact: CompletionFact): string {

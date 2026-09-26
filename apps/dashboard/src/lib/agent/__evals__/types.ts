@@ -25,6 +25,17 @@ export interface FixtureKbArticle {
 export interface SimulatedToolResult {
   tool: string;
   result: string;
+  /**
+   * The successful receipt the provider would have returned. The runner stamps
+   * its identity (version, tool, operation and execution IDs, time) from the
+   * live execution, so a fixture declares only what the provider observed.
+   * Needed wherever a reply placeholder is filled from this call.
+   */
+  receipt?: {
+    target: { kind: string; id: string };
+    providerReference: string | null;
+    facts: Record<string, unknown>;
+  };
 }
 
 /**
@@ -154,6 +165,10 @@ export interface Fixture {
   // `core` is the paid release profile and is always hard-gated. `extended`
   // belongs to the complete drift profile and may be hard or advisory.
   suite: "core" | "extended";
+  // Set only for behavior a single runtime has (receipt placeholders exist only
+  // on runtime v2). Such a fixture runs only when EVAL_AGENT_RUNTIME_VERSION
+  // names that runtime, so a v1/v2 comparison never counts it against v1.
+  runtimeVersion?: 2;
   // Advisory fixtures track a pass-rate but never hard-fail the per-fixture gate, even at 0/N.
   // Use for irreducibly model-judgment cases whose safety property is guaranteed elsewhere.
   advisory?: boolean;

@@ -33,6 +33,25 @@ function codes(result: ReturnType<typeof validatePlan>) {
 }
 
 describe("validatePlan", () => {
+  it("refuses a placeholder on a plan that does not approve an exact draft", () => {
+    const calls: RawToolCall[] = [
+      { id: "refund_1", name: "create_refund", input: { order_id: "123", reason: "Wrong size" } },
+      { id: "reply_1", name: "send_reply", input: { text: "We refunded {{refund_amount}}." } },
+    ];
+    expect(codes(validatePlan({ ctx: makeCtx(), instruction: "Refund", rawToolCalls: calls })))
+      .toEqual(["unbound_reply_placeholder"]);
+    expect(validatePlan({ ctx: makeCtx(), instruction: "Refund", rawToolCalls: calls, singleCustomerMessage: true }))
+      .toEqual({ status: "valid", issues: [] });
+  });
+
+  it("refuses an exact draft whose placeholder no single call can fill", () => {
+    const calls: RawToolCall[] = [
+      { id: "reply_1", name: "send_reply", input: { text: "Your return is {{return_name}}." } },
+    ];
+    expect(codes(validatePlan({ ctx: makeCtx(), instruction: "Return", rawToolCalls: calls, singleCustomerMessage: true })))
+      .toEqual(["unbound_reply_placeholder"]);
+  });
+
   it("accepts a well-formed plan", () => {
     expect(validatePlan({
       ctx: makeCtx(),

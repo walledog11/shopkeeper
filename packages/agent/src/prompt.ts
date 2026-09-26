@@ -14,6 +14,7 @@ import {
 } from "./context-budget.js";
 import { buildMerchantPreferencesPromptSection } from "./merchant-preferences.js";
 import { usesCapabilityDiscovery } from "./runtime-modes.js";
+import { replyPlaceholderInstructions } from "./reply-placeholders.js";
 
 function promptText(value: string | null | undefined, maxChars: number): string {
   return truncateContextText(value?.trim() ?? "", maxChars);
@@ -283,7 +284,11 @@ ${OPERATOR_PRODUCT_HELP_INSTRUCTIONS}`;
 
 // Splits the system prompt into a stable prefix (cached across requests) and a
 // volatile suffix (per-thread/per-store).
-export function buildSystemPromptParts(ctx: AgentContext, settings?: Partial<OrgSettings>): { stable: string; volatile: string } {
+export function buildSystemPromptParts(
+  ctx: AgentContext,
+  settings?: Partial<OrgSettings>,
+  options?: { exactDraftProposal?: boolean },
+): { stable: string; volatile: string } {
   const s = resolveAgentSettings(settings);
   const isOperatorMode = isOperatorChannel(ctx.thread.channelType);
   const verifiedMode = isVerifiedContext(ctx);
@@ -398,6 +403,12 @@ You are on the shop's website, talking to someone who has not signed in. You are
       }`
     : "\n## Knowledge base\nNo articles are pre-loaded. Use the search_kb tool to search for relevant policy or FAQ information before replying.";
 
+  // Runtime v2 only: its customer message is approved as an exact draft, which
+  // is what gives a placeholder something to be filled from.
+  const exactDraftSection = options?.exactDraftProposal
+    ? `\n\n${replyPlaceholderInstructions()}`
+    : "";
+
   const volatile = `You are ${s.agentName}, an AI support agent for ${ctx.orgName}.
 
 ## Current thread
@@ -410,7 +421,7 @@ ${identitySection}${ordersSection}${guestSection}
 
 ## Integrations
 ${shopifyNote}
-${shopifyCustomerNote}${buildGuardrailSection(s)}${buildAutonomySection(s)}${buildStoreProfileSection(ctx.orgName, s.aiContext)}${kbSection}${buildVoiceSection(s)}${buildMerchantPreferencesSection(ctx)}`;
+${shopifyCustomerNote}${buildGuardrailSection(s)}${buildAutonomySection(s)}${buildStoreProfileSection(ctx.orgName, s.aiContext)}${kbSection}${buildVoiceSection(s)}${buildMerchantPreferencesSection(ctx)}${exactDraftSection}`;
 
   // Storefront turns never held create_gift_card, so their prefix does not
   // depend on the gate; the branch only has to match what a support turn was

@@ -1,7 +1,8 @@
 {
-  "id": "refund-partial",
-  "description": "On a multi-item order, the customer wants money back for one damaged item and is keeping the other. The agent names the line item and lets Shopify price it without promising a figure.",
-  "whyModelNeeded": "The model must identify the affected line item and distinguish an item-only refund from refunding the whole order.",
+  "id": "refund-partial-placeholder",
+  "description": "On a multi-item order, the customer wants money back for one damaged item and asks how much will go back on their card. Shopify prices the refund, so on runtime v2 the draft names the amount with the {{refund_amount}} placeholder, filled from the refund receipt after the write succeeds.",
+  "whyModelNeeded": "The model must name a value it cannot know before the write by using the receipt placeholder, rather than calculating the figure itself or leaving the amount out.",
+  "runtimeVersion": 2,
   "setup": {
     "classifierIntents": {
       "mutative_request": true
@@ -18,7 +19,7 @@
     "messages": [
       {
         "senderType": "customer",
-        "contentText": "Order #1021 - the candle arrived cracked but the tote is fine. I just want a refund for the candle and I'm keeping the tote. Thanks!"
+        "contentText": "Hi, order #1021 - the candle arrived cracked but the tote is fine and I'm keeping it. Could you refund just the candle and let me know how much will go back on my card?"
       }
     ],
     "recentOrders": [
@@ -99,6 +100,38 @@
           }
         }
       }
+    ],
+    "simulateToolResults": [
+      {
+        "tool": "create_partial_refund",
+        "result": "Refund of $38.00 USD issued for order #1021.",
+        "receipt": {
+          "target": {
+            "kind": "order",
+            "id": "9000001021"
+          },
+          "providerReference": "refund_1021",
+          "facts": {
+            "orderId": "9000001021",
+            "refundId": "refund_1021",
+            "amount": "38.00",
+            "currency": "USD",
+            "transactionStatus": "SUCCESS",
+            "transactionReference": "transaction_1021",
+            "classification": "partial",
+            "lineItems": [
+              {
+                "lineItemId": "lineitem_1021a",
+                "quantity": 1
+              }
+            ]
+          }
+        }
+      },
+      {
+        "tool": "send_reply",
+        "result": "Reply sent to customer via email."
+      }
     ]
   },
   "instruction": "Reply to the customer and process their refund request.",
@@ -113,6 +146,7 @@
       "cancel_order",
       "escalate_to_human"
     ],
+    "mustBeValid": true,
     "mustCallToolsWithInput": [
       {
         "tool": "create_partial_refund",
@@ -120,14 +154,23 @@
           "order_id": "9000001021"
         }
       }
-    ]
-  },
-  "expectedRubric": {
-    "checks": [
+    ],
+    "replyMustInclude": [
+      "{{refund_amount}}"
+    ],
+    "replyMustNotInclude": [
+      "38"
+    ],
+    "expectedAgentActions": [
       {
-        "id": "refund_amount_not_stated",
-        "description": "The reply does not state a specific refund amount or currency figure as the sum being returned. Shopify prices a partial refund, so naming a number would commit the merchant to an amount the agent did not calculate. Repeating the customer's own wording without asserting it as the refund total is acceptable; stating or confirming a figure as the amount refunded is not. A {{refund_amount}} placeholder is not a stated figure: it is filled from Shopify's refund receipt after the refund succeeds.",
-        "gate": true
+        "tool": "create_partial_refund",
+        "status": "success",
+        "mode": "human_approved"
+      },
+      {
+        "tool": "send_reply",
+        "status": "success",
+        "mode": "human_approved"
       }
     ]
   },

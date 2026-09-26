@@ -200,3 +200,143 @@ describe("completion grounding at execution", () => {
     });
   });
 });
+
+// Overhaul plan, Next work item 4 (decisions A and B, case D18): an approved
+// exact draft is sent as approved, placeholders filled from receipts, and is
+// never rendered, re-judged or rejected for its wording.
+describe("approved exact drafts at execution", () => {
+  const refundReceipt = {
+    version: 1 as const,
+    operationId: "operation-1",
+    executionId: "execution-1",
+    tool: "create_refund" as const,
+    target: { kind: "order", id: "123" },
+    observedAt: "2026-09-25T07:00:00.000Z",
+    outcome: "succeeded" as const,
+    providerReference: "refund-1",
+    facts: {
+      orderId: "123",
+      refundId: "refund-1",
+      amount: "18.40",
+      currency: "USD",
+      transactionStatus: "SUCCESS",
+      transactionReference: "transaction-1",
+      classification: "partial" as const,
+    },
+  };
+
+  function refundAction(overrides: Partial<ActionEntry> = {}): ActionEntry {
+    return {
+      tool: "create_refund",
+      toolCallId: "refund_1",
+      input: { order_id: "123" },
+      result: "Refund of $20.00 issued successfully for order 123.",
+      status: "success",
+      receipt: refundReceipt,
+      ...overrides,
+    };
+  }
+
+  async function sendApproved(
+    draft: string,
+    actionsPerformed: ActionEntry[],
+    options: { sentText?: string; bindings?: boolean; writeCallIds?: string[] } = {},
+  ) {
+    const { ctx, sendReply } = context();
+    await executeAgentToolCall({
+      id: "reply_1",
+      name: "send_reply",
+      input: { text: options.sentText ?? draft },
+    }, {
+      ctx,
+      readOnly: false,
+      supportThread: ctx.thread,
+      actionsPerformed,
+      executedToolCalls: [],
+      approvedMessage: {
+        communication: {
+          mode: "exact_draft",
+          destination: { kind: "thread", id: "thread_1", channel: "email" },
+          draft,
+          allowedResultBindings: options.bindings
+            ? [{ placeholder: "refund_amount", toolCallId: "refund_1", tool: "create_refund", field: "facts.amount" }]
+            : [],
+        },
+        writeCallIds: options.writeCallIds ?? actionsPerformed.map((action) => action.toolCallId!),
+      },
+      recordAgentFailure: vi.fn(),
+      setEscalationReason: vi.fn(),
+    });
+    return { actionsPerformed, sendReply };
+  }
+
+  it("sends the approved words unchanged where the legacy renderer would rewrite them", async () => {
+    const draft = "We refunded USD 20.00 for order #1001.";
+    const result = await sendApproved(draft, [refundAction()]);
+
+    expect(result.sendReply).toHaveBeenCalledWith({ text: draft });
+    expect(result.actionsPerformed.at(-1)).toMatchObject({ status: "success", input: { text: draft } });
+  });
+
+  // Gate C run 3: a true reply backed by an address-update receipt was rejected
+  // for its phrasing.
+  it("sends a true reply whose phrasing the legacy prose check rejects", async () => {
+    const draft = "Your shipping address for order #1001 has been updated to 12 Elm St.";
+    const result = await sendApproved(draft, [{
+      tool: "update_shopify_order_address",
+      toolCallId: "address_1",
+      input: { order_id: "123" },
+      result: "Address updated.",
+      status: "success",
+    }]);
+
+    expect(result.sendReply).toHaveBeenCalledWith({ text: draft });
+  });
+
+  it("fills a placeholder from the approved write's receipt and nothing else", async () => {
+    const result = await sendApproved(
+      "Hi Ada, we refunded {{refund_amount}} to your card.",
+      [refundAction()],
+      { bindings: true },
+    );
+
+    expect(result.sendReply).toHaveBeenCalledWith({ text: "Hi Ada, we refunded $18.40 to your card." });
+  });
+
+  it("does not send when the bound write left only a result string (D18)", async () => {
+    const result = await sendApproved(
+      "We refunded {{refund_amount}}.",
+      [refundAction({ receipt: undefined })],
+      { bindings: true },
+    );
+
+    expect(result.sendReply).not.toHaveBeenCalled();
+    expect(result.actionsPerformed.at(-1)).toMatchObject({
+      tool: "send_reply",
+      status: "error",
+      result: expect.stringContaining("refund_amount placeholder"),
+    });
+  });
+
+  it("does not send when an approved write did not succeed", async () => {
+    const result = await sendApproved("Your refund is on its way.", [refundAction({ status: "error", receipt: undefined })]);
+
+    expect(result.sendReply).not.toHaveBeenCalled();
+    expect(result.actionsPerformed.at(-1)?.result).toContain("an approved action did not succeed");
+  });
+
+  it("does not send ahead of an approved write that has not run", async () => {
+    const result = await sendApproved("Your refund is on its way.", [], { writeCallIds: ["refund_1"] });
+
+    expect(result.sendReply).not.toHaveBeenCalled();
+  });
+
+  it("does not send a message that is not the approved draft", async () => {
+    const result = await sendApproved("Your refund is on its way.", [refundAction()], {
+      sentText: "Your refund is on its way!",
+    });
+
+    expect(result.sendReply).not.toHaveBeenCalled();
+    expect(result.actionsPerformed.at(-1)?.result).toContain("not the message the merchant approved");
+  });
+});

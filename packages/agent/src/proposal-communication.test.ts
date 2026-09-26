@@ -43,6 +43,23 @@ describe("deriveProposalCommunication", () => {
     expect(deriveProposalCommunication([reply, email], thread)).toBeNull();
     expect(deriveProposalCommunication([{ ...reply, input: { text: "  " } }], thread)).toBeNull();
   });
+
+  it("binds each placeholder to the approved call that fills it", () => {
+    const withAmount = { ...reply, input: { text: "We refunded {{refund_amount}}." } };
+    expect(deriveProposalCommunication([refund, withAmount], thread)).toEqual({
+      ...exact,
+      draft: "We refunded {{refund_amount}}.",
+      allowedResultBindings: [
+        { placeholder: "refund_amount", toolCallId: "refund", tool: "create_refund", field: "facts.amount" },
+      ],
+    });
+  });
+
+  it("cannot represent a placeholder no single approved call can fill", () => {
+    const withAmount = { ...reply, input: { text: "We refunded {{refund_amount}}." } };
+    expect(deriveProposalCommunication([withAmount], thread)).toBeNull();
+    expect(deriveProposalCommunication([refund, { ...refund, id: "refund-2" }, withAmount], thread)).toBeNull();
+  });
 });
 
 describe("planCommunication", () => {
@@ -64,6 +81,13 @@ describe("proposal identity", () => {
       communication: { ...exact, destination: { kind: "thread", id: "thread-2", channel: "email" } },
     })).not.toBe(hash);
     expect(hashPlan({ ...base, communication: { ...exact } })).toBe(hash);
+  });
+
+  it("changes when a placeholder's binding changes", () => {
+    const binding = { placeholder: "refund_amount" as const, toolCallId: "refund", tool: "create_refund", field: "facts.amount" };
+    const bound: ProposalCommunication = { ...exact, allowedResultBindings: [binding] };
+    expect(hashPlan({ ...base, communication: bound }))
+      .not.toBe(hashPlan({ ...base, communication: { ...bound, allowedResultBindings: [{ ...binding, toolCallId: "other" }] } }));
   });
 
   it("hashes a proposal that authorizes no message as it did before the snapshot", () => {

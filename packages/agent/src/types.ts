@@ -153,6 +153,7 @@ export type PlanValidationIssueCode =
   | 'ungrounded_escalation_reason'
   | 'ungrounded_customer_reply'
   | 'multiple_customer_messages'
+  | 'unbound_reply_placeholder'
 
 /**
  * Where an approved customer message goes: the conversation's own channel for
@@ -163,11 +164,31 @@ export type CommunicationDestination =
   | { kind: 'thread'; id: string; channel: string }
   | { kind: 'email'; id: string }
 
+/** A value an exact draft may name before it exists, filled from a receipt. */
+export type ReplyPlaceholderName =
+  | 'refund_amount'
+  | 'return_name'
+  | 'order_name'
+  | 'gift_card_amount'
+  | 'tracking_number'
+
+/**
+ * One placeholder in an exact draft, bound to the approved call whose
+ * successful receipt fills it and the receipt field it reads.
+ */
+export interface ResultBinding {
+  placeholder: ReplyPlaceholderName
+  toolCallId: string
+  tool: string
+  field: string
+}
+
 /**
  * What a proposal authorizes saying to the customer. `none` authorizes nothing:
  * the approved writes run and no message follows them. `exact_draft` is the
  * message the merchant was shown, byte for byte, and the only one that may be
- * sent on this approval.
+ * sent on this approval; the only change after approval is filling its
+ * `allowedResultBindings` from the approved writes' receipts.
  */
 export type ProposalCommunication =
   | { mode: 'none' }
@@ -175,7 +196,7 @@ export type ProposalCommunication =
       mode: 'exact_draft'
       destination: CommunicationDestination
       draft: string
-      allowedResultBindings: []
+      allowedResultBindings: ResultBinding[]
     }
 
 /** `legacy_warning` is only ever read off a plan cached before signals existed. */

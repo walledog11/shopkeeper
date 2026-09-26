@@ -10,7 +10,7 @@ import {
 } from "./agent-actions.js";
 import { buildCachedSystemPrompt, buildSplitCachedSystemPrompt } from "./ai/anthropic.js";
 import { pickModel } from "./ai/index.js";
-import type { OrgSettings, RawToolCall } from "./types.js";
+import type { OrgSettings, ProposalCommunication, RawToolCall } from "./types.js";
 import {
   selectAgentTools,
   TOOL_CATEGORIES,
@@ -47,6 +47,7 @@ import {
   executeAgentToolCalls,
   finishAgentRun,
   isSupportContext,
+  type ApprovedMessage,
   type RecordToolFailure,
 } from "./run-execution.js";
 import {
@@ -75,6 +76,10 @@ export interface RunAgentOptions extends RunAgentPolicyOptions {
   // Successful facts established by live reads during planning. Approved plans
   // do not re-run those reads, so their evidence travels with the execution.
   completionEvidence?: readonly CompletionFact[];
+  // The communication an approved proposal binds (runtime v2). Its customer
+  // message is sent exactly as approved, placeholders filled from receipts, and
+  // only if every approved write succeeded. Absent for legacy plans.
+  approvedCommunication?: ProposalCommunication;
 }
 
 const OPERATOR_HIDDEN_TOOL_NAMES = new Set([
@@ -146,7 +151,7 @@ export async function runAgent(
   let actionIndex = 0;
   const executeToolCalls = (
     toolCalls: { id: string; name: string; input: unknown }[],
-    executionOptions?: { stopOnDefiniteFailure?: boolean },
+    executionOptions?: { stopOnDefiniteFailure?: boolean; approvedMessage?: ApprovedMessage },
   ) =>
     executeAgentToolCalls(toolCalls, {
       ctx,
@@ -208,6 +213,9 @@ export async function runAgent(
       ...(executionOptions?.stopOnDefiniteFailure
         ? { stopOnDefiniteFailure: true }
         : {}),
+      ...(executionOptions?.approvedMessage
+        ? { approvedMessage: executionOptions.approvedMessage }
+        : {}),
     });
 
   try {
@@ -215,8 +223,19 @@ export async function runAgent(
     // customer message included, as drafted — and nothing the model writes after.
     if (!readOnly && approvedToolCalls && approvedToolCalls.length > 0) {
       const executableToolCalls = selectExecutableApprovedToolCalls(approvedToolCalls);
+      const approvedMessage: ApprovedMessage | undefined = options?.approvedCommunication
+        ? {
+          communication: options.approvedCommunication,
+          writeCallIds: executableToolCalls
+            .filter((call) => TOOL_CATEGORIES[call.name] === "action")
+            .map((call) => call.id),
+        }
+        : undefined;
 
-      await executeToolCalls(executableToolCalls, { stopOnDefiniteFailure: true });
+      await executeToolCalls(executableToolCalls, {
+        stopOnDefiniteFailure: true,
+        ...(approvedMessage ? { approvedMessage } : {}),
+      });
 
       if (escalationReason) {
         return finish({

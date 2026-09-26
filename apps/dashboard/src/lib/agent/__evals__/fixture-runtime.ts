@@ -177,6 +177,9 @@ export async function executeRunForFixture(params: {
     : plan.rawToolCalls
   const options: RunAgentOptions = { mode }
   if (mode === "read_only") options.readOnly = true
+  // A v2 plan executes its customer message as production does: the approved
+  // exact draft, placeholders filled from receipts, never re-judged.
+  if (plan.communication && approvedToolCalls) options.approvedCommunication = plan.communication
   if (mode === "human_approved") {
     const approval: AgentActionApproval = {
       approverId: "eval_runner:Eval Runner",
