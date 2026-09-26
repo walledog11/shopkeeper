@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { StackDeck } from "@/app/dashboard/_components/stack/StackDeck"
 import type { HomeNeedsAttentionItem } from "@/lib/home/summary-contract"
 import { NeedsYouAllClear } from "./NeedsYouAllClear"
@@ -15,6 +15,8 @@ interface Props {
 export function NeedsYouDeck({ items, onApproved }: Props) {
   const [dismissed, setDismissed] = useState<Set<string>>(() => new Set())
   const [currentId, setCurrentId] = useState<string | null>(null)
+  // The front card remounts on every swipe; keep half-typed answers across it.
+  const answerDrafts = useRef(new Map<string, string>())
   const deck = items.filter(item => !dismissed.has(item.threadId))
   const empty = useMemo(() => <NeedsYouAllClear />, [])
 
@@ -42,7 +44,6 @@ export function NeedsYouDeck({ items, onApproved }: Props) {
         empty={empty}
         stackSingleItem
         peek={STACKED_BELOW_PEEK}
-        isDraggable={(item) => item.kind !== "needs_merchant_input"}
         labels={{ previous: "Previous card", next: "Next card" }}
         controls="dots"
         peekShellClassName="h-full w-full rounded-3xl border border-border bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)] pointer-events-none box-border"
@@ -52,7 +53,12 @@ export function NeedsYouDeck({ items, onApproved }: Props) {
           <NeedsYouCard
             item={item}
             onResolved={() => dismiss(item.threadId, context.activeIndex, context.flyOff)}
-            onAnswered={onApproved}
+            onAnswered={() => {
+              answerDrafts.current.delete(item.threadId)
+              onApproved()
+            }}
+            answerDraft={answerDrafts.current.get(item.threadId)}
+            onAnswerDraftChange={answer => answerDrafts.current.set(item.threadId, answer)}
           />
         )}
         renderPeekCard={(item) => (

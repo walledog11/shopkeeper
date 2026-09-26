@@ -15,6 +15,9 @@ interface Props {
   threadId: string
   question: string | null
   onAnswered: (result: MerchantAnswerResult) => void
+  /** Seeds the answer, so a host that unmounts the form (the home deck on swipe) keeps the draft. */
+  initialAnswer?: string
+  onAnswerChange?: (answer: string) => void
 }
 
 interface MerchantAnswerState {
@@ -42,9 +45,9 @@ function mergeState(state: MerchantAnswerState, patch: Partial<MerchantAnswerSta
 // Shared affordance for answering an `ask_operator` question. The merchant supplies the
 // missing fact; the route records it, optionally saves it to the KB, and re-plans the ticket
 // so a normal reply rides the usual approval flow. Used by the home deck and the ticket view.
-export default function MerchantAnswerForm({ threadId, question, onAnswered }: Props) {
+export default function MerchantAnswerForm({ threadId, question, onAnswered, initialAnswer, onAnswerChange }: Props) {
   const [{ answer, error, isSubmitting, saveToKb, succeeded, toastMessage }, updateState] =
-    useReducer(mergeState, INITIAL_STATE)
+    useReducer(mergeState, { ...INITIAL_STATE, answer: initialAnswer ?? "" })
 
   const submit = async () => {
     const trimmed = answer.trim()
@@ -89,7 +92,10 @@ export default function MerchantAnswerForm({ threadId, question, onAnswered }: P
 
         <Textarea
           value={answer}
-          onChange={event => updateState({ answer: event.target.value })}
+          onChange={event => {
+            updateState({ answer: event.target.value })
+            onAnswerChange?.(event.target.value)
+          }}
           placeholder="Your answer…"
           rows={3}
           disabled={isSubmitting || succeeded}
