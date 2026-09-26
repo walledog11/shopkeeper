@@ -176,6 +176,8 @@ export function ForwardingEmailDetails({ model, callbacks }: { model: Integratio
           loading={loading}
           onSave={saveEmail}
           disabled={!model.canManageWorkspace}
+          dualInboundWarning={model.emailInboundDualMessage}
+          connectBlockedReason={model.forwardingConnectBlockedMessage}
         />
       </ConfigureSection>
       {integration ? (

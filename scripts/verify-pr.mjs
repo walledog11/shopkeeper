@@ -8,6 +8,7 @@ const STAGES = {
     ['npx', ['turbo', 'run', 'lint']],
     ['npm', ['run', 'typecheck']],
     ['node', ['--test', 'scripts/check-production-env.test.mjs']],
+    ['node', ['scripts/check-inbound-email-enqueue-surface.mjs']],
   ],
   unit: [
     ['npm', ['run', 'test:unit']],

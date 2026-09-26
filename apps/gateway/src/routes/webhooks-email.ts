@@ -3,7 +3,8 @@ import { createHash, randomUUID } from 'crypto';
 import { db, EmailProvider } from '@shopkeeper/db';
 import { getPostmarkWebhookConfig } from '../config/runtime-config.js';
 import logger from '../logger.js';
-import { CHANNEL, JOB } from '../constants.js';
+import type { InboundEmailEvent } from '@shopkeeper/email';
+import { enqueueInboundEmail } from '../inbound/enqueue-inbound-email.js';
 import { safeEqual } from '../lib/crypto.js';
 import { rateLimit, sendTooManyRequests } from '../rate-limit.js';
 import { applyInboundAttachmentBudget } from '../storage/attachment-budget.js';
@@ -149,8 +150,7 @@ export function registerEmailWebhookRoutes(router: Router): void {
       }
 
       const traceId = randomUUID();
-      await getMessageQueue().add(JOB.EMAIL, {
-        platform: CHANNEL.EMAIL,
+      const event: InboundEmailEvent = {
         organizationId,
         integrationId: integration.id,
         receivedAt: new Date().toISOString(),
@@ -158,10 +158,12 @@ export function registerEmailWebhookRoutes(router: Router): void {
         senderName: fromName,
         subject,
         body: text,
-        inboundMessageId,
+        externalMessageId: inboundMessageId,
         traceId,
+        ingressTransport: 'postmark_forward',
         ...(attachments.length > 0 && { attachments }),
-      });
+      };
+      await enqueueInboundEmail(getMessageQueue(), event);
 
       logger.info({ integrationId: integration.id, organizationId, traceId }, '[Webhook] Inbound email queued');
       return res.status(200).send('OK');

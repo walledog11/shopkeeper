@@ -152,6 +152,7 @@ describe('POST /api/integrations/gmail/callback', () => {
         emailProvider: EmailProvider.postmark,
         externalAccountId: 'support@old-domain.test',
         accessToken: 'postmark-key',
+        lifecycleStatus: 'disconnecting',
         metadata: { provider: 'postmark' },
       },
     });
@@ -167,7 +168,6 @@ describe('POST /api/integrations/gmail/callback', () => {
         fromEmail: 'support@merchant.test',
         metadata: {
           provider: 'gmail',
-          inboundMode: 'hybrid',
           gmail: {
             inboundStatus: 'degraded',
             lastError: 'watch_setup_failed',
@@ -226,7 +226,6 @@ describe('POST /api/integrations/gmail/callback', () => {
       const refreshed = await db.integration.findUniqueOrThrow({ where: { id: existingGmail.id } });
       expect(refreshed.metadata).toMatchObject({
         provider: 'gmail',
-        inboundMode: 'hybrid',
         oauthScopes: [
           'openid',
           'email',

@@ -62,6 +62,8 @@ export interface InboundJobData {
   body?: string;
   inboundMessageId?: string | null;
   attachments?: Array<{ name: string; contentType: string; contentBase64: string }>;
+  /** Normalized ingress provenance (Phase 3+ process-email jobs). */
+  ingressTransport?: 'postmark_forward' | 'gmail_sync';
 }
 
 export interface InstagramInboundAttachment {

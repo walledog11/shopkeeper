@@ -1,5 +1,11 @@
 import { db, EmailProvider, Prisma } from '@shopkeeper/db';
+import {
+  assertNoDualInboundDelivery,
+  DUAL_INBOUND_MESSAGE,
+  findEmailIntegrations,
+} from '@shopkeeper/email';
 import { getEmailProvider } from '@shopkeeper/email/providers';
+import { BadRequestError } from '@/lib/api/errors';
 import type { Prisma as PrismaTypes } from '@prisma/client';
 
 import { isRecord } from "@shopkeeper/shared/guards";
@@ -8,7 +14,8 @@ export type EmailIntegrationProvider = 'gmail' | 'postmark';
 export type UpsertEmailIntegrationArgs = {
   externalAccountId: string;
   fromEmail?: string;
-  inboundMode?: 'hybrid' | 'native' | 'postmark';
+  /** Gmail send-only: disables watch while Postmark handles inbound. */
+  inboundMode?: 'postmark';
   oauthScopes?: readonly string[];
   organizationId: string;
   provider: EmailIntegrationProvider;
@@ -33,18 +40,22 @@ function mergeEmailMetadata(
   existingMetadata: unknown,
   provider: EmailIntegrationProvider,
   oauthScopes?: readonly string[],
-  inboundMode?: 'hybrid' | 'native' | 'postmark',
+  inboundMode?: 'postmark',
   gmailState?: Record<string, unknown>,
 ): PrismaTypes.InputJsonObject {
   const existing = isRecord(existingMetadata) && existingMetadata.provider === provider
     ? existingMetadata
     : {};
-  const base = {
+  const base: Record<string, unknown> = {
     ...existing,
     provider,
-    ...(inboundMode && { inboundMode }),
     ...(oauthScopes && { oauthScopes: [...oauthScopes] }),
   };
+  if (provider === 'gmail' && inboundMode === 'postmark') {
+    base.inboundMode = 'postmark';
+  } else {
+    delete base.inboundMode;
+  }
 
   if (provider === 'gmail' && gmailState) {
     const existingGmail = isRecord(existing.gmail) ? existing.gmail : {};
@@ -58,6 +69,37 @@ function mergeEmailMetadata(
   }
 
   return base as PrismaTypes.InputJsonObject;
+}
+
+function assertInboundTransportAllowedAfterUpsert(input: {
+  emailIntegrations: Array<{
+    id: string;
+    emailProvider: EmailProvider | null;
+    lifecycleStatus: string;
+    metadata: unknown;
+  }>;
+  provider: EmailIntegrationProvider;
+  metadata: PrismaTypes.InputJsonObject;
+}): void {
+  const emailProvider = input.provider === 'gmail' ? EmailProvider.gmail : EmailProvider.postmark;
+  const existing = input.emailIntegrations.find((integration) =>
+    getEmailProvider(integration) === input.provider);
+  const projectedUpsert = {
+    ...(existing ?? { id: 'projected-new' }),
+    emailProvider,
+    lifecycleStatus: 'active',
+    metadata: input.metadata,
+  };
+  const projected = [
+    ...input.emailIntegrations.filter((integration) => getEmailProvider(integration) !== input.provider),
+    projectedUpsert,
+  ];
+  const { gmail, postmark } = findEmailIntegrations(projected);
+  try {
+    assertNoDualInboundDelivery({ gmail, postmark });
+  } catch {
+    throw new BadRequestError(DUAL_INBOUND_MESSAGE);
+  }
 }
 
 export async function upsertEmailIntegration(
@@ -88,6 +130,12 @@ export async function upsertEmailIntegration(
       args.provider === 'gmail' ? args.gmailMetadata : undefined,
     ),
   } satisfies PrismaTypes.IntegrationUncheckedUpdateInput;
+
+  assertInboundTransportAllowedAfterUpsert({
+    emailIntegrations,
+    provider: args.provider,
+    metadata: data.metadata as PrismaTypes.InputJsonObject,
+  });
 
   let saved;
   if (existing) {
@@ -133,11 +181,31 @@ export async function upsertEmailIntegration(
   return saved.id;
 }
 
+async function assertForwardingEmailAllowed(organizationId: string): Promise<void> {
+  const integrations = await db.integration.findMany({
+    where: { organizationId, platform: 'email' },
+  });
+  const { gmail } = findEmailIntegrations(integrations);
+  try {
+    assertNoDualInboundDelivery({
+      gmail,
+      postmark: {
+        emailProvider: 'postmark',
+        lifecycleStatus: 'active',
+        metadata: { provider: 'postmark' },
+      },
+    });
+  } catch {
+    throw new BadRequestError(DUAL_INBOUND_MESSAGE);
+  }
+}
+
 export async function saveForwardingEmailIntegration(args: {
   externalAccountId: string;
   fromEmail: string;
   organizationId: string;
 }) {
+  await assertForwardingEmailAllowed(args.organizationId);
   const integrationId = await upsertEmailIntegration({
     organizationId: args.organizationId,
     externalAccountId: args.externalAccountId,

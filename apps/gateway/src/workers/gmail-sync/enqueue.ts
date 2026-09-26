@@ -6,7 +6,8 @@ import {
   normalizeInboundEmail,
   parseMime,
 } from '@shopkeeper/email';
-import { CHANNEL, JOB } from '../../constants.js';
+import type { InboundEmailEvent } from '@shopkeeper/email';
+import { enqueueInboundEmail } from '../../inbound/enqueue-inbound-email.js';
 import logger from '../../logger.js';
 import { recordEmailBounce } from '../../message-handlers/inbound/email-bounce.js';
 import { applyInboundAttachmentBudget } from '../../storage/attachment-budget.js';
@@ -92,30 +93,27 @@ export async function enqueueGmailMessages(
         );
       }
 
-      const inboundMessageId = normalized.inboundMessageId || providerMessageKey(message.id);
+      const externalMessageId = normalized.inboundMessageId || providerMessageKey(message.id);
       const internalDateMs = message.internalDate ? Number(message.internalDate) : Number.NaN;
       const receivedAt = Number.isFinite(internalDateMs) && internalDateMs >= 0
         ? new Date(internalDateMs).toISOString()
         : new Date().toISOString();
-      await inboundQueue.add(
-        JOB.EMAIL,
-        {
-          platform: CHANNEL.EMAIL,
-          organizationId: integration.organizationId,
-          integrationId: integration.id,
-          receivedAt,
-          senderEmail: normalized.senderEmail,
-          senderName: normalized.senderName,
-          subject: normalized.subject,
-          body: normalized.body,
-          inboundMessageId,
-          traceId,
-          ...(attachments.length > 0
-            ? { attachments }
-            : {}),
-        },
-        { jobId: `gmail-inbound-${integration.id}-${message.id}` },
-      );
+      const event: InboundEmailEvent = {
+        organizationId: integration.organizationId,
+        integrationId: integration.id,
+        receivedAt,
+        senderEmail: normalized.senderEmail,
+        senderName: normalized.senderName,
+        subject: normalized.subject,
+        body: normalized.body,
+        externalMessageId,
+        traceId,
+        ingressTransport: 'gmail_sync',
+        ...(attachments.length > 0 ? { attachments } : {}),
+      };
+      await enqueueInboundEmail(inboundQueue, event, {
+        jobId: `gmail-inbound-${integration.id}-${message.id}`,
+      });
       return 1;
     },
   );

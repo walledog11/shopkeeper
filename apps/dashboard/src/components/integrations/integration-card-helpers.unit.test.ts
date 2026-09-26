@@ -243,8 +243,9 @@ describe("Gmail integration health", () => {
       true,
       deriveIntegrationHealth(GMAIL, integration, null, true),
     ).receiving).toEqual({
-      title: "Receiving messages",
-      description: "Customer emails sent to your Gmail inbox appear here automatically.",
+      title: "Inbound via Gmail",
+      description:
+        "Customer emails in your connected Gmail inbox appear here automatically. Do not also forward the same inbox to Shopkeeper.",
       status: "Active",
     })
   })

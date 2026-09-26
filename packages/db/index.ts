@@ -42,6 +42,13 @@ export {
   type TenantConsistencyReport,
 } from './tenant-consistency.js';
 export {
+  computeEmailInboundTransportAuditReport,
+  gmailNativeSyncConfigured,
+  type DualIntegrationOrgAudit,
+  type EmailInboundTransportAuditReport,
+  type EmailIntegrationAuditRow,
+} from './email-inbound-transport-audit.js';
+export {
   DEFAULT_DAILY_LLM_SPEND_CAP_USD,
   LLM_PRICING,
   LLM_PRICING_AS_OF,

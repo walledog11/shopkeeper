@@ -220,6 +220,35 @@ describe('/api/integrations', () => {
     ]);
   });
 
+  it('rejects new forwarding connect when Gmail native receiving is active', async () => {
+    await db.integration.create({
+      data: {
+        organizationId: org.id,
+        platform: ChannelType.email,
+        emailProvider: EmailProvider.gmail,
+        externalAccountId: 'merchant@gmail.test',
+        accessToken: 'token',
+        refreshToken: 'refresh',
+        tokenExpiresAt: new Date(Date.now() + 3600_000),
+        metadata: {
+          provider: 'gmail',
+          gmail: { inboundStatus: 'active' },
+        },
+      },
+    });
+
+    const res = await POST(new Request('http://localhost/api/integrations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ platform: 'email', externalAccountId: 'support@example.com' }),
+    }));
+
+    expect(res.status).toBe(400);
+    await expect(db.integration.count({
+      where: { organizationId: org.id, emailProvider: EmailProvider.postmark },
+    })).resolves.toBe(0);
+  });
+
   it('handles concurrent forwarding connects as one provider row', async () => {
     const responses = await Promise.all(Array.from({ length: 8 }, (_, index) => POST(new Request(
       'http://localhost/api/integrations',

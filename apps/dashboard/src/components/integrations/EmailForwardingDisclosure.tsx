@@ -13,6 +13,8 @@ export function EmailForwardingSetupPanel({
   loading,
   onSave,
   disabled = false,
+  dualInboundWarning = null,
+  connectBlockedReason = null,
 }: {
   isConnected: boolean
   email: string
@@ -20,16 +22,28 @@ export function EmailForwardingSetupPanel({
   loading: boolean
   onSave: () => void
   disabled?: boolean
+  dualInboundWarning?: string | null
+  connectBlockedReason?: string | null
 }) {
   const { data: org } = useOrg({ enabled: true })
   const inboundAddress = org?.id && org.inboundEmailDomain ? `${org.id}@${org.inboundEmailDomain}` : null
 
+  const saveDisabled = disabled || !email || loading || Boolean(connectBlockedReason && !isConnected)
+
   return (
     <div className="space-y-4 px-4 py-4 sm:px-5">
+      {dualInboundWarning ? (
+        <p className="rounded-lg border border-amber-600/20 bg-amber-600/[0.06] px-3 py-2.5 text-xs leading-relaxed text-amber-800 dark:text-amber-200">
+          {dualInboundWarning}
+        </p>
+      ) : null}
+      {connectBlockedReason && !isConnected ? (
+        <p className="text-xs leading-relaxed text-foreground/55">{connectBlockedReason}</p>
+      ) : null}
       <div className="space-y-2">
-        <p className="text-[13px] font-semibold text-foreground/80">Forwarding address</p>
+        <p className="text-[13px] font-semibold text-foreground/80">Inbound via forwarding</p>
         <p className="text-xs leading-relaxed text-foreground/50">
-          Forward your support inbox to this address in your email provider.
+          Forward your support inbox to this address in your email provider. Mutually exclusive with inbound via Gmail on the same mailbox.
         </p>
         <div className="flex min-w-0 items-center gap-2 rounded-lg border border-foreground/[0.08] bg-foreground/[0.03] px-3 py-2.5">
           {inboundAddress ? (
@@ -61,7 +75,7 @@ export function EmailForwardingSetupPanel({
           />
           <div className="flex shrink-0 items-center gap-1.5">
             {loading && <Loader2 className="size-3.5 animate-spin text-foreground/50" />}
-            <PermissionActionLink onClick={onSave} disabled={disabled || !email || loading}>
+            <PermissionActionLink onClick={onSave} disabled={saveDisabled}>
               {isConnected ? "Update" : "Save"}
             </PermissionActionLink>
           </div>

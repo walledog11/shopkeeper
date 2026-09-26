@@ -342,29 +342,45 @@ and must never be retried until provider activity proves no delivery.
    with `sendAttemptedAt` is converted to `unknown`. Investigate sweep/worker health before any
    manual state change.
 
-### Gmail native-inbound rollout
+### Gmail native-inbound (steady state)
 
-Keep `EMAIL_INBOUND_MODE=hybrid` for every rollout stage so Postmark forwarding remains active.
+**One inbound transport per mailbox.** Gmail OAuth workspaces use **inbound via Gmail sync**
+(Pub/Sub + history) only. **Inbound via forwarding** (Postmark webhook) is for forward-only
+workspaces without Gmail OAuth. Do not run both on the same merchant INBOX.
+
+Inventory and dual-delivery checks:
+
+```bash
+npm run audit:email-inbound-transport
+npm run audit:email-inbound-transport -- --strict   # fails when dual-delivery risk > 0
+```
+
 Set `GMAIL_NATIVE_INBOUND=true` in both dashboard and gateway only after the environment's
 Pub/Sub topic, push subscription, OIDC audience, and service account have been verified.
-Enabling the flag does not automatically enroll existing send-only Gmail connections; they enter
-native inbound only after an explicit reconnect (or an operator sets their integration
-`inboundMode` to `hybrid`/`native`). Existing active watches continue to renew.
+New Gmail connects set `inboundMode` to `native` when the flag is on. Existing send-only Gmail
+rows enter native inbound after reconnect (or operator sets `inboundMode` to `native`).
+Existing active watches continue to renew.
 
 Roll out in this order:
 
 1. Local and automated tests with mocked Gmail and Pub/Sub.
 2. One OAuth test user through a public development tunnel.
-3. Internal organizations with Gmail and Postmark dual delivery.
+3. Internal organizations — **one inbound path each** (Gmail sync *or* forwarding, not both).
 4. Google OAuth test users while restricted-scope verification is pending.
 5. Newly connected external merchants after verification.
 6. Existing Gmail merchants after explicit reconnection.
 
 For every stage, verify watch expiration, last successful sync, duplicate suppression, alias
-filtering, outbound send-as behavior, and reconnect/degraded states in Integrations. Roll back by
-setting `GMAIL_NATIVE_INBOUND=false` in both services; leave `EMAIL_INBOUND_MODE=hybrid`.
-Do not use `gmail-only` until the production soak is complete and no forwarding integrations
-remain.
+filtering, outbound send-as behavior, and reconnect/degraded states in Integrations. Roll back
+**per integration** (pause native sync or revert to forwarding-only) — do not re-enable global
+dual-rail hybrid as steady state. See [email-inbound-steady-state-plan.md](../email-inbound-steady-state-plan.md).
+
+#### Migration-only: parallel Postmark forward during native rollout
+
+While migrating a merchant from forward-only to Gmail sync, Postmark forward may stay on
+**temporarily** until native sync is verified, then **must be disabled** (merchant rule or
+disconnect the Email forwarding integration). This is not a supported production steady state.
+Do not use `EMAIL_INBOUND_MODE=hybrid` as long-term configuration after Phase 1 acceptance.
 
 After deploying Gmail reliability changes, allow one complete 12-hour
 maintenance interval and verify:
@@ -412,13 +428,20 @@ The owner-ready restricted-scope package is
 
 ### Independent-email canary (Palette)
 
-1. Confirm Palette's existing Gmail row and watch remain active.
-2. Connect `support@palettegarments.com` as the forwarded Email integration.
-3. Keep Gmail selected as the default for proactive email.
-4. Send one inbound message through each path, then alternate both paths from the same customer.
-   Confirm one open thread and confirm each reply follows the newest distinct inbound source.
-5. Disconnect and reconnect Email; verify the Gmail row, token, watch, and health display do not
-   change.
+Steady-state goal: **one inbound path** for Palette (Gmail sync *or* forwarding alias, not both
+delivering the same INBOX). During migration only, dual paths may be tested with **separate**
+messages — never the same customer email on both rails.
+
+1. Confirm Palette's Gmail row and watch remain active (`npm run audit:email-inbound-transport`).
+2. If testing the forwarding product path, use a **different** test org or disconnect Gmail native
+   ingest first; do not connect `support@palettegarments.com` forwarding while Gmail watch reads the
+   same INBOX.
+3. Keep Gmail selected as the default for proactive email when Gmail is the inbound transport.
+4. Send **distinct** test messages per path (different subjects / Message-IDs). Do not replay one
+   message through Postmark forward and Gmail sync. Confirm one thread per message and replies
+   follow the correct integration.
+5. After native verification, disable Postmark forward to `{orgId}@inbound.*` and re-run the audit
+   with `--strict`.
 6. Monitor structured `unclaimed_recipient` events, default/source mismatches, provider send
    failures, duplicate suppression, and Gmail watch health before expanding rollout.
 

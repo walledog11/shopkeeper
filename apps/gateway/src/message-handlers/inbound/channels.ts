@@ -21,6 +21,7 @@ import type {
   InstagramInboundJobData,
   ShopifyOrderPayload,
 } from '../../types.js';
+import { parseInboundEmailJobData } from '@shopkeeper/email';
 import { emptyRequestFacts } from '@shopkeeper/agent/classifier-signals';
 import { uploadOrgAttachment } from '../../storage/blob.js';
 import { applyInboundAttachmentBudget, mapWithConcurrency } from '../../storage/attachment-budget.js';
@@ -324,16 +325,36 @@ function knownSenderClassification(
 }
 
 export async function handleEmailJob(job: Job<InboundJobData>, aiSummaryQueue: Queue): Promise<void> {
-  const { organizationId, traceId } = job.data;
-  const { senderName, subject, body } = job.data;
-  const senderEmail = job.data.senderEmail?.trim().toLowerCase();
-  if (await alreadyIngested(organizationId, job.data.inboundMessageId, aiSummaryQueue)) return;
+  const email = parseInboundEmailJobData(job.data);
+  if (!email) {
+    logger.error(
+      { jobId: job.id, platform: job.data.platform },
+      '[Worker] Invalid process-email job payload — dropping',
+    );
+    return;
+  }
+
+  const {
+    organizationId,
+    traceId,
+    senderName,
+    subject,
+    body,
+    senderEmail,
+    integrationId,
+    externalMessageId,
+    receivedAt,
+    attachments: queuedAttachments,
+    ingressTransport,
+  } = email;
+
+  if (await alreadyIngested(organizationId, externalMessageId, aiSummaryQueue)) return;
 
   try {
-    if (job.data.integrationId) {
+    if (integrationId.trim()) {
       const activeIntegration = await db.integration.findFirst({
         where: {
-          id: job.data.integrationId,
+          id: integrationId,
           organizationId,
           platform: CHANNEL.EMAIL,
           lifecycleStatus: 'active',
@@ -342,7 +363,7 @@ export async function handleEmailJob(job: Job<InboundJobData>, aiSummaryQueue: Q
       });
       if (!activeIntegration) {
         logger.info(
-          { integrationId: job.data.integrationId, organizationId, traceId },
+          { integrationId, organizationId, traceId, ingressTransport },
           '[Worker] Email integration disconnected before processing — dropping',
         );
         return;
@@ -397,26 +418,31 @@ export async function handleEmailJob(job: Job<InboundJobData>, aiSummaryQueue: Q
       lookupShopifyName: () => lookupShopifyCustomerName(organizationId, senderEmail!),
     });
 
-    const { accepted: budgetedAttachments } = applyInboundAttachmentBudget(job.data.attachments ?? []);
+    // Attachments are budgeted at ingress (Postmark webhook / Gmail sync). Re-apply
+    // here only as a safety net before blob upload.
+    const { accepted: budgetedAttachments } = applyInboundAttachmentBudget(queuedAttachments ?? []);
     const attachmentUrls = (await mapWithConcurrency(
       budgetedAttachments,
       getInboundAttachmentLimits().uploadConcurrency,
-      (att) => uploadOrgAttachment(organizationId, att.name, att.contentType, att.contentBase64, job.data.inboundMessageId),
+      (att) => uploadOrgAttachment(organizationId, att.name, att.contentType, att.contentBase64, externalMessageId),
     )).filter((url): url is string => url !== null);
 
-    await processInboundMessage(organizationId, senderEmail!, CHANNEL.EMAIL, stripQuotedReply(body!), aiSummaryQueue, {
+    await processInboundMessage(organizationId, senderEmail, CHANNEL.EMAIL, stripQuotedReply(body), aiSummaryQueue, {
       customerName: resolvedName,
-      subject: subject?.trim() || null,
-      externalMessageId: job.data.inboundMessageId,
-      integrationId: job.data.integrationId,
-      receivedAt: job.data.receivedAt ? new Date(job.data.receivedAt) : undefined,
+      subject: subject.trim() || null,
+      externalMessageId,
+      integrationId: integrationId.trim() || undefined,
+      receivedAt: new Date(receivedAt),
       traceId,
       attachments: attachmentUrls,
       precomputed,
       lockAsGenuine: !spamFilterEnabled,
       isRealCustomerMessage: true,
     });
-    logger.info({ senderEmail, organizationId, traceId, classification: precomputed?.filterStatus ?? null }, '[Worker] Successfully saved Email');
+    logger.info(
+      { senderEmail, organizationId, traceId, ingressTransport, classification: precomputed?.filterStatus ?? null },
+      '[Worker] Successfully saved Email',
+    );
   } catch (error) {
     logger.error({ err: error, traceId }, '[Worker] DB operation failed for Email');
     throw error;

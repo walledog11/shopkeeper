@@ -36,6 +36,10 @@ import { getShopifyDisconnectMessage, resolveShopifyConnectionState } from "@/li
 import { Skeleton } from "@/components/ui/skeleton"
 import type { Integration } from "@/types"
 import { EmailSpamFilterCard } from "./EmailSpamFilterCard"
+import {
+  assessWorkspaceEmailInbound,
+  dualInboundDeliveryMessage,
+} from "@/lib/integrations/email-inbound-path"
 
 const INTEGRATION_CARD_GRID = "grid items-stretch gap-4 auto-rows-fr grid-cols-[repeat(auto-fill,minmax(340px,1fr))]"
 
@@ -180,6 +184,14 @@ function IntegrationsPageContent({
   }), [visibleModels])
   const attention = useMemo(() => integrationAttentionSummary(models), [models])
   const emailConnected = integrations.some((integration) => integration.platform === "email")
+  const dualInboundMessage = useMemo(() => {
+    if (!gmailNativeInboundEnabled) return null
+    const assessment = assessWorkspaceEmailInbound(
+      integrations.filter((integration) => integration.platform === "email"),
+      gmailNativeInboundEnabled,
+    )
+    return dualInboundDeliveryMessage(assessment)
+  }, [gmailNativeInboundEnabled, integrations])
 
   useEffect(() => {
     if (!loaded) return
@@ -326,6 +338,13 @@ function IntegrationsPageContent({
             <div className="flex items-center gap-3 rounded-lg border border-amber-600/[0.20] bg-amber-600/[0.04] px-4 py-3 text-sm text-amber-600">
               <AlertTriangle className="size-4 shrink-0" />
               <span>{attention.copy}</span>
+            </div>
+          ) : null}
+
+          {loaded && dualInboundMessage ? (
+            <div className="flex items-center gap-3 rounded-lg border border-amber-600/[0.20] bg-amber-600/[0.04] px-4 py-3 text-sm text-amber-600">
+              <AlertTriangle className="size-4 shrink-0" />
+              <span>{dualInboundMessage}</span>
             </div>
           ) : null}
 

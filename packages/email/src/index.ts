@@ -21,6 +21,32 @@ export {
 } from './integration-resolution.js';
 
 export {
+  assessEmailInboundPaths,
+  findEmailIntegrations,
+  isGmailWatchReceivingConfigured,
+  type EmailInboundPathAssessment,
+  type EmailInboundTransportLabel,
+} from './inbound-transport.js';
+
+export {
+  assertNoDualInboundDelivery,
+  DUAL_INBOUND_MESSAGE,
+  hasDualInboundDeliveryRisk,
+} from './inbound-transport-policy.js';
+
+export type {
+  InboundEmailAttachment,
+  InboundEmailEvent,
+  InboundEmailIngressTransport,
+} from './inbound-event.js';
+
+export {
+  parseInboundEmailJobData,
+  toInboundEmailJobPayload,
+  type InboundEmailJobPayload,
+} from './inbound-email-job.js';
+
+export {
   GMAIL_READONLY_SCOPE,
   getEmailAuthReauthorizationReason,
   getGmailInboundStatus,

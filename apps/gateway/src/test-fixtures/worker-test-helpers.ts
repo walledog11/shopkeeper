@@ -17,6 +17,7 @@ export function getMockLogger() {
 }
 
 export function makeEmailJob(organizationId: string, overrides: Record<string, unknown> = {}) {
+  const inboundMessageId = `mid_${Date.now()}`;
   return {
     id: 'job-test',
     data: {
@@ -26,8 +27,11 @@ export function makeEmailJob(organizationId: string, overrides: Record<string, u
       senderName: 'Test Customer',
       subject: 'I need help with my order',
       body: 'Hello, my package has not arrived yet.',
-      inboundMessageId: `mid_${Date.now()}`,
+      inboundMessageId,
+      externalMessageId: inboundMessageId,
+      receivedAt: new Date().toISOString(),
       traceId: 'trace-test',
+      ingressTransport: 'postmark_forward',
       ...overrides,
     },
   };

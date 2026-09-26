@@ -19,6 +19,7 @@ what each audit still blocks.
 | `npm run audit:bullmq-compatibility-names` | Before renaming BullMQ queue or repeatable job IDs. |
 | `npm run audit:agent-action-operation-keys` | Before `migrate deploy` on any database carrying `agent_actions` history. Gates `20260912160000_add_agent_action_dispatch_lifecycle`, whose duplicate-key `RAISE` is the only data-dependent abort in the pending queue — a schema-only migration replay cannot surface it. Use `--strict`. |
 | `npm run audit:outbound-email-mode` | Before dropping the synchronous outbound email rollback path. |
+| `npm run audit:email-inbound-transport` | Email inbound steady-state: dual Gmail+Postmark integrations and dual-delivery risk. Use `--strict` after integration changes; CI runs fixture gate via `scripts/email-inbound-transport-audit-fixture.test.mjs`. |
 
 ## Agent and product rollouts
 
