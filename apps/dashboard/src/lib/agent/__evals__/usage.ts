@@ -1,5 +1,4 @@
 import { anthropic, buildCachedSystemPrompt, HAIKU_MODEL } from "@shopkeeper/agent/ai"
-import { DISCOVERY_TOOL_NAME } from "@shopkeeper/agent/planner"
 import { readModelUsage } from "@shopkeeper/agent/usage"
 import type { BaselineUsage, EvalUsage, FixtureRunSummary, PhaseUsage } from "./types"
 
@@ -51,15 +50,6 @@ export function recordEvalUsage(
     addPhaseUsage(modelTotal, modelUsage)
     usage.models[model] = modelTotal
   }
-}
-
-export function countDiscoveryCalls(response: unknown): number {
-  if (!response || typeof response !== "object" || !("content" in response)) return 0
-  const content = (response as { content?: unknown }).content
-  if (!Array.isArray(content)) return 0
-  return content.filter(block => (
-    block && typeof block === "object" && block.type === "tool_use" && block.name === DISCOVERY_TOOL_NAME
-  )).length
 }
 
 function nearestRank(sorted: readonly number[], percentile: number): number {

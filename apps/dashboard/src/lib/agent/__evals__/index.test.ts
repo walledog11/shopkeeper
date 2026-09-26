@@ -33,6 +33,7 @@ import {
   hardFailureConfirmations,
   selectBaselineFixtures,
 } from "./runner";
+import { anthropic } from "@shopkeeper/agent/ai";
 import type { Fixture, FixtureRunSummary } from "./types";
 import { validateFixtures } from "./fixture-validator";
 import { readCachedPassingSummary, writePassingSummary } from "./result-cache";
@@ -79,6 +80,41 @@ describe.sequential("agent evals", () => {
     });
     return;
   }
+
+  // Free, and run through this file's import graph on purpose: if anything loads
+  // the agent executor ahead of the runner's mock, fixtures run against real
+  // Shopify tools and a paid suite fails as a harness gap (2026-09-26, $0.82).
+  it("serves a fixture's simulated read result to the planner", async () => {
+    const fixture = allFixtures.find((f) => f.id === "storefront-guest-product-search");
+    const simulated = fixture?.setup.simulateToolResults?.find((r) => r.tool === "search_shopify_products");
+    if (!fixture || !simulated) throw new Error("guard fixture no longer simulates search_shopify_products");
+    const toolResults: unknown[] = [];
+    const originalCreate = anthropic.messages.create;
+    let calls = 0;
+    anthropic.messages.create = (async (body: { model: string; messages: Array<{ content: unknown }> }) => {
+      calls += 1;
+      const last = body.messages[body.messages.length - 1]?.content;
+      if (Array.isArray(last)) toolResults.push(...last.filter((block) => block?.type === "tool_result"));
+      return {
+        id: `scripted-${calls}`,
+        type: "message",
+        role: "assistant",
+        model: body.model,
+        content: calls === 1
+          ? [{ type: "tool_use", id: "read-1", name: "search_shopify_products", input: { query: "Pencil Half Zip" } }]
+          : [{ type: "text", text: "Done." }],
+        stop_reason: calls === 1 ? "tool_use" : "end_turn",
+        stop_sequence: null,
+        usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+      };
+    }) as never;
+    try {
+      await runFixtureRepeated(fixture, 1);
+    } finally {
+      anthropic.messages.create = originalCreate;
+    }
+    expect(toolResults).toContainEqual(expect.objectContaining({ tool_use_id: "read-1", content: simulated.result }));
+  });
 
   // Fixture loading and validation above are free and worth keeping on every
   // integration run; everything past here spends. See selection.ts:evalsEnabled.
