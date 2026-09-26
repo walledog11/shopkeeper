@@ -21,9 +21,9 @@ export type Partner = {
 
 export const productCards: ProductCard[] = [
   {
-    href: "/#workflow",
-    title: "Your merchant agent",
-    subtitle: "Check stock, run sales, change orders, and work through the inbox by text.",
+    href: "/#night",
+    title: "A night with Shopkeeper",
+    subtitle: "Customers answered overnight, and a morning briefing you approve by text.",
     icon: Store,
   },
   {
