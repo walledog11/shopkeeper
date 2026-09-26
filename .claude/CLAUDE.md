@@ -99,8 +99,9 @@ Names live in each app's `.env.example`; values in Vercel/Railway.
 Both `DATABASE_URL`s append `?pgbouncer=true&connection_limit=1`. `TOKEN_ENCRYPTION_KEY` (AES-256-GCM, 32 raw bytes — hex64, base64, or 32 ASCII chars) encrypts `Integration.accessToken`/`refreshToken` at rest, applied transparently via Prisma `$extends`; same value in both apps; required in production.
 
 ## Architecture
-Design law below comes from the 2026-08-21 pipeline audit (`git show 044cb21a:AGENT_AUDIT.md`).
-Active agent architecture, contracts, and the ordered work queue live in
+Design law is in the **Architecture** section below (2026-08-21 pipeline audit
+conclusions, kept here so agents read one file). Active agent architecture,
+contracts, and the ordered work queue live in
 [conversational-agent-overhaul-plan.md](../docs/conversational-agent-overhaul-plan.md).
 These bullets describe the direction every change moves in, including changes that don't
 mention them. Moving away from one needs a reason in the diff.

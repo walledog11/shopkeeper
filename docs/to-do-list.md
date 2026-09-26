@@ -510,7 +510,7 @@ so a search for one lands somewhere.
   `docs/production/shopify-webhook-migration.md` (utility into the config reference),
   plus the chronology cut from the storefront-chat record and the closed M0a/M0b
   archaeology cut from the Shopify config reference.
-- 2026-09-26, `AGENT_AUDIT.md` (August 2026 pipeline audit and milestone ledger;
-  architecture law remains in `.claude/CLAUDE.md`; active agent work order is
+- 2026-09-26, root pipeline audit doc (August 2026 milestone ledger; architecture
+  law is `.claude/CLAUDE.md` § Architecture; work order is
   [conversational-agent-overhaul-plan.md](conversational-agent-overhaul-plan.md))
-  — `git show 044cb21a:AGENT_AUDIT.md`.
+  — last tree path `AGENT_AUDIT.md`, `git show 044cb21a:AGENT_AUDIT.md`.
