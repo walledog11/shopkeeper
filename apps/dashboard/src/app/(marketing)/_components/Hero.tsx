@@ -1,12 +1,12 @@
 import Image from "next/image";
+import { MessageCircle } from "lucide-react";
 import { GlassLink } from "./GlassLink";
 import { PRIMARY_CTA_LABEL } from "@/lib/brand";
-import { HeroMedia } from "./HeroMedia";
 
-const integrationRoles = [
-  { name: "Instagram, email, website chat", role: "Customer messages", logo: "/logos/instagram-logo.png" },
-  { name: "iMessage & the dashboard", role: "Talk to your agent", logo: "/logos/imessage.svg" },
-  { name: "Shopify", role: "Orders, products & sales", logo: "/logos/shopify.svg" },
+const channels = [
+  { name: "Instagram", logo: "/logos/instagram-logo.png" },
+  { name: "Email", logo: "/logos/email.svg" },
+  { name: "Website chat", logo: null },
 ] as const;
 
 function rise(delayMs: number) {
@@ -18,110 +18,125 @@ function rise(delayMs: number) {
 
 export function Hero() {
   return (
-    <section className="relative isolate px-5 pb-4 pt-12 text-center sm:px-6 sm:pt-16 md:pb-8">
+    <section className="relative isolate px-5 pb-10 pt-12 sm:px-6 sm:pt-16 md:pb-16">
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[600px] [background:radial-gradient(58%_52%_at_50%_40%,rgba(249,245,238,0.95)_0%,rgba(249,245,238,0.55)_42%,transparent_72%)]"
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[640px] [background:radial-gradient(58%_52%_at_50%_40%,rgba(249,245,238,0.95)_0%,rgba(249,245,238,0.55)_42%,transparent_72%)]"
       />
 
-      <p className="m-kicker mb-5" style={rise(0)}>
-        An AI agent that works in your Shopify store
-      </p>
+      <div className="mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="text-center lg:text-left">
+          <p className="m-kicker mb-5" style={rise(0)}>
+            Customer support for Shopify stores
+          </p>
 
-      <h1
-        className="m-display mx-auto mb-6 max-w-[min(820px,94vw)] text-[clamp(2.55rem,6vw,5rem)]"
-        style={rise(0)}
-      >
-        A shopkeeper you can text.
-      </h1>
+          <h1
+            className="m-display mx-auto mb-6 max-w-[14ch] text-[clamp(2.55rem,6vw,4.75rem)] lg:mx-0"
+            style={rise(0)}
+          >
+            Your support, handled before you wake up.
+          </h1>
 
-      <p
-        className="mx-auto mb-8 max-w-[620px] text-[17px] leading-[1.6] text-stone-600 sm:text-[18px]"
-        style={rise(80)}
-      >
-        Check stock. Change an order. Run a weekend sale. Tell Shopkeeper what you
-        need through iMessage or the dashboard, and it does the work in Shopify.
-        It also handles customer messages using your products, policies, and order history.
-      </p>
+          <p
+            className="mx-auto mb-8 max-w-[560px] text-[17px] leading-[1.6] text-stone-600 sm:text-[18px] lg:mx-0"
+            style={rise(80)}
+          >
+            Shopkeeper answers your customers on Instagram, email, and chat, day and night.
+            Routine questions get answered on the spot. Anything involving money comes to
+            you as a plan by text. Approve it with one reply.
+          </p>
 
-      <div className="mb-9" style={rise(160)}>
-        <div className="flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
-          <GlassLink href="/signup" variant="primary" className="min-h-12 justify-center px-6 py-3">
-            {PRIMARY_CTA_LABEL}
-          </GlassLink>
-          <GlassLink href="#workflow" variant="outline" className="min-h-12 justify-center px-6 py-3">
-            See what you can ask
-          </GlassLink>
-        </div>
-        <p className="mt-3 text-[13px] text-stone-500">
-          Free for 14 days. You add a card when you pick a plan.
-        </p>
-      </div>
-
-      <div
-        className="mx-auto grid max-w-[760px] divide-y divide-stone-900/10 border-y border-stone-900/10 text-left sm:grid-cols-3 sm:divide-x sm:divide-y-0"
-        style={rise(210)}
-        aria-label="How Shopkeeper connects"
-      >
-        {integrationRoles.map((item) => (
-          <div key={item.role} className="flex items-center gap-3 px-3 py-4 sm:px-5">
-            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-white/65 ring-1 ring-stone-900/8">
-              <Image src={item.logo} alt="" width={22} height={22} className="size-[22px] object-contain" />
-            </span>
-            <span>
-              <span className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-stone-400">
-                {item.role}
-              </span>
-              <span className="mt-0.5 block text-[13px] font-semibold text-stone-800">{item.name}</span>
-            </span>
+          <div className="mb-8" style={rise(160)}>
+            <div className="flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center lg:justify-start">
+              <GlassLink href="/signup" variant="primary" className="min-h-12 justify-center px-6 py-3">
+                {PRIMARY_CTA_LABEL}
+              </GlassLink>
+              <GlassLink href="#night" variant="outline" className="min-h-12 justify-center px-6 py-3">
+                See a night with Shopkeeper
+              </GlassLink>
+            </div>
+            <p className="mt-3 text-[13px] text-stone-500">
+              Free for 14 days. No per-ticket fees, ever.
+            </p>
           </div>
-        ))}
-      </div>
 
+          <div
+            className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[13px] font-semibold text-stone-600 lg:justify-start"
+            style={rise(210)}
+            aria-label="Channels Shopkeeper answers"
+          >
+            <span className="text-[11px] uppercase tracking-[0.08em] text-stone-400">Answers on</span>
+            {channels.map((channel) => (
+              <span key={channel.name} className="inline-flex items-center gap-2">
+                {channel.logo ? (
+                  <Image src={channel.logo} alt="" width={18} height={18} className="size-[18px] object-contain" />
+                ) : (
+                  <MessageCircle aria-hidden className="size-[18px] text-stone-500" />
+                )}
+                {channel.name}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div style={rise(240)}>
+          <BriefingPhone />
+        </div>
+      </div>
     </section>
   );
 }
 
-export function CustomerWorkflow() {
-  return (
-    <section aria-label="Customer request walkthrough" className="relative isolate px-5 py-14 sm:px-6">
-      <div id="demo" style={rise(260)} className="relative mx-auto mt-2 max-w-6xl scroll-mt-28">
-        <div className="mb-7 text-center">
-          <p className="m-kicker">When a customer writes first · example workflow</p>
-          <h2 className="m-display mx-auto mt-4 max-w-[18ch] text-[clamp(1.9rem,4vw,3.25rem)]">
-            From a customer’s DM to a change in Shopify.
-          </h2>
-          <p className="mx-auto mt-4 max-w-[52ch] text-[15px] leading-relaxed text-stone-600">
-            Maya wants a different size. Shopkeeper finds her order, checks stock,
-            prepares the change, and asks you to approve it. Then it updates the order
-            and replies to her on Instagram.
-          </p>
-        </div>
+function Bubble({ from, children }: { from: "agent" | "you"; children: React.ReactNode }) {
+  return from === "you" ? (
+    <div className="ml-auto max-w-[70%] rounded-[20px] rounded-br-md bg-[#0a84ff] px-3.5 py-2 text-[14px] leading-snug text-white">
+      {children}
+    </div>
+  ) : (
+    <div className="max-w-[84%] rounded-[20px] rounded-bl-md bg-[#e9e9eb] px-3.5 py-2 text-[14px] leading-snug text-[#1c1c1e]">
+      {children}
+    </div>
+  );
+}
 
-        <div className="relative">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute -inset-x-32 -inset-y-16 -z-10 overflow-hidden [mask-image:radial-gradient(62%_60%_at_50%_50%,black_28%,transparent_74%)]"
-          >
-            <Image
-              src="/atmosphere/hero-light.jpg"
-              alt=""
-              fill
-              sizes="100vw"
-              className="scale-110 object-cover opacity-75 [filter:blur(26px)_sepia(0.18)_saturate(0.85)_brightness(1.07)]"
-            />
-            <div className="m-grain absolute inset-0" />
+/** The morning briefing as it lands in iMessage — the product's daily moment. */
+function BriefingPhone() {
+  return (
+    <figure className="relative mx-auto w-full max-w-[340px]">
+      <div
+        aria-hidden
+        className="absolute -inset-10 -z-10 rounded-full bg-[radial-gradient(closest-side,rgba(205,184,150,0.45),transparent)] blur-2xl"
+      />
+      <div className="rounded-[3rem] bg-[#1c1c1e] p-2.5 shadow-[0_40px_80px_-40px_rgba(43,33,24,0.65)] ring-1 ring-black/40">
+        <div className="overflow-hidden rounded-[2.4rem] bg-white">
+          <div className="flex flex-col items-center gap-1 border-b border-stone-200/80 bg-[#f7f7f7] px-4 pb-2.5 pt-7">
+            <span className="grid size-10 place-items-center rounded-full bg-[#2b2118] text-[15px] font-bold text-[#f6f2eb] [font-family:var(--m-hand)]">
+              S
+            </span>
+            <span className="text-[12px] font-medium text-[#1c1c1e]">Shopkeeper</span>
           </div>
-          <div className="mx-auto max-w-[560px] rounded-[2.25rem] bg-white/35 p-2 shadow-[0_30px_80px_-52px_rgba(43,33,24,0.5)] ring-1 ring-stone-900/5 sm:p-3">
-            <HeroMedia />
+
+          <div className="flex flex-col gap-2 px-3.5 pb-6 pt-3">
+            <p className="text-center text-[11px] text-stone-400">Today 8:00 AM</p>
+            <Bubble from="agent">
+              Morning! I handled 14 customers overnight. 2 need you:
+            </Bubble>
+            <Bubble from="agent">
+              1. Refund $38 to Dana. Her order arrived a week late (#1042).
+              <br />
+              2. Send Marcus a new case. His arrived cracked (#1057).
+            </Bubble>
+            <Bubble from="you">Approve both</Bubble>
+            <p className="-mt-1 text-right text-[11px] text-stone-400">Read 8:02 AM</p>
+            <Bubble from="agent">
+              Done. Dana’s refund is on its way and Marcus’s replacement is ordered. I let them both know.
+            </Bubble>
           </div>
         </div>
-        <p className="mx-auto mt-5 max-w-[54ch] text-center text-[12px] leading-relaxed text-stone-500">
-          Fictional customer, store, and order details. Once an order ships, a swap
-          becomes an exchange rather than an edit. What Shopkeeper can do is still
-          bounded by the rules you set.
-        </p>
       </div>
-    </section>
+      <figcaption className="sr-only">
+        An example morning briefing from Shopkeeper in iMessage, approved with one reply.
+      </figcaption>
+    </figure>
   );
 }
