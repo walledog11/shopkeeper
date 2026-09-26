@@ -1,4 +1,4 @@
-import { assessEmailInboundPaths } from '@shopkeeper/email';
+import { assessEmailInboundPaths } from '@shopkeeper/email/inbound-transport';
 import type { Integration } from '@/types';
 
 const INBOUND_VIA_GMAIL_LABEL = 'Inbound via Gmail';
