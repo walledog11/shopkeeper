@@ -17,23 +17,30 @@ export function getMockLogger() {
 }
 
 export function makeEmailJob(organizationId: string, overrides: Record<string, unknown> = {}) {
-  const inboundMessageId = `mid_${Date.now()}`;
+  const defaultMessageId = `mid_${Date.now()}`;
+  const data: Record<string, unknown> = {
+    platform: 'email',
+    organizationId,
+    senderEmail: 'customer@example.com',
+    senderName: 'Test Customer',
+    subject: 'I need help with my order',
+    body: 'Hello, my package has not arrived yet.',
+    inboundMessageId: defaultMessageId,
+    externalMessageId: defaultMessageId,
+    receivedAt: new Date().toISOString(),
+    traceId: 'trace-test',
+    ingressTransport: 'postmark_forward',
+    ...overrides,
+  };
+  if (!('externalMessageId' in overrides) && 'inboundMessageId' in overrides) {
+    data.externalMessageId = overrides.inboundMessageId;
+  } else if (!('inboundMessageId' in overrides) && 'externalMessageId' in overrides) {
+    data.inboundMessageId = overrides.externalMessageId;
+  }
+
   return {
     id: 'job-test',
-    data: {
-      platform: 'email',
-      organizationId,
-      senderEmail: 'customer@example.com',
-      senderName: 'Test Customer',
-      subject: 'I need help with my order',
-      body: 'Hello, my package has not arrived yet.',
-      inboundMessageId,
-      externalMessageId: inboundMessageId,
-      receivedAt: new Date().toISOString(),
-      traceId: 'trace-test',
-      ingressTransport: 'postmark_forward',
-      ...overrides,
-    },
+    data,
   };
 }
 
