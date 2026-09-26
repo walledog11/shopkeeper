@@ -142,9 +142,8 @@ Done when the regression matrix cannot emit a completion claim unsupported by it
 sound and runs against the original tool call, so the renderer cannot launder an unsupported claim
 past it. The rendering half selects *what* to rewrite by matching English — `MUTATION_VERB`,
 `MUTATION_VERB_PROGRESSIVE`, `CLAIM_CONTINUATION`, contrastive-phrase carve-outs — and then edits
-the reply the customer reads. That is a repair pass on customer-visible text, forbidden
-for cause by `.claude/CLAUDE.md` § Architecture (*Validate, don't repair*), and it means
-`plan-grounding.ts` now grows a case
+the reply the customer reads. That is a repair pass on customer-visible text, which
+`.claude/CLAUDE.md` § Architecture forbids that pattern for cause, and it means `plan-grounding.ts` now grows a case
 every time a phrasing slips through. The structural fix the architecture law already names is to put
 the completion statement in the **tool schema**: `send_reply` accepts an optional structured
 `completion` the executor renders, so the model never authors the sentence that needs grading.

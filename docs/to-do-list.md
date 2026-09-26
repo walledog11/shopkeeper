@@ -433,36 +433,6 @@ Every file in `docs/`. If it is not here, it does not exist.
   gates, and the budget ceilings a paid run must carry.
 - [compatibility-retirement-backlog.md](compatibility-retirement-backlog.md) —
   read before renaming any BullMQ queue or job string.
-- [audit-commands.md](audit-commands.md) — when to run repo audit npm scripts.
-- [project-improvement-plan.md](project-improvement-plan.md) — September 2026 validation
-  charter; superseded by [conversational-agent-overhaul-plan.md](conversational-agent-overhaul-plan.md)
-  where they disagree. Open action items live in this file.
-
-**Agent runtime overhaul (Package 6 open)**
-
-- [conversational-agent-overhaul-plan.md](conversational-agent-overhaul-plan.md) —
-  authoritative v2 architecture, contracts, and ordered rollout work.
-- [conversational-agent-overhaul-release-matrix.md](conversational-agent-overhaul-release-matrix.md) —
-  short working gate checklist for Package 6.
-- [conversational-agent-overhaul-p6-release-evidence.md](conversational-agent-overhaul-p6-release-evidence.md) —
-  run-by-run Package 6 evidence log.
-- [conversational-agent-overhaul-p0-baseline.md](conversational-agent-overhaul-p0-baseline.md) —
-  Package 0 capability inventory and baseline decisions.
-- [agent-maintainability-audit-2026-09-11.md](agent-maintainability-audit-2026-09-11.md) —
-  pre-overhaul analysis; superseded by the overhaul plan where they disagree.
-- [gateway-message-handlers-layout.md](gateway-message-handlers-layout.md) —
-  `apps/gateway/src/message-handlers/` directory map.
-
-**Instagram / SocialAPI**
-
-- [socialapi-transport-plan.md](socialapi-transport-plan.md) — selected `ig_dm`
-  transport through the first 100 users (current policy).
-- [production/socialapi-s0-diligence-2026-09-07.md](production/socialapi-s0-diligence-2026-09-07.md) —
-  dated S0 diligence evidence; read the transport plan for what still blocks rollout.
-- [production/socialapi-spike-evidence-2026-09-09.md](production/socialapi-spike-evidence-2026-09-09.md) —
-  milestone-zero spike record (DM → ticket → reply).
-- [research/socialapi-pivot-assessment-2026-09-07.md](research/socialapi-pivot-assessment-2026-09-07.md) —
-  decision record for choosing SocialAPI over waiting on direct Meta.
 
 **Production**
 
