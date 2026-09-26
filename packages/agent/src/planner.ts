@@ -34,6 +34,7 @@ export {
   type CapabilityDiscoveryMode,
   type ProposalSuspensionMode,
 } from "./runtime-modes.js";
+export { DISCOVERY_TOOL_NAME } from "./planner-tool-selection.js";
 import { usesCapabilityDiscovery } from "./runtime-modes.js";
 import { TOKEN_BUDGET, DEFAULT_MAX_ITERATIONS } from "./run-policy.js";
 import { resolveAgentSettings } from "./settings.js";

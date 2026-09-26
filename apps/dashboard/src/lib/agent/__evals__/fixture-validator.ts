@@ -1,6 +1,6 @@
 import { isAgentToolName } from "@shopkeeper/agent/tools"
 import { INTENT_KEYS } from "@shopkeeper/agent/classifier-signals"
-import type { Fixture, ToolInputExpectation } from "./types"
+import { HOLDOUT_CASES, type Fixture, type ToolInputExpectation } from "./types"
 
 import { isRecord } from "@shopkeeper/shared/guards";
 const SUITES = new Set(["core", "extended"])
@@ -308,6 +308,19 @@ export function validateFixtures(fixtures: readonly unknown[], filenames?: reado
     }
     if (fixture.runtimeVersion !== undefined && fixture.runtimeVersion !== 2) {
       local.push("runtimeVersion may only be 2")
+    }
+    if (fixture.holdout !== undefined) {
+      if (!(HOLDOUT_CASES as readonly string[]).includes(fixture.holdout)) {
+        local.push(`holdout must name a model-scored manifest case (${HOLDOUT_CASES.join(", ")})`)
+      }
+      // A held-out case is measured by the release comparison, which runs the
+      // hard core suite only.
+      if (fixture.suite !== "core" || fixture.advisory === true) {
+        local.push("a held-out fixture must be a hard core fixture")
+      }
+    }
+    if (fixture.withheldMessageFollowUp !== undefined && fixture.runtimeVersion !== 2) {
+      local.push("withheldMessageFollowUp exists only on runtime v2; set runtimeVersion 2")
     }
     for (const [resultIndex, result] of (fixture.setup.simulateToolResults ?? []).entries()) {
       assertToolName(result.tool, `setup.simulateToolResults[${resultIndex}].tool`, local)

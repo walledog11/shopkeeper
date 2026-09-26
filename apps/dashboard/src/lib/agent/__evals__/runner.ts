@@ -2,6 +2,7 @@ import { cleanupTestData } from "@shopkeeper/db/test-helpers"
 import { anthropic } from "@shopkeeper/agent/ai"
 import {
   ModelSpendBudgetExceededError,
+  estimateModelUsageCostUsd,
   type ModelSpendBudget,
 } from "@shopkeeper/agent/model-cost"
 import { planAgent } from "@shopkeeper/agent/planner"
@@ -21,7 +22,7 @@ import {
   inferRunMode,
   isJudgeEnabled,
 } from "./fixture-runtime"
-import { recordEvalUsage, zeroPhaseUsage } from "./usage"
+import { countDiscoveryCalls, recordEvalUsage, zeroPhaseUsage } from "./usage"
 import type {
   EvalResult,
   EvalUsage,
@@ -47,7 +48,13 @@ export {
   writeBaseline,
 } from "./baseline"
 export { mutativeIntentActionFailures } from "./assertions"
-export { formatModelUsageBreakdown, formatUsageBreakdown, formatUsageDelta, probeSystemPromptCacheRead } from "./usage"
+export {
+  formatModelUsageBreakdown,
+  formatTaskSummary,
+  formatUsageBreakdown,
+  formatUsageDelta,
+  probeSystemPromptCacheRead,
+} from "./usage"
 
 const simulatedToolResults = vi.hoisted(() => ({
   current: null as Map<string, SimulatedToolResult> | null,
@@ -162,6 +169,8 @@ function createEvalUsage(): EvalUsage {
   return {
     modelCalls: 0,
     plannerModelCalls: 0,
+    discoveryCalls: 0,
+    taskCostUsd: 0,
     models: {},
     inputTokens: 0,
     outputTokens: 0,
@@ -235,6 +244,17 @@ async function runFixture(
       if (currentPhase === usage.plannerUsage) usage.plannerModelCalls += 1
       const model = "model" in response && typeof response.model === "string" ? response.model : undefined
       recordEvalUsage(usage, response, currentPhase, model)
+      // The judge runs outside both phases, so this is the task alone.
+      if (currentPhase !== null) {
+        usage.discoveryCalls += countDiscoveryCalls(response)
+        const pricedModel = model ?? requestedModel
+        if (pricedModel) {
+          usage.taskCostUsd += estimateModelUsageCostUsd(
+            pricedModel,
+            readModelUsage(response as { usage?: unknown }),
+          )
+        }
+      }
       if (budget && requestedModel) {
         budget.record(requestedModel, readModelUsage(response as { usage?: unknown }))
         budget.assertWithinLimit()
@@ -256,6 +276,7 @@ async function runFixture(
       merchantInstruction: fixture.merchantInstruction === true,
       ...(runtimeVersion !== undefined ? { runtimeVersion } : {}),
       ...(runtimeVersion === 2 ? { exactDraftProposal: true } : {}),
+      ...(fixture.withheldMessageFollowUp ? { withheldMessageFollowUp: true } : {}),
     })
     currentPhase = null
 

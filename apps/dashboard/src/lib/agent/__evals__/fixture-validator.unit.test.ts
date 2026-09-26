@@ -53,6 +53,17 @@ describe("validateFixtures", () => {
     expect(() => validateFixtures([invalid], ["expected-id.json"])).toThrow(/moneyEquals\.amount/)
   })
 
+  it("requires a held-out fixture to name a model-scored case and gate the release", () => {
+    expect(() => validateFixtures([fixture({ holdout: "C05" })])).not.toThrow()
+    expect(() => validateFixtures([fixture({ holdout: "C04" as never })])).toThrow(/model-scored manifest case/)
+    expect(() => validateFixtures([fixture({ holdout: "C05", suite: "extended" })])).toThrow(/hard core fixture/)
+  })
+
+  it("allows the withheld-message follow-up only on runtime v2", () => {
+    expect(() => validateFixtures([fixture({ withheldMessageFollowUp: true })])).toThrow(/runtime v2/)
+    expect(() => validateFixtures([fixture({ withheldMessageFollowUp: true, runtimeVersion: 2 })])).not.toThrow()
+  })
+
   it("rejects missing required setup fields and invalid enums", () => {
     const invalid = fixture({
       setup: { channelType: "fax", messages: undefined } as never,

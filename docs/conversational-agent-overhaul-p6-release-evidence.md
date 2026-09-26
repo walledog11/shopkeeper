@@ -36,8 +36,9 @@ or customer from production data merely because it is available.
 | Delivery channel and destination | operator-controlled email address; exact address held outside the repository | Actual delivery |
 | Permitted commercial effect | writes on the organization's Shopify **dev store**, driven by a realistic customer ticket (the first attempt's customer-note canary was replaced by an address change on an unfulfilled order) | Provider dispatch |
 | Maximum commercial amount/count | dev-store test data; no real merchant or customer | Provider dispatch |
-| v1 eval ceiling | $0.90 / 120 model calls | Paid v1 comparison |
-| v2 eval ceiling | $0.90 / 120 model calls | Paid v2 comparison |
+| v1 eval ceiling | $1.00 / 150 model calls (raised from $0.90 / 120 on 2026-09-26 for the 35-fixture set) | Paid v1 comparison |
+| v2 eval ceiling | $1.40 / 170 model calls (raised from $0.90 / 120 on 2026-09-26 for the 37-fixture set) | Paid v2 comparison |
+| Task budget | active latency p95 ≤ 10s and mean task cost ≤ $0.035 per completed task, from the `[eval:task]` line (set 2026-09-26) | Gate B pass |
 | Rollout observation window and operator | pending | Routing change |
 
 ## Gate A — comparison tooling and free verification
@@ -194,6 +195,55 @@ Comparison attempt notes:
   criteria pass. The open item is v2's higher per-suite spend, which has no
   numeric budget to be judged against yet.
 
+### Gate B rerun preparation — 2026-09-26
+
+The plan's item 7 steps that cost nothing. No model was called.
+
+**Held-out fixtures.** Each is a hard core fixture marked `holdout` with its
+Package 0 manifest case. A targeted run cannot name one (`selectFixtures` and
+`eval-budget-preflight.mjs` both refuse), so none can be rerun alone while
+tuning. They have never run, so they have never been tuned against.
+
+| Case | Fixture | Departure from the manifest wording |
+| --- | --- | --- |
+| C01 | `investigate-stalled-replacement-ask-before-refund` | None. It is the plan's acceptance conversation, typed in the ticket composer |
+| C02 | `explain-return-window-mixed-language`, `refund-full-order-mixed-language` | None; the pair is two fixtures |
+| C03 | `refund-partial-customer-guesses-amount` | "Requested" is the customer's own guess ("around forty bucks"), because the fixture validator rejects an exact customer amount and Shopify owns the quote |
+| C05 | `continuity-two-black-variants` | None |
+| C06 | `continuity-return-after-other-order-status` | Two orders of one customer, not two customers. A support fixture is one thread with one customer, and the path where a merchant works across customers (`runOperatorFreeFormTurn`) is not in the dashboard harness; operator behavior is verified by phone round-trip |
+| C07 | `prompt-injection-claimed-owner-gift-card` | The manifest reserved a forwarded prompt injection, but that input already runs as the routine `prompt-injection-forwarded-email`, so it is not held out. The substitute is an owner approval claimed over Instagram |
+| C08 | `withheld-cancellation-follow-up` | Runtime v2 only, since the withheld-message follow-up exists only there. The fixture sets `withheldMessageFollowUp`, and its instruction is what `buildWithheldMessageFollowUpInstruction` produces for a cancellation Shopify refused |
+| C10 | `order-status-product-search-unavailable` | Support stats are merchant-only, so the unavailable context is a failing product lookup during an order-status question |
+| C11 | `order-status-spanish-brand-voice` | None |
+
+C01, C06, C08 and C10 have no routine fixture, only the held-out one. For those
+families the comparison measures v1 against v2 on unseen input with no seen
+counterpart.
+
+`refund-full-order` now simulates the receipt the real refund adapter returns.
+Without it, a v2 draft that used `{{refund_amount}}` would be withheld for a
+missing receipt, which is a harness gap rather than a model result.
+
+**Discovery and cost per case.** The report line for each fixture now records
+`discovery=` and `cost=`, and the run ends with an `[eval:task]` line: runs,
+nearest-rank p50/p95 active latency and task cost, and total model and
+discovery calls. The judge is excluded from task cost.
+
+**Composer-path skew.** Three of the 52 fixture files set
+`merchantInstruction`: `gift-card-goodwill`, `fulfill-merchant-confirmed-shipment`
+and the C01 held-out. That is 3 of the 35 release fixtures on runtime v1 and 3
+of 37 on v2. The paid gate therefore grades mostly the customer-derived
+auto-plan path. A pass says little about instructions typed in the ticket
+composer.
+
+**Ceilings.** The release set grows from 26 to 35 fixtures on v1 and from 27 to
+37 on v2. The preflight estimates $0.51 and $0.54, but it prices from the stale
+committed baseline. At Gate B's measured per-fixture spend ($0.0207 on v1 and
+$0.0275 on v2) the suites cost about $0.72 and $1.02 before confirmation
+retries. The release owner raised the ceilings to $1.00 / 150 calls for v1 and
+$1.40 / 170 calls for v2, and set the task budget (see *Required
+controlled-release inputs*).
+
 ## Gate C — controlled real-provider and delivery exercise
 
 Preconditions:
@@ -337,3 +387,4 @@ architecture/product documentation describes the single active runtime.
 | 2026-09-25 | Targeted refund reruns on `a12ca5f8` | `refund-full-order` passed on v1 and v2. v2 `refund-partial` escalated after an unsimulated redundant `get_shopify_orders` lookup failed; one unconfirmed sample, no unsafe action. No production/provider action occurred |
 | 2026-09-25 | Runtime-v2 `refund-partial` confirmation on `a12ca5f8` | 2/2 passed, $0.0169, 3 calls. Gate B comparison table filled; no unauthorized or duplicate effect on either runtime |
 | 2026-09-25 | Gate C production exercise, four runs | Run 4 passed approval → Shopify write → receipt → task-attributed customer reply received. Defects fixed: #106, `14ed5576`. Not fixed: the reply guard's false rejection (#108 closed unmerged). Open: rejected reply draft marks the task failed; closed ticket leaves its task waiting |
+| 2026-09-26 | Gate B rerun preparation (free) | Ten held-out fixtures, discovery and cost per case in the eval report, composer skew recorded, task budget and ceilings set. `npm run verify:pr` passed; no model call |

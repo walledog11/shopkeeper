@@ -24,7 +24,23 @@
     "simulateToolResults": [
       {
         "tool": "create_refund",
-        "result": "Refund of $42.00 USD issued for order #1010."
+        "result": "Refund of $42.00 USD issued for order #1010.",
+        "receipt": {
+          "target": {
+            "kind": "order",
+            "id": "9000001010"
+          },
+          "providerReference": "refund_1010",
+          "facts": {
+            "orderId": "9000001010",
+            "refundId": "refund_1010",
+            "amount": "42.00",
+            "currency": "USD",
+            "transactionStatus": "SUCCESS",
+            "transactionReference": "transaction_1010",
+            "classification": "full"
+          }
+        }
       },
       {
         "tool": "send_reply",

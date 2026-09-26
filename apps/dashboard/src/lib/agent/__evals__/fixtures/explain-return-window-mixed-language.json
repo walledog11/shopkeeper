@@ -1,0 +1,71 @@
+{
+  "id": "explain-return-window-mixed-language",
+  "description": "A customer who has not decided whether to keep a delivered lamp asks, half in Spanish, how long they would have to return it. The agent answers from the returns article and starts nothing.",
+  "whyModelNeeded": "The model must read a conditional, mixed-language question as a request for information, not as a return request.",
+  "holdout": "C02",
+  "setup": {
+    "classifierIntents": {
+      "policy_question": true
+    },
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Sofía Ramírez",
+    "customerPlatformId": "sofia@example.com",
+    "shopifyCustomerId": "10000001510",
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
+    "messages": [
+      {
+        "senderType": "customer",
+        "contentText": "Hola! I got the brass lamp from order #1510 last week. Todavía no sé si me la voy a quedar... ¿cuántos días tengo para devolverla si decido que no?"
+      }
+    ],
+    "kbArticles": [
+      {
+        "title": "Returns policy",
+        "body": "Unused items in their original packaging can be returned within 30 days of delivery for a full refund. To start a return, reply to your order email and we will send a prepaid label."
+      }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000001510",
+        "name": "#1510",
+        "created_at": "2026-09-14T10:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": "fulfilled",
+        "total_price": "89.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_1510",
+            "title": "Brass Table Lamp",
+            "quantity": 1,
+            "variant_id": "variant_1510",
+            "fulfillable_quantity": 0,
+            "current_quantity": 1,
+            "fulfillment_status": "fulfilled"
+          }
+        ]
+      }
+    ]
+  },
+  "instruction": "Reply to the customer about the return policy.",
+  "expectedPlan": {
+    "mustCallTools": [
+      "send_reply"
+    ],
+    "mustNotCallTools": [
+      "create_return",
+      "create_refund",
+      "create_partial_refund",
+      "attach_return_label",
+      "escalate_to_human"
+    ],
+    "replyMustInclude": [
+      "30"
+    ]
+  },
+  "suite": "core"
+}

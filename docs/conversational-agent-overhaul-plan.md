@@ -3,7 +3,8 @@
 Status, checked 2026-09-26: Packages 0–5
 are done. Package 6 (certify, cut over, and delete the old runtime) is in
 progress. Of the thirteen items in [What is left](#what-is-left-in-order), 1–6
-are done and 7–13 are open. Decision E was answered
+are done, 7 is in progress (its free steps and budgets are done; the paid
+comparison has not run), and 8–13 are open. Decision E was answered
 on 2026-09-25 (phone instructions move onto durable tasks, item 10); decision F
 is open and blocks item 8. Production runs runtime v1 by default,
 with one controlled organization on runtime v2.
@@ -78,7 +79,7 @@ contract was unbuilt.
 | Gate C: real provider and delivery | Exercised on 2026-09-25. Run 4 went approval → Shopify write → typed receipt → customer email received, but its execution was stored as failed, by a rule item 5 has since fixed. It runs again as item 8. |
 | Gate D, staged rollout, Gate E | Not started. |
 | Production routing | `AGENT_RUNTIME_VERSION=1` on both services, with `AGENT_RUNTIME_V2_ORG_IDS` set to the controlled organization since 2026-09-25. New tasks for every other organization run v1. |
-| Work in flight | None. |
+| Work in flight | Item 7's free steps (budgets, held-out fixtures, discovery and cost counting, composer skew) in one pull request. The paid comparison is next. |
 | Open pull requests | None for this plan. Items 5, 6 and 4 landed as #115, #116 and #118. |
 
 ## Where the code disagrees with this plan
@@ -122,31 +123,28 @@ request. Doc-only changes go straight to master.
 7. **Budgets, held-out variants, and Gate B again** (Package 6, first checkbox;
    *Success criteria*; *Model evaluation cases and scoring*). The prerequisites
    are free. Do them before booking the paid run.
-   1. **Set numeric latency and cost budgets per completed task.** *Success
-      criteria* required this "after package 0", and it was never done. This is
-      a release-owner input. Measurements available now: Gate B's per-fixture
-      active latency (v1 p50 4.1s / p95 7.8s; v2 p50 4.1s / p95 5.8s); suite
-      spend over 26 fixtures ($0.5370 v1, $0.7157 v2); and Package 3's live
-      refund slice (6 model calls, about 56k tokens, about 12 seconds for the
-      whole task).
-   2. **Write the held-out variants.** The Package 0 evaluation manifest (cases
-      C01–C12, "Evaluation manifest draft" in the Package 0 baseline) names a
-      held-out variant for every family, but none exists as a fixture. No
-      fixture or runner file mentions a holdout. The model-scored ones are C01,
-      C02, C05, C06, C07, C10 and C11, plus the model halves of C03 and C08.
-      C04, C09 and C12 are deterministic database cases. Mark held-out fixtures
-      so they cannot feed prompt tuning ("Keep holdout inputs out of prompt
-      tuning").
-   3. **Count discovery calls in the eval ledger.** Gate B recorded them as
-      "not instrumented", and the scoring rule requires model calls, discovery
-      calls, active latency and total cost per case. v2 fixtures do plan with
-      discovery, because the runner passes `runtimeVersion` into planning, even
-      though `evals.yml` pins the environment flag off.
-   4. **Composer-path coverage.** Only 2 of the 43 fixture files set
-      `merchantInstruction`, so the paid gate mostly grades the customer-derived
-      auto-plan path, not the ticket-composer path. Package 4 deferred this to
-      this baseline. Either add composer variants or record the skew in the
-      evidence.
+   1. ~~**Set numeric latency and cost budgets per completed task.**~~ Set by
+      the release owner on 2026-09-26: active latency p95 at most 10 seconds
+      and mean task cost at most $0.035, measured over a runtime's comparison
+      runs by the `[eval:task]` line. They were set against Gate B's per-fixture
+      numbers: v1 p95 7.8s at $0.0207 mean, v2 p95 5.8s at $0.0275 mean.
+   2. ~~**Write the held-out variants.**~~ Done 2026-09-26. Ten hard core
+      fixtures carry `holdout` naming their manifest case: one each for C01,
+      C03, C05, C06, C07, C08, C10 and C11, and two for C02 (explain and act).
+      `selectFixtures` and the budget preflight refuse a held-out fixture
+      named in a targeted run, so it runs only with its whole suite. C04, C09
+      and C12 are deterministic database cases and have none. Where a fixture
+      departs from the manifest's wording, and why, is in the release
+      evidence (*Held-out fixtures*).
+   3. ~~**Count discovery calls in the eval ledger.**~~ Done 2026-09-26. Each
+      fixture line in the eval report now carries `discovery=` (the
+      `discover_capabilities` calls the model made) and `cost=` (planner and
+      run spend at list price, judge excluded), and the run ends with an
+      `[eval:task]` line: nearest-rank p50/p95 latency and cost over runs, with
+      model-call and discovery-call totals.
+   4. ~~**Composer-path coverage.**~~ Done 2026-09-26 by recording the skew.
+      Three of the 52 fixture files set `merchantInstruction`, the C01
+      held-out among them; the counts are in the release evidence.
 
    Then run the same-commit v1/v2 comparison with the new held-out fixtures,
    `refund-partial-placeholder`, and v2 now held to the same reply fixtures as

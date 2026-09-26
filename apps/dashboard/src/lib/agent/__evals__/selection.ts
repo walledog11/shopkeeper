@@ -68,6 +68,16 @@ export function selectFixtures(
     : onRuntime
   if (!requested) return inSuite
 
+  // Rerunning a held-out case by name to see whether a change fixed it is how
+  // its input ends up tuning the prompt. It runs only with its whole suite.
+  const heldOut = inSuite.filter(fixture => fixture.holdout && requested.has(fixture.id))
+  if (heldOut.length > 0) {
+    throw new Error(
+      `EVAL_FIXTURE named held-out fixture(s): ${heldOut.map(fixture => fixture.id).join(", ")}; `
+      + "they run only in a whole-suite comparison",
+    )
+  }
+
   const selected = inSuite.filter(fixture => requested.has(fixture.id))
   const selectedIds = new Set(selected.map(fixture => fixture.id))
   const missing = [...requested].filter(id => !selectedIds.has(id))

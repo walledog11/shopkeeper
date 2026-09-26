@@ -1,0 +1,121 @@
+{
+  "id": "continuity-return-after-other-order-status",
+  "description": "A customer starts a return on one order, breaks off to ask whether a different order has shipped, then says 'go ahead with the lamp one'. The agent should open the return for the lamp on the first order and not act on the second.",
+  "whyModelNeeded": "The model must resume the unfinished task across an interleaved question about another order and keep the two orders apart.",
+  "holdout": "C06",
+  "setup": {
+    "classifierIntents": {
+      "mutative_request": true
+    },
+    "channelType": "email",
+    "tag": "Returns",
+    "customerName": "Priya Shah",
+    "customerPlatformId": "priya@example.com",
+    "shopifyCustomerId": "10000001601",
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
+    "messages": [
+      {
+        "senderType": "customer",
+        "contentText": "Hi, I'd like to return the brass lamp from order #1601. The finish is a lot darker than in the photos."
+      },
+      {
+        "senderType": "agent",
+        "contentText": "Happy to help with that. Before I set it up, do you want to return just the lamp, or the matching shade from that order too?"
+      },
+      {
+        "senderType": "customer",
+        "contentText": "Just the lamp. Also, unrelated, has my other order #1607 shipped yet? It's a birthday present."
+      },
+      {
+        "senderType": "agent",
+        "contentText": "#1607 shipped yesterday with UPS and should arrive on Thursday."
+      },
+      {
+        "senderType": "customer",
+        "contentText": "Perfect, thank you! OK, go ahead with the lamp one."
+      }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000001607",
+        "name": "#1607",
+        "created_at": "2026-09-21T10:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": "fulfilled",
+        "total_price": "42.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_1607",
+            "title": "Scented Candle Gift Set",
+            "quantity": 1,
+            "variant_id": "variant_1607",
+            "fulfillable_quantity": 0,
+            "current_quantity": 1,
+            "fulfillment_status": "fulfilled"
+          }
+        ]
+      },
+      {
+        "id": "9000001601",
+        "name": "#1601",
+        "created_at": "2026-09-09T10:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": "fulfilled",
+        "total_price": "124.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_1601a",
+            "title": "Brass Table Lamp",
+            "quantity": 1,
+            "variant_id": "variant_1601a",
+            "fulfillable_quantity": 0,
+            "current_quantity": 1,
+            "fulfillment_status": "fulfilled"
+          },
+          {
+            "line_item_id": "lineitem_1601b",
+            "title": "Linen Lamp Shade",
+            "quantity": 1,
+            "variant_id": "variant_1601b",
+            "fulfillable_quantity": 0,
+            "current_quantity": 1,
+            "fulfillment_status": "fulfilled"
+          }
+        ]
+      }
+    ],
+    "simulateToolResults": [
+      {
+        "tool": "send_reply",
+        "result": "Reply sent to customer via email."
+      }
+    ]
+  },
+  "instruction": "Continue the customer's latest request using the conversation context.",
+  "expectedPlan": {
+    "mustCallTools": [
+      "create_return"
+    ],
+    "mustCallToolsWithInput": [
+      {
+        "tool": "create_return",
+        "inputEquals": {
+          "order_id": "9000001601",
+          "variant_id": "variant_1601a"
+        }
+      }
+    ],
+    "mustNotCallTools": [
+      "create_refund",
+      "cancel_order",
+      "edit_shopify_order",
+      "create_exchange"
+    ]
+  },
+  "suite": "core"
+}

@@ -1,0 +1,89 @@
+{
+  "id": "continuity-two-black-variants",
+  "description": "The agent offered two black options for an exchange, and the customer answers 'the black one'. Both offered variants are black, so the agent must ask which one rather than pick.",
+  "whyModelNeeded": "The model must notice that a natural reference matches two consequential options and ask one focused question instead of choosing.",
+  "holdout": "C05",
+  "setup": {
+    "classifierIntents": {
+      "mutative_request": true
+    },
+    "channelType": "email",
+    "tag": "Exchange",
+    "customerName": "Sam Okafor",
+    "customerPlatformId": "sam@example.com",
+    "shopifyCustomerId": "10000006001",
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
+    "messages": [
+      {
+        "senderType": "customer",
+        "contentText": "The sand overshirt in order #6001 is too small. Could I swap it for a large?"
+      },
+      {
+        "senderType": "agent",
+        "contentText": "Of course! The large is available in Jet Black (variant 96002) or Washed Black (variant 96003). Olive is sold out. Which would you like?"
+      },
+      {
+        "senderType": "customer",
+        "contentText": "The black one's perfect, thanks!"
+      }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000006001",
+        "name": "#6001",
+        "created_at": "2026-09-12T10:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": "fulfilled",
+        "total_price": "82.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_6001",
+            "title": "Overshirt / Sand / Medium",
+            "quantity": 1,
+            "variant_id": "96001",
+            "fulfillable_quantity": 0,
+            "current_quantity": 1,
+            "fulfillment_status": "fulfilled"
+          }
+        ]
+      }
+    ],
+    "simulateToolResults": [
+      {
+        "tool": "search_shopify_products",
+        "result": "Overshirt / Large: Jet Black — variant 96002 — in stock (4). Washed Black — variant 96003 — in stock (7). Olive — variant 96004 — sold out."
+      },
+      {
+        "tool": "send_reply",
+        "result": "Reply sent to customer via email."
+      }
+    ]
+  },
+  "instruction": "Continue the customer's latest request using the conversation context.",
+  "expectedPlan": {
+    "mustCallTools": [
+      "send_reply"
+    ],
+    "mustNotCallTools": [
+      "create_exchange",
+      "create_return",
+      "create_refund",
+      "cancel_order",
+      "edit_shopify_order"
+    ]
+  },
+  "expectedRubric": {
+    "checks": [
+      {
+        "id": "asks_which_black",
+        "gate": true,
+        "description": "The reply briefly asks whether the customer wants Jet Black or Washed Black. It does not claim an exchange was started or pick one of them."
+      }
+    ]
+  },
+  "suite": "core"
+}
