@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useImperativeHandle, useRef, type ReactNode, type Ref } from "react"
-import { animate, m, useMotionValue, useTransform } from "motion/react"
+import { animate, m, useDragControls, useMotionValue, useTransform } from "motion/react"
 import {
   arcRotate,
   arcY,
@@ -10,6 +10,10 @@ import {
   SWIPE_DISTANCE,
   SWIPE_VELOCITY,
 } from "./needs-you-motion"
+
+// A touch that lands on a control belongs to the control: typing, toggling, or
+// tapping a button must never start a swipe.
+const NO_DRAG_TARGET = "input, textarea, select, button, a, label, [role=switch], [contenteditable]"
 
 export type SwipeCardHandle = {
   flyOff: (sign: -1 | 1) => Promise<boolean>
@@ -37,6 +41,7 @@ export function SwipeCard({
   const dragRotate = useTransform(dragX, arcRotate)
   const opacity = useMotionValue(1)
   const isFlying = useRef(false)
+  const dragControls = useDragControls()
 
   const highlightPosition = useTransform(
     dragX,
@@ -78,6 +83,13 @@ export function SwipeCard({
   return (
     <m.div
       drag={draggable ? "x" : false}
+      dragControls={dragControls}
+      dragListener={false}
+      onPointerDown={event => {
+        if (!draggable) return
+        if (event.target instanceof Element && event.target.closest(NO_DRAG_TARGET)) return
+        dragControls.start(event)
+      }}
       style={{ x: dragX, y: dragY, rotate: dragRotate, opacity, transformOrigin: "50% 100%" }}
       dragSnapToOrigin={false}
       dragElastic={0.5}

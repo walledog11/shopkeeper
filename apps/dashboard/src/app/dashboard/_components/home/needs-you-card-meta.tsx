@@ -317,13 +317,16 @@ function NeedsYouTicketMetaPill({ item }: { item: HomeNeedsAttentionItem }) {
     </MetaPill>
   ) : null
 
+  // The headline is the merchant's context for the card, so on mobile it gets
+  // its own row and wraps instead of truncating.
+  const mobileHeadlinePill = headline ? (
+    <MetaPill className="h-auto min-h-10 w-full px-3 py-2">
+      <span className="text-sm font-medium leading-snug text-[#6b5d4f]">{headline}</span>
+    </MetaPill>
+  ) : null
+
   const topicPill = (
-    <MetaPill className={cn(
-      "shrink-0 px-3 sm:max-w-none",
-      topicPillClassName,
-      !headline && "min-w-0 flex-1 sm:flex-none sm:shrink-0",
-    )}
-    >
+    <MetaPill className={cn("min-w-0 flex-1 px-3 sm:max-w-none sm:flex-none sm:shrink-0", topicPillClassName)}>
       <span className="truncate text-xs font-bold tabular-nums leading-none sm:max-w-[5.5rem]">
         {topicLabel}
       </span>
@@ -356,8 +359,8 @@ function NeedsYouTicketMetaPill({ item }: { item: HomeNeedsAttentionItem }) {
           {channelPill}
           {customerPill}
         </div>
+        {mobileHeadlinePill}
         <div className="flex min-w-0 items-center gap-2">
-          {headlinePill}
           {topicPill}
           {datePill}
         </div>

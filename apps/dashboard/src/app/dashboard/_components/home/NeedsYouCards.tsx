@@ -35,11 +35,15 @@ export function NeedsYouCard({
   item,
   onResolved,
   onAnswered,
+  answerDraft,
+  onAnswerDraftChange,
 }: {
   item: HomeNeedsAttentionItem
   /** The ticket left the queue — approved and sent, or closed without a reply. */
   onResolved: () => void
   onAnswered: (result?: { saveToKb: boolean }) => void
+  answerDraft?: string
+  onAnswerDraftChange?: (answer: string) => void
 }) {
   const actions = useNeedsYouActions(item, { onApproved: onResolved, onClosed: onResolved })
   const busy = actions.pending !== null
@@ -78,7 +82,13 @@ export function NeedsYouCard({
   } else if (item.kind === "needs_merchant_input") {
     content = (
       <div className="mt-1">
-        <MerchantAnswerForm threadId={item.threadId} question={item.question} onAnswered={onAnswered} />
+        <MerchantAnswerForm
+          threadId={item.threadId}
+          question={item.question}
+          onAnswered={onAnswered}
+          initialAnswer={answerDraft}
+          onAnswerChange={onAnswerDraftChange}
+        />
       </div>
     )
   } else if (item.isEscalationOnly) {
