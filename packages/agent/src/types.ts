@@ -143,6 +143,7 @@ export type ProducedPlanSignalCode =
   | 'kb_no_match'
   | 'mutative_intent_no_action'
   | 'circular_channel_deflection'
+  | 'approved_message_withheld'
   | PlanValidationIssueCode
 
 export type PlanValidationIssueCode =

@@ -315,6 +315,7 @@ describe("approved exact drafts at execution", () => {
       tool: "send_reply",
       status: "error",
       result: expect.stringContaining("refund_amount placeholder"),
+      withheld: "placeholder_unfilled",
     });
   });
 
@@ -323,6 +324,7 @@ describe("approved exact drafts at execution", () => {
 
     expect(result.sendReply).not.toHaveBeenCalled();
     expect(result.actionsPerformed.at(-1)?.result).toContain("an approved action did not succeed");
+    expect(result.actionsPerformed.at(-1)?.withheld).toBe("approved_action_failed");
   });
 
   it("does not send ahead of an approved write that has not run", async () => {
@@ -338,5 +340,8 @@ describe("approved exact drafts at execution", () => {
 
     expect(result.sendReply).not.toHaveBeenCalled();
     expect(result.actionsPerformed.at(-1)?.result).toContain("not the message the merchant approved");
+    // A message that differs from the approval is refused, not withheld: nothing
+    // about the outcome made it untrue, so it owes the customer no follow-up.
+    expect(result.actionsPerformed.at(-1)?.withheld).toBeUndefined();
   });
 });

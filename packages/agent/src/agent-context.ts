@@ -241,7 +241,16 @@ export interface ActionEntry {
   category?: string;
   /** Validated provider/runtime observation. New writes never derive it from result text. */
   receipt?: import("./tools/result.js").ReceiptV1;
+  /** Set when the executor held back an approved message that would not be true. */
+  withheld?: ApprovedMessageWithheld;
 }
+
+/**
+ * Why an approved customer message was not sent: an approved write did not
+ * succeed, or a placeholder had no successful receipt to fill it. A provider
+ * that failed to deliver a true message is a delivery failure, not this.
+ */
+export type ApprovedMessageWithheld = "approved_action_failed" | "placeholder_unfilled";
 
 export interface AgentResult {
   summary: string;

@@ -28,7 +28,8 @@ import { buildPlanSteps } from "./planner-steps.js";
 import { hashInstruction, hashPlan } from "./agent-actions.js";
 import { claimCurrentPlanExecution } from "./execution-ledger.js";
 import {
-  acceptCustomerAgentRequest, claimAgentTask, settleAgentTaskClaim,
+  acceptCustomerAgentRequest, claimAgentTask, claimWithheldMessageFollowUp, findQueuedAgentTasks,
+  finishWithheldMessageFollowUp, settleAgentTaskClaim, withheldMessageFollowUp,
 } from "./task-ledger.js";
 import { updateThreadStatusMutation } from "./thread-io/db-mutations.js";
 import { authorizeAgentProposal } from "./task-approval.js";
@@ -886,6 +887,123 @@ describe("executeCurrentCachedHomePlan execution", () => {
       .toMatchObject({ status: "completed", failureCode: null });
     expect(await db.agentProposal.findUniqueOrThrow({ where: { id: support.cache.planId! } }))
       .toMatchObject({ status: "completed" });
+  });
+
+  // Approval and communication contract: when an action fails or a binding is
+  // unavailable, the success draft is not sent and a new proposal is composed.
+  // The task is queued for that one attempt instead of ending untold.
+  describe("a withheld approved message", () => {
+    const approve = (
+      support: Awaited<ReturnType<typeof seedSupportCardParkedOnTask>>,
+      actionsPerformed: AgentResult["actionsPerformed"],
+    ) => executeCurrentCachedHomePlan({
+      orgId: support.org.id,
+      threadId: support.thread.id,
+      settings: support.settings,
+      executionIntent: "merchant_approved",
+      failureRoute: "test",
+      approver: { clerkUserId: support.member.clerkUserId, displayName: null },
+    }, makeDeps({ runAgent: vi.fn(async () => ({ summary: "ran", actionsPerformed })) }));
+
+    const executionFor = (support: Awaited<ReturnType<typeof seedSupportCardParkedOnTask>>) => (
+      db.planExecution.findUniqueOrThrow({
+        where: { organizationId_planId: { organizationId: support.org.id, planId: support.cache.planId! } },
+      })
+    );
+
+    it("queues a follow-up when a placeholder had no receipt value", async () => {
+      const support = await seedSupportCardParkedOnTask(2);
+      await approve(support, [
+        { tool: "add_shopify_customer_note", result: "Noted", status: "success" },
+        { tool: "create_refund", result: "Refunded", status: "success" },
+        {
+          tool: "send_reply", result: "Error: skipped send_reply", status: "error",
+          withheld: "placeholder_unfilled",
+        },
+      ]);
+
+      const execution = await executionFor(support);
+      expect(execution.status).toBe("committed");
+      const task = await db.agentTask.findUniqueOrThrow({ where: { id: support.task.id } });
+      expect(task).toMatchObject({
+        status: "queued", revision: support.task.revision + 1,
+        activeProposalId: null, failureCode: null, completedAt: null,
+      });
+      expect(withheldMessageFollowUp(task.checkpoint)).toEqual({
+        executionId: execution.id, reason: "placeholder_unfilled",
+      });
+      // The refund committed, so its proposal is done whatever the message did.
+      expect(await db.agentProposal.findUniqueOrThrow({ where: { id: support.cache.planId! } }))
+        .toMatchObject({ status: "completed" });
+      expect((await findQueuedAgentTasks()).map((queued) => queued.id)).toContain(task.id);
+
+      const claimed = await claimWithheldMessageFollowUp({
+        organizationId: support.org.id, taskId: task.id, expectedRevision: task.revision,
+      });
+      expect(claimed?.followUp).toEqual({ executionId: execution.id, reason: "placeholder_unfilled" });
+      expect(await finishWithheldMessageFollowUp({
+        organizationId: support.org.id, taskId: task.id, expectedRevision: task.revision,
+        claimToken: claimed!.claimToken, outcome: "completed",
+      })).toBe(true);
+      expect(await db.agentTask.findUniqueOrThrow({ where: { id: task.id } }))
+        .toMatchObject({ status: "completed", claimToken: null, failureCode: null });
+    });
+
+    it("queues a follow-up when an approved write failed and the message was never attempted", async () => {
+      const support = await seedSupportCardParkedOnTask(2);
+      await approve(support, [
+        { tool: "add_shopify_customer_note", result: "Noted", status: "success" },
+        { tool: "create_refund", result: "Error: refund declined", status: "error" },
+      ]);
+
+      const execution = await executionFor(support);
+      expect(execution.status).toBe("failed");
+      const task = await db.agentTask.findUniqueOrThrow({ where: { id: support.task.id } });
+      expect(task.status).toBe("queued");
+      expect(withheldMessageFollowUp(task.checkpoint)).toEqual({
+        executionId: execution.id, reason: "approved_action_failed",
+      });
+
+      const claimed = await claimWithheldMessageFollowUp({
+        organizationId: support.org.id, taskId: task.id, expectedRevision: task.revision,
+      });
+      expect(await finishWithheldMessageFollowUp({
+        organizationId: support.org.id, taskId: task.id, expectedRevision: task.revision,
+        claimToken: claimed!.claimToken, outcome: "failed",
+      })).toBe(true);
+      // Not `reconciling`: the note settled and the refund definitely failed.
+      expect(await db.agentTask.findUniqueOrThrow({ where: { id: task.id } }))
+        .toMatchObject({ status: "failed", failureCode: "approved_execution_failed" });
+    });
+
+    it("reconciles an unknown outcome instead of following it up", async () => {
+      const support = await seedSupportCardParkedOnTask(2);
+      await approve(support, [
+        { tool: "create_refund", result: "Unknown: timed out", status: "unknown" },
+      ]);
+
+      const task = await db.agentTask.findUniqueOrThrow({ where: { id: support.task.id } });
+      expect(task.status).toBe("reconciling");
+      expect(withheldMessageFollowUp(task.checkpoint)).toBeNull();
+    });
+
+    it("does not claim a follow-up beside a write that has not settled", async () => {
+      const support = await seedSupportCardParkedOnTask(2);
+      await approve(support, [
+        { tool: "create_refund", result: "Error: refund declined", status: "error" },
+      ]);
+      const task = await db.agentTask.findUniqueOrThrow({ where: { id: support.task.id } });
+      await db.agentAction.create({ data: {
+        organizationId: support.org.id, threadId: support.thread.id, taskId: task.id,
+        turnId: support.request.id, tool: "add_shopify_customer_note", category: "action", input: {},
+        status: "unknown", mode: "human_approved", dispatchState: "submitted",
+        submittedAt: new Date(), operationId: randomUUID(), actionIndex: 0,
+      } });
+
+      expect(await claimWithheldMessageFollowUp({
+        organizationId: support.org.id, taskId: task.id, expectedRevision: task.revision,
+      })).toBeNull();
+    });
   });
 
   it("keeps a v1 durable approval pinned to cached-plan interpretation", async () => {

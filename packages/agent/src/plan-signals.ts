@@ -26,6 +26,8 @@ export const PLAN_SIGNAL_MESSAGES: Record<ProducedPlanSignalCode, string> = {
     "Customer requested a refund/cancel but no action was planned — review before sending.",
   circular_channel_deflection:
     "Draft reply deflected the customer to a channel the agent already manages — review before sending.",
+  approved_message_withheld:
+    "The message you approved was not sent, because what it said did not happen. This draft tells the customer what actually happened.",
   invalid_tool_input:
     "The draft contains a step with invalid or incomplete inputs and cannot be approved as written.",
   duplicate_tool_call_id:

@@ -18,6 +18,7 @@ import {
   isUnknownPlanExecution,
   ledgerStatusForPlanOutcome,
   planExecutionOutcomeForResult,
+  withheldApprovedMessage,
 } from "./execution-outcome.js";
 import {
   attemptFailureReplanAfterExecution,
@@ -747,6 +748,11 @@ export async function executeCurrentCachedHomePlan(params: {
         claimToken,
         status: terminalExecutionStatus,
         error: findFailedToolResult(result)?.result ?? null,
+        // Only a durable proposal that bound an exact draft owes the customer a
+        // follow-up; a legacy plan keeps its own bounded replan below.
+        ...(proposalBacked && approvedCommunication?.mode === "exact_draft"
+          ? { withheldMessage: withheldApprovedMessage(result.actionsPerformed) }
+          : {}),
       });
     }
   } catch (error) {

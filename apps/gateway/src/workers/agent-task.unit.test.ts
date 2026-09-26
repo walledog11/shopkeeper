@@ -18,6 +18,8 @@ const {
 }));
 
 vi.mock('@shopkeeper/agent/task-ledger', () => ({
+  // No task here is a withheld-message follow-up; that path has its own test.
+  claimWithheldMessageFollowUp: vi.fn(async () => null),
   claimAgentTask: claim,
   renewAgentTaskLease: renew,
   settleAgentTaskClaim: settle,
@@ -37,6 +39,9 @@ vi.mock('../operator-context.js', () => ({
     calls.map(({ id, name, input }) => ({ id, name, input })),
 }));
 vi.mock('../message-handlers/operator/operator-free-form-turn.js', () => ({ runOperatorFreeFormTurn: runTurn }));
+vi.mock('../message-handlers/support-plan/withheld-message-follow-up.js', () => ({
+  runWithheldMessageFollowUp: vi.fn(),
+}));
 vi.mock('../logger.js', () => ({ default: { error: vi.fn(), info: vi.fn(), warn: vi.fn() } }));
 
 import { processAgentTaskJob } from './agent-task.js';

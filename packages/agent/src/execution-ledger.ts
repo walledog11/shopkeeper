@@ -6,6 +6,8 @@ import { hashInstruction, hashPlan } from "./agent-actions.js";
 import { ledgerStatusForPlanOutcome, planExecutionOutcomeForActions } from "./execution-outcome.js";
 import { readAgentPlanCache } from "./plan-cache.js";
 import { SENDER_TYPE } from "./thread-constants.js";
+import { withheldMessageFollowUpCheckpoint } from "./task-ledger.js";
+import type { ApprovedMessageWithheld } from "./agent-context.js";
 
 export interface PlanExecutionIdentity {
   orgId: string;
@@ -380,6 +382,8 @@ export async function completePlanExecution(params: {
   claimToken: string;
   status: TerminalPlanExecutionStatus;
   error?: string | null;
+  /** Why the approved message was withheld, when the task owes the customer a follow-up. */
+  withheldMessage?: ApprovedMessageWithheld | null;
 }): Promise<PlanExecution> {
   return db.$transaction(async (tx) => {
     const now = new Date();
@@ -399,7 +403,7 @@ export async function completePlanExecution(params: {
       throw new ConflictError("Plan execution claim is no longer active.");
     }
     const execution = await tx.planExecution.findUniqueOrThrow({ where: { id: params.executionId } });
-    await settleLinkedTask(tx, execution, params.status, now);
+    await settleLinkedTask(tx, execution, params.status, now, params.withheldMessage ?? null);
     return execution;
   });
 }
@@ -408,11 +412,57 @@ type ExecutionTaskTx = Pick<typeof db, "agentTask" | "agentProposal">;
 
 async function settleLinkedTask(
   tx: ExecutionTaskTx,
-  execution: Pick<PlanExecution, "organizationId" | "taskId" | "proposalId">,
+  execution: Pick<PlanExecution, "id" | "organizationId" | "taskId" | "proposalId">,
   status: TerminalPlanExecutionStatus,
   now: Date,
+  withheldMessage: ApprovedMessageWithheld | null,
 ): Promise<void> {
   if (!execution.taskId || !execution.proposalId) return;
+  // The approved message would have been untrue, so it was not sent and the
+  // customer has not been told. Rather than end here, the task is queued for one
+  // attempt that drafts what actually happened for the merchant to approve. The
+  // revision increment is the supersede: nothing parked at the old revision is
+  // current. An unknown outcome is never followed up; it reconciles.
+  if (withheldMessage && status !== "unknown") {
+    const waiting = await tx.agentTask.findFirst({
+      where: {
+        id: execution.taskId,
+        organizationId: execution.organizationId,
+        status: "waiting_approval",
+        activeProposalId: execution.proposalId,
+      },
+      select: { checkpoint: true },
+    });
+    if (waiting) {
+      const queued = await tx.agentTask.updateMany({
+        where: {
+          id: execution.taskId,
+          organizationId: execution.organizationId,
+          status: "waiting_approval",
+          activeProposalId: execution.proposalId,
+        },
+        data: {
+          status: "queued",
+          revision: { increment: 1 },
+          activeProposalId: null,
+          pendingQuestionId: null,
+          pendingQuestion: null,
+          pendingAnswererKind: null,
+          pendingAnswererKey: null,
+          failureCode: null,
+          lastProgressAt: now,
+          checkpoint: withheldMessageFollowUpCheckpoint(waiting.checkpoint, {
+            executionId: execution.id,
+            reason: withheldMessage,
+          }),
+        },
+      });
+      if (queued.count === 1) {
+        if (status === "committed") await completeApprovedProposal(tx, execution, now);
+        return;
+      }
+    }
+  }
   const taskStatus = status === "committed"
     ? "completed" as const
     : status === "unknown" ? "reconciling" as const : "failed" as const;
@@ -458,14 +508,20 @@ async function settleLinkedTask(
     });
   }
   if (updated.count !== 1) return;
-  if (status === "committed") {
-    const proposal = await tx.agentProposal.updateMany({
-      where: { id: execution.proposalId, taskId: execution.taskId, status: "approved" },
-      data: { status: "completed", decidedAt: now },
-    });
-    if (proposal.count !== 1) {
-      throw new ConflictError("The approved proposal changed before execution could be settled.");
-    }
+  if (status === "committed") await completeApprovedProposal(tx, execution, now);
+}
+
+async function completeApprovedProposal(
+  tx: ExecutionTaskTx,
+  execution: { taskId: string | null; proposalId: string | null },
+  now: Date,
+): Promise<void> {
+  const proposal = await tx.agentProposal.updateMany({
+    where: { id: execution.proposalId!, taskId: execution.taskId!, status: "approved" },
+    data: { status: "completed", decidedAt: now },
+  });
+  if (proposal.count !== 1) {
+    throw new ConflictError("The approved proposal changed before execution could be settled.");
   }
 }
 
@@ -503,7 +559,7 @@ export async function reconcileStaleClaimedPlanExecutions(
       // The execution must become reviewable even if its task was independently
       // cancelled or otherwise settled. In the normal waiting state this still
       // moves the linked task to reconciling in the same transaction.
-      await settleLinkedTask(tx, execution, "unknown", now);
+      await settleLinkedTask(tx, execution, "unknown", now, null);
     }
     return updatedCount;
   });

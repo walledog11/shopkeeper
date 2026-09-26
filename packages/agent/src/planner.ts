@@ -77,6 +77,11 @@ export interface PlanAgentOptions {
   exactDraftProposal?: boolean;
   /** Persisted task runtime selects bounded discovery for durable attempts. */
   runtimeVersion?: number;
+  /**
+   * Set by the attempt that follows an approved message the executor withheld.
+   * It may only read and draft, and its plan always goes to the merchant.
+   */
+  withheldMessageFollowUp?: boolean;
 }
 
 const KB_MISS_REPLY_REFUSAL =
@@ -193,6 +198,7 @@ export async function planAgent(
     merchantInstruction: options?.merchantInstruction === true,
     capabilityDiscovery: usesCapabilityDiscovery(options?.runtimeVersion),
     ambiguousCustomerFollowUp: isAmbiguousCustomerFollowUp(ctx),
+    withheldMessageFollowUp: options?.withheldMessageFollowUp === true,
   });
   // Read off the selection rather than the flag: these two are what the model
   // was actually offered, and only one of them can be present.
@@ -364,6 +370,9 @@ export async function planAgent(
   rawToolCalls = await bindProviderApprovalFacts(ctx, rawToolCalls, exactDraftProposal);
 
   const signalCodes: ProducedPlanSignalCode[] = [];
+  // Blocking, so `decideAutonomy` sends this draft to the merchant: a customer
+  // message about a failed or unfinished approved action is never auto-sent.
+  if (options?.withheldMessageFollowUp) signalCodes.push("approved_message_withheld");
   appendInitialPlanningSignals({ ctx, operatorMode, codes: signalCodes });
   appendPlanningReadSignals({
     codes: signalCodes,

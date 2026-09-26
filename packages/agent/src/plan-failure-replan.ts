@@ -1,5 +1,5 @@
 import { db } from "@shopkeeper/db";
-import type { ActionEntry, AgentResult } from "./agent-context.js";
+import type { ActionEntry, AgentResult, ApprovedMessageWithheld } from "./agent-context.js";
 import { hashPlan } from "./agent-actions.js";
 import { allowsAutomaticExecution, decideAutonomy, type AutonomyVerdict } from "./autonomy.js";
 import type { ExecuteAgentTurnDeps } from "./turn.js";
@@ -119,6 +119,38 @@ export function buildFailureReplanPlanningInstruction(input: {
     `The step "${input.failureTool}" failed with: ${input.failureReason}`,
     "",
     "Draft a new plan to finish the remaining work. Do not call tools for steps already completed above.",
+  ].join("\n");
+}
+
+const WITHHELD_REASON_TEXT: Record<ApprovedMessageWithheld, string> = {
+  approved_action_failed: "an approved step did not succeed, so the message would not have been true",
+  placeholder_unfilled: "a value it named was not in the result of the approved step that should have supplied it",
+};
+
+/**
+ * The instruction for the attempt that follows a withheld approved message:
+ * what the approved steps did, as recorded, and why the message did not go out.
+ * The model drafts from it; nothing downstream reads this text.
+ */
+export function buildWithheldMessageFollowUpInstruction(input: {
+  objective: string;
+  reason: ApprovedMessageWithheld;
+  actions: readonly { tool: string; status: string; output: string | null }[];
+}): string {
+  const lines = input.actions.length > 0
+    ? input.actions.map((action) => (
+      `- ${action.tool} (${action.status})${action.output ? `: ${action.output}` : ""}`
+    )).join("\n")
+    : "- none";
+  return [
+    input.objective,
+    "",
+    `The merchant approved steps and a message to the customer. The message was not sent: ${WITHHELD_REASON_TEXT[input.reason]}.`,
+    "",
+    "What the approved steps did:",
+    lines,
+    "",
+    "Draft one message to the customer that tells them what actually happened and what happens next. Claim nothing the steps above do not show succeeded. Do not change the store; the merchant decides whether to try again.",
   ].join("\n");
 }
 

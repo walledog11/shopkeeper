@@ -6,7 +6,8 @@ import {
   resolveProposalSuspensionMode,
 } from "./planner.js";
 import type { AgentContext } from "./agent-context.js";
-import { AGENT_SETTINGS_DEFAULTS } from "./settings.js";
+import { AGENT_SETTINGS_DEFAULTS, resolveAgentSettings } from "./settings.js";
+import { decideAutonomy } from "./autonomy.js";
 import { emptyIntents, emptyRequestFacts, type ClassifierIntents } from "./classifier-signals.js";
 
 const {
@@ -723,6 +724,31 @@ describe("planAgent routing", () => {
     expect(plan.routing).toBeUndefined();
     expect(plan.routingEvidence?.classifierState).toBe("aligned");
     expect(completeLogPayload(injectedLogger)).toMatchObject({ routingDecision: "auto_execute" });
+  });
+
+  // The attempt after an approved message was withheld: the model is offered no
+  // write, and the reply it drafts is held for the merchant even where a
+  // reply-only plan would otherwise send itself.
+  it("drafts a withheld-message follow-up for review with no write offered", async () => {
+    installAgentLogger(makeLogger());
+    mockCreate.mockResolvedValueOnce(singleToolUse("send_reply", { text: "We couldn't complete your refund yet." }));
+
+    const plan = await planAgent(
+      makeCtx({ classifierSignals: classifierSignalsFor({ mutative_request: true }) }),
+      "Refund the order. The message was not sent.",
+      resolveAgentSettings({ autonomyTier: "trusted", autoExecuteMode: "live" }),
+      { exactDraftProposal: true, withheldMessageFollowUp: true },
+    );
+
+    const offered = toolNamesForCall(0);
+    expect(offered).toContain("send_reply");
+    expect(offered).not.toContain("create_refund");
+    expect(offered).not.toContain("request_wider_tool_set");
+    expect(plan.signals).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "approved_message_withheld", severity: "blocking" }),
+    ]));
+    expect(decideAutonomy(plan, resolveAgentSettings({ autonomyTier: "trusted", autoExecuteMode: "live" })))
+      .toMatchObject({ kind: "needs_review", approvalAllowed: true });
   });
 
   it("escalates a compensation request with no safe action", async () => {

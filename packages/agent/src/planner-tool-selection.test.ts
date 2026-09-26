@@ -59,6 +59,25 @@ describe("selectPlanningTools", () => {
     expect(names(selection)).toEqual(["send_reply"]);
   });
 
+  // Whatever else is true of the turn — a merchant instruction, a mutative
+  // classification, the discovery runtime — the follow-up to a withheld message
+  // is offered no write, no discovery, and no widening.
+  it("offers a withheld-message follow-up only order reads, a reply and escalation", () => {
+    const selection = select({
+      classifierSignals: signals({ mutative_request: true }),
+      merchantInstruction: true,
+      capabilityDiscovery: true,
+      withheldMessageFollowUp: true,
+    });
+
+    expect(selection).toMatchObject({ reason: "withheld_message_follow_up", narrowed: true });
+    expect(names(selection).sort()).toEqual([
+      "escalate_to_human", "find_customer", "get_order_by_name", "get_order_fulfillment_status",
+      "get_order_tracking", "get_shopify_orders", "send_reply",
+    ]);
+    expect(selection.tools.every((tool) => TOOL_DEFINITIONS[tool.name]?.category !== "action")).toBe(true);
+  });
+
   it.each([
     ["operator", { operatorMode: true }],
     ["storefront_policy", { storefrontMode: true }],
