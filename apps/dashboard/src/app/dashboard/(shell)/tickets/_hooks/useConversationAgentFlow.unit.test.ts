@@ -250,6 +250,7 @@ describe("useConversationAgentFlow execution state", () => {
       ok: true,
       executionId: "execution-2",
       outcome: "committed",
+      replyNotSent: false,
       turn: {
         instruction: secondPlan.instruction,
         actions: [{ tool: "create_refund", result: "Refunded", status: "success" }],
@@ -269,5 +270,35 @@ describe("useConversationAgentFlow execution state", () => {
       await new Promise(resolve => setTimeout(resolve, 550))
     })
     expect(current.value?.pendingPlan).toBeNull()
+
+    // The write committed but the reply did not go out: the card says so and
+    // stays until the merchant dismisses it.
+    const thirdTicket = { id: "ticket-3" } as Ticket
+    const thirdPlan: AgentPlan = { ...plan, planId: "plan-3" }
+    requestMocks.executeApprovedAgentPlan.mockResolvedValue({
+      ok: true,
+      executionId: "execution-3",
+      outcome: "committed",
+      replyNotSent: true,
+      turn: {
+        instruction: thirdPlan.instruction,
+        actions: [
+          { tool: "create_refund", result: "Refunded", status: "success" },
+          { tool: "send_reply", result: "Error: skipped send_reply", status: "error" },
+        ],
+        summary: "Refunded; the reply was not sent.",
+        error: null,
+      },
+    } satisfies AgentRequestResult)
+    renderHarness(thirdTicket, thirdPlan)
+
+    await act(async () => {
+      await current.value?.handlePlanApprove(thirdPlan.rawToolCalls)
+    })
+    expect(current.value?.planExecutionOutcome).toBe("reply_not_sent")
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 550))
+    })
+    expect(current.value?.pendingPlan).toEqual(thirdPlan)
   })
 })

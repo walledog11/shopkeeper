@@ -1002,9 +1002,9 @@ describe('durable order-status host path', () => {
         .toBe('reconciling');
       return;
     }
-    expect(executed.execution.status).toBe(
-      delivery === 'sent' ? 'committed' : delivery === 'failed' ? 'partial' : 'unknown',
-    );
+    // The cancellation is the effect; a failed reply is delivery and is recorded
+    // on its own row, so it does not fail the execution or the task.
+    expect(executed.execution.status).toBe(delivery === 'unknown' ? 'unknown' : 'committed');
     expect(executed.result.actionsPerformed.map(action => action.tool)).toEqual([
       'cancel_order', 'send_reply',
     ]);
@@ -1047,7 +1047,7 @@ describe('durable order-status host path', () => {
       receipt: { outcome: delivery === 'sent' ? 'succeeded' : delivery },
     });
     expect((await db.agentTask.findUniqueOrThrow({ where: { id: cancellation.taskId! } })).status)
-      .toBe(delivery === 'sent' ? 'completed' : delivery === 'failed' ? 'failed' : 'reconciling');
+      .toBe(delivery === 'unknown' ? 'reconciling' : 'completed');
     },
   );
 

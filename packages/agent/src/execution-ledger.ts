@@ -3,6 +3,7 @@ import type { PlanExecution, PlanExecutionStatus } from "@prisma/client";
 import { Prisma, db } from "@shopkeeper/db";
 import { BadRequestError, ConflictError } from "./errors.js";
 import { hashInstruction, hashPlan } from "./agent-actions.js";
+import { ledgerStatusForPlanOutcome, planExecutionOutcomeForActions } from "./execution-outcome.js";
 import { readAgentPlanCache } from "./plan-cache.js";
 import { SENDER_TYPE } from "./thread-constants.js";
 
@@ -511,13 +512,12 @@ export async function reconcileStaleClaimedPlanExecutions(
 export async function finalizeReconciledPlanExecution(executionId: string): Promise<"committed" | "failed" | "unknown" | null> {
   return db.$transaction(async (tx) => {
     const actions = await tx.agentAction.findMany({
-      where: { executionId }, select: { status: true },
+      where: { executionId }, select: { tool: true, category: true, status: true },
     });
     if (actions.length === 0) return null;
-    if (actions.some((action) => action.status === "unknown")) return "unknown";
-    const status = actions.some((action) => (
-      action.status === "error" || action.status === "policy_block"
-    )) ? "failed" as const : "committed" as const;
+    const outcome = ledgerStatusForPlanOutcome(planExecutionOutcomeForActions(actions));
+    if (outcome === "unknown") return "unknown";
+    const status = outcome;
     const updated = await tx.planExecution.updateMany({
       where: { id: executionId, status: "unknown" },
       data: { status, lastError: status === "committed" ? null : "reconciled_with_failures" },

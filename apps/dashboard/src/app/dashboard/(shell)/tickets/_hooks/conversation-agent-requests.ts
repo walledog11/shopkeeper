@@ -1,5 +1,5 @@
 import { ApiRequestError, requestJson } from "@/lib/api/fetcher"
-import { planExecutionOutcomeForActions } from "@shopkeeper/agent/execution-outcome"
+import { committedWithUnsentReply, planExecutionOutcomeForActions } from "@shopkeeper/agent/execution-outcome"
 import type { ActionEntry } from "@/lib/agent/runner"
 import type { AgentPlan, AgentTurn, PlanExecutionOutcome, RawToolCall } from "@/types"
 
@@ -17,7 +17,7 @@ interface AgentActionPayload {
 }
 
 export type AgentRequestResult =
-  | { ok: true; executionId: string | null; outcome: "committed"; turn: Omit<AgentTurn, "id"> }
+  | { ok: true; executionId: string | null; outcome: "committed"; replyNotSent: boolean; turn: Omit<AgentTurn, "id"> }
   | { ok: false; executionId: string | null; outcome: Exclude<PlanExecutionOutcome, "committed">; turn: Omit<AgentTurn, "id"> }
 
 type AgentTurnRequestResult =
@@ -76,6 +76,7 @@ function executionResult(
       ok: true,
       executionId: id,
       outcome,
+      replyNotSent: committedWithUnsentReply(payload.actionsPerformed ?? []),
       turn: agentTurnFields(instruction, payload, null),
     }
   }

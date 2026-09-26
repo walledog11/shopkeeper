@@ -8,7 +8,7 @@ import {
 } from "@/app/dashboard/_components/home/needs-you-card-ui"
 import { needsYouSecondaryButtonClassName } from "@/app/dashboard/_components/home/needs-you-card-styles"
 import { cn } from "@/lib/ui/cn"
-import type { AgentPlan, PlanExecutionOutcome, RawToolCall } from "@/types"
+import type { AgentPlan, PlanCardOutcome, RawToolCall } from "@/types"
 import { ActionPlanBody } from "./ActionPlanBody"
 import { useActionPlanReviewState } from "./useActionPlanReviewState"
 
@@ -17,7 +17,7 @@ const PLAN_CARD_CLASS = "w-full overflow-hidden"
 interface Props {
   plan: AgentPlan
   customerName?: string | null
-  executionOutcome: PlanExecutionOutcome | null
+  executionOutcome: PlanCardOutcome | null
   isExecuting: boolean
   isRegenerating?: boolean
   layout?: "default" | "mobile-sticky"
@@ -108,7 +108,7 @@ interface ActionPlanControlsProps {
     enabledCount: number
     hasBlockingSignals: boolean
     inReviewFlow: boolean
-    executionOutcome: PlanExecutionOutcome | null
+    executionOutcome: PlanCardOutcome | null
     isRunning: boolean
     primaryNeedsCaution: boolean
     showEditTakeover: boolean
@@ -140,6 +140,10 @@ function ActionPlanControls({
         unknown: {
           label: "Outcome unconfirmed",
           detail: "The provider may have accepted an action. Check provider activity before trying again.",
+        },
+        reply_not_sent: {
+          label: "Done, but the reply wasn't sent",
+          detail: "The actions completed. The customer has not been told — review the activity and reply yourself.",
         },
       }[status.executionOutcome]
     : null

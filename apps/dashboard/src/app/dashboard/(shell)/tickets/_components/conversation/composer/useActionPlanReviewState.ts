@@ -5,7 +5,7 @@ import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import { planReplyText } from "@shopkeeper/agent/plan-preview"
 import { planSignalTiers } from "@shopkeeper/agent/plan-signals"
 import { TOOL_CATEGORIES } from "@shopkeeper/agent/tools"
-import type { AgentPlan, PlanExecutionOutcome, RawToolCall } from "@/types"
+import type { AgentPlan, PlanCardOutcome, RawToolCall } from "@/types"
 import { getPlanCollapsedPreview } from "./plan-step-display"
 import { planRecipientDisplay } from "./plan-recipient-display"
 
@@ -76,7 +76,7 @@ export function useActionPlanReviewState({
   plan,
 }: {
   customerName?: string | null
-  executionOutcome: PlanExecutionOutcome | null
+  executionOutcome: PlanCardOutcome | null
   isExecuting: boolean
   onApprove: (approvedToolCalls: RawToolCall[]) => Promise<void>
   plan: AgentPlan

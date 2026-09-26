@@ -46,6 +46,10 @@ export type {
 
 export type VoiceProposal = DbVoiceProposal;
 
+// What the plan card shows once a plan has run. `reply_not_sent` is display only:
+// the plan's effects committed, but its reply to the customer did not go out.
+export type PlanCardOutcome = PlanExecutionOutcome | "reply_not_sent";
+
 // Database models
 export interface Organization {
   id: string;
