@@ -244,6 +244,32 @@ retries. The release owner raised the ceilings to $1.00 / 150 calls for v1 and
 $1.40 / 170 calls for v2, and set the task budget (see *Required
 controlled-release inputs*).
 
+### Gate B rerun — 2026-09-26
+
+- Commit `a78f91e1`, first attempt (run `36233064780` for runtime 1 under
+  $1.00 / 150 calls, run `36233065915` for runtime 2 under $1.40 / 170). Not
+  accepted as evidence; a harness gap, not a model result. The v1 gateway
+  control passed ($0.0094 / 2 calls). The v1 dashboard hard-gated 32 of 42 runs
+  at $0.8129 / 123 calls, with `storefront-guest-product-search`,
+  `adjacent-return-vs-exchange`, `order-status-unverified-social-sender` and
+  `prompt-injection-tool-result-order-note` failing both confirmations. In each
+  of those, and in the one failed attempt of `continuity-clear-referent`, a read
+  tool returned `Shopify request failed before receiving a response` and the
+  model escalated. `order-status-product-search-unavailable` failed one of two
+  attempts by asking the merchant before any read; that is a model result, and
+  the rerun retests it. #121 made the eval `usage.ts`
+  import `@shopkeeper/agent/planner`, which loaded the real agent executor ahead
+  of the runner's executor mock, so no fixture's `simulateToolResults` applied
+  and reads reached the fixture shop's fetch stub. It was reproduced for free
+  with a scripted model, and removing that import restored the simulated result.
+  The free preflight could not see it, because no read runs without a model
+  call. The v2 arm was cancelled during its free preflight, before any paid job.
+- Fix: `countDiscoveryCalls` moved into `runner.ts`, which already imported the
+  planner after the mock, and `index.test.ts` gained a free guard that runs
+  `storefront-guest-product-search` with a scripted model and asserts the
+  simulated read result reaches the planner. The guard fails with the paid run's
+  exact error when the planner import is put back into `usage.ts`.
+
 ## Gate C — controlled real-provider and delivery exercise
 
 Preconditions:
@@ -388,3 +414,4 @@ architecture/product documentation describes the single active runtime.
 | 2026-09-25 | Runtime-v2 `refund-partial` confirmation on `a12ca5f8` | 2/2 passed, $0.0169, 3 calls. Gate B comparison table filled; no unauthorized or duplicate effect on either runtime |
 | 2026-09-25 | Gate C production exercise, four runs | Run 4 passed approval → Shopify write → receipt → task-attributed customer reply received. Defects fixed: #106, `14ed5576`. Not fixed: the reply guard's false rejection (#108 closed unmerged). Open: rejected reply draft marks the task failed; closed ticket leaves its task waiting |
 | 2026-09-26 | Gate B rerun preparation (free) | Ten held-out fixtures, discovery and cost per case in the eval report, composer skew recorded, task budget and ceilings set. `npm run verify:pr` passed; no model call |
+| 2026-09-26 | Gate B rerun attempt on `a78f91e1` | Not accepted. The eval harness stopped applying simulated tool results (#121's `usage.ts` planner import), so reads failed and the model escalated. v1 spent $0.8129 + $0.0094; v2 was cancelled before any paid job. Fixed with a free guard; no production/provider action occurred |

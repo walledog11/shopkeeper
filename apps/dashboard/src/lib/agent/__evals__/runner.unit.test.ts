@@ -7,6 +7,7 @@ import {
 import type { AgentPlan } from "@/types";
 import { collectPlanExpectationFailures } from "./assertions";
 import {
+  countDiscoveryCalls,
   formatGateSummary,
   formatTaskSummary,
   formatUsageDelta,
@@ -18,7 +19,6 @@ import {
   summarizeGates,
   summarizeResults,
 } from "./runner";
-import { countDiscoveryCalls } from "./usage";
 import type { EvalBaseline, EvalResult, Fixture, FixtureRunSummary, PhaseUsage } from "./types";
 
 describe("summarizeGates", () => {
