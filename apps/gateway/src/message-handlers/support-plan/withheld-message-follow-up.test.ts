@@ -12,10 +12,11 @@ import {
   stubDurableAgentRuntimeEnv,
 } from '../../test-fixtures/support-plan-test-fixtures.js';
 import { createTestOrgTracker } from '../../test-fixtures/test-org-tracker.js';
+import type { sendOperatorPlanNotification } from './planning-notifications.js';
 
 const { mockPlanAgent, mockSendPlan, mockSendQuestion } = vi.hoisted(() => ({
   mockPlanAgent: vi.fn(),
-  mockSendPlan: vi.fn(async (..._args: unknown[]) => {}),
+  mockSendPlan: vi.fn<typeof sendOperatorPlanNotification>(async () => {}),
   mockSendQuestion: vi.fn(async () => {}),
 }));
 
