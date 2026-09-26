@@ -6,6 +6,7 @@ import {
 } from "./settings.js";
 import { merchantGapQuestion } from "./plan-preview.js";
 import { planSignals } from "./plan-signals.js";
+import { planCommunication } from "./proposal-communication.js";
 import { checkStaticToolPolicy } from "./tools/static-policy.js";
 import { TOOL_CATEGORIES } from "./tools/registry/index.js";
 import type {
@@ -78,7 +79,7 @@ export type AutonomyVerdict =
   | (VerdictBase & {
       kind: "auto_execute"
       toolCalls: RawToolCall[]
-      /** Null for a plan that suspended at its proposal: it composes after the write. */
+      /** Null when the exact draft is an email rather than a thread reply. */
       replyText: string | null
       sendReplyToolCall: RawToolCall | null
     });
@@ -282,12 +283,18 @@ export function decideAutonomy(
     }
     const sendReplyToolCall = plan.rawToolCalls.find((call) => call.name === "send_reply") ?? null;
     const text = replyText(sendReplyToolCall);
-    // A legacy plan's draft was its only chance to say anything, so a mutation
-    // that carries none can never run. A plan that suspended at its proposal
-    // composes from the receipt once the write lands, so the absent draft is
-    // expected — the rules on either side of this decide it like any other
-    // mutation, and the model having chosen the tool decides nothing.
-    if (!plan.suspendedAtProposal && (!sendReplyToolCall || !text)) {
+    const communication = planCommunication(plan);
+    if (communication) {
+      // An exact-draft proposal says in its snapshot whether the customer hears
+      // anything. With no message, nobody would see what the customer is told
+      // about a write that ran unreviewed, so it waits for the merchant — who
+      // may approve the write alone, since the proposal authorizes no message.
+      if (communication.mode === "none") {
+        return { kind: "needs_review", reasons: ["missing_customer_reply"], approvalAllowed: true, toolCalls: calls };
+      }
+    } else if (!sendReplyToolCall || !text) {
+      // A legacy plan's draft was its only chance to say anything, so a
+      // mutation that carries none can never run.
       return { kind: "needs_review", reasons: ["missing_customer_reply"], approvalAllowed: false, toolCalls: calls };
     }
     if (resolveAutoExecuteMode(resolved) === "off") {

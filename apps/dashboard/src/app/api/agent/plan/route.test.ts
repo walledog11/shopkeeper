@@ -16,9 +16,9 @@ vi.mock('@clerk/nextjs/server', () => ({
 }));
 
 // Mock the agent runner so tests don't call Anthropic
-const { mockPlanAgent, mockBuildContext, mockSuspendsAtProposal } = vi.hoisted(() => ({
+const { mockPlanAgent, mockBuildContext, mockUsesExactDraftProposals } = vi.hoisted(() => ({
   mockBuildContext: vi.fn().mockResolvedValue({ messages: [] }),
-  mockSuspendsAtProposal: vi.fn(() => false),
+  mockUsesExactDraftProposals: vi.fn(() => false),
   mockPlanAgent: vi.fn().mockResolvedValue({
     instruction: 'Resolve order issue',
     steps: [{ id: 'step_1', tool: 'send_reply', label: 'Send reply', description: 'Reply to customer', category: 'communication', enabled: true }],
@@ -30,7 +30,7 @@ vi.mock('@/lib/agent/runner', () => ({
   buildContext: mockBuildContext,
   hashInstructionForLog: vi.fn(() => 'test-hash'),
   planAgent: mockPlanAgent,
-  suspendsAtProposal: mockSuspendsAtProposal,
+  usesExactDraftProposals: mockUsesExactDraftProposals,
 }));
 
 vi.mock('@shopkeeper/agent/settings', () => ({
@@ -155,10 +155,9 @@ describe('POST /api/agent/plan', () => {
     expect(updatedThread?.cachedPlanMessageId).not.toBeNull();
   });
 
-  // Package 3, step 7: the merchant's own plan request on a ticket reads the same
-  // gate as the inbound auto-plan, so a thread does not draft a reply for one and
-  // compose from the receipt for the other.
-  it('lets planning stop at the proposal only when the suspension mode is on', async () => {
+  // The merchant's own plan request on a ticket reads the same gate as the
+  // inbound auto-plan, so a thread's proposals bind their exact draft on both.
+  it('binds the exact draft only when the proposal contract is on', async () => {
     const customer = await createTestCustomer(org.id, 'suspend@test.com');
     const thread = await createTestThread(org.id, customer.id, ChannelType.email);
     await createTestMessage(thread.id, 'The candle arrived cracked');
@@ -173,13 +172,13 @@ describe('POST /api/agent/plan', () => {
       return mockPlanAgent.mock.calls.at(-1)?.[3];
     }
 
-    mockSuspendsAtProposal.mockReturnValue(false);
+    mockUsesExactDraftProposals.mockReturnValue(false);
     expect(await planOnce('Resolve order issue')).toEqual({ merchantInstruction: true });
 
-    mockSuspendsAtProposal.mockReturnValue(true);
+    mockUsesExactDraftProposals.mockReturnValue(true);
     // A changed instruction, so this is a cache miss rather than the first plan.
     expect(await planOnce('Refund the candle only'))
-      .toEqual({ merchantInstruction: true, suspendAtProposal: true });
+      .toEqual({ merchantInstruction: true, exactDraftProposal: true });
   });
 
   it('returns cached plan on cache hit without calling planAgent', async () => {

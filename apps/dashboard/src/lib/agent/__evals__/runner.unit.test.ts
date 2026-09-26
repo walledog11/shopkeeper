@@ -195,9 +195,13 @@ describe("classification expectations", () => {
 });
 
 describe("runtime-v2 proposal expectations", () => {
+  // Runtime v2 used to stop at the write and compose the reply afterwards, so
+  // its write proposals were excused from reply assertions. Its proposals now
+  // carry the exact draft the merchant approves, so they are held to the same
+  // reply requirement as every other plan.
   const fixture: Fixture = {
-    id: "suspended-proposal",
-    description: "v2 stops at a write proposal",
+    id: "exact-draft-proposal",
+    description: "v2 drafts the reply with the write",
     whyModelNeeded: "test",
     suite: "core",
     setup: { channelType: "email", messages: [] },
@@ -218,22 +222,12 @@ describe("runtime-v2 proposal expectations", () => {
     }],
   };
 
-  it("keeps the legacy reply requirement by default", () => {
+  it("requires the reply a v2 proposal now drafts", () => {
     const result = collectPlanExpectationFailures(fixture, proposal);
-    expect(result.suspendedWriteProposal).toBe(false);
     expect(result.failures).toContain(
       'expected tool "send_reply" to be called; called: [update_shopify_order_address({"order_id":"order-1"})]',
     );
-  });
-
-  it("compares a v2 write proposal without requiring speculative reply text", () => {
-    expect(collectPlanExpectationFailures(fixture, proposal, {
-      allowSuspendedWriteProposal: true,
-    })).toEqual({
-      failures: [],
-      replyText: "",
-      suspendedWriteProposal: true,
-    });
+    expect(result.failures).toContain('reply missing "updated"; reply was: ""');
   });
 });
 

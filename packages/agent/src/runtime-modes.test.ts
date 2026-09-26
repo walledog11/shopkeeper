@@ -4,8 +4,8 @@ import {
   LEGACY_AGENT_RUNTIME_VERSION,
   resolveAgentRuntimeVersion,
   resolveAgentRuntimeVersionForOrg,
-  suspendsAtProposal,
   usesCapabilityDiscovery,
+  usesExactDraftProposals,
 } from "./runtime-modes.js";
 
 afterEach(() => vi.unstubAllEnvs());
@@ -31,12 +31,12 @@ describe("agent runtime routing", () => {
       .toBe(DURABLE_AGENT_RUNTIME_VERSION);
   });
 
-  it("derives proposal suspension from the persisted task version", () => {
+  it("derives the exact-draft proposal contract from the persisted task version", () => {
     vi.stubEnv("AGENT_PROPOSAL_SUSPENSION_MODE", "off");
-    expect(suspendsAtProposal(LEGACY_AGENT_RUNTIME_VERSION)).toBe(false);
-    expect(suspendsAtProposal(DURABLE_AGENT_RUNTIME_VERSION)).toBe(true);
+    expect(usesExactDraftProposals(LEGACY_AGENT_RUNTIME_VERSION)).toBe(false);
+    expect(usesExactDraftProposals(DURABLE_AGENT_RUNTIME_VERSION)).toBe(true);
     vi.stubEnv("AGENT_PROPOSAL_SUSPENSION_MODE", "compose_from_receipt");
-    expect(suspendsAtProposal(LEGACY_AGENT_RUNTIME_VERSION)).toBe(true);
+    expect(usesExactDraftProposals(LEGACY_AGENT_RUNTIME_VERSION)).toBe(true);
   });
 
   it("enables bounded discovery from the persisted v2 task version", () => {

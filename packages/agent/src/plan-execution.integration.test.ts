@@ -31,6 +31,7 @@ import {
   acceptCustomerAgentRequest, claimAgentTask, settleAgentTaskClaim,
 } from "./task-ledger.js";
 import { authorizeAgentProposal } from "./task-approval.js";
+import { deriveProposalCommunication } from "./proposal-communication.js";
 import type { AgentContext, AgentResult } from "./agent-context.js";
 import type { AgentPlan, OrgSettings, RawToolCall } from "./types.js";
 
@@ -184,13 +185,19 @@ async function seedThreadWithPlan(options: {
   plan?: AgentPlan;
   settings?: OrgSettings;
   filterStatus?: string;
+  /** Plan as runtime v2 does: the communication snapshot derived from its calls. */
+  exactDraft?: boolean;
 } = {}) {
-  const plan = options.plan ?? quickReplyPlan();
+  const authored = options.plan ?? quickReplyPlan();
   const settings = options.settings ?? resolveAgentSettings(null);
   const org = await createTestOrg();
   orgIds.push(org.id);
   const customer = await createTestCustomer(org.id, `${randomUUID()}@test.com`);
   const thread = await createTestThread(org.id, customer.id, "email");
+  const communication = options.exactDraft
+    ? deriveProposalCommunication(authored.rawToolCalls, thread)
+    : null;
+  const plan: AgentPlan = communication ? { ...authored, communication } : authored;
   const message = await createTestMessage(thread.id, plan.instruction);
 
   if (options.filterStatus) {
@@ -220,10 +227,10 @@ async function seedThreadWithPlan(options: {
 // A support conversation whose parked card is also a durable proposal: the
 // planning job accepts the customer's message, runs an attempt, and settles on
 // whatever `supportAttemptSettlement` reads back out of the cached plan.
-async function seedSupportCardParkedOnTask(runtimeVersion = 1) {
-  const plan = threeStepPlan();
+async function seedSupportCardParkedOnTask(runtimeVersion = 1, authored: AgentPlan = threeStepPlan()) {
   const settings = resolveAgentSettings({ autonomyTier: "guarded", maxRefundAmount: 100 });
-  const seeded = await seedThreadWithPlan({ plan, settings });
+  const seeded = await seedThreadWithPlan({ plan: authored, settings, exactDraft: runtimeVersion >= 2 });
+  const plan = seeded.plan;
   const member = await db.orgMember.create({
     data: { organizationId: seeded.org.id, clerkUserId: randomUUID() },
   });
@@ -837,30 +844,6 @@ describe("executeCurrentCachedHomePlan execution", () => {
     ]);
   });
 
-  // Package 3, step 5: a plan that stopped at its proposal has no draft to send,
-  // so its execution is the one that owes a reply composed from the receipt.
-  it("asks a suspended proposal's run to compose from what the write returned", async () => {
-    const base = mutativePlan();
-    const suspended: AgentPlan = {
-      ...base,
-      steps: base.steps.filter((step) => step.category === "action"),
-      rawToolCalls: [noteCall],
-      suspendedAtProposal: true,
-    };
-    const { org, thread, settings } = await seedThreadWithPlan({ plan: suspended });
-    const runAgent = vi.fn(async () => okResult);
-
-    await executeCurrentCachedHomePlan({
-      orgId: org.id,
-      threadId: thread.id,
-      settings,
-      executionIntent: "merchant_approved",
-      failureRoute: "test",
-    }, makeDeps({ runAgent }));
-
-    expect(runAgent.mock.calls[0]?.[4].composeFromReceipt).toBe(true);
-  });
-
   // Package 5: the request ID is the turn ID because that is how settlement finds
   // the rows this execution wrote. Both halves are asserted, because a turn ID
   // that does not match the request links nothing and still looks correct.
@@ -926,7 +909,7 @@ describe("executeCurrentCachedHomePlan execution", () => {
       failureRoute: "test",
     }, makeDeps({ runAgent }));
 
-    expect(runAgent.mock.calls[0]?.[4].composeFromReceipt).toBeUndefined();
+    expect(runAgent.mock.calls[0]?.[2]).toEqual([noteCall, sendReplyCall]);
   });
 
   it("refuses a second execution of the same plan", async () => {
@@ -997,6 +980,132 @@ describe("executeCurrentCachedHomePlan execution", () => {
 
     expect(executed.execution.id).toBeNull();
     expect(executed.result).toEqual(okResult);
+  });
+});
+
+// Overhaul plan, Next work item 3 (decision A): a v2 proposal that messages the
+// customer binds that exact message and where it goes into the approval.
+describe("exact-draft proposals", () => {
+  const cardIdentity = (support: Awaited<ReturnType<typeof seedSupportCardParkedOnTask>>, plan: AgentPlan) => ({
+    planId: support.cache.planId!,
+    sourceMessageId: support.message.id,
+    planHash: hashPlan(plan),
+    instructionHash: hashInstruction(plan.instruction),
+  });
+
+  it("persists the exact draft and its destination as part of the proposal's identity", async () => {
+    const support = await seedSupportCardParkedOnTask(2);
+    const proposal = await db.agentProposal.findUniqueOrThrow({ where: { id: support.cache.planId! } });
+
+    expect(proposal).toMatchObject({
+      communicationMode: "exact_draft",
+      communicationDestination: { kind: "thread", id: support.thread.id, channel: "email" },
+      approvedDraft: "Your order ships Monday.",
+      allowedResultBindings: [],
+    });
+    expect(proposal.proposalHash).toBe(hashPlan(support.plan));
+    expect(proposal.proposalHash).not.toBe(hashPlan({ ...support.plan, communication: undefined }));
+  });
+
+  it("refuses a card whose draft is not the one the proposal binds", async () => {
+    const support = await seedSupportCardParkedOnTask(2);
+    const runAgent = vi.fn(async () => okResult);
+    const edited: AgentPlan = {
+      ...support.plan,
+      communication: { ...support.plan.communication!, draft: "Your order ships Tuesday." } as AgentPlan["communication"],
+    };
+
+    await expect(executeCurrentCachedHomePlan({
+      orgId: support.org.id,
+      threadId: support.thread.id,
+      settings: support.settings,
+      executionIntent: "merchant_approved",
+      failureRoute: "test",
+      approver: { clerkUserId: support.member.clerkUserId, displayName: null },
+      expectedIdentity: cardIdentity(support, edited),
+    }, makeDeps({ runAgent }))).rejects.toBeInstanceOf(ConflictError);
+    expect(runAgent).not.toHaveBeenCalled();
+    expect(await db.agentProposal.findUniqueOrThrow({ where: { id: support.cache.planId! } }))
+      .toMatchObject({ status: "ready", approverKey: null });
+  });
+
+  it("refuses a card whose destination is not the one the proposal binds", async () => {
+    const support = await seedSupportCardParkedOnTask(2);
+    const runAgent = vi.fn(async () => okResult);
+    const exact = support.plan.communication as Extract<AgentPlan["communication"], { mode: "exact_draft" }>;
+    const redirected: AgentPlan = {
+      ...support.plan,
+      communication: { ...exact, destination: { kind: "thread", id: randomUUID(), channel: "email" } },
+    };
+
+    await expect(executeCurrentCachedHomePlan({
+      orgId: support.org.id,
+      threadId: support.thread.id,
+      settings: support.settings,
+      executionIntent: "merchant_approved",
+      failureRoute: "test",
+      approver: { clerkUserId: support.member.clerkUserId, displayName: null },
+      expectedIdentity: cardIdentity(support, redirected),
+    }, makeDeps({ runAgent }))).rejects.toBeInstanceOf(ConflictError);
+    expect(runAgent).not.toHaveBeenCalled();
+  });
+
+  it("refuses an approval that drops the approved reply and keeps the writes", async () => {
+    const support = await seedSupportCardParkedOnTask(2);
+    const runAgent = vi.fn(async () => okResult);
+
+    await expect(executeCurrentCachedHomePlan({
+      orgId: support.org.id,
+      threadId: support.thread.id,
+      settings: support.settings,
+      executionIntent: "merchant_approved",
+      failureRoute: "test",
+      approver: { clerkUserId: support.member.clerkUserId, displayName: null },
+      approvedToolCalls: [noteCall, refundCall],
+    }, makeDeps({ runAgent }))).rejects.toBeInstanceOf(ConflictError);
+    expect(runAgent).not.toHaveBeenCalled();
+    expect(await db.planExecution.count({ where: { organizationId: support.org.id } })).toBe(0);
+  });
+
+  it("sends nothing on a proposal that authorizes no message", async () => {
+    const writesOnly: AgentPlan = {
+      instruction: "Note the request and issue the refund",
+      steps: buildPlanSteps([noteCall, refundCall]),
+      rawToolCalls: [noteCall, refundCall],
+      routingEvidence: { classifierState: "not_applicable", codes: [] },
+      validation: { status: "valid", issues: [] },
+    };
+    const support = await seedSupportCardParkedOnTask(2, writesOnly);
+    const runAgent = vi.fn(async () => okResult);
+    expect(support.plan.communication).toEqual({ mode: "none" });
+    expect(await db.agentProposal.findUniqueOrThrow({ where: { id: support.cache.planId! } }))
+      .toMatchObject({ communicationMode: null, approvedDraft: null });
+
+    await executeCurrentCachedHomePlan({
+      orgId: support.org.id,
+      threadId: support.thread.id,
+      settings: support.settings,
+      executionIntent: "merchant_approved",
+      failureRoute: "test",
+      approver: { clerkUserId: support.member.clerkUserId, displayName: null },
+      expectedIdentity: cardIdentity(support, support.plan),
+    }, makeDeps({ runAgent }));
+
+    expect(runAgent.mock.calls[0]?.[2]).toEqual([noteCall, refundCall]);
+  });
+
+  it("refuses a plan that authorizes no message but carries one", async () => {
+    const { org, thread, settings } = await seedThreadWithPlan({
+      plan: { ...mutativePlan(), communication: { mode: "none" } },
+    });
+
+    await expect(executeCurrentCachedHomePlan({
+      orgId: org.id,
+      threadId: thread.id,
+      settings,
+      executionIntent: "merchant_approved",
+      failureRoute: "test",
+    }, unreachableDeps())).rejects.toBeInstanceOf(ConflictError);
   });
 });
 

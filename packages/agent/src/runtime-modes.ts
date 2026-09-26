@@ -41,11 +41,11 @@ export function resolveAgentRuntimeVersionForOrg(
 export type ProposalSuspensionMode = "off" | "compose_from_receipt";
 
 /**
- * Whether support planning stops at the proposal and lets the reply be composed
- * from the receipt, for the callers that produce the plan behind an approval
- * card. Off unless explicitly enabled: it changes what the merchant is shown to
- * approve — actions without the draft reply that travels with a plan today — so
- * it is the gate that lets the slice merge before the cutover chooses a default.
+ * The runtime v1 compatibility switch for the exact-draft proposal contract.
+ * `compose_from_receipt` is the value's historical name: it used to stop
+ * planning at the write and compose the reply after it. Decision A of the
+ * overhaul plan replaced that — the merchant approves the exact message — so
+ * the value now selects the exact-draft contract below. Off unless enabled.
  */
 export function resolveProposalSuspensionMode(
   value: string | undefined = process.env.AGENT_PROPOSAL_SUSPENSION_MODE,
@@ -55,7 +55,13 @@ export function resolveProposalSuspensionMode(
   throw new Error("AGENT_PROPOSAL_SUSPENSION_MODE must be off or compose_from_receipt");
 }
 
-export function suspendsAtProposal(runtimeVersion?: number): boolean {
+/**
+ * Whether a plan binds its customer message into the proposal: the draft is
+ * written before approval, shown on the card, hashed with the writes, and is
+ * the only message the approval may send. A plan with no message authorizes
+ * none.
+ */
+export function usesExactDraftProposals(runtimeVersion?: number): boolean {
   if (runtimeVersion !== undefined && runtimeVersion >= DURABLE_AGENT_RUNTIME_VERSION) return true;
   // Runtime v1 retains the pre-router feature flag until its callers have been
   // drained. That preserves already-configured workspaces while v2 becomes the

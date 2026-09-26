@@ -152,6 +152,31 @@ export type PlanValidationIssueCode =
   | 'orphan_internal_note'
   | 'ungrounded_escalation_reason'
   | 'ungrounded_customer_reply'
+  | 'multiple_customer_messages'
+
+/**
+ * Where an approved customer message goes: the conversation's own channel for
+ * `send_reply`, or the address `send_email` names. The same target a
+ * communication receipt records, plus the channel the approval card names.
+ */
+export type CommunicationDestination =
+  | { kind: 'thread'; id: string; channel: string }
+  | { kind: 'email'; id: string }
+
+/**
+ * What a proposal authorizes saying to the customer. `none` authorizes nothing:
+ * the approved writes run and no message follows them. `exact_draft` is the
+ * message the merchant was shown, byte for byte, and the only one that may be
+ * sent on this approval.
+ */
+export type ProposalCommunication =
+  | { mode: 'none' }
+  | {
+      mode: 'exact_draft'
+      destination: CommunicationDestination
+      draft: string
+      allowedResultBindings: []
+    }
 
 /** `legacy_warning` is only ever read off a plan cached before signals existed. */
 export type PlanSignalCode = ProducedPlanSignalCode | 'legacy_warning'
@@ -192,9 +217,14 @@ export interface AgentPlan {
   /** True when the planner widened tool selection after a namespace-miss retry. */
   namespaceMiss?: boolean
   /**
-   * True when planning stopped at the proposal instead of drafting its outcome.
-   * Such a plan composes the customer's reply from the receipt after the write,
-   * so it carries no draft by design.
+   * The customer message this plan asks approval for, on runtimes that bind one
+   * into the proposal. Absent on legacy plans, whose draft is only a tool call.
+   */
+  communication?: ProposalCommunication
+  /**
+   * @deprecated Read only off plans cached before `communication` existed. Such a
+   * plan stopped at its write with no draft, which `planCommunication` reads as
+   * a proposal that authorizes no message.
    */
   suspendedAtProposal?: boolean
   /**

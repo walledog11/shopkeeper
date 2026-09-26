@@ -92,10 +92,10 @@ describe('POST /api/agent', () => {
     expect(mockExecuteAgentTurn).not.toHaveBeenCalled();
   });
 
-  // Package 3, step 7: the dashboard approval surface with a plan that stopped at
-  // its proposal. It carries no draft, so what it owes is a reply composed from
-  // the receipt the refund returns.
-  it('runs a suspended proposal with the composition its plan has no draft for', async () => {
+  // A plan cached before the exact-draft snapshot existed stopped at its write
+  // with no draft. It authorizes no message, so approving it runs the write and
+  // composes nothing afterwards.
+  it('runs a plan cached before the exact-draft snapshot as authorizing no message', async () => {
     const approvedToolCalls = [{ id: 'refund_1', name: 'create_refund', input: { order_id: '456', amount: '20.00' } }];
     const plan: AgentPlan = {
       instruction: 'Handle this',
@@ -113,7 +113,7 @@ describe('POST /api/agent', () => {
 
     expect(res.status).toBe(200);
     expect(mockExecuteAgentTurn).toHaveBeenCalledWith(
-      expect.objectContaining({ composeFromReceipt: true }),
+      expect.objectContaining({ approvedToolCalls }),
       expect.anything(),
     );
   });

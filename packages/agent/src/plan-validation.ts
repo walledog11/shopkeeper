@@ -5,6 +5,7 @@ import {
   detectUngroundedReplyText,
 } from "./plan-grounding.js";
 import { shouldBlockCreateRefundForAlreadyRefundedOrder } from "./planner-safety/refunds.js";
+import { customerMessageCallCount } from "./proposal-communication.js";
 import { TOOL_CATEGORIES, parseToolInput } from "./tools/registry/index.js";
 import type {
   PlanValidation,
@@ -30,6 +31,12 @@ export function validatePlan(params: {
   instruction: string;
   rawToolCalls: readonly RawToolCall[];
   readResults?: Readonly<Record<string, string>>;
+  /**
+   * Set when the plan binds its customer message into the proposal as one exact
+   * draft. Two messages cannot be one draft, and approving one of them must not
+   * send the other.
+   */
+  singleCustomerMessage?: boolean;
 }): PlanValidation {
   const { ctx, instruction, rawToolCalls, readResults } = params;
   const issues: PlanValidationIssue[] = [];
@@ -55,6 +62,13 @@ export function validatePlan(params: {
   ) {
     const refund = rawToolCalls.find((toolCall) => toolCall.name === "create_refund");
     issues.push(issue("already_refunded_action", refund));
+  }
+
+  if (params.singleCustomerMessage && customerMessageCallCount(rawToolCalls) > 1) {
+    const second = rawToolCalls.filter((toolCall) => (
+      toolCall.name === "send_reply" || toolCall.name === "send_email"
+    ))[1];
+    issues.push(issue("multiple_customer_messages", second));
   }
 
   const hasAction = rawToolCalls.some((toolCall) => TOOL_CATEGORIES[toolCall.name] === "action");

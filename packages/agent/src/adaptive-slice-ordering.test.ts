@@ -11,7 +11,6 @@ import { planAgent } from "./planner.js";
 import { runAgent } from "./run.js";
 import { TOOL_CATEGORIES } from "./tools/registry/index.js";
 import { jsonResponse } from "./testing/json-response.js";
-import type Anthropic from "@anthropic-ai/sdk";
 import type { AgentContext } from "./agent-context.js";
 
 const {
@@ -212,11 +211,16 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-// The approved proposal a suspended plan produces: no draft travels with it.
+// The approved proposal: the write and the exact reply the merchant was shown.
 const APPROVED_REFUND = {
   id: "t2",
   name: "create_refund",
   input: { order_id: "456", amount: "20.00", currency: "USD", reason: "Damaged" },
+};
+const APPROVED_REPLY = {
+  id: "t3",
+  name: "send_reply",
+  input: { text: "Your refund for the damaged item is on its way." },
 };
 
 function supportCtx() {
@@ -330,78 +334,41 @@ describe("adaptive slice loop ordering", () => {
   });
 });
 
-// Package 3, step 5: the approved proposal runs on the existing claim and journal,
-// and the reply the merchant never saw drafted is composed from what came back.
-describe("composing an approved proposal's completion from its receipt", () => {
-  it("commits the approved write, then asks the model with the result in hand", async () => {
-    // The loop appends to `messages` in place, so what the composing call was
-    // given has to be copied while it is being made.
-    let composingMessages: Anthropic.MessageParam[] = [];
-    mockCreate
-      .mockImplementationOnce(async (params: Anthropic.MessageCreateParams) => {
-        events.push("model:call_1");
-        composingMessages = structuredClone(params.messages);
-        return toolUse("t3", "send_reply", { text: "Your $20.00 refund is on its way." });
-      })
-      .mockImplementationOnce(async () => {
-        events.push("model:call_2");
-        return { stop_reason: "end_turn", content: [{ type: "text", text: "Refunded and told her." }], usage: USAGE };
-      });
-
+// Package 3, step 5, as revised by decision A of the overhaul plan: the approved
+// proposal runs on the existing claim and journal, and the customer gets the
+// exact reply the merchant approved with it. Nothing is composed afterwards.
+describe("running an approved exact-draft proposal", () => {
+  it("commits the approved write, then sends the approved reply verbatim without asking the model", async () => {
     const result = await runAgent(
       supportCtx(),
       "Handle the refund request.",
-      [APPROVED_REFUND],
+      [APPROVED_REFUND, APPROVED_REPLY],
       LIVE_SETTINGS,
-      { composeFromReceipt: true },
     );
 
-    // The money moves before the model is asked for a word, and the customer is
-    // written to only after that.
+    // The money moves before the customer is written to.
     expect(events).toEqual([
       "provider:read_order",
       "provider:calculate_refund",
       "provider:commit_refund",
-      "model:call_1",
       "io:send_reply",
-      "model:call_2",
     ]);
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(mockSendReply.mock.calls[0]?.[0]).toMatchObject(APPROVED_REPLY.input);
     expect(result.actionsPerformed.map(action => action.tool))
       .toEqual(["create_refund", "send_reply"]);
-
-    // What "from the receipt" means concretely: the composing call answers the
-    // executed proposal, and the refund's own result is the turn it answers.
-    expect(composingMessages.at(-2)).toMatchObject({
-      role: "assistant",
-      content: [{ type: "tool_use", id: "t2", name: "create_refund" }],
-    });
-    const outcome = composingMessages.at(-1);
-    expect(outcome).toMatchObject({
-      role: "user",
-      content: [{ type: "tool_result", tool_use_id: "t2" }],
-    });
-    expect(JSON.stringify(outcome?.content)).toContain("20.00");
   });
 
-  it("cannot commit a second write while reporting the first", async () => {
-    mockCreate.mockImplementation(async () => {
-      events.push("model:call");
-      return { stop_reason: "end_turn", content: [{ type: "text", text: "Done." }], usage: USAGE };
-    });
+  it("sends nothing on a proposal that authorizes no message", async () => {
+    const result = await runAgent(supportCtx(), "Handle the refund request.", [APPROVED_REFUND], LIVE_SETTINGS);
 
-    await runAgent(supportCtx(), "Handle the refund request.", [APPROVED_REFUND], LIVE_SETTINGS, {
-      composeFromReceipt: true,
-    });
-
-    // The merchant approved one refund. Nothing in the tool set the composing call
-    // is offered can commit another.
-    const offered: string[] = (mockCreate.mock.calls[0]?.[0]?.tools ?? []).map((tool: { name: string }) => tool.name);
-    expect(offered).toContain("send_reply");
-    expect(offered).not.toContain("create_refund");
-    expect(offered).not.toContain("cancel_order");
+    expect(events).toContain("provider:commit_refund");
+    expect(events).not.toContain("io:send_reply");
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(result.actionsPerformed.map(action => action.tool)).toEqual(["create_refund"]);
   });
 
-  it("composes nothing when the approved write did not commit", async () => {
+  it("sends nothing when the approved write did not commit", async () => {
     vi.stubGlobal("fetch", vi.fn(async (url: string | URL) => {
       const href = typeof url === "string" ? url : url.toString();
       if (href.includes("/refunds/calculate")) {
@@ -437,40 +404,16 @@ describe("composing an approved proposal's completion from its receipt", () => {
     const result = await runAgent(
       supportCtx(),
       "Handle the refund request.",
-      [APPROVED_REFUND],
+      [APPROVED_REFUND, APPROVED_REPLY],
       LIVE_SETTINGS,
-      { composeFromReceipt: true },
     );
 
-    // A failed write has nothing to report as done, so the model is never asked.
-    // Definite failure, not ambiguity: an unknown outcome would stop the model
-    // being asked for its own reason and would prove nothing about this one.
+    // A definite failure stops the batch before the approved reply, which was
+    // written for the write succeeding.
     expect(result.actionsPerformed).toHaveLength(1);
     expect(result.actionsPerformed[0]).toMatchObject({ tool: "create_refund", status: "error" });
     expect(mockCreate).not.toHaveBeenCalled();
     expect(events).not.toContain("io:send_reply");
-  });
-
-  it("keeps a committed refund when composition fails, and does not refund again", async () => {
-    mockCreate.mockImplementation(async () => {
-      events.push("model:call");
-      throw new Error("model provider unavailable");
-    });
-
-    const result = await runAgent(
-      supportCtx(),
-      "Handle the refund request.",
-      [APPROVED_REFUND],
-      LIVE_SETTINGS,
-      { composeFromReceipt: true },
-    );
-
-    // The refund happened once and is still known to have happened. Composition is
-    // the only thing that failed, and it failed without touching the provider.
-    expect(events.filter(event => event === "provider:commit_refund")).toHaveLength(1);
-    expect(events).not.toContain("io:send_reply");
-    expect(result.actionsPerformed).toHaveLength(1);
-    expect(result.actionsPerformed[0]).toMatchObject({ tool: "create_refund", status: "success" });
   });
 });
 
@@ -599,9 +542,13 @@ describe("a compound task: read the order and the policy, refund one line, repor
   function proposedActions(plan: { rawToolCalls: { id: string; name: string; input: unknown }[] }) {
     return plan.rawToolCalls.filter(call => TOOL_CATEGORIES[call.name] === "action");
   }
+  // What an approval runs: every call the card shows except the reads, which
+  // already ran during planning.
+  function approvedCalls(plan: { rawToolCalls: { id: string; name: string; input: unknown }[] }) {
+    return plan.rawToolCalls.filter(call => TOOL_CATEGORIES[call.name] !== "read");
+  }
 
-  it("reads the order and the policy, proposes one line, and reports what Shopify priced", async () => {
-    let composingMessages: Anthropic.MessageParam[] = [];
+  it("reads the order and the policy, proposes one line with its reply, and sends that reply once it commits", async () => {
     mockCreate
       .mockImplementationOnce(async () => {
         events.push("model:plan_1");
@@ -615,36 +562,26 @@ describe("a compound task: read the order and the policy, refund one line, repor
         events.push("model:plan_3");
         return toolUse("t3", "create_partial_refund", PARTIAL_REFUND_PROPOSAL.input);
       })
-      // Scripted so that a planning turn asking for a draft would show up as a
-      // composing call before the refund committed, rather than as a script that
-      // ran out.
-      .mockImplementationOnce(async (params: Anthropic.MessageCreateParams) => {
-        events.push("model:compose_1");
-        composingMessages = structuredClone(params.messages);
-        return toolUse("t4", "send_reply", { text: "We've refunded the torn napkin." });
-      })
       .mockImplementationOnce(async () => {
-        events.push("model:compose_2");
-        return { stop_reason: "end_turn", content: [{ type: "text", text: "Told her." }], usage: USAGE };
+        events.push("model:plan_4");
+        return toolUse("t4", "send_reply", { text: "We're refunding the torn napkin." });
       });
 
     const ctx = supportCtx();
     const instruction = "One of the napkins arrived torn - sort it out.";
-    const plan = await planAgent(ctx, instruction, LIVE_SETTINGS, { suspendAtProposal: true });
+    const plan = await planAgent(ctx, instruction, LIVE_SETTINGS, { exactDraftProposal: true });
 
-    // Planning investigated and stopped at the proposal: no reply describing a
-    // refund that had not happened.
+    // Planning investigated, proposed one line, and drafted the reply the
+    // merchant approves with it.
     expect(plan.rawToolCalls.map(call => call.name))
-      .toEqual(["get_order_by_name", "search_kb", "create_partial_refund"]);
-    expect(plan.suspendedAtProposal).toBe(true);
+      .toEqual(["get_order_by_name", "search_kb", "create_partial_refund", "send_reply"]);
+    expect(plan.communication).toMatchObject({ mode: "exact_draft", draft: "We're refunding the torn napkin." });
     expect(proposedActions(plan)[0]?.input).toMatchObject({
       approval_amount: "8.50",
       approval_currency: "USD",
     });
 
-    const result = await runAgent(ctx, instruction, proposedActions(plan), LIVE_SETTINGS, {
-      composeFromReceipt: true,
-    });
+    const result = await runAgent(ctx, instruction, approvedCalls(plan), LIVE_SETTINGS);
 
     expect(events).toEqual([
       "model:plan_1",
@@ -652,24 +589,23 @@ describe("a compound task: read the order and the policy, refund one line, repor
       "model:plan_2",
       "read:policy",
       "model:plan_3",
+      "model:plan_4",
       "provider:read_order",
       "provider:calculate_refund",
       "provider:read_order",
       "provider:calculate_refund",
       "provider:commit_refund",
-      "model:compose_1",
       "io:send_reply",
-      "model:compose_2",
     ]);
     expect(result.actionsPerformed.map(action => action.tool))
       .toEqual(["create_partial_refund", "send_reply"]);
+    expect(mockSendReply.mock.calls[0]?.[0]).toMatchObject({ text: "We're refunding the torn napkin." });
 
-    // One line of three units, priced by Shopify, and that figure is the one the
-    // composing call is given to report.
+    // One line of three units, priced by Shopify. Putting that figure into the
+    // approved reply is the receipt-bound placeholder work that follows.
     expect(committedRefund?.refundLineItems)
       .toEqual([{ lineItemId: "gid://shopify/LineItem/11", quantity: 1, restockType: "NO_RESTOCK" }]);
     expect(committedRefund?.transactions?.[0]?.amount).toBe("8.50");
-    expect(JSON.stringify(composingMessages.at(-1)?.content)).toContain("8.50");
   });
 
   it("commits the proposal the merchant revised to, not the one it replaced", async () => {
@@ -683,7 +619,11 @@ describe("a compound task: read the order and the policy, refund one line, repor
         return toolUse("t3", "create_partial_refund", PARTIAL_REFUND_PROPOSAL.input);
       })
       .mockImplementationOnce(async () => {
-        events.push("model:replan");
+        events.push("model:plan_3");
+        return toolUse("t4", "send_reply", { text: "We're refunding the torn napkin." });
+      })
+      .mockImplementationOnce(async () => {
+        events.push("model:replan_1");
         return toolUse("t5", "create_partial_refund", {
           order_id: "456",
           items: [{ line_item_id: "11", quantity: 2 }],
@@ -691,29 +631,24 @@ describe("a compound task: read the order and the policy, refund one line, repor
         });
       })
       .mockImplementationOnce(async () => {
-        events.push("model:compose_1");
-        return toolUse("t6", "send_reply", { text: "We've refunded both napkins." });
-      })
-      .mockImplementationOnce(async () => {
-        events.push("model:compose_2");
-        return { stop_reason: "end_turn", content: [{ type: "text", text: "Told her." }], usage: USAGE };
+        events.push("model:replan_2");
+        return toolUse("t6", "send_reply", { text: "We're refunding both napkins." });
       });
 
     const ctx = supportCtx();
     const first = await planAgent(ctx, "One of the napkins arrived torn - sort it out.", LIVE_SETTINGS, {
-      suspendAtProposal: true,
+      exactDraftProposal: true,
     });
     // The merchant changes the instruction instead of approving what they were
     // shown, so the proposal they approve is the one planned from the new one.
     const revisedInstruction = "Both napkins were torn - refund both of them.";
-    const revised = await planAgent(ctx, revisedInstruction, LIVE_SETTINGS, { suspendAtProposal: true });
+    const revised = await planAgent(ctx, revisedInstruction, LIVE_SETTINGS, { exactDraftProposal: true });
 
-    const result = await runAgent(ctx, revisedInstruction, proposedActions(revised), LIVE_SETTINGS, {
-      composeFromReceipt: true,
-    });
+    const result = await runAgent(ctx, revisedInstruction, approvedCalls(revised), LIVE_SETTINGS);
 
     // The superseded proposal named and quoted one napkin but never committed
-    // anything; the money that moved is the revised selection's approved quote.
+    // anything; the money that moved is the revised selection's approved quote,
+    // and the reply sent is the revised one.
     expect(proposedActions(first)[0]?.input).toMatchObject({ items: [{ line_item_id: "11", quantity: 1 }] });
     expect(events.filter(event => event === "provider:commit_refund")).toHaveLength(1);
     expect(committedRefund?.refundLineItems)
@@ -721,6 +656,8 @@ describe("a compound task: read the order and the policy, refund one line, repor
     expect(committedRefund?.transactions?.[0]?.amount).toBe("17.00");
     expect(result.actionsPerformed.map(action => action.tool))
       .toEqual(["create_partial_refund", "send_reply"]);
+    expect(mockSendReply).toHaveBeenCalledTimes(1);
+    expect(mockSendReply.mock.calls[0]?.[0]).toMatchObject({ text: "We're refunding both napkins." });
   });
 
   it("tells the customer nothing when the provider refuses the refund", async () => {
@@ -733,13 +670,12 @@ describe("a compound task: read the order and the policy, refund one line, repor
     const result = await runAgent(
       supportCtx(),
       "One of the napkins arrived torn - sort it out.",
-      [PARTIAL_REFUND_PROPOSAL],
+      [PARTIAL_REFUND_PROPOSAL, { id: "t4", name: "send_reply", input: { text: "We're refunding the torn napkin." } }],
       LIVE_SETTINGS,
-      { composeFromReceipt: true },
     );
 
-    // A refused write has nothing to report as done, so the model is never asked
-    // for a word and the customer hears nothing from this turn.
+    // The approved reply was written for the refund going through, so a refused
+    // refund stops the batch before it and the customer hears nothing.
     expect(events).toContain("provider:refund_refused");
     expect(mockCreate).not.toHaveBeenCalled();
     expect(events).not.toContain("io:send_reply");

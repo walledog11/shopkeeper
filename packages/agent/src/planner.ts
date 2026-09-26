@@ -24,12 +24,13 @@ import { recordMerchantPreferenceUsage } from "./merchant-preferences.js";
 import { validatePlan } from "./plan-validation.js";
 import { buildPlanSignals } from "./plan-signals.js";
 import { buildPlanSteps } from "./planner-steps.js";
+import { deriveProposalCommunication } from "./proposal-communication.js";
 import { buildSystemPromptParts } from "./prompt.js";
 export {
   resolveCapabilityDiscoveryMode,
   resolveProposalSuspensionMode,
-  suspendsAtProposal,
   usesCapabilityDiscovery,
+  usesExactDraftProposals,
   type CapabilityDiscoveryMode,
   type ProposalSuspensionMode,
 } from "./runtime-modes.js";
@@ -42,7 +43,6 @@ import { enforceSpendCap } from "./spend.js";
 import {
   parseToolInput,
   selectAgentTools,
-  TOOL_CATEGORIES,
   ToolInputValidationError,
   type CreatePartialRefundInput,
   type CreateRefundInput,
@@ -70,12 +70,11 @@ export interface PlanAgentOptions {
   // derived from the customer's own message. Intent narrowing is inferred from
   // what the customer said, so it must not gate a tool the merchant named.
   merchantInstruction?: boolean;
-  // Set by a caller that suspends at a proposal and composes the customer's
-  // reply from the receipt once the write lands. Planning then stops at the
-  // mutative call and is not asked for a terminal draft, because the outcome it
-  // would describe has not happened yet. Absent for every legacy caller, whose
-  // plans keep the terminal-tool requirement and its single re-prompt.
-  suspendAtProposal?: boolean;
+  // Set by a caller whose proposals carry the exact-draft communication
+  // snapshot: the customer message is drafted before approval like any other
+  // plan, then bound into the proposal as `communication`, so the approval
+  // covers those exact bytes and nothing else may be sent on it.
+  exactDraftProposal?: boolean;
   /** Persisted task runtime selects bounded discovery for durable attempts. */
   runtimeVersion?: number;
 }
@@ -150,7 +149,7 @@ export async function planAgent(
   const instructionHash = hashInstructionForLog(instruction);
   const modelInstruction = truncateContextText(instruction, CONTEXT_BUDGETS.instructionChars);
   const operatorMode = isOperatorChannel(ctx.thread.channelType);
-  const suspendAtProposal = options?.suspendAtProposal === true;
+  const exactDraftProposal = options?.exactDraftProposal === true;
   const historyWindow = operatorMode ? ctx.recentMessages.slice(-4) : ctx.recentMessages;
   const baseMessages = buildMessageHistory(historyWindow, modelInstruction, {
     segregateUntrusted: !operatorMode,
@@ -270,13 +269,8 @@ export async function planAgent(
     maxTokensPerCall: 4096,
     settings,
     usageTotals,
-    // Proposal suspension only ends the loop when a write is captured. Reads
-    // still need the normal one-time terminal reprompt when the model ends its
-    // turn without send_reply/ask_operator/escalate_to_human; otherwise a v2
-    // read-and-reply task can strand the customer after the lookup succeeds.
     captureReprompt: !operatorMode,
     captureRefuseReply: operatorMode ? undefined : refuseUngroundedReply,
-    captureSuspendAtProposal: suspendAtProposal,
     captureStopToolNames: tools.some((tool) => tool.name === NAMESPACE_MISS_TOOL_NAME)
       ? [NAMESPACE_MISS_TOOL_NAME]
       : undefined,
@@ -360,13 +354,14 @@ export async function planAgent(
     instruction,
     rawToolCalls: loop.rawToolCalls,
     readResults: Object.fromEntries(loop.readResults),
+    singleCustomerMessage: exactDraftProposal,
   });
   let validation = authoredValidation;
   let rawToolCalls = [...loop.rawToolCalls];
-  // Shopify owns a full refund's balance on both runtimes. Runtime v2 also
-  // binds item-refund pricing into its suspended proposal. Execution quotes
-  // again and refuses a changed amount before dispatch.
-  rawToolCalls = await bindProviderApprovalFacts(ctx, rawToolCalls, suspendAtProposal);
+  // Shopify owns a full refund's balance on both runtimes. Exact-draft
+  // proposals also bind item-refund pricing. Execution quotes again and refuses
+  // a changed amount before dispatch.
+  rawToolCalls = await bindProviderApprovalFacts(ctx, rawToolCalls, exactDraftProposal);
 
   const signalCodes: ProducedPlanSignalCode[] = [];
   appendInitialPlanningSignals({ ctx, operatorMode, codes: signalCodes });
@@ -426,6 +421,7 @@ export async function planAgent(
         instruction,
         rawToolCalls,
         readResults: Object.fromEntries(loop.readResults),
+        singleCustomerMessage: exactDraftProposal,
       });
     }
   }
@@ -484,6 +480,11 @@ export async function planAgent(
   const readResults = loop.readResults.size > 0
     ? Object.fromEntries(loop.readResults)
     : undefined;
+  // Derived from the finished calls, after routing, because those are what the
+  // merchant approves. Null only for a plan validation has already refused.
+  const communication = exactDraftProposal && !operatorMode
+    ? deriveProposalCommunication(rawToolCalls, ctx.thread)
+    : null;
   return {
     instruction,
     steps,
@@ -496,13 +497,6 @@ export async function planAgent(
     warnings: signals.length > 0 ? signals.map(signal => signal.message) : undefined,
     routingEvidence,
     namespaceMiss: namespaceMiss || undefined,
-    // The runtime may enable proposal suspension for the whole task, but a
-    // read-and-reply plan did not suspend on a write. Marking every such plan
-    // as suspended made safe replies run an unnecessary receipt-composition
-    // turn even though there was no write receipt to compose from.
-    suspendedAtProposal: (
-      suspendAtProposal
-      && rawToolCalls.some((call) => TOOL_CATEGORIES[call.name] === "action")
-    ) || undefined,
+    ...(communication ? { communication } : {}),
   };
 }

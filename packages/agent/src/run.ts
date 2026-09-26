@@ -1,4 +1,3 @@
-import type Anthropic from "@anthropic-ai/sdk";
 import logger from "./logger.js";
 import { randomUUID } from "node:crypto";
 import {
@@ -20,7 +19,7 @@ import {
 import { buildSystemPromptParts, buildComposerAskPrompt } from "./prompt.js";
 import { isOperatorChannel } from "./intent.js";
 import { buildMessageHistory } from "./message-history.js";
-import { runAgentLoop, type AgentLoopResult } from "./agent-loop.js";
+import { runAgentLoop } from "./agent-loop.js";
 import {
   hasUnresolvedShopifyCustomer,
   isGuestOnlyTool,
@@ -43,7 +42,6 @@ import {
   summarizeApprovedDashboardActions,
 } from "./run-approved-actions.js";
 import { summarizeOperatorTurnDispatchFailure } from "./message-dispatch.js";
-import { planExecutionOutcomeForActions } from "./execution-outcome.js";
 import {
   createAgentFailureRecorder,
   executeAgentToolCalls,
@@ -77,10 +75,6 @@ export interface RunAgentOptions extends RunAgentPolicyOptions {
   // Successful facts established by live reads during planning. Approved plans
   // do not re-run those reads, so their evidence travels with the execution.
   completionEvidence?: readonly CompletionFact[];
-  // Set by the caller of a plan that suspended at its proposal: once the approved
-  // write commits, its receipts go back to the same loop and the model composes
-  // the customer's reply from what actually happened.
-  composeFromReceipt?: boolean;
 }
 
 const OPERATOR_HIDDEN_TOOL_NAMES = new Set([
@@ -216,17 +210,13 @@ export async function runAgent(
         : {}),
     });
 
-  // A plan that suspended at its proposal carries no draft, so the turn that tells
-  // the customer what happened is written after the write, from what it returned.
-  // The executed proposal and its results are seeded into the shared loop below as
-  // the turn the model is answering.
-  const receiptTurns: Anthropic.MessageParam[] = [];
-
   try {
+    // An approved plan runs exactly the calls the merchant approved — its
+    // customer message included, as drafted — and nothing the model writes after.
     if (!readOnly && approvedToolCalls && approvedToolCalls.length > 0) {
       const executableToolCalls = selectExecutableApprovedToolCalls(approvedToolCalls);
 
-      const toolResults = await executeToolCalls(executableToolCalls, { stopOnDefiniteFailure: true });
+      await executeToolCalls(executableToolCalls, { stopOnDefiniteFailure: true });
 
       if (escalationReason) {
         return finish({
@@ -235,38 +225,11 @@ export async function runAgent(
         }, "escalated");
       }
 
-      // Only a committed write earns a composed completion. An unknown outcome is
-      // the executor's to escalate and a definite failure is the caller's bounded
-      // replan; both keep the summary they have today.
-      const composeFromReceipt = options?.composeFromReceipt === true
-        && planExecutionOutcomeForActions(actionsPerformed) === "committed";
-
-      if (!composeFromReceipt) {
-        return finish({
-          summary: summarizeApprovedDashboardActions(actionsPerformed),
-          actionsPerformed,
-        }, approvedActionsCompleteOutcome());
-      }
-
-      // Every tool_use block owes a tool_result, so the transcript carries only
-      // the calls that ran: `stopOnDefiniteFailure` can end the batch early.
-      const answered = new Set(toolResults.map((result) => result.tool_use_id));
-      receiptTurns.push(
-        {
-          role: "assistant",
-          content: executableToolCalls
-            .filter((call) => answered.has(call.id))
-            .map((call) => ({
-              type: "tool_use" as const,
-              id: call.id,
-              name: call.name,
-              input: call.input,
-            })),
-        },
-        { role: "user", content: toolResults },
-      );
+      return finish({
+        summary: summarizeApprovedDashboardActions(actionsPerformed),
+        actionsPerformed,
+      }, approvedActionsCompleteOutcome());
     }
-    const composingFromReceipt = receiptTurns.length > 0;
 
     // The operator channel is now one durable thread per binding, so its history is
     // the merchant's real conversation — widen the window from the legacy 4. Composer
@@ -281,7 +244,6 @@ export async function runAgent(
       ? `Private question from the support operator. Do not contact the customer.\n\n${boundedInstruction}`
       : boundedInstruction;
     const messages = buildMessageHistory(history, messageInstruction, { segregateUntrusted: !operatorMode });
-    messages.push(...receiptTurns);
     // runAgent is the support/composer entry: it builds a support-shaped system
     // prompt and tool set. Thread-less modules (order-ops and later) run through the
     // shared loop (runAgentLoop) via their own entrypoint, not here — the executor
@@ -309,19 +271,14 @@ export async function runAgent(
         ));
     const tools = readOnly
       ? selectedCoreTools
-      : composingFromReceipt
-        // The merchant's approval covered the writes that already ran. Reporting
-        // what they did may read, reply, note or escalate; committing again would
-        // be a write nobody approved.
-        ? selectedCoreTools.filter((tool) => TOOL_CATEGORIES[tool.name] !== "action")
-        : [
-          ...selectedCoreTools,
-          ...Object.values(options?.moduleTools ?? {}).map((def) => ({
-            name: def.name,
-            description: def.description,
-            input_schema: def.inputSchema,
-          })),
-        ];
+      : [
+        ...selectedCoreTools,
+        ...Object.values(options?.moduleTools ?? {}).map((def) => ({
+          name: def.name,
+          description: def.description,
+          input_schema: def.inputSchema,
+        })),
+      ];
     let systemPromptBlocks;
     if (readOnly) {
       systemPromptBlocks = buildCachedSystemPrompt(buildComposerAskPrompt(ctx, settings));
@@ -334,43 +291,25 @@ export async function runAgent(
     const iterationModel = pickModel(readOnly ? "composer_ask" : "agent_run");
 
     // Spend cap is a backstop, not a per-call meter — check once before the model
-    // loop. The approved-execution path above returns with zero model calls and
-    // stays ungated unless it goes on to compose from its receipts.
+    // loop. The approved-execution path above returns with zero model calls, so it
+    // is ungated.
     await enforceSpendCap(ctx.orgId, s);
 
-    let loop: AgentLoopResult;
-    try {
-      loop = await runAgentLoop({
-        ctx,
-        mode: readOnly ? "read_only" : "execute",
-        messages,
-        systemPromptBlocks,
-        tools,
-        model: iterationModel,
-        maxIterations,
-        maxTokensPerCall: readOnly ? 2048 : 4096,
-        settings,
-        usageTotals,
-        runTools: executeToolCalls,
-        getEscalationReason: () => escalationReason,
-        ...(readOnly ? {} : { tokenBudget: TOKEN_BUDGET }),
-      });
-    } catch (error) {
-      if (!composingFromReceipt) throw error;
-      // The approved write is already committed and its receipt already stored.
-      // Reporting the turn as an error would make the caller record a known
-      // outcome as unknown, so report what committed and stop here instead.
-      logger.error({
-        err: error,
-        orgId: ctx.orgId,
-        threadId: supportThread?.id ?? null,
-        turnId,
-      }, "[agent] receipt composition failed");
-      return finish({
-        summary: summarizeApprovedDashboardActions(actionsPerformed),
-        actionsPerformed,
-      }, "compose_failed");
-    }
+    const loop = await runAgentLoop({
+      ctx,
+      mode: readOnly ? "read_only" : "execute",
+      messages,
+      systemPromptBlocks,
+      tools,
+      model: iterationModel,
+      maxIterations,
+      maxTokensPerCall: readOnly ? 2048 : 4096,
+      settings,
+      usageTotals,
+      runTools: executeToolCalls,
+      getEscalationReason: () => escalationReason,
+      ...(readOnly ? {} : { tokenBudget: TOKEN_BUDGET }),
+    });
 
     switch (loop.stop) {
       case "escalated":

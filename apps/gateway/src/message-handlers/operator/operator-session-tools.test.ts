@@ -29,7 +29,7 @@ vi.mock('./execute-operator-agent-turn.js', () => ({
 
 vi.mock('@shopkeeper/agent/planner', () => ({
   planAgent: planAgentSpy,
-  suspendsAtProposal: vi.fn(() => false),
+  usesExactDraftProposals: vi.fn(() => false),
 }));
 
 vi.mock('../support-plan/planning-notifications.js', async (importOriginal) => {

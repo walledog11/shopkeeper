@@ -11,6 +11,7 @@ import type { AgentPlan } from "./types.js";
 import type { ModelUsageMetrics } from "./usage.js";
 import { parseReceiptV1, type ReceiptV1 } from "./tools/result.js";
 import { ConflictError } from "./errors.js";
+import { communicationIdentity } from "./proposal-communication.js";
 
 export interface AgentActionApproval {
   approverId: string;
@@ -94,12 +95,17 @@ function canonicalizeJson(value: unknown): unknown {
 
 // The one proposal identity every surface uses: the card, the durable proposal
 // row, and each approval and claim check. It covers what an approver actually
-// agrees to (instruction + tool calls). Steps are display labels derived from the
-// calls, so a label change does not change authority and must not change identity.
-export function hashPlan(plan: Pick<AgentPlan, "instruction" | "rawToolCalls">): string {
+// agrees to (instruction + tool calls + the exact customer message and where it
+// goes). Steps are display labels derived from the calls, so a label change does
+// not change authority and must not change identity. A proposal that authorizes
+// no message hashes as it did before the snapshot existed, so legacy plans and
+// proposals keep their identity.
+export function hashPlan(plan: Pick<AgentPlan, "instruction" | "rawToolCalls" | "communication">): string {
+  const communication = communicationIdentity(plan.communication);
   return sha256Hex(JSON.stringify(canonicalizeJson({
     instruction: plan.instruction,
     rawToolCalls: plan.rawToolCalls,
+    ...(communication ? { communication } : {}),
   })));
 }
 

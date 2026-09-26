@@ -213,7 +213,7 @@ describe('POST /api/agent/answer', () => {
     });
   });
 
-  it('keeps proposal suspension enabled when an answer resumes planning', async () => {
+  it('keeps the exact-draft proposal contract when an answer resumes planning', async () => {
     const previous = process.env.AGENT_PROPOSAL_SUSPENSION_MODE;
     process.env.AGENT_PROPOSAL_SUSPENSION_MODE = 'compose_from_receipt';
     try {
@@ -224,7 +224,7 @@ describe('POST /api/agent/answer', () => {
         expect.anything(),
         'answer-informed instruction',
         expect.anything(),
-        { suspendAtProposal: true },
+        { exactDraftProposal: true },
       );
     } finally {
       if (previous === undefined) delete process.env.AGENT_PROPOSAL_SUSPENSION_MODE;

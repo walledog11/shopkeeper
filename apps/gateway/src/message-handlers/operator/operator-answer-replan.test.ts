@@ -389,11 +389,26 @@ describe('applyOperatorAnswerReplan', () => {
           description: instruction, category: 'action', enabled: true,
         }],
         rawToolCalls: [{ id: 'action_1', name: tool, input }],
-        suspendedAtProposal: true,
+        communication: { mode: 'none' },
         routingEvidence: { classifierState: 'not_applicable', codes: [] },
         validation: { status: 'valid', issues: [] },
         warnings: [],
       };
+    }
+
+    // What the planner returns on a v2 task: the write and the exact reply the
+    // card shows with it, bound to the thread it is planning for.
+    function withExactReply(plan: AgentPlan, text: string) {
+      return async (ctx: { thread: { id: string; channelType: string } }): Promise<AgentPlan> => ({
+        ...plan,
+        rawToolCalls: [...plan.rawToolCalls, { id: 'reply', name: 'send_reply', input: { text } }],
+        communication: {
+          mode: 'exact_draft',
+          destination: { kind: 'thread', id: ctx.thread.id, channel: ctx.thread.channelType },
+          draft: text,
+          allowedResultBindings: [],
+        },
+      });
     }
 
     it('continues the task the card it revised was parked on', async () => {
@@ -520,14 +535,7 @@ describe('applyOperatorAnswerReplan', () => {
         throw new Error(`Unexpected provider request: ${url}`);
       });
       vi.stubGlobal('fetch', providerFetch);
-      planAgentSpy.mockResolvedValue(revisedPlan);
-      anthropicCreate.mockResolvedValue({
-        stop_reason: 'tool_use',
-        content: [{ type: 'tool_use', id: 'reply', name: 'send_reply', input: {
-          text: `The revised ${capability} for order #1001 is open.`,
-        } }],
-        usage: { input_tokens: 10, output_tokens: 5 },
-      });
+      planAgentSpy.mockImplementation(withExactReply(revisedPlan, `The revised ${capability} for order #1001 is open.`));
       postDashboardInternal.mockImplementation(async (_path: string, body: {
         operationId: string; executionId: string; threadId: string; input: { text: string };
       }) => ({
@@ -666,16 +674,9 @@ describe('applyOperatorAnswerReplan', () => {
         throw new Error(`Unexpected provider request: ${method} ${url}`);
       });
       vi.stubGlobal('fetch', providerFetch);
-      planAgentSpy.mockResolvedValue(plan);
-      anthropicCreate.mockResolvedValue({
-        stop_reason: 'tool_use',
-        content: [{ type: 'tool_use', id: 'reply', name: 'send_reply', input: {
-          text: capability === 'profile'
-            ? 'Your contact details have been updated.'
-            : 'I added that note to your customer record.',
-        } }],
-        usage: { input_tokens: 10, output_tokens: 5 },
-      });
+      planAgentSpy.mockImplementation(withExactReply(plan, capability === 'profile'
+        ? 'Your contact details have been updated.'
+        : 'I added that note to your customer record.'));
       postDashboardInternal.mockImplementation(async (_path: string, body: {
         operationId: string; executionId: string; threadId: string; input: { text: string };
       }) => ({
@@ -831,7 +832,7 @@ describe('applyOperatorAnswerReplan', () => {
         expect.anything(),
         expect.any(String),
         expect.anything(),
-        { runtimeVersion: 2, suspendAtProposal: true },
+        { runtimeVersion: 2, exactDraftProposal: true },
       );
 
       const settled = await db.agentTask.findUniqueOrThrow({ where: { id: taskId } });
@@ -900,19 +901,19 @@ describe('applyOperatorAnswerReplan', () => {
         }],
         rawToolCalls: [{
           id: 'label', name: 'attach_return_label', input: { order_id: '9000001001', label_url: labelUrl },
+        }, {
+          id: 'reply', name: 'send_reply', input: { text: `Your return label is ready: ${labelUrl}` },
         }],
-        suspendedAtProposal: true,
+        communication: {
+          mode: 'exact_draft',
+          destination: { kind: 'thread', id: thread.id, channel: thread.channelType },
+          draft: `Your return label is ready: ${labelUrl}`,
+          allowedResultBindings: [],
+        },
         routingEvidence: { classifierState: 'not_applicable', codes: [] },
         validation: { status: 'valid', issues: [] },
         warnings: [],
       } satisfies AgentPlan);
-      anthropicCreate.mockResolvedValue({
-        stop_reason: 'tool_use',
-        content: [{ type: 'tool_use', id: 'reply', name: 'send_reply', input: {
-          text: `Your return label is ready: ${labelUrl}`,
-        } }],
-        usage: { input_tokens: 10, output_tokens: 5 },
-      });
       postDashboardInternal.mockImplementation(async (_path: string, body: {
         operationId: string; executionId: string; threadId: string; input: { text: string };
       }) => ({
@@ -971,6 +972,8 @@ describe('applyOperatorAnswerReplan', () => {
       });
       expect(providerFetch.mock.calls.filter(([input]) =>
         String(input).includes('/graphql.json'))).toHaveLength(2);
+      // The reply is the exact draft the card showed; no model writes it afterwards.
+      expect(anthropicCreate).not.toHaveBeenCalled();
       if (providerOutcome === 'confirmed') {
         expect(postDashboardInternal).toHaveBeenCalledWith(
           '/api/agent/io-send-internal',

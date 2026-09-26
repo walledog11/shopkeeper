@@ -240,13 +240,11 @@ async function runFixture(
     const plan = await planAgent(environment.ctx, fixture.instruction, resolvedSettings, {
       merchantInstruction: fixture.merchantInstruction === true,
       ...(runtimeVersion !== undefined ? { runtimeVersion } : {}),
-      ...(runtimeVersion === 2 ? { suspendAtProposal: true } : {}),
+      ...(runtimeVersion === 2 ? { exactDraftProposal: true } : {}),
     })
     currentPhase = null
 
-    const planCheck = collectPlanExpectationFailures(fixture, plan, {
-      allowSuspendedWriteProposal: runtimeVersion === 2,
-    })
+    const planCheck = collectPlanExpectationFailures(fixture, plan)
     failures.push(...planCheck.failures)
     if (planCheck.failures.length > 0) failureKind = "model_behavior"
     const rubricChecks = fixture.expectedRubric && planCheck.replyText.length > 0
@@ -281,9 +279,7 @@ async function runFixture(
       }
     }
 
-    const expectedActions = planCheck.suspendedWriteProposal
-      ? fixture.expectedPlan.expectedAgentActions?.filter(action => action.tool !== "send_reply")
-      : fixture.expectedPlan.expectedAgentActions
+    const expectedActions = fixture.expectedPlan.expectedAgentActions
     if (shouldVerifyExpectedActions(expectedActions, planCheck.failures.length)) {
       const runMode = inferRunMode(expectedActions)
       currentPhase = usage.runUsage

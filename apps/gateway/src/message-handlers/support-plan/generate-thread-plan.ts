@@ -1,7 +1,7 @@
 import { db } from '@shopkeeper/db';
 import { requireOrgThread, getLatestConversationMessage } from '@shopkeeper/agent/thread-auth';
 import { buildContext } from '@shopkeeper/agent/build-context';
-import { planAgent, suspendsAtProposal } from '@shopkeeper/agent/planner';
+import { planAgent, usesExactDraftProposals } from '@shopkeeper/agent/planner';
 import { resolveAgentRuntimeVersionForOrg } from '@shopkeeper/agent/runtime-modes';
 import { decideAutonomy } from '@shopkeeper/agent/autonomy';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
@@ -393,7 +393,7 @@ async function runPlanAttempt(scope: PlanAttemptScope): Promise<GeneratedThreadP
     instruction,
     settings,
     {
-      ...(suspendsAtProposal(scope.durableTurn?.runtimeVersion) ? { suspendAtProposal: true } : {}),
+      ...(usesExactDraftProposals(scope.durableTurn?.runtimeVersion) ? { exactDraftProposal: true } : {}),
       ...(scope.durableTurn?.runtimeVersion !== undefined
         ? { runtimeVersion: scope.durableTurn.runtimeVersion }
         : {}),

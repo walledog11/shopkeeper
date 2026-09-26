@@ -168,6 +168,7 @@ export async function sendOperatorPlanNotification(
           stage,
           ...(verifiedOrders.length > 0 ? { verifiedOrders } : {}),
           ...(plan.validation ? { validation: plan.validation } : {}),
+          ...(plan.communication ? { communication: plan.communication } : {}),
           ...(queueNotice ? { queueNotice } : {}),
           ...(sourceMessageText ? { sourceMessageText } : {}),
         }),

@@ -65,9 +65,9 @@ contract was unbuilt.
 
 | Area | State |
 | --- | --- |
-| Packages 0–5 | Implemented and verified with the real test database and fake providers. Record in [Appendix A](#appendix-a-completed-packages-0-to-5). Two of its checkboxes overstate runtime v2; see [Where the code disagrees](#where-the-code-disagrees-with-this-plan), item 1. |
+| Packages 0–5 | Implemented and verified with the real test database and fake providers. Record in [Appendix A](#appendix-a-completed-packages-0-to-5). Package 3's "Compose completion wording after execution from receipts" and Package 5's last item describe v2 behavior that decision A replaced with exact drafts; see [Where the code disagrees](#where-the-code-disagrees-with-this-plan), item 1. |
 | Gate A: comparison tooling | Done. |
-| Gate B: v1/v2 model comparison | Baseline comparison passed on 2026-09-25: both runtimes pass the 26 hard fixtures with no unauthorized or duplicate effect. Not complete: the plan also requires held-out variants (Package 6, first checkbox), and none has run. Runtime v2 spends about 33% more per suite; the cause is not isolated and no numeric budget exists to judge it (*Success criteria*). Items 3 and 4 of *Next work* change what the model reads, so the comparison runs again after them. |
+| Gate B: v1/v2 model comparison | Baseline comparison passed on 2026-09-25: both runtimes pass the 26 hard fixtures with no unauthorized or duplicate effect. Not complete: the plan also requires held-out variants (Package 6, first checkbox), and none has run. Runtime v2 spends about 33% more per suite; the cause is not isolated and no numeric budget exists to judge it (*Success criteria*). Item 3 of *Next work* changed what the model does on v2 (it now drafts the reply before approval, as v1 does) and item 4 will change it again, so the comparison runs again after them (item 7). |
 | Gate C: real provider and delivery | Exercised on 2026-09-25. Run 4 completed approval → Shopify write → typed receipt → customer reply received. Runs 1–3 exposed the defects below. It must be run again after *Next work* items 1–7, because run 4's reply got through only on a phrasing the reply check does not scan, and the run is stored as failed. |
 | Gate D, staged rollout, Gate E | Not started. |
 | Production routing | `AGENT_RUNTIME_VERSION=1` on both services, with `AGENT_RUNTIME_V2_ORG_IDS` set to the controlled organization since 2026-09-25 (release evidence). New tasks for every other organization run v1. |
@@ -78,24 +78,24 @@ contract was unbuilt.
 Each item was checked against the code on 2026-09-25. Each is a defect against a
 contract this plan already specifies, not a new requirement.
 
-1. **Replies after a v2 write carry no communication authorization.** Contract:
-   *Approval and communication contract*, and the communication snapshot frozen
-   in the [Package 0 baseline](conversational-agent-overhaul-p0-baseline.md).
-   `AgentProposal` has `communicationMode`, `communicationDestination`,
-   `approvedDraft` and `allowedResultBindings`, but no code writes them, and
-   only the Shopify compliance route reads `communicationDestination`. Package 0
-   says a null mode means the proposal authorizes no communication, yet the v2
-   path composes and sends a reply after the write. The approval card shows the
-   write and nothing about the reply. Package 3's item "Compose completion
-   wording after execution from receipts" and Package 5's last item are marked
-   done; for runtime v2 they are not.
-2. **v2 reply text is judged by reading its English.** Contract: *Response
-   grounding and delivery* ("Prose checks remain heuristics") and case D18. For
-   a suspended proposal, `plan-execution.ts` passes `composeFromReceipt` to
-   `runAgent`, which runs the executor in `run-execution.ts`. That executor:
+1. *Resolved 2026-09-25.* Replies after a v2 write carried no communication
+   authorization: the v2 path composed and sent a reply after the write that no
+   card had shown. v2 plans now carry `AgentPlan.communication`
+   (`proposal-communication.ts`), derived from the plan's own calls: `none`, or
+   `exact_draft` with the destination and the draft. `hashPlan` binds an exact
+   draft, `persistProposal` writes the four snapshot columns, and execution
+   derives the snapshot again from the calls about to run and refuses on any
+   difference. The compose-after-write path (`composeFromReceipt`) is removed.
+2. **v2 reply text is judged, and can be rewritten, by reading its English.**
+   Contract: *Response grounding and delivery* ("Prose checks remain
+   heuristics"), case D18, and decision A. The approved exact draft is sent by
+   the executor in `run-execution.ts`, which runs on every send:
    - calls `executedCompletionFacts(..., { allowHistoricalResultInference: true })`,
      although that function's own comment says new-runtime callers must leave
      it disabled;
+   - passes the draft through `renderReplyCompletionClaims` (`plan-grounding.ts`),
+     which can replace a claiming sentence with a rendered one, so the text
+     sent can differ from the text the merchant approved;
    - rejects a reply when `unsupportedReplyCompletionClaims` (`plan-grounding.ts`)
      maps its words to an action that has no fact.
 
@@ -131,14 +131,19 @@ what done means.
    written before this change included steps, so a card, proposal or pending execution
    created before it deploys is refused as no longer current and must be
    regenerated; nothing executes on a mismatched identity.
-3. **Exact-draft communication on v2 proposals** (disagreement 1; decision A).
-   A v2 proposal that will message the customer carries `exact_draft`: its
-   destination, the exact draft, and any allowed result bindings are hash-bound,
-   and the card shows the write, the destination and the exact draft. This
-   means v2 drafts the reply before approval instead of after the write. A
-   proposal with a null mode sends no reply. Done when every v2 card that leads
-   to a customer message shows that message, and a changed draft invalidates the
-   approval. Anything the model reads is eval-gated.
+3. ~~**Exact-draft communication on v2 proposals**~~ Done 2026-09-25
+   (disagreement 1; decisions A and D). v2 planning no longer stops at the
+   first write; it drafts the reply the way v1 does, and the plan records the
+   snapshot. The phone card names the destination and shows the whole draft
+   (the legacy 600-character excerpt stays for v1), and a draft too long to show
+   is not put up for approval. The dashboard card already showed the whole reply
+   in the thread it goes to. A proposal with no message is approvable, runs the
+   writes and sends nothing; it can no longer auto-execute (decision D). Two
+   customer messages in one proposal are invalid (`multiple_customer_messages`).
+   The eval harness's v2 carve-out that skipped reply assertions is removed, so
+   v2 is held to the same reply fixtures as v1. No paid run was made for this
+   item; item 7's comparison is its model evidence. Until item 4 lands, the
+   executor can still rewrite or reject the approved draft (disagreement 2).
 4. **Receipt-bound placeholders** (disagreement 2; decisions A and B). A value
    known only after the write, such as the amount Shopify refunds, appears on
    the card as a labeled placeholder bound to a receipt field. After execution,
@@ -147,9 +152,9 @@ what done means.
    binding cannot be filled, the approved draft is not sent, and any other
    message to the customer goes back to the merchant as a new proposal.
    `allowHistoricalResultInference` is off on the v2 path. Prose checks follow
-   decision B. Done when D18 holds for the v2 path and new v2 composition
-   fixtures pass. Gate B dropped reply assertions for v2 action-only plans, so
-   those fixtures do not exist yet. Eval-gated.
+   decision B. `renderReplyCompletionClaims` no longer changes an approved
+   draft. Done when D18 holds for the v2 path and new v2 placeholder fixtures
+   pass. Eval-gated.
 5. **Delivery separate from completion** (disagreement 4). A rejected draft is
    not a failed effect; the task outcome comes from receipts and final delivery
    state. Deterministic.

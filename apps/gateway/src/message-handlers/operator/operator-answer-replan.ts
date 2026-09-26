@@ -1,7 +1,7 @@
 import { db, createMessage } from '@shopkeeper/db';
 import { requireOrgThread, getLatestConversationMessage } from '@shopkeeper/agent/thread-auth';
 import { buildContext } from '@shopkeeper/agent/build-context';
-import { planAgent, suspendsAtProposal } from '@shopkeeper/agent/planner';
+import { planAgent, usesExactDraftProposals } from '@shopkeeper/agent/planner';
 import { ConflictError } from '@shopkeeper/shared/errors';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { buildMerchantAnswerPlanningInstruction } from '@shopkeeper/agent/kb-learned';
@@ -300,7 +300,7 @@ async function runAnswerReplan(
       planningInstruction,
       settings,
       {
-        ...(suspendsAtProposal(runtimeVersion) ? { suspendAtProposal: true } : {}),
+        ...(usesExactDraftProposals(runtimeVersion) ? { exactDraftProposal: true } : {}),
         ...(runtimeVersion !== undefined ? { runtimeVersion } : {}),
       },
     );
