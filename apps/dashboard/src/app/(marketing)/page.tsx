@@ -2,14 +2,15 @@ import type { Metadata } from "next";
 import { Navbar } from "./_components/Navbar";
 import { MarginThread } from "./_components/MarginThread";
 import { Hero } from "./_components/Hero";
-import { BeyondSupport, NightTimeline, ProblemSection, Proof, TrustSection } from "./_components/ProductOverview";
+import { CoreProductOverview, ProactiveOperations, TrustSection } from "./_components/ProductOverview";
+import { Onboarding } from "./_components/Onboarding";
 import { Pricing } from "./_components/Pricing";
 import { FAQ as Faq } from "./_components/FAQ";
 import { CTA as Cta } from "./_components/CTA";
 import { Footer } from "./_components/Footer";
 
-const title = "Shopkeeper — your Shopify support, handled before you wake up";
-const description = "Shopkeeper answers your customers on Instagram, email, and chat. Routine questions get answered on the spot; anything involving money comes to you as a plan by text.";
+const title = "Shopkeeper — manage your Shopify store by text";
+const description = "An AI agent for orders, stock checks, sales, and customer messages. Give Shopkeeper work through iMessage or the dashboard, with your store knowledge and action limits.";
 
 export const metadata: Metadata = {
   title,
@@ -28,11 +29,10 @@ export default function Home() {
       <MarginThread />
       <Navbar />
       <Hero />
-      <ProblemSection />
-      <NightTimeline />
-      <BeyondSupport />
+      <CoreProductOverview />
+      <ProactiveOperations />
+      <Onboarding />
       <TrustSection />
-      <Proof />
       <Pricing />
       <Faq />
       <Cta />

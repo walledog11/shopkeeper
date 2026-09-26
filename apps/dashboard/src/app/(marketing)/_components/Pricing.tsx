@@ -6,9 +6,6 @@ import { Reveal } from "./Reveal";
 import { SectionLabel } from "./SectionLabel";
 import { cn } from "@/lib/ui/cn";
 
-// Placeholder prices and limits while the page is designed; set the real ones
-// before launch, and keep them matched to `PLAN_LIMITS`.
-//
 // Both plans run the whole product. `PLAN_LIMITS` in `packages/db/plan-limits.ts`
 // sells volume and seats and gates no tool or capability, so a $19 subscriber
 // already gets Shopify actions, phone approvals and voice training. Do not add a
@@ -54,7 +51,7 @@ export function Pricing() {
       <Reveal>
         <SectionLabel>what it costs</SectionLabel>
         <h2 className="mx-auto mb-5 max-w-[20ch] text-[clamp(36px,5vw,68px)] font-bold leading-[1] tracking-[0.03em] [font-family:var(--m-hand)]">
-          Less than a part-time VA. <em className="italic text-[var(--m-quill)]">No per-ticket fees, ever.</em>
+          The whole product, <em className="italic text-[var(--m-quill)]">on either plan.</em>
         </h2>
         <p className="mx-auto mb-8 max-w-[48ch] text-[16px] leading-relaxed text-stone-700">
           <span className="relative inline-block whitespace-nowrap">
@@ -65,12 +62,13 @@ export function Pricing() {
               className="pointer-events-none absolute -inset-x-2 -inset-y-1 h-[calc(100%+8px)] w-[calc(100%+16px)] opacity-70 [color:var(--m-pen)]"
             />
           </span>{" "}
-          on either plan. One flat monthly price, and the whole product on both.
+          on either plan. Check the plan and total in checkout before you subscribe.
         </p>
 
         <p className="mx-auto mb-12 max-w-[62ch] rounded-xl border border-stone-900/10 bg-[#fdfbf7]/80 px-5 py-4 text-[15px] leading-relaxed text-stone-700">
-          Usage-based helpdesks charge for every AI resolution, so your bill peaks in your
-          busiest month. Shopkeeper costs the same in December as it does in March.
+          Both plans include the merchant agent, customer inbox, supported Shopify
+          actions, sales and stock tools, iMessage, store memory, and briefings.
+          Choose based on customer conversation volume and the number of people using the workspace.
         </p>
       </Reveal>
 

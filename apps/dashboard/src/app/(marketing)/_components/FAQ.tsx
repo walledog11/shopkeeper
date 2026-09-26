@@ -6,36 +6,44 @@ import { SectionLabel } from "./SectionLabel";
 
 const faqs = [
   {
-    q: "What does it do on its own, and what does it ask me about?",
-    a: "Routine questions get answered on the spot: order status, tracking, product questions, and your store policies. Anything involving money comes to you as a plan by text, whether it’s a refund, a replacement, or an order change. You approve it with one reply.",
+    q: "Can I ask it to do things, or does it only answer customers?",
+    a: "You can give it work directly through iMessage or the dashboard. Ask it to look up a customer, check stock, edit an eligible order, create a timed sale, update a product variant’s price, or email a customer. Incoming customer support is another part of the same product.",
   },
   {
-    q: "Where do my customers reach it?",
-    a: "Instagram DMs, email, and chat on your store. Customers keep writing where they already do, and Shopkeeper answers there.",
+    q: "What does “run a sale” actually do?",
+    a: "It creates an automatic percentage discount in Shopify for your whole catalog or specified variants, with an end time. Regular product prices stay unchanged. You can ask it to list or end active sales. Permanent price changes are a separate action on specific variants. These actions require the relevant Shopify permissions.",
   },
   {
-    q: "How do I talk to it?",
-    a: "By text in iMessage, or from the dashboard on any device. Plans, questions, and your morning briefing come to your phone, and you reply like you would to an employee.",
+    q: "Will it email a customer without me seeing it?",
+    a: "For incoming support, Draft only prepares replies for review. In Ask first, the default, routine information replies can go out automatically, while order changes, money, and exceptions wait for you. Separately, you can instruct the merchant agent to send a message yourself. Actions remain subject to your settings and account permissions.",
   },
   {
-    q: "What happens when it doesn’t know the answer?",
-    a: "It asks you instead of guessing. Answer once and it remembers, so the next customer who asks gets your answer without you.",
+    q: "Do I need to use iMessage?",
+    a: "No. You can talk to the agent, review proposed actions, answer its questions, and manage conversations in the dashboard. Linking iMessage lets you do that work from your phone, including receiving the optional daily briefing.",
   },
   {
-    q: "Will it sound like me?",
-    a: "It learns from the edits you make to its replies and suggests an updated voice for your store. Nothing changes until you say yes.",
+    q: "Will it sound like me, or like a robot?",
+    a: "It learns from the edits you make to its drafts. After enough of them it proposes a new voice brief. Nothing changes until you read it and say yes.",
   },
   {
-    q: "How long does setup take?",
-    a: "Connect Shopify, connect your inbox and Instagram, and tell it your policies. It starts on the next customer message.",
+    q: "If I leave, do I get my data?",
+    a: "Yes. Store and customer data downloads as JSON. Your action history downloads as CSV.",
   },
   {
-    q: "Is my store data safe?",
-    a: "Your customers and orders are only ever visible to your store. Your logins are encrypted, every action is logged, and you can download all of your data at any time.",
+    q: "I don’t use Shopify. What do I get?",
+    a: "It can still read your channels and reply using the rules you give it. But refunds, address changes, and exchanges need Shopify. Without it, there’s no order to fix.",
   },
   {
-    q: "Can I cancel?",
-    a: "Anytime, from your dashboard. No contract, and your data is yours to take with you.",
+    q: "Where do my customers actually reach it?",
+    a: "Through Gmail, forwarded support email, website chat, or an available Instagram connection. Instagram requires a Professional account. Check your workspace’s Integrations page for channel availability. Your own iMessage conversation is with your agent; customer conversations stay in their support channels.",
+  },
+  {
+    q: "What if it doesn’t know the answer?",
+    a: "If a missing store fact or judgment call would unblock a customer request, it asks you. If the request is outside its limits or it cannot complete the action, it hands the thread to you. You can inspect the context, correct the reply, and take over. Use Draft only while you evaluate its customer replies.",
+  },
+  {
+    q: "Can another store see my customers?",
+    a: "No. Your customers and your orders are yours alone. Your Shopify and Instagram logins are encrypted before they’re stored. You can download your data yourself.",
   },
 ];
 
@@ -76,10 +84,10 @@ export function FAQ() {
   return (
     <section id="faq" className="mx-auto max-w-6xl scroll-mt-24 px-6 py-12 text-center">
       <Reveal>
-        <SectionLabel>questions merchants ask</SectionLabel>
+        <SectionLabel>how it works in practice</SectionLabel>
         <h2 className="mx-auto mb-12 max-w-[20ch] text-[clamp(36px,5vw,68px)] font-bold leading-[1] tracking-[0.03em] [font-family:var(--m-hand)]">
-          Good questions.{" "}
-          <em className="italic text-[var(--m-quill)]">Straight answers.</em>
+          What you can ask.{" "}
+          <em className="italic text-[var(--m-quill)]">What happens next.</em>
         </h2>
       </Reveal>
 
