@@ -5,7 +5,7 @@ ownership and capability inventory were completed 2026-09-11 against commit
 `bd25cf3a`; the production aggregate inventory, compatibility decisions, exact
 additive schema contract, evaluation manifest, and first-slice limits were
 completed 2026-09-12. This artifact supplies the evidence and decisions required by
-[Package 0](conversational-agent-overhaul-plan.md#0-establish-baseline-and-contract-decisions).
+[Package 0](conversational-agent-overhaul-plan.md#what-has-been-done).
 It is descriptive only: it does not authorize a production write, recovery run,
 canary, or cleanup.
 
