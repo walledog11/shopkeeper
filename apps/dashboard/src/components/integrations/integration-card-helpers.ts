@@ -138,7 +138,6 @@ export function deriveIntegrationHealth(
   definition: WorkspaceIntegrationDefinition,
   integration: Integration | null,
   lastActivity: string | null,
-  gmailNativeInboundEnabled = false,
 ): IntegrationHealth {
   if (!integration) return { state: "not-connected", note: null, recoveryAction: null }
 
@@ -202,7 +201,7 @@ export function deriveIntegrationHealth(
 
   if (connectType === "email") {
     const gmailIntegration = definition.id === "gmail" ? integration : null
-    if (gmailIntegration && gmailNativeInboundEnabled) {
+    if (gmailIntegration) {
       if (!isGmailNativeInboundEnrolled(gmailIntegration)) {
         return {
           state: "waiting",

@@ -1,4 +1,4 @@
-export type EmailInboundMode = 'hybrid' | 'postmark' | 'gmail-only';
+export type EmailInboundMode = 'standard' | 'postmark' | 'gmail-only';
 export type GatewayRuntimeRole = 'all' | 'server' | 'worker';
 export type RolloutMode = 'off' | 'shadow' | 'enforce';
 
@@ -21,7 +21,6 @@ export interface GatewayProductionConfig {
   productAnalyticsEnabled: boolean;
   planExecutionLedgerMode: RolloutMode | undefined;
   agentContextBudgetMode: RolloutMode | undefined;
-  gmailNativeInbound: boolean;
   workerRedis: GatewayWorkerRedisProductionConfig;
 }
 

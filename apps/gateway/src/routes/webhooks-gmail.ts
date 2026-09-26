@@ -3,9 +3,9 @@ import type { Request, Response, Router } from 'express';
 import { OAuth2Client, type LoginTicket } from 'google-auth-library';
 import { db } from '@shopkeeper/db';
 import { decodeGmailBase64Url, getEmailProvider, isValidGmailHistoryId, readGmailHistoryId } from '@shopkeeper/email';
+import { getEmailInboundMode } from '../config/env.js';
 import {
   getGmailPubSubPushConfig,
-  isGmailNativeInboundEnabled,
   type GmailPubSubPushConfig,
 } from '../config/runtime-config.js';
 import { JOB } from '../constants.js';
@@ -121,8 +121,8 @@ function gmailSyncJobId(integrationId: string, historyId: string): string {
 
 export function registerGmailWebhookRoutes(router: Router): void {
   router.post('/gmail/push', webhookJsonParser(), async (req: Request, res: Response) => {
-    if (!isGmailNativeInboundEnabled()) {
-      logger.info('[Gmail Push] Native inbound is disabled; notification acknowledged');
+    if (getEmailInboundMode() === 'postmark') {
+      logger.info('[Gmail Push] Postmark-only inbound mode; notification acknowledged');
       return res.sendStatus(204);
     }
 

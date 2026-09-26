@@ -56,7 +56,7 @@ async function createGmailIntegration(organizationId: string, mailbox: string) {
 beforeEach(() => {
   org = webhookFixture.org;
   additionalOrgIds = [];
-  vi.stubEnv('GMAIL_NATIVE_INBOUND', 'true');
+  vi.stubEnv('EMAIL_INBOUND_MODE', 'standard');
 });
 
 afterEach(async () => {
@@ -169,8 +169,8 @@ describe('POST /webhooks/gmail/push', () => {
     expect(queueAddSpy).not.toHaveBeenCalled();
   });
 
-  it('acknowledges valid notifications without queueing when rollout is disabled', async () => {
-    vi.stubEnv('GMAIL_NATIVE_INBOUND', 'false');
+  it('acknowledges valid notifications without queueing in postmark-only mode', async () => {
+    vi.stubEnv('EMAIL_INBOUND_MODE', 'postmark');
     await createGmailIntegration(org.id, 'owner@example.com');
 
     const response = await postPush(pushEnvelope('owner@example.com'));

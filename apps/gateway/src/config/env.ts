@@ -113,7 +113,7 @@ export function validateGatewayEnv(): void {
   }
 
   // Postmark inbound auth is required whenever the forwarding rail is active
-  // (hybrid/postmark). gmail-only boots without it for dev / future native-only.
+  // (standard/postmark). gmail-only boots without it for dev / native-only fleets.
   if (process.env.NODE_ENV === 'production' && productionConfig.emailInboundMode !== 'gmail-only') {
     if (!hasEnv('POSTMARK_INBOUND_USERNAME')) {
       throw new Error('[Gateway] Missing required environment variable: POSTMARK_INBOUND_USERNAME');

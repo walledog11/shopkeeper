@@ -1,7 +1,6 @@
 import { after } from 'next/server';
 import { resolveGmailAccountType } from '@shopkeeper/email/providers';
 import type { IntegrationFailureCategory } from '@shopkeeper/analytics';
-import { isGmailNativeInboundEnabled } from '@/lib/env';
 import logger from '@/lib/server/logger';
 import { isRecord } from "@shopkeeper/shared/guards";
 import {
@@ -44,7 +43,6 @@ export async function completeGmailOAuth(input: {
   const userResult = await fetchGmailUser(input.config, tokenResult.data.accessToken);
   if (!userResult.ok) return userResult;
 
-  const gmailNativeInboundEnabled = isGmailNativeInboundEnabled();
   const gmailAccountType = resolveGmailAccountType(
     userResult.data.email,
     userResult.data.hostedDomain,
@@ -65,7 +63,7 @@ export async function completeGmailOAuth(input: {
     },
   });
 
-  if (gmailNativeInboundEnabled) scheduleGmailWatchRegistration(integrationId);
+  scheduleGmailWatchRegistration(integrationId);
   logger.info(
     { userEmail: userResult.data.email, orgId: input.organizationId },
     '[Gmail OAuth] Integration saved',

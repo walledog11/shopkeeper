@@ -25,7 +25,7 @@ describe('email-inbound-path', () => {
     const assessment = assessWorkspaceEmailInbound([
       emailIntegration('gmail', { provider: 'gmail', gmail: { inboundStatus: 'active' } }),
       emailIntegration('postmark', { provider: 'postmark' }),
-    ], true);
+    ]);
 
     expect(dualInboundDeliveryMessage(assessment)).toMatch(/both active/i);
   });

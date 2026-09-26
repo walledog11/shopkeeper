@@ -150,10 +150,6 @@ export function getOperatorPlanQueueMax(): number {
   return Math.min(parsed, 5);
 }
 
-export function isGmailNativeInboundEnabled(): boolean {
-  return parseGatewayProductionConfig(process.env).gmailNativeInbound;
-}
-
 export interface StorefrontChatMessageBudgets {
   perSession: number;
   perShopPerDay: number;

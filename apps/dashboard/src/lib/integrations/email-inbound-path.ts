@@ -4,11 +4,8 @@ import type { Integration } from '@/types';
 const INBOUND_VIA_GMAIL_LABEL = 'Inbound via Gmail';
 const INBOUND_VIA_FORWARDING_LABEL = 'Inbound via forwarding';
 
-export function assessWorkspaceEmailInbound(
-  integrations: Integration[],
-  gmailNativeInboundEnabled: boolean,
-) {
-  return assessEmailInboundPaths(integrations, { gmailNativeInboundEnabled });
+export function assessWorkspaceEmailInbound(integrations: Integration[]) {
+  return assessEmailInboundPaths(integrations);
 }
 
 export function dualInboundDeliveryMessage(assessment: ReturnType<typeof assessEmailInboundPaths>): string | null {

@@ -123,8 +123,7 @@ function dependencies(client: {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.stubEnv('EMAIL_INBOUND_MODE', 'hybrid');
-  vi.stubEnv('GMAIL_NATIVE_INBOUND', 'true');
+  vi.stubEnv('EMAIL_INBOUND_MODE', 'standard');
   dbMock.integration.findUnique.mockResolvedValue(integration());
   dbMock.integration.update.mockResolvedValue(integration());
 });
@@ -132,19 +131,6 @@ beforeEach(() => {
 describe('processGmailSyncJob', () => {
   it('drops a job whose integration was removed before processing', async () => {
     dbMock.integration.findUnique.mockResolvedValueOnce(null);
-    const client = {
-      listHistory: vi.fn(),
-      getMessageRaw: vi.fn(),
-    };
-    const { dependencies: deps } = dependencies(client);
-
-    await processGmailSyncJob(JOB_DATA, deps);
-
-    expect(client.listHistory).not.toHaveBeenCalled();
-  });
-
-  it('honors the native inbound kill switch before calling Gmail', async () => {
-    vi.stubEnv('GMAIL_NATIVE_INBOUND', 'false');
     const client = {
       listHistory: vi.fn(),
       getMessageRaw: vi.fn(),

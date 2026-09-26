@@ -46,14 +46,12 @@ export function assessEmailInboundPaths(
     metadata?: unknown | null;
     lifecycleStatus?: string;
   }[],
-  options: { gmailNativeInboundEnabled: boolean },
 ): EmailInboundPathAssessment {
   const { gmail, postmark } = findEmailIntegrations(integrations);
   const gmailActive = !gmail?.lifecycleStatus || gmail.lifecycleStatus === 'active';
   const postmarkActive = !postmark?.lifecycleStatus || postmark.lifecycleStatus === 'active';
   const gmailWatchReceiving = Boolean(
-    options.gmailNativeInboundEnabled
-    && gmail
+    gmail
     && gmailActive
     && isGmailWatchReceivingConfigured(gmail),
   );

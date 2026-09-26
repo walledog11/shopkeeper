@@ -62,27 +62,16 @@ function syncQueue() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.stubEnv('EMAIL_INBOUND_MODE', 'hybrid');
-  vi.stubEnv('GMAIL_NATIVE_INBOUND', 'true');
+  vi.stubEnv('EMAIL_INBOUND_MODE', 'standard');
   dbMock.integration.update.mockResolvedValue({});
 });
 
 describe('runGmailWatchMaintenance', () => {
-  it('honors global native-inbound and runtime-mode disablement', async () => {
+  it('skips Gmail rows when the gateway is in postmark-only inbound mode', async () => {
     const row = integration();
     dbMock.integration.findMany.mockResolvedValue([row]);
     const queue = syncQueue();
 
-    vi.stubEnv('GMAIL_NATIVE_INBOUND', 'false');
-    const disabled = await runGmailWatchMaintenance({
-      redis: redis(),
-      syncQueue: queue,
-      emitAlert: vi.fn(),
-      now: () => NOW,
-      topicName: 'projects/test/topics/gmail-inbound',
-    });
-
-    vi.stubEnv('GMAIL_NATIVE_INBOUND', 'true');
     vi.stubEnv('EMAIL_INBOUND_MODE', 'postmark');
     const postmarkOnly = await runGmailWatchMaintenance({
       redis: redis(),
@@ -92,7 +81,6 @@ describe('runGmailWatchMaintenance', () => {
       topicName: 'projects/test/topics/gmail-inbound',
     });
 
-    expect(disabled.checked).toBe(0);
     expect(postmarkOnly.checked).toBe(0);
   });
 

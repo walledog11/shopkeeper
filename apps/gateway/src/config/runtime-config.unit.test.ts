@@ -8,7 +8,6 @@ import {
   getMetaWebhookConfig,
   getPostmarkWebhookConfig,
   getTelegramConfig,
-  isGmailNativeInboundEnabled,
   isOrderRiskMonitorEnabled,
   isReturnLifecycleMonitorEnabled,
   getGatewayRuntimeFlags,
@@ -212,20 +211,6 @@ describe('getGatewayRuntimeFlags', () => {
         returnLifecycle: false,
       },
     });
-  });
-});
-
-describe('isGmailNativeInboundEnabled', () => {
-  it('is disabled by default and supports an explicit rollout', () => {
-    expect(isGmailNativeInboundEnabled()).toBe(false);
-
-    vi.stubEnv('GMAIL_NATIVE_INBOUND', 'true');
-    expect(isGmailNativeInboundEnabled()).toBe(true);
-  });
-
-  it('rejects invalid values', () => {
-    vi.stubEnv('GMAIL_NATIVE_INBOUND', 'gradual');
-    expect(() => isGmailNativeInboundEnabled()).toThrow(/GMAIL_NATIVE_INBOUND/);
   });
 });
 

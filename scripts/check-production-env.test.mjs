@@ -33,7 +33,6 @@ function createDashboardLaunchEnv(overrides = {}) {
     BLOB_READ_WRITE_TOKEN: 'vercel-blob-token',
     GOOGLE_CLIENT_ID: 'google-client-id',
     GOOGLE_CLIENT_SECRET: 'google-client-secret',
-    GMAIL_NATIVE_INBOUND: 'false',
     GMAIL_PUBSUB_TOPIC: 'projects/shopkeeper-prod/topics/gmail-inbound',
     IMESSAGE_LINE_HANDLE: '+15551234567',
     INSTAGRAM_INTEGRATION_ENABLED: 'false',
@@ -58,7 +57,6 @@ function createGatewayLaunchEnv(overrides = {}) {
     POSTMARK_INBOUND_PASSWORD: 'postmark-inbound-pass',
     GOOGLE_CLIENT_ID: 'google-client-id',
     GOOGLE_CLIENT_SECRET: 'google-client-secret',
-    GMAIL_NATIVE_INBOUND: 'false',
     GMAIL_PUBSUB_TOPIC: 'projects/shopkeeper-prod/topics/gmail-inbound',
     GMAIL_PUBSUB_AUDIENCE: 'https://gateway.example.com/webhooks/gmail/push',
     GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT:
@@ -313,7 +311,7 @@ test('gateway launch contract uses the shared inbound-mode enum', () => {
   });
   assert.equal(
     typo.errors.includes(
-      'EMAIL_INBOUND_MODE must be one of: hybrid, postmark, gmail-only',
+      'EMAIL_INBOUND_MODE must be one of: standard, postmark, gmail-only',
     ),
     true,
   );
@@ -356,7 +354,6 @@ test('Gmail Pub/Sub production settings use deployable identifiers', () => {
   const gateway = validateProductionEnv('gateway', {
     scope: 'launch',
     env: createGatewayLaunchEnv({
-      GMAIL_NATIVE_INBOUND: 'gradual',
       GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT: 'not-an-email',
     }),
   });
@@ -364,12 +361,6 @@ test('Gmail Pub/Sub production settings use deployable identifiers', () => {
   assert.equal(
     dashboard.errors.includes(
       'GMAIL_PUBSUB_TOPIC must use projects/<project>/topics/<topic>',
-    ),
-    true,
-  );
-  assert.equal(
-    gateway.errors.includes(
-      'GMAIL_NATIVE_INBOUND must be either true or false',
     ),
     true,
   );
@@ -490,7 +481,6 @@ test('env file parser trims comments and quoted values the same way prod env fil
       'POSTMARK_INBOUND_PASSWORD=postmark-inbound-pass',
       'GOOGLE_CLIENT_ID=google-client-id',
       'GOOGLE_CLIENT_SECRET=google-client-secret',
-      'GMAIL_NATIVE_INBOUND=false',
       'GMAIL_PUBSUB_TOPIC=projects/shopkeeper-prod/topics/gmail-inbound',
       'GMAIL_PUBSUB_AUDIENCE=https://gateway.example.com/webhooks/gmail/push',
       'GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT=shopkeeper-gmail-push@shopkeeper-prod.iam.gserviceaccount.com',

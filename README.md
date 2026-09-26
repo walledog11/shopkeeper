@@ -64,7 +64,7 @@ Run `nvm use` from the repository root to select the version declared in `.nvmrc
 - All DB queries are scoped by `organizationId`
 
 ## Channels
-- **Email** — complete. **Hybrid model**: inbound rail and outbound provider are separate concerns. *Inbound* (customer mail → ticket) uses Postmark forwarding (`{orgId}@inbound.<domain>` → `POST /webhooks/email/inbound` → `process-email` job) plus controlled-rollout native Gmail Pub/Sub/history sync behind `GMAIL_NATIVE_INBOUND`. *Outbound* (replies) is per-integration from `Integration.metadata.provider` — Gmail API or Postmark fallback — with reply threading, quote stripping, and an AI spam filter on new senders. A daily `email-token-health` cron probes Gmail refresh tokens and flags "Reconnect" in Integrations on failure.
+- **Email** — complete. **One inbound transport per mailbox** (see [email inbound steady-state plan](docs/email-inbound-steady-state-plan.md)): forward-only workspaces use Postmark (`{orgId}@inbound.<domain>` → `POST /webhooks/email/inbound` → `process-email`); Gmail OAuth workspaces use Pub/Sub/history sync. Both adapters share one normalized `InboundEmailEvent` enqueue path. *Outbound* (replies) is per-integration from `Integration.metadata.provider` — Gmail API or Postmark fallback — with reply threading, quote stripping, and an AI spam filter on new senders. A daily `email-token-health` cron probes Gmail refresh tokens and flags "Reconnect" in Integrations on failure.
 - **Instagram DM** — Instagram Login OAuth, isolated inbound webhooks, private media storage, agent image understanding, exact-account replies, and token health are implemented. The complete Standard Access lifecycle has passed; Advanced Access approval and a non-role merchant pass remain launch gates
 - **Telegram test transport** — internal testing only; not a product integration and never a marketing or onboarding surface
 - **iMessage** — complete (operator-only, platform-wide Photon Spectrum line, merchant binds iPhone via connect code in Integrations, inbound via `/webhooks/photon`, outbound plan notifications with dashboard deep links, yes/no/skip approval via reply)
@@ -258,7 +258,6 @@ Required for launch-scope features:
 - `BLOB_READ_WRITE_TOKEN` — Vercel Blob token for private inbound email and Instagram attachment storage and authenticated downloads
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — Gmail OAuth and token refresh
 - `GMAIL_PUBSUB_TOPIC` — fully qualified Gmail notification topic
-- `GMAIL_NATIVE_INBOUND` — explicit controlled rollout flag (`false` until enabled); must match the gateway
 - `INSTAGRAM_INTEGRATION_ENABLED` — explicit production rollout switch; keep `false` until the intended test cohort is ready
 
 Optional dashboard variables:
@@ -289,10 +288,9 @@ Required for launch-scope features:
 - `GMAIL_PUBSUB_TOPIC` — fully qualified Gmail notification topic
 - `GMAIL_PUBSUB_AUDIENCE` — expected Pub/Sub OIDC token audience
 - `GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT` — expected Pub/Sub OIDC service-account email
-- `GMAIL_NATIVE_INBOUND` — explicit controlled rollout flag (`false` until enabled); must match the dashboard
 
 Optional gateway variables:
-- `EMAIL_INBOUND_MODE` — `hybrid` (default), `postmark`, or development-only `gmail-only`
+- `EMAIL_INBOUND_MODE` — `standard` (default: both adapters; one transport per org in data), `postmark` (forward-only fleet — disables Gmail sync globally), or `gmail-only` (dev / all-native — Postmark inbound creds optional)
 - `PORT` — Railway sets this automatically
 - `DASHBOARD_INTERNAL_URL` — local dashboard URL used only for dev callback forwarding
 - `GATEWAY_RUNTIME_ROLE` — defaults to `all`; use only when splitting server and worker processes

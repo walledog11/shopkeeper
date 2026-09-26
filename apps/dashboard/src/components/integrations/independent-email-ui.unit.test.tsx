@@ -16,7 +16,6 @@ vi.mock('@/hooks/useOrg', () => ({
 const EMAIL_CONFIG = getIntegrationDefinition('email') as WorkspaceIntegrationDefinition;
 const GMAIL_CONFIG = getIntegrationDefinition('gmail') as WorkspaceIntegrationDefinition;
 const FLAGS = {
-  gmailNativeInboundEnabled: true,
   instagramConnectAvailable: true,
   tiktokShopConfigured: true,
   imessageHandle: null,
@@ -122,8 +121,8 @@ describe('independent email integration UI', () => {
     });
     const forwarding = integration({ emailProvider: 'postmark' });
 
-    expect(deriveIntegrationHealth(GMAIL_CONFIG, gmail, null, true).state).toBe('needs-attention');
-    expect(deriveIntegrationHealth(EMAIL_CONFIG, forwarding, null, true)).toEqual({
+    expect(deriveIntegrationHealth(GMAIL_CONFIG, gmail, null).state).toBe('needs-attention');
+    expect(deriveIntegrationHealth(EMAIL_CONFIG, forwarding, null)).toEqual({
       state: 'waiting',
       note: null,
       recoveryAction: null,

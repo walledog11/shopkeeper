@@ -4,11 +4,13 @@ Evidence-gated removal of compatibility surfaces identified in the 2026-07-10
 codebase audit (in git history). One candidate per pull request; never
 batch unrelated retirements.
 
-Last reviewed: 2026-09-21.
+Last reviewed: 2026-09-26.
 
 ## Completed
 
 | Candidate | Owner | Evidence | Removed |
+| `GMAIL_NATIVE_INBOUND` rollout kill switch (dashboard + gateway) | Email / platform | Phase 4 steady-state plan; Gmail watch on OAuth connect; eligibility from integration state; production audit `--strict` green | 2026-09-26 |
+| `EMAIL_INBOUND_MODE=hybrid` global rollout mode | Email / gateway | Replaced by `standard` (default) with `legacyAliases.hybrid → standard`; `postmark` / `gmail-only` unchanged | 2026-09-26 |
 | --- | --- | --- | --- |
 | Sentry example page/API (`/sentry-example-page`, `/api/sentry-example-api`, `SENTRY_EXAMPLE_PAGE_ENABLED`) | Product engineering | Not referenced in production runbooks; gated outside development; zero production env usage expected | 2026-07-30 |
 | Deprecated `GATEWAY_PUBLIC_URL` alias | Platform / dashboard | Dashboard reads only `GATEWAY_INTERNAL_URL`; legacy alias removed from `gateway-url.ts`, test harness, and production env checker | 2026-07-30 |

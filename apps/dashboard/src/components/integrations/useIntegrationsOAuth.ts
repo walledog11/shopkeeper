@@ -9,15 +9,11 @@ import { useOAuthLauncher } from "@/hooks/useOAuthLauncher"
 import { oauthDefinitionForProvider } from "./integration-presentation"
 
 export function useIntegrationsOAuth({
-  gmailNativeInboundEnabled,
   mutate,
-  onGmailForwardingSetup,
   outcome,
   showToast,
 }: {
-  gmailNativeInboundEnabled: boolean
   mutate: KeyedMutator<Integration[]>
-  onGmailForwardingSetup: () => void
   outcome: OAuthOutcome | null
   showToast: (tone: "success" | "error", message: string) => void
 }) {
@@ -31,10 +27,7 @@ export function useIntegrationsOAuth({
     const definition = oauthDefinitionForProvider(nextOutcome.provider)
     if (!definition) return
     showToast("success", definition.oauth.successCopy)
-    if (definition.id === "gmail" && !gmailNativeInboundEnabled) {
-      onGmailForwardingSetup()
-    }
-  }, [gmailNativeInboundEnabled, mutate, onGmailForwardingSetup, showToast])
+  }, [mutate, showToast])
 
   const { launch } = useOAuthLauncher({
     outcome,

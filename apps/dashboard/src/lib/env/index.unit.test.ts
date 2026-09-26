@@ -5,7 +5,6 @@ import {
   getDashboardOpsAlertConfig,
   getInstagramOAuthAuthorizeConfig,
   getInstagramOAuthCallbackConfig,
-  isGmailNativeInboundEnabled,
   isInstagramIntegrationEnabledForOrg,
   validateDashboardEnv,
 } from './index';
@@ -168,20 +167,6 @@ describe('Instagram OAuth config', () => {
 
     expect(getInstagramOAuthAuthorizeConfig()).toBeNull();
     expect(getInstagramOAuthCallbackConfig()).toBeNull();
-  });
-});
-
-describe('isGmailNativeInboundEnabled', () => {
-  it('is disabled by default and supports explicit rollout values', () => {
-    expect(isGmailNativeInboundEnabled()).toBe(false);
-
-    vi.stubEnv('GMAIL_NATIVE_INBOUND', 'true');
-    expect(isGmailNativeInboundEnabled()).toBe(true);
-  });
-
-  it('rejects invalid values', () => {
-    vi.stubEnv('GMAIL_NATIVE_INBOUND', 'some-merchants');
-    expect(() => isGmailNativeInboundEnabled()).toThrow(/GMAIL_NATIVE_INBOUND/);
   });
 });
 

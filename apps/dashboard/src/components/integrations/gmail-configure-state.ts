@@ -44,11 +44,10 @@ export function usesCustomReplyAddress(integration: Integration): boolean {
 export function needsGmailForwardingSetup(
   integration: Integration,
   lastActivity: string | null,
-  gmailNativeInboundEnabled: boolean,
 ): boolean {
   if (getEmailAuthReauthorizationReason(integration)) return false
 
-  if (gmailNativeInboundEnabled && getGmailInboundStatus(integration) === "active") {
+  if (getGmailInboundStatus(integration) === "active") {
     return false
   }
 
@@ -58,12 +57,11 @@ export function needsGmailForwardingSetup(
 export function deriveGmailConfigureScene(
   integration: Integration,
   lastActivity: string | null,
-  gmailNativeInboundEnabled: boolean,
   health: IntegrationHealth,
 ): GmailConfigureScene {
   if (health.recoveryAction) return "needs_reconnect"
 
-  if (needsGmailForwardingSetup(integration, lastActivity, gmailNativeInboundEnabled)) {
+  if (needsGmailForwardingSetup(integration, lastActivity)) {
     return "needs_forwarding"
   }
 
@@ -73,7 +71,6 @@ export function deriveGmailConfigureScene(
 function gmailReceivingSummary(
   integration: Integration,
   lastActivity: string | null,
-  gmailNativeInboundEnabled: boolean,
 ): { title: string; description: string; status: string } {
   const authIssue = getEmailAuthReauthorizationReason(integration)
   if (authIssue) {
@@ -86,21 +83,19 @@ function gmailReceivingSummary(
     }
   }
 
-  if (gmailNativeInboundEnabled) {
-    const inboundStatus = getGmailInboundStatus(integration)
-    if (inboundStatus === "degraded") {
-      return {
-        title: "Receiving messages",
-        description: "Some messages may be delayed. Sending still works.",
-        status: "Needs attention",
-      }
+  const inboundStatus = getGmailInboundStatus(integration)
+  if (inboundStatus === "degraded") {
+    return {
+      title: "Receiving messages",
+      description: "Some messages may be delayed. Sending still works.",
+      status: "Needs attention",
     }
-    if (inboundStatus === "active") {
-      return {
-        title: "Inbound via Gmail",
-        description: "Customer emails in your connected Gmail inbox appear here automatically. Do not also forward the same inbox to Shopkeeper.",
-        status: "Active",
-      }
+  }
+  if (inboundStatus === "active") {
+    return {
+      title: "Inbound via Gmail",
+      description: "Customer emails in your connected Gmail inbox appear here automatically. Do not also forward the same inbox to Shopkeeper.",
+      status: "Active",
     }
   }
 
@@ -143,19 +138,13 @@ export function gmailConfigureStatusLine(
 export function deriveGmailPresentation(
   integration: Integration,
   lastActivity: string | null,
-  gmailNativeInboundEnabled: boolean,
   health: IntegrationHealth,
 ): GmailPresentation {
-  const scene = deriveGmailConfigureScene(
-    integration,
-    lastActivity,
-    gmailNativeInboundEnabled,
-    health,
-  )
+  const scene = deriveGmailConfigureScene(integration, lastActivity, health)
   return {
     scene,
     statusLine: gmailConfigureStatusLine(scene, integration, lastActivity, health),
-    receiving: gmailReceivingSummary(integration, lastActivity, gmailNativeInboundEnabled),
+    receiving: gmailReceivingSummary(integration, lastActivity),
   }
 }
 

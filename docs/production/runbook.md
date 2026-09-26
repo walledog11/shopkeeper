@@ -141,10 +141,6 @@ Rules:
   Gmail OAuth credentials used for connection and watch registration.
 - `GMAIL_PUBSUB_TOPIC`
   Fully qualified topic name, for example `projects/shopkeeper-prod/topics/gmail-inbound`.
-- `GMAIL_NATIVE_INBOUND`
-  Controlled-rollout switch. Defaults to `false`; use the same value in the dashboard and
-  gateway. When disabled, Gmail OAuth remains available for sending; merchants may independently
-  connect the forwarded Email integration for inbound intake.
 - `IMESSAGE_LINE_HANDLE`
   The fixed iMessage handle merchants text to reach the operator agent. Presence makes iMessage
   available in Integrations and onboarding; it is not a secret.
@@ -184,7 +180,7 @@ Rules:
 - `SHOPIFY_APP_SECRET`
 - `POSTMARK_INBOUND_USERNAME`, `POSTMARK_INBOUND_PASSWORD`
   Required for inbound email webhook basic auth in production whenever the forwarding rail is
-  active — i.e. `EMAIL_INBOUND_MODE` is `hybrid` (default) or `postmark`. See the email
+  active — i.e. `EMAIL_INBOUND_MODE` is `standard` (default) or `postmark`. See the email
   architecture note below.
 - `BLOB_READ_WRITE_TOKEN`
   Required for inbound email and Instagram attachment upload in the gateway worker.
@@ -194,10 +190,6 @@ Rules:
 - `GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT`
   Gmail and authenticated Pub/Sub push settings. The audience and service-account email must
   exactly match the push subscription configuration.
-- `GMAIL_NATIVE_INBOUND`
-  Explicit controlled-rollout switch. Set `false` until Pub/Sub provisioning is verified, and
-  keep its value in sync with the dashboard. When disabled, Gmail pushes are acknowledged
-  without queueing, sync jobs no-op, and watch renewal skips Gmail integrations.
 - `SPECTRUM_PROJECT_ID`, `SPECTRUM_PROJECT_SECRET`, `SPECTRUM_WEBHOOK_SECRET`
   Platform-wide Photon Spectrum credentials for the operator iMessage line (one project for all orgs).
   `SPECTRUM_WEBHOOK_SECRET` is the per-endpoint secret shown when registering
@@ -207,9 +199,10 @@ Rules:
 Optional:
 
 - `EMAIL_INBOUND_MODE`
-  `hybrid` (default) | `postmark` | `gmail-only`. Selects which inbound rail(s) the gateway
-  expects. `gmail-only` lets the gateway boot without Postmark inbound creds (dev / future
-  native-only); production stays `hybrid` until the last forwarding merchant migrates.
+  `standard` (default) | `postmark` | `gmail-only`. `standard` runs both inbound adapters;
+  transport choice is per integration (one mailbox, one path). `postmark` disables Gmail sync
+  globally for forward-only fleets. `gmail-only` skips Postmark inbound cred requirements (dev /
+  all-native). Legacy `hybrid` is accepted and treated as `standard`.
 - `GATEWAY_RUNTIME_ROLE`
   Defaults to `all`. Only set it if you intentionally split server and worker processes.
 - `INSTAGRAM_WEBHOOK_APP_SECRET`, `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` for Instagram DM webhooks.
@@ -355,11 +348,9 @@ npm run audit:email-inbound-transport
 npm run audit:email-inbound-transport -- --strict   # fails when dual-delivery risk > 0
 ```
 
-Set `GMAIL_NATIVE_INBOUND=true` in both dashboard and gateway only after the environment's
-Pub/Sub topic, push subscription, OIDC audience, and service account have been verified.
-New Gmail connects set `inboundMode` to `native` when the flag is on. Existing send-only Gmail
-rows enter native inbound after reconnect (or operator sets `inboundMode` to `native`).
-Existing active watches continue to renew.
+Before enabling Gmail inbound in production, verify the Pub/Sub topic, push subscription, OIDC
+audience, and service account. New Gmail OAuth connects register a watch automatically when
+inbox scopes are granted.
 
 Roll out in this order:
 
@@ -380,7 +371,8 @@ dual-rail hybrid as steady state. See [email-inbound-steady-state-plan.md](../em
 While migrating a merchant from forward-only to Gmail sync, Postmark forward may stay on
 **temporarily** until native sync is verified, then **must be disabled** (merchant rule or
 disconnect the Email forwarding integration). This is not a supported production steady state.
-Do not use `EMAIL_INBOUND_MODE=hybrid` as long-term configuration after Phase 1 acceptance.
+Do not rely on legacy `EMAIL_INBOUND_MODE=hybrid` in new configuration; use `standard` (or
+`gmail-only` / `postmark` when the fleet is homogeneous).
 
 After deploying Gmail reliability changes, allow one complete 12-hour
 maintenance interval and verify:

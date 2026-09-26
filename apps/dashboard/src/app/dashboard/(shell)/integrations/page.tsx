@@ -3,10 +3,7 @@ import { auth } from "@clerk/nextjs/server"
 import { IntegrationsPageSkeleton } from "@/app/dashboard/_components/skeletons"
 import IntegrationsPageClient from "./_components/IntegrationsPageClient"
 import { normalizeImessageLineHandle } from "@/lib/integrations/imessage-visibility"
-import {
-  getShopifyOAuthAuthorizeConfig,
-  isGmailNativeInboundEnabled,
-} from "@/lib/env"
+import { getShopifyOAuthAuthorizeConfig } from "@/lib/env"
 import { resolveInstagramConnectTransport } from "@/lib/socialapi/config"
 import { isStorefrontChatGloballyEnabled } from "@/lib/storefront-chat/enabled"
 import { isTikTokShopOAuthConfigured } from "@/lib/tiktok-shop/config"
@@ -18,7 +15,6 @@ export default async function IntegrationsPage() {
   const org = await getOrCreateOrg()
   const initialIntegrations = await getIntegrationsForOrg(org)
   const imessageHandle = normalizeImessageLineHandle(process.env.IMESSAGE_LINE_HANDLE)
-  const gmailNativeInboundEnabled = isGmailNativeInboundEnabled()
   const instagramConnectAvailable = resolveInstagramConnectTransport(orgId) !== null
   const tiktokShopConfigured = isTikTokShopOAuthConfigured()
   const storefrontChatGloballyEnabled = isStorefrontChatGloballyEnabled()
@@ -28,7 +24,6 @@ export default async function IntegrationsPage() {
     <Suspense fallback={<IntegrationsPageSkeleton />}>
       <IntegrationsPageClient
         imessageHandle={imessageHandle}
-        gmailNativeInboundEnabled={gmailNativeInboundEnabled}
         instagramConnectAvailable={instagramConnectAvailable}
         tiktokShopConfigured={tiktokShopConfigured}
         initialIntegrations={initialIntegrations}

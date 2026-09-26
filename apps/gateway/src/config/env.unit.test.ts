@@ -62,21 +62,24 @@ describe('getGatewayDashboardUrl', () => {
 });
 
 describe('getEmailInboundMode', () => {
-  it('defaults to hybrid and accepts each declared mode', () => {
-    expect(getEmailInboundMode()).toBe('hybrid');
+  it('defaults to standard and accepts each declared mode', () => {
+    expect(getEmailInboundMode()).toBe('standard');
 
     vi.stubEnv('EMAIL_INBOUND_MODE', 'POSTMARK');
     expect(getEmailInboundMode()).toBe('postmark');
 
     vi.stubEnv('EMAIL_INBOUND_MODE', 'gmail-only');
     expect(getEmailInboundMode()).toBe('gmail-only');
+
+    vi.stubEnv('EMAIL_INBOUND_MODE', 'hybrid');
+    expect(getEmailInboundMode()).toBe('standard');
   });
 
-  it('rejects typos instead of silently selecting hybrid', () => {
+  it('rejects typos instead of silently selecting standard', () => {
     vi.stubEnv('EMAIL_INBOUND_MODE', 'gmail_only');
 
     expect(() => getEmailInboundMode()).toThrow(
-      /EMAIL_INBOUND_MODE must be one of: hybrid, postmark, gmail-only/,
+      /EMAIL_INBOUND_MODE must be one of: standard, postmark, gmail-only/,
     );
   });
 });

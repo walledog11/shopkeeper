@@ -42,7 +42,6 @@ const CONTRACTS = {
       'PRICE_ID_PRO',
       'GOOGLE_CLIENT_ID',
       'GOOGLE_CLIENT_SECRET',
-      'GMAIL_NATIVE_INBOUND',
       'GMAIL_PUBSUB_TOPIC',
       'IMESSAGE_LINE_HANDLE',
       'INSTAGRAM_INTEGRATION_ENABLED',
@@ -76,7 +75,6 @@ const CONTRACTS = {
       'POSTMARK_INBOUND_PASSWORD',
       'GOOGLE_CLIENT_ID',
       'GOOGLE_CLIENT_SECRET',
-      'GMAIL_NATIVE_INBOUND',
       'GMAIL_PUBSUB_TOPIC',
       'GMAIL_PUBSUB_AUDIENCE',
       'GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT',
@@ -285,12 +283,10 @@ export function validateProductionEnv(target, options = {}) {
     errors.push('PLAN_EXECUTION_LEDGER_MODE must be one of: off, enforce');
   }
 
-  const gmailNativeInbound = target === 'gateway' && gatewayConfig
-    ? gatewayConfig.gmailNativeInbound
-    : readEnv(env, 'GMAIL_NATIVE_INBOUND');
-  if (target !== 'gateway' && gmailNativeInbound
-    && gmailNativeInbound !== 'true' && gmailNativeInbound !== 'false') {
-    errors.push('GMAIL_NATIVE_INBOUND must be either true or false');
+  if (readEnv(env, 'GMAIL_NATIVE_INBOUND')) {
+    warnings.push(
+      'GMAIL_NATIVE_INBOUND is retired; remove it from the environment (Gmail watch is integration-driven)',
+    );
   }
   const instagramIntegrationEnabled = readEnv(env, 'INSTAGRAM_INTEGRATION_ENABLED');
   if (

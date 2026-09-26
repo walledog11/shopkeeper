@@ -12,7 +12,6 @@ import { ForwardingEmailDetails, type IntegrationCardCallbacks } from "./Integra
 import { deriveIntegrationCardModels } from "./integration-presentation"
 
 const FLAGS = {
-  gmailNativeInboundEnabled: false,
   instagramConnectAvailable: true,
   tiktokShopConfigured: true,
   imessageHandle: "+15555550100",

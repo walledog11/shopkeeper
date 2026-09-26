@@ -10,7 +10,6 @@ import {
 } from "./integration-presentation"
 
 const FLAGS = {
-  gmailNativeInboundEnabled: true,
   instagramConnectAvailable: true,
   tiktokShopConfigured: true,
   imessageHandle: "+15555550100",

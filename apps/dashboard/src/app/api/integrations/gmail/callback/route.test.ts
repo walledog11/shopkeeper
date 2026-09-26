@@ -57,7 +57,6 @@ beforeEach(async () => {
   vi.stubEnv('GOOGLE_CLIENT_ID', 'google-client-id');
   vi.stubEnv('GOOGLE_CLIENT_SECRET', 'google-client-secret');
   vi.stubEnv('GMAIL_PUBSUB_TOPIC', 'projects/test-project/topics/gmail-inbound');
-  vi.stubEnv('GMAIL_NATIVE_INBOUND', 'true');
   vi.mocked(auth).mockResolvedValue({
     userId: 'usr_oauth',
     orgId: org.clerkOrgId,
@@ -322,47 +321,6 @@ describe('POST /api/integrations/gmail/callback', () => {
       },
       '[Gmail Watch] Watch registration failed',
     );
-  });
-
-  it('keeps Gmail outbound connected without registering a watch when rollout is disabled', async () => {
-    vi.stubEnv('GMAIL_NATIVE_INBOUND', 'false');
-    mockSavedCookies({
-      gmail_oauth_state: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-      gmail_oauth_org: org!.clerkOrgId,
-      gmail_oauth_user: 'usr_oauth',
-    });
-    mockFetch
-      .mockResolvedValueOnce(jsonResponse({
-        access_token: 'gmail_access_token',
-        refresh_token: 'gmail_refresh_token',
-        expires_in: 3600,
-        scope: 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly',
-      }))
-      .mockResolvedValueOnce(jsonResponse({ email: 'merchant@gmail.com' }));
-
-    const res = await POST(new Request(
-      'http://localhost/api/integrations/gmail/callback?code=oauth_code&state=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-    ));
-
-    expect(res.status).toBe(303);
-    const integration = await db.integration.findFirstOrThrow({
-      where: { organizationId: org!.id, platform: ChannelType.email },
-    });
-    expect(integration).toMatchObject({
-      externalAccountId: 'merchant@gmail.com',
-      fromEmail: 'merchant@gmail.com',
-    });
-    expect(integration.metadata).toMatchObject({
-      provider: 'gmail',
-      oauthScopes: [
-        'https://www.googleapis.com/auth/gmail.send',
-        'https://www.googleapis.com/auth/gmail.readonly',
-      ],
-      gmail: {
-        accountType: 'personal',
-      },
-    });
-    expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 
   it('records the read scope after a successful watch when Google omits scope', async () => {

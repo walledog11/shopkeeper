@@ -81,7 +81,6 @@ function renderIntegrationSkeletonSection(
 
 interface IntegrationsPageProps {
   imessageHandle: string | null
-  gmailNativeInboundEnabled: boolean
   instagramConnectAvailable: boolean
   tiktokShopConfigured: boolean
   initialIntegrations?: Integration[]
@@ -99,7 +98,6 @@ export default function IntegrationsPageClient(props: IntegrationsPageProps) {
 
 function IntegrationsPageContent({
   imessageHandle,
-  gmailNativeInboundEnabled,
   instagramConnectAvailable,
   tiktokShopConfigured,
   initialIntegrations,
@@ -140,9 +138,7 @@ function IntegrationsPageContent({
     [searchParams],
   )
   const launchOAuth = useIntegrationsOAuth({
-    gmailNativeInboundEnabled,
     mutate,
-    onGmailForwardingSetup: () => setOpenId("gmail"),
     outcome: oauthOutcome,
     showToast,
   })
@@ -150,14 +146,12 @@ function IntegrationsPageContent({
   const models = useMemo(() => deriveIntegrationCardModels({
     integrations,
     flags: {
-      gmailNativeInboundEnabled,
       instagramConnectAvailable,
       tiktokShopConfigured,
       imessageHandle,
     },
     isAdmin,
   }), [
-    gmailNativeInboundEnabled,
     imessageHandle,
     instagramConnectAvailable,
     integrations,
@@ -185,13 +179,11 @@ function IntegrationsPageContent({
   const attention = useMemo(() => integrationAttentionSummary(models), [models])
   const emailConnected = integrations.some((integration) => integration.platform === "email")
   const dualInboundMessage = useMemo(() => {
-    if (!gmailNativeInboundEnabled) return null
     const assessment = assessWorkspaceEmailInbound(
       integrations.filter((integration) => integration.platform === "email"),
-      gmailNativeInboundEnabled,
     )
     return dualInboundDeliveryMessage(assessment)
-  }, [gmailNativeInboundEnabled, integrations])
+  }, [integrations])
 
   useEffect(() => {
     if (!loaded) return

@@ -18,7 +18,6 @@ import { deriveIntegrationHealth, type IntegrationHealth } from "./integration-c
 import { deriveGmailPresentation, type GmailPresentation } from "./gmail-configure-state"
 
 export interface IntegrationDeploymentFlags {
-  gmailNativeInboundEnabled: boolean
   /** Whether *either* Instagram transport is open to this workspace. */
   instagramConnectAvailable: boolean
   tiktokShopConfigured: boolean
@@ -158,7 +157,6 @@ export function deriveIntegrationCardModels({
 }): IntegrationCardModel[] {
   const emailInboundAssessment = assessWorkspaceEmailInbound(
     integrations.filter((integration) => integration.platform === "email"),
-    flags.gmailNativeInboundEnabled,
   )
   const emailInboundDualMessage = dualInboundDeliveryMessage(emailInboundAssessment)
   const forwardingConnectBlockedMessage = forwardingBlockedMessage(emailInboundAssessment)
@@ -203,14 +201,12 @@ export function deriveIntegrationCardModels({
       definition,
       selectedConnection,
       selectedConnection?.lastActivity ?? null,
-      flags.gmailNativeInboundEnabled,
     )
 
     const gmail = definition.id === "gmail" && selectedConnection
       ? deriveGmailPresentation(
           selectedConnection,
           selectedConnection.lastActivity ?? null,
-          flags.gmailNativeInboundEnabled,
           health,
         )
       : null

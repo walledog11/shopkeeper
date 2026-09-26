@@ -173,7 +173,6 @@ export function validateDashboardEnv(): void {
   }
 
   parseProductAnalyticsConfig();
-  isGmailNativeInboundEnabled();
 
   const redisUrl = process.env.UPSTASH_REDIS_REST_URL?.trim();
   const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
@@ -238,10 +237,6 @@ function parsePositiveIntEnv(name: string, fallback: number): number {
 
 function readDashboardBooleanEnv(name: string, fallback: boolean): boolean {
   return parseBooleanEnv(readEnv, name, fallback, "Dashboard");
-}
-
-export function isGmailNativeInboundEnabled(): boolean {
-  return readDashboardBooleanEnv("GMAIL_NATIVE_INBOUND", false);
 }
 
 /**

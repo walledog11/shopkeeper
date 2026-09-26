@@ -18,22 +18,12 @@ test('shared gateway schema normalizes HTTP URLs and rejects other protocols', (
   );
 });
 
-test('shared gateway schema uses strict boolean syntax', () => {
+test('shared gateway schema maps legacy hybrid inbound mode to standard', () => {
+  assert.equal(parseGatewayProductionConfig({}).emailInboundMode, 'standard');
   assert.equal(
-    parseGatewayProductionConfig({ GMAIL_NATIVE_INBOUND: 'true' }).gmailNativeInbound,
-    true,
+    parseGatewayProductionConfig({ EMAIL_INBOUND_MODE: 'hybrid' }).emailInboundMode,
+    'standard',
   );
-  assert.equal(
-    parseGatewayProductionConfig({ GMAIL_NATIVE_INBOUND: 'false' }).gmailNativeInbound,
-    false,
-  );
-
-  for (const invalid of ['TRUE', '1', 'yes', 'on']) {
-    assert.throws(
-      () => parseGatewayProductionConfig({ GMAIL_NATIVE_INBOUND: invalid }),
-      /GMAIL_NATIVE_INBOUND must be either true or false/,
-    );
-  }
 });
 
 test('shared gateway schema accepts only positive safe integers', () => {
@@ -58,13 +48,12 @@ test('shared gateway schema accepts only positive safe integers', () => {
 });
 
 test('shared gateway schema rejects enum typos', () => {
-  assert.equal(parseGatewayProductionConfig({}).emailInboundMode, 'hybrid');
   assert.equal(
     parseGatewayProductionConfig({ EMAIL_INBOUND_MODE: 'GMAIL-ONLY' }).emailInboundMode,
     'gmail-only',
   );
   assert.throws(
     () => parseGatewayProductionConfig({ EMAIL_INBOUND_MODE: 'gmail_only' }),
-    /EMAIL_INBOUND_MODE must be one of: hybrid, postmark, gmail-only/,
+    /EMAIL_INBOUND_MODE must be one of: standard, postmark, gmail-only/,
   );
 });

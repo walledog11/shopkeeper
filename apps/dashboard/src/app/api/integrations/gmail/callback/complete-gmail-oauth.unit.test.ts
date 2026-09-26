@@ -9,8 +9,12 @@ const { mockFetch, mockUpsert } = vi.hoisted(() => ({
 vi.mock('@/app/api/integrations/_lib/email-integration', () => ({
   upsertEmailIntegration: mockUpsert,
 }));
+const { mockRegisterGmailWatch } = vi.hoisted(() => ({
+  mockRegisterGmailWatch: vi.fn(),
+}));
+
 vi.mock('@/app/api/integrations/_lib/gmail-watch', () => ({
-  registerGmailWatch: vi.fn(),
+  registerGmailWatch: mockRegisterGmailWatch,
 }));
 vi.mock('@/lib/server/logger', () => ({
   default: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
@@ -21,8 +25,8 @@ import { GMAIL_EMAIL_OAUTH } from '@/app/api/integrations/_lib/email-oauth-provi
 import { completeGmailOAuth } from './complete-gmail-oauth';
 
 beforeEach(() => {
-  vi.stubEnv('GMAIL_NATIVE_INBOUND', 'false');
   mockUpsert.mockResolvedValue('integration_1');
+  mockRegisterGmailWatch.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -105,6 +109,7 @@ describe('completeGmailOAuth', () => {
     }));
 
     await expect(complete()).resolves.toEqual({ ok: true, integrationId: 'integration_1' });
+    expect(mockRegisterGmailWatch).toHaveBeenCalledWith('integration_1');
     expect(mockUpsert).toHaveBeenCalledWith(expect.objectContaining({
       accessToken: 'gmail_access',
       externalAccountId: 'owner@example.test',

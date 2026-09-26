@@ -30,7 +30,7 @@ describe("deriveGmailConfigureScene", () => {
       metadata: { oauthScopes: ["https://www.googleapis.com/auth/gmail.send"] },
     })
 
-    expect(deriveGmailConfigureScene(integration, null, true, {
+    expect(deriveGmailConfigureScene(integration, null, {
       state: "needs-attention",
       note: "Reconnect Gmail to grant inbox access for native receiving.",
       recoveryAction: { kind: "oauth", label: "Fix" },
@@ -42,12 +42,12 @@ describe("deriveGmailConfigureScene", () => {
       metadata: { oauthScopes: [GMAIL_READONLY_SCOPE] },
     })
 
-    expect(deriveGmailConfigureScene(integration, null, false, {
+    expect(deriveGmailConfigureScene(integration, null, {
       state: "working",
       note: null,
       recoveryAction: null,
     })).toBe("needs_forwarding")
-    expect(needsGmailForwardingSetup(integration, null, false)).toBe(true)
+    expect(needsGmailForwardingSetup(integration, null)).toBe(true)
   })
 
   it("shows ready when native inbound is active", () => {
@@ -58,7 +58,7 @@ describe("deriveGmailConfigureScene", () => {
       },
     })
 
-    expect(deriveGmailConfigureScene(integration, null, true, {
+    expect(deriveGmailConfigureScene(integration, null, {
       state: "working",
       note: null,
       recoveryAction: null,
@@ -70,7 +70,7 @@ describe("deriveGmailConfigureScene", () => {
       metadata: { oauthScopes: [GMAIL_READONLY_SCOPE] },
     })
 
-    expect(deriveGmailConfigureScene(integration, new Date().toISOString(), false, {
+    expect(deriveGmailConfigureScene(integration, new Date().toISOString(), {
       state: "working",
       note: null,
       recoveryAction: null,
