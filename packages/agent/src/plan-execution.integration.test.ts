@@ -749,6 +749,42 @@ describe("executeCurrentCachedHomePlan execution", () => {
     expect(runAgent.mock.calls[0]?.[2]).toEqual(proposal.canonicalActions);
   });
 
+  // Gate C run 4's shape: the write committed and the approved draft was withheld
+  // because a placeholder had no receipt value. The refund stands; the reply is
+  // delivery, recorded on its own row.
+  it("completes a v2 task whose write committed when its approved draft is withheld", async () => {
+    const support = await seedSupportCardParkedOnTask(2);
+    const runAgent = vi.fn(async (): Promise<AgentResult> => ({
+      summary: "Refunded the order; the reply was not sent.",
+      actionsPerformed: [
+        { tool: "create_refund", result: "Refunded", status: "success" },
+        {
+          tool: "send_reply",
+          result: "Error: skipped send_reply because its refund_amount placeholder has no value from a successful action receipt.",
+          status: "error",
+        },
+      ],
+    }));
+
+    const executed = await executeCurrentCachedHomePlan({
+      orgId: support.org.id,
+      threadId: support.thread.id,
+      settings: support.settings,
+      executionIntent: "merchant_approved",
+      failureRoute: "test",
+      approver: { clerkUserId: support.member.clerkUserId, displayName: null },
+    }, makeDeps({ runAgent }));
+
+    expect(executed.execution?.status).toBe("committed");
+    expect(await db.planExecution.findUniqueOrThrow({
+      where: { organizationId_planId: { organizationId: support.org.id, planId: support.cache.planId! } },
+    })).toMatchObject({ status: "committed" });
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: support.task.id } }))
+      .toMatchObject({ status: "completed", failureCode: null });
+    expect(await db.agentProposal.findUniqueOrThrow({ where: { id: support.cache.planId! } }))
+      .toMatchObject({ status: "completed" });
+  });
+
   it("keeps a v1 durable approval pinned to cached-plan interpretation", async () => {
     const support = await seedSupportCardParkedOnTask(1);
 

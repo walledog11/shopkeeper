@@ -19,7 +19,7 @@ import { partitionConversationMessages } from "./utils/conversationViewUtils"
 import { useConversationCocoAction } from "./useConversationCocoAction"
 import { useConversationViewportEffects } from "./useConversationViewportEffects"
 import { useVisualKeyboard } from "./useVisualKeyboard"
-import type { Ticket, AgentTurn, AgentPlan, FailedMessage, OrgSettings, PlanExecutionOutcome, Thread } from "@/types"
+import type { Ticket, AgentTurn, AgentPlan, FailedMessage, OrgSettings, PlanCardOutcome, Thread } from "@/types"
 
 interface Props {
   ticket: Ticket
@@ -341,7 +341,7 @@ interface ConversationOpenComposerProps {
     isPlanLoading: boolean
     isRegenerating: boolean
     pendingPlan: AgentPlan | null
-    planExecutionOutcome: PlanExecutionOutcome | null
+    planExecutionOutcome: PlanCardOutcome | null
   }
   composerRef: RefObject<HTMLDivElement | null>
   customer: {

@@ -3,7 +3,7 @@
 import { useEffect, useReducer, useRef, useState } from "react"
 import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import { planReplyText } from "@shopkeeper/agent/plan-preview"
-import type { AgentPlan, AgentTurn, PlanExecutionOutcome, RawToolCall, Ticket } from "@/types"
+import type { AgentPlan, AgentTurn, PlanCardOutcome, RawToolCall, Ticket } from "@/types"
 import {
   askAgentPrivately,
   dismissAgentPlan,
@@ -84,7 +84,7 @@ interface PendingPlanState {
 interface PlanExecutionState {
   ticketId: string
   planKey: string
-  outcome: PlanExecutionOutcome
+  outcome: PlanCardOutcome
 }
 
 function planStateKey(plan: AgentPlan): string {
@@ -162,10 +162,13 @@ export function useConversationAgentFlow({
 
     try {
       const result = await executeApprovedAgentPlan(ticket.id, instruction, approvedToolCalls)
-      setPlanExecutionState({ ...executionIdentity, outcome: result.outcome })
+      const replyNotSent = result.ok && result.replyNotSent
+      setPlanExecutionState({ ...executionIdentity, outcome: replyNotSent ? "reply_not_sent" : result.outcome })
       const turn = createAgentTurn({ ...result.turn, instruction: NO_MERCHANT_INSTRUCTION })
       if (result.ok) {
         onAgentComplete(turn)
+        // A reply that did not go out stays on the card until the merchant dismisses it.
+        if (replyNotSent) return
         successDismissTimer.current = setTimeout(() => {
           successDismissTimer.current = null
           setPendingPlan(null)

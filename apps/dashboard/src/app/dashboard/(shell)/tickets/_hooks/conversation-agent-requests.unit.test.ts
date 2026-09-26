@@ -27,12 +27,32 @@ describe("conversation agent requests", () => {
       ok: true,
       executionId: "execution-1",
       outcome: "committed",
+      replyNotSent: false,
       turn: {
         instruction: "reply to customer",
         actions: [{ tool: "send_reply", result: "Sent reply" }],
         summary: "Done",
         error: null,
       },
+    })
+  })
+
+  it("reports a committed plan whose reply did not go out", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({
+        summary: "Refunded; the reply was not sent.",
+        actionsPerformed: [
+          { tool: "create_refund", result: "Refunded", status: "success" },
+          { tool: "send_reply", result: "Error: skipped send_reply", status: "error" },
+        ],
+        execution: { id: "execution-1", status: "committed" },
+      }), { status: 200 }),
+    ))
+
+    expect(await executeApprovedAgentPlan("thread-1", "refund and reply", [])).toMatchObject({
+      ok: true,
+      outcome: "committed",
+      replyNotSent: true,
     })
   })
 

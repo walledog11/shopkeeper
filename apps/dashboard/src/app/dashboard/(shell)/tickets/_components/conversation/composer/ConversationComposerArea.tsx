@@ -9,7 +9,7 @@ import Composer from "./Composer"
 import MobileFloatingReplyComposer from "./MobileFloatingReplyComposer"
 import { PlanReviewSurface } from "./PlanReviewSurface"
 import type { ComposerAttachments } from "../../../_hooks/useComposerAttachments"
-import type { AgentPlan, PlanExecutionOutcome, RawToolCall, Ticket } from "@/types"
+import type { AgentPlan, PlanCardOutcome, RawToolCall, Ticket } from "@/types"
 
 interface Props {
   containerRef?: Ref<HTMLDivElement>
@@ -28,7 +28,7 @@ interface Props {
   onSend: (isNote: boolean) => void
   onAnswered: (result?: { saveToKb: boolean }) => void
   pendingPlan: AgentPlan | null
-  planExecutionOutcome: PlanExecutionOutcome | null
+  planExecutionOutcome: PlanCardOutcome | null
   threadId: string
   composer: {
     customerName: string

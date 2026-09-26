@@ -2,7 +2,7 @@
 
 import MerchantAnswerForm from "@/components/agent/MerchantAnswerForm"
 import { NeedsYouCardFooter } from "@/app/dashboard/_components/home/needs-you-card-ui"
-import type { AgentPlan, PlanExecutionOutcome, RawToolCall } from "@/types"
+import type { AgentPlan, PlanCardOutcome, RawToolCall } from "@/types"
 import ActionPlanCard from "./ActionPlanCard"
 
 export function PlanReviewSurface({
@@ -25,7 +25,7 @@ export function PlanReviewSurface({
   isExecuting: boolean
   isRegenerating: boolean
   layout?: "default" | "mobile-sticky"
-  executionOutcome: PlanExecutionOutcome | null
+  executionOutcome: PlanCardOutcome | null
   onAnswered: (result?: { saveToKb: boolean }) => void
   onApprove: (approvedToolCalls: RawToolCall[]) => Promise<void>
   onDismiss?: () => void

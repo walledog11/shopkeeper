@@ -5,14 +5,14 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AgentPlan, PlanExecutionOutcome, RawToolCall } from '@/types';
+import type { AgentPlan, PlanCardOutcome, RawToolCall } from '@/types';
 import ActionPlanCard from './ActionPlanCard';
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
 
 function render(plan: AgentPlan, options: {
-  executionOutcome?: PlanExecutionOutcome | null;
+  executionOutcome?: PlanCardOutcome | null;
   isExecuting?: boolean;
   onApprove?: (approvedToolCalls: RawToolCall[]) => Promise<void>;
   onDismiss?: () => void;
@@ -226,6 +226,7 @@ describe('ActionPlanCard', () => {
     ['failed', 'Plan failed', 'Review the activity'],
     ['partial', 'Plan partially completed', 'Some steps completed'],
     ['unknown', 'Outcome unconfirmed', 'Check provider activity'],
+    ['reply_not_sent', "Done, but the reply wasn't sent", 'reply yourself'],
   ] as const)('retains %s outcomes with safe recovery guidance', (outcome, label, guidance) => {
     const onDismiss = vi.fn();
     const plan: AgentPlan = {

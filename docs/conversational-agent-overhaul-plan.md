@@ -3,7 +3,7 @@
 Status, checked 2026-09-25 against `origin/master` at `fff54dc4`: Packages 0–5
 are done. Package 6 (certify, cut over, and delete the old runtime) is in
 progress. Of the thirteen items in [What is left](#what-is-left-in-order), 1–3
-are done, 4 is done except one piece, and 5–13 are open. Decision E was answered
+and 5 are done, 4 is done except one piece, and 6–13 are open. Decision E was answered
 on 2026-09-25 (phone instructions move onto durable tasks, item 10); decision F
 is open and blocks item 8. Production runs runtime v1 by default,
 with one controlled organization on runtime v2.
@@ -75,26 +75,19 @@ contract was unbuilt.
 | Packages 0–5 | Done, and verified with the real test database and fake providers; see [What has been done](#what-has-been-done). The only real-store effects so far are Gate C's customer note and address change. |
 | Gate A: comparison tooling | Done. |
 | Gate B: v1/v2 model comparison | The baseline comparison passed on 2026-09-25: both runtimes pass the 26 hard fixtures with no unauthorized or duplicate effect. Not complete, for three reasons. The held-out variants the plan requires have never been written as fixtures. v2 costs about 33% more per suite, and there is no budget to judge that against. Items 3 and 4 have changed v2's model behavior since that run. It runs again as item 7. |
-| Gate C: real provider and delivery | Exercised on 2026-09-25. Run 4 went approval → Shopify write → typed receipt → customer email received, but it is stored as failed (disagreement 4). It runs again as item 8. |
+| Gate C: real provider and delivery | Exercised on 2026-09-25. Run 4 went approval → Shopify write → typed receipt → customer email received, but its execution was stored as failed, by a rule item 5 has since fixed. It runs again as item 8. |
 | Gate D, staged rollout, Gate E | Not started. |
 | Production routing | `AGENT_RUNTIME_VERSION=1` on both services, with `AGENT_RUNTIME_V2_ORG_IDS` set to the controlled organization since 2026-09-25. New tasks for every other organization run v1. |
-| Work in flight | Item 5 is committed on the local branch `delivery-separate-from-completion` (`894cbb83`, not pushed). It is based on `36d43c12`, before #110, #111 and #114, so it needs a rebase. Item 6 is uncommitted work in the `.claude/worktrees/one-proposal-identity` worktree, branch `close-cancels-waiting-tasks`. |
-| Open pull requests | None for this plan. |
+| Work in flight | Item 6, branch `close-cancels-waiting-tasks`. |
+| Open pull requests | Item 5, branch `delivery-separate-from-completion`. |
 
 ## Where the code disagrees with this plan
 
 Each open item was checked against the code on 2026-09-25. Each is a defect
 against a contract this plan already specifies, not a new requirement.
-Disagreements 1, 2, 3 and 6 are resolved; see
+Disagreements 1, 2, 3, 4 and 6 are resolved; see
 [What has been done](#what-has-been-done).
 
-- **Disagreement 4: A rejected reply draft fails the execution.** Contract: *Durable request
-  and work state* ("Record action completion separately from response
-  delivery"). `planExecutionOutcomeForActions` (`execution-outcome.ts`) counts a
-  rejected or withheld draft as a failed action. A committed write is therefore
-  stored as `partial`, and `execution-ledger.ts` records
-  `approved_execution_failed`. Gate C run 4 (write committed, reply delivered)
-  is stored as failed. Fixed by item 5.
 - **Disagreement 5: Closing a conversation strands its waiting task.** Contract: *Task
   transitions and concurrency*, which has no row for this; decision C supplies
   it. Observed in Gate C: task `6abfe733` stayed `waiting_approval` after its
@@ -136,28 +129,12 @@ request. Doc-only changes go straight to master.
      task puts a new proposal to the merchant that reflects the actual outcome.
      It goes through the ordinary proposal and approval path, never a direct
      send.
-   - Order: land this after item 5. Until then a withheld draft still counts as
-     a failed action, which is what item 5 fixes.
+   - Item 5 has landed, so a withheld draft no longer counts as a failed
+     action; build on that.
    - Done when deterministic tests cover both triggers (failed write, unfillable
      placeholder). The model evidence for the whole item is item 7's run of
      `refund-partial-placeholder` (runtime v2 only), which has never run.
-5. **Delivery separate from completion** (disagreement 4). A rejected or withheld
-   draft is not a failed effect. The task outcome comes from receipts and the
-   final delivery state. Deterministic.
-   - Exists: commit `894cbb83` on the local branch
-     `delivery-separate-from-completion`. A plan is judged by its effects, and a
-     `communication`-category reply counts as delivery. A plan whose only work is
-     the reply is still judged by it, and an `unknown` anywhere still outranks a
-     known outcome. Reconciliation calls the same helper instead of its own copy
-     of the rule. The dashboard card gets a display-only `reply_not_sent` state
-     that says the customer has not been told and stays until dismissed.
-   - To do: rebase onto `origin/master`. #114 changed the approved-draft path
-     this commit judges, so reread the conflict against #114's rule (send
-     exactly as approved, or withhold), not against the older grounding code.
-     Then run the full suite and open a PR.
-   - Done when Gate C run 4's shape (write committed, draft withheld or
-     delivered) stores a committed execution and a completed task, with
-     delivery recorded separately.
+5. ~~**Delivery separate from completion**~~ Done 2026-09-25 (disagreement 4).
 6. **Closed conversation and waiting tasks** (disagreement 5; decision C). Add
    the transition to the task table in *Task transitions and concurrency*, then
    implement it.
@@ -522,6 +499,15 @@ capability: it goes from 5,929 to 13,313 tokens. v1 is unchanged.
     by its label. The v2 path computes no completion facts and runs no prose
     check. Decision B holds through planning-time validation
     (`detectUngroundedReplyText`). The legacy path is unchanged.
+- *Item 5* (disagreement 4). `planExecutionOutcomeForActions`
+  (`execution-outcome.ts`) judges a plan by its effects and treats a
+  `communication`-category reply as delivery, so a committed write whose reply
+  was withheld or failed stays `committed` and its task `completed`. A plan
+  whose only work is the reply is still judged by it, and an `unknown` anywhere,
+  a reply included, still outranks a known outcome. Reconciliation
+  (`finalizeReconciledPlanExecution`) calls the same helper. The dashboard card
+  shows a display-only `reply_not_sent` state (`committedWithUnsentReply`) that
+  says the customer has not been told and stays until dismissed.
 
 ## Product outcome
 
