@@ -24,6 +24,24 @@ test('release budget reserves the bounded gateway cost without starving dashboar
   assert.match(result.stdout, /calls=62\/120/);
 });
 
+test('a runtime-v2 fixture counts only toward a runtime-v2 budget', () => {
+  const run = runtimeVersion => spawnSync(process.execPath, [
+    'scripts/eval-budget-preflight.mjs',
+    '--mode', 'release',
+    '--runtime-version', runtimeVersion,
+    '--repeats', '1',
+    '--judges', 'off',
+    '--max-usd', '0.75',
+    '--max-calls', '120',
+  ], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+  });
+
+  assert.match(run('1').stdout, /mode=release fixtures=26 /);
+  assert.match(run('2').stdout, /mode=release fixtures=27 /);
+});
+
 test('release preflight rejects the call ceiling exhausted by the observed suite', () => {
   const result = spawnSync(process.execPath, [
     'scripts/eval-budget-preflight.mjs',
