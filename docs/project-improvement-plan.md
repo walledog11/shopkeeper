@@ -143,7 +143,7 @@ sound and runs against the original tool call, so the renderer cannot launder an
 past it. The rendering half selects *what* to rewrite by matching English — `MUTATION_VERB`,
 `MUTATION_VERB_PROGRESSIVE`, `CLAIM_CONTINUATION`, contrastive-phrase carve-outs — and then edits
 the reply the customer reads. That is a repair pass on customer-visible text, which
-`AGENT_AUDIT.md` records as deleted for cause, and it means `plan-grounding.ts` now grows a case
+The 2026-08 pipeline audit (`git show 044cb21a:AGENT_AUDIT.md`) records as deleted for cause, and it means `plan-grounding.ts` now grows a case
 every time a phrasing slips through. The structural fix the architecture law already names is to put
 the completion statement in the **tool schema**: `send_reply` accepts an optional structured
 `completion` the executor renders, so the model never authors the sentence that needs grading.

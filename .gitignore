@@ -44,6 +44,7 @@ artifacts/landing-media/
 
 # Local Claude metadata
 /.claude/agent-memory/
+/.claude/scheduled_tasks.lock
 /.claude/settings.local.json
 .vercel
 

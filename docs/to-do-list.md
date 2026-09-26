@@ -365,7 +365,7 @@ Gated-off integrations cost nothing to keep dark.
 | Redis TLS migration | Gateway `REDIS_URL` → `rediss://` on both services | [compatibility-retirement-backlog.md](compatibility-retirement-backlog.md) |
 | Paid beta | Better Stack Level 1 log drains + escalation (free tier done 2026-07-31) | [runbook.md](production/runbook.md), [alerting-evidence.md](production/alerting-evidence.md) |
 | Merchants report a duplicate "over your plan" notice | Move the once-per-period marker off `Organization.settings`. `buildSettingsUpdate` rebuilds that blob from `normalizeStoredOrgSettings`, a whitelist, so saving any org setting drops the marker. Every available fix costs more than the bug today. | — |
-| First customer launch | The canaries the remediation milestones deferred while there was no real traffic to run them against: outcome rows on a live request path (M3), the auto-plan failure-replan path and its prompt tuning (M4), observed preference proposals under `MERCHANT_PREFERENCE_OBSERVED_PROPOSALS=true` and operator-channel confirm/dismiss (M5), and the classifier version-lifecycle ceremony — production inventory by version, retirement procedure, version-upgrade test (M2). | [AGENT_AUDIT.md](../AGENT_AUDIT.md) §2 |
+| First customer launch | The canaries the remediation milestones deferred while there was no real traffic to run them against: outcome rows on a live request path (M3), the auto-plan failure-replan path and its prompt tuning (M4), observed preference proposals under `MERCHANT_PREFERENCE_OBSERVED_PROPOSALS=true` and operator-channel confirm/dismiss (M5), and the classifier version-lifecycle ceremony — production inventory by version, retirement procedure, version-upgrade test (M2). | [conversational-agent-overhaul-plan.md](conversational-agent-overhaul-plan.md) Package 6 |
 
 **Decisions on record** (not tasks): operate "Shopkeeper" unregistered (2026-08-02),
 revisiting the trademark at ~50 paying merchants or before marketing spend. Sync
@@ -433,6 +433,36 @@ Every file in `docs/`. If it is not here, it does not exist.
   gates, and the budget ceilings a paid run must carry.
 - [compatibility-retirement-backlog.md](compatibility-retirement-backlog.md) —
   read before renaming any BullMQ queue or job string.
+- [audit-commands.md](audit-commands.md) — when to run repo audit npm scripts.
+- [project-improvement-plan.md](project-improvement-plan.md) — September 2026 validation
+  charter; superseded by [conversational-agent-overhaul-plan.md](conversational-agent-overhaul-plan.md)
+  where they disagree. Open action items live in this file.
+
+**Agent runtime overhaul (Package 6 open)**
+
+- [conversational-agent-overhaul-plan.md](conversational-agent-overhaul-plan.md) —
+  authoritative v2 architecture, contracts, and ordered rollout work.
+- [conversational-agent-overhaul-release-matrix.md](conversational-agent-overhaul-release-matrix.md) —
+  short working gate checklist for Package 6.
+- [conversational-agent-overhaul-p6-release-evidence.md](conversational-agent-overhaul-p6-release-evidence.md) —
+  run-by-run Package 6 evidence log.
+- [conversational-agent-overhaul-p0-baseline.md](conversational-agent-overhaul-p0-baseline.md) —
+  Package 0 capability inventory and baseline decisions.
+- [agent-maintainability-audit-2026-09-11.md](agent-maintainability-audit-2026-09-11.md) —
+  pre-overhaul analysis; superseded by the overhaul plan where they disagree.
+- [gateway-message-handlers-layout.md](gateway-message-handlers-layout.md) —
+  `apps/gateway/src/message-handlers/` directory map.
+
+**Instagram / SocialAPI**
+
+- [socialapi-transport-plan.md](socialapi-transport-plan.md) — selected `ig_dm`
+  transport through the first 100 users (current policy).
+- [production/socialapi-s0-diligence-2026-09-07.md](production/socialapi-s0-diligence-2026-09-07.md) —
+  dated S0 diligence evidence; read the transport plan for what still blocks rollout.
+- [production/socialapi-spike-evidence-2026-09-09.md](production/socialapi-spike-evidence-2026-09-09.md) —
+  milestone-zero spike record (DM → ticket → reply).
+- [research/socialapi-pivot-assessment-2026-09-07.md](research/socialapi-pivot-assessment-2026-09-07.md) —
+  decision record for choosing SocialAPI over waiting on direct Meta.
 
 **Production**
 
@@ -459,8 +489,7 @@ Every file in `docs/`. If it is not here, it does not exist.
 - [phase-6-external-services.md](phase-6-external-services.md) — console-only
   brand/domain checklist; delete when closing verification passes.
 
-Also live, outside `docs/`: [AGENT_AUDIT.md](../AGENT_AUDIT.md) (the agent pipeline
-audit and its completion bar), [TESTING.md](../TESTING.md) (suite ownership and local
+Also live, outside `docs/`: [TESTING.md](../TESTING.md) (suite ownership and local
 commands), and `.claude/CLAUDE.md` (architecture law and agent-change invariants).
 
 ## Deleted records
@@ -481,3 +510,7 @@ so a search for one lands somewhere.
   `docs/production/shopify-webhook-migration.md` (utility into the config reference),
   plus the chronology cut from the storefront-chat record and the closed M0a/M0b
   archaeology cut from the Shopify config reference.
+- 2026-09-26, `AGENT_AUDIT.md` (August 2026 pipeline audit and milestone ledger;
+  architecture law remains in `.claude/CLAUDE.md`; active agent work order is
+  [conversational-agent-overhaul-plan.md](conversational-agent-overhaul-plan.md))
+  — `git show 044cb21a:AGENT_AUDIT.md`.
