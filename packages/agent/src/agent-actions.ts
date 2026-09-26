@@ -92,13 +92,13 @@ function canonicalizeJson(value: unknown): unknown {
   return value;
 }
 
-// Hashes the executable shape of a plan. Mirrors what an approver actually
-// agreed to (instruction + tool calls), so a backend change to readResults
-// or warnings between approval and execution does not invalidate the hash.
-export function hashPlan(plan: AgentPlan): string {
+// The one proposal identity every surface uses: the card, the durable proposal
+// row, and each approval and claim check. It covers what an approver actually
+// agrees to (instruction + tool calls). Steps are display labels derived from the
+// calls, so a label change does not change authority and must not change identity.
+export function hashPlan(plan: Pick<AgentPlan, "instruction" | "rawToolCalls">): string {
   return sha256Hex(JSON.stringify(canonicalizeJson({
     instruction: plan.instruction,
-    steps: plan.steps,
     rawToolCalls: plan.rawToolCalls,
   })));
 }

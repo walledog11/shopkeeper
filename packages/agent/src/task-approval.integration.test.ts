@@ -147,7 +147,7 @@ describe("shared proposal approval boundary", () => {
     const identity = {
       orgId: input.organizationId,
       planId,
-      planHash: hashPlan({ instruction, steps: [], rawToolCalls: approvedToolCalls }),
+      planHash: hashPlan({ instruction, rawToolCalls: approvedToolCalls }),
       instructionHash: hashInstruction(instruction),
       taskId: task.id,
       proposalId: planId,
@@ -191,7 +191,7 @@ describe("shared proposal approval boundary", () => {
     const execution = await claimPlanExecution({
       orgId: input.organizationId,
       planId,
-      planHash: hashPlan({ instruction, steps: [], rawToolCalls: approvedToolCalls }),
+      planHash: hashPlan({ instruction, rawToolCalls: approvedToolCalls }),
       instructionHash: hashInstruction(instruction),
       taskId: task.id,
       proposalId: planId,
@@ -217,7 +217,7 @@ describe("shared proposal approval boundary", () => {
     const execution = await claimPlanExecution({
       orgId: input.organizationId,
       planId,
-      planHash: hashPlan({ instruction, steps: [], rawToolCalls: approvedToolCalls }),
+      planHash: hashPlan({ instruction, rawToolCalls: approvedToolCalls }),
       instructionHash: hashInstruction(instruction),
       taskId: task.id,
       proposalId: planId,
@@ -268,7 +268,7 @@ describe("shared proposal approval boundary", () => {
     const execution = await claimPlanExecution({
       orgId: input.organizationId,
       planId,
-      planHash: hashPlan({ instruction, steps: [], rawToolCalls: approvedToolCalls }),
+      planHash: hashPlan({ instruction, rawToolCalls: approvedToolCalls }),
       instructionHash: hashInstruction(instruction),
       taskId: task.id,
       proposalId: planId,
@@ -310,7 +310,7 @@ describe("shared proposal approval boundary", () => {
     const execution = await claimPlanExecution({
       orgId: input.organizationId,
       planId,
-      planHash: hashPlan({ instruction, steps: [], rawToolCalls: approvedToolCalls }),
+      planHash: hashPlan({ instruction, rawToolCalls: approvedToolCalls }),
       instructionHash: hashInstruction(instruction),
       taskId: task.id,
       proposalId: planId,

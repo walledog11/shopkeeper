@@ -622,6 +622,13 @@ describe("executeCurrentCachedHomePlan execution", () => {
       data: { cachedPlan: Prisma.DbNull, cachedPlanMessageId: null },
     });
     const runAgent = vi.fn(async () => okResult);
+    // One identity: the hash a card carries is the proposal row's hash, and a
+    // step label the planner changes is display, not authority.
+    expect(hashPlan(support.cache.plan)).toBe(proposal.proposalHash);
+    expect(hashPlan({
+      ...support.cache.plan,
+      steps: support.cache.plan.steps.map((step) => ({ ...step, label: "Relabelled" })),
+    })).toBe(proposal.proposalHash);
 
     await executeCurrentCachedHomePlan({
       orgId: support.org.id,
@@ -733,10 +740,6 @@ describe("executeCurrentCachedHomePlan execution", () => {
     });
     expect(runAgent.mock.calls[0]?.[1]).toBe(proposal.instruction);
     expect(runAgent.mock.calls[0]?.[2]).toEqual(proposal.canonicalActions);
-    // The cached plan hash includes presentation steps. A v2 execution instead
-    // records the proposal's executable-envelope hash, proving which record
-    // authorized the provider inputs.
-    expect(execution.planHash).not.toBe(hashPlan(support.plan));
   });
 
   it("keeps a v1 durable approval pinned to cached-plan interpretation", async () => {
