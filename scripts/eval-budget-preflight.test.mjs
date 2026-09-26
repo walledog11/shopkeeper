@@ -20,8 +20,8 @@ test('release budget reserves the bounded gateway cost without starving dashboar
     result.stdout,
     /allocations dashboard=\$0\.7000\/114calls gateway=\$0\.0500\/6calls/,
   );
-  assert.match(result.stdout, /mode=release fixtures=26 repeats=1 judges=8/);
-  assert.match(result.stdout, /calls=62\/120/);
+  assert.match(result.stdout, /mode=release fixtures=35 repeats=1 judges=14/);
+  assert.match(result.stdout, /calls=82\/120/);
 });
 
 test('a runtime-v2 fixture counts only toward a runtime-v2 budget', () => {
@@ -38,8 +38,8 @@ test('a runtime-v2 fixture counts only toward a runtime-v2 budget', () => {
     encoding: 'utf8',
   });
 
-  assert.match(run('1').stdout, /mode=release fixtures=26 /);
-  assert.match(run('2').stdout, /mode=release fixtures=27 /);
+  assert.match(run('1').stdout, /mode=release fixtures=35 /);
+  assert.match(run('2').stdout, /mode=release fixtures=37 /);
 });
 
 test('release preflight rejects the call ceiling exhausted by the observed suite', () => {
@@ -49,14 +49,14 @@ test('release preflight rejects the call ceiling exhausted by the observed suite
     '--repeats', '1',
     '--judges', 'off',
     '--max-usd', '0.75',
-    '--max-calls', '60',
+    '--max-calls', '80',
   ], {
     cwd: process.cwd(),
     encoding: 'utf8',
   });
 
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /Estimated 62 calls exceeds the approved 60-call ceiling/);
+  assert.match(result.stderr, /Estimated 82 calls exceeds the approved 80-call ceiling/);
 });
 
 test('targeted preflight accounts for isolated cold-cache cost and planner call bounds', () => {
@@ -125,6 +125,24 @@ test('targeted preflight accounts for isolated cold-cache cost and planner call 
   assert.equal(bounded.status, 0, bounded.stderr);
   assert.match(bounded.stdout, /estimate=\$0\.0552\/0\.10 calls=20\/20/);
   assert.match(bounded.stdout, /allocations dashboard=\$0\.1000\/20calls gateway=\$0\.0000\/0calls/);
+});
+
+test('targeted preflight refuses a held-out fixture', () => {
+  const result = spawnSync(process.execPath, [
+    'scripts/eval-budget-preflight.mjs',
+    '--mode', 'targeted',
+    '--fixtures', 'refund-full-order,continuity-two-black-variants',
+    '--repeats', '1',
+    '--judges', 'off',
+    '--max-usd', '0.50',
+    '--max-calls', '60',
+  ], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Held-out fixtures cannot be targeted: continuity-two-black-variants/);
 });
 
 test('targeted call bound includes execution and a gated judge', () => {

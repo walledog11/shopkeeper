@@ -1,4 +1,5 @@
 import { anthropic, buildCachedSystemPrompt, HAIKU_MODEL } from "@shopkeeper/agent/ai"
+import { DISCOVERY_TOOL_NAME } from "@shopkeeper/agent/planner"
 import { readModelUsage } from "@shopkeeper/agent/usage"
 import type { BaselineUsage, EvalUsage, FixtureRunSummary, PhaseUsage } from "./types"
 
@@ -50,6 +51,36 @@ export function recordEvalUsage(
     addPhaseUsage(modelTotal, modelUsage)
     usage.models[model] = modelTotal
   }
+}
+
+export function countDiscoveryCalls(response: unknown): number {
+  if (!response || typeof response !== "object" || !("content" in response)) return 0
+  const content = (response as { content?: unknown }).content
+  if (!Array.isArray(content)) return 0
+  return content.filter(block => (
+    block && typeof block === "object" && block.type === "tool_use" && block.name === DISCOVERY_TOOL_NAME
+  )).length
+}
+
+function nearestRank(sorted: readonly number[], percentile: number): number {
+  if (sorted.length === 0) return 0
+  return sorted[Math.max(0, Math.ceil((percentile / 100) * sorted.length) - 1)]
+}
+
+/**
+ * Per-run latency, cost, model calls and discovery calls across every executed
+ * fixture run, the measures the latency and cost budgets are set against.
+ * Percentiles are nearest-rank over runs, not over fixtures.
+ */
+export function formatTaskSummary(summaries: readonly FixtureRunSummary[]): string {
+  const results = summaries.flatMap(summary => summary.results)
+  const latencies = results.map(result => result.latencyMs).sort((a, b) => a - b)
+  const costs = results.map(result => result.usage.taskCostUsd).sort((a, b) => a - b)
+  const total = (read: (usage: EvalUsage) => number) => results.reduce((sum, result) => sum + read(result.usage), 0)
+  return `[eval:task] runs=${results.length}`
+    + ` latency p50=${nearestRank(latencies, 50)}ms p95=${nearestRank(latencies, 95)}ms`
+    + ` cost p50=$${nearestRank(costs, 50).toFixed(4)} p95=$${nearestRank(costs, 95).toFixed(4)} total=$${total(usage => usage.taskCostUsd).toFixed(4)}`
+    + ` modelCalls=${total(usage => usage.modelCalls)} discoveryCalls=${total(usage => usage.discoveryCalls)}`
 }
 
 export function zeroPhaseUsage(): PhaseUsage {

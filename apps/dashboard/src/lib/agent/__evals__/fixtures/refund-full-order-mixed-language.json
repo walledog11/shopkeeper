@@ -1,0 +1,162 @@
+{
+  "id": "refund-full-order-mixed-language",
+  "description": "A customer writing half in Spanish asks for a full refund on an order that arrived broken and declines a replacement. The agent requests the refund while Shopify supplies the amount and currency.",
+  "whyModelNeeded": "The model must recognise an explicit refund request across two languages and target the right order without calculating money.",
+  "holdout": "C02",
+  "setup": {
+    "classifierIntents": {
+      "mutative_request": true
+    },
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Diego Morales",
+    "customerPlatformId": "diego@example.com",
+    "shopifyCustomerId": "10000001511",
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
+    "messages": [
+      {
+        "senderType": "customer",
+        "contentText": "Hi, el pedido #1511 llegó con las dos tazas rotas. No quiero reemplazo — please just refund the whole order."
+      }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000001511",
+        "name": "#1511",
+        "created_at": "2026-09-16T10:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": "fulfilled",
+        "total_price": "36.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_1511",
+            "title": "Stoneware Mug",
+            "quantity": 2,
+            "variant_id": "variant_1511",
+            "fulfillable_quantity": 0,
+            "current_quantity": 2,
+            "fulfillment_status": "fulfilled"
+          }
+        ]
+      }
+    ],
+    "simulateShopifyRest": [
+      {
+        "path": "orders/9000001511.json",
+        "response": {
+          "order": {
+            "id": 9000001511,
+            "name": "#1511",
+            "currency": "USD",
+            "financial_status": "paid",
+            "total_price": "36.00",
+            "current_total_price": "36.00",
+            "refunds": [],
+            "line_items": [
+              {
+                "id": "lineitem_1511",
+                "title": "Stoneware Mug",
+                "quantity": 2,
+                "current_quantity": 2,
+                "price": "18.00"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "method": "POST",
+        "path": "orders/9000001511/refunds/calculate.json",
+        "response": {
+          "refund": {
+            "currency": "USD",
+            "transactions": [
+              {
+                "kind": "suggested_refund",
+                "gateway": "shopify_payments",
+                "parent_id": 7000001,
+                "amount": "36.00",
+                "currency": "USD"
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "simulateToolResults": [
+      {
+        "tool": "get_shopify_orders",
+        "result": "1 order for Diego Morales: #1511 (id 9000001511, $36.00 USD, paid, fulfilled). Items: Stoneware Mug x2."
+      },
+      {
+        "tool": "get_order_by_name",
+        "result": "Order #1511 (id 9000001511): $36.00 USD, paid, fulfilled. Items: Stoneware Mug (line item lineitem_1511) x2."
+      },
+      {
+        "tool": "create_refund",
+        "result": "Refund of $36.00 USD issued for order #1511.",
+        "receipt": {
+          "target": {
+            "kind": "order",
+            "id": "9000001511"
+          },
+          "providerReference": "refund_1511",
+          "facts": {
+            "orderId": "9000001511",
+            "refundId": "refund_1511",
+            "amount": "36.00",
+            "currency": "USD",
+            "transactionStatus": "SUCCESS",
+            "transactionReference": "transaction_1511",
+            "classification": "full"
+          }
+        }
+      },
+      {
+        "tool": "send_reply",
+        "result": "Reply sent to customer via email."
+      }
+    ]
+  },
+  "instruction": "Reply to the customer and process their refund request.",
+  "expectedPlan": {
+    "mustCallTools": [
+      "create_refund",
+      "send_reply"
+    ],
+    "mustNotCallTools": [
+      "escalate_to_human",
+      "cancel_order",
+      "create_partial_refund",
+      "create_exchange"
+    ],
+    "mustCallToolsWithInput": [
+      {
+        "tool": "create_refund",
+        "inputEquals": {
+          "order_id": "9000001511"
+        },
+        "moneyEquals": {
+          "amount": "36.00"
+        }
+      }
+    ],
+    "expectedAgentActions": [
+      {
+        "tool": "create_refund",
+        "status": "success",
+        "mode": "human_approved"
+      },
+      {
+        "tool": "send_reply",
+        "status": "success",
+        "mode": "human_approved"
+      }
+    ]
+  },
+  "suite": "core"
+}

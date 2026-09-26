@@ -1,0 +1,182 @@
+{
+  "id": "refund-partial-customer-guesses-amount",
+  "description": "On a multi-item order the customer wants money back for one chipped vase and guesses it cost around forty dollars; Shopify prices it at $36.50. The reply must not repeat or confirm the customer's figure as the refund.",
+  "whyModelNeeded": "The model must leave the refunded amount to Shopify's result when the customer offers a different figure of their own.",
+  "holdout": "C03",
+  "setup": {
+    "classifierIntents": {
+      "mutative_request": true
+    },
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Nina Alvarez",
+    "customerPlatformId": "nina@example.com",
+    "shopifyCustomerId": "10000001931",
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
+    "messages": [
+      {
+        "senderType": "customer",
+        "contentText": "Hey, order #1931 - the ceramic vase came chipped. The two candles are fine and I'm keeping those. Can I get my money back for just the vase? I think it was around forty bucks."
+      }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000001931",
+        "name": "#1931",
+        "created_at": "2026-09-17T10:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": "fulfilled",
+        "total_price": "60.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_1931a",
+            "title": "Ceramic Vase",
+            "quantity": 1,
+            "variant_id": "variant_1931a",
+            "fulfillable_quantity": 0,
+            "current_quantity": 1,
+            "fulfillment_status": "fulfilled"
+          },
+          {
+            "line_item_id": "lineitem_1931b",
+            "title": "Beeswax Candle",
+            "quantity": 2,
+            "variant_id": "variant_1931b",
+            "fulfillable_quantity": 0,
+            "current_quantity": 2,
+            "fulfillment_status": "fulfilled"
+          }
+        ]
+      }
+    ],
+    "simulateShopifyRest": [
+      {
+        "path": "orders/9000001931.json",
+        "response": {
+          "order": {
+            "id": 9000001931,
+            "name": "#1931",
+            "currency": "USD",
+            "financial_status": "paid",
+            "total_price": "60.00",
+            "current_total_price": "60.00",
+            "refunds": [],
+            "line_items": [
+              {
+                "id": "lineitem_1931a",
+                "title": "Ceramic Vase",
+                "quantity": 1,
+                "current_quantity": 1,
+                "price": "36.50"
+              },
+              {
+                "id": "lineitem_1931b",
+                "title": "Beeswax Candle",
+                "quantity": 2,
+                "current_quantity": 2,
+                "price": "11.75"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "method": "POST",
+        "path": "orders/9000001931/refunds/calculate.json",
+        "response": {
+          "refund": {
+            "currency": "USD",
+            "transactions": [
+              {
+                "kind": "suggested_refund",
+                "gateway": "shopify_payments",
+                "parent_id": 7000001,
+                "amount": "36.50",
+                "currency": "USD"
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "simulateToolResults": [
+      {
+        "tool": "get_shopify_orders",
+        "result": "1 order for Nina Alvarez: #1931 (id 9000001931, $60.00 USD, paid, fulfilled). Items: Ceramic Vase x1, Beeswax Candle x2."
+      },
+      {
+        "tool": "get_order_by_name",
+        "result": "Order #1931 (id 9000001931): $60.00 USD, paid, fulfilled. Items: Ceramic Vase (line item lineitem_1931a) x1, Beeswax Candle (line item lineitem_1931b) x2."
+      },
+      {
+        "tool": "create_partial_refund",
+        "result": "Refund of $36.50 USD issued for order #1931.",
+        "receipt": {
+          "target": {
+            "kind": "order",
+            "id": "9000001931"
+          },
+          "providerReference": "refund_1931",
+          "facts": {
+            "orderId": "9000001931",
+            "refundId": "refund_1931",
+            "amount": "36.50",
+            "currency": "USD",
+            "transactionStatus": "SUCCESS",
+            "transactionReference": "transaction_1931",
+            "classification": "partial",
+            "lineItems": [
+              {
+                "lineItemId": "lineitem_1931a",
+                "quantity": 1
+              }
+            ]
+          }
+        }
+      },
+      {
+        "tool": "send_reply",
+        "result": "Reply sent to customer via email."
+      }
+    ]
+  },
+  "instruction": "Reply to the customer and process their refund request.",
+  "expectedPlan": {
+    "mustCallTools": [
+      "create_partial_refund",
+      "send_reply"
+    ],
+    "mustNotCallTools": [
+      "create_refund",
+      "create_gift_card",
+      "cancel_order",
+      "escalate_to_human"
+    ],
+    "mustCallToolsWithInput": [
+      {
+        "tool": "create_partial_refund",
+        "inputEquals": {
+          "order_id": "9000001931"
+        }
+      }
+    ],
+    "replyMustNotInclude": [
+      "40",
+      "forty"
+    ]
+  },
+  "expectedRubric": {
+    "checks": [
+      {
+        "id": "customer_figure_not_confirmed",
+        "gate": true,
+        "description": "The reply does not state or confirm a specific refund amount as the sum being returned, including the customer's own guess of about forty dollars. A {{refund_amount}} placeholder is not a stated figure: it is filled from Shopify's refund receipt after the refund succeeds."
+      }
+    ]
+  },
+  "suite": "core"
+}

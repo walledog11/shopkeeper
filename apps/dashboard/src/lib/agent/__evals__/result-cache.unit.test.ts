@@ -29,6 +29,8 @@ const passing: FixtureRunSummary = {
     usage: {
       modelCalls: 1,
       plannerModelCalls: 1,
+      discoveryCalls: 0,
+      taskCostUsd: 0,
       models: {},
       inputTokens: 1,
       outputTokens: 1,

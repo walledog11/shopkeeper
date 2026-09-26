@@ -8,6 +8,7 @@ import type { AgentPlan } from "@/types";
 import { collectPlanExpectationFailures } from "./assertions";
 import {
   formatGateSummary,
+  formatTaskSummary,
   formatUsageDelta,
   hardFailureConfirmations,
   installSimulatedShopifyRest,
@@ -17,7 +18,8 @@ import {
   summarizeGates,
   summarizeResults,
 } from "./runner";
-import type { EvalBaseline, Fixture, FixtureRunSummary, PhaseUsage } from "./types";
+import { countDiscoveryCalls } from "./usage";
+import type { EvalBaseline, EvalResult, Fixture, FixtureRunSummary, PhaseUsage } from "./types";
 
 describe("summarizeGates", () => {
   const summaries: FixtureRunSummary[] = [
@@ -92,6 +94,49 @@ describe("formatUsageDelta", () => {
       { runs: 1, planner: phase(100, 0), run: phase(0, 0), judge: phase(0, 0) },
     );
     expect(line).toContain("out/run 150 vs 100 (+50.0%)");
+  });
+});
+
+describe("task measures", () => {
+  it("counts only discover_capabilities tool calls in a model response", () => {
+    expect(countDiscoveryCalls({
+      content: [
+        { type: "text", text: "Looking for a tool." },
+        { type: "tool_use", id: "a", name: "discover_capabilities", input: {} },
+        { type: "tool_use", id: "b", name: "get_shopify_orders", input: {} },
+        { type: "tool_use", id: "c", name: "discover_capabilities", input: {} },
+      ],
+    })).toBe(2);
+    expect(countDiscoveryCalls({ content: "text" })).toBe(0);
+    expect(countDiscoveryCalls(null)).toBe(0);
+  });
+
+  it("reports nearest-rank latency and cost over runs, with call totals", () => {
+    const zero = { inputTokens: 0, outputTokens: 0, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 };
+    const run = (latencyMs: number, taskCostUsd: number, discoveryCalls: number): EvalResult => ({
+      id: "a",
+      pass: true,
+      failureKind: "none",
+      failures: [],
+      latencyMs,
+      usage: {
+        modelCalls: 2,
+        plannerModelCalls: 2,
+        discoveryCalls,
+        taskCostUsd,
+        models: {},
+        ...zero,
+        plannerUsage: zero,
+        runUsage: zero,
+        judgeUsage: zero,
+      },
+    });
+    const line = formatTaskSummary([
+      { id: "a", repeats: 3, passes: 3, passRate: 1, results: [run(4000, 0.02, 0), run(1000, 0.01, 1), run(9000, 0.05, 1)] },
+    ]);
+    expect(line).toBe(
+      "[eval:task] runs=3 latency p50=4000ms p95=9000ms cost p50=$0.0200 p95=$0.0500 total=$0.0800 modelCalls=6 discoveryCalls=2",
+    );
   });
 });
 

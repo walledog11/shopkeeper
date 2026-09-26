@@ -149,6 +149,10 @@ export interface ExpectedRubric {
   checks: RubricCheck[];
 }
 
+// C04, C09 and C12 are deterministic database cases and have no model fixture.
+export const HOLDOUT_CASES = ["C01", "C02", "C03", "C05", "C06", "C07", "C08", "C10", "C11"] as const;
+export type HoldoutCase = (typeof HOLDOUT_CASES)[number];
+
 export interface Fixture {
   id: string;
   description: string;
@@ -169,6 +173,13 @@ export interface Fixture {
   // on runtime v2). Such a fixture runs only when EVAL_AGENT_RUNTIME_VERSION
   // names that runtime, so a v1/v2 comparison never counts it against v1.
   runtimeVersion?: 2;
+  // A held-out variant of a model-scored case in the Package 0 evaluation
+  // manifest. It measures behavior on input nobody tuned against, so it runs
+  // only in whole-suite comparisons and cannot be selected by name.
+  holdout?: HoldoutCase;
+  // The attempt that follows an approved message the executor withheld, which
+  // only runtime v2 has. `instruction` is what that attempt is given.
+  withheldMessageFollowUp?: true;
   // Advisory fixtures track a pass-rate but never hard-fail the per-fixture gate, even at 0/N.
   // Use for irreducibly model-judgment cases whose safety property is guaranteed elsewhere.
   advisory?: boolean;
@@ -184,6 +195,10 @@ export interface PhaseUsage {
 export interface EvalUsage {
   modelCalls: number;
   plannerModelCalls: number;
+  /** `discover_capabilities` calls the model made while planning or running. */
+  discoveryCalls: number;
+  /** Planner and run spend at list price; the judge is not part of the task. */
+  taskCostUsd: number;
   models: Record<string, PhaseUsage>;
   inputTokens: number;
   outputTokens: number;

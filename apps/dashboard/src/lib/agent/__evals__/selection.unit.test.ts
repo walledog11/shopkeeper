@@ -50,6 +50,14 @@ describe("eval selection", () => {
     expect(() => selectFixtures(all, "full", new Set(["placeholder-a"]), 1)).toThrow(/placeholder-a/)
   })
 
+  it("runs a held-out fixture with its suite and never by name", () => {
+    const heldOut = { ...fixture("holdout-a", "core"), holdout: "C05" as const }
+    const all = [...fixtures, heldOut]
+    expect(selectFixtures(all, "core", null).map(row => row.id)).toEqual(["core-a", "holdout-a"])
+    expect(() => selectFixtures(all, "full", new Set(["core-a", "holdout-a"]))).toThrow(/held-out.*holdout-a/)
+    expect(selectFixtures(all, "full", new Set(["core-a"])).map(row => row.id)).toEqual(["core-a"])
+  })
+
   it("parses an explicit comparison runtime without changing the default", () => {
     expect(requestedEvalAgentRuntimeVersion(undefined)).toBeUndefined()
     expect(requestedEvalAgentRuntimeVersion("current")).toBeUndefined()

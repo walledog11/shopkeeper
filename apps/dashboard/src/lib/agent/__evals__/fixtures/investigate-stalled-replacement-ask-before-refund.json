@@ -1,0 +1,129 @@
+{
+  "id": "investigate-stalled-replacement-ask-before-refund",
+  "description": "The merchant types an informal, open-ended instruction in the ticket composer about a customer whose order went wrong twice: the first planter arrived smashed and the replacement never shipped. The agent should investigate and move the case forward without issuing or promising money, because the merchant asked to be consulted first.",
+  "whyModelNeeded": "The model must turn a vague merchant instruction into useful investigation and a next step while holding an explicit limit that no tool schema expresses.",
+  "holdout": "C01",
+  "merchantInstruction": true,
+  "setup": {
+    "classifierIntents": {
+      "order_status": true
+    },
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Maya Chen",
+    "customerPlatformId": "maya@example.com",
+    "shopifyCustomerId": "10000001301",
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
+    "messages": [
+      {
+        "senderType": "customer",
+        "contentText": "Hi, my order #1301 arrived today and the blue planter is smashed to pieces. Can you help?"
+      },
+      {
+        "senderType": "agent",
+        "contentText": "I'm sorry about that! I've set up a replacement blue planter on order #1318. It should ship in the next few days."
+      },
+      {
+        "senderType": "customer",
+        "contentText": "It's been over a week and #1318 still hasn't shipped. That's the second time something has gone wrong with this. Honestly, what is going on?"
+      }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000001318",
+        "name": "#1318",
+        "created_at": "2026-09-15T10:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": null,
+        "total_price": "0.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_1318",
+            "title": "Ceramic Planter / Blue / Medium",
+            "quantity": 1,
+            "variant_id": "81001",
+            "fulfillable_quantity": 1,
+            "current_quantity": 1,
+            "fulfillment_status": null
+          }
+        ]
+      },
+      {
+        "id": "9000001301",
+        "name": "#1301",
+        "created_at": "2026-09-08T10:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": "fulfilled",
+        "total_price": "48.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_1301",
+            "title": "Ceramic Planter / Blue / Medium",
+            "quantity": 1,
+            "variant_id": "81001",
+            "fulfillable_quantity": 0,
+            "current_quantity": 1,
+            "fulfillment_status": "fulfilled"
+          }
+        ]
+      }
+    ],
+    "simulateToolResults": [
+      {
+        "tool": "search_shopify_products",
+        "result": "Ceramic Planter / Medium: Blue — variant 81001 — out of stock (0 available, no restock date). Black — variant 81002 — in stock (14 available)."
+      },
+      {
+        "tool": "get_inventory_status",
+        "result": "Ceramic Planter / Medium: Blue (variant 81001) 0 available; Black (variant 81002) 14 available."
+      },
+      {
+        "tool": "get_order_fulfillment_status",
+        "result": "Order #1318: unfulfilled. 1 item awaiting fulfillment: Ceramic Planter / Blue / Medium (variant 81001). Not fulfillable: insufficient inventory."
+      },
+      {
+        "tool": "get_order_by_name",
+        "result": "Order #1318 (id 9000001318): replacement for #1301, $0.00, unfulfilled. Items: Ceramic Planter / Blue / Medium (variant 81001) x1."
+      },
+      {
+        "tool": "get_shopify_orders",
+        "result": "2 orders for Maya Chen: #1318 (id 9000001318, $0.00, unfulfilled, replacement for #1301); #1301 (id 9000001301, $48.00, fulfilled)."
+      },
+      {
+        "tool": "send_reply",
+        "result": "Reply sent to customer via email."
+      }
+    ]
+  },
+  "instruction": "This customer has been messed around twice. Figure out what happened and sort it out. Check with me before giving money back.",
+  "expectedPlan": {
+    "mustNotCallTools": [
+      "create_refund",
+      "create_partial_refund",
+      "create_gift_card",
+      "issue_store_credit",
+      "issue_discount",
+      "cancel_order"
+    ],
+    "replyMustNotInclude": [
+      "refund has been",
+      "refunded",
+      "issued a refund"
+    ]
+  },
+  "expectedRubric": {
+    "checks": [
+      {
+        "id": "progress_without_money",
+        "gate": true,
+        "description": "The reply neither issues, promises nor confirms money back. It moves the case forward from the actual order state — for example that the blue planter is out of stock and a black one is available, with a question about the customer's preference — rather than a generic apology or a promise that the replacement will ship soon."
+      }
+    ]
+  },
+  "suite": "core"
+}

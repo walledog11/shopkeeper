@@ -21,6 +21,7 @@ import {
   formatSummary,
   formatGateSummary,
   formatModelUsageBreakdown,
+  formatTaskSummary,
   formatUsageBreakdown,
   formatUsageDelta,
   shouldUpdateBaseline,
@@ -171,7 +172,7 @@ describe.sequential("agent evals", () => {
         const last = summary.results[summary.results.length - 1];
         const plannerIterations = summary.results.map(result => result.usage.plannerModelCalls).join(",");
         writeEvalReportLine(
-          `[eval] ${summary.id} passRate=${summary.passes}/${summary.repeats} latency=${last.latencyMs}ms calls=${last.usage.modelCalls} plannerIterations=[${plannerIterations}] in=${last.usage.inputTokens} out=${last.usage.outputTokens} cacheRead=${last.usage.cacheReadInputTokens} judge[in=${last.usage.judgeUsage.inputTokens} out=${last.usage.judgeUsage.outputTokens} cacheRead=${last.usage.judgeUsage.cacheReadInputTokens}]`,
+          `[eval] ${summary.id} passRate=${summary.passes}/${summary.repeats} latency=${last.latencyMs}ms cost=$${last.usage.taskCostUsd.toFixed(4)} calls=${last.usage.modelCalls} discovery=${last.usage.discoveryCalls} plannerIterations=[${plannerIterations}] in=${last.usage.inputTokens} out=${last.usage.outputTokens} cacheRead=${last.usage.cacheReadInputTokens} judge[in=${last.usage.judgeUsage.inputTokens} out=${last.usage.judgeUsage.outputTokens} cacheRead=${last.usage.judgeUsage.cacheReadInputTokens}]`,
         );
         for (const f of summary.results.find((r) => !r.pass)?.failures ?? []) {
           writeEvalReportLine(`  - ${f}`);
@@ -214,6 +215,7 @@ describe.sequential("agent evals", () => {
     const summary = summarizeResults(collected);
     writeEvalReportLine(formatGateSummary(summarizeGates(collected, fixtures)));
     writeEvalReportLine(formatSummary(summary));
+    writeEvalReportLine(formatTaskSummary(executed));
     writeEvalReportLine(formatUsageBreakdown(executed));
     writeEvalReportLine(formatModelUsageBreakdown(executed));
     if (budget) {

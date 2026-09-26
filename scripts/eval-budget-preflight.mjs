@@ -61,6 +61,10 @@ if (mode === 'targeted') {
   const found = new Set(fixtures.map(fixture => fixture.id));
   const missing = [...requestedIds].filter(id => !found.has(id));
   if (missing.length > 0) throw new Error(`Unknown fixture IDs: ${missing.join(', ')}`);
+  // Held-out fixtures run only with their whole suite (selectFixtures in the
+  // eval harness); refuse here too, before any job starts.
+  const heldOut = fixtures.filter(fixture => fixture.holdout).map(fixture => fixture.id);
+  if (heldOut.length > 0) throw new Error(`Held-out fixtures cannot be targeted: ${heldOut.join(', ')}`);
 } else if (mode === 'release') {
   fixtures = allFixtures.filter(fixture => fixture.suite === 'core' && fixture.advisory !== true);
 } else {
