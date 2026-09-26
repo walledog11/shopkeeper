@@ -365,7 +365,7 @@ Gated-off integrations cost nothing to keep dark.
 | Redis TLS migration | Gateway `REDIS_URL` → `rediss://` on both services | [compatibility-retirement-backlog.md](compatibility-retirement-backlog.md) |
 | Paid beta | Better Stack Level 1 log drains + escalation (free tier done 2026-07-31) | [runbook.md](production/runbook.md), [alerting-evidence.md](production/alerting-evidence.md) |
 | Merchants report a duplicate "over your plan" notice | Move the once-per-period marker off `Organization.settings`. `buildSettingsUpdate` rebuilds that blob from `normalizeStoredOrgSettings`, a whitelist, so saving any org setting drops the marker. Every available fix costs more than the bug today. | — |
-| First customer launch | The canaries the remediation milestones deferred while there was no real traffic to run them against: outcome rows on a live request path (M3), the auto-plan failure-replan path and its prompt tuning (M4), observed preference proposals under `MERCHANT_PREFERENCE_OBSERVED_PROPOSALS=true` and operator-channel confirm/dismiss (M5), and the classifier version-lifecycle ceremony — production inventory by version, retirement procedure, version-upgrade test (M2). | [conversational-agent-overhaul-plan.md](conversational-agent-overhaul-plan.md) Package 6 |
+| First customer launch | The canaries the remediation milestones deferred while there was no real traffic to run them against: outcome rows on a live request path (M3), the auto-plan failure-replan path and its prompt tuning (M4), observed preference proposals under `MERCHANT_PREFERENCE_OBSERVED_PROPOSALS=true` and operator-channel confirm/dismiss (M5), and the classifier version-lifecycle ceremony — production inventory by version, retirement procedure, version-upgrade test (M2). | — |
 
 **Decisions on record** (not tasks): operate "Shopkeeper" unregistered (2026-08-02),
 revisiting the trademark at ~50 paying merchants or before marketing spend. Sync
@@ -510,7 +510,3 @@ so a search for one lands somewhere.
   `docs/production/shopify-webhook-migration.md` (utility into the config reference),
   plus the chronology cut from the storefront-chat record and the closed M0a/M0b
   archaeology cut from the Shopify config reference.
-- 2026-09-26, root pipeline audit doc (August 2026 milestone ledger; architecture
-  law is `.claude/CLAUDE.md` § Architecture; work order is
-  [conversational-agent-overhaul-plan.md](conversational-agent-overhaul-plan.md))
-  — last tree path `AGENT_AUDIT.md`, `git show 044cb21a:AGENT_AUDIT.md`.
