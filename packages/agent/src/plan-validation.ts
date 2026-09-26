@@ -6,6 +6,7 @@ import {
 } from "./plan-grounding.js";
 import { shouldBlockCreateRefundForAlreadyRefundedOrder } from "./planner-safety/refunds.js";
 import { customerMessageCallCount } from "./proposal-communication.js";
+import { bindReplyPlaceholders, hasReplyPlaceholders } from "./reply-placeholders.js";
 import { TOOL_CATEGORIES, parseToolInput } from "./tools/registry/index.js";
 import type {
   PlanValidation,
@@ -71,6 +72,18 @@ export function validatePlan(params: {
     issues.push(issue("multiple_customer_messages", second));
   }
 
+  // Only an exact draft fills placeholders; any other plan would send the
+  // token itself. On an exact draft each one must name exactly one approved
+  // call that can fill it.
+  for (const toolCall of rawToolCalls) {
+    const draft = customerDraft(toolCall);
+    if (!draft) continue;
+    const unfillable = params.singleCustomerMessage
+      ? bindReplyPlaceholders(draft, rawToolCalls).unbound.length > 0
+      : hasReplyPlaceholders(draft);
+    if (unfillable) issues.push(issue("unbound_reply_placeholder", toolCall));
+  }
+
   const hasAction = rawToolCalls.some((toolCall) => TOOL_CATEGORIES[toolCall.name] === "action");
   if (!hasAction) {
     const orphanNote = rawToolCalls.find((toolCall) => toolCall.name === "add_internal_note");
@@ -93,6 +106,15 @@ export function validatePlan(params: {
   return issues.length > 0
     ? { status: "invalid", issues }
     : { status: "valid", issues: [] };
+}
+
+function customerDraft(toolCall: RawToolCall): string | null {
+  if (!toolCall.input || typeof toolCall.input !== "object") return null;
+  const input = toolCall.input as Record<string, unknown>;
+  const draft = toolCall.name === "send_reply" ? input.text
+    : toolCall.name === "send_email" ? input.body
+    : null;
+  return typeof draft === "string" ? draft : null;
 }
 
 export function isInvalidPlan(

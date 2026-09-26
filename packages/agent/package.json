@@ -18,6 +18,10 @@
       "types": "./dist/types.d.ts",
       "default": "./dist/types.js"
     },
+    "./reply-placeholders": {
+      "types": "./dist/reply-placeholders.d.ts",
+      "default": "./dist/reply-placeholders.js"
+    },
     "./context": {
       "types": "./dist/agent-context.d.ts",
       "default": "./dist/agent-context.js"

@@ -9,6 +9,7 @@ import {
 import { lowerFirst } from '../../../lib/sentence-case.js';
 import { formatBlockedTicketLine } from '../../../maintenance/digest-briefing/ticket-lines.js';
 import type { ProposalCommunication } from '@shopkeeper/agent/types';
+import { displayApprovedDraft } from '@shopkeeper/agent/reply-placeholders';
 import type { AgentPlan, PlanStep } from '../../../types.js';
 import { firstDraftExcerpt } from '../../operator/operator-ledger.js';
 import { requestDisplayHasContext, type RequestDisplay } from '../../shared/request-display.js';
@@ -139,10 +140,12 @@ export function formatOperatorPlanMessage(
 
   // The actual draft the merchant is approving, so approval is not sight-unseen.
   // An exact draft is shown whole; a legacy draft keeps its excerpt.
+  // Its receipt placeholders are shown by what they will hold.
   const exactDraft = options?.communication?.mode === 'exact_draft' ? options.communication : null;
-  const exactDraftHidden = exactDraft !== null && exactDraft.draft.length > EXACT_DRAFT_DISPLAY_LIMIT;
-  const draftBody = exactDraft
-    ? (exactDraftHidden ? null : exactDraft.draft)
+  const exactDraftText = exactDraft ? displayApprovedDraft(exactDraft.draft) : null;
+  const exactDraftHidden = exactDraftText !== null && exactDraftText.length > EXACT_DRAFT_DISPLAY_LIMIT;
+  const draftBody = exactDraftText !== null
+    ? (exactDraftHidden ? null : exactDraftText)
     : options?.rawToolCalls ? firstDraftExcerpt(options.rawToolCalls) : null;
   const draftLines = (replyOnly: boolean, legacyLead: string): string[] => {
     if (!draftBody) return [];

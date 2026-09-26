@@ -40,6 +40,8 @@ export const PLAN_SIGNAL_MESSAGES: Record<ProducedPlanSignalCode, string> = {
     "The customer reply contains a completion claim that is not supported by a preceding action or live store result.",
   multiple_customer_messages:
     "The draft sends the customer more than one message. One approval covers one exact message, so this cannot be approved as written.",
+  unbound_reply_placeholder:
+    "The customer reply has a placeholder that no single step in this draft can fill, so it cannot be approved as written.",
 }
 
 // Reads that make an unlinked Shopify customer consequential: the plan leaned on

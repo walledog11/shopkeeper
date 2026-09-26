@@ -142,6 +142,7 @@ jobs:
           if [ "$mode" = drift ] || [ "$mode" = baseline ]; then repeats=3; judges=on; fi
           node scripts/eval-budget-preflight.mjs \
             --mode "$mode" \
+            --runtime-version "$RUNTIME_VERSION" \
             --fixtures "$FIXTURES" \
             --repeats "$repeats" \
             --judges "$judges" \

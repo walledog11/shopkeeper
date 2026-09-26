@@ -552,6 +552,21 @@ describe('TOOL_GROUPS', () => {
 // 0, and every write token counted at 1.25x against TOKEN_BUDGET. Three live
 // turns opened cold at 19,715 / 19,721 / 19,047 against a 20,000 budget and died
 // on their second model call. Nothing covered the split at all, which is why.
+// Overhaul plan, Next work item 4: only a planner whose customer message is
+// approved as an exact draft is told about receipt placeholders, and only in
+// the volatile half, so the cached support prefix stays one prefix.
+describe('buildSystemPromptParts exact-draft placeholders', () => {
+  it('offers placeholders to an exact-draft planner and to no other', () => {
+    const legacy = buildSystemPromptParts(makeCtx());
+    const exact = buildSystemPromptParts(makeCtx(), undefined, { exactDraftProposal: true });
+
+    expect(legacy.volatile).not.toContain('{{refund_amount}}');
+    expect(exact.volatile).toContain('## Customer message approval');
+    expect(exact.volatile).toContain('{{refund_amount}}');
+    expect(exact.stable).toBe(legacy.stable);
+  });
+});
+
 describe('buildSystemPromptParts caching split', () => {
   const operatorThread = {
     id: 'thread_test',

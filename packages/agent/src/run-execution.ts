@@ -28,6 +28,8 @@ import {
   unsupportedReplyCompletionClaims,
 } from "./plan-grounding.js";
 import type { ReceiptV1 } from "./tools/result.js";
+import type { ProposalCommunication } from "./types.js";
+import { fillApprovedDraft } from "./reply-placeholders.js";
 
 export type AgentToolCall = {
   id: string;
@@ -71,6 +73,54 @@ function shouldSkipAfterFailedReply(toolName: string, actionsPerformed: ActionEn
   return actionsPerformed.some((action) => (
     action.tool === "send_reply" && action.status === "error"
   ));
+}
+
+function isCustomerMessage(toolName: string): boolean {
+  return toolName === "send_reply" || toolName === "send_email";
+}
+
+/**
+ * What an approved proposal lets this run say to the customer. Present only when
+ * executing a proposal that binds its communication (runtime v2); absent on the
+ * legacy path and on model turns, whose replies keep the legacy grounding.
+ */
+export interface ApprovedMessage {
+  communication: ProposalCommunication;
+  /** The approved writes the message waits on. It is sent only if all succeeded. */
+  writeCallIds: readonly string[];
+}
+
+/**
+ * The customer message an approved proposal sends, exactly as approved except
+ * for its placeholders, or why it is not sent. No completion fact, result text
+ * or prose check is consulted: the merchant approved these words, and what
+ * makes them true is that every approved write succeeded and every placeholder
+ * filled from its receipt.
+ */
+function prepareApprovedMessage(
+  toolCall: AgentToolCall,
+  approved: ApprovedMessage,
+  actionsPerformed: readonly ActionEntry[],
+): { call: AgentToolCall } | { refusal: string } {
+  const communication = approved.communication;
+  const field = toolCall.name === "send_email" ? "body" : "text";
+  const input = toolCall.input && typeof toolCall.input === "object"
+    ? toolCall.input as Record<string, unknown>
+    : null;
+  if (communication.mode !== "exact_draft" || input?.[field] !== communication.draft) {
+    return { refusal: `Error: skipped ${toolCall.name} because it is not the message the merchant approved.` };
+  }
+  const unfinished = approved.writeCallIds.some((id) => (
+    actionsPerformed.find((action) => action.toolCallId === id)?.status !== "success"
+  ));
+  if (unfinished) {
+    return { refusal: `Error: skipped ${toolCall.name} because an approved action did not succeed, so the approved message is not true.` };
+  }
+  const filled = fillApprovedDraft(communication.draft, communication.allowedResultBindings, actionsPerformed);
+  if (filled.status === "unfilled") {
+    return { refusal: `Error: skipped ${toolCall.name} because its ${filled.placeholder} placeholder has no value from a successful action receipt.` };
+  }
+  return { call: { ...toolCall, input: { ...input, [field]: filled.text } } };
 }
 
 function hasUnknownProviderOutcome(actionsPerformed: ActionEntry[]): boolean {
@@ -260,6 +310,7 @@ export async function executeAgentToolCall(
     moduleTools?: Record<string, AgentToolDefinition>;
     operationScopeId?: string;
     completionEvidence?: readonly CompletionFact[];
+    approvedMessage?: ApprovedMessage;
     beginAction?: (
       call: AgentToolCall,
       operationId: string,
@@ -281,16 +332,23 @@ export async function executeAgentToolCall(
   } = input;
   ctx.assertExecutionAllowed?.();
   const category = moduleTools?.[toolCall.name]?.category ?? TOOL_CATEGORIES[toolCall.name];
-  const completionFacts = [
-    ...(input.completionEvidence ?? []),
-    // This execution loop is the pinned legacy runtime. Its string-only action
-    // rows retain their bounded compatibility reader until migrated tools emit
-    // receipts and the durable runtime replaces this call path.
-    ...executedCompletionFacts(actionsPerformed, ctx, { allowHistoricalResultInference: true }),
-  ];
-  const executableToolCall = toolCall.name === "send_reply" || toolCall.name === "send_email"
-    ? renderReplyCompletionClaims(toolCall, completionFacts, ctx)
-    : toolCall;
+  const approvedMessage = input.approvedMessage && isCustomerMessage(toolCall.name)
+    ? prepareApprovedMessage(toolCall, input.approvedMessage, actionsPerformed)
+    : null;
+  // The legacy runtime's replies keep their bounded compatibility reader over
+  // string-only action rows until that path is deleted (Gate E). An approved
+  // exact draft never reaches it.
+  const legacyReplyFacts = !input.approvedMessage && isCustomerMessage(toolCall.name)
+    ? [
+      ...(input.completionEvidence ?? []),
+      ...executedCompletionFacts(actionsPerformed, ctx, { allowHistoricalResultInference: true }),
+    ]
+    : null;
+  const executableToolCall = approvedMessage && "call" in approvedMessage
+    ? approvedMessage.call
+    : legacyReplyFacts
+      ? renderReplyCompletionClaims(toolCall, legacyReplyFacts, ctx)
+      : toolCall;
 
   logger.info({
     orgId: ctx.orgId,
@@ -328,14 +386,18 @@ export async function executeAgentToolCall(
     result = "Error: skipped status update because send_reply failed.";
     status = "error";
     errorDetail = result;
+  } else if (approvedMessage && "refusal" in approvedMessage) {
+    result = approvedMessage.refusal;
+    status = "error";
+    errorDetail = result;
   } else if (
-    (toolCall.name === "send_reply" || toolCall.name === "send_email")
+    legacyReplyFacts
     // Validate the exact receipt-bound text that will be dispatched. The model
     // draft may contain a broader phrase (for example "shipping address") that
     // the canonical renderer deliberately replaces with one grounded claim;
     // checking the discarded draft can reject a safe reply for a claim no
     // customer will receive.
-    && unsupportedReplyCompletionClaims(executableToolCall, completionFacts, ctx).length > 0
+    && unsupportedReplyCompletionClaims(executableToolCall, legacyReplyFacts, ctx).length > 0
   ) {
     result = `Error: skipped ${toolCall.name} because its completion claim is not supported by a successful action result.`;
     status = "error";

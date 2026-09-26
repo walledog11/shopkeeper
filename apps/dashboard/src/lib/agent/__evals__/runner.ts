@@ -28,6 +28,7 @@ import type {
   Fixture,
   FixtureRunSummary,
   PhaseUsage,
+  SimulatedToolResult,
 } from "./types"
 import { requestedEvalAgentRuntimeVersion } from "./selection"
 
@@ -49,7 +50,7 @@ export { mutativeIntentActionFailures } from "./assertions"
 export { formatModelUsageBreakdown, formatUsageBreakdown, formatUsageDelta, probeSystemPromptCacheRead } from "./usage"
 
 const simulatedToolResults = vi.hoisted(() => ({
-  current: null as Map<string, string> | null,
+  current: null as Map<string, SimulatedToolResult> | null,
 }))
 
 vi.mock("@shopkeeper/agent/executor", async importOriginal => {
@@ -57,25 +58,39 @@ vi.mock("@shopkeeper/agent/executor", async importOriginal => {
   return {
     ...actual,
     executeTool: (async (...args: Parameters<typeof actual.executeTool>) => {
-      const simulated = simulatedToolResults.current
-      if (simulated?.has(args[0])) return simulated.get(args[0]) as string
+      const simulated = simulatedToolResults.current?.get(args[0])
+      if (simulated) return simulated.result
       return actual.executeTool(...args)
     }) as typeof actual.executeTool,
     executeToolWithStatus: (async (...args: Parameters<typeof actual.executeToolWithStatus>) => {
-      const simulated = simulatedToolResults.current
-      if (simulated?.has(args[0])) {
-        const result = simulated.get(args[0]) as string
+      const simulated = simulatedToolResults.current?.get(args[0])
+      if (simulated) {
+        const status = simulated.result.toLowerCase().startsWith("error:") ? "error" : "success"
+        const execution = (args[2] as { execution?: { operationId: string; executionId: string } }).execution
         return {
-          result,
-          status: result.toLowerCase().startsWith("error:") ? "error" : "success",
-        }
+          result: simulated.result,
+          status,
+          ...(simulated.receipt && status === "success" && execution
+            ? {
+                receipt: {
+                  version: 1,
+                  operationId: execution.operationId,
+                  executionId: execution.executionId,
+                  tool: args[0],
+                  observedAt: new Date().toISOString(),
+                  outcome: "succeeded",
+                  ...simulated.receipt,
+                },
+              }
+            : {}),
+        } as Awaited<ReturnType<typeof actual.executeToolWithStatus>>
       }
       return actual.executeToolWithStatus(...args)
     }) as typeof actual.executeToolWithStatus,
     executeToolStructured: (async (...args: Parameters<typeof actual.executeToolStructured>) => {
-      const simulated = simulatedToolResults.current
-      if (simulated?.has(args[0])) {
-        const message = simulated.get(args[0]) as string
+      const simulated = simulatedToolResults.current?.get(args[0])
+      if (simulated) {
+        const message = simulated.result
         return {
           status: message.toLowerCase().startsWith("error:") ? "error" : "ok",
           message,
@@ -86,9 +101,9 @@ vi.mock("@shopkeeper/agent/executor", async importOriginal => {
   }
 })
 
-function buildSimulatedToolResults(fixture: Fixture): Map<string, string> {
-  const results = new Map<string, string>(
-    (fixture.setup.simulateToolResults ?? []).map(entry => [entry.tool, entry.result]),
+function buildSimulatedToolResults(fixture: Fixture): Map<string, SimulatedToolResult> {
+  const results = new Map<string, SimulatedToolResult>(
+    (fixture.setup.simulateToolResults ?? []).map(entry => [entry.tool, entry]),
   )
   const sendReply = results.get("send_reply")
   if (sendReply && !results.has("send_email")) results.set("send_email", sendReply)

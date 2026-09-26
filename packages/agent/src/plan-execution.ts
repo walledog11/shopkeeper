@@ -600,6 +600,7 @@ export async function executeCurrentCachedHomePlan(params: {
   validateApprovedToolCalls(current.plan, requestedToolCalls);
   validateCustomerFacingApprovalSet(verdict, requestedToolCalls);
   validateApprovedCommunication(current.plan, requestedToolCalls, thread);
+  const approvedCommunication = planCommunication(current.plan);
   if (!requestedToolCalls.some((call) => {
     const category = TOOL_CATEGORIES[call.name];
     return Boolean(category && EXECUTABLE_CATEGORIES.has(category));
@@ -734,6 +735,9 @@ export async function executeCurrentCachedHomePlan(params: {
         current.plan.rawToolCalls,
         current.plan.readResults,
       ),
+      // The same snapshot validateApprovedCommunication checked the calls
+      // against, and the one the approval hash binds.
+      ...(approvedCommunication ? { approvedCommunication } : {}),
       ...(approval ? { approval } : {}),
     }, deps);
     terminalExecutionStatus = terminalStatusForResult(result);

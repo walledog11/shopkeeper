@@ -306,9 +306,15 @@ export function validateFixtures(fixtures: readonly unknown[], filenames?: reado
       if (!ACTION_STATUSES.has(action.status)) local.push(`expectedPlan.expectedAgentActions[${actionIndex}].status is invalid`)
       if (!ACTION_MODES.has(action.mode)) local.push(`expectedPlan.expectedAgentActions[${actionIndex}].mode is invalid`)
     }
+    if (fixture.runtimeVersion !== undefined && fixture.runtimeVersion !== 2) {
+      local.push("runtimeVersion may only be 2")
+    }
     for (const [resultIndex, result] of (fixture.setup.simulateToolResults ?? []).entries()) {
       assertToolName(result.tool, `setup.simulateToolResults[${resultIndex}].tool`, local)
       if (typeof result.result !== "string") local.push(`setup.simulateToolResults[${resultIndex}].result is required`)
+      if (result.receipt !== undefined && (!isRecord(result.receipt) || !isRecord(result.receipt.target) || !isRecord(result.receipt.facts))) {
+        local.push(`setup.simulateToolResults[${resultIndex}].receipt needs target and facts`)
+      }
     }
     for (const [restIndex, rest] of (fixture.setup.simulateShopifyRest ?? []).entries()) {
       const label = `setup.simulateShopifyRest[${restIndex}]`

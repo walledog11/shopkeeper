@@ -608,7 +608,7 @@ describe('formatOperatorPlanMessage with an exact draft', () => {
     mode: 'exact_draft' as const,
     destination: { kind: 'thread' as const, id: THREAD_ID, channel: ChannelType.ig_dm },
     draft,
-    allowedResultBindings: [] as [],
+    allowedResultBindings: [],
   });
 
   it('names where the reply goes and shows it whole', () => {
@@ -660,6 +660,28 @@ describe('formatOperatorPlanMessage with an exact draft', () => {
     expect(message).not.toContain(longDraft.slice(0, 200));
     expect(message).toContain('open the thread to read it before approving');
     expect(message).not.toContain('Sound good?');
+  });
+
+  it('shows a receipt placeholder by what it will hold', () => {
+    const draft = 'Hi Jane, we refunded {{refund_amount}} to your card.';
+    const message = formatOperatorPlanMessage('Jane Doe', ChannelType.ig_dm, requestDisplay('Refund'), [
+      { category: 'action', tool: 'create_refund', description: 'Refund the order', label: 'Refund order', enabled: true },
+      { category: 'communication', tool: 'send_reply', description: 'Tell the customer', label: 'Reply', enabled: true },
+    ], {
+      rawToolCalls: [
+        { name: 'create_refund', input: {} },
+        { name: 'send_reply', input: { text: draft } },
+      ],
+      communication: {
+        ...exact(draft),
+        allowedResultBindings: [
+          { placeholder: 'refund_amount', toolCallId: 'refund_1', tool: 'create_refund', field: 'facts.amount' },
+        ],
+      },
+    });
+
+    expect(message).toContain('"Hi Jane, we refunded [refund amount] to your card."');
+    expect(message).not.toContain('{{refund_amount}}');
   });
 
   it('keeps the legacy excerpt for a plan without the snapshot', () => {

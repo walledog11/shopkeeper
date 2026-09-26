@@ -1,4 +1,5 @@
 import { isRecord } from "./guards.js";
+import { bindReplyPlaceholders, isResultBinding } from "./reply-placeholders.js";
 import type {
   AgentPlan,
   CommunicationDestination,
@@ -43,8 +44,9 @@ export function customerMessageCallCount(rawToolCalls: readonly RawToolCall[]): 
 
 /**
  * Null when the calls cannot be one exact draft: more than one customer message,
- * or one whose input is malformed. Plan validation reports both, so a plan that
- * reaches a merchant with null here is already invalid.
+ * one whose input is malformed, or a placeholder no single approved call can
+ * fill. Plan validation reports all three, so a plan that reaches a merchant
+ * with null here is already invalid.
  */
 export function deriveProposalCommunication(
   rawToolCalls: readonly RawToolCall[],
@@ -54,7 +56,11 @@ export function deriveProposalCommunication(
   if (sends.length === 0) return { mode: "none" };
   if (sends.length > 1) return null;
   const message = customerMessage(sends[0]!, thread);
-  return message ? { mode: "exact_draft", ...message, allowedResultBindings: [] } : null;
+  if (!message) return null;
+  const { bindings, unbound } = bindReplyPlaceholders(message.draft, rawToolCalls);
+  return unbound.length === 0
+    ? { mode: "exact_draft", ...message, allowedResultBindings: bindings }
+    : null;
 }
 
 /**
@@ -88,7 +94,7 @@ export function isProposalCommunication(value: unknown): value is ProposalCommun
     && isDestination(value.destination)
     && nonBlank(value.draft)
     && Array.isArray(value.allowedResultBindings)
-    && value.allowedResultBindings.length === 0
+    && value.allowedResultBindings.every(isResultBinding)
     && Object.keys(value).length === 4;
 }
 

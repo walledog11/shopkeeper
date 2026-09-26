@@ -41,6 +41,15 @@ describe("eval selection", () => {
     expect(() => selectFixtures(fixtures, "core", new Set(["extended-a"]))).toThrow(/extended-a/)
   })
 
+  it("runs a runtime-v2 fixture only when runtime v2 is pinned", () => {
+    const v2Only = { ...fixture("placeholder-a", "core"), runtimeVersion: 2 as const }
+    const all = [...fixtures, v2Only]
+    expect(selectFixtures(all, "full", null, undefined).map(row => row.id)).toEqual(["core-a", "extended-a"])
+    expect(selectFixtures(all, "full", null, 1).map(row => row.id)).toEqual(["core-a", "extended-a"])
+    expect(selectFixtures(all, "core", null, 2).map(row => row.id)).toEqual(["core-a", "placeholder-a"])
+    expect(() => selectFixtures(all, "full", new Set(["placeholder-a"]), 1)).toThrow(/placeholder-a/)
+  })
+
   it("parses an explicit comparison runtime without changing the default", () => {
     expect(requestedEvalAgentRuntimeVersion(undefined)).toBeUndefined()
     expect(requestedEvalAgentRuntimeVersion("current")).toBeUndefined()
