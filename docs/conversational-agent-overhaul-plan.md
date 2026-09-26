@@ -1,9 +1,9 @@
 # Conversational agent overhaul plan
 
-Status, checked 2026-09-25 against `origin/master` at `fff54dc4`: Packages 0–5
+Status, checked 2026-09-26: Packages 0–5
 are done. Package 6 (certify, cut over, and delete the old runtime) is in
-progress. Of the thirteen items in [What is left](#what-is-left-in-order), 1–3
-5 and 6 are done, 4 is done except one piece, and 7–13 are open. Decision E was answered
+progress. Of the thirteen items in [What is left](#what-is-left-in-order), 1–6
+are done and 7–13 are open. Decision E was answered
 on 2026-09-25 (phone instructions move onto durable tasks, item 10); decision F
 is open and blocks item 8. Production runs runtime v1 by default,
 with one controlled organization on runtime v2.
@@ -79,7 +79,7 @@ contract was unbuilt.
 | Gate D, staged rollout, Gate E | Not started. |
 | Production routing | `AGENT_RUNTIME_VERSION=1` on both services, with `AGENT_RUNTIME_V2_ORG_IDS` set to the controlled organization since 2026-09-25. New tasks for every other organization run v1. |
 | Work in flight | None. |
-| Open pull requests | Item 5, branch `delivery-separate-from-completion`; item 6, branch `close-cancels-waiting-tasks`, stacked on it. |
+| Open pull requests | None for this plan. Items 5, 6 and 4 landed as #115, #116 and #118. |
 
 ## Where the code disagrees with this plan
 
@@ -112,24 +112,10 @@ request. Doc-only changes go straight to master.
 1. ~~**Merge PR #109**~~ Done 2026-09-25.
 2. ~~**One proposal identity**~~ Done 2026-09-25 (#110).
 3. ~~**Exact-draft communication on v2 proposals**~~ Done 2026-09-25 (#111).
-4. **Receipt-bound placeholders** (disagreement 2; decisions A and B). The code
-   landed 2026-09-25 in #114; see [What has been done](#what-has-been-done).
-   **One piece is not built**, and this item is not done until it is. The
-   *Approval and communication contract* says: "If an action fails or a binding
-   is unavailable, do not send the success draft; compose a new status/proposal
-   and apply normal communication policy." Today a withheld draft sends nothing
-   to the customer, and no replacement proposal is created
-   (`prepareApprovedMessage` in `run-execution.ts` returns a refusal and stops
-   there).
-   - Build: when an approved write fails or a placeholder cannot be filled, the
-     task puts a new proposal to the merchant that reflects the actual outcome.
-     It goes through the ordinary proposal and approval path, never a direct
-     send.
-   - Item 5 has landed, so a withheld draft no longer counts as a failed
-     action; build on that.
-   - Done when deterministic tests cover both triggers (failed write, unfillable
-     placeholder). The model evidence for the whole item is item 7's run of
-     `refund-partial-placeholder` (runtime v2 only), which has never run.
+4. ~~**Receipt-bound placeholders**~~ Done 2026-09-26 (disagreement 2;
+   decisions A and B; #114, then #118 for the replacement proposal). The model
+   evidence for the whole item is item 7's run of `refund-partial-placeholder`
+   (runtime v2 only), which has never run.
 5. ~~**Delivery separate from completion**~~ Done 2026-09-25 (disagreement 4).
 6. ~~**Closed conversation and waiting tasks**~~ Done 2026-09-25 (disagreement 5;
    decision C).
@@ -506,6 +492,18 @@ capability: it goes from 5,929 to 13,313 tokens. v1 is unchanged.
   left to its execution. Phone cards drop because the close clears the thread's
   cached plan, and the approval boundary refuses a superseded proposal. Bulk
   close now clears the cached plan too, as a single close already did.
+- *Item 4, the replacement proposal* (#118). A withheld approved draft is
+  marked on its action (`ActionEntry.withheld`), and `withheldApprovedMessage`
+  (`execution-outcome.ts`) names why from outcomes: a definitely failed write,
+  or an unfillable placeholder. A delivery failure or any unknown outcome gets
+  no follow-up. The task is queued rather than ended, and the durable task
+  worker claims it through `claimWithheldMessageFollowUp`, which admits
+  settled writes only. It runs one attempt offered order reads, `send_reply`
+  and `escalate_to_human`. Its plan carries the blocking
+  `approved_message_withheld` signal, so it always goes to the merchant, and its
+  card goes to every channel. Not covered: auto-executed v2 plans, and
+  revising the follow-up card (`claimContinuedAgentTask` refuses a task that
+  reached a provider).
 
 ## Product outcome
 
