@@ -83,17 +83,6 @@ export interface RunAgentOptions extends RunAgentPolicyOptions {
   composeFromReceipt?: boolean;
 }
 
-// The composing call reads the customer's request, then the approved writes and
-// their results. Without this it took the request as still outstanding, found no
-// write tool offered, and escalated "no tool available" for work that had just
-// committed — telling the merchant to redo it and the customer nothing.
-const RECEIPT_COMPOSITION_TASK = [
-  "The merchant approved the actions above and they have now run; their results are shown.",
-  "That work is finished. Do not try to do it again, and do not treat the customer's request as outstanding for anything those actions covered.",
-  "Your remaining job is to reply to the customer with send_reply, telling them what was done using only these results.",
-  "If a result shows something did not happen, say so plainly.",
-].join(" ");
-
 const OPERATOR_HIDDEN_TOOL_NAMES = new Set([
   "escalate_to_human",
   "send_reply",
@@ -274,7 +263,7 @@ export async function runAgent(
               input: call.input,
             })),
         },
-        { role: "user", content: [...toolResults, { type: "text", text: RECEIPT_COMPOSITION_TASK }] },
+        { role: "user", content: toolResults },
       );
     }
     const composingFromReceipt = receiptTurns.length > 0;
@@ -424,25 +413,13 @@ export async function runAgent(
           actionsPerformed,
         }, "token_budget");
       }
-      default: {
-        // An approved write that committed and then went unreported used to end
-        // as "Done." — the customer heard nothing and nobody was told.
-        const repliedToCustomer = actionsPerformed.some((action) => (
-          action.tool === "send_reply" && action.status !== "error"
-        ));
-        if (composingFromReceipt && !repliedToCustomer) {
-          return finish({
-            summary: `${summarizeApprovedDashboardActions(actionsPerformed)}\nI didn't send the customer a reply — reply from the ticket.`,
-            actionsPerformed,
-          }, "end_turn");
-        }
+      default:
         return finish({
           summary: readOnly
             ? (loop.finalText?.trim() || "I do not have enough information to answer that.")
             : (loop.finalText ?? "Done."),
           actionsPerformed,
         }, "end_turn");
-      }
     }
   } catch (error) {
     await finish({
