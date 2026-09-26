@@ -1346,40 +1346,95 @@ export async function cancelMemberAgentTask(input: {
       throw new ConflictError("The task changed before cancellation was recorded.");
     }
     if (["completed", "failed", "cancelled"].includes(task.status)) return task;
-
-    const consequential = await tx.agentAction.count({
-      where: {
-        organizationId: input.organizationId, taskId: input.taskId,
-        dispatchState: { in: DISPATCHED_STATES },
-      },
-    });
-    const running = task.status === "running";
-    const status = running
-      ? "running" as const
-      : consequential > 0 ? "reconciling" as const : "cancelled" as const;
-    // A stop that ends an approval wait ends it for the proposal too. A claimed
-    // attempt keeps its wait, so it keeps whatever it is parked on.
-    if (!running) {
-      await supersedeActiveProposal(tx, {
-        organizationId: input.organizationId,
-        activeProposalId: task.activeProposalId,
-      }, now);
-    }
-    return tx.agentTask.update({
-      where: { id: task.id },
-      data: {
-        status,
-        cancelledAt: task.cancelledAt ?? now,
-        failureCode: consequential > 0 ? "cancelled_after_dispatch" : null,
-        lastProgressAt: now,
-        // A stop that lands while the merchant is being asked to approve or
-        // answer ends that wait. A claimed attempt keeps its own, and clears it
-        // through settle or fail.
-        ...(!running ? {
-          ...NO_SUSPENSION,
-          claimToken: null, leaseExpiresAt: null, activeCheckpointAt: null,
-        } : {}),
-      },
-    });
+    return recordTaskStop(tx, task, now);
   });
+}
+
+type TaskStopTx = Pick<typeof db, "agentTask" | "agentProposal" | "agentAction">;
+
+/**
+ * The authorized-stop row of the task table, written once for every stop. The
+ * caller holds the task row lock. No new action starts after it; a task that has
+ * touched a provider goes to `reconciling` rather than `cancelled`.
+ */
+async function recordTaskStop(
+  tx: TaskStopTx,
+  task: {
+    id: string; organizationId: string; status: string;
+    activeProposalId: string | null; cancelledAt: Date | null;
+  },
+  now: Date,
+) {
+  const consequential = await tx.agentAction.count({
+    where: {
+      organizationId: task.organizationId, taskId: task.id,
+      dispatchState: { in: DISPATCHED_STATES },
+    },
+  });
+  const running = task.status === "running";
+  const status = running
+    ? "running" as const
+    : consequential > 0 ? "reconciling" as const : "cancelled" as const;
+  // A stop that ends an approval wait ends it for the proposal too. A claimed
+  // attempt keeps its wait, so it keeps whatever it is parked on.
+  if (!running) {
+    await supersedeActiveProposal(tx, {
+      organizationId: task.organizationId,
+      activeProposalId: task.activeProposalId,
+    }, now);
+  }
+  return tx.agentTask.update({
+    where: { id: task.id },
+    data: {
+      status,
+      cancelledAt: task.cancelledAt ?? now,
+      failureCode: consequential > 0 ? "cancelled_after_dispatch" : null,
+      lastProgressAt: now,
+      // A stop that lands while the merchant is being asked to approve or
+      // answer ends that wait. A claimed attempt keeps its own, and clears it
+      // through settle or fail.
+      ...(!running ? {
+        ...NO_SUSPENSION,
+        claimToken: null, leaseExpiresAt: null, activeCheckpointAt: null,
+      } : {}),
+    },
+  });
+}
+
+/**
+ * Closing a conversation stops every task on it that is waiting for the merchant
+ * (release-owner decision C). Call it in the transaction that closes the threads,
+ * so a close never leaves a wait behind with no card to act on.
+ *
+ * A task whose proposal is already approved is not waiting: its execution owns
+ * it, and a plan that closes the ticket as its last step must not stop itself.
+ */
+export async function stopWaitingTasksOnClosedThreads(
+  tx: TaskStopTx & Pick<typeof db, "$queryRaw">,
+  input: { organizationId: string; threadIds: readonly string[]; now?: Date },
+): Promise<number> {
+  if (input.threadIds.length === 0) return 0;
+  const now = input.now ?? new Date();
+  const locked = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    SELECT id FROM agent_tasks
+    WHERE organization_id = ${input.organizationId}::uuid
+      AND thread_id IN (${Prisma.join(input.threadIds.map((id) => Prisma.sql`${id}::uuid`))})
+      AND status IN ('waiting_input', 'waiting_approval')
+    ORDER BY id
+    FOR UPDATE
+  `);
+  let stopped = 0;
+  for (const { id } of locked) {
+    const task = await tx.agentTask.findFirst({
+      where: {
+        id, organizationId: input.organizationId,
+        status: { in: ["waiting_input", "waiting_approval"] },
+        OR: [{ activeProposalId: null }, { activeProposal: { status: { not: "approved" } } }],
+      },
+    });
+    if (!task) continue;
+    await recordTaskStop(tx, task, now);
+    stopped += 1;
+  }
+  return stopped;
 }

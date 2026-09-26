@@ -30,6 +30,7 @@ import { claimCurrentPlanExecution } from "./execution-ledger.js";
 import {
   acceptCustomerAgentRequest, claimAgentTask, settleAgentTaskClaim,
 } from "./task-ledger.js";
+import { updateThreadStatusMutation } from "./thread-io/db-mutations.js";
 import { authorizeAgentProposal } from "./task-approval.js";
 import { deriveProposalCommunication } from "./proposal-communication.js";
 import type { AgentContext, AgentResult } from "./agent-context.js";
@@ -258,6 +259,108 @@ async function seedSupportCardParkedOnTask(runtimeVersion = 1, authored: AgentPl
     .toBe(seeded.cache.planId);
   return { ...seeded, member, task, request };
 }
+
+// Release-owner decision C: closing a conversation stops every task on it that
+// is waiting for the merchant, through the authorized-stop row.
+describe("closing a conversation", () => {
+  const closeThread = (orgId: string, threadId: string) => (
+    updateThreadStatusMutation({ status: "closed" }, { orgId, threadId })
+  );
+
+  it("cancels a waiting approval and its card can no longer be approved", async () => {
+    const support = await seedSupportCardParkedOnTask(2);
+    const runAgent = vi.fn(async () => okResult);
+
+    await closeThread(support.org.id, support.thread.id);
+
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: support.task.id } })).toMatchObject({
+      status: "cancelled", activeProposalId: null, failureCode: null,
+      cancelledAt: expect.any(Date),
+    });
+    expect(await db.agentProposal.findUniqueOrThrow({ where: { id: support.cache.planId! } }))
+      .toMatchObject({ status: "superseded" });
+    await expect(executeCurrentCachedHomePlan({
+      orgId: support.org.id,
+      threadId: support.thread.id,
+      settings: support.settings,
+      executionIntent: "merchant_approved",
+      failureRoute: "test",
+      approver: { clerkUserId: support.member.clerkUserId, displayName: null },
+    }, makeDeps({ runAgent }))).rejects.toBeInstanceOf(ConflictError);
+    expect(runAgent).not.toHaveBeenCalled();
+  });
+
+  it("cancels a task waiting on a question", async () => {
+    const { org, thread, message } = await seedThreadWithPlan();
+    const { request, task } = await acceptCustomerAgentRequest({
+      organizationId: org.id, threadId: thread.id, sourceMessageId: message.id,
+      objective: "Change the shipping address",
+      budget: { runtimeVersion: 2, modelCallLimit: 20, activeTimeMsLimit: 120000, spendNanoUsdLimit: 1000000000n },
+    });
+    const claim = await claimAgentTask({ organizationId: org.id, taskId: task.id, expectedRevision: task.revision });
+    expect(await settleAgentTaskClaim({
+      organizationId: org.id, taskId: task.id, expectedRevision: task.revision,
+      claimToken: claim!.claimToken, requestId: request.id,
+      settlement: {
+        status: "waiting_input", question: "What is the full postal code?",
+        answerer: { kind: "customer", key: `customer:${thread.customerId}` },
+      },
+    })).toBe(true);
+
+    await closeThread(org.id, thread.id);
+
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: task.id } })).toMatchObject({
+      status: "cancelled", pendingQuestion: null, pendingQuestionId: null,
+    });
+  });
+
+  it("reconciles a waiting task that already reached a provider", async () => {
+    const support = await seedSupportCardParkedOnTask(2);
+    await db.agentAction.create({ data: {
+      organizationId: support.org.id, threadId: support.thread.id, taskId: support.task.id,
+      turnId: support.request.id, tool: "create_refund", category: "action", input: {},
+      status: "unknown", mode: "human_approved", dispatchState: "submitted",
+      submittedAt: new Date(), operationId: randomUUID(), actionIndex: 0,
+    } });
+
+    await closeThread(support.org.id, support.thread.id);
+
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: support.task.id } })).toMatchObject({
+      status: "reconciling", failureCode: "cancelled_after_dispatch", cancelledAt: expect.any(Date),
+    });
+  });
+
+  it("leaves an approved proposal to the execution that owns it", async () => {
+    const support = await seedSupportCardParkedOnTask(2);
+    const proposal = await db.agentProposal.findUniqueOrThrow({ where: { id: support.cache.planId! } });
+    await authorizeAgentProposal({
+      organizationId: support.org.id, clerkUserId: support.member.clerkUserId,
+      threadId: support.thread.id, proposalId: proposal.id,
+      instruction: support.plan.instruction,
+      approvedToolCalls: support.plan.rawToolCalls,
+      communication: support.plan.communication,
+      executionLedgerEnforced: true,
+    });
+
+    await closeThread(support.org.id, support.thread.id);
+
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: support.task.id } })).toMatchObject({
+      status: "waiting_approval", activeProposalId: proposal.id, cancelledAt: null,
+    });
+    expect(await db.agentProposal.findUniqueOrThrow({ where: { id: proposal.id } }))
+      .toMatchObject({ status: "approved" });
+  });
+
+  it("leaves waiting tasks on other conversations alone", async () => {
+    const closing = await seedSupportCardParkedOnTask(2);
+    const other = await seedSupportCardParkedOnTask(2);
+
+    await closeThread(closing.org.id, closing.thread.id);
+
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: other.task.id } }))
+      .toMatchObject({ status: "waiting_approval", activeProposalId: other.cache.planId });
+  });
+});
 
 describe("plan execution helpers", () => {
   it("records a delivered customer question as a wait on that customer", async () => {

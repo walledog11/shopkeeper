@@ -3,9 +3,13 @@ import { ChannelType, db } from '@shopkeeper/db';
 import {
   cleanupTestData,
   createTestCustomer,
+  createTestMessage,
   createTestOrg,
   createTestThread,
 } from '@shopkeeper/db/test-helpers';
+import {
+  acceptCustomerAgentRequest, claimAgentTask, settleAgentTaskClaim,
+} from '@shopkeeper/agent/task-ledger';
 
 vi.mock('@clerk/nextjs/server', () => ({ auth: vi.fn(), clerkClient: vi.fn() }));
 
@@ -56,6 +60,38 @@ describe('PATCH /api/threads/bulk', () => {
 
     expect(response.status).toBe(200);
     await expect(db.thread.findUnique({ where: { id: thread.id } })).resolves.toMatchObject(expected);
+  });
+
+  it('stops the tasks waiting on every conversation it closes', async () => {
+    const waiting = [];
+    for (const email of ['bulk_wait_a@example.com', 'bulk_wait_b@example.com']) {
+      const customer = await createTestCustomer(org.id, email);
+      const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+      const message = await createTestMessage(thread.id, 'Can you change my address?');
+      const { request: agentRequest, task } = await acceptCustomerAgentRequest({
+        organizationId: org.id, threadId: thread.id, sourceMessageId: message.id,
+        objective: 'Change the shipping address',
+        budget: { runtimeVersion: 2, modelCallLimit: 20, activeTimeMsLimit: 120000, spendNanoUsdLimit: BigInt(1_000_000_000) },
+      });
+      const claim = await claimAgentTask({ organizationId: org.id, taskId: task.id, expectedRevision: task.revision });
+      await settleAgentTaskClaim({
+        organizationId: org.id, taskId: task.id, expectedRevision: task.revision,
+        claimToken: claim!.claimToken, requestId: agentRequest.id,
+        settlement: {
+          status: 'waiting_input', question: 'What is the full postal code?',
+          answerer: { kind: 'customer', key: `customer:${customer.id}` },
+        },
+      });
+      waiting.push({ thread, task });
+    }
+
+    const response = await PATCH(request({ ids: waiting.map(({ thread }) => thread.id), action: 'close' }));
+
+    expect(response.status).toBe(200);
+    for (const { task } of waiting) {
+      await expect(db.agentTask.findUniqueOrThrow({ where: { id: task.id } }))
+        .resolves.toMatchObject({ status: 'cancelled', pendingQuestion: null });
+    }
   });
 
   it('ignores cross-organization ids and never mutates them', async () => {

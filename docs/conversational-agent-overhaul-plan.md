@@ -3,7 +3,7 @@
 Status, checked 2026-09-25 against `origin/master` at `fff54dc4`: Packages 0–5
 are done. Package 6 (certify, cut over, and delete the old runtime) is in
 progress. Of the thirteen items in [What is left](#what-is-left-in-order), 1–3
-and 5 are done, 4 is done except one piece, and 6–13 are open. Decision E was answered
+5 and 6 are done, 4 is done except one piece, and 7–13 are open. Decision E was answered
 on 2026-09-25 (phone instructions move onto durable tasks, item 10); decision F
 is open and blocks item 8. Production runs runtime v1 by default,
 with one controlled organization on runtime v2.
@@ -78,20 +78,16 @@ contract was unbuilt.
 | Gate C: real provider and delivery | Exercised on 2026-09-25. Run 4 went approval → Shopify write → typed receipt → customer email received, but its execution was stored as failed, by a rule item 5 has since fixed. It runs again as item 8. |
 | Gate D, staged rollout, Gate E | Not started. |
 | Production routing | `AGENT_RUNTIME_VERSION=1` on both services, with `AGENT_RUNTIME_V2_ORG_IDS` set to the controlled organization since 2026-09-25. New tasks for every other organization run v1. |
-| Work in flight | Item 6, branch `close-cancels-waiting-tasks`. |
-| Open pull requests | Item 5, branch `delivery-separate-from-completion`. |
+| Work in flight | None. |
+| Open pull requests | Item 5, branch `delivery-separate-from-completion`; item 6, branch `close-cancels-waiting-tasks`, stacked on it. |
 
 ## Where the code disagrees with this plan
 
 Each open item was checked against the code on 2026-09-25. Each is a defect
 against a contract this plan already specifies, not a new requirement.
-Disagreements 1, 2, 3, 4 and 6 are resolved; see
+Disagreements 1–6 are resolved; see
 [What has been done](#what-has-been-done).
 
-- **Disagreement 5: Closing a conversation strands its waiting task.** Contract: *Task
-  transitions and concurrency*, which has no row for this; decision C supplies
-  it. Observed in Gate C: task `6abfe733` stayed `waiting_approval` after its
-  ticket was closed, with no card left to act on. Fixed by item 6.
 - **Disagreement 7: Phone instructions are not durable tasks.** Contract: *Target
   architecture* ("Support and operator turns … share request identity,
   budgets, receipts, and recovery semantics") and Package 6's acceptance ("all
@@ -135,19 +131,8 @@ request. Doc-only changes go straight to master.
      placeholder). The model evidence for the whole item is item 7's run of
      `refund-partial-placeholder` (runtime v2 only), which has never run.
 5. ~~**Delivery separate from completion**~~ Done 2026-09-25 (disagreement 4).
-6. **Closed conversation and waiting tasks** (disagreement 5; decision C). Add
-   the transition to the task table in *Task transitions and concurrency*, then
-   implement it.
-   - Exists (uncommitted, worktree `one-proposal-identity`): a shared
-     `recordTaskStop` in `task-ledger.ts` that `cancelMemberAgentTask` now uses,
-     called from the thread `PATCH` and bulk routes, `inactive-thread-sweep.ts`,
-     `resolve-inbound-episode.ts` and `thread-io/db-mutations.ts`, with
-     integration cases in `plan-execution.integration.test.ts` and the thread
-     route test.
-   - Done when closing a conversation (single, bulk, or the inactivity sweep)
-     cancels every waiting task on it and invalidates their proposals and
-     cards, and a task with an uncertain submitted write goes to `reconciling`,
-     as an authorized stop does. Deterministic.
+6. ~~**Closed conversation and waiting tasks**~~ Done 2026-09-25 (disagreement 5;
+   decision C).
 7. **Budgets, held-out variants, and Gate B again** (Package 6, first checkbox;
    *Success criteria*; *Model evaluation cases and scoring*). The prerequisites
    are free. Do them before booking the paid run.
@@ -508,6 +493,19 @@ capability: it goes from 5,929 to 13,313 tokens. v1 is unchanged.
   (`finalizeReconciledPlanExecution`) calls the same helper. The dashboard card
   shows a display-only `reply_not_sent` state (`committedWithUnsentReply`) that
   says the customer has not been told and stays until dismissed.
+- *Item 6* (disagreement 5; decision C). The task table has a row for a closed
+  conversation. `recordTaskStop` (`task-ledger.ts`) is the one authorized-stop
+  write, used by `cancelMemberAgentTask` and by
+  `stopWaitingTasksOnClosedThreads`, which every close path calls in the
+  transaction that closes the conversation: the dashboard's single and bulk
+  close, the inactivity sweep, an inbound episode rollover, and the
+  `update_thread_status` tool. The gateway's thread sink now delegates that tool
+  to `updateThreadStatusMutation` instead of keeping its own copy. A waiting
+  task is cancelled, or goes to `reconciling` if it already reached a provider,
+  and its proposal is superseded. A task whose proposal is already approved is
+  left to its execution. Phone cards drop because the close clears the thread's
+  cached plan, and the approval boundary refuses a superseded proposal. Bulk
+  close now clears the cached plan too, as a single close already did.
 
 ## Product outcome
 
@@ -651,6 +649,7 @@ Use a task-specific state set: `queued`, `running`, `waiting_input`, `waiting_ap
 | reconciling | Provider probe establishes outcome | queued to observe known outcome, or cancelled after recording outcome if cancellation was requested |
 | running | Objective satisfied; required response persisted | completed; delivery can still be pending/failed |
 | queued/running/waiting_* | Authorized stop | cancelled if no uncertain submitted write; otherwise reconciling with cancellation recorded |
+| waiting_input/waiting_approval | Conversation closed, unless its proposal is already approved (decision C) | Authorized stop, in the transaction that closes the conversation; the pending proposal is superseded |
 | running | Definite unrecoverable failure or exhausted budget | failed with reason and resumable facts; uncertainty still takes precedence as reconciling |
 
 Completed/cancelled/failed tasks are not reset by a duplicate request. A deliberate new instruction can create a new task referencing prior work. A known partial result remains visible even when the overall task fails or is cancelled.

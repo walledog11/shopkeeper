@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { db } from '@shopkeeper/db';
+import { db, Prisma } from '@shopkeeper/db';
+import { stopWaitingTasksOnClosedThreads } from '@shopkeeper/agent/task-ledger';
 import { NotFoundError } from '@/lib/api/errors';
 import { readRequiredJsonObject } from '@/lib/api/body';
 import { withOrgRoute } from '@/lib/api/route';
@@ -23,14 +24,20 @@ export const PATCH = withOrgRoute(
     const verifiedIds = threads.map(t => t.id);
 
     const data: Record<string, unknown> = {};
-    if (action === 'close') data.status = 'closed';
+    // A close drops the cached plan with the conversation, as a single close does.
+    if (action === 'close') Object.assign(data, { status: 'closed', cachedPlan: Prisma.DbNull, cachedPlanMessageId: null });
     if (action === 'open') data.status = 'open';
     if (action === 'tag') data.tag = tag;
     if (action === 'archive') data.archivedAt = new Date();
 
-    await db.thread.updateMany({
-      where: { id: { in: verifiedIds }, organizationId: org.id },
-      data,
+    await db.$transaction(async (tx) => {
+      await tx.thread.updateMany({
+        where: { id: { in: verifiedIds }, organizationId: org.id },
+        data,
+      });
+      if (action === 'close') {
+        await stopWaitingTasksOnClosedThreads(tx, { organizationId: org.id, threadIds: verifiedIds });
+      }
     });
 
     return NextResponse.json({ updated: verifiedIds.length });
