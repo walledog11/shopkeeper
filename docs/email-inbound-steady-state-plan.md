@@ -1,8 +1,8 @@
 # Email inbound steady-state plan
 
-Created: 2026-09-25. Last updated: 2026-09-26 (Phase 4 code + ops verification).
+Created: 2026-09-25. Last updated: 2026-09-26 (Phase 4 shipped + host env cleanup).
 
-**Status:** Phases **0–4 complete in code**. Phases **0–3** shipped in production ([PR #112](https://github.com/walledog11/shopkeeper/pull/112)). **Phase 4** awaits deploy + host env cleanup (`GMAIL_NATIVE_INBOUND` removed from Railway/Vercel). Phases **5–6** open (5 product-gated; 6 partial).
+**Status:** Phases **0–4 complete** (code + production). Phases **0–3** in [PR #112](https://github.com/walledog11/shopkeeper/pull/112); **Phase 4** on `master` (`1903cc02`). Phases **5–6** open (5 product-gated; 6 partial).
 
 | Phase | State | Notes |
 | --- | --- | --- |
@@ -10,7 +10,7 @@ Created: 2026-09-25. Last updated: 2026-09-26 (Phase 4 code + ops verification).
 | 1 — Stop dual delivery | Done | [Phase 1 acceptance](./email-inbound-phase-1-acceptance.md) |
 | 2 — Data model + validation | Done | Migration `20260926120000_email_inbound_mode_backfill` applied in production (2026-09-26) |
 | 3 — Unified ingress | Done | Shipped on gateway via `master` deploy; `InboundEmailEvent` + single enqueue path |
-| 4 — Retire env flags | Done (code) | Remove `GMAIL_NATIVE_INBOUND` from Railway/Vercel after deploy; set `EMAIL_INBOUND_MODE=standard` or unset |
+| 4 — Retire env flags | Done | `GMAIL_NATIVE_INBOUND` removed from Vercel + Railway (2026-09-26); default `EMAIL_INBOUND_MODE` (`standard`) |
 | 5 — Remove Postmark inbound (optional) | Not started | Product-gated |
 | 6 — Docs handoff | Partial | README + runbook updated in Phase 4; to-do cross-link remains |
 
@@ -27,7 +27,7 @@ Owner: engineering / release, with product sign-off on forward-only Postmark ret
 | --- | --- | --- |
 | Inventory / audit | Yes | `npm run audit:email-inbound-transport` ([`packages/db/email-inbound-transport-audit.ts`](../packages/db/email-inbound-transport-audit.ts), [`scripts/audit-email-inbound-transport.mjs`](../scripts/audit-email-inbound-transport.mjs)). `--strict` fails on dual-delivery risk. Production `--strict` green (2026-09-26, re-run after fleet changes). |
 | Production snapshot | Yes | 1 Gmail-only email org, 0 dual-integration, 0 dual-delivery risk ([inventory](./email-inbound-phase-0-inventory.md)). |
-| Ops health (post Phase 3) | Yes | Dashboard `/api/health` ok; gateway `/health/deep` ok (`worker` ok). See **Ops evidence** at end of doc. |
+| Ops health (post Phase 4) | Yes | Dashboard `/api/health` ok; gateway `/health/deep` ok (`worker` ok). See **Ops evidence** at end of doc. |
 | Integrations UI | Yes | “Inbound via Gmail” / “Inbound via forwarding”; dual-path banner; forward connect blocked when Gmail sync is active. Phase 4: no `GMAIL_NATIVE_INBOUND` gating in UI ([`email-inbound-path.ts`](../apps/dashboard/src/lib/integrations/email-inbound-path.ts), presentation + forwarding panels). |
 | Connect validation (Phase 2) | Yes | Dual inbound blocked on **all** email upserts via [`hasDualInboundDeliveryRisk` / `assertNoDualInboundDelivery`](../packages/email/src/inbound-transport-policy.ts) in [`email-integration.ts`](../apps/dashboard/src/app/api/integrations/_lib/email-integration.ts). Option **A**: transport implied by `email_provider`. |
 | Metadata backfill (Phase 2) | Yes | [`20260926120000_email_inbound_mode_backfill`](../packages/db/prisma/migrations/20260926120000_email_inbound_mode_backfill/migration.sql) applied in production; upsert strips `inboundMode` except Gmail send-only (`inboundMode: 'postmark'`). |
@@ -36,9 +36,9 @@ Owner: engineering / release, with product sign-off on forward-only Postmark ret
 | Unified ingress (Phase 3) | Yes | [`InboundEmailEvent`](../packages/email/src/inbound-event.ts), [`toInboundEmailJobPayload` / `parseInboundEmailJobData`](../packages/email/src/inbound-email-job.ts), sole producer [`enqueue-inbound-email.ts`](../apps/gateway/src/inbound/enqueue-inbound-email.ts). Postmark webhook + Gmail sync enqueue through it; `handleEmailJob` parses normalized shape. |
 | CI gates | Yes | Audit fixture + enqueue surface gates in `verify:pr`. Production env schema: [`scripts/lib/production-config-schema.mjs`](../scripts/lib/production-config-schema.mjs), [`scripts/check-production-env.mjs`](../scripts/check-production-env.mjs) (Phase 4). |
 | Production deploy (0–3) | Yes | [PR #112](https://github.com/walledog11/shopkeeper/pull/112) → `master`; `db:migrate:deploy` + post-deploy `audit --strict` (2026-09-26). |
-| Production deploy (Phase 4) | Pending | Deploy dashboard + gateway with Phase 4 binary; strip `GMAIL_NATIVE_INBOUND` from host env; optional `EMAIL_INBOUND_MODE=standard` or `gmail-only` for current fleet. |
+| Production deploy (Phase 4) | Yes | Vercel + Railway deploy (2026-09-26); `GMAIL_NATIVE_INBOUND` stripped from both hosts |
 | Runbook + README (Phase 4/6) | Partial | Steady-state inbound docs updated ([runbook](./production/runbook.md), [README](../README.md)); diagram + per-transport health checklist still Phase 6. |
-| Retire env flags (Phase 4) | Yes (code) | `GMAIL_NATIVE_INBOUND` removed from contracts; `EMAIL_INBOUND_MODE`: `standard` (default), `postmark`, `gmail-only`; legacy `hybrid` → `standard`. Retirements logged in [compatibility-retirement-backlog.md](./compatibility-retirement-backlog.md). |
+| Retire env flags (Phase 4) | Yes | Code + host env; `EMAIL_INBOUND_MODE`: `standard` (default), `postmark`, `gmail-only`; legacy `hybrid` → `standard`. [compatibility-retirement-backlog.md](./compatibility-retirement-backlog.md). |
 | to-do cross-link | No | Phase 6 — link from [to-do-list.md](./to-do-list.md). |
 
 **Tests added or updated (Phases 0–4):**
@@ -309,8 +309,8 @@ HAVING count(*) > 1;
 
 ### Phase 4 — Retire rollout globals (2–4 days)
 
-**Status:** Complete in code (2026-09-26). **Deploy follow-up:** unset or remove
-`GMAIL_NATIVE_INBOUND` on Railway/Vercel; prefer `EMAIL_INBOUND_MODE=standard` (or unset).
+**Status:** Complete (2026-09-26). Deploy + host env cleanup done; `GMAIL_NATIVE_INBOUND`
+removed from Vercel and Railway (`shopkeeper` + Gateway Worker).
 
 **Tasks**
 
@@ -326,7 +326,7 @@ HAVING count(*) > 1;
 
 - [x] Production env preflight/schema updated; warn if `GMAIL_NATIVE_INBOUND` still set.
 - [x] Runbook: no “must match on both hosts” for Gmail inbound.
-- [ ] Host env cleaned after Phase 4 deploy (remove `GMAIL_NATIVE_INBOUND`).
+- [x] Host env cleaned after Phase 4 deploy (remove `GMAIL_NATIVE_INBOUND`).
 
 **Key code touchpoints (Phase 4):** [`production-config-schema.mjs`](../scripts/lib/production-config-schema.mjs),
 [`check-production-env.mjs`](../scripts/check-production-env.mjs),
@@ -401,14 +401,14 @@ dual-integration, 0 dual-delivery risk — [details](./email-inbound-phase-0-inv
 | --- | --- |
 | Invariant 1 enforced in code (validation + audit script) | Done |
 | Single module enqueues `JOB.EMAIL` from normalized events | Done |
-| No production dependency on `GMAIL_NATIVE_INBOUND` or `EMAIL_INBOUND_MODE=hybrid` | Done (code); **ops:** remove stale env vars after deploy |
+| No production dependency on `GMAIL_NATIVE_INBOUND` or `EMAIL_INBOUND_MODE=hybrid` | Done (2026-09-26) |
 | Runbook steady-state section; hybrid migration-only | Done |
 | Integrations UI reflects one inbound path per connection type | Done |
 | No duplicate-ingestion from dual rails (ops evidence) | Done — [Phase 1 acceptance](./email-inbound-phase-1-acceptance.md) |
 | Phase 2 SQL backfill applied in production | Done (2026-09-26) |
 | Phase 3 gateway binary live in production | Done (2026-09-26, via `master` deploy) |
-| Phase 4 rollout globals retired in code | Done (2026-09-26); host env cleanup after deploy |
-| Phase 4 binary live in production | Pending deploy |
+| Phase 4 rollout globals retired in code | Done (2026-09-26) |
+| Phase 4 binary live in production | Done (2026-09-26) |
 
 ## Expected outcomes (maintainability)
 
@@ -435,17 +435,17 @@ Optional: add row **E1** to [project-improvement-plan.md](project-improvement-pl
 
 **Next actions**
 
-1. **Deploy** Phase 4; then remove `GMAIL_NATIVE_INBOUND` from dashboard + gateway env (preflight warns if still set).
-2. Ops: weekly `npm run audit:email-inbound-transport -- --strict` (or after any email integration change).
-3. Optional ops: set `EMAIL_INBOUND_MODE=gmail-only` when the fleet is all-native (prod snapshot: 1 Gmail org, 2026-09-26).
-4. Docs (Phase 6): `to-do-list.md` cross-link; steady-state diagram in README if desired.
+1. Ops: weekly `npm run audit:email-inbound-transport -- --strict` (or after any email integration change).
+2. Optional ops: set `EMAIL_INBOUND_MODE=gmail-only` when the fleet is all-native (prod snapshot: 1 Gmail org, 2026-09-26).
+3. Docs (Phase 6): `to-do-list.md` cross-link; steady-state diagram in README if desired.
 
-**Ops evidence (2026-09-26):**
+**Ops evidence (2026-09-26, post Phase 4):**
 
 | Check | Result |
 | --- | --- |
-| `npm run audit:email-inbound-transport -- --strict` | Green — 1 Gmail org, 0 dual-delivery risk |
+| `npm run audit:email-inbound-transport -- --strict` | Green — 1 Gmail org, 0 dual-delivery risk (pre–Phase 4; re-run after fleet changes) |
 | `GET https://app.useshopkeeper.com/api/health` | `{"status":"ok"}` |
-| Gateway `GET /health/deep` | `status: ok`, `checks.worker.status: ok` (pre–Phase 4 deploy snapshot) |
+| Gateway `GET /health/deep` | `status: ok`, `checks.worker.status: ok` |
+| Host env | `GMAIL_NATIVE_INBOUND` absent on Vercel production + Railway gateway services |
 
-Re-run health + audit after Phase 4 deploy and after any email integration change.
+Re-run health + audit after any email integration change.
