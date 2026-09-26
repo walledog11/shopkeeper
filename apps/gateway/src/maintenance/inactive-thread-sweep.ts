@@ -5,6 +5,7 @@ import {
   type PlanThreadMessage,
 } from '@shopkeeper/agent/plan-cache-shape';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
+import { stopWaitingTasksOnClosedThreads } from '@shopkeeper/agent/task-ledger';
 import { CHANNEL_TYPE, SENDER_TYPE, THREAD_STATUS } from '@shopkeeper/agent/thread-constants';
 import { db, Prisma, ThreadFilterStatus } from '@shopkeeper/db';
 import logger from '../logger.js';
@@ -187,11 +188,21 @@ export async function closeInactiveOpenThreads(now: Date = new Date()): Promise<
     }
 
     if (toClose.length > 0) {
-      const result = await db.thread.updateMany({
-        where: { id: { in: toClose }, status: THREAD_STATUS.OPEN },
-        data: { status: THREAD_STATUS.CLOSED, closedReason: 'inactivity' },
+      closed += await db.$transaction(async (tx) => {
+        const closedRows = await tx.thread.updateManyAndReturn({
+          where: { id: { in: toClose }, status: THREAD_STATUS.OPEN },
+          data: { status: THREAD_STATUS.CLOSED, closedReason: 'inactivity' },
+          select: { id: true, organizationId: true },
+        });
+        const threadIdsByOrg = new Map<string, string[]>();
+        for (const row of closedRows) {
+          threadIdsByOrg.set(row.organizationId, [...(threadIdsByOrg.get(row.organizationId) ?? []), row.id]);
+        }
+        for (const [organizationId, threadIds] of threadIdsByOrg) {
+          await stopWaitingTasksOnClosedThreads(tx, { organizationId, threadIds });
+        }
+        return closedRows.length;
       });
-      closed += result.count;
     }
 
     if (threads.length < SWEEP_BATCH_SIZE) break;

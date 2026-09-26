@@ -4,6 +4,7 @@ import { NotFoundError } from '@/lib/api/errors';
 import { readRequiredJsonObject } from '@/lib/api/body';
 import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
 import { merchantInboxInternalChannelFilter } from '@shopkeeper/agent/merchant-inbox-surfaces';
+import { stopWaitingTasksOnClosedThreads } from '@shopkeeper/agent/task-ledger';
 import { THREAD_STATUS } from '@shopkeeper/agent/thread-constants';
 import { parseThreadPatchBody } from '@/app/api/threads/_lib/validation';
 import type { AgentTurnAction } from '@shopkeeper/agent/turns';
@@ -74,15 +75,21 @@ export const PATCH = withOrgRoute<{ id: string }>(
             ? ThreadFilterFeedback.confirmed_genuine
             : undefined);
 
-    const updated = await db.thread.update({
-      where: { id },
-      data: {
-        ...(status && { status, cachedPlan: Prisma.DbNull, cachedPlanMessageId: null }),
-        ...(tag !== undefined && { tag }),
-        ...(shopifyCustomerId !== undefined && { shopifyCustomerId }),
-        ...(filterStatus !== undefined && { filterStatus }),
-        ...(resolvedFeedback !== undefined && { filterFeedback: resolvedFeedback }),
-      },
+    const updated = await db.$transaction(async (tx) => {
+      const row = await tx.thread.update({
+        where: { id },
+        data: {
+          ...(status && { status, cachedPlan: Prisma.DbNull, cachedPlanMessageId: null }),
+          ...(tag !== undefined && { tag }),
+          ...(shopifyCustomerId !== undefined && { shopifyCustomerId }),
+          ...(filterStatus !== undefined && { filterStatus }),
+          ...(resolvedFeedback !== undefined && { filterFeedback: resolvedFeedback }),
+        },
+      });
+      if (status === THREAD_STATUS.CLOSED) {
+        await stopWaitingTasksOnClosedThreads(tx, { organizationId: org.id, threadIds: [id] });
+      }
+      return row;
     });
 
     return NextResponse.json(updated);

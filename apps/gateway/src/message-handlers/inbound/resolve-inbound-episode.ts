@@ -1,5 +1,6 @@
 import type { Prisma as PrismaTypes } from '@prisma/client';
 import { db, Prisma, SenderType, type DbChannelType, type DbThreadFilterStatus } from '@shopkeeper/db';
+import { stopWaitingTasksOnClosedThreads } from '@shopkeeper/agent/task-ledger';
 import { THREAD_STATUS } from '@shopkeeper/agent/thread-constants';
 import { CHANNEL } from '../../constants.js';
 
@@ -246,7 +247,7 @@ export async function resolveInboundEpisode(
   // exactly the confusion this whole phase exists to stop. Genuinely unresolved
   // work survives as a CustomerObligation instead (P5); there is no such record
   // yet, which is why nothing is carried today.
-  await tx.thread.update({
+  const closedThread = await tx.thread.update({
     where: { id: openThread.id },
     data: {
       status: THREAD_STATUS.CLOSED,
@@ -254,6 +255,10 @@ export async function resolveInboundEpisode(
       cachedPlan: Prisma.DbNull,
       cachedPlanMessageId: null,
     },
+    select: { organizationId: true },
+  });
+  await stopWaitingTasksOnClosedThreads(tx, {
+    organizationId: closedThread.organizationId, threadIds: [openThread.id],
   });
   if (storefrontSessionId) {
     await tx.storefrontChatSessionEpisode.updateMany({

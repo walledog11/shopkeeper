@@ -1,6 +1,7 @@
 import { db, SenderType, createMessage } from '@shopkeeper/db';
 import { AGENT_NOTE_PREFIX, THREAD_STATUS } from '@shopkeeper/agent/thread-constants';
 import type { ThreadSink } from '@shopkeeper/agent/build-context';
+import { updateThreadStatusMutation } from '@shopkeeper/agent/thread-io';
 import { randomUUID } from 'node:crypto';
 import { createHash } from 'node:crypto';
 import { toolError, toolNotFound, toolOk, toolEscalated, toolUnknown, type ReceiptV1, type ToolResult } from '@shopkeeper/agent/tools';
@@ -195,29 +196,10 @@ export const gatewayThreadSink: ThreadSink = {
     return result;
   },
 
+  // The shared mutation owns what a close does to the conversation's waiting
+  // tasks (release-owner decision C).
   async updateThreadStatus(input: UpdateThreadStatusInput, ctx: ThreadSinkContext): Promise<ToolResult> {
-    const observed = await db.$transaction(async tx => {
-      const before = await tx.thread.findFirst({
-        where: { id: ctx.threadId, organizationId: ctx.orgId },
-        select: { status: true },
-      });
-      if (!before) return null;
-      const after = await tx.thread.update({
-        where: { id: ctx.threadId },
-        data: { status: input.status },
-        select: { status: true },
-      });
-      return { before: before.status, after: after.status };
-    });
-    if (!observed) return toolNotFound('Error: thread not found.');
-    await publishThreadEvent(ctx.orgId, ctx.threadId);
-    const result = toolOk(`Thread status updated to "${observed.after}".`);
-    const receipt = successfulThreadReceipt(ctx, 'update_thread_status', ctx.threadId, {
-      threadId: ctx.threadId,
-      beforeStatus: observed.before,
-      afterStatus: observed.after,
-    });
-    return receipt ? { ...result, receipt } : result;
+    return updateThreadStatusMutation(input, ctx, (hookCtx) => publishThreadEvent(hookCtx.orgId, hookCtx.threadId));
   },
 
   async updateThreadTag(input: UpdateThreadTagInput, ctx: ThreadSinkContext): Promise<ToolResult> {

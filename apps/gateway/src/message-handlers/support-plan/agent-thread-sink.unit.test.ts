@@ -9,6 +9,7 @@ const {
   threadFindFirst,
   threadUpdate,
   threadUpdateMany,
+  updateThreadStatusMutation,
 } = vi.hoisted(() => ({
   createMessage: vi.fn(),
   postInternal: vi.fn(),
@@ -18,6 +19,7 @@ const {
   threadFindFirst: vi.fn(),
   threadUpdate: vi.fn(),
   threadUpdateMany: vi.fn(),
+  updateThreadStatusMutation: vi.fn(),
 }));
 
 vi.mock('@shopkeeper/db', () => ({
@@ -30,6 +32,9 @@ vi.mock('@shopkeeper/db', () => ({
   SenderType: { note: 'note' },
   createMessage,
 }));
+// The status write, and what a close does to waiting tasks, is the shared
+// mutation's; its database behavior is covered in the agent package.
+vi.mock('@shopkeeper/agent/thread-io', () => ({ updateThreadStatusMutation }));
 vi.mock('../../clients/dashboard-internal.js', () => ({
   postDashboardInternal: postInternal,
 }));
@@ -61,6 +66,14 @@ describe('gatewayThreadSink persistence', () => {
       data.status ? { status: data.status } : { tag: data.tag }
     ));
     pushEscalation.mockResolvedValue(undefined);
+    updateThreadStatusMutation.mockImplementation(async (
+      input: { status: string },
+      hookCtx: typeof ctx,
+      after: (hookCtx: typeof ctx) => Promise<void>,
+    ) => {
+      await after(hookCtx);
+      return { status: 'ok', message: `Thread status updated to "${input.status}".` };
+    });
   });
 
   it('persists notes, status, tags, and merchant questions', async () => {
@@ -75,7 +88,8 @@ describe('gatewayThreadSink persistence', () => {
       senderType: 'note',
       contentText: '__shopkeeper_agent_note__Investigating',
     });
-    expect(threadUpdate).toHaveBeenCalledTimes(2);
+    expect(updateThreadStatusMutation).toHaveBeenCalledWith({ status: 'closed' }, ctx, expect.any(Function));
+    expect(threadUpdate).toHaveBeenCalledTimes(1);
     expect(createMessage).toHaveBeenNthCalledWith(2, {
       threadId: 'thread-1',
       senderType: 'note',
@@ -88,7 +102,6 @@ describe('gatewayThreadSink persistence', () => {
   it('returns provider-observed receipts for identity-bearing thread writes', async () => {
     const execution = { ...ctx, operationId: 'operation-1', executionId: 'execution-1' };
     const note = await gatewayThreadSink.addInternalNote({ text: 'Investigating' }, execution);
-    const status = await gatewayThreadSink.updateThreadStatus({ status: 'closed' }, execution);
     const tag = await gatewayThreadSink.updateThreadTag({ tag: 'shipping' }, execution);
 
     expect(note.receipt).toEqual(expect.objectContaining({
@@ -99,10 +112,6 @@ describe('gatewayThreadSink persistence', () => {
         messageId: 'message-1',
         contentSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
       }),
-    }));
-    expect(status.receipt).toEqual(expect.objectContaining({
-      tool: 'update_thread_status',
-      facts: { threadId: 'thread-1', beforeStatus: 'open', afterStatus: 'closed' },
     }));
     expect(tag.receipt).toEqual(expect.objectContaining({
       tool: 'update_thread_tag',
@@ -211,11 +220,9 @@ describe('gatewayThreadSink persistence', () => {
     threadFindFirst.mockResolvedValue(null);
     threadUpdateMany.mockResolvedValue({ count: 0 });
 
-    const status = await gatewayThreadSink.updateThreadStatus({ status: 'closed' }, ctx);
     const tag = await gatewayThreadSink.updateThreadTag({ tag: 'shipping' }, ctx);
     const escalation = await gatewayThreadSink.escalateToHuman({ reason: 'Refund approval needed' }, ctx);
 
-    expect(status).toEqual({ status: 'not_found', message: 'Error: thread not found.' });
     expect(tag).toEqual({ status: 'not_found', message: 'Error: thread not found.' });
     expect(escalation).toEqual({ status: 'error', message: 'Error: thread not found.' });
     expect(createMessage).not.toHaveBeenCalled();

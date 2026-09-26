@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { createMessage, db, SenderType } from "@shopkeeper/db";
+import { stopWaitingTasksOnClosedThreads } from "../task-ledger.js";
 import { AGENT_NOTE_PREFIX, THREAD_STATUS } from "../thread-constants.js";
 import { toolEscalated, toolError, toolNotFound, toolOk, type ToolResult } from "../tools/result.js";
 import type {
@@ -59,6 +60,9 @@ export async function updateThreadStatusMutation(
       data: { status: input.status },
       select: { status: true },
     });
+    if (afterRow.status === THREAD_STATUS.CLOSED) {
+      await stopWaitingTasksOnClosedThreads(tx, { organizationId: ctx.orgId, threadIds: [ctx.threadId] });
+    }
     return { before: before.status, after: afterRow.status };
   });
   if (!observed) return toolNotFound("Error: thread not found.");

@@ -13,6 +13,9 @@ vi.mock('@clerk/nextjs/server', () => ({
   clerkClient: vi.fn(),
 }));
 
+import {
+  acceptCustomerAgentRequest, claimAgentTask, settleAgentTaskClaim,
+} from '@shopkeeper/agent/task-ledger';
 import { GET, PATCH } from './route';
 import { auth } from '@clerk/nextjs/server';
 
@@ -186,6 +189,32 @@ describe('PATCH /api/threads/[id]', () => {
     const updated = await db.thread.findUnique({ where: { id: thread.id } });
     expect(updated?.status).toBe('closed');
     expect(updated?.filterFeedback).toBe('confirmed_genuine');
+  });
+
+  it('stops a task waiting on the conversation it closes', async () => {
+    const customer = await createTestCustomer(org.id, 'close_waiting@test.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+    const message = await createTestMessage(thread.id, 'Can you change my address?');
+    const { request, task } = await acceptCustomerAgentRequest({
+      organizationId: org.id, threadId: thread.id, sourceMessageId: message.id,
+      objective: 'Change the shipping address',
+      budget: { runtimeVersion: 2, modelCallLimit: 20, activeTimeMsLimit: 120000, spendNanoUsdLimit: BigInt(1_000_000_000) },
+    });
+    const claim = await claimAgentTask({ organizationId: org.id, taskId: task.id, expectedRevision: task.revision });
+    await settleAgentTaskClaim({
+      organizationId: org.id, taskId: task.id, expectedRevision: task.revision,
+      claimToken: claim!.claimToken, requestId: request.id,
+      settlement: {
+        status: 'waiting_input', question: 'What is the full postal code?',
+        answerer: { kind: 'customer', key: `customer:${customer.id}` },
+      },
+    });
+
+    const res = await callPatch(thread.id, { status: 'closed' });
+    expect(res.status).toBe(200);
+
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: task.id } }))
+      .toMatchObject({ status: 'cancelled', pendingQuestion: null });
   });
 
   it('does not write implicit feedback when closing a genuine thread', async () => {

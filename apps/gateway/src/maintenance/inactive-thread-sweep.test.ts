@@ -9,6 +9,9 @@ import {
 } from '@shopkeeper/db/test-helpers';
 import { closeInactiveOpenThreads } from './inactive-thread-sweep.js';
 import { appendPendingPlan } from '../operator-context.js';
+import {
+  acceptCustomerAgentRequest, claimAgentTask, settleAgentTaskClaim,
+} from '@shopkeeper/agent/task-ledger';
 
 const NOW = new Date('2026-04-29T12:00:00Z');
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -68,6 +71,34 @@ describe('closeInactiveOpenThreads', () => {
     await closeInactiveOpenThreads(NOW);
 
     expect(await closureOf(thread.id)).toEqual({ status: 'closed', closedReason: 'inactivity' });
+  });
+
+  // Release-owner decision C: the sweep's close stops the waits it leaves behind.
+  it('cancels a question the customer never answered when it closes the thread', async () => {
+    const thread = await openThread();
+    const inbound = await createTestMessage(thread.id, 'Can you change my address?', SenderType.customer);
+    const question = await createTestMessage(thread.id, 'What is the full postal code?', SenderType.ai);
+    await ageConversation([inbound.id, question.id], QUIET_AGED);
+    const { request, task } = await acceptCustomerAgentRequest({
+      organizationId: org.id, threadId: thread.id, sourceMessageId: inbound.id,
+      objective: 'Change the shipping address',
+      budget: { runtimeVersion: 2, modelCallLimit: 20, activeTimeMsLimit: 120000, spendNanoUsdLimit: 1000000000n },
+    });
+    const claim = await claimAgentTask({ organizationId: org.id, taskId: task.id, expectedRevision: task.revision });
+    await settleAgentTaskClaim({
+      organizationId: org.id, taskId: task.id, expectedRevision: task.revision,
+      claimToken: claim!.claimToken, requestId: request.id,
+      settlement: {
+        status: 'waiting_input', question: 'What is the full postal code?',
+        answerer: { kind: 'customer', key: `customer:${thread.customerId}` },
+      },
+    });
+
+    await closeInactiveOpenThreads(NOW);
+
+    expect(await closureOf(thread.id)).toEqual({ status: 'closed', closedReason: 'inactivity' });
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: task.id } }))
+      .toMatchObject({ status: 'cancelled', pendingQuestion: null });
   });
 
   it('keeps a six-day answered thread open', async () => {
