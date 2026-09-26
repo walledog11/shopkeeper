@@ -8,13 +8,17 @@ const STAGES = {
     ['npx', ['turbo', 'run', 'lint']],
     ['npm', ['run', 'typecheck']],
     ['node', ['--test', 'scripts/check-production-env.test.mjs']],
+    ['node', ['scripts/check-inbound-email-enqueue-surface.mjs']],
   ],
   unit: [
     ['npm', ['run', 'test:unit']],
     ['npm', ['run', 'test:node']],
   ],
   e2e: [['npm', ['run', 'test:e2e:smoke']]],
-  coverage: [['npm', ['run', 'test:coverage']]],
+  coverage: [
+    ['npm', ['run', 'test:coverage']],
+    ['node', ['--test', 'scripts/email-inbound-transport-audit-fixture.test.mjs']],
+  ],
   build: [['npm', ['run', 'build']]],
 };
 

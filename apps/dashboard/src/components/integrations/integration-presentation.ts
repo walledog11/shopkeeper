@@ -9,6 +9,11 @@ import { isShopifyIntegrationLinked } from "@/lib/integrations/shopify-connectio
 import { normalizeImessageLineHandle } from "@/lib/integrations/imessage-visibility"
 import type { Integration } from "@/types"
 import type { OAuthProvider } from "@/lib/integrations/oauth-contract"
+import {
+  assessWorkspaceEmailInbound,
+  dualInboundDeliveryMessage,
+  forwardingBlockedMessage,
+} from "@/lib/integrations/email-inbound-path"
 import { deriveIntegrationHealth, type IntegrationHealth } from "./integration-card-helpers"
 import { deriveGmailPresentation, type GmailPresentation } from "./gmail-configure-state"
 
@@ -52,6 +57,8 @@ export interface IntegrationCardModel {
   gmail: GmailPresentation | null
   dialogStatusLine: string | null
   preventInitialFocus: boolean
+  emailInboundDualMessage: string | null
+  forwardingConnectBlockedMessage: string | null
 }
 
 export interface IntegrationAttentionSummary {
@@ -149,6 +156,13 @@ export function deriveIntegrationCardModels({
   isAdmin: boolean
   definitions?: IntegrationDefinition[]
 }): IntegrationCardModel[] {
+  const emailInboundAssessment = assessWorkspaceEmailInbound(
+    integrations.filter((integration) => integration.platform === "email"),
+    flags.gmailNativeInboundEnabled,
+  )
+  const emailInboundDualMessage = dualInboundDeliveryMessage(emailInboundAssessment)
+  const forwardingConnectBlockedMessage = forwardingBlockedMessage(emailInboundAssessment)
+
   return definitions.map((originalDefinition) => {
     const availability = availabilityFor(originalDefinition, flags, integrations)
     const definition = descriptionFor(originalDefinition, availability) === originalDefinition.description
@@ -176,6 +190,8 @@ export function deriveIntegrationCardModels({
         gmail: null,
         dialogStatusLine: definition.description,
         preventInitialFocus: false,
+        emailInboundDualMessage: null,
+        forwardingConnectBlockedMessage: null,
       }
     }
 
@@ -232,6 +248,12 @@ export function deriveIntegrationCardModels({
       gmail,
       dialogStatusLine: gmail?.statusLine ?? activityCopy,
       preventInitialFocus: Boolean(gmail && selectedConnection),
+      emailInboundDualMessage: definition.id === "gmail" || definition.id === "email"
+        ? emailInboundDualMessage
+        : null,
+      forwardingConnectBlockedMessage: definition.id === "email"
+        ? forwardingConnectBlockedMessage
+        : null,
     }
   })
 }

@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { Queue } from 'bullmq';
 import { Redis as IORedis } from 'ioredis';
-import { CHANNEL, JOB, PROCESSING_QUEUE_DEFAULTS, QUEUE } from '../constants.js';
+import { PROCESSING_QUEUE_DEFAULTS, QUEUE } from '../constants.js';
+import { enqueueInboundEmail } from '../inbound/enqueue-inbound-email.js';
 import { toGatewayBullMqConnection } from '../clients/redis-client.js';
 import type { InboundJobData } from '../types.js';
 // The repository-level loader, not loadGatewayEnv: this targets production and
@@ -126,6 +127,14 @@ async function main(): Promise<void> {
 
   const runId = randomUUID().slice(0, 8);
   const senderEmail = canarySender(runId);
+  const emailIntegration = await db.integration.findFirst({
+    where: { organizationId, platform: 'email', lifecycleStatus: 'active' },
+    select: { id: true },
+  });
+  if (!emailIntegration?.id) {
+    throw new Error(`No active email integration for organization ${organizationId}`);
+  }
+  const emailIntegrationId = emailIntegration.id;
   const connection = new IORedis(getRedisUrl(), {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
@@ -135,18 +144,20 @@ async function main(): Promise<void> {
     defaultJobOptions: PROCESSING_QUEUE_DEFAULTS,
   });
 
-  async function enqueue(data: Partial<InboundJobData>, label: string): Promise<void> {
-    await inbound.add(JOB.EMAIL, {
-      platform: CHANNEL.EMAIL,
+  async function enqueue(data: { subject: string; body: string }, label: string): Promise<void> {
+    const traceId = `classification-canary-${runId}-${label}`;
+    await enqueueInboundEmail(inbound, {
       organizationId,
+      integrationId: emailIntegrationId,
       senderEmail,
       senderName: 'Classification Canary',
       receivedAt: new Date().toISOString(),
-      // Dedupe key, so a BullMQ retry cannot create a second message.
-      inboundMessageId: `classification-canary-${runId}-${label}`,
-      traceId: `classification-canary-${runId}-${label}`,
-      ...data,
-    } as InboundJobData);
+      externalMessageId: traceId,
+      traceId,
+      subject: data.subject,
+      body: data.body,
+      ingressTransport: 'postmark_forward',
+    });
   }
 
   async function pollThread<T>(

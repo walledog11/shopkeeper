@@ -56,7 +56,6 @@ export async function completeGmailOAuth(input: {
     refreshToken: tokenResult.data.refreshToken,
     tokenExpiresAt: new Date(Date.now() + tokenResult.data.expiresIn * 1_000),
     provider: 'gmail',
-    ...(gmailNativeInboundEnabled ? { inboundMode: 'hybrid' as const } : {}),
     oauthScopes: tokenResult.data.scopes,
     gmailMetadata: {
       accountType: gmailAccountType,

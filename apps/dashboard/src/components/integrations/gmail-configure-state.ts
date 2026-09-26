@@ -97,8 +97,8 @@ function gmailReceivingSummary(
     }
     if (inboundStatus === "active") {
       return {
-        title: "Receiving messages",
-        description: "Customer emails sent to your Gmail inbox appear here automatically.",
+        title: "Inbound via Gmail",
+        description: "Customer emails in your connected Gmail inbox appear here automatically. Do not also forward the same inbox to Shopkeeper.",
         status: "Active",
       }
     }
@@ -106,14 +106,14 @@ function gmailReceivingSummary(
 
   if (lastActivity) {
     return {
-      title: "Receiving messages",
+      title: "Inbound via forwarding",
       description: "Mail forwarded from your Gmail inbox is arriving in Shopkeeper.",
       status: "Active",
     }
   }
 
   return {
-    title: "Receiving messages",
+    title: "Inbound via forwarding",
     description: "Forward Gmail to Shopkeeper so customer emails show up here.",
     status: "Setup needed",
   }

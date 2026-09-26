@@ -38,6 +38,10 @@
       "types": "./dist/inbound-normalize.d.ts",
       "default": "./dist/inbound-normalize.js"
     },
+    "./inbound-transport": {
+      "types": "./dist/inbound-transport.d.ts",
+      "default": "./dist/inbound-transport.js"
+    },
     "./address-filter": {
       "types": "./dist/address-filter.d.ts",
       "default": "./dist/address-filter.js"
