@@ -2,9 +2,10 @@
 
 Status, checked 2026-09-25 against `origin/master` at `fff54dc4`: Packages 0–5
 are done. Package 6 (certify, cut over, and delete the old runtime) is in
-progress. Of the twelve items in [What is left](#what-is-left-in-order), 1–3 are
-done, 4 is done except one piece, and 5–12 are open. Two release-owner decisions
-(E and F) are open and block later items. Production runs runtime v1 by default,
+progress. Of the thirteen items in [What is left](#what-is-left-in-order), 1–3
+are done, 4 is done except one piece, and 5–13 are open. Decision E was answered
+on 2026-09-25 (phone instructions move onto durable tasks, item 10); decision F
+is open and blocks item 8. Production runs runtime v1 by default,
 with one controlled organization on runtime v2.
 
 Created 2026-09-11. This file holds what is left, the rules for doing it, and the
@@ -111,7 +112,7 @@ Disagreements 1, 2, 3 and 6 are resolved; see
   dashboard reaches the same function through the durable task worker
   (`workers/agent-task.ts`). Package 2 deferred the phone surfaces to "their
   migration onto the durable path", and no later package scheduled it.
-  Decision E decides whether this plan does.
+  Decision E puts it in this plan; fixed by item 10.
 
 ## What is left, in order
 
@@ -222,15 +223,36 @@ request. Doc-only changes go straight to master.
    evidence lists as "pending". Production carries no merchant traffic besides
    the controlled organization, so the window will measure only controlled runs.
    The evidence must say so rather than present it as rollout observation.
-10. **Staged rollout** (Package 6, cutover step 4). Expand v2 routing beyond the
+10. **Phone instructions as durable tasks** (disagreement 7; decision E;
+    *Target architecture*, "Support and operator turns … share request identity,
+    budgets, receipts, and recovery semantics"). A free-form Telegram or
+    iMessage instruction becomes an accepted `AgentRequest` run as a claimed
+    `AgentTask`, as a dashboard instruction already is.
+    - Reuse, do not replace, the `OperatorEvent` claim and its
+      `operator-event-sweep`. The event stays the inbound record and the
+      dedupe boundary; the request's dedupe key derives from the event, so a
+      redelivered provider message reaches the same request.
+    - The turn runs through the same task claim, budget, stop and lease
+      recovery as `workers/agent-task.ts`. The reply to the phone still goes
+      out through the event's committed-reply path, so the sweep's re-send of
+      a committed but undelivered reply keeps working.
+    - `executeFreeFormInstruction` no longer calls `runOperatorFreeFormTurn`
+      directly.
+    - Done when a phone instruction creates exactly one request and one task
+      (also on redelivery), charges the task budget, can be stopped, recovers
+      from a dead worker as `reconciling` without replaying a write, and sends
+      its phone reply once. Deterministic tests, then a live Telegram and
+      iMessage round-trip (CLAUDE.md: operator changes are verified by live
+      phone round-trip, not evals).
+11. **Staged rollout** (Package 6, cutover step 4). Expand v2 routing beyond the
     controlled organization only after the comparison passes, then make v2 the
     default for new tasks. Stop expansion on any unauthorized or duplicate
-    effect. Existing tasks keep their runtime version. Phone instructions create
-    no task (disagreement 7), so "new tasks" means support and dashboard work
-    until decision E is answered.
-11. **Gate E**, persisted-state inventory and deletion, using the targets below.
-    Decision E decides whether the synchronous operator path is one of them.
-12. **Documentation.** Update the architecture and product docs to describe the
+    effect. Existing tasks keep their runtime version. Until item 10 lands,
+    phone instructions create no task, so "new tasks" means support and
+    dashboard work.
+12. **Gate E**, persisted-state inventory and deletion, using the targets below.
+    It includes the synchronous operator path item 10 replaces.
+13. **Documentation.** Update the architecture and product docs to describe the
     single runtime (Package 6, last checkbox). Remove conflicting directions
     rather than adding another layer.
 
@@ -263,8 +285,10 @@ marked as having no caller.
   `hasContradictoryInstructionSignals` and `hasMerchantPolicyGapIntent`.
 - **No caller outside tests (checked 2026-09-25).** The synchronous
   `POST /operator/turn` route in `apps/gateway/src/routes/internal-operator.ts`.
-  The dashboard uses the durable request route. Phone instructions call
-  `runOperatorFreeFormTurn` directly, which is the path decision E is about.
+  The dashboard uses the durable request route.
+- After item 10: the direct `runOperatorFreeFormTurn` call in
+  `executeFreeFormInstruction` (`apps/gateway/src/routes/telegram/agent-execution.ts`)
+  and anything left that only it used.
 
 ### Release-owner decisions
 
@@ -308,16 +332,16 @@ that depends on it until it is answered.
   afterward. A flag (decision B) turns the proposal into one the merchant
   reviews. Items 3 and 4 of *What is left* cover this path.
 
+- **E. Phone instructions move onto durable tasks in this plan.** Answered
+  2026-09-25 (disagreement 7). Telegram and iMessage free-form instructions
+  become accepted `AgentRequest`s run as claimed `AgentTask`s, reusing the
+  `OperatorEvent` claim and sweep rather than replacing them. This is item 10,
+  before the staged rollout. Gate E then deletes the synchronous path they use
+  today.
+
 Open, added 2026-09-25. Each blocks the items named until the release owner
 answers it.
 
-- **E. Do phone instructions move onto durable tasks in this plan?**
-  (Disagreement 7.) If yes, a work item is added before item 10. It makes
-  Telegram and iMessage free-form instructions accepted `AgentRequest`s run as
-  claimed `AgentTask`s, reusing the `OperatorEvent` claim and sweep rather than
-  replacing them. Gate E then deletes the synchronous path they use today. If
-  no, record it under *Outside this plan*, keep that path out of Gate E, and
-  amend Package 6's acceptance to name the exception. Blocks items 10–12.
 - **F. What must Gate C's rerun cover?** Cutover step 3 asks for one controlled
   approval → provider → receipt → delivery exercise. The release matrix lists a
   controlled real-provider exercise as the outstanding evidence for full and
