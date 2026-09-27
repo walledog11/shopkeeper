@@ -404,6 +404,49 @@ Open before Gate D:
 - The approval card shows only the write; the merchant cannot see that a
   customer reply will follow. Card content is a release-owner decision.
 
+### Gate C rerun — pre-run state, 2026-09-27
+
+Captured 2026-09-27T03:58Z by a read-only script run under `railway run` on
+the `shopkeeper` service. The rerun covers the fourteen effects in the plan's
+item 8 (decision F).
+
+Deployment. The dashboard (Vercel production), `shopkeeper` (Railway, role
+`server`) and `Gateway Worker` (Railway, role `worker`) all run `c1175579`.
+Both Railway services have `AGENT_RUNTIME_VERSION=1` and
+`AGENT_RUNTIME_V2_ORG_IDS` set to the controlled organization; Vercel declares
+both variables.
+
+Controlled organization, before any rerun:
+
+| Record | State |
+| --- | --- |
+| Integrations | Shopify, email and Instagram DM all `active` |
+| Agent tasks | all v2: 1 `completed`, 2 `failed`, 1 `waiting_approval` (`6abfe733`, stranded by the run 1 card refusal before item 6 existed) |
+| Agent actions, last 14 days | 76 `success`, 22 `error`, 7 `escalated`, 2 `policy_block`, none `unknown` |
+| Plan executions | 14 `committed`, 4 `failed` |
+
+Store: a Shopify development store (`partnerDevelopment=true`) in USD. Every
+scope the fourteen effects need is granted, including `write_returns`,
+`write_order_edits`, `write_gift_cards`,
+`write_merchant_managed_fulfillment_orders`, `write_discounts` and
+`write_products`. No automatic discount is active. Ten gift cards exist, none
+issued to the test customer.
+
+Test customer: one order, #1032: paid through the `manual` gateway,
+unfulfilled, one unit at 49.95 USD, nothing refunded. That order cannot carry
+a partial refund, a cancellation and a return at once, and
+`create_shopify_order` creates `pending` orders, so it cannot supply a
+refundable one. Setup the run needs, created by the operator in the Shopify
+admin for the test customer and marked as paid, not fulfilled:
+
+- an order with two line items, for `create_partial_refund`;
+- a one-item order, for `cancel_order`;
+- a two-item order, which the `fulfill_order` run fulfills before
+  `create_return`, `attach_return_label` and `create_exchange` use it.
+
+#1032 carries `create_refund`. `create_shopify_order` produces the order
+that `edit_shopify_order` edits.
+
 ## Gate D — observation and rollback rehearsal
 
 During the agreed observation window, record at least:
