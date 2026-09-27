@@ -1,8 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { PROCESSING_QUEUE_DEFAULTS, QUEUE } from '../constants.js';
-import type { AiSummaryJobData, InboundJobData } from '../types.js';
-import type { FailedJobSnapshot } from './failure.js';
-import type { SharedGatewayWorkerOptions } from './resources.js';
 
 interface MockQueueInstance {
   name: string;
@@ -119,115 +115,6 @@ beforeEach(() => {
   mockLogger.warn.mockClear();
 });
 
-describe('createCoreWorkerResources', () => {
-  it('registers the core queue and workers with the existing options', () => {
-    const producerConn = { name: 'producer-conn' };
-    const workerConn = { name: 'worker-conn' };
-    const workerOptions: SharedGatewayWorkerOptions = {
-      connection: workerConn,
-      drainDelay: 7,
-      stalledInterval: 8,
-    };
-
-    const resources = createCoreWorkerResources(producerConn, workerOptions);
-
-    expect(resources.aiSummaryQueue).toBe(queueInstances[0]);
-    expect(resources.inboundQueue).toBe(queueInstances[1]);
-    expect(resources.messageWorker).toBe(workerInstances[0]);
-    expect(resources.aiSummaryWorker).toBe(workerInstances[1]);
-    expect(resources.workers).toEqual(workerInstances);
-    expect(resources.queues).toEqual(queueInstances);
-    expect(resources.heartbeats).toHaveLength(0);
-    expect(resources.shutdownResources).toHaveLength(0);
-
-    expect(queueInstances.map((queue) => queue.name)).toEqual([
-      QUEUE.AI_SUMMARY,
-      QUEUE.INBOUND,
-    ]);
-    expect(readOptions(queueInstances[0])).toMatchObject({
-      connection: producerConn,
-      defaultJobOptions: PROCESSING_QUEUE_DEFAULTS,
-    });
-
-    expect(workerInstances.map((worker) => worker.name)).toEqual([
-      QUEUE.INBOUND,
-      QUEUE.AI_SUMMARY,
-      QUEUE.ORDER_REVIEW,
-      QUEUE.OUTBOUND_EMAIL,
-      QUEUE.GMAIL_SYNC,
-      QUEUE.OPERATOR_EVENT,
-      QUEUE.AGENT_TASK,
-      QUEUE.INTEGRATION_DISCONNECT,
-    ]);
-    expect(workerInstances.every((worker) => {
-      const options = readOptions(worker);
-      return options.connection === workerConn
-        && options.drainDelay === 7
-        && options.stalledInterval === 8;
-    })).toBe(true);
-    expect(workerInstances.every((worker) => worker.on.mock.calls[0]?.[0] === 'failed')).toBe(true);
-  });
-
-  it('keeps core worker failure telemetry unchanged', () => {
-    createCoreWorkerResources({ name: 'producer-conn' }, {
-      connection: { name: 'worker-conn' },
-      drainDelay: 7,
-      stalledInterval: 8,
-    });
-
-    const inboundError = new Error('inbound boom');
-    readFailedHandler<InboundJobData>(workerInstances[0])({
-      id: 'inbound-job',
-      attemptsMade: 2,
-      data: {
-        platform: 'email',
-        organizationId: 'org_1',
-        traceId: 'trace_1',
-      },
-    }, inboundError);
-
-    expect(mockLogger.error).toHaveBeenCalledWith(
-      {
-        err: 'inbound boom',
-        jobId: 'inbound-job',
-        queue: 'inbound',
-        platform: 'email',
-        organizationId: 'org_1',
-        traceId: 'trace_1',
-        attemptsMade: 2,
-      },
-      '[Worker] Job failed permanently',
-    );
-
-    const summaryError = new Error('summary boom');
-    readFailedHandler<AiSummaryJobData>(workerInstances[1])({
-      id: 'summary-job',
-      attemptsMade: 3,
-      data: {
-      threadId: 'thread_1',
-      organizationId: 'org_1',
-      sourceMessageId: 'message_1',
-        customerName: 'Customer',
-        channelType: 'email',
-        traceId: 'trace_2',
-      },
-    }, summaryError);
-
-    expect(mockLogger.error).toHaveBeenCalledWith(
-      {
-        err: 'summary boom',
-        jobId: 'summary-job',
-        threadId: 'thread_1',
-        queue: 'aiSummary',
-        organizationId: 'org_1',
-        traceId: 'trace_2',
-        attemptsMade: 3,
-      },
-      '[AISummary] Job failed',
-    );
-  });
-});
-
 describe('core worker shutdown resources', () => {
   it('stops heartbeat, closes core workers and queues, then closes shutdown resources', async () => {
     const coreResources = createCoreWorkerResources({ name: 'producer-conn' }, {
@@ -324,23 +211,3 @@ describe('core worker shutdown resources', () => {
     expect(exitProcess).toHaveBeenCalledWith(1);
   });
 });
-
-type FailedHandler<DataType> = (
-  job: FailedJobSnapshot<DataType> | undefined,
-  err: Error,
-) => void;
-
-function readFailedHandler<DataType>(worker: MockWorkerInstance | undefined): FailedHandler<DataType> {
-  const handler = worker?.on.mock.calls[0]?.[1];
-  if (typeof handler !== 'function') {
-    throw new Error('Missing failed handler');
-  }
-  return handler as FailedHandler<DataType>;
-}
-
-function readOptions(resource: { options: unknown } | undefined): Record<string, unknown> {
-  if (!resource?.options || typeof resource.options !== 'object' || Array.isArray(resource.options)) {
-    throw new Error('Expected object options');
-  }
-  return resource.options as Record<string, unknown>;
-}

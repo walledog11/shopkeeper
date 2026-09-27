@@ -81,7 +81,6 @@ export { createShopifyOrder, type CreateShopifyOrderOptions } from "./order-crea
 export { editShopifyOrder } from "./order-edit.js";
 export { createReturn, fetchReturnableLineItems } from "./returns.js";
 export { createExchange } from "./exchanges.js";
-export { issueStoreCredit } from "./store-credit.js";
 export { createGiftCard } from "./gift-cards.js";
 export { attachReturnLabel, OPEN_RETURN_STATUSES } from "./return-labels.js";
 export {
@@ -89,7 +88,6 @@ export {
   fetchFulfillableFulfillmentOrders,
   FULFILLABLE_FULFILLMENT_ORDER_STATUSES,
 } from "./fulfillment.js";
-export { issueDiscount } from "./discounts.js";
 export {
   probeUnknownShopifyMutation,
   RECONCILABLE_SHOPIFY_MUTATION_TOOLS,

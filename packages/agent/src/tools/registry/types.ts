@@ -314,10 +314,8 @@ export interface ToolExecutionDeps {
     options: { allowCustomLineItems: boolean },
   ): Promise<ToolResult>;
   editShopifyOrder(input: EditShopifyOrderInput, ctx: ShopifyToolContext): Promise<ToolResult>;
-  issueDiscount(input: IssueDiscountInput, ctx: ShopifyToolContext): Promise<ToolResult>;
   createReturn(input: CreateReturnInput, ctx: ShopifyToolContext): Promise<ToolResult>;
   createExchange(input: CreateExchangeInput, ctx: ShopifyToolContext): Promise<ToolResult>;
-  issueStoreCredit(input: IssueStoreCreditInput, ctx: ShopifyToolContext): Promise<SpendToolResult>;
   createGiftCard(input: CreateGiftCardInput, ctx: ShopifyToolContext): Promise<SpendToolResult>;
   attachReturnLabel(input: AttachReturnLabelInput, ctx: ShopifyToolContext): Promise<ToolResult>;
   fulfillOrder(input: FulfillOrderInput, ctx: ShopifyToolContext): Promise<ToolResult>;

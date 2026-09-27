@@ -35,12 +35,6 @@ export function gmailCustomerAddress(integration: Integration): string {
   return gmailReplyAddress(integration)
 }
 
-export function usesCustomReplyAddress(integration: Integration): boolean {
-  const from = integration.fromEmail?.trim().toLowerCase()
-  const account = integration.externalAccountId.trim().toLowerCase()
-  return !!from && from !== account
-}
-
 export function needsGmailForwardingSetup(
   integration: Integration,
   lastActivity: string | null,

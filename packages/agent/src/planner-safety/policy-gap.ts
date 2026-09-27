@@ -23,10 +23,3 @@ export function sendReplyDeflectsToManagedChannels(toolCall: RawToolCall): boole
   const text = sendReplyText(toolCall)
   return Boolean(text && MANAGED_CHANNEL_DEFLECTION_RES.some(pattern => pattern.test(text)))
 }
-
-export function replyDraftPrompt(settings?: { brandVoice?: string | null }): string {
-  if (!settings?.brandVoice?.trim()) {
-    return "Now call send_reply to respond to the customer."
-  }
-  return "Now call send_reply to respond to the customer. Follow the brand voice section exactly, including any banned phrases or tone constraints."
-}

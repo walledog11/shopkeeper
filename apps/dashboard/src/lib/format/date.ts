@@ -151,17 +151,6 @@ export function formatRelativeTime(iso: DateInput): string {
   return parts.date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-export function formatRelativeTimestamp(input: DateInput): string {
-  const parts = relativeParts(input);
-  if (!parts) return "just now";
-
-  if (parts.minutes < 1) return "just now";
-  if (parts.minutes < 60) return `${parts.minutes}m ago`;
-  if (parts.hours < 24) return `${parts.hours}h ago`;
-
-  return formatMonthDay(parts.date);
-}
-
 export function formatShortRelativeTime(
   input: DateInput,
   {
@@ -181,14 +170,6 @@ export function formatShortRelativeTime(
   }
   if (parts.hours < 24) return `${parts.hours}h ago`;
   return `${parts.days}d ago`;
-}
-
-export function formatSyncRelativeTime(input: DateInput): string {
-  return formatShortRelativeTime(input, {
-    includeSeconds: true,
-    justNowSeconds: 30,
-    minuteUnit: "min",
-  });
 }
 
 export function formatLastActivityTime(input: DateInput): string {

@@ -6,7 +6,6 @@ import {
   gmailConfigureStatusLine,
   isGmailWorkspaceAccount,
   needsGmailForwardingSetup,
-  usesCustomReplyAddress,
 } from "./gmail-configure-state"
 
 function gmailIntegration(overrides: Partial<Integration> & { metadata?: Record<string, unknown> }): Integration {
@@ -75,20 +74,6 @@ describe("deriveGmailConfigureScene", () => {
       note: null,
       recoveryAction: null,
     })).toBe("ready")
-  })
-})
-
-describe("usesCustomReplyAddress", () => {
-  it("detects a saved alias", () => {
-    expect(usesCustomReplyAddress(gmailIntegration({
-      fromEmail: "support@merchant.test",
-    }))).toBe(true)
-  })
-
-  it("treats the Google account address as the default", () => {
-    expect(usesCustomReplyAddress(gmailIntegration({
-      fromEmail: "merchant@gmail.test",
-    }))).toBe(false)
   })
 })
 

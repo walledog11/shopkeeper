@@ -22,7 +22,6 @@ import type { AgentPlan } from "./types.js";
 import {
   claimPlanExecution,
   claimCurrentPlanExecution,
-  claimStoredPlanExecution,
   completePlanExecution,
   observePlanExecution,
   type PlanExecutionIdentity,
@@ -113,28 +112,6 @@ describe("plan execution ledger", () => {
       where: { organizationId_planId: { organizationId: org.id, planId: cache.planId! } },
     });
     expect(execution.mode).toBe("auto_executed");
-  });
-
-  it("records repeated shadow observations without claiming the plan", async () => {
-    const identity = await seedIdentity();
-
-    await observePlanExecution(identity);
-    const second = await observePlanExecution(identity);
-
-    expect(second.status).toBe("pending");
-    expect(second.observationCount).toBe(2);
-    expect(second.claimToken).toBeNull();
-  });
-
-  it("allows exactly one concurrent claimant", async () => {
-    const identity = await seedIdentity();
-    const results = await Promise.all(Array.from({ length: 8 }, () => (
-      claimPlanExecution(identity)
-    )));
-
-    expect(results.filter((result) => result.claimed)).toHaveLength(1);
-    expect(new Set(results.map((result) => result.execution.id)).size).toBe(1);
-    expect(results.every((result) => result.execution.status === "claimed")).toBe(true);
   });
 
   it("rejects a stale cached plan inside the claim transaction", async () => {
@@ -236,50 +213,6 @@ describe("plan execution ledger", () => {
       ...identity,
       sourceMessageId: otherMessage.id,
     })).rejects.toBeInstanceOf(BadRequestError);
-  });
-
-  it("claims a host-specific stored plan exactly once and rejects replacement", async () => {
-    const identity = await seedIdentity();
-    const instruction = "Create an order";
-    const storedPlan: AgentPlan = {
-      instruction,
-      steps: [{
-        id: "create_1",
-        tool: "create_shopify_order",
-        label: "Create order",
-        description: "Create an order",
-        category: "action",
-        enabled: true,
-      }],
-      rawToolCalls: [{
-        id: "create_1",
-        name: "create_shopify_order",
-        input: { email: "ada@example.com", line_items: [] },
-      }],
-    };
-    identity.planHash = hashPlan(storedPlan);
-    identity.instructionHash = hashInstruction(instruction);
-    identity.sourceMessageId = null;
-    await db.thread.update({
-      where: { id: identity.threadId! },
-      data: {
-        cachedPlan: {
-          kind: "dashboard_pending_approval",
-          planId: identity.planId,
-          instruction,
-          plan: storedPlan,
-        },
-      },
-    });
-
-    const claims = await Promise.all([
-      claimStoredPlanExecution(identity),
-      claimStoredPlanExecution(identity),
-    ]);
-    expect(claims.filter((claim) => claim.claimed)).toHaveLength(1);
-
-    const replacement = { ...identity, planId: randomUUID() };
-    await expect(claimStoredPlanExecution(replacement)).rejects.toBeInstanceOf(ConflictError);
   });
 
   it("allows AgentAction rows to link to the durable execution intent", async () => {

@@ -24,15 +24,6 @@ export function formatPlanStepSentence(step: PlanStep, customerName?: string | n
   return step.label
 }
 
-export function getPlanApproveLabel(steps: Array<PlanStep & { enabled: boolean }>): string {
-  const enabled = steps.filter((step) => step.enabled)
-  const replyOnly =
-    enabled.length === 1 &&
-    enabled[0].tool === "send_reply"
-
-  return replyOnly ? "Send reply" : "Do this"
-}
-
 export function getPlanCollapsedPreview(plan: AgentPlan): string | null {
   const replyStep = plan.steps.find((step) => step.tool === "send_reply")
   if (replyStep?.description) {

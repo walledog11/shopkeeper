@@ -6,8 +6,6 @@ export {
   createRefund,
   createPartialRefund,
   createReturn,
-  issueDiscount,
-  issueStoreCredit,
   createShopifyOrder,
   editShopifyOrder,
   fulfillOrder,

@@ -10,7 +10,7 @@ let anthropicClient: Anthropic | null = null;
 // for ten minutes.
 //
 // 60s clears the worst legitimate completion with room to spare: every call site
-// is non-streaming and bounded at or below PLAN_REPLAN_MAX_TOKENS (2048), which
+// is non-streaming and bounded at or below 4096 output tokens, which
 // lands well under a minute. Retries drop to 1 because the gateway already
 // retries at the job level (`attempts: 3`), and the two multiply — SDK 2 + BullMQ
 // 3 is up to nine provider calls for one job.

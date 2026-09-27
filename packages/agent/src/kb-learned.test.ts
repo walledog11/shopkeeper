@@ -5,8 +5,6 @@ import {
   buildMerchantAnswerPlanningInstruction,
   isAgentLearnedKbArticle,
   isMerchantAnswerPlanningInstruction,
-  kbTagsForDisplay,
-  merchantAnswerReplyDraftPrompt,
 } from "./kb-learned.js";
 
 describe("kb-learned", () => {
@@ -21,10 +19,6 @@ describe("kb-learned", () => {
   it("isAgentLearnedKbArticle detects the agent-learned tag", () => {
     expect(isAgentLearnedKbArticle(["Support", AGENT_LEARNED_KB_TAG])).toBe(true);
     expect(isAgentLearnedKbArticle(["Support"])).toBe(false);
-  });
-
-  it("kbTagsForDisplay hides agent-learned", () => {
-    expect(kbTagsForDisplay(["shipping", AGENT_LEARNED_KB_TAG])).toEqual(["shipping"]);
   });
 
   it("buildMerchantAnswerPlanningInstruction always includes the merchant answer", () => {
@@ -80,12 +74,6 @@ describe("kb-learned", () => {
       answer: "Yes — details at https://example.com/shipping.",
       saveToKb: true,
     })).not.toContain("attach_return_label");
-  });
-
-  it("merchantAnswerReplyDraftPrompt tells the model to send_reply, not note+close", () => {
-    expect(merchantAnswerReplyDraftPrompt()).toContain("send_reply");
-    expect(merchantAnswerReplyDraftPrompt()).toContain("add_internal_note");
-    expect(merchantAnswerReplyDraftPrompt()).toContain("Do NOT close");
   });
 
   it("isMerchantAnswerPlanningInstruction detects answer-informed replans", () => {
