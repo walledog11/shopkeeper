@@ -82,6 +82,63 @@ describe("shouldEscalateFulfilledCancelRequest", () => {
       "Reply to the customer about their cancellation request.",
     )).toBe(false);
   });
+  // Found in the 2026-09-27 audit: any shipped order in the customer's history
+  // escalated a cancellation of a different, unfulfilled one.
+  it("judges the order the request names, not the customer's other orders", () => {
+    const unfulfilled = {
+      id: "9000001045",
+      name: "#1045",
+      created_at: null,
+      financial_status: "paid",
+      fulfillment_status: null,
+      total_price: "40.00",
+      currency: "USD",
+      items: [],
+    };
+    const shipped = { ...unfulfilled, id: "9000001032", name: "#1032", fulfillment_status: "fulfilled" };
+
+    expect(shouldEscalateFulfilledCancelRequest(
+      makeCtx({
+        recentMessages: [{ senderType: "customer", contentText: "Please cancel order #1045, wrong size." }],
+        recentOrders: [unfulfilled, shipped],
+      }),
+      "Handle the request.",
+    )).toBe(false);
+  });
+
+  it("escalates when the plan proposes cancelling a fulfilled order the request did not name", () => {
+    const orders = [
+      {
+        id: "9000001045",
+        name: "#1045",
+        created_at: null,
+        financial_status: "paid",
+        fulfillment_status: null,
+        total_price: "40.00",
+        currency: "USD",
+        items: [],
+      },
+      {
+        id: "9000001032",
+        name: "#1032",
+        created_at: null,
+        financial_status: "paid",
+        fulfillment_status: "fulfilled",
+        total_price: "40.00",
+        currency: "USD",
+        items: [],
+      },
+    ];
+
+    expect(shouldEscalateFulfilledCancelRequest(
+      makeCtx({
+        recentMessages: [{ senderType: "customer", contentText: "Please cancel my order." }],
+        recentOrders: orders,
+      }),
+      "Handle the request.",
+      [{ id: "cancel_1", name: "cancel_order", input: { order_id: "9000001032" } }],
+    )).toBe(true);
+  });
 });
 
 describe("shouldEscalateFulfilledAddressChangeRequest", () => {
