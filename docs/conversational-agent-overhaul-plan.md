@@ -307,10 +307,11 @@ already-authorized set. On v2, full-registry widening is gone:
 - An aligned `order_status` turn defers the knowledge base to `search_kb`.
 
 The storefront allowlist now runs before argument parsing at execution. Gift
-cards left the default support set. `discovery-cost.test.ts` measures input
-cost. For `order_mutation`, the first prompt drops from 5,176 to 2,430 tokens.
-The case that gets worse is a narrowed status turn that must then discover a
-capability: it goes from 5,929 to 13,313 tokens. v1 is unchanged.
+cards left the default support set. A since-deleted estimate
+(`discovery-cost.test.ts`, removed 2026-09-27) put the `order_mutation` first
+prompt at 2,430 tokens instead of 5,176, and a narrowed status turn that must
+then discover a capability at 13,313 instead of 5,929. Those were estimates, not
+billed tokens: Gate B measured v2 at about 33% more per suite than v1.
 
 **Package 5 — support conversations as durable tasks** (closed 2026-09-23,
 `c2195343`):
