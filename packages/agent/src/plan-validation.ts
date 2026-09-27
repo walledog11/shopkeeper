@@ -1,9 +1,6 @@
 import type { AgentContext } from "./agent-context.js";
 import { PLAN_SIGNAL_MESSAGES } from "./plan-signals.js";
-import {
-  detectUngroundedEscalationReasons,
-  detectUngroundedReplyText,
-} from "./plan-grounding.js";
+import { detectUngroundedEscalationReasons } from "./plan-grounding.js";
 import { shouldBlockCreateRefundForAlreadyRefundedOrder } from "./planner-safety/refunds.js";
 import { customerMessageCallCount } from "./proposal-communication.js";
 import { bindReplyPlaceholders, hasReplyPlaceholders } from "./reply-placeholders.js";
@@ -92,12 +89,6 @@ export function validatePlan(params: {
 
   for (const claim of detectUngroundedEscalationReasons(rawToolCalls, { ctx, readResults })) {
     issues.push(issue("ungrounded_escalation_reason", {
-      id: claim.toolCallId,
-      name: claim.tool,
-    }));
-  }
-  for (const claim of detectUngroundedReplyText(rawToolCalls, { ctx, readResults })) {
-    issues.push(issue("ungrounded_customer_reply", {
       id: claim.toolCallId,
       name: claim.tool,
     }));

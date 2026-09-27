@@ -849,7 +849,7 @@ describe("planAgent routing", () => {
     });
   });
 
-  it("preserves an invalid proposal and does not let routing hide it", async () => {
+  it("holds a reply the claim check flags for review instead of invalidating it", async () => {
     installAgentLogger(makeLogger());
     const reply = "I've issued the wholesale refund.";
     mockCreate.mockResolvedValueOnce(singleToolUse("send_reply", { text: reply }, "tu_reply"));
@@ -862,15 +862,59 @@ describe("planAgent routing", () => {
       AGENT_SETTINGS_DEFAULTS,
     );
 
-    expect(plan.validation).toEqual({
-      status: "invalid",
-      issues: [expect.objectContaining({ code: "ungrounded_customer_reply" })],
-    });
+    expect(plan.validation).toEqual({ status: "valid", issues: [] });
     expect(plan.rawToolCalls).toEqual([
       { id: "tu_reply", name: "send_reply", input: { text: reply } },
     ]);
-    expect(plan.routing).toBeUndefined();
-    expect(plan.signals?.map((signal) => signal.code)).toContain("ungrounded_customer_reply");
+    expect(plan.signals).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "ungrounded_customer_reply", severity: "blocking" }),
+    ]));
+    expect(decideAutonomy(plan, resolveAgentSettings({ autonomyTier: "trusted", autoExecuteMode: "live" })))
+      .toMatchObject({ kind: "needs_review", approvalAllowed: true });
+  });
+
+  // Gate C, 2026-09-25: the check read "shipping address" as a shipment and
+  // every true address-change reply left the plan unapprovable.
+  it("keeps a true address-change reply approvable", async () => {
+    installAgentLogger(makeLogger());
+    mockCreate.mockResolvedValueOnce(toolUses([
+      {
+        id: "tu_address",
+        name: "update_shopify_order_address",
+        input: {
+          order_id: "9000001032",
+          customer_id: "shopify_customer_1",
+          address1: "12 Oak St",
+          city: "Austin",
+          province: "TX",
+          zip: "78701",
+          country: "United States",
+        },
+      },
+      { id: "tu_reply", name: "send_reply", input: { text: "Hi Jane, I've updated your shipping address to 12 Oak St, Austin." } },
+    ]));
+
+    const plan = await planAgent(
+      makeCtx({
+        recentMessages: [{ senderType: "customer", contentText: "Please change the address on #1032 to 12 Oak St, Austin TX 78701." }],
+        recentOrders: [{
+          id: "9000001032",
+          name: "#1032",
+          created_at: "2026-09-20T09:00:00-07:00",
+          financial_status: "paid",
+          fulfillment_status: null,
+          total_price: "40.00",
+          currency: "USD",
+          items: [],
+          shipping_address: null,
+        }],
+      }),
+      "Handle this ticket.",
+      AGENT_SETTINGS_DEFAULTS,
+    );
+
+    expect(plan.validation).toEqual({ status: "valid", issues: [] });
+    expect(decideAutonomy(plan, AGENT_SETTINGS_DEFAULTS)).toMatchObject({ kind: "needs_review", approvalAllowed: true });
   });
 });
 

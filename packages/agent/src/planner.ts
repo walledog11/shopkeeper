@@ -21,6 +21,7 @@ import { applyEscalationRouting } from "./escalation-materialization.js";
 import { buildPlanRoutingEvidence, kbMissNeedsMerchant } from "./planner-evidence.js";
 import { decideAutonomy } from "./autonomy.js";
 import { recordMerchantPreferenceUsage } from "./merchant-preferences.js";
+import { detectUngroundedReplyText } from "./plan-grounding.js";
 import { validatePlan } from "./plan-validation.js";
 import { buildPlanSignals } from "./plan-signals.js";
 import { buildPlanSteps } from "./planner-steps.js";
@@ -441,6 +442,13 @@ export async function planAgent(
   // Severity is resolved here, against the finished tool calls: a plan the router
   // rewrote is the plan the merchant sees, and the one signals must describe.
   signalCodes.push(...validation.issues.map((issue) => issue.code));
+  // A reply the claim check flags is held for the merchant with the flag on the
+  // card, never made unapprovable (decision B). The check reads phrasing and
+  // misreads true replies ("your shipping address" as a shipment), so it may
+  // force review but never decide that a plan cannot run.
+  if (detectUngroundedReplyText(rawToolCalls, { ctx, readResults: Object.fromEntries(loop.readResults) }).length > 0) {
+    signalCodes.push("ungrounded_customer_reply");
+  }
   const signals = buildPlanSignals(signalCodes, rawToolCalls);
   const validationIssueCounts = validation.issues.reduce<Record<string, number>>((counts, issue) => {
     counts[issue.code] = (counts[issue.code] ?? 0) + 1;
