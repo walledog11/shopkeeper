@@ -81,8 +81,8 @@ contract was unbuilt.
 | Gate C: real provider and delivery | Exercised on 2026-09-25. Run 4 went approval → Shopify write → typed receipt → customer email received, but its execution was stored as failed, by a rule item 5 has since fixed. It runs again as item 8. |
 | Gate D, staged rollout, Gate E | Not started. |
 | Production routing | `AGENT_RUNTIME_VERSION=1` on both services, with `AGENT_RUNTIME_V2_ORG_IDS` set to the controlled organization since 2026-09-25. New tasks for every other organization run v1. |
-| Work in flight | Disagreement 8, part 1 (order line-item variant), on branch `order-line-item-variant`. |
-| Open pull requests | None for this plan. Item 7 landed as #121 and #123. |
+| Work in flight | None. Next: disagreement 8, parts 2 and 3. |
+| Open pull requests | None for this plan. Item 7 landed as #121 and #123; disagreement 8 part 1 as #124. |
 
 ## Where the code disagrees with this plan
 
@@ -130,7 +130,7 @@ Disagreements 1–6 are resolved; see
      quoted amount and names the item only through the model-authored `reason`.
      A model that picked the wrong line would be caught by neither.
 
-  Part 1 is fixed on branch `order-line-item-variant`: one serializer for both
+  Part 1 is fixed in #124: one serializer for both
   paths, carrying `variant_title` when Shopify reports one. Parts 2 and 3 are
   one change: bind Shopify's line-item names into the proposal where it is
   priced or made, and render them on both cards, the phone card with the
