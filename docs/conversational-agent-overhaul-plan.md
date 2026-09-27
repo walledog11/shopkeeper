@@ -2,8 +2,8 @@
 
 Status, 2026-09-27: not complete. Packages 0–5 are done. Package 6 (certify,
 cut over, and delete the old runtime) has the steps in
-[Open work](#open-work-in-order) left, and one question waits on the release
-owner ([Open decision](#open-decision)). Production runs runtime v1 by default,
+[Open work](#open-work-in-order) left. No question waits on the release owner.
+Production runs runtime v1 by default,
 with one controlled organization on runtime v2.
 
 Created 2026-09-11. This file holds the open work, the rules for doing it, and
@@ -79,7 +79,7 @@ contract was unbuilt.
 | --- | --- |
 | Packages 0–5 | Done, verified with the real test database and fake providers. The only real-store effects so far are Gate C's customer note and address change. |
 | Gate A: comparison tooling | Done. |
-| Gate B: v1/v2 model comparison | Passed on `cf41c169` (2026-09-26). The one open result, the C08 held-out, is the [Open decision](#open-decision). |
+| Gate B: v1/v2 model comparison | Passed on `cf41c169` (2026-09-26). Its one miss, the C08 held-out, was a runtime defect fixed under decision G; C08 re-confirms before item 11. |
 | Gate C: real provider and delivery | Rerun not started. The pre-run state is recorded in the release evidence. The first attempt, on 2026-09-27, stopped on item 8a and counts as no run. |
 | Gate D, staged rollout, Gate E | Not started. |
 | Production routing | `AGENT_RUNTIME_VERSION=1` on both services, with `AGENT_RUNTIME_V2_ORG_IDS` set to the controlled organization since 2026-09-25. New tasks for every other organization run v1. |
@@ -184,7 +184,10 @@ in [What has been done](#what-has-been-done).
 
 11. **Staged rollout** (Package 6, cutover step 4). Expand v2 routing beyond the
     controlled organization only after the comparison passes, then make v2 the
-    default for new tasks. Stop expansion on any unauthorized or duplicate
+    default for new tasks. Before the first expansion, the C08 held-out
+    (`withheld-cancellation-follow-up`) re-confirms in a paid runtime-v2 suite
+    run with its expectation unchanged (decision G). A held-out fixture cannot
+    run alone, so this is the whole v2 suite. Stop expansion on any unauthorized or duplicate
     effect. Existing tasks keep their runtime version. Until item 10 lands,
     phone instructions create no task, so "new tasks" means support and
     dashboard work.
@@ -233,37 +236,7 @@ marked as having no caller.
 Blocks the work named until the release owner answers it. When answered, it
 moves to [Settled decisions](#settled-decisions).
 
-- **G. Is an escalation acceptable for the withheld-message follow-up?** Added
-  2026-09-26; cause established 2026-09-27. On `cf41c169` the C08 held-out
-  (`withheld-cancellation-follow-up`) escalated on 2 of 2 attempts instead of
-  drafting the replacement reply #118 built. It proposed no write and sent
-  nothing.
-
-  The escalation is the runtime's, not the model's. Its reason text is the
-  structural `fulfilled_cancellation_request` evidence (`planner-evidence.ts`),
-  which `shouldEscalateFulfilledCancelRequest` (`planner-safety/mutative.ts`)
-  raises whenever the instruction or the latest customer message says
-  "cancel" and any recent order is fulfilled. The planner then replaces the
-  model's calls with that escalation (`applyEscalationRouting`). A free probe
-  gave `buildPlanRoutingEvidence` the fixture's context and a correct reply,
-  with no model call, and got the same code and reason. Nothing exempts the
-  follow-up attempt. So every follow-up after Shopify refuses to cancel an
-  order that has shipped escalates, and that refusal is the usual way a
-  cancellation fails. The other checks in `escalationCode` that judge the
-  request's write are not exempted either. Only the cancellation one has been
-  observed on a follow-up.
-
-  Recommendation: escalation is not acceptable, and the fixture's expectation
-  stands. Fix it through the follow-up contract (*Task transitions*, the
-  follow-up rows). An attempt whose tool set holds no write is not judged by
-  the evidence that guards a proposed write. Key it on the typed follow-up flag
-  the planner already receives. That means no new phrase case and no change to
-  the keyword checks themselves, which stay outside this plan. Nothing is
-  loosened: the follow-up cannot write, and its plan carries the blocking
-  `approved_message_withheld` signal, so it always goes to the merchant. C08
-  re-confirms in the next paid v2 suite run, with its expectation unchanged.
-  If fixed, it lands before item 11, which widens v2 to where the follow-up
-  runs. Blocks nothing already scheduled.
+None.
 
 ## What has been done
 
@@ -453,7 +426,8 @@ capability: it goes from 5,929 to 13,313 tokens. v1 is unchanged.
     missed the C10 held-out once. p95 9.4s (v1) and 8.2s (v2); mean $0.0162
     and $0.0233 per task. `refund-partial-placeholder`, the model evidence for
     item 4, passed one conclusive attempt; the other failed on a read the
-    fixture does not simulate. The C08 miss is decision G. The first paid
+    fixture does not simulate. The C08 miss was a runtime defect (decision G).
+    The first paid
     attempt, on `a78f91e1`, was a harness gap that #123 fixed and now guards
     for free.
 - *Item 8a, first part* (#124). Order reads gave the model only a line item's
@@ -461,6 +435,14 @@ capability: it goes from 5,929 to 13,313 tokens. v1 is unchanged.
   identically. One serializer (`serializeOrderLineItem`, `shopify/serializers.ts`)
   now shapes line items for both order reads and `buildContext`'s recent
   orders, carrying `variant_title` when Shopify reports one.
+- *Decision G* (#125). The withheld-message follow-up was judged by the
+  structural checks that guard its request's write, so a follow-up after
+  Shopify refused to cancel a shipped order always escalated and dropped the
+  model's draft. Those checks (`requestedWriteEscalationCode`,
+  `planner-evidence.ts`) no longer run when the planner is given
+  `withheldMessageFollowUp`. Read-grounding, identity and classifier evidence
+  still apply. A planner test with a scripted model reproduced the C08
+  escalation before the change and keeps the draft, for review, after it.
 
 ## Settled decisions
 
@@ -501,6 +483,13 @@ and commits cite it.
   fourteen runs are listed in item 8. Internal thread writes touch no store
   and are not included; email delivery is exercised by each customer-ticket
   run.
+- **G. A withheld-message follow-up drafts; it does not escalate**
+  (2026-09-27). When an approved write definitely failed, the follow-up's job
+  is the replacement message #118 built, and the merchant reviews it. The C08
+  escalation was the runtime's own write-guarding evidence applied to a turn
+  that cannot write. The fix follows the follow-up contract and is keyed on
+  the typed follow-up flag, not on phrasing. The keyword checks themselves
+  stay outside this plan. C08's expectation stands.
 - **Task budget** (2026-09-26, item 7). Active latency p95 at most 10 seconds
   and mean task cost at most $0.035, measured over a runtime's comparison runs
   by the eval report's `[eval:task]` line.

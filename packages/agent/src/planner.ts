@@ -399,6 +399,7 @@ export async function planAgent(
       readStatusMap: loop.readStatus,
       readResultsMap: loop.readResults,
       settings: resolvedSettings,
+      withheldMessageFollowUp: options?.withheldMessageFollowUp === true,
     });
     routingEvidence = built.evidence;
     signalCodes.push(...built.signalCodes);

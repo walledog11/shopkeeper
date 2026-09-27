@@ -98,6 +98,40 @@ describe("buildPlanRoutingEvidence", () => {
     });
   });
 
+  it("does not judge the settled write again on a withheld-message follow-up", () => {
+    const ctx = context({
+      recentMessages: [{ senderType: "customer", contentText: "Refund order #1020 or I'll file a chargeback." }],
+      recentOrders: [{
+        id: "9000001020",
+        name: "#1020",
+        created_at: "2026-05-08T16:00:00Z",
+        financial_status: "refunded",
+        fulfillment_status: "fulfilled",
+        total_price: "38.00",
+        currency: "USD",
+        items: [],
+      }],
+      classifierSignals: {
+        version: 2,
+        language: "en",
+        intents: { ...emptyIntents(), mutative_request: true, fraud_signals: true },
+        requestFacts: emptyRequestFacts(),
+      },
+    });
+    const followUp = (withheldMessageFollowUp: boolean) => buildPlanRoutingEvidence({
+      ctx,
+      instruction: "Handle it",
+      rawToolCalls: [{ id: "reply", name: "send_reply", input: { text: "Hello." } }],
+      readBlocks: [],
+      readStatusMap: new Map(),
+      readResultsMap: new Map(),
+      withheldMessageFollowUp,
+    }).evidence.codes;
+
+    expect(followUp(false)).toEqual(["already_refunded_request", "fraud_risk"]);
+    expect(followUp(true)).toEqual(["fraud_risk"]);
+  });
+
   it("records planned compensation above the resolved cap", () => {
     const ctx = context({
       recentMessages: [{ senderType: "customer", contentText: "Refund $200 on order #1012." }],

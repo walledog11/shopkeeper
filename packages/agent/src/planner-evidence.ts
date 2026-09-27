@@ -33,6 +33,7 @@ export interface BuildPlanRoutingEvidenceInput {
   readStatusMap: ReadonlyMap<string, ToolStatus>;
   readResultsMap: ReadonlyMap<string, string>;
   settings?: OrgSettings;
+  withheldMessageFollowUp?: boolean;
 }
 
 export interface BuiltPlanRoutingEvidence {
@@ -103,7 +104,7 @@ function hasExplicitCompensationRequest(ctx: AgentContext): boolean {
   });
 }
 
-function escalationCode(input: BuildPlanRoutingEvidenceInput): PlanRoutingEvidenceCode | null {
+function requestedWriteEscalationCode(input: BuildPlanRoutingEvidenceInput): PlanRoutingEvidenceCode | null {
   const { ctx, instruction, rawToolCalls } = input;
   if (shouldEscalateFulfilledCancelRequest(ctx, instruction)) return "fulfilled_cancellation_request";
   if (shouldEscalateFulfilledAddressChangeRequest(ctx, instruction)) return "fulfilled_address_change_request";
@@ -114,6 +115,16 @@ function escalationCode(input: BuildPlanRoutingEvidenceInput): PlanRoutingEviden
   if (!shape.hasAction && !shape.hasEscalation && hasExplicitCompensationRequest(ctx)) {
     return "compensation_exception";
   }
+  return null;
+}
+
+function escalationCode(input: BuildPlanRoutingEvidenceInput): PlanRoutingEvidenceCode | null {
+  const { ctx } = input;
+  // A withheld-message follow-up is offered no write and always goes to the
+  // merchant. The write its request asked for was already approved and has
+  // settled, so the checks that guard that write have nothing left to guard.
+  const writeCode = input.withheldMessageFollowUp ? null : requestedWriteEscalationCode(input);
+  if (writeCode) return writeCode;
   if (hasAmbiguousCustomerSearchResult(input.readBlocks, input.readResultsMap)) return "ambiguous_customer";
   if (hasCriticalPlanningReadErrorsForBlocks(input.readBlocks, input.readStatusMap)) {
     if (hasActionableMutativeIntent(...customerMessageTexts(ctx)) || ctx.recentOrders.length === 0) {
