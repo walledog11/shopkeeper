@@ -93,3 +93,37 @@ describe("serializeOrder currency", () => {
     });
   });
 });
+
+describe("serializeOrder line items", () => {
+  // Order #1033 on the dev store: two variants of one product. Shopify's `title`
+  // is the product's, so without `variant_title` both lines read "Selling Plans
+  // Ski Wax" and "refund just the sample" names neither.
+  it("tells two variants of one product apart", () => {
+    const { items } = serializeOrder({
+      id: 1033,
+      name: "#1033",
+      line_items: [
+        { id: 21, variant_id: 31, title: "Selling Plans Ski Wax", variant_title: "Selling Plans Ski Wax", quantity: 1 },
+        { id: 22, variant_id: 32, title: "Selling Plans Ski Wax", variant_title: "Sample Selling Plans Ski Wax", quantity: 1 },
+      ],
+    });
+    expect(items.map((item) => [item.line_item_id, item.variant_title])).toEqual([
+      ["21", "Selling Plans Ski Wax"],
+      ["22", "Sample Selling Plans Ski Wax"],
+    ]);
+  });
+
+  // A default variant has no variant title. Its line must serialize exactly as
+  // before, so no planner fixture's input changes.
+  it("leaves a default-variant line unchanged", () => {
+    const [item] = serializeOrder({
+      id: 1,
+      line_items: [{ id: 11, title: "Hat", variant_title: null, quantity: 1 }],
+    }).items;
+    expect(item).not.toHaveProperty("variant_title");
+    expect(Object.keys(item!)).toEqual([
+      "line_item_id", "variant_id", "title", "quantity",
+      "fulfillable_quantity", "current_quantity", "fulfillment_status",
+    ]);
+  });
+});

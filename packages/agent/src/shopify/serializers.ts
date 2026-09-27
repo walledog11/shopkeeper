@@ -49,11 +49,15 @@ export function serializeCustomer(customer: ShopifyCustomer) {
   };
 }
 
-function serializeOrderLineItem(lineItem: ShopifyOrderLineItem) {
+// `title` is the product's, so two variants of one product read the same
+// without `variant_title`. It is absent for a default variant, which keeps
+// every single-variant line byte-identical to what it was.
+export function serializeOrderLineItem(lineItem: ShopifyOrderLineItem) {
   return {
     line_item_id: lineItem.id !== undefined && lineItem.id !== null ? String(lineItem.id) : null,
     variant_id: lineItem.variant_id !== undefined && lineItem.variant_id !== null ? String(lineItem.variant_id) : null,
     title: lineItem.title,
+    ...(lineItem.variant_title ? { variant_title: lineItem.variant_title } : {}),
     quantity: lineItem.quantity,
     fulfillable_quantity: lineItem.fulfillable_quantity ?? null,
     current_quantity: lineItem.current_quantity ?? null,
