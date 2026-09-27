@@ -435,7 +435,7 @@ capability: it goes from 5,929 to 13,313 tokens. v1 is unchanged.
   identically. One serializer (`serializeOrderLineItem`, `shopify/serializers.ts`)
   now shapes line items for both order reads and `buildContext`'s recent
   orders, carrying `variant_title` when Shopify reports one.
-- *Decision G* (#PR). The withheld-message follow-up was judged by the
+- *Decision G* (#125). The withheld-message follow-up was judged by the
   structural checks that guard its request's write, so a follow-up after
   Shopify refused to cancel a shipped order always escalated and dropped the
   model's draft. Those checks (`requestedWriteEscalationCode`,
