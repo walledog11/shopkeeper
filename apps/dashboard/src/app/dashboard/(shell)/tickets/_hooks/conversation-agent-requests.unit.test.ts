@@ -4,7 +4,6 @@ import {
   executeApprovedAgentPlan,
   fetchAgentPlan,
   planRequestErrorTurn,
-  regenerateAgentPlan,
 } from "./conversation-agent-requests"
 
 afterEach(() => {
@@ -120,7 +119,7 @@ describe("conversation agent requests", () => {
     })
   })
 
-  it("requests agent plans with optional force regeneration", async () => {
+  it("requests agent plans without forcing regeneration by default", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({
         instruction: "refund order",
@@ -131,13 +130,9 @@ describe("conversation agent requests", () => {
     vi.stubGlobal("fetch", fetchMock)
 
     await fetchAgentPlan("thread-1", "refund order")
-    await regenerateAgentPlan("thread-1", "refund order")
 
-    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/agent/plan", expect.objectContaining({
+    expect(fetchMock).toHaveBeenCalledWith("/api/agent/plan", expect.objectContaining({
       body: JSON.stringify({ threadId: "thread-1", instruction: "refund order", force: false }),
-    }))
-    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/agent/plan", expect.objectContaining({
-      body: JSON.stringify({ threadId: "thread-1", instruction: "refund order", force: true }),
     }))
   })
 

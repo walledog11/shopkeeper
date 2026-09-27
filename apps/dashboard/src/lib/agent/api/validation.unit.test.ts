@@ -4,7 +4,6 @@ import { encodeAgentActionCursor } from "@/lib/agent/api/action-log";
 import {
   parseActionLogCursorQuery,
   parseAgentAskBody,
-  parseAgentInternalBody,
   parseAgentPlanDecisionBody,
   parseAgentRouteBody,
 } from "@/lib/agent/api/validation";
@@ -68,22 +67,6 @@ describe("agent api validation", () => {
       expect(error).toBeInstanceOf(BadRequestError);
       expect((error as BadRequestError).details).toEqual([
         { code: "required", field: "approvedToolCalls[0].id", message: "Tool call id is required" },
-      ]);
-    }
-  });
-
-  it("rejects malformed internal payload strings", () => {
-    try {
-      parseAgentInternalBody({
-        orgId: "org_123",
-        instruction: "Handle this",
-        senderPhone: 12345,
-      });
-      throw new Error("Expected parseAgentInternalBody to throw");
-    } catch (error) {
-      expect(error).toBeInstanceOf(BadRequestError);
-      expect((error as BadRequestError).details).toEqual([
-        { code: "invalid", field: "senderPhone", message: "senderPhone must be a string" },
       ]);
     }
   });

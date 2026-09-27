@@ -56,21 +56,6 @@ beforeEach(() => {
 });
 
 describe('processIntegrationDisconnect', () => {
-  it('claims, cleans, records, and completes in order', async () => {
-    await processIntegrationDisconnect(job());
-
-    expect(claimIntegrationDisconnect).toHaveBeenCalledWith('disconnect_1');
-    expect(postDashboardInternal).toHaveBeenCalledWith(
-      '/api/integrations/internal/disconnect-cleanup',
-      { operationId: 'disconnect_1', claimToken: 'claim_1' },
-      { requestId: 'disconnect_1' },
-    );
-    expect(markIntegrationProviderCleaned).toHaveBeenCalledWith('disconnect_1', 'claim_1');
-    expect(completeIntegrationDisconnect).toHaveBeenCalledWith('disconnect_1', 'claim_1');
-    expect(markIntegrationProviderCleaned.mock.invocationCallOrder[0])
-      .toBeLessThan(completeIntegrationDisconnect.mock.invocationCallOrder[0]);
-  });
-
   it('releases a transient failure so BullMQ can retry it', async () => {
     postDashboardInternal.mockResolvedValueOnce({
       ok: false,

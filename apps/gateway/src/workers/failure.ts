@@ -1,6 +1,6 @@
 import logger from '../logger.js';
 
-export interface FailedJobSnapshot<DataType> {
+interface FailedJobSnapshot<DataType> {
   id?: string;
   attemptsMade?: number;
   data?: DataType;

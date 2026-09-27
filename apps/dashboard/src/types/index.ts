@@ -51,14 +51,6 @@ export type VoiceProposal = DbVoiceProposal;
 export type PlanCardOutcome = PlanExecutionOutcome | "reply_not_sent";
 
 // Database models
-export interface Organization {
-  id: string;
-  clerkOrgId: string;
-  name: string;
-  settings: OrgSettings | null;
-  createdAt: string;
-}
-
 export interface Integration {
   id: string;
   organizationId: string;

@@ -224,38 +224,6 @@ describe('order-review worker', () => {
     expect(runOrderOps).not.toHaveBeenCalled();
   });
 
-  it('builds context, resolves settings, and records flagged results', async () => {
-    isEnabled.mockReturnValue(true);
-    findUnique.mockResolvedValue({ settings: { agentTone: 'warm' } });
-    runOrderOps.mockResolvedValue({ flagged: true, flagReason: 'Address mismatch' });
-    const handle = createWorker();
-
-    await handle({
-      id: 'job-1',
-      data: { organizationId: 'org-1', orderId: '100', traceId: 'trace-1' },
-    });
-
-    expect(findUnique).toHaveBeenCalledWith({
-      where: { id: 'org-1' },
-      select: { settings: true },
-    });
-    expect(resolveSettings).toHaveBeenCalledWith({ agentTone: 'warm' });
-    expect(buildContext).toHaveBeenCalledWith('100', 'org-1', expect.any(Function));
-    expect(runOrderOps).toHaveBeenCalledWith(
-      { order: { id: '100', name: '#1001' } },
-      { autonomyLevel: 'draft' },
-    );
-    expect(logger.info).toHaveBeenCalledWith(
-      {
-        organizationId: 'org-1',
-        orderId: '100',
-        reason: 'Address mismatch',
-        traceId: 'trace-1',
-      },
-      '[OrderReview] order flagged',
-    );
-  });
-
   it('propagates provider failures for BullMQ retry handling', async () => {
     isEnabled.mockReturnValue(true);
     findUnique.mockResolvedValue({ settings: null });

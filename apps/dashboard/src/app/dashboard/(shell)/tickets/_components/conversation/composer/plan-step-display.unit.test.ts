@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
   formatPlanStepSentence,
-  getPlanApproveLabel,
   getPlanCollapsedPreview,
 } from "./plan-step-display"
 import type { AgentPlan, PlanStep } from "@/types"
@@ -46,22 +45,6 @@ describe("formatPlanStepSentence", () => {
 
   it("maps close status to plain English", () => {
     expect(formatPlanStepSentence(closeStep)).toBe("Close the ticket")
-  })
-})
-
-describe("getPlanApproveLabel", () => {
-  it("uses Send reply for reply-only plans", () => {
-    expect(getPlanApproveLabel([{ ...sendReplyStep, enabled: true }])).toBe("Send reply")
-  })
-
-  it("uses Do this when multiple steps are enabled", () => {
-    expect(
-      getPlanApproveLabel([
-        { ...lookupStep, enabled: true },
-        { ...sendReplyStep, enabled: true },
-        { ...closeStep, enabled: true },
-      ]),
-    ).toBe("Do this")
   })
 })
 

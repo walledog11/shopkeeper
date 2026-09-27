@@ -7,26 +7,6 @@ type ArticleInput = {
   tags: string[]
 }
 
-export async function deleteKnowledgeBase(id: string) {
-  await requestJson<{ ok: boolean }>(
-    `/api/kb/bases/${id}`,
-    { method: "DELETE" },
-    "Failed to delete folder.",
-  )
-}
-
-export function createArticle(knowledgeBaseId: string, input: ArticleInput) {
-  return requestJson<{ article: KbArticle }>(
-    `/api/kb/bases/${knowledgeBaseId}/articles`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
-    },
-    "Failed to create note.",
-  )
-}
-
 export function createContext(content: string, category: string, correctionTargetId?: string) {
   return requestJson<{ article: KbArticle }>(
     "/api/kb/context",

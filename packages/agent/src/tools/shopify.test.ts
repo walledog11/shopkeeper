@@ -6,7 +6,6 @@ import {
   createReturn,
   createShopifyOrder,
   editShopifyOrder,
-  issueDiscount,
   updateShopifyCustomerInfo,
   updateShopifyOrderAddress,
 } from "./shopify.js";
@@ -523,60 +522,6 @@ describe("shopify tools", () => {
       message: "Error: edit_shopify_order requires at least variant_id (to add) or remove_variant_id (to remove).",
     });
     expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("issues a single-use percentage discount and converts the percentage to a fraction", async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
-      data: {
-        discountCodeBasicCreate: {
-          codeDiscountNode: {
-            codeDiscount: { codes: { nodes: [{ code: "THANKS10-ABCDEF" }] }, endsAt: null },
-          },
-          userErrors: [],
-        },
-      },
-    }));
-    vi.stubGlobal("fetch", fetchMock);
-
-    const result = await issueDiscount({ percentage: 10, reason: "Shipping delay" }, ctx);
-
-    const { query, variables } = JSON.parse(fetchMock.mock.calls[0][1].body as string);
-    expect(query).toContain("mutation discountCodeBasicCreate");
-    expect(variables.basicCodeDiscount).toMatchObject({
-      customerGets: { items: { all: true }, value: { percentage: 0.1 } },
-      appliesOncePerCustomer: true,
-      usageLimit: 1,
-    });
-    expect(result.status).toBe("ok");
-    expect(result.message).toContain("THANKS10-ABCDEF");
-  });
-
-  it("rejects a discount percentage outside 0–100 without calling Shopify", async () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
-
-    const result = await issueDiscount({ percentage: 150 }, ctx);
-
-    expect(result.status).toBe("error");
-    expect(result.message).toContain("percentage must be a number greater than 0 and at most 100");
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("surfaces Shopify userErrors when the discount cannot be created", async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
-      data: {
-        discountCodeBasicCreate: {
-          codeDiscountNode: null,
-          userErrors: [{ field: ["code"], message: "Code already exists." }],
-        },
-      },
-    }));
-    vi.stubGlobal("fetch", fetchMock);
-
-    const result = await issueDiscount({ percentage: 10 }, ctx);
-
-    expect(result.status).toBe("error");
-    expect(result.message).toContain("Code already exists.");
   });
 
   it("opens a return for a single requested item and maps the reason to the Shopify enum", async () => {

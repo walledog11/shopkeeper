@@ -1,35 +1,5 @@
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 
-export interface SaveWorkspaceInput {
-  name: string
-  version: string
-}
-
-export type SaveWorkspaceResult =
-  | { status: "saved"; version?: string }
-  | { status: "conflict"; current?: { name?: string; version?: string } }
-
-export async function saveWorkspaceName(
-  { name, version }: SaveWorkspaceInput,
-  fetchImpl: FetchLike = fetch,
-): Promise<SaveWorkspaceResult> {
-  const res = await fetchImpl("/api/org", {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, version }),
-  })
-
-  if (res.status === 409) {
-    const body = await res.json().catch(() => ({})) as { current?: { name?: string; version?: string } }
-    return { status: "conflict", current: body.current }
-  }
-
-  if (!res.ok) throw new Error("Failed")
-
-  const body = await res.json().catch(() => ({})) as { version?: string }
-  return { status: "saved", version: body.version }
-}
-
 export function exportFilenameFromDisposition(disposition: string, now = new Date()): string {
   const match = disposition.match(/filename="?([^"]+)"?/)
   return match?.[1] ?? `shopkeeper-export-${now.toISOString().slice(0, 10)}.json`

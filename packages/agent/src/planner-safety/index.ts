@@ -11,6 +11,5 @@ export {
 } from "./mutative.js"
 
 export {
-  replyDraftPrompt,
   sendReplyDeflectsToManagedChannels,
 } from "./policy-gap.js"

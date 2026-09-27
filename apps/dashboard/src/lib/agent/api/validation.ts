@@ -165,19 +165,6 @@ export function parseAgentChatBody(body: unknown) {
   };
 }
 
-export function parseAgentInternalBody(body: unknown) {
-  const candidate = requireObject(body);
-  return {
-    orgId: requireNonEmptyString(candidate.orgId, "orgId"),
-    instruction: requireTrimmedInstruction(candidate.instruction),
-    orderNumber: parseOptionalString(candidate.orderNumber, "orderNumber"),
-    senderPhone: parseOptionalString(candidate.senderPhone, "senderPhone"),
-    clerkUserId: parseOptionalString(candidate.clerkUserId, "clerkUserId"),
-    threadId: parseOptionalString(candidate.threadId, "threadId"),
-    approvedToolCalls: parseApprovedToolCalls(candidate.approvedToolCalls),
-  };
-}
-
 export function parseAgentPlanBody(body: unknown) {
   const candidate = requireObject(body);
   return {

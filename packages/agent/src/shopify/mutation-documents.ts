@@ -9,7 +9,6 @@
 // REST mutations (order cancel, order address, order create) are not here: they
 // fail with an HTTP status rather than as a statusless document-validation
 // error, so they are not part of this class.
-import { DISCOUNT_CODE_BASIC_CREATE_MUTATION } from "./discounts.js";
 import {
   AUTOMATIC_DISCOUNT_CREATE_MUTATION,
   AUTOMATIC_DISCOUNT_DELETE_MUTATION,
@@ -26,7 +25,6 @@ import { REFUND_CREATE_MUTATION } from "./refunds.js";
 import { PARTIAL_REFUND_MUTATION } from "./partial-refunds.js";
 import { REVERSE_DELIVERY_CREATE_WITH_SHIPPING_MUTATION } from "./return-labels.js";
 import { RETURN_CREATE_MUTATION } from "./returns.js";
-import { STORE_CREDIT_ACCOUNT_CREDIT_MUTATION } from "./store-credit.js";
 import { VARIANT_PRICE_UPDATE_MUTATION } from "./variant-pricing.js";
 
 export interface ShopifyMutationDocument {
@@ -37,10 +35,6 @@ export interface ShopifyMutationDocument {
 }
 
 export const SHOPIFY_MUTATION_DOCUMENTS: Record<string, ShopifyMutationDocument> = {
-  discountCodeBasicCreate: {
-    document: DISCOUNT_CODE_BASIC_CREATE_MUTATION,
-    rootField: "discountCodeBasicCreate",
-  },
   fulfillmentCreate: {
     document: FULFILLMENT_CREATE_MUTATION,
     rootField: "fulfillmentCreate",
@@ -92,10 +86,6 @@ export const SHOPIFY_MUTATION_DOCUMENTS: Record<string, ShopifyMutationDocument>
   variantPriceUpdate: {
     document: VARIANT_PRICE_UPDATE_MUTATION,
     rootField: "productVariantsBulkUpdate",
-  },
-  storeCreditAccountCredit: {
-    document: STORE_CREDIT_ACCOUNT_CREDIT_MUTATION,
-    rootField: "storeCreditAccountCredit",
   },
 };
 

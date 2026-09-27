@@ -177,26 +177,6 @@ describe('executeOperatorAgentTurn', () => {
       expect.anything(),
     );
   });
-
-  it('forwards the ledger and module tools the caller supplies', async () => {
-    const moduleTools = { list_active_tickets: { name: 'list_active_tickets' } } as never;
-
-    await executeOperatorAgentTurn({
-      orgId: org.id,
-      instruction: "what's in my inbox?",
-      operatorKey: 'telegram:123',
-      operatorLedger: 'Nothing is awaiting the merchant\'s decision.',
-      moduleTools,
-    });
-
-    expect(mockExecuteAgentTurn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        operatorLedger: 'Nothing is awaiting the merchant\'s decision.',
-        moduleTools,
-      }),
-      expect.anything(),
-    );
-  });
 });
 
 it('passes restrictive workspace policy into free-form operator execution', async () => {

@@ -210,17 +210,6 @@ export async function dismissAgentPlan(threadId: string, planId: string): Promis
   )
 }
 
-export async function regenerateAgentPlan(
-  threadId: string,
-  instruction: string,
-): Promise<AgentPlan | null> {
-  try {
-    return await fetchAgentPlan(threadId, instruction, { force: true })
-  } catch {
-    return null
-  }
-}
-
 export function planRequestErrorTurn(instruction: string, error: unknown): Omit<AgentTurn, "id"> {
   return requestErrorTurn(instruction, error, "Failed to generate plan — please try again.")
 }

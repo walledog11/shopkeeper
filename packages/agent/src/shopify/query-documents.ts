@@ -41,7 +41,6 @@ import {
 import { ORDER_RETURNS_QUERY } from "./return-labels.js";
 import { ORDER_RETURN_STATUSES_QUERY } from "./return-status.js";
 import { RETURNABLE_FULFILLMENTS_QUERY } from "./returns.js";
-import { SHOP_CURRENCY_QUERY } from "./store-credit.js";
 
 export interface ShopifyQueryDocument {
   document: string;
@@ -103,10 +102,6 @@ export const SHOPIFY_QUERY_DOCUMENTS: Record<string, ShopifyQueryDocument> = {
   orderFulfillmentsTracking: {
     document: ORDER_FULFILLMENTS_TRACKING_QUERY,
     variables: { id: "gid://shopify/Order/1" },
-  },
-  shopCurrency: {
-    document: SHOP_CURRENCY_QUERY,
-    variables: {},
   },
   productSearch: {
     document: PRODUCT_SEARCH_QUERY,

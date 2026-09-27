@@ -4,27 +4,7 @@ import {
   clearWorkspaceTicketsRequest,
   deleteWorkspaceRequest,
   exportFilenameFromDisposition,
-  saveWorkspaceName,
 } from "./workspace-requests"
-
-describe("saveWorkspaceName", () => {
-  it("returns conflict data without throwing", async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse({
-      current: { name: "Updated", version: "v2" },
-    }, { status: 409 }))
-
-    await expect(saveWorkspaceName({ name: "Old", version: "v1" }, fetchImpl)).resolves.toEqual({
-      status: "conflict",
-      current: { name: "Updated", version: "v2" },
-    })
-  })
-
-  it("throws on failed saves", async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse({ error: "Nope" }, { status: 500 }))
-
-    await expect(saveWorkspaceName({ name: "Store", version: "v1" }, fetchImpl)).rejects.toThrow("Failed")
-  })
-})
 
 describe("exportFilenameFromDisposition", () => {
   it("uses the response filename or a dated fallback", () => {
