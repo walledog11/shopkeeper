@@ -34,7 +34,7 @@ or customer from production data merely because it is available.
 | Controlled Shopify store | organization-owned test store; verify connection before use | Real-provider exercise |
 | Test order/customer owned by operator | Walle Walson; exact provider identity held outside the repository | Real-provider exercise |
 | Delivery channel and destination | operator-controlled email address; exact address held outside the repository | Actual delivery |
-| Permitted commercial effect | writes on the organization's Shopify **dev store**, driven by a realistic customer ticket (the first attempt's customer-note canary was replaced by an address change on an unfulfilled order) | Provider dispatch |
+| Permitted commercial effect | writes on the organization's Shopify **dev store**, driven by a realistic customer ticket, or by a merchant instruction for an effect no customer can request (the first attempt's customer-note canary was replaced by an address change on an unfulfilled order). The rerun covers every retained Shopify write not yet run against a real store (plan decision F, item 8) | Provider dispatch |
 | Maximum commercial amount/count | dev-store test data; no real merchant or customer | Provider dispatch |
 | v1 eval ceiling | $1.00 / 150 model calls (raised from $0.90 / 120 on 2026-09-26 for the 35-fixture set) | Paid v1 comparison |
 | v2 eval ceiling | $1.40 / 170 model calls (raised from $0.90 / 120 on 2026-09-26 for the 37-fixture set) | Paid v2 comparison |

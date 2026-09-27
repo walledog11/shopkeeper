@@ -5,8 +5,10 @@ are done. Package 6 (certify, cut over, and delete the old runtime) is in
 progress. Of the thirteen items in [What is left](#what-is-left-in-order), 1–6
 are done, 7 is done (Gate B's comparison passed on `cf41c169`), and 8–13 are
 open. Decision E was answered on 2026-09-25 (phone instructions move onto
-durable tasks, item 10). Decision F is open and blocks item 8. Decision G (the
-C08 held-out follow-up that escalates instead of drafting) is open. Production runs runtime v1 by default,
+durable tasks, item 10). Decision F was answered on 2026-09-26 (Gate C runs
+every retained Shopify write that has never touched a real store, item 8).
+Decision G (the C08 held-out follow-up that escalates instead of drafting) is
+open. Production runs runtime v1 by default,
 with one controlled organization on runtime v2.
 
 Created 2026-09-11. This file holds what is left, the rules for doing it, and the
@@ -162,14 +164,35 @@ request. Doc-only changes go straight to master.
    CLAUDE.md's eval rules. A cheap-tier planner turn that discovers a mutation
    is re-planned on the judgment tier and discovers it twice (Package 4). Watch
    for it in the call counts if that tier is on.
-8. **Re-run Gate C** from a realistic ticket (rule 6), with the inputs recorded
-   in the release evidence, and record the result there. Blocked on decision F
-   (which effects it must cover). Done when the run is stored as succeeded, the
-   customer receives the approved draft unchanged except for its filled
-   placeholders, and the release evidence records redacted provider and message
-   references. The release evidence also offers an optional step 7: retry a
-   deliberately induced definite delivery failure and confirm the write does not
-   repeat.
+8. **Re-run Gate C** (decision F): one controlled run per retained Shopify
+   write that has never touched a real store, each from a realistic ticket
+   (rule 6), with the inputs recorded in the release evidence and the result
+   recorded there. The runs, grouped by how the effect is reached:
+   - *From a customer ticket:* `create_refund`, `create_partial_refund`,
+     `cancel_order`, `create_return`, `create_exchange`, `attach_return_label`
+     and `update_shopify_customer_info`.
+   - *From a merchant instruction, isolated from default support discovery:*
+     `create_shopify_order`, `edit_shopify_order`, `fulfill_order` and
+     `create_gift_card`.
+   - *Operator-only, from a merchant instruction:* `create_flash_sale`,
+     `end_flash_sale` and `set_variant_prices`.
+
+   A merchant-instruction run is the realistic ticket for an effect no customer
+   can request. Until item 10 lands, those runs go through the dashboard, whose
+   requests are durable tasks; a phone instruction creates no task and would not
+   exercise the v2 path. One run may prepare state for the next (a fulfilled
+   order before a return, a return before its label), and each run is recorded
+   on its own.
+
+   Each customer-ticket run is done when its execution is stored as succeeded,
+   the typed receipt matches Shopify's actual state, the customer receives the
+   approved draft unchanged except for its filled placeholders, and the release
+   evidence records redacted provider and message references. A
+   merchant-instruction run is done on the same terms, with the merchant's reply
+   in place of customer delivery. A failure is a finding against its owning
+   contract (rule 2); stop, record it, and fix it before continuing. The release
+   evidence also offers an optional step 7: retry a deliberately induced
+   definite delivery failure and confirm the write does not repeat.
 9. **Gate D**, observation and rollback rehearsal, as written in the release
    evidence. Needs the observation window and operator, which the release
    evidence lists as "pending". Production carries no merchant traffic besides
@@ -291,20 +314,19 @@ that depends on it until it is answered.
   before the staged rollout. Gate E then deletes the synchronous path they use
   today.
 
-Open, added 2026-09-25. Each blocks the items named until the release owner
+- **F. Gate C runs every retained Shopify write that has never touched a real
+  store.** Answered 2026-09-26. Cutover step 3 asks for one controlled
+  approval → provider → receipt → delivery exercise, but Package 1's live
+  Shopify schema validation never ran, so every typed receipt except the two
+  Gate C has exercised (`add_shopify_customer_note` and
+  `update_shopify_order_address`) was built from fake provider responses, and
+  `create_partial_refund` has never run against a real store at all
+  (Package 3). One representative effect would leave those unproven. The
+  fourteen runs are listed in item 8. Internal thread writes touch no store and
+  are not included; email delivery is exercised by each customer-ticket run.
+
+Open, added 2026-09-26. Each blocks the items named until the release owner
 answers it.
-
-- **F. What must Gate C's rerun cover?** Cutover step 3 asks for one controlled
-  approval → provider → receipt → delivery exercise. The release matrix lists a
-  controlled real-provider exercise as the outstanding evidence for full and
-  partial refunds, address change, returns and exchanges, return labels, and
-  customer updates and notes. Other facts bear on the answer:
-  `create_partial_refund` has never run against a real store (Package 3).
-  Package 1's live Shopify schema validation never ran. Gate C has so far
-  covered a customer note and an address change. The choice is between one
-  representative effect and one run per effect row. Blocks item 8.
-
-Open, added 2026-09-26.
 
 - **G. Is an escalation an acceptable outcome for the withheld-message
   follow-up?** On `cf41c169` the C08 held-out (`withheld-cancellation-follow-up`)
@@ -381,7 +403,7 @@ replayed, and a probe that cannot rebuild a complete receipt leaves the action
 `unknown`. Each tool's Shopify scopes are enforced at both selection and
 execution. Replies and emails persist a logical response `Message` before
 dispatch. String-only historical rows are readable only through an explicit
-legacy option. Never run: live Shopify schema validation (decision F).
+legacy option. Never run: live Shopify schema validation (decision F; item 8).
 
 **Package 2 — durable dashboard requests** (2026-09-15/16). The new tables are
 `AgentRequest`, `AgentTask` and `AgentProposal`. Dashboard submission works as
