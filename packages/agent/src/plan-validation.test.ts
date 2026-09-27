@@ -108,7 +108,7 @@ describe("validatePlan", () => {
     expect(codes(note)).toEqual(["orphan_internal_note"]);
   });
 
-  it("turns grounding failures into validation issues without rewriting prose", () => {
+  it("invalidates an ungrounded escalation reason but leaves reply claims to planning signals", () => {
     const calls: RawToolCall[] = [
       { id: "reply_1", name: "send_reply", input: { text: "I've issued the refund." } },
       { id: "escalate_1", name: "escalate_to_human", input: { reason: "I've issued the refund, but need help." } },
@@ -116,10 +116,7 @@ describe("validatePlan", () => {
     const before = structuredClone(calls);
     const result = validatePlan({ ctx: makeCtx(), instruction: "Refund", rawToolCalls: calls });
 
-    expect(codes(result)).toEqual([
-      "ungrounded_escalation_reason",
-      "ungrounded_customer_reply",
-    ]);
+    expect(codes(result)).toEqual(["ungrounded_escalation_reason"]);
     expect(calls).toEqual(before);
   });
 });

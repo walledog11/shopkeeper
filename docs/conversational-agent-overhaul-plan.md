@@ -371,9 +371,12 @@ capability: it goes from 5,929 to 13,313 tokens. v1 is unchanged.
     planning time to the one approved call whose successful receipt fills it, and
     `allowedResultBindings` is part of the hash. An unbindable placeholder makes
     the plan invalid (`unbound_reply_placeholder`), and cards show a placeholder
-    by its label. The v2 path computes no completion facts and runs no prose
-    check. Decision B holds through planning-time validation
-    (`detectUngroundedReplyText`). The legacy path is unchanged.
+    by its label. The v2 path computes no completion facts at send time. Both
+    runtimes still run the prose claim check (`detectUngroundedReplyText`) at
+    planning. It made a flagged plan invalid, which rejected true
+    address-change replies; since 2026-09-27 it adds the blocking
+    `ungrounded_customer_reply` signal instead, so the merchant reviews the
+    flagged draft (decision B). The legacy path is unchanged.
 - *Item 5*. `planExecutionOutcomeForActions`
   (`execution-outcome.ts`) judges a plan by its effects and treats a
   `communication`-category reply as delivery, so a committed write whose reply
