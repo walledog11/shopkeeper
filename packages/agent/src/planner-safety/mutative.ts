@@ -1,8 +1,9 @@
 import type Anthropic from "@anthropic-ai/sdk"
-import type { AgentContext } from "../agent-context.js"
+import type { AgentContext, ShopifyOrderSummary } from "../agent-context.js"
 import { planningIntentTexts } from "../intent.js"
 import { findReferencedOrder } from "../order-reference.js"
 import type { ToolStatus } from "../tools/result.js"
+import type { RawToolCall } from "../types.js"
 
 const ORDER_LOOKUP_TOOLS = new Set([
   "get_order_by_name",
@@ -45,13 +46,32 @@ export function hasAmbiguousCustomerSearchResult(
   return false
 }
 
+// The orders a request is about: the one its text names, else the customer's
+// only order. With several orders and none named, it is about none in
+// particular, and another order's state says nothing about it.
+function requestTargetOrders(ctx: AgentContext, requestText: string): ShopifyOrderSummary[] {
+  const referenced = findReferencedOrder(ctx.recentOrders, requestText)
+  if (referenced) return [referenced]
+  return ctx.recentOrders.length === 1 ? [ctx.recentOrders[0]] : []
+}
+
 export function shouldEscalateFulfilledCancelRequest(
   ctx: AgentContext,
   instruction: string,
+  rawToolCalls: readonly RawToolCall[] = [],
 ): boolean {
-  const intentTexts = planningIntentTexts(ctx, instruction)
-  const wantsCancel = intentTexts.some(text => /\bcancel(?:lation|led|ing)?\b/i.test(text))
-  return wantsCancel && ctx.recentOrders.some(order => order.fulfillment_status === "fulfilled")
+  const requestText = planningIntentTexts(ctx, instruction)
+    .find(text => /\bcancel(?:lation|led|ing)?\b/i.test(text))
+  if (!requestText) return false
+
+  const proposedIds = new Set(rawToolCalls
+    .filter(toolCall => toolCall.name === "cancel_order")
+    .map(toolCall => String((toolCall.input as { order_id?: unknown } | null)?.order_id ?? "")))
+  const targets = [
+    ...requestTargetOrders(ctx, requestText),
+    ...ctx.recentOrders.filter(order => proposedIds.has(String(order.id))),
+  ]
+  return targets.some(order => order.fulfillment_status === "fulfilled")
 }
 
 export function shouldEscalateFulfilledAddressChangeRequest(
@@ -65,11 +85,5 @@ export function shouldEscalateFulfilledAddressChangeRequest(
   })
   if (!requestText) return false
 
-  const referenced = findReferencedOrder(ctx.recentOrders, requestText)
-  const targets = referenced
-    ? [referenced]
-    : ctx.recentOrders.length === 1
-      ? [ctx.recentOrders[0]]
-      : []
-  return targets.some(order => order.fulfillment_status === "fulfilled")
+  return requestTargetOrders(ctx, requestText).some(order => order.fulfillment_status === "fulfilled")
 }

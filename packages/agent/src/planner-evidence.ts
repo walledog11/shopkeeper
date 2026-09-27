@@ -106,7 +106,7 @@ function hasExplicitCompensationRequest(ctx: AgentContext): boolean {
 
 function requestedWriteEscalationCode(input: BuildPlanRoutingEvidenceInput): PlanRoutingEvidenceCode | null {
   const { ctx, instruction, rawToolCalls } = input;
-  if (shouldEscalateFulfilledCancelRequest(ctx, instruction)) return "fulfilled_cancellation_request";
+  if (shouldEscalateFulfilledCancelRequest(ctx, instruction, rawToolCalls)) return "fulfilled_cancellation_request";
   if (shouldEscalateFulfilledAddressChangeRequest(ctx, instruction)) return "fulfilled_address_change_request";
   if (refundTargetsAlreadyFullyRefunded(ctx, instruction)) return "already_refunded_request";
   if (refundTargetsNonPaidOrder(ctx, instruction, rawToolCalls)) return "non_paid_refund_request";
