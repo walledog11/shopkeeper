@@ -751,6 +751,31 @@ describe("planAgent routing", () => {
       .toMatchObject({ kind: "needs_review", approvalAllowed: true });
   });
 
+  // Regression for the C08 held-out: the request that led to the withheld
+  // message still says "cancel" and names a shipped order, which is why Shopify
+  // refused it. Judging that request's write again replaced the draft with an
+  // escalation on every such follow-up.
+  it("keeps a follow-up draft after Shopify refused to cancel a shipped order", async () => {
+    installAgentLogger(makeLogger());
+    const draft = "We couldn't cancel #4003 because it had already shipped. You can return it once it arrives.";
+    mockCreate.mockResolvedValueOnce(singleToolUse("send_reply", { text: draft }));
+
+    const plan = await planAgent(
+      makeCtx({
+        recentMessages: [{ senderType: "customer", contentText: "Please cancel order #4003, I ordered the wrong size." }],
+        recentOrders: [FULFILLED_ORDER_4003],
+        classifierSignals: classifierSignalsFor({ mutative_request: true }),
+      }),
+      "Customer wants order #4003 cancelled. The message was not sent: cancel_order (error): the order has already been fulfilled.",
+      AGENT_SETTINGS_DEFAULTS,
+      { exactDraftProposal: true, withheldMessageFollowUp: true },
+    );
+
+    expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual(["send_reply"]);
+    expect(plan.routingEvidence?.codes).not.toContain("fulfilled_cancellation_request");
+    expect(decideAutonomy(plan, AGENT_SETTINGS_DEFAULTS)).toMatchObject({ kind: "needs_review" });
+  });
+
   it("escalates a compensation request with no safe action", async () => {
     installAgentLogger(makeLogger());
     mockCreate.mockResolvedValueOnce(singleToolUse("send_reply", { text: "Your refund is on the way." }, "tu_reply"));
