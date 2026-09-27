@@ -27,6 +27,11 @@ type FieldDefinition =
       required?: boolean;
       minItems?: number;
       items: FieldMap;
+      /**
+       * Written by the runtime, never by the model: parsed like any field but
+       * left out of the schema the model is shown.
+       */
+      runtimeOnly?: boolean;
     };
 
 type FieldMap = Record<string, FieldDefinition>;
@@ -76,20 +81,23 @@ export function booleanArg(description: string, options: { required?: boolean } 
 export function arrayArg(
   description: string,
   items: FieldMap,
-  options: { required?: boolean; minItems?: number } = {},
+  options: { required?: boolean; minItems?: number; runtimeOnly?: boolean } = {},
 ): FieldDefinition {
   return { kind: "array", description, items, ...options };
 }
 
 function objectSchema(fields: FieldMap): Anthropic.Tool.InputSchema {
-  const required = Object.entries(fields).flatMap(([name, field]) => (
+  const modelFields = Object.entries(fields).filter(([, field]) => (
+    !(field.kind === "array" && field.runtimeOnly)
+  ));
+  const required = modelFields.flatMap(([name, field]) => (
     field.required ? [name] : []
   ));
 
   return {
     type: "object",
     properties: Object.fromEntries(
-      Object.entries(fields).map(([name, field]) => [name, fieldSchema(field)])
+      modelFields.map(([name, field]) => [name, fieldSchema(field)])
     ),
     ...(required.length > 0 ? { required } : {}),
     additionalProperties: false,

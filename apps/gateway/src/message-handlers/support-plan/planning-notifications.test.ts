@@ -252,6 +252,65 @@ describe('formatOperatorPlanMessage', () => {
     expect(message).not.toContain('skip 1');
   });
 
+  // Found at the first Gate C rerun: the agent called the Special variant "the
+  // sample", and a card that said only "Issue partial refund" could not show it.
+  it('names the Shopify line item and quote a single line-item write targets', () => {
+    const message = formatOperatorPlanMessage(
+      'Jane Doe',
+      ChannelType.email,
+      requestDisplay('Torn napkin'),
+      [{ id: 'tc_refund', category: 'action', tool: 'create_partial_refund', description: 'Refund', label: 'Issue partial refund', enabled: true }],
+      {
+        rawToolCalls: [{
+          id: 'tc_refund',
+          name: 'create_partial_refund',
+          input: {
+            order_id: '1032',
+            items: [{ line_item_id: '11', quantity: 1 }],
+            approval_amount: '8.50',
+            approval_currency: 'USD',
+            approval_line_items: [{ name: 'Linen Napkin - Special', quantity: 1, change: 'refund' }],
+          },
+        }],
+      },
+    );
+
+    expect(message).toContain("I'd refund $8.50 for 1x Linen Napkin - Special.");
+  });
+
+  it('names the items of a line-item write in a multi-step list', () => {
+    const message = formatOperatorPlanMessage(
+      'Jane Doe',
+      ChannelType.email,
+      requestDisplay('Wrong size'),
+      [
+        { id: 'tc_exchange', category: 'action', tool: 'create_exchange', description: 'Exchange', label: 'Set up exchange', enabled: true },
+        { id: 'tc_note', category: 'internal', tool: 'add_internal_note', description: 'Add internal note', label: 'Add note', enabled: true },
+      ],
+      {
+        rawToolCalls: [
+          {
+            id: 'tc_exchange',
+            name: 'create_exchange',
+            input: {
+              order_id: '1032',
+              variant_id: '501',
+              exchange_variant_id: '502',
+              approval_line_items: [
+                { name: 'Tee - Small', quantity: 1, change: 'return' },
+                { name: 'Tee - Medium', quantity: 1, change: 'replacement' },
+              ],
+            },
+          },
+          { id: 'tc_note', name: 'add_internal_note', input: { text: 'Size swap' } },
+        ],
+      },
+    );
+
+    expect(message).toContain('1. Exchange 1x Tee - Small for 1x Tee - Medium');
+    expect(message).toContain('2. Add note');
+  });
+
   // The header used to call a shopper who had proved they owned an order
   // "Someone on your storefront", one line above the card's own statement that
   // they had confirmed the email on it. Both surfaces read the same

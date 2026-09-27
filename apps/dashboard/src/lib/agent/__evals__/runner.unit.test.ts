@@ -1,8 +1,11 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  exchangeApprovalLineItems,
+  orderEditApprovalLineItems,
   quoteFullRefundForApproval,
   quotePartialRefundForApproval,
+  returnApprovalLineItems,
 } from "@shopkeeper/agent/shopify";
 import type { AgentPlan } from "@/types";
 import { collectPlanExpectationFailures } from "./assertions";
@@ -317,6 +320,77 @@ describe("installSimulatedShopifyRest", () => {
       )).resolves.toMatchObject({ approval_amount: "38.00", approval_currency: "USD" });
     } finally {
       restorePartial();
+    }
+  });
+
+  // On runtime v2 the planner names the line items a return, exchange or edit
+  // targets by reading Shopify before approval. A fixture that must propose one
+  // and cannot answer that read fails as a harness gap, not a model result.
+  it("names the items each line-item write fixture's expected write targets", async () => {
+    const cases = [
+      {
+        id: "adjacent-edit-order-vs-cancel",
+        name: (f: Fixture) => orderEditApprovalLineItems(
+          { order_id: "9000007040", remove_variant_id: "710000007040" }, f.setup.shopify!),
+        expected: [{ name: "Wool Beanie - Charcoal", quantity: 1, change: "remove" }],
+      },
+      {
+        id: "adjacent-refund-vs-return",
+        name: (f: Fixture) => returnApprovalLineItems({ order_id: "9000007010" }, f.setup.shopify!),
+        expected: [{ name: "Linen Throw - Sand", quantity: 1, change: "return" }],
+      },
+      {
+        id: "adjacent-return-vs-exchange",
+        name: (f: Fixture) => exchangeApprovalLineItems(
+          { order_id: "9000007020", variant_id: "710000007020", exchange_variant_id: "710000007021" }, f.setup.shopify!),
+        expected: [
+          { name: "Trail Rain Shell - Small", quantity: 1, change: "return" },
+          { name: "Trail Rain Shell - Medium", quantity: 1, change: "replacement" },
+        ],
+      },
+      {
+        id: "continuity-clear-referent",
+        name: (f: Fixture) => exchangeApprovalLineItems(
+          { order_id: "9000005001", variant_id: "95001", exchange_variant_id: "95002" }, f.setup.shopify!),
+        expected: [
+          { name: "Blue Overshirt / Medium", quantity: 1, change: "return" },
+          { name: "Overshirt - Black / Large", quantity: 1, change: "replacement" },
+        ],
+      },
+      {
+        id: "continuity-return-after-other-order-status",
+        name: (f: Fixture) => returnApprovalLineItems(
+          { order_id: "9000001601", variant_id: "71000016011" }, f.setup.shopify!),
+        expected: [{ name: "Brass Table Lamp", quantity: 1, change: "return" }],
+      },
+      {
+        id: "create-return-fulfilled-order",
+        name: (f: Fixture) => returnApprovalLineItems({ order_id: "9000002020" }, f.setup.shopify!),
+        expected: [{ name: "Leather Boots", quantity: 1, change: "return" }],
+      },
+      {
+        id: "return-label-ask-merchant",
+        name: (f: Fixture) => returnApprovalLineItems({ order_id: "9000011111" }, f.setup.shopify!),
+        expected: [{ name: "Linen Curtains", quantity: 1, change: "return" }],
+      },
+    ]
+    const lineItemWrites = ["create_return", "create_exchange", "edit_shopify_order"]
+    const mustPropose = readdirSync(new URL("./fixtures/", import.meta.url))
+      .filter((file) => file.endsWith(".json"))
+      .map((file) => loadFixture(file.replace(/\.json$/, "")))
+      .filter((fixture) => fixture.expectedPlan.mustCallTools?.some((tool) => lineItemWrites.includes(tool)))
+      .map((fixture) => fixture.id)
+      .sort()
+    expect(cases.map((c) => c.id).sort()).toEqual(mustPropose)
+
+    for (const c of cases) {
+      const fixture = loadFixture(c.id)
+      const restore = installSimulatedShopifyRest(fixture)
+      try {
+        await expect(c.name(fixture), c.id).resolves.toEqual(c.expected)
+      } finally {
+        restore()
+      }
     }
   });
 

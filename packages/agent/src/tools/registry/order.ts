@@ -18,6 +18,18 @@ import type {
   GetShopifyOrdersInput,
   UpdateShopifyOrderAddressInput,
 } from "./types.js";
+import { APPROVAL_LINE_ITEM_CHANGES } from "./types.js";
+
+// Hidden from the model; the planner binds it from Shopify before approval.
+const approvalLineItemsArg = arrayArg(
+  "The line items this write targets, as Shopify names them, bound by the runtime for approval.",
+  {
+    name: stringArg("Shopify's name for the line item or variant.", { required: true }),
+    quantity: numberArg("How many units the write changes.", { required: true }),
+    change: stringArg("What the write does to it.", { required: true, enum: APPROVAL_LINE_ITEM_CHANGES }),
+  },
+  { runtimeOnly: true },
+);
 
 export const ORDER_TOOL_DEFINITIONS = [
   defineTool({
@@ -165,6 +177,7 @@ export const ORDER_TOOL_DEFINITIONS = [
       reason: stringArg("Reason for the refund (e.g. 'One napkin arrived torn')."),
       approval_amount: stringArg("Runtime-supplied Shopify quote for approval. Always omit this field."),
       approval_currency: stringArg("Runtime-supplied quote currency for approval. Always omit this field."),
+      approval_line_items: approvalLineItemsArg,
     },
     category: "action",
     group: "order",
@@ -264,6 +277,7 @@ export const ORDER_TOOL_DEFINITIONS = [
       variant_id: stringArg("Variant ID to add. Required when adding or swapping. Omit for pure removal."),
       quantity: numberArg("Number of units to add. Required when variant_id is provided."),
       remove_variant_id: stringArg("Variant ID of the existing item to remove. Use for removals and swaps. Available in the orders context — no search needed."),
+      approval_line_items: approvalLineItemsArg,
     },
     category: "action",
     group: "order",
@@ -304,6 +318,7 @@ export const ORDER_TOOL_DEFINITIONS = [
       order_id: stringArg("Shopify order ID (numeric). Use the id field from the orders context.", { required: true }),
       variant_id: stringArg("Variant ID of the single item to return, from the orders context. Omit to return all returnable items on the order."),
       reason: stringArg("Why the item is coming back.", { enum: returnReasons }),
+      approval_line_items: approvalLineItemsArg,
     },
     category: "action",
     group: "order",
@@ -330,6 +345,7 @@ export const ORDER_TOOL_DEFINITIONS = [
       exchange_variant_id: stringArg("Variant ID of the replacement item to ship instead. Use search_shopify_products to find it if it is not in context.", { required: true }),
       quantity: numberArg("How many units to exchange. Defaults to 1."),
       reason: stringArg("Why the item is coming back.", { enum: returnReasons }),
+      approval_line_items: approvalLineItemsArg,
     },
     category: "action",
     group: "order",

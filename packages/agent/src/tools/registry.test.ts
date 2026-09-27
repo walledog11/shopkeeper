@@ -291,6 +291,22 @@ describe("agent tool registry", () => {
     expect(() => definition.parse({ text: "hello", order_id: "2001" })).toThrow(/input.order_id is not allowed/);
   });
 
+  it("parses the runtime-bound item names but never shows them to the model", () => {
+    for (const name of ["create_partial_refund", "create_return", "create_exchange", "edit_shopify_order"]) {
+      expect(definitionFor(name).inputSchema.properties).not.toHaveProperty("approval_line_items");
+    }
+    const bound = {
+      order_id: "2001",
+      approval_line_items: [{ name: "Napkin - Special", quantity: 1, change: "return" }],
+    };
+
+    expect(definitionFor("create_return").parse(bound)).toEqual(bound);
+    expect(() => definitionFor("create_return").parse({
+      order_id: "2001",
+      approval_line_items: [{ name: "Napkin", quantity: 1, change: "gift" }],
+    })).toThrow(/must be one of/);
+  });
+
   it("rejects blank customer-facing messaging fields in schema and parser", () => {
     const reply = definitionFor("send_reply");
 

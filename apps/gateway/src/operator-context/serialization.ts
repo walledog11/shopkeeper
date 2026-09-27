@@ -193,6 +193,7 @@ const PLAN_VALIDATION_CODES = new Set<PlanValidationIssue['code']>([
   'ungrounded_customer_reply',
   'multiple_customer_messages',
   'unbound_reply_placeholder',
+  'unnamed_line_item_target',
 ]);
 
 function readPlanValidationIssue(value: unknown): PlanValidationIssue | null {

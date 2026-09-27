@@ -16,7 +16,13 @@ import {
 } from "../tools/result.js";
 import { shopifyFailureReceipt, shopifyReceiptEnvelope } from "./receipts.js";
 import { moneyToCents, optionalPositiveInteger, requireNumericId } from "./validation.js";
-import { fetchReturnableLineItems, mapReturnReason, runReturnCreate, type ReturnWatchToolData } from "./returns.js";
+import {
+  allocateReturnQuantity,
+  fetchReturnableLineItems,
+  mapReturnReason,
+  runReturnCreate,
+  type ReturnWatchToolData,
+} from "./returns.js";
 
 interface VariantPricesData {
   nodes: ({
@@ -42,7 +48,7 @@ export const VARIANT_PRICES_QUERY = `query variantPrices($ids: [ID!]!) {
   }
 }`;
 
-function variantDisplayName(variant: { title?: string | null; product?: { title?: string | null } | null }): string {
+export function variantDisplayName(variant: { title?: string | null; product?: { title?: string | null } | null }): string {
   const product = variant.product?.title ?? null;
   const title = variant.title && variant.title !== "Default Title" ? variant.title : null;
   return [product, title].filter(Boolean).join(" - ") || "item";
@@ -180,18 +186,11 @@ export async function createExchange(
       );
     }
 
-    const returnLineItems: { fulfillmentLineItemId: string; quantity: number; returnReason: string }[] = [];
-    let remaining = quantity;
-    for (const item of selected) {
-      if (remaining <= 0) break;
-      const take = Math.min(item.quantity, remaining);
-      returnLineItems.push({
-        fulfillmentLineItemId: item.fulfillmentLineItemId,
-        quantity: take,
-        returnReason,
-      });
-      remaining -= take;
-    }
+    const returnLineItems = allocateReturnQuantity(selected, quantity).map(({ item, quantity: take }) => ({
+      fulfillmentLineItemId: item.fulfillmentLineItemId,
+      quantity: take,
+      returnReason,
+    }));
 
     mutationStarted = true;
     const created = await runReturnCreate(ctx, {

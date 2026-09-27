@@ -338,6 +338,14 @@ export function validateFixtures(fixtures: readonly unknown[], filenames?: reado
       }
       if (rest.response === undefined) local.push(`${label}.response is required`)
     }
+    for (const [graphqlIndex, graphql] of (fixture.setup.simulateShopifyGraphql ?? []).entries()) {
+      const label = `setup.simulateShopifyGraphql[${graphqlIndex}]`
+      if (!fixture.setup.shopify) local.push(`${label} requires setup.shopify`)
+      if (typeof graphql.operation !== "string" || !/^\w+$/.test(graphql.operation)) {
+        local.push(`${label}.operation must be a GraphQL query's operation name`)
+      }
+      if (graphql.data === undefined) local.push(`${label}.data is required`)
+    }
     validateFinancialExpectation(fixture, "create_refund", local)
     validateFinancialExpectation(fixture, "create_gift_card", local)
     validateUsefulNegativeOutcome(fixture, local)

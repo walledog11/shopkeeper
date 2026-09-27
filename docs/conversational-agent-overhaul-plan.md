@@ -80,10 +80,10 @@ contract was unbuilt.
 | Packages 0–5 | Done, verified with the real test database and fake providers. The only real-store effects so far are Gate C's customer note and address change. |
 | Gate A: comparison tooling | Done. |
 | Gate B: v1/v2 model comparison | Passed on `cf41c169` (2026-09-26). Its one miss, the C08 held-out, was a runtime defect fixed under decision G; C08 re-confirms before item 11. |
-| Gate C: real provider and delivery | Rerun not started. The pre-run state is recorded in the release evidence. The first attempt, on 2026-09-27, stopped on item 8a and counts as no run. |
+| Gate C: real provider and delivery | Rerun not started. The pre-run state is recorded in the release evidence. The first attempt, on 2026-09-27, stopped on item 8a, since fixed, and counts as no run. |
 | Gate D, staged rollout, Gate E | Not started. |
 | Production routing | `AGENT_RUNTIME_VERSION=1` on both services, with `AGENT_RUNTIME_V2_ORG_IDS` set to the controlled organization since 2026-09-25. New tasks for every other organization run v1. |
-| Work in flight | None. Next: item 8a. |
+| Work in flight | Item 8a, in review. Next: item 8. |
 
 ## Open work, in order
 
@@ -92,26 +92,6 @@ and what done means. Items that touch the agent path land through a pull
 request. Doc-only changes go straight to master. The numbers continue the
 original list so references in the release evidence stay valid; items 1–7 are
 in [What has been done](#what-has-been-done).
-
-8a. **Name the line item a write targets** (*Approval and communication
-   contract*: the approved snapshot binds "normalized tool names/inputs/targets",
-   and approval must "clearly show proposed actions"). Found at the first Gate C
-   rerun attempt, when the agent called the Special variant on #1032 "the
-   sample". Order reads now carry `variant_title` (#124). What is left:
-   - A line-item write's proposal binds only IDs.
-     `quotePartialRefundForApproval` (`shopify/partial-refunds.ts`) fetches the
-     order's line items from Shopify and keeps only the quoted amount, so the
-     item it prices is never named. Return and exchange have no quote step.
-   - The phone card (`parkedActionLabel`, `format-plan.ts`) shows only the
-     static tool label, "Issue partial refund" or "Open return", with neither
-     the item nor the quoted amount. The dashboard card
-     (`buildHomeActionDisplay`, `plan-preview.ts`) names the item only through
-     the model-authored `reason`. A model that picked the wrong line would be
-     caught by neither.
-
-   One change: bind Shopify's line-item names into the proposal where the write
-   is priced or made, and render them on both cards, the phone card with the
-   quoted amount. Blocks item 8's runs that target a line item.
 
 8. **Re-run Gate C** (decision F): one controlled run per retained Shopify
    write that has never touched a real store, each from a realistic ticket
@@ -126,12 +106,10 @@ in [What has been done](#what-has-been-done).
    - *Operator-only, from a merchant instruction:* `create_flash_sale`,
      `end_flash_sale` and `set_variant_prices`.
 
-   Item 8a blocks the runs that target a line item
-   (`create_partial_refund`, `create_return`, `create_exchange` and
-   `edit_shopify_order`) until it lands. The other runs may go first.
-
    A merchant-instruction run is the realistic ticket for an effect no customer
-   can request. Until item 10 lands, those runs go through the dashboard, whose
+   can request. It runs its write under the instruction's own authority
+   (`executeOperatorAgentTurn`), with no approval card, so item 8a's card
+   binding does not reach it. Until item 10 lands, those runs go through the dashboard, whose
    requests are durable tasks; a phone instruction creates no task and would not
    exercise the v2 path. One run may prepare state for the next (a fulfilled
    order before a return, a return before its label), and each run is recorded
@@ -435,6 +413,28 @@ capability: it goes from 5,929 to 13,313 tokens. v1 is unchanged.
   identically. One serializer (`serializeOrderLineItem`, `shopify/serializers.ts`)
   now shapes line items for both order reads and `buildContext`'s recent
   orders, carrying `variant_title` when Shopify reports one.
+- *Item 8a, second part* (this change). A line-item write's proposal now names
+  its items as Shopify does. On exact-draft planning, `bindProviderApprovalFacts`
+  (`planner.ts`) binds `approval_line_items` (name, quantity, and what the write
+  does to each) into the tool input, so the names are in the approval hash. Each
+  lookup (`shopify/approval-line-items.ts`) reads what its write reads to select
+  the same lines: the partial-refund quote's own order read, the returnable
+  fulfillments for a return or exchange (`selectReturnLineItems`,
+  `allocateReturnQuantity`, now shared with the writes), and the order and
+  variant reads for an edit. The field is runtime-only: parsed, never shown to
+  the model, and a model-written value is dropped on every runtime. A target
+  Shopify does not show makes the plan invalid
+  (`unnamed_line_item_target`) and leaves it intact; a provider error
+  propagates, as the refund quote's does. Both cards render one sentence
+  (`lineItemWriteSentence`, `line-item-display.ts`): the ticket card through
+  the step description, the home card as its first detail line, and the phone
+  card in place of the static label, with the quote for a partial refund
+  ("I'd refund $8.50 for 1x Linen Napkin - Special."). The eval harness serves
+  GraphQL reads by operation name (`simulateShopifyGraphql`). The seven
+  fixtures that must propose a return, exchange or edit declare those reads,
+  and a free test binds each one's expected write against them. Two of those
+  fixtures had non-numeric variant IDs, which the write refuses, and now use
+  numeric ones.
 - *Decision G* (#125). The withheld-message follow-up was judged by the
   structural checks that guard its request's write, so a follow-up after
   Shopify refused to cancel a shipped order always escalated and dropped the

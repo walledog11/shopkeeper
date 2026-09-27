@@ -49,6 +49,42 @@
           }
         ]
       }
+    ],
+    "simulateShopifyGraphql": [
+      {
+        "operation": "returnableFulfillments",
+        "data": {
+          "order": {
+            "id": "gid://shopify/Order/9000011111"
+          },
+          "returnableFulfillments": {
+            "edges": [
+              {
+                "node": {
+                  "returnableFulfillmentLineItems": {
+                    "edges": [
+                      {
+                        "node": {
+                          "quantity": 1,
+                          "fulfillmentLineItem": {
+                            "id": "gid://shopify/FulfillmentLineItem/90000111111",
+                            "lineItem": {
+                              "name": "Linen Curtains",
+                              "variant": {
+                                "id": "gid://shopify/ProductVariant/710000011111"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
     ]
   },
   "instruction": "Set up the customer's return and get them a shipping label.",

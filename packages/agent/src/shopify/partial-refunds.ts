@@ -17,9 +17,10 @@ import {
   requireNumericId,
 } from "./validation.js";
 import type { RefundToolResult } from "../tools/registry/types.js";
-import type { CreatePartialRefundInput } from "../tools/registry/types.js";
+import type { ApprovalLineItem, CreatePartialRefundInput } from "../tools/registry/types.js";
 import type { OrgSettings } from "../types.js";
 import type { ShopifyOrder, ShopifyOrderLineItem } from "./types.js";
+import { orderLineItemName } from "./approval-line-items.js";
 
 /**
  * Refunding some of an order, deliberately kept apart from `createRefund`.
@@ -190,6 +191,8 @@ interface PreparedPartialRefund {
   currency: string;
   calculatedCents: number;
   suggested: { amount?: string; gateway?: string; parent_id?: number; kind?: string }[];
+  /** The selection as Shopify names it, for the approval card. */
+  lineItems: ApprovalLineItem[];
 }
 
 async function preparePartialRefund(
@@ -277,10 +280,17 @@ async function preparePartialRefund(
       { code: "no_refundable_balance" },
     ), "rejected", "no_refundable_balance");
   }
-  return { orderId, items, note, currency, calculatedCents, suggested };
+  const orderLines = new Map((order.line_items ?? []).map((lineItem) => [String(lineItem.id), lineItem]));
+  const lineItems = items.map((item): ApprovalLineItem => ({
+    // unrefundableItems has already refused an ID that is not on the order.
+    name: orderLineItemName(orderLines.get(item.lineItemId)!),
+    quantity: item.quantity,
+    change: "refund",
+  }));
+  return { orderId, items, note, currency, calculatedCents, suggested, lineItems };
 }
 
-/** Bind the current Shopify quote into the immutable proposal shown for approval. */
+/** Bind the current Shopify quote and the items it prices into the immutable proposal shown for approval. */
 export async function quotePartialRefundForApproval(
   input: CreatePartialRefundInput,
   ctx: ShopifyContext,
@@ -291,6 +301,7 @@ export async function quotePartialRefundForApproval(
     ...input,
     approval_amount: centsToMoney(prepared.calculatedCents),
     approval_currency: prepared.currency,
+    approval_line_items: prepared.lineItems,
   };
 }
 

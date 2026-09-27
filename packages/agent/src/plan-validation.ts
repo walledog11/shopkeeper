@@ -38,6 +38,11 @@ export function validatePlan(params: {
    * send the other.
    */
   singleCustomerMessage?: boolean;
+  /**
+   * Line-item writes whose target the planner could not name from Shopify. The
+   * card would show only IDs, and a wrong line reads exactly like the right one.
+   */
+  unnamedTargetIds?: ReadonlySet<string>;
 }): PlanValidation {
   const { ctx, instruction, rawToolCalls, readResults } = params;
   const issues: PlanValidationIssue[] = [];
@@ -82,6 +87,10 @@ export function validatePlan(params: {
       ? bindReplyPlaceholders(draft, rawToolCalls).unbound.length > 0
       : hasReplyPlaceholders(draft);
     if (unfillable) issues.push(issue("unbound_reply_placeholder", toolCall));
+  }
+
+  for (const toolCall of rawToolCalls) {
+    if (params.unnamedTargetIds?.has(toolCall.id)) issues.push(issue("unnamed_line_item_target", toolCall));
   }
 
   const hasAction = rawToolCalls.some((toolCall) => TOOL_CATEGORIES[toolCall.name] === "action");
