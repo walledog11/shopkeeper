@@ -48,8 +48,7 @@ export function Footer() {
           sizes="100vw"
           className="object-cover object-[center_42%] [filter:sepia(0.08)_saturate(0.9)_brightness(1.04)]"
         />
-        <div className="absolute inset-0 bg-[#f6f2eb]/25" />
-        <div className="m-grain absolute inset-0" />
+        <div className="absolute inset-0 bg-white/40" />
       </div>
       <div className="mx-auto max-w-6xl">
         <nav

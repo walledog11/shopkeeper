@@ -1,120 +1,246 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
-import { ArrowRight, Check, MessageCircle } from "lucide-react";
-import { SectionLabel } from "./SectionLabel";
+import { AnimatePresence, LazyMotion, domAnimation, m } from "motion/react";
 
-// Illustrative conversations, grounded in the merchant tools shared by the
-// dashboard and iMessage. These controls only select examples.
+const STORE = "Linen & Loom";
+
 const tasks = [
   {
     label: "Run a sale",
-    prompt: "Take 15% off the whole store for the next 48 hours.",
-    response: "The 15% sale is live across your store. It ends in 48 hours. Your regular product prices haven’t changed.",
-    title: "Set up the promotion in Shopify.",
-    description: "Create an automatic discount across your catalog or on selected product variants. Give it a percentage and duration, then ask it to end the sale early if you need to.",
-    details: ["Storewide or selected products", "A set end time", "List or stop active sales"],
-    note: "You can also ask for a permanent price change on specific variants. That changes the product price itself; a timed sale uses a discount.",
-    record: ["15% automatic discount", "Entire catalog", "Ends in 48 hours"],
+    headline: "Run a sale without opening admin.",
+    about:
+      "Text the discount and end date. Shopkeeper creates the automatic discount in Shopify and tells you when it’s live.",
+    prompt: "Put the store on sale until Sunday.",
+    response: "Done — 15% off the whole store through Sunday night.",
+    gradient: "/marketing/bento/bento-1-gradient.svg",
   },
   {
     label: "Check stock",
+    headline: "Get a count in the words you already use.",
+    about:
+      "Name the product, size, and color—the way you’d ask someone on the floor. Shopkeeper reads inventory and answers in the thread.",
     prompt: "How many sand linen jumpsuits do we have in Small?",
-    response: "There are 12 Small / Sand linen jumpsuits in stock.",
-    title: "Ask about the products you actually sell.",
-    description: "Find a product by name, check its sizes and colors, and read the stock for each variant. Ask what’s running low to get the items at or below your chosen threshold.",
-    details: ["Search your Shopify catalog", "Stock by size, color, or variant", "Low-stock checks"],
-    note: "Stock checks read your current Shopify inventory. They don’t change inventory quantities or place a replenishment order.",
-    record: ["Linen jumpsuit", "Small / Sand", "12 in stock"],
+    response: "Twelve in Small / Sand.",
+    gradient: "/marketing/bento/bento-3-gradient.svg",
   },
   {
     label: "Change an order",
+    headline: "Fix an order before it ships.",
+    about:
+      "Give a customer name or order number and say what to change. Shopkeeper updates the order in Shopify and confirms what changed.",
     prompt: "On Maya’s order #3102, swap the Medium jumpsuit for a Small.",
-    response: "Order #3102 is updated: one Small / Sand linen jumpsuit in place of the Medium. The order total is unchanged.",
-    title: "Give it the order work directly.",
-    description: "Look up a customer or order, add or remove items, change a variant, or correct an address before fulfillment. You can also create a new unpaid order for a customer.",
-    details: ["Customer and order lookup", "Item swaps and address corrections", "New orders with payment pending"],
-    note: "Shopkeeper checks the order’s state and your configured limits. A shipped item needs a return or exchange rather than an edit to the original order.",
-    record: ["Order #3102", "Medium → Small", "Order total unchanged"],
+    response: "Updated #3102 — Small / Sand now, same total.",
+    gradient: "/marketing/bento/bento-2-gradient.svg",
   },
   {
     label: "Work the inbox",
+    headline: "Your queue, in one ask.",
+    about:
+      "Shopkeeper lists what needs your approval, what it can reply to on its own, and what only you can handle—then waits for your call on each.",
     prompt: "What’s waiting on me?",
-    response: "Maya’s size swap is ready for approval. Priya needs an answer about international shipping. Alex’s refund needs you to take over because it’s above your limit.",
-    title: "Read, answer, and direct the work.",
-    description: "Ask what’s open, read a customer’s conversation, approve or reject a proposed action, or ask for a revised reply. Tell Shopkeeper what to send and it replies on the customer’s existing thread.",
-    details: ["Open conversations and pending decisions", "Approve, decline, or revise a plan", "Send a reply or mark a thread as spam"],
-    note: "You can also ask what customers have been writing about over the last week or month, including ticket topics, channels, and resolution times.",
-    record: ["1 approval", "1 policy question", "1 handoff"],
+    response:
+      "Maya’s swap is ready for your OK. Priya needs an answer about international shipping. Alex’s refund needs you — it’s above your limit.",
+    gradient: "/marketing/bento/bento-4-gradient.svg",
   },
   {
     label: "Email a customer",
-    prompt: "Email jamie@example.com to say their replacement ships tomorrow.",
-    response: "Sent to jamie@example.com: their replacement ships tomorrow.",
-    title: "Start the conversation when you need to.",
-    description: "Ask Shopkeeper to send an email to a specific address, even when there isn’t an existing support ticket. For a customer already in your inbox, it can reply on their original channel.",
-    details: ["New outbound emails", "Replies on existing customer threads", "A record of the message and result"],
-    note: "Requires a configured outbound email connection. Shopkeeper uses the information you provide; an email doesn’t itself ship or fulfill an order.",
-    record: ["jamie@example.com", "Replacement update", "Email sent"],
+    headline: "Reach out when you’re starting the thread.",
+    about:
+      "Some updates don’t begin with a customer DM. Tell Shopkeeper the address and message; it sends the email and keeps a record.",
+    prompt: "Email jamie@example.com — their replacement ships tomorrow.",
+    response: "Sent.",
+    gradient: "/marketing/bento/bento-2-gradient.svg",
   },
 ] as const;
+
+const panelReveal = {
+  hidden: { opacity: 0, y: 14 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] as const },
+  },
+  exit: { opacity: 0, y: -10, transition: { duration: 0.22 } },
+};
+
+function MerchantThread({
+  headline,
+  about,
+  prompt,
+  response,
+  gradient,
+}: {
+  headline: string;
+  about: string;
+  prompt: string;
+  response: string;
+  gradient: string;
+}) {
+  return (
+    <figure className="relative mx-auto w-full max-w-[400px] lg:mx-0 lg:max-w-none">
+      <figcaption className="sr-only">
+        {headline} {about} Example for {STORE}: {prompt} {response}
+      </figcaption>
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -inset-x-6 -inset-y-10 -z-10 overflow-hidden rounded-[3rem] lg:hidden [mask-image:radial-gradient(70%_65%_at_50%_50%,black_20%,transparent_78%)]"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element -- decorative SVG burst, same as bento cards */}
+        <img src={gradient} alt="" className="size-full scale-110 object-cover opacity-80" />
+      </div>
+      <div className="m-merchant-device">
+        <div className="m-merchant-phone">
+          <div className="m-merchant-phone-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden>
+              <path d="m15 18-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span className="m-merchant-phone-avatar">SK</span>
+            <div className="m-merchant-phone-who">
+              <p>Shopkeeper</p>
+              <p>{STORE}</p>
+            </div>
+            <Image src="/logos/imessage.svg" alt="" width={22} height={22} className="ml-auto shrink-0 opacity-90" />
+          </div>
+          <div className="m-merchant-phone-thread">
+            <p className="m-merchant-phone-time">Today 9:14 AM</p>
+            <div className="m-merchant-phone-row is-out">
+              <p className="m-merchant-phone-out">{prompt}</p>
+            </div>
+            <div className="m-merchant-phone-row is-in">
+              <span className="m-merchant-phone-avatar is-tiny">SK</span>
+              <p className="m-merchant-phone-in">{response}</p>
+            </div>
+          </div>
+          <div className="m-merchant-phone-compose">
+            <span>iMessage</span>
+          </div>
+        </div>
+      </div>
+    </figure>
+  );
+}
+
+function MerchantCopy({ headline, about }: { headline: string; about: string }) {
+  return (
+    <div className="flex flex-col justify-center">
+      <h3 className="m-display text-[clamp(1.45rem,2.2vw,1.85rem)] font-semibold leading-[1.12] tracking-[-0.035em] text-stone-950">
+        {headline}
+      </h3>
+      <p className="mt-4 max-w-[42ch] text-[16px] leading-[1.65] text-stone-600">{about}</p>
+    </div>
+  );
+}
 
 export function MerchantTasks() {
   const [active, setActive] = useState(0);
   const task = tasks[active];
 
   return (
-    <section id="workflow" aria-labelledby="merchant-tasks-heading" className="mx-auto max-w-6xl scroll-mt-24 px-6 py-14">
-      <div className="mb-9 text-center">
-        <SectionLabel>when you have a job for it</SectionLabel>
-        <h2 id="merchant-tasks-heading" className="m-display mx-auto mb-4 max-w-[22ch] text-[clamp(34px,4.5vw,58px)]">
-          “Put the store on sale until Sunday.”
-        </h2>
-        <p className="mx-auto max-w-[63ch] text-[15px] leading-relaxed text-stone-700 sm:text-base">
-          You can give Shopkeeper work without waiting for a customer to ask.
-          Talk to the same agent from iMessage or the dashboard: it can read your
-          store, make supported changes, and tell you what happened.
-        </p>
-      </div>
+    <LazyMotion features={domAnimation} strict>
+      <section id="workflow" aria-labelledby="merchant-tasks-heading" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-14 sm:px-6 sm:py-20">
+        <m.header
+          className="mb-8 max-w-[min(720px,100%)] text-left sm:mb-10"
+          initial={{ opacity: 0, y: 22 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.5 }}
+          transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <h2
+            id="merchant-tasks-heading"
+            className="m-display text-[clamp(2rem,4.2vw,3.35rem)] font-semibold leading-[1.08] tracking-[-0.04em] text-stone-950"
+          >
+            “Put the store on sale until Sunday.”
+          </h2>
+          <p className="m-display mt-4 text-[clamp(1.2rem,2.2vw,1.65rem)] font-medium leading-[1.28] tracking-[-0.03em] text-stone-500">
+            When you start the conversation—not the customer.
+          </p>
+          <p className="mt-5 max-w-[58ch] text-[16px] leading-[1.65] text-stone-600 sm:text-[17px]">
+            Up above, Shopkeeper handles a customer who wrote first. Here, you’re the one with a job: a sale, a stock
+            check, an order fix, the inbox, an outbound email. Same agent on iMessage or the dashboard; the work still
+            lands in Shopify. Each tab is one way {STORE}’s owner might text Shopkeeper.
+          </p>
+        </m.header>
 
-      <div role="group" aria-label="Explore things you can ask Shopkeeper" className="mb-7 flex flex-wrap justify-center gap-2">
-        {tasks.map((item, index) => (
-          <button key={item.label} type="button" aria-pressed={active === index} aria-controls="merchant-task-example"
-            onClick={() => setActive(index)}
-            className={`min-h-11 rounded-full border px-4 py-2.5 text-[13px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-stone-800 motion-reduce:transition-none ${active === index ? "border-[#2b2118] bg-[#2b2118] text-[#f6f2eb]" : "border-stone-900/15 bg-white/50 text-stone-700 hover:bg-white/80"}`}>
-            {item.label}
-          </button>
-        ))}
-      </div>
+        <m.div
+          className="m-merchant-panel overflow-hidden rounded-[1.35rem]"
+          initial={{ opacity: 0, y: 28 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.2 }}
+          transition={{ duration: 0.75, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <div className="border-b border-stone-900/8 bg-[#fcfcfb] px-4 py-4 sm:px-6 sm:py-5">
+            <div
+              role="tablist"
+              aria-label="Example jobs"
+              className="m-merchant-tabs flex gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            >
+              {tasks.map((item, index) => {
+                const selected = active === index;
+                return (
+                  <button
+                    key={item.label}
+                    type="button"
+                    role="tab"
+                    id={`merchant-task-tab-${index}`}
+                    aria-selected={selected}
+                    aria-controls="merchant-task-panel"
+                    tabIndex={selected ? 0 : -1}
+                    onClick={() => setActive(index)}
+                    className={`m-merchant-tab shrink-0 ${selected ? "is-active" : ""}`}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
-      <div id="merchant-task-example" className="grid gap-7 lg:grid-cols-[1.05fr_1fr]" aria-live="polite" aria-atomic="true">
-        <div className="relative rounded-3xl border border-stone-900/10 bg-[#fdfbf7]/90 p-6 shadow-[0_24px_50px_-32px_rgba(43,33,24,0.45)] sm:p-8">
-          <span aria-hidden className="absolute -top-2 left-8 h-[18px] w-20 -rotate-3 rounded-[2px] bg-[#cdb896]/55" />
-          <div className="mb-7 flex items-center justify-between gap-3 border-b border-stone-900/10 pb-4 text-xs text-stone-500">
-            <span className="flex items-center gap-2"><MessageCircle size={16} aria-hidden />You & Shopkeeper</span>
-            <span>Illustrative conversation</span>
+          <div
+            id="merchant-task-panel"
+            role="tabpanel"
+            aria-labelledby={`merchant-task-tab-${active}`}
+            className="m-merchant-panel-body"
+          >
+            <AnimatePresence mode="wait">
+              <m.div
+                key={active}
+                variants={panelReveal}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+                className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:min-h-[420px]"
+              >
+                <div className="order-2 border-t border-stone-900/8 bg-white px-5 py-8 sm:px-8 sm:py-10 lg:order-1 lg:border-t-0 lg:border-r lg:py-12">
+                  <MerchantCopy headline={task.headline} about={task.about} />
+                </div>
+                <div className="m-merchant-well relative order-1 flex items-center justify-center px-4 py-10 sm:px-8 sm:py-12 lg:order-2 lg:py-14">
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute inset-0 overflow-hidden [mask-image:linear-gradient(180deg,black_55%,transparent_100%)]"
+                  >
+                    <Image
+                      src="/atmosphere/hero-light.jpg"
+                      alt=""
+                      fill
+                      sizes="(min-width: 1024px) 480px, 100vw"
+                      className="object-cover opacity-70 [filter:blur(28px)_sepia(0.12)_saturate(0.9)_brightness(1.05)]"
+                    />
+                  </div>
+                  <MerchantThread
+                    headline={task.headline}
+                    about={task.about}
+                    prompt={task.prompt}
+                    response={task.response}
+                    gradient={task.gradient}
+                  />
+                </div>
+              </m.div>
+            </AnimatePresence>
           </div>
-          <p className="mb-2 text-right text-[11px] text-stone-500">You</p>
-          <p className="ml-auto max-w-[90%] rounded-2xl rounded-br-sm bg-[#2b2118] px-5 py-4 text-[15px] leading-relaxed text-[#f6f2eb]">{task.prompt}</p>
-          <p className="mb-2 mt-6 text-[11px] text-stone-500">Shopkeeper</p>
-          <p className="mr-auto max-w-[95%] rounded-2xl rounded-bl-sm border border-stone-900/10 bg-white/80 px-5 py-4 text-[15px] leading-relaxed text-stone-800">{task.response}</p>
-          <div className="mt-7 flex flex-wrap gap-x-4 gap-y-2 border-t border-stone-900/10 pt-4">
-            {task.record.map(item => <span key={item} className="flex items-center gap-1.5 text-[11px] text-stone-600"><Check size={12} className="text-[#2f7a4a]" aria-hidden />{item}</span>)}
-          </div>
-        </div>
-        <div className="flex flex-col justify-center py-3 lg:min-h-[420px]">
-          <h3 className="text-[32px] leading-tight [font-family:var(--m-hand)]">{task.title}</h3>
-          <p className="mt-4 text-[15px] leading-relaxed text-stone-700">{task.description}</p>
-          <ul className="mt-5 space-y-3">
-            {task.details.map(item => <li key={item} className="flex items-center gap-2.5 text-sm text-stone-800"><ArrowRight size={14} className="shrink-0 text-stone-400" aria-hidden />{item}</li>)}
-          </ul>
-          <p className="mt-6 border-t border-stone-900/10 pt-4 text-[13px] leading-relaxed text-stone-600">{task.note}</p>
-        </div>
-      </div>
-      <p className="mx-auto mt-5 max-w-[70ch] text-center text-xs leading-relaxed text-stone-500">
-        Illustrative conversations with fictional store data.
-        Shopify actions require the relevant permissions and follow your workspace limits.
-      </p>
-    </section>
+        </m.div>
+      </section>
+    </LazyMotion>
   );
 }

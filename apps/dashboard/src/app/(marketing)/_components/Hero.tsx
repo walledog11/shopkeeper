@@ -45,7 +45,6 @@ function HeroFlow() {
         aria-label="A customer asks to swap their order to a medium. Shopkeeper checks the order in Shopify, replies, and the swap is approved from iMessage and updated in Shopify."
       >
         <div aria-hidden className="m-shimmer-sheen" />
-        <div aria-hidden className="m-grain pointer-events-none absolute inset-0 opacity-70 mix-blend-overlay" />
         {sparkles.map((s, i) => (
           <span
             key={i}
@@ -175,7 +174,6 @@ export function CustomerWorkflow() {
               sizes="100vw"
               className="scale-110 object-cover opacity-75 [filter:blur(26px)_sepia(0.18)_saturate(0.85)_brightness(1.07)]"
             />
-            <div className="m-grain absolute inset-0" />
           </div>
           <div className="mx-auto max-w-[560px] rounded-[2.25rem] bg-white/35 p-2 shadow-[0_30px_80px_-52px_rgba(43,33,24,0.5)] ring-1 ring-stone-900/5 sm:p-3">
             <HeroMedia />

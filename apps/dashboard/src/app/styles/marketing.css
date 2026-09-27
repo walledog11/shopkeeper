@@ -909,23 +909,14 @@ html:has(.m-paper-sheet) {
   background-size: 160px 160px;
 }
 
-/* Crumpled-paper sheet — one sheet of real crumpled paper rendered in its own
-   position:fixed layer behind the page. We deliberately avoid
-   background-attachment:fixed: iOS Safari renders that unreliably and rasterizes
-   it into a blurry low-res layer. A fixed element scrolls-under natively and
-   stays sharp. The white overlay lightens the grey photo toward paper-white and
-   softens the creases so text and cards stay readable; tune its alpha to taste. */
+/* Marketing page backdrop — fixed layer behind the page (avoids
+   background-attachment:fixed, which iOS Safari renders unreliably). */
 .m-paper-bg {
   position: fixed;
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background-color: #f6f2eb;
-  background-image:
-    linear-gradient(rgba(244, 238, 229, 0.72), rgba(244, 238, 229, 0.72)),
-    url("/atmosphere/paper.webp");
-  background-size: cover;
-  background-position: center;
+  background-color: #fff;
 }
 
 /* Torn-notebook CTA card — a photographed ripped, ruled, taped sheet
@@ -2067,5 +2058,468 @@ html:has(.m-paper-sheet) {
 
   .m-onboard.is-playing .m-onboard-toggle-dash {
     opacity: 1;
+  }
+}
+
+/* ── Landing bento feature grid ── */
+.m-bento-grid {
+  display: grid;
+  gap: 1.25rem;
+}
+
+@media (min-width: 768px) {
+  .m-bento-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-rows: minmax(552px, 552px) minmax(552px, auto);
+    gap: 1rem;
+  }
+}
+
+.m-bento-card {
+  background: linear-gradient(180deg, #fff 0%, #f5f5f5 100%);
+  border: 1px solid rgba(22, 20, 19, 0.08);
+  box-shadow: none;
+}
+
+.m-bento-gradient-burst {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  width: 100%;
+  height: 100%;
+  inset: auto 0 0 auto;
+  object-fit: cover;
+}
+
+.m-bento-gradient-burst--bl {
+  inset: auto auto 0 0;
+}
+
+.m-bento-3-ui {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  object-fit: contain;
+  object-position: center bottom;
+}
+
+.m-bento-card--horizontal {
+  background: #fff;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+@media (min-width: 768px) {
+  .m-bento-card--horizontal {
+    flex-direction: row;
+    align-items: stretch;
+  }
+}
+
+.m-bento-convert-copy {
+  overflow: visible;
+}
+
+.m-bento-stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-top: 0.75rem;
+  padding: 0.75rem 0.75rem 0 1rem;
+  border-left: 1px solid #e8e3e1;
+}
+
+.m-bento-stat-logo {
+  max-width: 8.75rem;
+  width: 100%;
+  height: auto;
+}
+
+.m-bento-4-chart {
+  position: absolute;
+  right: 0;
+  bottom: -30%;
+  left: 0;
+  pointer-events: none;
+}
+
+.m-bento-lottie--bento-4 {
+  z-index: 1;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 220px;
+  height: 100%;
+}
+
+.m-bento-lottie {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 400px;
+}
+
+.m-bento-lottie--fill {
+  min-height: 0;
+  height: 100%;
+}
+
+.m-bento-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+.m-bento-glow--br {
+  transform-origin: 88% 92%;
+  background: radial-gradient(
+    72% 68% at 88% 92%,
+    rgba(253, 228, 218, 0.95) 0%,
+    rgba(253, 242, 238, 0.45) 38%,
+    transparent 72%
+  );
+  animation: m-bento-glow-breathe 7.6s ease-in-out infinite;
+}
+
+.m-bento-glow--center {
+  transform-origin: 50% 62%;
+  background: radial-gradient(
+    58% 52% at 50% 62%,
+    rgba(253, 228, 218, 0.85) 0%,
+    rgba(253, 242, 238, 0.35) 42%,
+    transparent 74%
+  );
+  animation: m-bento-glow-breathe 8.9s ease-in-out infinite;
+}
+
+.m-bento-glow--bottom {
+  transform-origin: 50% 100%;
+  background: radial-gradient(
+    80% 55% at 50% 108%,
+    rgba(253, 228, 218, 0.9) 0%,
+    rgba(253, 242, 238, 0.4) 40%,
+    transparent 70%
+  );
+  animation: m-bento-glow-breathe 6.5s ease-in-out infinite;
+}
+
+@keyframes m-bento-glow-breathe {
+  0%,
+  100% {
+    opacity: 0.82;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+
+.m-bento-typing-dot {
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  border-radius: 9999px;
+  background: rgb(120 113 108);
+  animation: m-bento-typing 1s ease-in-out infinite;
+}
+
+@keyframes m-bento-typing {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+.m-bento-float {
+  border: 1px solid rgba(22, 20, 19, 0.06);
+  background: #fff;
+  box-shadow:
+    0 22px 56px -32px rgba(22, 20, 19, 0.2),
+    0 6px 18px -12px rgba(22, 20, 19, 0.08);
+}
+
+.m-bento-pulse {
+  position: absolute;
+  border-radius: 9999px;
+  border: 1px dashed rgba(22, 20, 19, 0.08);
+  animation: m-bento-pulse 4.5s ease-out infinite;
+}
+
+.m-bento-pulse--a {
+  width: 7.5rem;
+  height: 7.5rem;
+}
+
+.m-bento-pulse--b {
+  width: 10.5rem;
+  height: 10.5rem;
+  animation-delay: 1.2s;
+}
+
+.m-bento-pulse--c {
+  width: 14rem;
+  height: 14rem;
+  animation-delay: 2.4s;
+}
+
+@keyframes m-bento-pulse {
+  0% {
+    opacity: 0.55;
+    transform: scale(0.92);
+  }
+  70% {
+    opacity: 0;
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .m-bento-pulse {
+    animation: none;
+    opacity: 0.35;
+  }
+
+  .m-bento-glow--br,
+  .m-bento-glow--center,
+  .m-bento-glow--bottom {
+    animation: none;
+  }
+
+  .m-bento-typing-dot {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+
+/* ── Merchant workflow — iMessage thread + Shopify receipt ── */
+.m-merchant-panel {
+  border: 1px solid rgba(22, 20, 19, 0.08);
+  background: #fff;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 28px 70px -48px rgba(43, 33, 24, 0.35);
+}
+
+.m-merchant-panel-body {
+  overflow: hidden;
+}
+
+.m-merchant-well {
+  background: linear-gradient(165deg, #f8f6f1 0%, #f3efe8 48%, #ebe6dc 100%);
+}
+
+.m-merchant-tabs {
+  max-width: 100%;
+}
+
+.m-merchant-tab {
+  min-height: 2.5rem;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  padding: 0.45rem 1rem;
+  font-family: var(--m-display);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #57534e;
+  white-space: nowrap;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.m-merchant-tab:hover:not(.is-active) {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(22, 20, 19, 0.08);
+  color: #292524;
+}
+
+.m-merchant-tab.is-active {
+  border-color: rgba(22, 20, 19, 0.12);
+  background: #161413;
+  color: #fafaf9;
+  box-shadow: 0 10px 28px -18px rgba(22, 20, 19, 0.55);
+}
+
+.m-merchant-tab:focus-visible {
+  outline: 2px solid #292524;
+  outline-offset: 3px;
+}
+
+.m-merchant-device {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  padding: 0.35rem;
+  border-radius: 2.25rem;
+  background: rgba(255, 255, 255, 0.42);
+  box-shadow:
+    0 24px 60px -40px rgba(43, 33, 24, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.65) inset;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.m-merchant-phone {
+  display: flex;
+  flex-direction: column;
+  min-height: 360px;
+  padding: 14px 16px 12px;
+  border-radius: 1.95rem;
+  background: #fff;
+  border: 1px solid rgba(22, 20, 19, 0.06);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+}
+
+.m-merchant-phone-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(22, 20, 19, 0.06);
+  color: #161413;
+}
+
+.m-merchant-phone-header > svg:first-child {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  color: #007aff;
+}
+
+.m-merchant-phone-avatar {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #3d3a36 0%, #161413 100%);
+  color: #fafaf9;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.m-merchant-phone-avatar.is-tiny {
+  width: 22px;
+  height: 22px;
+  font-size: 7px;
+  align-self: flex-end;
+}
+
+.m-merchant-phone-who {
+  min-width: 0;
+}
+
+.m-merchant-phone-who p:first-child {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.m-merchant-phone-who p:last-child {
+  margin: 2px 0 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: #8a837c;
+  line-height: 1.2;
+}
+
+.m-merchant-phone-thread {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 2px;
+  min-height: 0;
+  padding: 16px 0 10px;
+}
+
+.m-merchant-phone-time {
+  margin: 0 0 12px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 500;
+  color: #b0aaa3;
+}
+
+.m-merchant-phone-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  max-width: 92%;
+}
+
+.m-merchant-phone-row.is-out {
+  align-self: flex-end;
+  max-width: 88%;
+}
+
+.m-merchant-phone-row.is-in {
+  margin-top: 8px;
+}
+
+.m-merchant-phone-out {
+  margin: 0;
+  padding: 9px 14px;
+  background: linear-gradient(180deg, #39d353 0%, #34c759 100%);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.38;
+  text-wrap: pretty;
+  border-radius: 20px 20px 6px 20px;
+  box-shadow: 0 10px 24px -16px rgba(20, 120, 50, 0.65);
+}
+
+.m-merchant-phone-in {
+  margin: 0;
+  padding: 9px 14px;
+  background: #ececec;
+  color: #161413;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.38;
+  text-wrap: pretty;
+  border-radius: 20px 20px 20px 6px;
+}
+
+.m-merchant-phone-compose {
+  display: flex;
+  align-items: center;
+  height: 38px;
+  margin-top: 8px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: #f2f2f2;
+  color: #a8a29e;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .m-merchant-tab {
+    transition: none;
   }
 }
