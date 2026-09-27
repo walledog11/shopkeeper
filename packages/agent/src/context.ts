@@ -3,6 +3,8 @@ import { parseClassifierSignals } from "./classifier-signals.js";
 import { usesCapabilityDiscovery } from "./runtime-modes.js";
 import { shopifyRestJson, type ShopifyContext } from "./shopify/client.js";
 import { recordedShopifyScopes } from "./shopify/integration-health.js";
+import { serializeOrderLineItem } from "./shopify/serializers.js";
+import type { ShopifyOrderLineItem } from "./shopify/types.js";
 import { CHANNEL_TYPE, isOperatorChannel } from "./thread-constants.js";
 import { MEMORY_OVERRIDE_TAG, memoryOverrideTargetIds } from "./kb-memory.js";
 import {
@@ -72,15 +74,7 @@ type RawShopifyOrder = {
   fulfillment_status: string | null;
   current_total_price: string;
   currency?: string | null;
-  line_items: {
-    id?: number | string;
-    title: string;
-    quantity: number;
-    fulfillable_quantity?: number;
-    current_quantity?: number;
-    fulfillment_status?: string | null;
-    variant_id: number | string | null;
-  }[];
+  line_items: ShopifyOrderLineItem[];
   shipping_address?: {
     address1?: string | null;
     address2?: string | null;
@@ -417,15 +411,7 @@ export async function buildContext(
         fulfillment_status: o.fulfillment_status,
         total_price: o.current_total_price,
         currency: o.currency ?? null,
-        items: o.line_items.map((li) => ({
-          line_item_id: li.id !== undefined && li.id !== null ? String(li.id) : null,
-          title: li.title,
-          quantity: li.quantity,
-          fulfillable_quantity: li.fulfillable_quantity ?? null,
-          current_quantity: li.current_quantity ?? null,
-          fulfillment_status: li.fulfillment_status ?? null,
-          variant_id: li.variant_id ? String(li.variant_id) : null,
-        })),
+        items: o.line_items.map(serializeOrderLineItem),
         shipping_address: o.shipping_address
           ? {
               address1: o.shipping_address.address1 ?? null,

@@ -43,6 +43,7 @@ export interface ShopifyOrderSummary {
   items: {
     line_item_id: string | null;
     title: string;
+    variant_title?: string;
     quantity: number;
     variant_id: string | null;
     fulfillable_quantity: number | null;

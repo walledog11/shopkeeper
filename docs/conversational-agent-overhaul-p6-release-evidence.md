@@ -447,6 +447,17 @@ admin for the test customer and marked as paid, not fulfilled:
 #1032 carries `create_refund`. `create_shopify_order` produces the order
 that `edit_shopify_order` edits.
 
+First attempt, 2026-09-27T04:04Z. The partial-refund ticket named #1032, not a
+two-item order; the operator's order A was created as #1033 under a different
+customer. Task `0b03b4dd` (v2) read #1032, proposed no write and escalated
+(`compensation_exception`); nothing reached the customer. The merchant's "Go
+ahead" on the phone escalation card was refused by `approve_pending_plan` ("needs
+an instruction, not approval"), and the free-form operator turn then asked
+whether to refund the whole order or ask the customer. That turn called the
+Special variant on #1032 "the sample": the stored order read carried only the
+product title. This is plan disagreement 8, which blocks the runs that target a
+line item. No effect; not counted as a Gate C run.
+
 ## Gate D — observation and rollback rehearsal
 
 During the agreed observation window, record at least:

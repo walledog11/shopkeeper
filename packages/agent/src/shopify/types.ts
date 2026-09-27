@@ -42,6 +42,8 @@ export interface ShopifyOrderLineItem {
   id?: number | string;
   variant_id?: number | string | null;
   title: string;
+  /** Null for a product's default variant; otherwise what tells its variants apart. */
+  variant_title?: string | null;
   quantity: number;
   fulfillable_quantity?: number;
   current_quantity?: number;

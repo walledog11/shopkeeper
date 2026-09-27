@@ -18,7 +18,7 @@ import {
   type ShopifyContext,
   type ShopifyGraphqlUserError,
 } from "./client.js";
-import type { ShopifyOrder, ShopifyOrderLineItem } from "./types.js";
+import type { ShopifyOrder } from "./types.js";
 import { shopifyFailureReceipt, shopifyReceiptEnvelope } from "./receipts.js";
 import {
   optionalPositiveInteger,
@@ -132,10 +132,6 @@ interface DisplayLineItem {
   variantTitle?: string | null;
 }
 
-interface ReconciliationOrder extends ShopifyOrder {
-  line_items?: Array<ShopifyOrderLineItem & { variant_title?: string | null }>;
-}
-
 function variantQuantitiesFromCalculated(lineItems: CalculatedLineItems): Map<string, number> {
   const quantities = new Map<string, number>();
   for (const { node } of lineItems.edges ?? []) {
@@ -146,7 +142,7 @@ function variantQuantitiesFromCalculated(lineItems: CalculatedLineItems): Map<st
   return quantities;
 }
 
-function variantQuantitiesFromOrder(order: ReconciliationOrder): Map<string, number> {
+function variantQuantitiesFromOrder(order: ShopifyOrder): Map<string, number> {
   const quantities = new Map<string, number>();
   for (const lineItem of order.line_items ?? []) {
     if (lineItem.variant_id === undefined || lineItem.variant_id === null) continue;
@@ -198,7 +194,7 @@ function observedVariantsFromCommitted(
   return observed;
 }
 
-function observedVariantsFromOrder(order: ReconciliationOrder): Map<string, ObservedVariantState> {
+function observedVariantsFromOrder(order: ShopifyOrder): Map<string, ObservedVariantState> {
   const observed = new Map<string, ObservedVariantState>();
   for (const lineItem of order.line_items ?? []) {
     if (lineItem.variant_id === undefined || lineItem.variant_id === null) continue;
@@ -314,7 +310,7 @@ async function reconcileCommittedEdit(
   mutationError?: unknown,
 ): Promise<ToolResult> {
   try {
-    const data = await shopifyRestJson<{ order?: ReconciliationOrder }>(ctx, `orders/${orderId}.json`, {
+    const data = await shopifyRestJson<{ order?: ShopifyOrder }>(ctx, `orders/${orderId}.json`, {
       query: { fields: "id,name,line_items" },
     });
     const order = data.order;

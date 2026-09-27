@@ -81,7 +81,7 @@ contract was unbuilt.
 | Gate C: real provider and delivery | Exercised on 2026-09-25. Run 4 went approval → Shopify write → typed receipt → customer email received, but its execution was stored as failed, by a rule item 5 has since fixed. It runs again as item 8. |
 | Gate D, staged rollout, Gate E | Not started. |
 | Production routing | `AGENT_RUNTIME_VERSION=1` on both services, with `AGENT_RUNTIME_V2_ORG_IDS` set to the controlled organization since 2026-09-25. New tasks for every other organization run v1. |
-| Work in flight | None. |
+| Work in flight | Disagreement 8, part 1 (order line-item variant), on branch `order-line-item-variant`. |
 | Open pull requests | None for this plan. Item 7 landed as #121 and #123. |
 
 ## Where the code disagrees with this plan
@@ -105,6 +105,36 @@ Disagreements 1–6 are resolved; see
   (`workers/agent-task.ts`). Package 2 deferred the phone surfaces to "their
   migration onto the durable path", and no later package scheduled it.
   Decision E puts it in this plan; fixed by item 10.
+- **Disagreement 8: A write that targets a line item does not show which one.**
+  Found 2026-09-27 before the first Gate C rerun (release evidence, *Gate C
+  rerun — pre-run state*). Three parts, each against its own contract:
+  1. *Capability and result contracts* ("Results carry outcome, target, …").
+     Order reads gave the model only a line item's `title`, which is the
+     product's, and dropped `variant_title`. Two variants of one product read
+     identically, so "refund just the sample" on an order holding the regular
+     and the Sample variant names neither. On #1032 the agent called the Special
+     variant "the sample". The shaping was also written twice: once in
+     `serializeOrderLineItem` (`shopify/serializers.ts`) and once in
+     `buildContext`'s recent orders (`context.ts`).
+  2. *Approval and communication contract* ("The approved snapshot binds …
+     normalized tool names/inputs/targets"). A line-item write's proposal binds
+     only IDs. `quotePartialRefundForApproval` (`shopify/partial-refunds.ts`)
+     fetches the order's line items from Shopify and keeps only the quoted
+     amount, so the item it prices is never named. Return and exchange have no
+     quote step at all.
+  3. The same contract ("display the destination and exact draft"; *Approval*,
+     "clearly show proposed actions"). The phone card (`parkedActionLabel`,
+     `format-plan.ts`) shows only the static tool label, "Issue partial refund"
+     or "Open return", with neither the item nor the quoted amount. The
+     dashboard card (`buildHomeActionDisplay`, `plan-preview.ts`) shows the
+     quoted amount and names the item only through the model-authored `reason`.
+     A model that picked the wrong line would be caught by neither.
+
+  Part 1 is fixed on branch `order-line-item-variant`: one serializer for both
+  paths, carrying `variant_title` when Shopify reports one. Parts 2 and 3 are
+  one change: bind Shopify's line-item names into the proposal where it is
+  priced or made, and render them on both cards, the phone card with the
+  quoted amount. Both precede item 8's runs that target a line item.
 
 ## What is left, in order
 
@@ -176,6 +206,11 @@ request. Doc-only changes go straight to master.
      `create_gift_card`.
    - *Operator-only, from a merchant instruction:* `create_flash_sale`,
      `end_flash_sale` and `set_variant_prices`.
+
+   Disagreement 8 blocks the runs that target a line item
+   (`create_partial_refund`, `create_return`, `create_exchange` and
+   `edit_shopify_order`) until both of its changes land. The other runs may go
+   first.
 
    A merchant-instruction run is the realistic ticket for an effect no customer
    can request. Until item 10 lands, those runs go through the dashboard, whose
