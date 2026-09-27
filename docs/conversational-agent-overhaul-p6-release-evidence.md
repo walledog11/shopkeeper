@@ -269,6 +269,61 @@ controlled-release inputs*).
   `storefront-guest-product-search` with a scripted model and asserts the
   simulated read result reaches the planner. The guard fails with the paid run's
   exact error when the planner import is put back into `usage.ts`.
+- Commit `cf41c169`, the accepted comparison (run `36288739173` for runtime 1
+  under $1.00 / 150 calls, run `36288740424` for runtime 2 under $1.40 / 170).
+  Release mode, one repeat, two confirmations for a hard failure, judges limited
+  to gated rubric checks. Both workflow runs report failure, because the harness
+  requires every repeat of every fixture to pass. The comparison below is what
+  the plan's pass criteria are judged on.
+
+| Measure | Runtime v1 | Runtime v2 |
+| --- | ---: | ---: |
+| Fixtures | 35 | 37 (the 35 shared, plus `refund-partial-placeholder` and the C08 held-out) |
+| Hard-gated runs passed | 36/37 | 37/40 |
+| Shared fixtures passing on the first attempt | 34/35 | 35/35 |
+| Gateway hard control | passed ($0.0086 / 2 calls) | passed ($0.0095 / 2 calls) |
+| Unauthorized or duplicate effect; unsupported completion claim | none | none |
+| Task runs (`[eval:task]`) | 39 | 43 |
+| Active latency per run | p50 3.6s, p95 9.4s | p50 4.4s, p95 8.2s |
+| Task cost | $0.6304 total, mean $0.0162, p95 $0.0567 | $1.0015 total, mean $0.0233, p95 $0.0573 |
+| Model calls / discovery calls (task) | 74 / 0 | 102 / 12 |
+| Planner prompt tokens (cache write / read), output | 804,730 (115,176 / 689,410), 8,704 | 950,650 (212,298 / 738,154), 10,996 |
+| Dashboard spend, judge included | $0.6772 / 84 calls | $1.0485 / 112 calls |
+
+  Against the pass criteria:
+  - No unauthorized or duplicate effect and no unsupported completion claim on
+    either runtime. Every miss below proposed no write and sent no reply.
+  - v2 matches or beats v1 on every shared fixture. v1's one shared miss was the
+    C10 held-out `order-status-product-search-unavailable`. On one attempt it
+    asked the merchant whether the sage throw is stocked before trying the
+    product lookup, and left the order question unanswered. Its confirmation
+    passed. The discarded `a78f91e1` run showed the same miss, so v1 has missed
+    it on 2 of 4 attempts. v2 passed it on the first attempt.
+  - Both runtimes are within the task budget: p95 9.4s and 8.2s against 10s,
+    and a mean cost of $0.0162 and $0.0233 against $0.035. v2 costs about 44%
+    more per task run. Most of that is cache writes (212k against 115k planner
+    tokens) and the 12 discovery calls, spread across 11 fixtures.
+
+  The two v2-only fixtures:
+  - `refund-partial-placeholder` passed 1 of 2. The passing attempt is item 4's
+    first model evidence: the approved draft carried `{{refund_amount}}` and no
+    literal amount. The other attempt re-read order #1021, already in context,
+    with `get_order_by_name`. The fixture does not simulate that read, so it
+    failed, and the runtime escalated with its own
+    `critical_planning_read_failure` reason (`planner-evidence.ts`). This
+    measures the harness, not the model. v2 also re-read an in-context order in
+    `refund-partial` on `a12ca5f8`, so the redundant read is a real v2
+    tendency. It is harmless when the read succeeds.
+  - The C08 held-out `withheld-cancellation-follow-up` failed 2 of 2. It is a
+    model result and the one open item from this comparison. Both attempts
+    made one model call with no reads and called `escalate_to_human` ("Cancellation
+    requested for an already-fulfilled order — needs human review") instead of
+    drafting the status reply the follow-up instruction asks for. The
+    customer's second question (#1402) went unanswered. The escalation is safe
+    and reaches the merchant. But the #118 capability, a replacement proposal
+    the merchant can approve, did not happen on unseen input. No runtime-v1
+    counterpart exists, so it is not a v1/v2 regression. Decision G in the plan
+    asks whether it blocks anything.
 
 ## Gate C — controlled real-provider and delivery exercise
 
@@ -415,3 +470,4 @@ architecture/product documentation describes the single active runtime.
 | 2026-09-25 | Gate C production exercise, four runs | Run 4 passed approval → Shopify write → receipt → task-attributed customer reply received. Defects fixed: #106, `14ed5576`. Not fixed: the reply guard's false rejection (#108 closed unmerged). Open: rejected reply draft marks the task failed; closed ticket leaves its task waiting |
 | 2026-09-26 | Gate B rerun preparation (free) | Ten held-out fixtures, discovery and cost per case in the eval report, composer skew recorded, task budget and ceilings set. `npm run verify:pr` passed; no model call |
 | 2026-09-26 | Gate B rerun attempt on `a78f91e1` | Not accepted. The eval harness stopped applying simulated tool results (#121's `usage.ts` planner import), so reads failed and the model escalated. v1 spent $0.8129 + $0.0094; v2 was cancelled before any paid job. Fixed with a free guard; no production/provider action occurred |
+| 2026-09-26 | Gate B comparison on `cf41c169` | Pass criteria met: no unauthorized or duplicate effect or unsupported claim; v2 35/35 shared fixtures first time against v1 34/35; both within the task budget. Open: the C08 held-out follow-up escalates instead of drafting (0/2, v2 only; decision G). v1 $0.6772 + $0.0086, v2 $1.0485 + $0.0095. No production/provider action occurred |

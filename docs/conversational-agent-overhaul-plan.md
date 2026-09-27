@@ -3,10 +3,10 @@
 Status, checked 2026-09-26: Packages 0–5
 are done. Package 6 (certify, cut over, and delete the old runtime) is in
 progress. Of the thirteen items in [What is left](#what-is-left-in-order), 1–6
-are done, 7 is in progress (its free steps and budgets are done; the first
-paid attempt was a harness gap and is being rerun), and 8–13 are open. Decision E was answered
-on 2026-09-25 (phone instructions move onto durable tasks, item 10); decision F
-is open and blocks item 8. Production runs runtime v1 by default,
+are done, 7 is done (Gate B's comparison passed on `cf41c169`), and 8–13 are
+open. Decision E was answered on 2026-09-25 (phone instructions move onto
+durable tasks, item 10). Decision F is open and blocks item 8. Decision G (the
+C08 held-out follow-up that escalates instead of drafting) is open. Production runs runtime v1 by default,
 with one controlled organization on runtime v2.
 
 Created 2026-09-11. This file holds what is left, the rules for doing it, and the
@@ -75,12 +75,12 @@ contract was unbuilt.
 | --- | --- |
 | Packages 0–5 | Done, and verified with the real test database and fake providers; see [What has been done](#what-has-been-done). The only real-store effects so far are Gate C's customer note and address change. |
 | Gate A: comparison tooling | Done. |
-| Gate B: v1/v2 model comparison | The baseline comparison passed on 2026-09-25: both runtimes pass the 26 hard fixtures with no unauthorized or duplicate effect. Not complete, for three reasons. The held-out variants the plan requires have never been written as fixtures. v2 costs about 33% more per suite, and there is no budget to judge that against. Items 3 and 4 have changed v2's model behavior since that run. It runs again as item 7. |
+| Gate B: v1/v2 model comparison | Passed on `cf41c169` (2026-09-26), with the held-out fixtures and task budget. Neither runtime had an unauthorized or duplicate effect or an unsupported claim. v2 passed all 35 shared fixtures on the first attempt; v1 missed the C10 held-out once. Both runtimes are within budget (p95 9.4s and 8.2s; mean $0.0162 and $0.0233 per task). Open: the v2-only C08 held-out escalates instead of drafting (0/2), which is decision G. |
 | Gate C: real provider and delivery | Exercised on 2026-09-25. Run 4 went approval → Shopify write → typed receipt → customer email received, but its execution was stored as failed, by a rule item 5 has since fixed. It runs again as item 8. |
 | Gate D, staged rollout, Gate E | Not started. |
 | Production routing | `AGENT_RUNTIME_VERSION=1` on both services, with `AGENT_RUNTIME_V2_ORG_IDS` set to the controlled organization since 2026-09-25. New tasks for every other organization run v1. |
-| Work in flight | Item 7's paid comparison. The free steps landed as #121. The first attempt on `a78f91e1` failed on a harness gap #121 introduced (simulated tool results stopped applying); the fix and a free guard are in one pull request, then both arms rerun. |
-| Open pull requests | None for this plan. Items 5, 6 and 4 landed as #115, #116 and #118. |
+| Work in flight | None. |
+| Open pull requests | None for this plan. Item 7 landed as #121 and #123. |
 
 ## Where the code disagrees with this plan
 
@@ -116,11 +116,17 @@ request. Doc-only changes go straight to master.
 4. ~~**Receipt-bound placeholders**~~ Done 2026-09-26 (disagreement 2;
    decisions A and B; #114, then #118 for the replacement proposal). The model
    evidence for the whole item is item 7's run of `refund-partial-placeholder`
-   (runtime v2 only), which has never run.
+   (runtime v2 only). It passed one conclusive attempt on `cf41c169`; the
+   other attempt failed on a read the fixture does not simulate.
 5. ~~**Delivery separate from completion**~~ Done 2026-09-25 (disagreement 4).
 6. ~~**Closed conversation and waiting tasks**~~ Done 2026-09-25 (disagreement 5;
    decision C).
-7. **Budgets, held-out variants, and Gate B again** (Package 6, first checkbox;
+7. ~~**Budgets, held-out variants, and Gate B again**~~ Done 2026-09-26
+   (#121, #123; runs `36288739173` and `36288740424` on `cf41c169`). The pass
+   criteria were met. The first paid attempt, on `a78f91e1`, was a harness gap
+   that #123 fixed and now guards for free. The results, and the C08 miss
+   behind decision G, are in the release evidence (*Gate B rerun*).
+   (Package 6, first checkbox;
    *Success criteria*; *Model evaluation cases and scoring*). The prerequisites
    are free. Do them before booking the paid run.
    1. ~~**Set numeric latency and cost budgets per completed task.**~~ Set by
@@ -297,6 +303,20 @@ answers it.
   Package 1's live Shopify schema validation never ran. Gate C has so far
   covered a customer note and an address change. The choice is between one
   representative effect and one run per effect row. Blocks item 8.
+
+Open, added 2026-09-26.
+
+- **G. Is an escalation an acceptable outcome for the withheld-message
+  follow-up?** On `cf41c169` the C08 held-out (`withheld-cancellation-follow-up`)
+  escalated on 2 of 2 attempts instead of drafting the replacement status reply
+  #118 built. It proposed no write and sent nothing. If escalation is
+  acceptable, the fixture's expectation is what is wrong. Changing a held-out
+  expectation after seeing its result must be recorded as that, and C08 is then
+  no longer unseen. If escalation is not acceptable, the follow-up contract
+  (*Task transitions*, the follow-up rows) is not delivering on unseen input.
+  The fix belongs in that contract, not in a prompt carve-out, and it needs a new
+  held-out case. Blocks nothing already scheduled: the follow-up exists only on
+  runtime v2, and its failure mode is a merchant escalation.
 
 ## Outside this plan: recorded, not scheduled
 
@@ -771,7 +791,7 @@ Cutover sequence:
 
 Deletion targets to inspect, not a command to delete whole files: capture-only forced speculative terminal drafting, full-registry widening, active result-text fact extraction, duplicated per-channel approval/policy code, and obsolete runtime adapters. Files such as `planner.ts`, `plan-execution.ts`, and `completion-facts.ts` may retain shared or historical responsibilities. Delete by responsibility and callers, not filename.
 
-- [ ] Compare old and new behavior on the same baseline and unseen variants. Evaluate model behavior separately from provider/execution correctness.
+- [x] Compare old and new behavior on the same baseline and unseen variants. Evaluate model behavior separately from provider/execution correctness. (Item 7, `cf41c169`.)
 - [ ] Run the required full deterministic suites and a justified, budgeted model release gate. Exercise the real approval-to-provider-to-delivery path on a controlled workspace.
 - [ ] Roll out through a single controlled runtime routing mechanism. Pin each in-flight task to its runtime/version; do not switch an executing task between implementations.
 - [ ] Use shadow comparisons only for decisions/proposals. Never shadow-execute external writes or deliver duplicate messages.
