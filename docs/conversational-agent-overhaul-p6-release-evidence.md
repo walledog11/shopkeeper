@@ -273,8 +273,10 @@ controlled-release inputs*).
   under $1.00 / 150 calls, run `36288740424` for runtime 2 under $1.40 / 170).
   Release mode, one repeat, two confirmations for a hard failure, judges limited
   to gated rubric checks. Both workflow runs report failure, because the harness
-  requires every repeat of every fixture to pass. The comparison below is what
-  the plan's pass criteria are judged on.
+  requires every repeat of every fixture to pass. **Verdict: not passed.** An
+  earlier version of this record judged the gate by its own reading of the
+  criteria below and called it passed, explaining v2's misses as a harness gap
+  and a runtime defect. A runtime defect is a v2 failure.
 
 | Measure | Runtime v1 | Runtime v2 |
 | --- | ---: | ---: |

@@ -1,6 +1,8 @@
 # Conversational agent overhaul plan
 
-Status, 2026-09-27: not complete. Packages 0–5 are done. Package 6 (certify,
+Status, 2026-09-27: not complete, and not working on a real store. Packages 0–5
+are built and pass tests against a scripted model and fake Shopify only. No
+real-store attempt has worked cleanly (Gate C row below). Package 6 (certify,
 cut over, and delete the old runtime) has the steps in
 [Open work](#open-work-in-order) left. No question waits on the release owner.
 Production runs runtime v1 by default,
@@ -77,13 +79,13 @@ contract was unbuilt.
 
 | Area | State |
 | --- | --- |
-| Packages 0–5 | Done, verified with the real test database and fake providers. The only real-store effects so far are Gate C's customer note and address change. |
+| Packages 0–5 | Built. Tested only with a scripted model and fake Shopify, which cannot show that they work. 2 of the 16 retained Shopify writes (customer note, address change) have ever run on the real store. |
 | Gate A: comparison tooling | Done. |
-| Gate B: v1/v2 model comparison | Passed on `cf41c169` (2026-09-26). Its one miss, the C08 held-out, was a runtime defect fixed under decision G; C08 re-confirms before item 11. |
-| Gate C: real provider and delivery | Rerun not started. The pre-run state is recorded in the release evidence. The first attempt, on 2026-09-27, stopped on item 8a, since fixed, and counts as no run. |
+| Gate B: v1/v2 model comparison | **Not passed.** Both workflow runs on `cf41c169` (2026-09-26) reported failure. v2 failed the C08 held-out 2 of 2 and `refund-partial-placeholder` 1 of 2. Those misses were recorded as a runtime defect and a harness gap and the gate was called passed; a runtime defect is a v2 failure, so it was not a pass. #125 then changed the runtime to fix C08's failure, so C08 can no longer count as held-out. A new unseen C08 variant is needed. |
+| Gate C: real provider and delivery | 0 of 5 real-store attempts worked cleanly: four runs on 2026-09-25 (run 4 reached the customer but is stored as failed) and one on 2026-09-27 that misnamed the variant and made no write (item 8a, since fixed; not counted as a Gate C run). Rerun not started. The pre-run state is recorded in the release evidence. |
 | Gate D, staged rollout, Gate E | Not started. |
 | Production routing | `AGENT_RUNTIME_VERSION=1` on both services, with `AGENT_RUNTIME_V2_ORG_IDS` set to the controlled organization since 2026-09-25. New tasks for every other organization run v1. |
-| Work in flight | Item 8a, in review (#126). Next: item 8. |
+| Work in flight | None. Next: item 8. |
 
 ## Open work, in order
 
@@ -164,7 +166,8 @@ in [What has been done](#what-has-been-done).
     controlled organization only after the comparison passes, then make v2 the
     default for new tasks. Before the first expansion, the C08 held-out
     (`withheld-cancellation-follow-up`) re-confirms in a paid runtime-v2 suite
-    run with its expectation unchanged (decision G). A held-out fixture cannot
+    run with its expectation unchanged (decision G), plus a new C08 variant
+    written after #125, since C08 itself was fixed against. A held-out fixture cannot
     run alone, so this is the whole v2 suite. Stop expansion on any unauthorized or duplicate
     effect. Existing tasks keep their runtime version. Until item 10 lands,
     phone instructions create no task, so "new tasks" means support and
@@ -401,6 +404,7 @@ billed tokens: Gate B measured v2 at about 33% more per suite than v1.
     and $0.0233 per task. `refund-partial-placeholder`, the model evidence for
     item 4, passed one conclusive attempt; the other failed on a read the
     fixture does not simulate. The C08 miss was a runtime defect (decision G).
+    Both workflow runs reported failure, and the gate did not pass.
     The first paid
     attempt, on `a78f91e1`, was a harness gap that #123 fixed and now guards
     for free.
@@ -775,7 +779,7 @@ Persist the composed response and its destination before attempting delivery. As
 
 ## Migration work packages
 
-Packages 0–5 are done; see [What has been done](#what-has-been-done). Package 6
+Packages 0–5 are built and tested against fake Shopify only; see [What has been done](#what-has-been-done). Package 6
 follows. Its progress and ordered steps are in
 [Open work](#open-work-in-order).
 
@@ -792,7 +796,7 @@ Cutover sequence:
 
 Deletion targets to inspect, not a command to delete whole files: capture-only forced speculative terminal drafting, full-registry widening, active result-text fact extraction, duplicated per-channel approval/policy code, and obsolete runtime adapters. Files such as `planner.ts`, `plan-execution.ts`, and `completion-facts.ts` may retain shared or historical responsibilities. Delete by responsibility and callers, not filename.
 
-- [x] Compare old and new behavior on the same baseline and unseen variants. Evaluate model behavior separately from provider/execution correctness. (Item 7, `cf41c169`.)
+- [ ] Compare old and new behavior on the same baseline and unseen variants. Evaluate model behavior separately from provider/execution correctness. (Item 7 on `cf41c169` failed; see *Current state*, Gate B.)
 - [ ] Run the required full deterministic suites and a justified, budgeted model release gate. Exercise the real approval-to-provider-to-delivery path on a controlled workspace.
 - [ ] Roll out through a single controlled runtime routing mechanism. Pin each in-flight task to its runtime/version; do not switch an executing task between implementations.
 - [ ] Use shadow comparisons only for decisions/proposals. Never shadow-execute external writes or deliver duplicate messages.
