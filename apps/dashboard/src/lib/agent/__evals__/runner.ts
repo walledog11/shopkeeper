@@ -5,7 +5,7 @@ import {
   estimateModelUsageCostUsd,
   type ModelSpendBudget,
 } from "@shopkeeper/agent/model-cost"
-import { planAgent } from "@shopkeeper/agent/planner"
+import { DISCOVERY_TOOL_NAME, planAgent } from "@shopkeeper/agent/planner"
 import { resolveAgentSettings } from "@shopkeeper/agent/settings"
 import { readModelUsage } from "@shopkeeper/agent/usage"
 import { vi } from "vitest"
@@ -22,7 +22,7 @@ import {
   inferRunMode,
   isJudgeEnabled,
 } from "./fixture-runtime"
-import { countDiscoveryCalls, recordEvalUsage, zeroPhaseUsage } from "./usage"
+import { recordEvalUsage, zeroPhaseUsage } from "./usage"
 import type {
   EvalResult,
   EvalUsage,
@@ -107,6 +107,18 @@ vi.mock("@shopkeeper/agent/executor", async importOriginal => {
     }) as typeof actual.executeToolStructured,
   }
 })
+
+// Lives here, not in usage.ts. When usage.ts imported the planner, the real
+// executor loaded ahead of the mock above and every simulated tool result was
+// ignored; the guard in index.test.ts catches that without a model call.
+export function countDiscoveryCalls(response: unknown): number {
+  if (!response || typeof response !== "object" || !("content" in response)) return 0
+  const content = (response as { content?: unknown }).content
+  if (!Array.isArray(content)) return 0
+  return content.filter(block => (
+    block && typeof block === "object" && block.type === "tool_use" && block.name === DISCOVERY_TOOL_NAME
+  )).length
+}
 
 function buildSimulatedToolResults(fixture: Fixture): Map<string, SimulatedToolResult> {
   const results = new Map<string, SimulatedToolResult>(

@@ -3,8 +3,8 @@
 Status, checked 2026-09-26: Packages 0–5
 are done. Package 6 (certify, cut over, and delete the old runtime) is in
 progress. Of the thirteen items in [What is left](#what-is-left-in-order), 1–6
-are done, 7 is in progress (its free steps and budgets are done; the paid
-comparison has not run), and 8–13 are open. Decision E was answered
+are done, 7 is in progress (its free steps and budgets are done; the first
+paid attempt was a harness gap and is being rerun), and 8–13 are open. Decision E was answered
 on 2026-09-25 (phone instructions move onto durable tasks, item 10); decision F
 is open and blocks item 8. Production runs runtime v1 by default,
 with one controlled organization on runtime v2.
@@ -79,7 +79,7 @@ contract was unbuilt.
 | Gate C: real provider and delivery | Exercised on 2026-09-25. Run 4 went approval → Shopify write → typed receipt → customer email received, but its execution was stored as failed, by a rule item 5 has since fixed. It runs again as item 8. |
 | Gate D, staged rollout, Gate E | Not started. |
 | Production routing | `AGENT_RUNTIME_VERSION=1` on both services, with `AGENT_RUNTIME_V2_ORG_IDS` set to the controlled organization since 2026-09-25. New tasks for every other organization run v1. |
-| Work in flight | Item 7's free steps (budgets, held-out fixtures, discovery and cost counting, composer skew) in one pull request. The paid comparison is next. |
+| Work in flight | Item 7's paid comparison. The free steps landed as #121. The first attempt on `a78f91e1` failed on a harness gap #121 introduced (simulated tool results stopped applying); the fix and a free guard are in one pull request, then both arms rerun. |
 | Open pull requests | None for this plan. Items 5, 6 and 4 landed as #115, #116 and #118. |
 
 ## Where the code disagrees with this plan
