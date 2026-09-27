@@ -1,5 +1,4 @@
 import express, { type Request, type Response, type Router } from 'express';
-import { isLlmBudgetUnavailableError, isSpendCapError, nanoDollarsToUsd } from '@shopkeeper/db';
 import { ApiError } from '@shopkeeper/shared/errors';
 import {
   acceptMemberAgentRequest,
@@ -9,7 +8,6 @@ import {
 } from '@shopkeeper/agent/task-ledger';
 import { resolveOperatorThread } from '@shopkeeper/agent/internal-thread';
 import logger from '../logger.js';
-import { runOperatorFreeFormTurn } from '../message-handlers/operator/operator-free-form-turn.js';
 import {
   expectedPlanIdentity,
   isPendingPlanInvalid,
@@ -22,7 +20,6 @@ import { resolveOperatorMemberKey } from '../operator-identity.js';
 import { pushOperatorEscalation } from '../operator-escalation.js';
 import { internalJsonParser } from './body-parsers.js';
 import { authorizeInternalRequest } from './internal-auth.js';
-import type { OperatorMessageContext } from './operator-message.js';
 import { ensureAgentTaskEnqueued } from '../agent-task-ingest.js';
 import { resolveAgentRuntimeVersionForOrg } from '@shopkeeper/agent/runtime-modes';
 
@@ -210,77 +207,6 @@ export function registerInternalOperatorRoutes(router: Router): void {
       logger.error(
         { err: (err as Error).message, organizationId, threadId },
         '[InternalOperator] escalation handler error',
-      );
-      return res.status(500).json({ error: 'Internal Server Error' });
-    }
-  });
-
-  // Compatibility path for callers not yet moved to durable /operator/requests.
-  // Its HTTP lifetime still owns the turn, so new dashboard work must not use it.
-  router.post('/operator/turn', internalJsonParser(), async (req: Request, res: Response) => {
-    if (!authorizeInternalRequest(req, res, 'InternalOperator')) return;
-
-    const body = req.body as Record<string, unknown>;
-    const organizationId = stringField(body.organizationId);
-    const clerkUserId = stringField(body.clerkUserId);
-    const instruction = stringField(body.instruction);
-    if (!organizationId || !clerkUserId || !instruction) {
-      return res.status(400).json({
-        error: 'organizationId, clerkUserId, and instruction are required',
-      });
-    }
-
-    try {
-      const memberKey = await resolveOperatorMemberKey(organizationId, clerkUserId);
-      const message: OperatorMessageContext = {
-        chatId: memberKey,
-        body: instruction,
-        senderRef: memberKey,
-        reply: async () => {},
-        presence: (_progress, work) => work(),
-      };
-
-      const context = await loadLiveOperatorContext(
-        organizationId,
-        memberKey,
-        await getContext(organizationId, memberKey),
-      );
-      const result = await runOperatorFreeFormTurn({
-        organizationId,
-        clerkUserId,
-        message,
-        context,
-      });
-      // Whether anything is still awaiting a decision after the turn — the panel
-      // renders its Approve affordance off this rather than parsing the summary.
-      const after = await getContext(organizationId, memberKey);
-      return res.status(200).json({
-        threadId: result.threadId,
-        summary: result.summary,
-        actionsPerformed: result.actionsPerformed,
-        awaitingApproval: after.pendingPlans.length > 0,
-      });
-    } catch (err) {
-      if (isLlmBudgetUnavailableError(err)) {
-        return res.status(503).json({
-          error: 'AI usage accounting is temporarily unavailable, so new AI work is paused. Continue handling requests manually and try again shortly.',
-          code: 'llm_budget_unavailable',
-        });
-      }
-      if (isSpendCapError(err)) {
-        return res.status(429).json({
-          error: 'AI spend cap reached for today. Increase the daily limit in Settings or wait until midnight UTC.',
-          code: 'spend_cap_reached',
-          currentUsd: nanoDollarsToUsd(err.currentNanoUsd),
-          capUsd: nanoDollarsToUsd(err.capNanoUsd),
-        });
-      }
-      if (err instanceof ApiError && err.status < 500) {
-        return res.status(err.status).json({ error: err.message });
-      }
-      logger.error(
-        { err: (err as Error).message, organizationId, clerkUserId },
-        '[InternalOperator] turn handler error',
       );
       return res.status(500).json({ error: 'Internal Server Error' });
     }
