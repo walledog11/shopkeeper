@@ -1,6 +1,6 @@
 import type { ShopifyOrderSummary } from "./agent-context.js";
 
-export const ORDER_REFERENCE_RE = /(?:#?[A-Z]{1,4}\d{3,}|\border\s*#?\s*\d{4,}\b)/i;
+const ORDER_REFERENCE_RE = /(?:#?[A-Z]{1,4}\d{3,}|\border\s*#?\s*\d{4,}\b)/i;
 
 export function normalizeOrderName(name: string): string {
   const withoutPrefix = name.trim().replace(/^#/, "");

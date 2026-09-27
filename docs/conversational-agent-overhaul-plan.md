@@ -219,14 +219,6 @@ marked as having no caller.
   wording). Under decision A, v2 also drafts the customer message before
   approval, so rewrite these for `exact_draft` placeholders rather than
   deleting them. Changing them is eval-gated.
-- **No caller; may be removed at any time.** These exports in `intent.ts` are
-  called only by their own tests: `isInformationalReturnQuestion`,
-  `hasMutativeRequestIntent`, `hasSuspectedFraudRefundSignals`,
-  `hasForwardedInjectionRefundSignal`, `hasOutOfScopeCommercialRequestSignals`,
-  `hasContradictoryInstructionSignals` and `hasMerchantPolicyGapIntent`.
-- **No caller outside tests (checked 2026-09-25).** The synchronous
-  `POST /operator/turn` route in `apps/gateway/src/routes/internal-operator.ts`.
-  The dashboard uses the durable request route.
 - After item 10: the direct `runOperatorFreeFormTurn` call in
   `executeFreeFormInstruction` (`apps/gateway/src/routes/telegram/agent-execution.ts`)
   and anything left that only it used.

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import express from 'express';
-import { ChannelType, LlmBudgetUnavailableError, SenderType, SpendCapError, db, usdToNanoDollars } from '@shopkeeper/db';
+import { ChannelType, SenderType, db } from '@shopkeeper/db';
 import {
   createTestOrg,
   createTestCustomer,
@@ -439,123 +439,6 @@ describe('POST /internal/operator/escalate', () => {
   });
 });
 
-describe('POST /internal/operator/turn', () => {
-  function turnBody(instruction = "what's in my inbox?") {
-    return {
-      organizationId: org.id,
-      clerkUserId: 'usr_desk',
-      instruction,
-    };
-  }
-
-  it('returns 401 when x-internal-secret is missing', async () => {
-    const res = await request(app).post('/internal/operator/turn').send(turnBody());
-
-    expect(res.status).toBe(401);
-    expect(executeAgentTurnSpy).not.toHaveBeenCalled();
-  });
-
-  it('returns 400 when a required field is missing', async () => {
-    const res = await request(app)
-      .post('/internal/operator/turn')
-      .set('x-internal-secret', SECRET)
-      .send({ organizationId: org.id, clerkUserId: 'usr_desk' });
-
-    expect(res.status).toBe(400);
-    expect(executeAgentTurnSpy).not.toHaveBeenCalled();
-  });
-
-  // The Concierge has no thread of its own: it resolves the merchant's durable
-  // operator thread from their membership, which is the one their phone uses.
-  it("runs the turn on the caller's operator thread with the operator module tools", async () => {
-    const res = await request(app)
-      .post('/internal/operator/turn')
-      .set('x-internal-secret', SECRET)
-      .send(turnBody());
-
-    expect(res.status).toBe(200);
-
-    const member = await db.orgMember.findUniqueOrThrow({
-      where: { organizationId_clerkUserId: { organizationId: org.id, clerkUserId: 'usr_desk' } },
-    });
-    const thread = await db.thread.findFirstOrThrow({
-      where: { organizationId: org.id, operatorKey: `member:${member.id}` },
-    });
-    expect(thread.channelType).toBe('operator');
-    expect(res.body).toEqual({
-      threadId: thread.id,
-      summary: 'Nothing urgent.',
-      actionsPerformed: [],
-      awaitingApproval: false,
-    });
-
-    const params = executeAgentTurnSpy.mock.calls[0][0];
-    expect(params).toMatchObject({
-      orgId: org.id,
-      threadId: thread.id,
-      instruction: "what's in my inbox?",
-      operatorLedger: "Nothing is awaiting the merchant's decision.",
-    });
-    expect(Object.keys(params.moduleTools).sort()).toEqual([
-      'answer_operator_question',
-      'approve_pending_plan',
-      'create_flash_sale',
-      'end_flash_sale',
-      'get_ticket',
-      'list_active_tickets',
-      'list_flash_sales',
-      'list_recent_changes',
-      'mark_ticket_spam',
-      'navigate_dashboard',
-      'reject_pending_plan',
-      'revise_pending_plan',
-      'search_product_help',
-      'send_ticket_reply',
-      'set_variant_prices',
-    ]);
-  });
-
-  it('reports a still-parked plan so the panel can offer approval', async () => {
-    await parkCurrentPlan({ customerEmail: 'ticket@example.com' });
-
-    const res = await request(app)
-      .post('/internal/operator/turn')
-      .set('x-internal-secret', SECRET)
-      .send(turnBody('what is waiting on me?'));
-
-    expect(res.status).toBe(200);
-    expect(res.body.awaitingApproval).toBe(true);
-  });
-
-  it('maps a spend-cap failure to the 429 the dashboard passes through', async () => {
-    executeAgentTurnSpy.mockRejectedValueOnce(
-      new SpendCapError(usdToNanoDollars(25), usdToNanoDollars(25)),
-    );
-
-    const res = await request(app)
-      .post('/internal/operator/turn')
-      .set('x-internal-secret', SECRET)
-      .send(turnBody());
-
-    expect(res.status).toBe(429);
-    expect(res.body).toMatchObject({ code: 'spend_cap_reached', currentUsd: 25, capUsd: 25 });
-  });
-
-  it('pauses paid work when budget accounting is unavailable', async () => {
-    executeAgentTurnSpy.mockRejectedValueOnce(new LlmBudgetUnavailableError());
-
-    const res = await request(app)
-      .post('/internal/operator/turn')
-      .set('x-internal-secret', SECRET)
-      .send(turnBody());
-
-    expect(res.status).toBe(503);
-    expect(res.body).toMatchObject({ code: 'llm_budget_unavailable' });
-  });
-});
-
-// A button press is a decision already made — it resolves the plan without a
-// model call, the way the messaging channels' keyword fast path does.
 describe('POST /internal/operator/plan-decision', () => {
   it('returns 401 when x-internal-secret is missing', async () => {
     const res = await request(app)
