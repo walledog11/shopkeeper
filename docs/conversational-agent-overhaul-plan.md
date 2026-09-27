@@ -83,7 +83,7 @@ contract was unbuilt.
 | Gate C: real provider and delivery | Rerun not started. The pre-run state is recorded in the release evidence. The first attempt, on 2026-09-27, stopped on item 8a, since fixed, and counts as no run. |
 | Gate D, staged rollout, Gate E | Not started. |
 | Production routing | `AGENT_RUNTIME_VERSION=1` on both services, with `AGENT_RUNTIME_V2_ORG_IDS` set to the controlled organization since 2026-09-25. New tasks for every other organization run v1. |
-| Work in flight | Item 8a, in review. Next: item 8. |
+| Work in flight | Item 8a, in review (#126). Next: item 8. |
 
 ## Open work, in order
 
@@ -413,7 +413,7 @@ capability: it goes from 5,929 to 13,313 tokens. v1 is unchanged.
   identically. One serializer (`serializeOrderLineItem`, `shopify/serializers.ts`)
   now shapes line items for both order reads and `buildContext`'s recent
   orders, carrying `variant_title` when Shopify reports one.
-- *Item 8a, second part* (this change). A line-item write's proposal now names
+- *Item 8a, second part* (#126). A line-item write's proposal now names
   its items as Shopify does. On exact-draft planning, `bindProviderApprovalFacts`
   (`planner.ts`) binds `approval_line_items` (name, quantity, and what the write
   does to each) into the tool input, so the names are in the approval hash. Each
