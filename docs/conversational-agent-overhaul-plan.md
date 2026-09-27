@@ -1,35 +1,32 @@
 # Conversational agent overhaul plan
 
-Status, checked 2026-09-26: Packages 0–5
-are done. Package 6 (certify, cut over, and delete the old runtime) is in
-progress. Of the thirteen items in [What is left](#what-is-left-in-order), 1–6
-are done, 7 is done (Gate B's comparison passed on `cf41c169`), and 8–13 are
-open. Decision E was answered on 2026-09-25 (phone instructions move onto
-durable tasks, item 10). Decision F was answered on 2026-09-26 (Gate C runs
-every retained Shopify write that has never touched a real store, item 8).
-Decision G (the C08 held-out follow-up that escalates instead of drafting) is
-open. Production runs runtime v1 by default,
+Status, 2026-09-27: not complete. Packages 0–5 are done. Package 6 (certify,
+cut over, and delete the old runtime) has the steps in
+[Open work](#open-work-in-order) left, and one question waits on the release
+owner ([Open decision](#open-decision)). Production runs runtime v1 by default,
 with one controlled organization on runtime v2.
 
-Created 2026-09-11. This file holds what is left, the rules for doing it, and the
-design it must match. Run-by-run evidence lives in the
+Created 2026-09-11. This file holds the open work, the rules for doing it, and
+the design it must match. Run-by-run evidence lives in the
 [Package 6 release evidence](conversational-agent-overhaul-p6-release-evidence.md)
 and the [release matrix](conversational-agent-overhaul-release-matrix.md). The
 capability inventory, frozen budgets and evaluation manifest are in the
-[Package 0 baseline](conversational-agent-overhaul-p0-baseline.md). The detailed,
-commit-by-commit record of Packages 0–5 was removed from this file on 2026-09-25
-and is summarized in [What has been done](#what-has-been-done). The full text is in git:
-`git show fff54dc4:docs/conversational-agent-overhaul-plan.md` (Appendix A and
-Appendix B).
+[Package 0 baseline](conversational-agent-overhaul-p0-baseline.md). Finished
+work is summarized in [What has been done](#what-has-been-done), and the
+release owner's answered questions are in
+[Settled decisions](#settled-decisions). The commit-by-commit record of
+Packages 0–5 is in git: `git show fff54dc4:docs/conversational-agent-overhaul-plan.md`
+(Appendix A and Appendix B).
 
 This document authorizes no production operation by itself. It supersedes the
 [maintainability audit](agent-maintainability-audit-2026-09-11.md) where the two
 differ: conversation remains model-authored, and tool discovery remains adaptive.
 
-Read everything down to [What has been done](#what-has-been-done) before starting
-work. Everything from [Product outcome](#product-outcome) onward is the original
-design and is binding. Contract sections whose work is already built are
-condensed to the rules that still apply, and each is marked *condensed*.
+Read down to [What has been done](#what-has-been-done) before starting work.
+[Settled decisions](#settled-decisions) and everything from
+[Product outcome](#product-outcome) onward are binding. Contract sections whose
+work is already built are condensed to the rules that still apply, and each is
+marked *condensed*.
 
 ## Rules for implementing this plan
 
@@ -55,9 +52,8 @@ contract was unbuilt.
    deterministic test first. A fix built on an unproven cause is reverted, not
    kept.
 4. **A checkbox is a claim. Check it before building on it.** Read the code path
-   behind any `[x]` you rely on. If the code contradicts it, add it to
-   [Where the code disagrees with this plan](#where-the-code-disagrees-with-this-plan)
-   in the same change.
+   behind any `[x]` you rely on. If the code contradicts it, add the defect to
+   [Open work](#open-work-in-order) in the same change.
 5. **A passing test proves only what it asserts.** Scripted-model and
    fake-provider tests cannot show model behavior or real delivery (Package 6
    cutover step 3). Never present a passing test as evidence a problem is solved
@@ -66,134 +62,57 @@ contract was unbuilt.
    (order status, address change, cancellation, return, refund), not from the
    effect under test.
 7. **Keep this document current in the same change as the code.** Update
-   *Current state*, *Where the code disagrees* and *What is left*. Evidence goes in
-   the evidence document, not at the top of this file.
+   *Current state* and *Open work*. Evidence goes in the evidence document, not
+   at the top of this file.
 8. **Paid model runs follow CLAUDE.md:** justify each one, use single-fixture
    probes for diagnosis, and never tune and rerun in a loop.
+9. **Record a finding once, where the work is.** A defect the code shows goes
+   into *Open work* as an item naming the contract it breaks, placed where it
+   blocks. A question only the release owner can answer goes under *Open
+   decision*, with the facts and a recommendation. When either is done it
+   leaves the top of this file: finished work moves to *What has been done*, an
+   answer to *Settled decisions*. Do not keep separate lists of disagreements.
 
 ## Current state
 
 | Area | State |
 | --- | --- |
-| Packages 0–5 | Done, and verified with the real test database and fake providers; see [What has been done](#what-has-been-done). The only real-store effects so far are Gate C's customer note and address change. |
+| Packages 0–5 | Done, verified with the real test database and fake providers. The only real-store effects so far are Gate C's customer note and address change. |
 | Gate A: comparison tooling | Done. |
-| Gate B: v1/v2 model comparison | Passed on `cf41c169` (2026-09-26), with the held-out fixtures and task budget. Neither runtime had an unauthorized or duplicate effect or an unsupported claim. v2 passed all 35 shared fixtures on the first attempt; v1 missed the C10 held-out once. Both runtimes are within budget (p95 9.4s and 8.2s; mean $0.0162 and $0.0233 per task). Open: the v2-only C08 held-out escalates instead of drafting (0/2), which is decision G. |
-| Gate C: real provider and delivery | Exercised on 2026-09-25. Run 4 went approval → Shopify write → typed receipt → customer email received, but its execution was stored as failed, by a rule item 5 has since fixed. It runs again as item 8. |
+| Gate B: v1/v2 model comparison | Passed on `cf41c169` (2026-09-26). The one open result, the C08 held-out, is the [Open decision](#open-decision). |
+| Gate C: real provider and delivery | Rerun not started. The pre-run state is recorded in the release evidence. The first attempt, on 2026-09-27, stopped on item 8a and counts as no run. |
 | Gate D, staged rollout, Gate E | Not started. |
 | Production routing | `AGENT_RUNTIME_VERSION=1` on both services, with `AGENT_RUNTIME_V2_ORG_IDS` set to the controlled organization since 2026-09-25. New tasks for every other organization run v1. |
-| Work in flight | None. Next: disagreement 8, parts 2 and 3. |
-| Open pull requests | None for this plan. Item 7 landed as #121 and #123; disagreement 8 part 1 as #124. |
+| Work in flight | None. Next: item 8a. |
 
-## Where the code disagrees with this plan
-
-Each open item was checked against the code on 2026-09-25. Each is a defect
-against a contract this plan already specifies, not a new requirement.
-Disagreements 1–6 are resolved; see
-[What has been done](#what-has-been-done).
-
-- **Disagreement 7: Phone instructions are not durable tasks.** Contract: *Target
-  architecture* ("Support and operator turns … share request identity,
-  budgets, receipts, and recovery semantics") and Package 6's acceptance ("all
-  retained capabilities have one execution owner … the old active orchestration
-  path is removed"). A free-form instruction from Telegram or iMessage reaches
-  `runOperatorFreeFormTurn` through `executeFreeFormInstruction`
-  (`apps/gateway/src/routes/telegram/agent-execution.ts`, which the iMessage
-  handler also calls). It passes no request or task, so no `AgentRequest` or
-  `AgentTask` exists for it. The inbound message itself is durable as an
-  `OperatorEvent`. The turn gets no task budget, stop, or task recovery. The
-  dashboard reaches the same function through the durable task worker
-  (`workers/agent-task.ts`). Package 2 deferred the phone surfaces to "their
-  migration onto the durable path", and no later package scheduled it.
-  Decision E puts it in this plan; fixed by item 10.
-- **Disagreement 8: A write that targets a line item does not show which one.**
-  Found 2026-09-27 before the first Gate C rerun (release evidence, *Gate C
-  rerun — pre-run state*). Three parts, each against its own contract:
-  1. *Capability and result contracts* ("Results carry outcome, target, …").
-     Order reads gave the model only a line item's `title`, which is the
-     product's, and dropped `variant_title`. Two variants of one product read
-     identically, so "refund just the sample" on an order holding the regular
-     and the Sample variant names neither. On #1032 the agent called the Special
-     variant "the sample". The shaping was also written twice: once in
-     `serializeOrderLineItem` (`shopify/serializers.ts`) and once in
-     `buildContext`'s recent orders (`context.ts`).
-  2. *Approval and communication contract* ("The approved snapshot binds …
-     normalized tool names/inputs/targets"). A line-item write's proposal binds
-     only IDs. `quotePartialRefundForApproval` (`shopify/partial-refunds.ts`)
-     fetches the order's line items from Shopify and keeps only the quoted
-     amount, so the item it prices is never named. Return and exchange have no
-     quote step at all.
-  3. The same contract ("display the destination and exact draft"; *Approval*,
-     "clearly show proposed actions"). The phone card (`parkedActionLabel`,
-     `format-plan.ts`) shows only the static tool label, "Issue partial refund"
-     or "Open return", with neither the item nor the quoted amount. The
-     dashboard card (`buildHomeActionDisplay`, `plan-preview.ts`) shows the
-     quoted amount and names the item only through the model-authored `reason`.
-     A model that picked the wrong line would be caught by neither.
-
-  Part 1 is fixed in #124: one serializer for both
-  paths, carrying `variant_title` when Shopify reports one. Parts 2 and 3 are
-  one change: bind Shopify's line-item names into the proposal where it is
-  priced or made, and render them on both cards, the phone card with the
-  quoted amount. Both precede item 8's runs that target a line item.
-
-## What is left, in order
+## Open work, in order
 
 Do these in order, one change each. Each item names the contract it implements
 and what done means. Items that touch the agent path land through a pull
-request. Doc-only changes go straight to master.
+request. Doc-only changes go straight to master. The numbers continue the
+original list so references in the release evidence stay valid; items 1–7 are
+in [What has been done](#what-has-been-done).
 
-1. ~~**Merge PR #109**~~ Done 2026-09-25.
-2. ~~**One proposal identity**~~ Done 2026-09-25 (#110).
-3. ~~**Exact-draft communication on v2 proposals**~~ Done 2026-09-25 (#111).
-4. ~~**Receipt-bound placeholders**~~ Done 2026-09-26 (disagreement 2;
-   decisions A and B; #114, then #118 for the replacement proposal). The model
-   evidence for the whole item is item 7's run of `refund-partial-placeholder`
-   (runtime v2 only). It passed one conclusive attempt on `cf41c169`; the
-   other attempt failed on a read the fixture does not simulate.
-5. ~~**Delivery separate from completion**~~ Done 2026-09-25 (disagreement 4).
-6. ~~**Closed conversation and waiting tasks**~~ Done 2026-09-25 (disagreement 5;
-   decision C).
-7. ~~**Budgets, held-out variants, and Gate B again**~~ Done 2026-09-26
-   (#121, #123; runs `36288739173` and `36288740424` on `cf41c169`). The pass
-   criteria were met. The first paid attempt, on `a78f91e1`, was a harness gap
-   that #123 fixed and now guards for free. The results, and the C08 miss
-   behind decision G, are in the release evidence (*Gate B rerun*).
-   (Package 6, first checkbox;
-   *Success criteria*; *Model evaluation cases and scoring*). The prerequisites
-   are free. Do them before booking the paid run.
-   1. ~~**Set numeric latency and cost budgets per completed task.**~~ Set by
-      the release owner on 2026-09-26: active latency p95 at most 10 seconds
-      and mean task cost at most $0.035, measured over a runtime's comparison
-      runs by the `[eval:task]` line. They were set against Gate B's per-fixture
-      numbers: v1 p95 7.8s at $0.0207 mean, v2 p95 5.8s at $0.0275 mean.
-   2. ~~**Write the held-out variants.**~~ Done 2026-09-26. Ten hard core
-      fixtures carry `holdout` naming their manifest case: one each for C01,
-      C03, C05, C06, C07, C08, C10 and C11, and two for C02 (explain and act).
-      `selectFixtures` and the budget preflight refuse a held-out fixture
-      named in a targeted run, so it runs only with its whole suite. C04, C09
-      and C12 are deterministic database cases and have none. Where a fixture
-      departs from the manifest's wording, and why, is in the release
-      evidence (*Held-out fixtures*).
-   3. ~~**Count discovery calls in the eval ledger.**~~ Done 2026-09-26. Each
-      fixture line in the eval report now carries `discovery=` (the
-      `discover_capabilities` calls the model made) and `cost=` (planner and
-      run spend at list price, judge excluded), and the run ends with an
-      `[eval:task]` line: nearest-rank p50/p95 latency and cost over runs, with
-      model-call and discovery-call totals.
-   4. ~~**Composer-path coverage.**~~ Done 2026-09-26 by recording the skew.
-      Three of the 52 fixture files set `merchantInstruction`, the C01
-      held-out among them; the counts are in the release evidence.
+8a. **Name the line item a write targets** (*Approval and communication
+   contract*: the approved snapshot binds "normalized tool names/inputs/targets",
+   and approval must "clearly show proposed actions"). Found at the first Gate C
+   rerun attempt, when the agent called the Special variant on #1032 "the
+   sample". Order reads now carry `variant_title` (#124). What is left:
+   - A line-item write's proposal binds only IDs.
+     `quotePartialRefundForApproval` (`shopify/partial-refunds.ts`) fetches the
+     order's line items from Shopify and keeps only the quoted amount, so the
+     item it prices is never named. Return and exchange have no quote step.
+   - The phone card (`parkedActionLabel`, `format-plan.ts`) shows only the
+     static tool label, "Issue partial refund" or "Open return", with neither
+     the item nor the quoted amount. The dashboard card
+     (`buildHomeActionDisplay`, `plan-preview.ts`) names the item only through
+     the model-authored `reason`. A model that picked the wrong line would be
+     caught by neither.
 
-   Then run the same-commit v1/v2 comparison with the new held-out fixtures,
-   `refund-partial-placeholder`, and v2 now held to the same reply fixtures as
-   v1. The pass criteria are: no unauthorized or duplicate effect and no
-   unsupported completion claim; task completion and conversational quality
-   match or beat v1; and v2's latency and cost are within the budget. If v2's
-   extra cost (157k vs 100k cache-write tokens in the baseline) breaks the
-   budget, isolate the cause before tuning anything. Paid: book each run under
-   CLAUDE.md's eval rules. A cheap-tier planner turn that discovers a mutation
-   is re-planned on the judgment tier and discovers it twice (Package 4). Watch
-   for it in the call counts if that tier is on.
+   One change: bind Shopify's line-item names into the proposal where the write
+   is priced or made, and render them on both cards, the phone card with the
+   quoted amount. Blocks item 8's runs that target a line item.
+
 8. **Re-run Gate C** (decision F): one controlled run per retained Shopify
    write that has never touched a real store, each from a realistic ticket
    (rule 6), with the inputs recorded in the release evidence and the result
@@ -207,10 +126,9 @@ request. Doc-only changes go straight to master.
    - *Operator-only, from a merchant instruction:* `create_flash_sale`,
      `end_flash_sale` and `set_variant_prices`.
 
-   Disagreement 8 blocks the runs that target a line item
+   Item 8a blocks the runs that target a line item
    (`create_partial_refund`, `create_return`, `create_exchange` and
-   `edit_shopify_order`) until both of its changes land. The other runs may go
-   first.
+   `edit_shopify_order`) until it lands. The other runs may go first.
 
    A merchant-instruction run is the realistic ticket for an effect no customer
    can request. Until item 10 lands, those runs go through the dashboard, whose
@@ -233,11 +151,20 @@ request. Doc-only changes go straight to master.
    evidence lists as "pending". Production carries no merchant traffic besides
    the controlled organization, so the window will measure only controlled runs.
    The evidence must say so rather than present it as rollout observation.
-10. **Phone instructions as durable tasks** (disagreement 7; decision E;
-    *Target architecture*, "Support and operator turns … share request identity,
-    budgets, receipts, and recovery semantics"). A free-form Telegram or
-    iMessage instruction becomes an accepted `AgentRequest` run as a claimed
-    `AgentTask`, as a dashboard instruction already is.
+
+10. **Phone instructions as durable tasks** (decision E; *Target architecture*,
+    "Support and operator turns … share request identity, budgets, receipts,
+    and recovery semantics"; Package 6 acceptance, "all retained capabilities
+    have one execution owner"). Today a free-form Telegram or iMessage
+    instruction reaches `runOperatorFreeFormTurn` through
+    `executeFreeFormInstruction` (`apps/gateway/src/routes/telegram/agent-execution.ts`,
+    which the iMessage handler also calls) with no request or task, so the turn
+    gets no task budget, stop, or task recovery. Only the inbound message is
+    durable, as an `OperatorEvent`. The dashboard reaches the same function
+    through the durable task worker (`workers/agent-task.ts`). Package 2
+    deferred the phone surfaces and no later package scheduled them. The
+    change: a phone instruction becomes an accepted `AgentRequest` run as a
+    claimed `AgentTask`, as a dashboard instruction already is.
     - Reuse, do not replace, the `OperatorEvent` claim and its
       `operator-event-sweep`. The event stays the inbound record and the
       dedupe boundary; the request's dedupe key derives from the event, so a
@@ -254,6 +181,7 @@ request. Doc-only changes go straight to master.
       its phone reply once. Deterministic tests, then a live Telegram and
       iMessage round-trip (CLAUDE.md: operator changes are verified by live
       phone round-trip, not evals).
+
 11. **Staged rollout** (Package 6, cutover step 4). Expand v2 routing beyond the
     controlled organization only after the comparison passes, then make v2 the
     default for new tasks. Stop expansion on any unauthorized or duplicate
@@ -300,114 +228,42 @@ marked as having no caller.
   `executeFreeFormInstruction` (`apps/gateway/src/routes/telegram/agent-execution.ts`)
   and anything left that only it used.
 
-### Release-owner decisions
+## Open decision
 
-Recorded 2026-09-25. They settle what the plan left open and are binding like
-the fixed decisions below. A new open question is added here and blocks the work
-that depends on it until it is answered.
+Blocks the work named until the release owner answers it. When answered, it
+moves to [Settled decisions](#settled-decisions).
 
-- **A. What the merchant approves is what the customer receives.** Every
-  customer message proposed alongside a write uses `exact_draft`. The `intent`
-  mode is not used for customer messages, because a message composed after
-  approval is not the one the merchant saw. The only permitted change after
-  approval is filling the labeled placeholders shown on the card from the
-  approved write's receipt.
+- **G. Is an escalation acceptable for the withheld-message follow-up?** Added
+  2026-09-26; cause established 2026-09-27. On `cf41c169` the C08 held-out
+  (`withheld-cancellation-follow-up`) escalated on 2 of 2 attempts instead of
+  drafting the replacement reply #118 built. It proposed no write and sent
+  nothing.
 
-  This changes one default of the original design. *Adaptive agent loop* and
-  *Conversation, evidence, and memory* compose a completion response after the
-  actual outcome, and Packages 3 and 5 built v2 to stop at the write with no
-  draft. For customer messages, that is replaced by `exact_draft` as the
-  *Approval and communication contract* already defines it. The model still
-  writes the message; it is not a template. It writes it before approval, with
-  outcome-dependent values as placeholders. This is not the speculative
-  completion draft Package 5 removed: the merchant sees it, it is bound into the
-  approval hash, and it is sent only if the write succeeds and every
-  placeholder fills. Messages to the merchant still compose after outcomes.
-- **B. A flagged reply is never sent.** A reply a check flags is held for the
-  merchant; it is never sent first with the merchant told afterward. A flag on a
-  draft awaiting approval is shown on the card. A flag on a reply that would
-  otherwise send without review, such as an auto-executed quick reply, holds it
-  as a proposal. Removing the flagged sentence and sending the rest is also
-  forbidden (*Validate, don't repair*).
-- **C. Closing a conversation cancels all of its waiting tasks.** It follows the
-  authorized-stop row of the task table: no new action starts, pending
-  proposals and cards are invalidated, and a task with an uncertain submitted
-  write goes to `reconciling` rather than `cancelled`.
+  The escalation is the runtime's, not the model's. Its reason text is the
+  structural `fulfilled_cancellation_request` evidence (`planner-evidence.ts`),
+  which `shouldEscalateFulfilledCancelRequest` (`planner-safety/mutative.ts`)
+  raises whenever the instruction or the latest customer message says
+  "cancel" and any recent order is fulfilled. The planner then replaces the
+  model's calls with that escalation (`applyEscalationRouting`). A free probe
+  gave `buildPlanRoutingEvidence` the fixture's context and a correct reply,
+  with no model call, and got the same code and reason. Nothing exempts the
+  follow-up attempt. So every follow-up after Shopify refuses to cancel an
+  order that has shipped escalates, and that refusal is the usual way a
+  cancellation fails. The other checks in `escalationCode` that judge the
+  request's write are not exempted either. Only the cancellation one has been
+  observed on a follow-up.
 
-- **D. A write that runs without the merchant reviewing it follows decision A.**
-  At the trusted tier with auto-execute on, `decideAutonomy` currently lets a
-  suspended v2 proposal run with no draft, so no one sees the customer message.
-  Instead, the customer message is fixed as an `exact_draft` before the write,
-  exactly as for a reviewed proposal, and only its placeholders are filled
-  afterward. A flag (decision B) turns the proposal into one the merchant
-  reviews. Items 3 and 4 of *What is left* cover this path.
-
-- **E. Phone instructions move onto durable tasks in this plan.** Answered
-  2026-09-25 (disagreement 7). Telegram and iMessage free-form instructions
-  become accepted `AgentRequest`s run as claimed `AgentTask`s, reusing the
-  `OperatorEvent` claim and sweep rather than replacing them. This is item 10,
-  before the staged rollout. Gate E then deletes the synchronous path they use
-  today.
-
-- **F. Gate C runs every retained Shopify write that has never touched a real
-  store.** Answered 2026-09-26. Cutover step 3 asks for one controlled
-  approval → provider → receipt → delivery exercise, but Package 1's live
-  Shopify schema validation never ran, so every typed receipt except the two
-  Gate C has exercised (`add_shopify_customer_note` and
-  `update_shopify_order_address`) was built from fake provider responses, and
-  `create_partial_refund` has never run against a real store at all
-  (Package 3). One representative effect would leave those unproven. The
-  fourteen runs are listed in item 8. Internal thread writes touch no store and
-  are not included; email delivery is exercised by each customer-ticket run.
-
-Open, added 2026-09-26. Each blocks the items named until the release owner
-answers it.
-
-- **G. Is an escalation an acceptable outcome for the withheld-message
-  follow-up?** On `cf41c169` the C08 held-out (`withheld-cancellation-follow-up`)
-  escalated on 2 of 2 attempts instead of drafting the replacement status reply
-  #118 built. It proposed no write and sent nothing. If escalation is
-  acceptable, the fixture's expectation is what is wrong. Changing a held-out
-  expectation after seeing its result must be recorded as that, and C08 is then
-  no longer unseen. If escalation is not acceptable, the follow-up contract
-  (*Task transitions*, the follow-up rows) is not delivering on unseen input.
-  The fix belongs in that contract, not in a prompt carve-out, and it needs a new
-  held-out case. Blocks nothing already scheduled: the follow-up exists only on
-  runtime v2, and its failure mode is a merchant escalation.
-
-## Outside this plan: recorded, not scheduled
-
-The 2026-09-25 audit also found decisions made by matching English outside the
-paths this plan migrates. They are listed so they are neither pulled into this
-plan nor forgotten. Changing any of them needs the release owner's go-ahead
-first.
-
-- Keyword intent checks in `planner-safety/refunds.ts` and
-  `planner-safety/mutative.ts`, and `hasActionableMutativeIntent` as used by
-  `planner-evidence.ts`.
-- `isMerchantAnswerPlanningInstruction` (`kb-learned.ts`), which recognizes a
-  sentence we write ourselves by regex; `planner.ts` then removes `ask_operator`.
-- The shipping and discount question regexes used by `merchant-answer-kb.ts`.
-- Summary-string parsing in `order-ops/finding.ts`.
-- The overall size of `SUPPORT_INSTRUCTIONS`.
-
-### Known limitations, accepted and not scheduled
-
-Each was recorded when its package closed and is not a defect against a
-contract. It is listed so nobody rediscovers it as new.
-
-- A continuation (an answer, a revision) is a new attempt on the same task that
-  re-derives its context from the conversation. It does not resume from the
-  task checkpoint, which is not updated after the task is created.
-- A stale question cleared from one member's pending projection
-  (`loadLiveOperatorContext`) stays parked on the organization-wide task until
-  the customer writes again. One member's card must not close a task, so this is
-  intended.
-- The dashboard chat has no stop control. The route
-  (`api/agent/requests/[requestId]/cancel`) exists, and nothing in the UI calls
-  it.
-- A stop is observed at loop-iteration boundaries, so a tool call already in
-  flight finishes. This is the intended bound.
+  Recommendation: escalation is not acceptable, and the fixture's expectation
+  stands. Fix it through the follow-up contract (*Task transitions*, the
+  follow-up rows). An attempt whose tool set holds no write is not judged by
+  the evidence that guards a proposed write. Key it on the typed follow-up flag
+  the planner already receives. That means no new phrase case and no change to
+  the keyword checks themselves, which stay outside this plan. Nothing is
+  loosened: the follow-up cannot write, and its plan carries the blocking
+  `approved_message_withheld` signal, so it always goes to the merchant. C08
+  re-confirms in the next paid v2 suite run, with its expectation unchanged.
+  If fixed, it lands before item 11, which widens v2 to where the follow-up
+  runs. Blocks nothing already scheduled.
 
 ## What has been done
 
@@ -455,7 +311,7 @@ follows:
 Every approval surface (dashboard button, phone keyword, control tool) goes
 through one boundary, `authorizeAgentProposal` (`task-approval.ts`). A parked
 question resumes through `resumeAnsweredTask`. This package covered the
-dashboard path only (disagreement 7).
+dashboard path only (item 10).
 
 **Package 3 — adaptive refund slice** (2026-09-18). Planning can suspend at the
 first write (`suspendAtProposal`). `decideAutonomy` decides a draft-less
@@ -507,7 +363,7 @@ capability: it goes from 5,929 to 13,313 tokens. v1 is unchanged.
   resume the exact task. Live-model clear- and ambiguous-referent cases passed.
   Turn-journal notes have an idempotent identity.
 
-**Package 6 so far** (2026-09-24 to 2026-09-25):
+**Package 6, 2026-09-24 to 2026-09-25:**
 - *Gate A.* The eval runner and `evals.yml` take a runtime selector
   (`EVAL_AGENT_RUNTIME_VERSION`), and result caches are isolated per runtime.
 - *Paid fixture audit.* The paid set was cut from 51 core plus 36 extended
@@ -519,8 +375,8 @@ capability: it goes from 5,929 to 13,313 tokens. v1 is unchanged.
   hard fixtures. The release evidence has the table.
 - *Gate C*, four runs on the controlled organization. #106 fixed phone approval
   of v2 proposals. `14ed5576` fixed an inbound email overwriting the
-  Shopify-matched customer name. The rest became disagreements 1–5.
-- *Items 1–4* (disagreements 1, 2, 3 and 6):
+  Shopify-matched customer name. The rest became items 2–6.
+- *Items 1–4*:
   - #109 reverted #107's composing instruction. #108 was closed unmerged.
   - #110 made `hashPlan` (`agent-actions.ts`) cover the instruction and tool
     calls only. It is the one identity for the card, the proposal row and every
@@ -545,7 +401,7 @@ capability: it goes from 5,929 to 13,313 tokens. v1 is unchanged.
     by its label. The v2 path computes no completion facts and runs no prose
     check. Decision B holds through planning-time validation
     (`detectUngroundedReplyText`). The legacy path is unchanged.
-- *Item 5* (disagreement 4). `planExecutionOutcomeForActions`
+- *Item 5*. `planExecutionOutcomeForActions`
   (`execution-outcome.ts`) judges a plan by its effects and treats a
   `communication`-category reply as delivery, so a committed write whose reply
   was withheld or failed stays `committed` and its task `completed`. A plan
@@ -554,7 +410,7 @@ capability: it goes from 5,929 to 13,313 tokens. v1 is unchanged.
   (`finalizeReconciledPlanExecution`) calls the same helper. The dashboard card
   shows a display-only `reply_not_sent` state (`committedWithUnsentReply`) that
   says the customer has not been told and stays until dismissed.
-- *Item 6* (disagreement 5; decision C). The task table has a row for a closed
+- *Item 6* (decision C). The task table has a row for a closed
   conversation. `recordTaskStop` (`task-ledger.ts`) is the one authorized-stop
   write, used by `cancelMemberAgentTask` and by
   `stopWaitingTasksOnClosedThreads`, which every close path calls in the
@@ -579,6 +435,109 @@ capability: it goes from 5,929 to 13,313 tokens. v1 is unchanged.
   card goes to every channel. Not covered: auto-executed v2 plans, and
   revising the follow-up card (`claimContinuedAgentTask` refuses a task that
   reached a provider).
+
+**Package 6, 2026-09-26 onward:**
+- *Item 7, budgets, held-out variants and Gate B again* (#121, #123; runs
+  `36288739173` and `36288740424` on `cf41c169`).
+  - The release owner set the task budget (see *Settled decisions*).
+  - Ten hard core fixtures carry `holdout` naming their manifest case: one each
+    for C01, C03, C05, C06, C07, C08, C10 and C11, and two for C02.
+    `selectFixtures` and the budget preflight refuse a held-out fixture named
+    in a targeted run. C04, C09 and C12 are deterministic database cases.
+  - Each fixture's report line carries `discovery=` and `cost=`, and a run ends
+    with an `[eval:task]` line.
+  - The composer-path skew is recorded rather than fixed: three of 52 fixture
+    files set `merchantInstruction`.
+  - Results: no unauthorized or duplicate effect and no unsupported claim on
+    either runtime. v2 passed all 35 shared fixtures on the first attempt; v1
+    missed the C10 held-out once. p95 9.4s (v1) and 8.2s (v2); mean $0.0162
+    and $0.0233 per task. `refund-partial-placeholder`, the model evidence for
+    item 4, passed one conclusive attempt; the other failed on a read the
+    fixture does not simulate. The C08 miss is decision G. The first paid
+    attempt, on `a78f91e1`, was a harness gap that #123 fixed and now guards
+    for free.
+- *Item 8a, first part* (#124). Order reads gave the model only a line item's
+  `title` and dropped `variant_title`, so two variants of one product read
+  identically. One serializer (`serializeOrderLineItem`, `shopify/serializers.ts`)
+  now shapes line items for both order reads and `buildContext`'s recent
+  orders, carrying `variant_title` when Shopify reports one.
+
+## Settled decisions
+
+The release owner's answers to what the plan left open. They are binding like
+the fixed decisions below. Each keeps its letter, because the release evidence
+and commits cite it.
+
+- **A. What the merchant approves is what the customer receives** (2026-09-25).
+  Every customer message proposed alongside a write uses `exact_draft`; the
+  `intent` mode is not used for customer messages. The model writes the
+  message before approval, with outcome-dependent values as labeled
+  placeholders. It is shown on the card, bound into the approval hash, and sent
+  only if the write succeeds and every placeholder fills. Filling those
+  placeholders from the approved write's receipt is the only change permitted
+  after approval. This replaces the original design's compose-after-outcome
+  default for customer messages only. Messages to the merchant still compose
+  after outcomes.
+- **B. A flagged reply is never sent** (2026-09-25). A flag on a draft awaiting
+  approval is shown on the card. A flag on a reply that would otherwise send
+  without review holds it as a proposal. Removing the flagged sentence and
+  sending the rest is forbidden (*Validate, don't repair*).
+- **C. Closing a conversation cancels all of its waiting tasks** (2026-09-25),
+  by the authorized-stop row of the task table: no new action starts, pending
+  proposals and cards are invalidated, and a task with an uncertain submitted
+  write goes to `reconciling` rather than `cancelled`.
+- **D. A write that runs without the merchant reviewing it follows decision A**
+  (2026-09-25). Its customer message is fixed as an `exact_draft` before the
+  write, and only its placeholders are filled afterward. A flag (decision B)
+  turns it into a proposal the merchant reviews.
+- **E. Phone instructions move onto durable tasks in this plan** (2026-09-25),
+  reusing the `OperatorEvent` claim and sweep rather than replacing them. This
+  is item 10, before the staged rollout; Gate E then deletes the synchronous
+  path.
+- **F. Gate C runs every retained Shopify write that has never touched a real
+  store** (2026-09-26). Package 1's live Shopify schema validation never ran,
+  so every typed receipt except `add_shopify_customer_note` and
+  `update_shopify_order_address` was built from fake provider responses. The
+  fourteen runs are listed in item 8. Internal thread writes touch no store
+  and are not included; email delivery is exercised by each customer-ticket
+  run.
+- **Task budget** (2026-09-26, item 7). Active latency p95 at most 10 seconds
+  and mean task cost at most $0.035, measured over a runtime's comparison runs
+  by the eval report's `[eval:task]` line.
+
+## Outside this plan: recorded, not scheduled
+
+The 2026-09-25 audit also found decisions made by matching English outside the
+paths this plan migrates. They are listed so they are neither pulled into this
+plan nor forgotten. Changing any of them needs the release owner's go-ahead
+first.
+
+- Keyword intent checks in `planner-safety/refunds.ts` and
+  `planner-safety/mutative.ts`, and `hasActionableMutativeIntent` as used by
+  `planner-evidence.ts`.
+- `isMerchantAnswerPlanningInstruction` (`kb-learned.ts`), which recognizes a
+  sentence we write ourselves by regex; `planner.ts` then removes `ask_operator`.
+- The shipping and discount question regexes used by `merchant-answer-kb.ts`.
+- Summary-string parsing in `order-ops/finding.ts`.
+- The overall size of `SUPPORT_INSTRUCTIONS`.
+
+### Known limitations, accepted and not scheduled
+
+Each was recorded when its package closed and is not a defect against a
+contract. It is listed so nobody rediscovers it as new.
+
+- A continuation (an answer, a revision) is a new attempt on the same task that
+  re-derives its context from the conversation. It does not resume from the
+  task checkpoint, which is not updated after the task is created.
+- A stale question cleared from one member's pending projection
+  (`loadLiveOperatorContext`) stays parked on the organization-wide task until
+  the customer writes again. One member's card must not close a task, so this is
+  intended.
+- The dashboard chat has no stop control. The route
+  (`api/agent/requests/[requestId]/cancel`) exists, and nothing in the UI calls
+  it.
+- A stop is observed at loop-iteration boundaries, so a tool call already in
+  flight finishes. This is the intended bound.
 
 ## Product outcome
 
@@ -833,7 +792,7 @@ Persist the composed response and its destination before attempting delivery. As
 
 Packages 0–5 are done; see [What has been done](#what-has-been-done). Package 6
 follows. Its progress and ordered steps are in
-[What is left](#what-is-left-in-order).
+[Open work](#open-work-in-order).
 
 ### 6. Certify, cut over, and delete superseded machinery
 

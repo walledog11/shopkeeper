@@ -324,6 +324,15 @@ controlled-release inputs*).
     the merchant can approve, did not happen on unseen input. No runtime-v1
     counterpart exists, so it is not a v1/v2 regression. Decision G in the plan
     asks whether it blocks anything.
+  - Correction, 2026-09-27: the C08 miss is not a model result. The
+    escalation reason is the runtime's structural `fulfilled_cancellation_request`
+    evidence, raised by `shouldEscalateFulfilledCancelRequest` because the
+    request says "cancel" and an order is fulfilled; the planner replaces the
+    model's calls with it (`applyEscalationRouting`). A free probe gave
+    `buildPlanRoutingEvidence` the fixture's context and a correct
+    `send_reply`, with no model call, and returned the same code and reason.
+    The model's own draft was discarded unseen. The plan's decision G carries
+    the cause and a recommendation.
 
 ## Gate C — controlled real-provider and delivery exercise
 
@@ -455,7 +464,7 @@ ahead" on the phone escalation card was refused by `approve_pending_plan` ("need
 an instruction, not approval"), and the free-form operator turn then asked
 whether to refund the whole order or ask the customer. That turn called the
 Special variant on #1032 "the sample": the stored order read carried only the
-product title. This is plan disagreement 8, which blocks the runs that target a
+product title. This is plan item 8a, which blocks the runs that target a
 line item. No effect; not counted as a Gate C run.
 
 ## Gate D — observation and rollback rehearsal
@@ -525,3 +534,4 @@ architecture/product documentation describes the single active runtime.
 | 2026-09-26 | Gate B rerun preparation (free) | Ten held-out fixtures, discovery and cost per case in the eval report, composer skew recorded, task budget and ceilings set. `npm run verify:pr` passed; no model call |
 | 2026-09-26 | Gate B rerun attempt on `a78f91e1` | Not accepted. The eval harness stopped applying simulated tool results (#121's `usage.ts` planner import), so reads failed and the model escalated. v1 spent $0.8129 + $0.0094; v2 was cancelled before any paid job. Fixed with a free guard; no production/provider action occurred |
 | 2026-09-26 | Gate B comparison on `cf41c169` | Pass criteria met: no unauthorized or duplicate effect or unsupported claim; v2 35/35 shared fixtures first time against v1 34/35; both within the task budget. Open: the C08 held-out follow-up escalates instead of drafting (0/2, v2 only; decision G). v1 $0.6772 + $0.0086, v2 $1.0485 + $0.0095. No production/provider action occurred |
+| 2026-09-27 | C08 cause probe (free, no model call) | `buildPlanRoutingEvidence` on the `withheld-cancellation-follow-up` context with a correct reply returns `fulfilled_cancellation_request` and the paid run's exact reason, so the C08 escalation is structural, not the model's. No production/provider action |
