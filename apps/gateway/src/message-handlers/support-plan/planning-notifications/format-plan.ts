@@ -10,6 +10,7 @@ import { lowerFirst } from '../../../lib/sentence-case.js';
 import { formatBlockedTicketLine } from '../../../maintenance/digest-briefing/ticket-lines.js';
 import type { ProposalCommunication } from '@shopkeeper/agent/types';
 import { displayApprovedDraft } from '@shopkeeper/agent/reply-placeholders';
+import { lineItemWriteSentence } from '@shopkeeper/agent/line-item-display';
 import type { AgentPlan, PlanStep } from '../../../types.js';
 import { firstDraftExcerpt } from '../../operator/operator-ledger.js';
 import { requestDisplayHasContext, type RequestDisplay } from '../../shared/request-display.js';
@@ -73,6 +74,15 @@ function escalationReason(
   return null;
 }
 
+type CardToolCall = { id?: string; name: string; input?: unknown };
+
+// The step as a sentence naming the items it changes, when the planner bound
+// them from Shopify. The IDs alone would let a wrong line read like the right one.
+function lineItemSentence(step: PlanStep, rawToolCalls: readonly CardToolCall[] | undefined): string | null {
+  const call = rawToolCalls?.find((toolCall) => toolCall.id === step.id);
+  return call ? lineItemWriteSentence(call.name, call.input) : null;
+}
+
 // A phrase that completes "I won't …", parked alongside the plan so a fast-path
 // dismissal can name what it dropped without re-reading the thread.
 export function parkedActionLabel(steps: PlanStep[], person: PersonName): string | undefined {
@@ -102,7 +112,7 @@ export function formatOperatorPlanMessage(
   options?: {
     threadId?: string;
     dashboardUrl?: string;
-    rawToolCalls?: readonly { name: string; input?: unknown }[];
+    rawToolCalls?: readonly CardToolCall[];
     stage?: ConversationStage;
     /** Injectable clock for deterministic deadline rendering in tests. */
     now?: Date;
@@ -222,15 +232,20 @@ export function formatOperatorPlanMessage(
     // One step is not a list. Numbering a single item is the tell that a machine
     // wrote the card; say it as a sentence instead. parkedActionLabel already
     // renders the phrase that completes "I won't …", which completes "I'd …" too.
+    // A step that names its items says them instead; the header already names
+    // the customer.
+    const itemsSentence = lineItemSentence(approvableSteps[0]!, options?.rawToolCalls);
     const only = parkedActionLabel(approvableSteps, person);
     const fallback = approvableSteps[0]!.label || approvableSteps[0]!.description;
-    lines.push('', only ? `I'd ${only}.` : `I'd ${lowerFirst(fallback)}.`);
+    lines.push('', itemsSentence
+      ? `I'd ${lowerFirst(itemsSentence)}.`
+      : only ? `I'd ${only}.` : `I'd ${lowerFirst(fallback)}.`);
     if (draftBody) lines.push('', ...draftLines(false, 'The reply:'));
   } else if (approvableSteps.length > 0) {
     const stepLines = approvableSteps.map((step, index) => {
       if (step.tool === 'send_reply') return `${index + 1}. Reply to ${personObject(person)}`;
       if (step.tool === 'send_email') return `${index + 1}. Email ${personObject(person)}`;
-      return `${index + 1}. ${step.label || step.description}`;
+      return `${index + 1}. ${lineItemSentence(step, options?.rawToolCalls) ?? (step.label || step.description)}`;
     });
     lines.push('', "Here's what I'd do:", ...stepLines);
     if (draftBody) lines.push('', ...draftLines(false, 'The reply:'));

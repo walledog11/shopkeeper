@@ -150,6 +150,32 @@ export async function fetchReturnableLineItems(
     .filter((item) => item.quantity > 0);
 }
 
+/** The returnable lines a return covers: those of one variant, or all of them. */
+export function selectReturnLineItems(
+  returnable: ReturnableLineItem[],
+  variantId: string | undefined,
+): ReturnableLineItem[] {
+  if (!variantId) return returnable;
+  const variantGid = `gid://shopify/ProductVariant/${requireNumericId(variantId, "variant_id")}`;
+  return returnable.filter((item) => item.variantId === variantGid);
+}
+
+/** Spreads an exchange's quantity over the returnable lines of its variant, in order. */
+export function allocateReturnQuantity(
+  selected: ReturnableLineItem[],
+  quantity: number,
+): { item: ReturnableLineItem; quantity: number }[] {
+  const allocated: { item: ReturnableLineItem; quantity: number }[] = [];
+  let remaining = quantity;
+  for (const item of selected) {
+    if (remaining <= 0) break;
+    const take = Math.min(item.quantity, remaining);
+    allocated.push({ item, quantity: take });
+    remaining -= take;
+  }
+  return allocated;
+}
+
 export async function runReturnCreate(
   ctx: ShopifyContext,
   returnInput: Record<string, unknown>
@@ -248,10 +274,8 @@ export async function createReturn(
       );
     }
 
-    let selected = returnable;
+    const selected = selectReturnLineItems(returnable, filterVariantId);
     if (filterVariantId) {
-      const variantGid = `gid://shopify/ProductVariant/${requireNumericId(filterVariantId, "variant_id")}`;
-      selected = returnable.filter((item) => item.variantId === variantGid);
       if (selected.length === 0) {
         return returnFailure(
           ctx,

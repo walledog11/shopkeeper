@@ -2,6 +2,7 @@ import type { AgentPlan, PlanStep, RawToolCall } from "./types.js"
 import { planSignals } from "./plan-signals.js"
 import { PLAN_STEP_LABELS } from "./tools/registry/index.js"
 import { displayApprovedDraft } from "./reply-placeholders.js"
+import { formatApprovalQuote, lineItemWriteSentence } from "./line-item-display.js"
 
 // Asked when a plan stopped for a gap but the model wrote no question of its
 // own. Names what was looked up and missed instead of echoing the customer,
@@ -282,16 +283,8 @@ function buildHomeActionDisplayFromTool(
       break
     }
     case "create_partial_refund": {
-      const amount = input.approval_amount
-      const currency = typeof input.approval_currency === "string"
-        ? input.approval_currency.trim().toUpperCase()
-        : ""
-      if (typeof amount === "string" || typeof amount === "number") {
-        const normalized = String(amount).replace(/^\$/, "").trim()
-        chipLabel = normalized
-          ? `Issue ${currency && currency !== "USD" ? `${currency} ` : "$"}${normalized} partial refund`
-          : "Issue partial refund"
-      }
+      const quote = formatApprovalQuote(input)
+      if (quote) chipLabel = `Issue ${quote} partial refund`
       if (typeof input.reason === "string" && input.reason.trim()) {
         detailLines = [input.reason.trim()]
       }
@@ -335,6 +328,10 @@ function buildHomeActionDisplayFromTool(
     default:
       break
   }
+
+  // Which items the IDs point at, ahead of the model's reason for the change.
+  const lineItemSentence = lineItemWriteSentence(step.tool, input)
+  if (lineItemSentence) detailLines = [lineItemSentence, ...detailLines]
 
   return { chipLabel, orderRef, detailLines }
 }

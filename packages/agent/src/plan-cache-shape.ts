@@ -39,6 +39,7 @@ const PLAN_VALIDATION_ISSUE_CODES: PlanValidationIssueCode[] = [
   "ungrounded_customer_reply",
   "multiple_customer_messages",
   "unbound_reply_placeholder",
+  "unnamed_line_item_target",
 ]
 const CLASSIFIER_ALIGNMENT_STATES: ClassifierAlignmentState[] = ["aligned", "missing", "unaligned", "not_applicable"]
 const PLAN_ROUTING_EVIDENCE_CODES: PlanRoutingEvidenceCode[] = [

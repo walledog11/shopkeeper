@@ -46,12 +46,48 @@
             "line_item_id": "lineitem_2020",
             "title": "Leather Boots",
             "quantity": 1,
-            "variant_id": "variant_2020",
+            "variant_id": "71000020200",
             "fulfillable_quantity": 0,
             "current_quantity": 1,
             "fulfillment_status": "fulfilled"
           }
         ]
+      }
+    ],
+    "simulateShopifyGraphql": [
+      {
+        "operation": "returnableFulfillments",
+        "data": {
+          "order": {
+            "id": "gid://shopify/Order/9000002020"
+          },
+          "returnableFulfillments": {
+            "edges": [
+              {
+                "node": {
+                  "returnableFulfillmentLineItems": {
+                    "edges": [
+                      {
+                        "node": {
+                          "quantity": 1,
+                          "fulfillmentLineItem": {
+                            "id": "gid://shopify/FulfillmentLineItem/90000020201",
+                            "lineItem": {
+                              "name": "Leather Boots",
+                              "variant": {
+                                "id": "gid://shopify/ProductVariant/71000020200"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
       }
     ]
   },

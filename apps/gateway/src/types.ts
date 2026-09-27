@@ -8,6 +8,8 @@ declare module 'http' {
 }
 
 export interface PlanStep {
+  /** The tool call this step shows, matching `rawToolCalls[].id`. */
+  id?: string;
   label: string;
   description: string;
   category: string;

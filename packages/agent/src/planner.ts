@@ -39,6 +39,11 @@ export { DISCOVERY_TOOL_NAME } from "./planner-tool-selection.js";
 import { usesCapabilityDiscovery } from "./runtime-modes.js";
 import { TOKEN_BUDGET, DEFAULT_MAX_ITERATIONS } from "./run-policy.js";
 import { resolveAgentSettings } from "./settings.js";
+import {
+  exchangeApprovalLineItems,
+  orderEditApprovalLineItems,
+  returnApprovalLineItems,
+} from "./shopify/approval-line-items.js";
 import { quotePartialRefundForApproval } from "./shopify/partial-refunds.js";
 import { quoteFullRefundForApproval } from "./shopify/refunds.js";
 import { enforceSpendCap } from "./spend.js";
@@ -46,8 +51,11 @@ import {
   parseToolInput,
   selectAgentTools,
   ToolInputValidationError,
+  type CreateExchangeInput,
   type CreatePartialRefundInput,
   type CreateRefundInput,
+  type CreateReturnInput,
+  type EditShopifyOrderInput,
 } from "./tools/registry/index.js";
 import {
   DISCOVERY_TOOL_NAME,
@@ -110,15 +118,44 @@ function isAmbiguousCustomerFollowUp(ctx: AgentContext): boolean {
   return Boolean(latestCustomerText && TERSE_REFERENT.test(latestCustomerText));
 }
 
+// Writes that act on line items the model chose by ID. Their approval names
+// the items, as Shopify does, from the runtime-only `approval_line_items`.
+const LINE_ITEM_WRITES = new Set([
+  "create_partial_refund",
+  "create_return",
+  "create_exchange",
+  "edit_shopify_order",
+]);
+
+interface BoundApprovalFacts {
+  rawToolCalls: AgentPlan["rawToolCalls"];
+  /** Line-item writes whose target Shopify does not show, so nothing true names it. */
+  unnamedTargetIds: Set<string>;
+}
+
+// Only the runtime names a target, so a value the model wrote is dropped
+// wherever the field appears, bound or not.
+function withoutAuthoredLineItems(call: AgentPlan["rawToolCalls"][number]): AgentPlan["rawToolCalls"][number] {
+  const input = call.input;
+  if (!LINE_ITEM_WRITES.has(call.name) || !input || typeof input !== "object" || !("approval_line_items" in input)) {
+    return call;
+  }
+  const rest = { ...(input as Record<string, unknown>) };
+  delete rest.approval_line_items;
+  return { ...call, input: rest };
+}
+
 async function bindProviderApprovalFacts(
   ctx: AgentContext,
   rawToolCalls: AgentPlan["rawToolCalls"],
-  includePartialRefund: boolean,
-): Promise<AgentPlan["rawToolCalls"]> {
+  exactDraftProposal: boolean,
+): Promise<BoundApprovalFacts> {
   const shopify = ctx.shopify;
-  if (!shopify) return rawToolCalls;
-  return Promise.all(rawToolCalls.map(async (call) => {
-    if (call.name !== "create_refund" && !(includePartialRefund && call.name === "create_partial_refund")) return call;
+  const unnamedTargetIds = new Set<string>();
+  const bound = await Promise.all(rawToolCalls.map(async (authored) => {
+    const call = withoutAuthoredLineItems(authored);
+    if (!shopify) return call;
+    if (call.name !== "create_refund" && !(exactDraftProposal && LINE_ITEM_WRITES.has(call.name))) return call;
     if (
       call.name === "create_refund"
       && typeof (call.input as { amount?: unknown })?.amount === "string"
@@ -128,20 +165,33 @@ async function bindProviderApprovalFacts(
       // execution still re-quotes and refuses any mismatch.
       return call;
     }
-    let parsed: CreatePartialRefundInput | CreateRefundInput;
+    let parsed: unknown;
     try {
-      parsed = parseToolInput(call.name, call.input) as CreatePartialRefundInput | CreateRefundInput;
+      parsed = parseToolInput(call.name, call.input);
     } catch (error) {
       // Plan validation owns malformed model input. Do not turn its useful
       // invalid-plan evidence into an unrelated provider-preflight failure.
       if (error instanceof ToolInputValidationError) return call;
       throw error;
     }
-    const input = call.name === "create_refund"
-      ? await quoteFullRefundForApproval(parsed as CreateRefundInput, shopify)
-      : await quotePartialRefundForApproval(parsed as CreatePartialRefundInput, shopify);
-    return { ...call, input };
+    if (call.name === "create_refund") {
+      return { ...call, input: await quoteFullRefundForApproval(parsed as CreateRefundInput, shopify) };
+    }
+    if (call.name === "create_partial_refund") {
+      return { ...call, input: await quotePartialRefundForApproval(parsed as CreatePartialRefundInput, shopify) };
+    }
+    const lineItems = call.name === "create_return"
+      ? await returnApprovalLineItems(parsed as CreateReturnInput, shopify)
+      : call.name === "create_exchange"
+        ? await exchangeApprovalLineItems(parsed as CreateExchangeInput, shopify)
+        : await orderEditApprovalLineItems(parsed as EditShopifyOrderInput, shopify);
+    if (!lineItems) {
+      unnamedTargetIds.add(call.id);
+      return call;
+    }
+    return { ...call, input: { ...(parsed as Record<string, unknown>), approval_line_items: lineItems } };
   }));
+  return { rawToolCalls: bound, unnamedTargetIds };
 }
 
 
@@ -357,19 +407,23 @@ export async function planAgent(
   // error by rewriting it into a different, executable plan. The one exception
   // is structural escalation evidence, which is derived from the merchant's data
   // and discards the proposal wholesale rather than repairing it.
+  //
+  // Shopify owns a full refund's balance on both runtimes. Exact-draft
+  // proposals also bind item-refund pricing and the names of the line items a
+  // write targets. Execution quotes again and refuses a changed amount before
+  // dispatch.
+  const bound = await bindProviderApprovalFacts(ctx, loop.rawToolCalls, exactDraftProposal);
+  const { unnamedTargetIds } = bound;
   const authoredValidation = validatePlan({
     ctx,
     instruction,
     rawToolCalls: loop.rawToolCalls,
     readResults: Object.fromEntries(loop.readResults),
     singleCustomerMessage: exactDraftProposal,
+    unnamedTargetIds,
   });
   let validation = authoredValidation;
-  let rawToolCalls = [...loop.rawToolCalls];
-  // Shopify owns a full refund's balance on both runtimes. Exact-draft
-  // proposals also bind item-refund pricing. Execution quotes again and refuses
-  // a changed amount before dispatch.
-  rawToolCalls = await bindProviderApprovalFacts(ctx, rawToolCalls, exactDraftProposal);
+  let rawToolCalls = bound.rawToolCalls;
 
   const signalCodes: ProducedPlanSignalCode[] = [];
   // Blocking, so `decideAutonomy` sends this draft to the merchant: a customer
@@ -434,6 +488,7 @@ export async function planAgent(
         rawToolCalls,
         readResults: Object.fromEntries(loop.readResults),
         singleCustomerMessage: exactDraftProposal,
+        unnamedTargetIds,
       });
     }
   }

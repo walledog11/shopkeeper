@@ -22,6 +22,10 @@
       "types": "./dist/reply-placeholders.d.ts",
       "default": "./dist/reply-placeholders.js"
     },
+    "./line-item-display": {
+      "types": "./dist/line-item-display.d.ts",
+      "default": "./dist/line-item-display.js"
+    },
     "./context": {
       "types": "./dist/agent-context.d.ts",
       "default": "./dist/agent-context.js"

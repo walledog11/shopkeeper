@@ -63,6 +63,11 @@ export {
 } from "./partial-refunds.js";
 export { createRefund, quoteFullRefundForApproval } from "./refunds.js";
 export {
+  exchangeApprovalLineItems,
+  orderEditApprovalLineItems,
+  returnApprovalLineItems,
+} from "./approval-line-items.js";
+export {
   INVENTORY_STATUS_QUERY,
   formatInventoryStatusLine,
   getInventoryStatus,

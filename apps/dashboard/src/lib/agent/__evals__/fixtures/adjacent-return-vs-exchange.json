@@ -48,6 +48,67 @@
           }
         ]
       }
+    ],
+    "simulateShopifyGraphql": [
+      {
+        "operation": "returnableFulfillments",
+        "data": {
+          "order": {
+            "id": "gid://shopify/Order/9000007020"
+          },
+          "returnableFulfillments": {
+            "edges": [
+              {
+                "node": {
+                  "returnableFulfillmentLineItems": {
+                    "edges": [
+                      {
+                        "node": {
+                          "quantity": 1,
+                          "fulfillmentLineItem": {
+                            "id": "gid://shopify/FulfillmentLineItem/90000070201",
+                            "lineItem": {
+                              "name": "Trail Rain Shell - Small",
+                              "variant": {
+                                "id": "gid://shopify/ProductVariant/710000007020"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "operation": "variantPrices",
+        "data": {
+          "nodes": [
+            {
+              "id": "gid://shopify/ProductVariant/710000007020",
+              "title": "Small",
+              "price": "140.00",
+              "inventoryQuantity": 6,
+              "product": {
+                "title": "Trail Rain Shell"
+              }
+            },
+            {
+              "id": "gid://shopify/ProductVariant/710000007021",
+              "title": "Medium",
+              "price": "140.00",
+              "inventoryQuantity": 9,
+              "product": {
+                "title": "Trail Rain Shell"
+              }
+            }
+          ]
+        }
+      }
     ]
   },
   "instruction": "Reply to the customer and handle their request.",

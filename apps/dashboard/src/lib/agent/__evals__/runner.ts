@@ -129,22 +129,41 @@ function buildSimulatedToolResults(fixture: Fixture): Map<string, SimulatedToolR
   return results
 }
 
+// The operation name of a GraphQL read. A mutation is never simulated: the
+// runtime's own requests before approval are reads.
+function graphqlQueryOperation(init: RequestInit | undefined): string | null {
+  if (typeof init?.body !== "string") return null
+  const query = (JSON.parse(init.body) as { query?: unknown }).query
+  return typeof query === "string" ? query.match(/^\s*query\s+(\w+)/)?.[1] ?? null : null
+}
+
 /**
- * Answers the runtime's own Shopify reads (the pre-approval refund quote) from
- * the fixture while it runs, and restores `fetch` when disposed. Every request
- * to the fixture's shop must be declared; other hosts pass through untouched.
+ * Answers the runtime's own Shopify reads (the pre-approval refund quote, and
+ * the names of the line items a write targets) from the fixture while it runs,
+ * and restores `fetch` when disposed. Every request to the fixture's shop must
+ * be declared; other hosts pass through untouched.
  */
 export function installSimulatedShopifyRest(fixture: Fixture): () => void {
   const shop = fixture.setup.shopify?.shop
   if (!shop) return () => {}
   const host = new URL(`https://${shop}`).host
   const responses = fixture.setup.simulateShopifyRest ?? []
+  const graphqlResponses = fixture.setup.simulateShopifyGraphql ?? []
   const originalFetch = globalThis.fetch
   const stubbed: typeof fetch = async (input, init) => {
     const url = new URL(input instanceof Request ? input.url : String(input))
     if (url.host !== host) return originalFetch(input, init)
     const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase()
     const path = url.pathname.replace(/^\/admin\/api\/[^/]+\//, "")
+    if (method === "POST" && path === "graphql.json") {
+      const operation = graphqlQueryOperation(init)
+      const graphql = graphqlResponses.find(entry => entry.operation === operation)
+      if (!graphql) throw new Error(`unsimulated Shopify GraphQL ${operation ?? "operation"} in fixture ${fixture.id}`)
+      return new Response(JSON.stringify({ data: graphql.data }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    }
     const match = responses.find(entry => (entry.method ?? "GET") === method && entry.path === path)
     if (!match) throw new Error(`unsimulated Shopify request ${method} ${path} in fixture ${fixture.id}`)
     return new Response(JSON.stringify(match.response), {

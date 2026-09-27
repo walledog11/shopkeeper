@@ -1,7 +1,10 @@
 import type { PlanStep, RawToolCall } from "./types.js";
 import { PLAN_STEP_LABELS, TOOL_CATEGORIES } from "./tools/registry/index.js";
+import { lineItemWriteSentence } from "./line-item-display.js";
 
 function describeTool(name: string, input: unknown): string {
+  const lineItemSentence = lineItemWriteSentence(name, input);
+  if (lineItemSentence) return lineItemSentence;
   const a = input as Record<string, unknown>;
   switch (name) {
     case "search_kb":

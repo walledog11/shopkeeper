@@ -52,7 +52,7 @@
             "line_item_id": "lineitem_1607",
             "title": "Scented Candle Gift Set",
             "quantity": 1,
-            "variant_id": "variant_1607",
+            "variant_id": "71000016070",
             "fulfillable_quantity": 0,
             "current_quantity": 1,
             "fulfillment_status": "fulfilled"
@@ -72,7 +72,7 @@
             "line_item_id": "lineitem_1601a",
             "title": "Brass Table Lamp",
             "quantity": 1,
-            "variant_id": "variant_1601a",
+            "variant_id": "71000016011",
             "fulfillable_quantity": 0,
             "current_quantity": 1,
             "fulfillment_status": "fulfilled"
@@ -81,7 +81,7 @@
             "line_item_id": "lineitem_1601b",
             "title": "Linen Lamp Shade",
             "quantity": 1,
-            "variant_id": "variant_1601b",
+            "variant_id": "71000016012",
             "fulfillable_quantity": 0,
             "current_quantity": 1,
             "fulfillment_status": "fulfilled"
@@ -93,6 +93,56 @@
       {
         "tool": "send_reply",
         "result": "Reply sent to customer via email."
+      }
+    ],
+    "simulateShopifyGraphql": [
+      {
+        "operation": "returnableFulfillments",
+        "data": {
+          "order": {
+            "id": "gid://shopify/Order/9000001601"
+          },
+          "returnableFulfillments": {
+            "edges": [
+              {
+                "node": {
+                  "returnableFulfillmentLineItems": {
+                    "edges": [
+                      {
+                        "node": {
+                          "quantity": 1,
+                          "fulfillmentLineItem": {
+                            "id": "gid://shopify/FulfillmentLineItem/90000016011",
+                            "lineItem": {
+                              "name": "Brass Table Lamp",
+                              "variant": {
+                                "id": "gid://shopify/ProductVariant/71000016011"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "quantity": 1,
+                          "fulfillmentLineItem": {
+                            "id": "gid://shopify/FulfillmentLineItem/90000016012",
+                            "lineItem": {
+                              "name": "Linen Lamp Shade",
+                              "variant": {
+                                "id": "gid://shopify/ProductVariant/71000016012"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
       }
     ]
   },
@@ -106,7 +156,7 @@
         "tool": "create_return",
         "inputEquals": {
           "order_id": "9000001601",
-          "variant_id": "variant_1601a"
+          "variant_id": "71000016011"
         }
       }
     ],

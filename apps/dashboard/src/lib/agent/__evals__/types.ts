@@ -49,6 +49,17 @@ interface SimulatedShopifyRest {
   response: unknown;
 }
 
+/**
+ * A Shopify Admin GraphQL read served to the runtime itself, matched by the
+ * query's operation name. Planning names the line items a return, exchange or
+ * order edit targets before approval; this answers those reads. `data` is what
+ * Shopify returns under `data`.
+ */
+interface SimulatedShopifyGraphql {
+  operation: string;
+  data: unknown;
+}
+
 export interface ThreadSetup {
   channelType:
     | "ig_dm"
@@ -81,6 +92,7 @@ export interface ThreadSetup {
   }>;
   simulateToolResults?: SimulatedToolResult[];
   simulateShopifyRest?: SimulatedShopifyRest[];
+  simulateShopifyGraphql?: SimulatedShopifyGraphql[];
   /**
    * Intents the inbound classifier would have written for this ticket's customer
    * message. Only the true ones need listing; the rest default to false.

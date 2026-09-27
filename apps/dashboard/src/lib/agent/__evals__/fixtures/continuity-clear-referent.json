@@ -64,6 +64,67 @@
           }
         ]
       }
+    ],
+    "simulateShopifyGraphql": [
+      {
+        "operation": "returnableFulfillments",
+        "data": {
+          "order": {
+            "id": "gid://shopify/Order/9000005001"
+          },
+          "returnableFulfillments": {
+            "edges": [
+              {
+                "node": {
+                  "returnableFulfillmentLineItems": {
+                    "edges": [
+                      {
+                        "node": {
+                          "quantity": 1,
+                          "fulfillmentLineItem": {
+                            "id": "gid://shopify/FulfillmentLineItem/90000050011",
+                            "lineItem": {
+                              "name": "Blue Overshirt / Medium",
+                              "variant": {
+                                "id": "gid://shopify/ProductVariant/95001"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "operation": "variantPrices",
+        "data": {
+          "nodes": [
+            {
+              "id": "gid://shopify/ProductVariant/95002",
+              "title": "Black / Large",
+              "price": "78.00",
+              "inventoryQuantity": 6,
+              "product": {
+                "title": "Overshirt"
+              }
+            },
+            {
+              "id": "gid://shopify/ProductVariant/95005",
+              "title": "Navy / Large",
+              "price": "78.00",
+              "inventoryQuantity": 0,
+              "product": {
+                "title": "Overshirt"
+              }
+            }
+          ]
+        }
+      }
     ]
   },
   "instruction": "Continue the customer's latest request using the conversation context.",

@@ -42,6 +42,42 @@
           }
         ]
       }
+    ],
+    "simulateShopifyGraphql": [
+      {
+        "operation": "returnableFulfillments",
+        "data": {
+          "order": {
+            "id": "gid://shopify/Order/9000007010"
+          },
+          "returnableFulfillments": {
+            "edges": [
+              {
+                "node": {
+                  "returnableFulfillmentLineItems": {
+                    "edges": [
+                      {
+                        "node": {
+                          "quantity": 1,
+                          "fulfillmentLineItem": {
+                            "id": "gid://shopify/FulfillmentLineItem/90000070101",
+                            "lineItem": {
+                              "name": "Linen Throw - Sand",
+                              "variant": {
+                                "id": "gid://shopify/ProductVariant/710000007010"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
     ]
   },
   "instruction": "Reply to the customer and handle their request.",

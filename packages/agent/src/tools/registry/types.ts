@@ -67,6 +67,19 @@ export interface CreateRefundInput {
   reason?: string;
 }
 
+export const APPROVAL_LINE_ITEM_CHANGES = ["refund", "return", "replacement", "remove", "add"] as const;
+
+/**
+ * A line item a write targets, named by Shopify and bound into the proposal
+ * before approval so the card can say which item the IDs point at. Display
+ * only: execution acts on the IDs and never reads it.
+ */
+export interface ApprovalLineItem {
+  name: string;
+  quantity: number;
+  change: (typeof APPROVAL_LINE_ITEM_CHANGES)[number];
+}
+
 /** Item and quantity selection. Approval fields are runtime-authored. */
 export interface CreatePartialRefundInput {
   order_id: string;
@@ -76,6 +89,7 @@ export interface CreatePartialRefundInput {
   approval_amount?: string;
   /** Currency paired with approval_amount. */
   approval_currency?: string;
+  approval_line_items?: ApprovalLineItem[];
 }
 
 export interface CancelOrderInput {
@@ -142,6 +156,7 @@ export interface EditShopifyOrderInput {
   variant_id?: string;
   quantity?: number;
   remove_variant_id?: string;
+  approval_line_items?: ApprovalLineItem[];
 }
 
 export interface IssueDiscountInput {
@@ -163,6 +178,7 @@ export interface CreateReturnInput {
     | "style"
     | "color"
     | "other";
+  approval_line_items?: ApprovalLineItem[];
 }
 
 export interface IssueStoreCreditInput {
@@ -184,6 +200,7 @@ export interface CreateExchangeInput {
   exchange_variant_id: string;
   quantity?: number;
   reason?: CreateReturnInput["reason"];
+  approval_line_items?: ApprovalLineItem[];
 }
 
 export interface AttachReturnLabelInput {

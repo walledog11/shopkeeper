@@ -155,6 +155,7 @@ export type PlanValidationIssueCode =
   | 'ungrounded_customer_reply'
   | 'multiple_customer_messages'
   | 'unbound_reply_placeholder'
+  | 'unnamed_line_item_target'
 
 /**
  * Where an approved customer message goes: the conversation's own channel for

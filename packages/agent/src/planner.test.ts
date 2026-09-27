@@ -560,6 +560,91 @@ describe("planAgent capture loop", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("names an exact-draft return's items from Shopify, not from the model", async () => {
+    installAgentLogger(makeLogger());
+    mockCreate.mockResolvedValueOnce(toolUses([
+      {
+        id: "tu_return",
+        name: "create_return",
+        input: {
+          order_id: "9000004003",
+          variant_id: "501",
+          approval_line_items: [{ name: "Canvas Tote", quantity: 1, change: "return" }],
+        },
+      },
+      { id: "tu_reply", name: "send_reply", input: { text: "I can open that return for you." } },
+    ]));
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({
+      data: {
+        order: { id: "gid://shopify/Order/9000004003" },
+        returnableFulfillments: { edges: [{ node: { returnableFulfillmentLineItems: { edges: [
+          { node: { quantity: 1, fulfillmentLineItem: { id: "gid://shopify/FulfillmentLineItem/1", lineItem: { name: "Napkin - Special", variant: { id: "gid://shopify/ProductVariant/501" } } } } },
+          { node: { quantity: 1, fulfillmentLineItem: { id: "gid://shopify/FulfillmentLineItem/2", lineItem: { name: "Napkin - Sample", variant: { id: "gid://shopify/ProductVariant/502" } } } } },
+        ] } } }] },
+      },
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const plan = await planAgent(makeCtx({ recentOrders: [FULFILLED_ORDER_4003] }), "Handle this return", AGENT_SETTINGS_DEFAULTS, {
+      exactDraftProposal: true,
+    });
+    vi.unstubAllGlobals();
+
+    expect(plan.rawToolCalls.find((call) => call.id === "tu_return")?.input).toEqual({
+      order_id: "9000004003",
+      variant_id: "501",
+      approval_line_items: [{ name: "Napkin - Special", quantity: 1, change: "return" }],
+    });
+    expect(plan.steps.find((step) => step.id === "tu_return")?.description)
+      .toBe("Open a return for 1x Napkin - Special");
+    expect(plan.validation?.issues.map((issue) => issue.code)).not.toContain("unnamed_line_item_target");
+  });
+
+  it("leaves an exact-draft edit whose target Shopify does not show invalid, intact", async () => {
+    installAgentLogger(makeLogger());
+    mockCreate.mockResolvedValueOnce(toolUses([
+      { id: "tu_edit", name: "edit_shopify_order", input: { order_id: "9000004003", remove_variant_id: "999" } },
+      { id: "tu_reply", name: "send_reply", input: { text: "I can take that off your order." } },
+    ]));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({
+      order: { id: 9000004003, line_items: [{ id: 1, variant_id: 501, title: "Napkin", quantity: 1, current_quantity: 1 }] },
+    }), { status: 200, headers: { "content-type": "application/json" } })));
+
+    const plan = await planAgent(makeCtx({ recentOrders: [FULFILLED_ORDER_4003] }), "Handle this edit", AGENT_SETTINGS_DEFAULTS, {
+      exactDraftProposal: true,
+    });
+    vi.unstubAllGlobals();
+
+    expect(plan.validation).toMatchObject({
+      status: "invalid",
+      issues: expect.arrayContaining([
+        expect.objectContaining({ code: "unnamed_line_item_target", toolCallId: "tu_edit" }),
+      ]),
+    });
+    expect(plan.rawToolCalls.find((call) => call.id === "tu_edit")?.input)
+      .toEqual({ order_id: "9000004003", remove_variant_id: "999" });
+  });
+
+  it("drops a model-written item name on a runtime that does not bind one", async () => {
+    installAgentLogger(makeLogger());
+    mockCreate.mockResolvedValueOnce(toolUses([
+      {
+        id: "tu_return",
+        name: "create_return",
+        input: { order_id: "9000004003", approval_line_items: [{ name: "Canvas Tote", quantity: 1, change: "return" }] },
+      },
+      { id: "tu_reply", name: "send_reply", input: { text: "I can open that return for you." } },
+    ]));
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const plan = await planAgent(makeCtx(), "Handle this return", AGENT_SETTINGS_DEFAULTS);
+    vi.unstubAllGlobals();
+
+    expect(plan.rawToolCalls.find((call) => call.id === "tu_return")?.input).toEqual({ order_id: "9000004003" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("reads the suspension mode from the environment, off unless asked for", () => {
     expect(resolveProposalSuspensionMode(undefined)).toBe("off");
     expect(resolveProposalSuspensionMode("")).toBe("off");

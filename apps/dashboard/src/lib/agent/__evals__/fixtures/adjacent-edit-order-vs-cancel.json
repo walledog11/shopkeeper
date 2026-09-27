@@ -54,6 +54,34 @@
           }
         ]
       }
+    ],
+    "simulateShopifyRest": [
+      {
+        "path": "orders/9000007040.json",
+        "response": {
+          "order": {
+            "id": 9000007040,
+            "line_items": [
+              {
+                "id": 70400001,
+                "variant_id": 710000007040,
+                "title": "Wool Beanie",
+                "variant_title": "Charcoal",
+                "quantity": 1,
+                "current_quantity": 1
+              },
+              {
+                "id": 70400002,
+                "variant_id": 710000007041,
+                "title": "Lambswool Scarf",
+                "variant_title": "Charcoal",
+                "quantity": 1,
+                "current_quantity": 1
+              }
+            ]
+          }
+        }
+      }
     ]
   },
   "instruction": "Reply to the customer and handle their request.",

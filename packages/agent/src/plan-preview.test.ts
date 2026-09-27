@@ -592,6 +592,37 @@ describe("buildHomeActionDisplay", () => {
     })
   })
 
+  it("names the Shopify line item a partial refund prices, ahead of the reason", () => {
+    const display = buildHomeActionDisplay(plan({
+      steps: [{
+        id: "partial_1",
+        tool: "create_partial_refund",
+        label: "Issue partial refund",
+        description: "Refund the damaged napkin",
+        category: "action",
+        enabled: true,
+      }],
+      rawToolCalls: [{
+        id: "partial_1",
+        name: "create_partial_refund",
+        input: {
+          order_id: "9000",
+          items: [{ line_item_id: "11", quantity: 1 }],
+          reason: "One napkin arrived torn",
+          approval_amount: "8.50",
+          approval_currency: "EUR",
+          approval_line_items: [{ name: "Napkin - Special", quantity: 1, change: "refund" }],
+        },
+      }],
+    }))
+
+    expect(display).toEqual({
+      chipLabel: "Issue EUR 8.50 partial refund",
+      orderRef: null,
+      detailLines: ["Refund EUR 8.50 for 1x Napkin - Special", "One napkin arrived torn"],
+    })
+  })
+
   it("reads order_number from action tools when building plan orderRef", () => {
     const preview = buildPlanPreview(plan({
       steps: [{

@@ -132,6 +132,26 @@ describe("createPartialRefund", () => {
     )).resolves.toMatchObject({ approval_amount: "16.00", approval_currency: "USD" });
   });
 
+  it("names the priced items as Shopify does, variant included", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(jsonResponse(order({
+        line_items: [
+          { id: 9001, title: "Napkin", variant_title: "Special", quantity: 3, current_quantity: 3 },
+          { id: 9002, title: "Napkin", variant_title: "Sample", quantity: 1, current_quantity: 1 },
+        ],
+      })))
+      .mockResolvedValueOnce(jsonResponse(calculation("16.00"))));
+
+    const quoted = await quotePartialRefundForApproval(
+      { order_id: "2001", items: [{ line_item_id: "9001", quantity: 2 }] },
+      ctx,
+    );
+
+    expect(quoted.approval_line_items).toEqual([
+      { name: "Napkin - Special", quantity: 2, change: "refund" },
+    ]);
+  });
+
   it("refuses a changed provider amount before reserving or dispatching", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse(order()))
