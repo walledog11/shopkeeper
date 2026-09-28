@@ -469,6 +469,37 @@ Special variant on #1032 "the sample": the stored order read carried only the
 product title. This is plan item 8a, which blocks the runs that target a
 line item. No effect; not counted as a Gate C run.
 
+Setup completed, 2026-09-28T06:15Z. All three services confirmed on
+`63e3bfb5` (Vercel from its build log, both Railway services from their
+deployment lists), with `AGENT_RUNTIME_VERSION=1` and
+`AGENT_RUNTIME_V2_ORG_IDS` set on both Railway services.
+
+- Task `6abfe733` stopped through `stopWaitingTasksOnClosedThreads`, the path a
+  ticket close now takes: its thread was already `closed`, it had no dispatched
+  action, so it went to `cancelled` and proposal `b56e800f` to `superseded`.
+- `create_refund` moved off #1032. #1032 is unfulfilled, and a customer asking
+  for their money back on an unshipped order is a cancellation, which
+  `create_refund`'s own description routes to `cancel_order`. A realistic ticket
+  (rule 6) therefore cannot reach `create_refund` on it. #1032 carries
+  `cancel_order` instead, and a new one-item order carries `create_refund` once
+  the `fulfill_order` run has fulfilled it.
+
+Orders for the test customer, all paid, unfulfilled, USD with no other
+presentment currency, no refunds:
+
+| Order | Lines | Total | Run |
+| --- | --- | --- | --- |
+| #1032 | Special | 49.95 | `cancel_order` |
+| #1034 | Special, Sample | 59.90 | `create_partial_refund` |
+| #1035 | Regular, Sample | 34.90 | `fulfill_order`, then `create_return`, `attach_return_label`, `create_exchange` |
+| #1036 | Special | 49.95 | `fulfill_order`, then `create_refund` |
+
+#1033 is the first attempt's order, under a different customer, and is unused.
+Run order: `update_shopify_customer_info`, `cancel_order`,
+`create_partial_refund`; then `fulfill_order`; then `create_refund`,
+`create_return`, `attach_return_label`, `create_exchange`; then the remaining
+merchant-instruction and operator-only runs.
+
 ## Gate D — observation and rollback rehearsal
 
 During the agreed observation window, record at least:

@@ -82,10 +82,10 @@ contract was unbuilt.
 | Packages 0–5 | Built. Tested only with a scripted model and fake Shopify, which cannot show that they work. 2 of the 16 retained Shopify writes (customer note, address change) have ever run on the real store. |
 | Gate A: comparison tooling | Done. |
 | Gate B: v1/v2 model comparison | **Not passed.** Both workflow runs on `cf41c169` (2026-09-26) reported failure. v2 failed the C08 held-out 2 of 2 and `refund-partial-placeholder` 1 of 2. Those misses were recorded as a runtime defect and a harness gap and the gate was called passed; a runtime defect is a v2 failure, so it was not a pass. #125 then changed the runtime to fix C08's failure, so C08 can no longer count as held-out. A new unseen C08 variant is needed. |
-| Gate C: real provider and delivery | 0 of 5 real-store attempts worked cleanly: four runs on 2026-09-25 (run 4 reached the customer but is stored as failed) and one on 2026-09-27 that misnamed the variant and made no write (item 8a, since fixed; not counted as a Gate C run). Rerun not started. The pre-run state is recorded in the release evidence. |
+| Gate C: real provider and delivery | 0 of 5 real-store attempts worked cleanly: four runs on 2026-09-25 (run 4 reached the customer but is stored as failed) and one on 2026-09-27 that misnamed the variant and made no write (item 8a, since fixed; not counted as a Gate C run). Rerun setup complete 2026-09-28 (orders, run order and deploy state in the release evidence); no rerun has run yet. |
 | Gate D, staged rollout, Gate E | Not started. |
 | Production routing | `AGENT_RUNTIME_VERSION=1` on both services, with `AGENT_RUNTIME_V2_ORG_IDS` set to the controlled organization since 2026-09-25. New tasks for every other organization run v1. |
-| Work in flight | None. Next: item 8. |
+| Work in flight | Item 8, Gate C rerun. First run: `cancel_order` on #1032. |
 
 ## Open work, in order
 
