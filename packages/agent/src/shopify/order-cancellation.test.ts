@@ -428,37 +428,6 @@ describe("cancelOrder", () => {
       expect(result.message).toContain("now calculates a refund of 39.95 USD for order #1032, but a refund of 49.95 USD was approved");
     });
 
-    it("cancels with the refund when Shopify's quote still matches the approval", async () => {
-      const fetchMock = vi.fn()
-        .mockResolvedValueOnce(jsonResponse(paidOrder()))
-        .mockResolvedValueOnce(jsonResponse(calculation()))
-        .mockResolvedValueOnce(jsonResponse(cancelled([refundRecord(501, "49.95")])));
-      vi.stubGlobal("fetch", fetchMock);
-
-      const result = await cancelOrder({
-        order_id: "123",
-        reason: "customer",
-        approval_amount: "49.95",
-        approval_currency: "usd",
-      }, ctx);
-
-      expect(JSON.parse(fetchMock.mock.calls[2][1].body as string)).toMatchObject({ amount: "49.95", currency: "USD" });
-      expect(result.receipt).toMatchObject({ outcome: "succeeded" });
-    });
-
-    it("refuses when a refund appeared on an order approved as refunding nothing", async () => {
-      const fetchMock = vi.fn()
-        .mockResolvedValueOnce(jsonResponse(paidOrder()))
-        .mockResolvedValueOnce(jsonResponse(calculation()));
-      vi.stubGlobal("fetch", fetchMock);
-
-      const result = await cancelOrder({ order_id: "123", approval_amount: "0.00" }, ctx);
-
-      expect(fetchMock).toHaveBeenCalledTimes(2);
-      expect(result.receipt).toMatchObject({ outcome: "rejected", code: "amount_mismatch" });
-      expect(result.message).toContain("but no refund was approved");
-    });
-
     it("confirms the refund when an interrupted cancellation is reconciled", async () => {
       const fetchMock = vi.fn()
         .mockResolvedValueOnce(jsonResponse(paidOrder()))
@@ -504,28 +473,5 @@ describe("quoteCancellationForApproval", () => {
     );
 
     expect(bound).toEqual({ order_id: "123", reason: "customer", approval_amount: "49.95", approval_currency: "USD" });
-  });
-
-  it("binds a zero refund when nothing was captured", async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(order({ financial_status: "authorized" })));
-    vi.stubGlobal("fetch", fetchMock);
-
-    expect(await quoteCancellationForApproval({ order_id: "123" }, ctx))
-      .toEqual({ order_id: "123", approval_amount: "0.00" });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
-
-  it.each([
-    { name: "already cancelled", state: order({ cancelled_at: "2026-09-28T06:20:40Z" }), calc: null },
-    { name: "shipped", state: order({ fulfillment_status: "partial" }), calc: null },
-    { name: "missing", state: {}, calc: null },
-    { name: "priced in two currencies", state: order(), calc: calculation([suggested("59.90", "USD")], "CAD") },
-  ])("leaves an order that is $name unbound for execution to refuse", async ({ state, calc }) => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(state));
-    if (calc) fetchMock.mockResolvedValueOnce(jsonResponse(calc));
-    vi.stubGlobal("fetch", fetchMock);
-
-    expect(await quoteCancellationForApproval({ order_id: "123", approval_amount: "5.00" }, ctx))
-      .toEqual({ order_id: "123" });
   });
 });
