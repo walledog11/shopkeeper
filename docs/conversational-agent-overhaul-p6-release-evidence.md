@@ -500,6 +500,53 @@ Run order: `update_shopify_customer_info`, `cancel_order`,
 `create_return`, `attach_return_label`, `create_exchange`; then the remaining
 merchant-instruction and operator-only runs.
 
+### Gate C rerun, run 1 — `cancel_order` on #1032, 2026-09-28
+
+Deployed commit `fbda4964` on all three services (docs-only on top of
+`63e3bfb5`). **Not clean: the write and its receipt are correct, and the
+customer was told a refund is coming that Shopify never issued.** The rerun is
+stopped here (plan item 8b).
+
+Ticket from the test customer's inbox: order #1032 has not shipped, they no
+longer need it, "Could you cancel it and refund me?"
+
+| Record | State |
+| --- | --- |
+| Request | `a6702618`, one, `attached` to task `21cadb91` |
+| Task | `21cadb91`, `runtimeVersion=2`, `completed`, 3 of 20 model calls |
+| Proposal | `661ce4b2`: `cancel_order` (`order_id` #1032, reason `customer`) and an `exact_draft` reply; `allowedResultBindings` empty; approved once from a member key, approved hash equals proposal hash; `completed` |
+| Execution | `ebbe944f`, `human_approved`, `committed` |
+| `cancel_order` action | `b7c7a44d`, `settled`, operation and provider key `131856ec`; receipt v1 `succeeded`, facts `cancelledAt` 2026-09-28T06:20:40Z, reason `customer`, `financialStatus: "paid"`, `restockResult: null` |
+| `send_reply` action | `c83519de`, `settled`, operation `9176aa49`; receipt `deliveryState: "sent"`, `providerMessageId: null` |
+| Reply message | `2328fbc5`, `sendStatus=sent`, `agentTaskId=21cadb91`, text identical to the approved draft, `providerMessageId` null |
+| Shopify #1032 after | cancelled (reason `customer`), fulfillment status `restocked`, financial status `paid`, `current_total_price` 49.95 of 49.95, **no refund** |
+| Duplicates | none org-wide by provider operation key |
+
+What the customer was sent, verbatim and as approved: "Hi Walle, done — order
+#1032 has been cancelled since it hadn't shipped yet, and Shopify will process
+your refund automatically as part of that cancellation."
+
+Findings:
+
+- **The refund promise is false.** `cancelOrder` posts `orders/{id}/cancel.json`
+  with `reason`, `restock` and `email` only. Shopify cancelled the order and
+  left the captured payment in place. The prompt tells the model the opposite
+  twice (`buildGuardrailClauses`' cap bullet: "Shopify settles its payment as
+  part of cancellation"; `SUPPORT_INSTRUCTIONS`' cancellation bullet: "Shopify
+  refunds the payment as part of cancellation"), so the model wrote the refund as a
+  certainty rather than as an outcome-dependent placeholder (decision A). The
+  receipt itself recorded `financialStatus: "paid"`; nothing reads it before the
+  draft is released. Plan item 8b.
+- **The delivery receipt has no provider reference.** The reply is `sent` with
+  `providerMessageId` null on both the message and the receipt, so the release
+  evidence cannot cite the provider message as Gate C requires. The
+  gateway's `handleOutboundEmailJob` stores the provider id; this reply was
+  marked sent by a path that does not. Cause not yet established. Plan item 8b.
+- The receipt's `restockResult` is null while Shopify reports the order
+  `restocked`: the receipt omits a fact rather than contradicting one.
+
+Customer-inbox delivery: pending the operator's confirmation.
+
 ## Gate D — observation and rollback rehearsal
 
 During the agreed observation window, record at least:
