@@ -4,13 +4,14 @@ import Image from "next/image";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 const TRANSITION_MS = 480;
+const SCENE_HOLD_PACE = 1.5;
 
 const SCENES = [
-  { id: "request", duration: 1800 },
-  { id: "verify", duration: 2100 },
-  { id: "ask", duration: 2400 },
-  { id: "done", duration: 2000 },
-  { id: "log", duration: 1800 },
+  { id: "request", duration: Math.round(1800 * SCENE_HOLD_PACE) },
+  { id: "verify", duration: Math.round(2100 * SCENE_HOLD_PACE) },
+  { id: "ask", duration: Math.round(2400 * SCENE_HOLD_PACE) },
+  { id: "done", duration: Math.round(2000 * SCENE_HOLD_PACE) },
+  { id: "log", duration: Math.round(1800 * SCENE_HOLD_PACE) },
 ] as const;
 
 type SceneMotion = "enter" | "leave" | "idle";

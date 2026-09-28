@@ -1,8 +1,44 @@
 import Image from "next/image";
 import { GlassLink } from "./GlassLink";
+import { MarketingHandoffLink } from "./MarketingHandoffLink";
 import { PRIMARY_CTA_LABEL } from "@/lib/brand";
 import { HeroMedia } from "./HeroMedia";
+import {
+  marketingSectionBodyClass,
+  marketingSectionTitleClass,
+  marketingSurfaceCardClass,
+} from "./marketingUi";
 import { Check, MessageSquareText } from "lucide-react";
+
+const operationGroups = [
+  {
+    title: "Before it ships",
+    items: [
+      "Look up orders and customer details",
+      "Correct a shipping address",
+      "Add, remove, or swap order items",
+      "Cancel an eligible unfulfilled order",
+    ],
+  },
+  {
+    title: "Returns & refunds",
+    items: [
+      "Refund a whole order or specified items",
+      "Open a return for delivered items",
+      "Arrange an eligible size or color exchange",
+      "Attach a return label you provide",
+    ],
+  },
+  {
+    title: "The rest of the paperwork",
+    items: [
+      "Create an unpaid customer order",
+      "Issue a requested fixed-value gift card",
+      "Update customer details and notes",
+      "Record fulfillment and tracking after shipment",
+    ],
+  },
+] as const;
 
 const heroProofPoints = ["Free for 14 days", "No card to start", "Connects to Shopify"] as const;
 
@@ -150,19 +186,42 @@ export function CustomerWorkflow() {
   return (
     <section aria-label="Customer request walkthrough" className="relative isolate px-5 py-14 sm:px-6">
       <div id="demo" style={rise(260)} className="relative mx-auto mt-2 max-w-6xl scroll-mt-28">
-        <div className="mb-7 text-center">
-          <p className="m-kicker">When a customer writes first · example workflow</p>
-          <h2 className="m-display mx-auto mt-4 max-w-[18ch] text-[clamp(1.9rem,4vw,3.25rem)]">
-            From a customer’s DM to a change in Shopify.
+        <div id="operations" className="mb-14 scroll-mt-28 text-center sm:mb-16">
+          <h2 className={`${marketingSectionTitleClass} max-w-[20ch]`}>
+            The actual order work, from lookup to return.
           </h2>
-          <p className="mx-auto mt-4 max-w-[52ch] text-[15px] leading-relaxed text-stone-600">
-            Maya wants a different size. Shopkeeper finds her order, checks stock,
-            prepares the change, and asks you to approve it. Then it updates the order
-            and replies to her on Instagram.
+          <p className={marketingSectionBodyClass}>
+            These are changes Shopkeeper can make in your connected store. Ask for them
+            yourself, or review a proposal from a customer conversation. Each action still
+            has to meet Shopify’s requirements and your configured limits.
           </p>
+          <div className="mx-auto mt-8 grid max-w-5xl gap-3 text-left sm:gap-4 md:grid-cols-3">
+            {operationGroups.map((group) => (
+              <div
+                key={group.title}
+                className={marketingSurfaceCardClass}
+              >
+                <h3 className="m-display text-[1.05rem] font-semibold tracking-[-0.03em] text-stone-950 sm:text-[1.125rem]">
+                  {group.title}
+                </h3>
+                <ul className="mt-4 space-y-2.5 text-[14px] leading-snug text-stone-600 sm:text-[15px] sm:leading-relaxed">
+                  {group.items.map((item) => (
+                    <li key={item} className="flex items-start gap-2.5">
+                      <Check
+                        className="mt-0.5 size-4 shrink-0 text-[var(--m-good)]"
+                        strokeWidth={2}
+                        aria-hidden
+                      />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
         </div>
 
-        <div className="relative">
+        <div className="relative mt-8 sm:mt-10">
           <div
             aria-hidden
             className="pointer-events-none absolute -inset-x-32 -inset-y-16 -z-10 overflow-hidden [mask-image:radial-gradient(62%_60%_at_50%_50%,black_28%,transparent_74%)]"
@@ -179,11 +238,10 @@ export function CustomerWorkflow() {
             <HeroMedia />
           </div>
         </div>
-        <p className="mx-auto mt-5 max-w-[54ch] text-center text-[12px] leading-relaxed text-stone-500">
-          Fictional customer, store, and order details. Once an order ships, a swap
-          becomes an exchange rather than an edit. What Shopkeeper can do is still
-          bounded by the rules you set.
-        </p>
+
+        <div className="mt-8">
+          <MarketingHandoffLink href="/product/order-operations" label="Order workflows and requirements" />
+        </div>
       </div>
     </section>
   );

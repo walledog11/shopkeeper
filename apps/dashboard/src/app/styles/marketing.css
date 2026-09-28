@@ -2325,6 +2325,18 @@ html:has(.m-paper-sheet) {
   max-width: 100%;
 }
 
+.m-merchant-tabs-vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.m-merchant-tab-vertical {
+  text-align: left;
+  white-space: normal;
+  border-radius: 0.75rem;
+}
+
 .m-merchant-tab {
   min-height: 2.5rem;
   border-radius: 9999px;

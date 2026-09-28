@@ -1,9 +1,15 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { ArrowRight, Check, CircleAlert, LockKeyhole } from "lucide-react";
+import { ArrowRight, Check, CircleAlert, LockKeyhole, type LucideIcon } from "lucide-react";
 import { SectionLabel } from "./SectionLabel";
 import { MerchantTasks } from "./MerchantTasks";
 import { CustomerWorkflow } from "./Hero";
+import { MarketingHandoffLink } from "./MarketingHandoffLink";
+import {
+  marketingSectionBodyClass,
+  marketingSectionTitleClass,
+  marketingSurfaceCardClass,
+} from "./marketingUi";
 
 function SectionHeading({
   label,
@@ -29,17 +35,41 @@ function SectionHeading({
 
 function SectionHandoff({ href, label }: { href: string; label: string }) {
   return (
-    <div className="mt-6 text-center">
-      <Link
-        href={href}
-        className="inline-flex items-center gap-2 rounded-full border border-stone-900/15 bg-[#fdfbf7] px-5 py-2.5 text-sm font-semibold text-stone-800 transition-transform hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-stone-900 motion-reduce:transition-none"
-      >
-        {label}
-        <ArrowRight className="size-4" aria-hidden />
-      </Link>
+    <div className="mt-6">
+      <MarketingHandoffLink href={href} label={label} />
     </div>
   );
 }
+
+const approvalModes = [
+  {
+    eyebrow: "Routine and safe",
+    title: "Handles it",
+    body: "Tracking, product details, and policy questions can be answered from your store data without waiting for you in Ask first mode.",
+    Icon: Check,
+    iconWrapClass: "bg-[var(--m-good)]/10 text-[var(--m-good)]",
+  },
+  {
+    eyebrow: "Money, or a change to the order",
+    title: "Checks with you",
+    body: "A customer asks for a refund, cancellation, or address change. Review the proposed action and reply, approve it, or ask for a revision.",
+    Icon: CircleAlert,
+    iconWrapClass: "bg-amber-700/10 text-amber-800",
+  },
+  {
+    eyebrow: "Outside your rules",
+    title: "Hands it back",
+    body: "An over-limit refund, an ineligible order, or a failed action needs your attention. The thread stays available for you to take over.",
+    Icon: LockKeyhole,
+    iconWrapClass: "bg-[#b0472f]/10 text-[#b0472f]",
+  },
+] as const satisfies ReadonlyArray<{
+  eyebrow: string;
+  title: string;
+  body: string;
+  Icon: LucideIcon;
+  iconWrapClass: string;
+}>;
 
 function PaperCard({
   children,
@@ -56,21 +86,6 @@ function PaperCard({
     </div>
   );
 }
-
-const operationGroups = [
-  {
-    title: "Before it ships",
-    items: ["Look up orders and customer details", "Correct a shipping address", "Add, remove, or swap order items", "Cancel an eligible unfulfilled order"],
-  },
-  {
-    title: "Returns & refunds",
-    items: ["Refund a whole order or specified items", "Open a return for delivered items", "Arrange an eligible size or color exchange", "Attach a return label you provide"],
-  },
-  {
-    title: "The rest of the paperwork",
-    items: ["Create an unpaid customer order", "Issue a requested fixed-value gift card", "Update customer details and notes", "Record fulfillment and tracking after shipment"],
-  },
-] as const;
 
 const systemLayers = [
   {
@@ -97,97 +112,42 @@ export function CoreProductOverview() {
       <MerchantTasks />
       <CustomerWorkflow />
 
-      <section id="operations" className="mx-auto max-w-6xl scroll-mt-24 px-6 py-14">
-        <SectionHeading
-          label="what it can do in shopify"
-          title="The actual order work, from lookup to return."
-          body="These are changes Shopkeeper can make in your connected store. Ask for them yourself, or review a proposal from a customer conversation. Each action still has to meet Shopify’s requirements and your configured limits."
-        />
+      <section id="controls" className="mx-auto max-w-6xl scroll-mt-28 px-5 py-14 sm:px-6">
+        <div className="mb-8 text-center sm:mb-10">
+          <h2 className={`${marketingSectionTitleClass} max-w-[18ch]`}>
+            Choose what needs your approval.
+          </h2>
+          <p className={marketingSectionBodyClass}>
+            In the default Ask first mode, routine information replies can go out automatically.
+            Changes to an order, money, and exceptions wait for your decision. Set refund limits
+            and enable only the actions you want it to use.
+          </p>
+        </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          {operationGroups.map((group) => (
-            <PaperCard key={group.title}>
-              <h3 className="text-[24px] font-bold leading-none [font-family:var(--m-hand)]">
-                {group.title}
+        <div className="mx-auto grid max-w-5xl gap-3 sm:gap-4 md:grid-cols-3">
+          {approvalModes.map(({ eyebrow, title, body, Icon, iconWrapClass }) => (
+            <div key={title} className={marketingSurfaceCardClass}>
+              <div className={`mb-3 grid size-8 place-items-center rounded-full ${iconWrapClass}`}>
+                <Icon className="size-4" aria-hidden />
+              </div>
+              <p className="text-[13px] font-medium text-stone-500">{eyebrow}</p>
+              <h3 className="m-display mt-1.5 text-[1.05rem] font-semibold tracking-[-0.03em] text-stone-950 sm:text-[1.125rem]">
+                {title}
               </h3>
-              <ul className="mt-5 space-y-3 text-sm text-stone-700">
-                {group.items.map((item) => (
-                  <li key={item} className="flex items-start gap-2.5">
-                    <Check className="mt-0.5 size-4 shrink-0 text-[#2f7a4a]" strokeWidth={2} aria-hidden />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </PaperCard>
+              <p className="mt-3 text-[14px] leading-snug text-stone-600 sm:text-[15px] sm:leading-relaxed">
+                {body}
+              </p>
+            </div>
           ))}
         </div>
-        <p className="mt-5 text-center text-[13px] leading-relaxed text-stone-600">
-          It cannot ship a parcel or buy a return label for you. Fulfillment records require
-          your confirmation that the order shipped; returns use a label you supply.
+        <p className="mx-auto mt-6 max-w-[58ch] text-center text-[13px] leading-relaxed text-stone-500 sm:text-[14px]">
+          Want to review every customer reply? Start in Draft only. Your direct instructions to
+          the merchant agent are a separate way to initiate work; they still follow your action
+          limits and connected-account permissions.
         </p>
-        <SectionHandoff href="/product/order-operations" label="Order workflows and requirements" />
-      </section>
-
-      <section id="controls" className="mx-auto max-w-6xl scroll-mt-24 px-6 py-14">
-        <SectionHeading
-          label="when the agent is handling customer messages"
-          title="Choose what needs your approval."
-          body="In the default Ask first mode, routine information replies can go out automatically. Changes to an order, money, and exceptions wait for your decision. Set refund limits and enable only the actions you want it to use."
-        />
-
-        <div className="grid gap-4 md:grid-cols-3">
-          <PaperCard>
-            <div className="mb-4 grid size-9 place-items-center rounded-full bg-[#2f7a4a]/10 text-[#2f7a4a]">
-              <Check className="size-5" aria-hidden />
-            </div>
-            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-stone-500">
-              Routine and safe
-            </p>
-            <h3 className="mt-2 text-[25px] font-bold leading-none [font-family:var(--m-hand)]">
-              Handles it
-            </h3>
-            <p className="mt-3 text-sm leading-relaxed text-stone-600">
-              Tracking, product details, and policy questions can be answered from
-              your store data without waiting for you in Ask first mode.
-            </p>
-          </PaperCard>
-          <PaperCard>
-            <div className="mb-4 grid size-9 place-items-center rounded-full bg-amber-700/10 text-amber-800">
-              <CircleAlert className="size-5" aria-hidden />
-            </div>
-            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-stone-500">
-              Money, or a change to the order
-            </p>
-            <h3 className="mt-2 text-[25px] font-bold leading-none [font-family:var(--m-hand)]">
-              Checks with you
-            </h3>
-            <p className="mt-3 text-sm leading-relaxed text-stone-600">
-              A customer asks for a refund, cancellation, or address change.
-              Review the proposed action and reply, approve it, or ask for a revision.
-            </p>
-          </PaperCard>
-          <PaperCard>
-            <div className="mb-4 grid size-9 place-items-center rounded-full bg-[#b0472f]/10 text-[#b0472f]">
-              <LockKeyhole className="size-5" aria-hidden />
-            </div>
-            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-stone-500">
-              Outside your rules
-            </p>
-            <h3 className="mt-2 text-[25px] font-bold leading-none [font-family:var(--m-hand)]">
-              Hands it back
-            </h3>
-            <p className="mt-3 text-sm leading-relaxed text-stone-600">
-              An over-limit refund, an ineligible order, or a failed action needs
-              your attention. The thread stays available for you to take over.
-            </p>
-          </PaperCard>
+        <div className="mt-8">
+          <MarketingHandoffLink href="/product/approvals-and-controls" label="See approval modes and limits" />
         </div>
-        <p className="mt-4 rounded-xl border border-stone-900/10 bg-[#fdfbf7]/80 px-5 py-4 text-center text-sm text-stone-700">
-          Want to review every customer reply? Start in Draft only. Your direct
-          instructions to the merchant agent are a separate way to initiate work;
-          they still follow your action limits and connected-account permissions.
-        </p>
-        <SectionHandoff href="/product/approvals-and-controls" label="See approval modes and limits" />
       </section>
 
       <section id="system" className="mx-auto max-w-6xl scroll-mt-24 px-6 py-14">
