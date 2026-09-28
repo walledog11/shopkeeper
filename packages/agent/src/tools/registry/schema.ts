@@ -10,6 +10,8 @@ type FieldDefinition =
       required?: boolean;
       enum?: readonly string[];
       nonBlank?: boolean;
+      /** As on an array field: written by the runtime, never shown to the model. */
+      runtimeOnly?: boolean;
     }
   | {
       kind: "number";
@@ -65,7 +67,7 @@ export class ToolInputValidationError extends Error {
 
 export function stringArg(
   description: string,
-  options: { required?: boolean; enum?: readonly string[]; nonBlank?: boolean } = {},
+  options: { required?: boolean; enum?: readonly string[]; nonBlank?: boolean; runtimeOnly?: boolean } = {},
 ): FieldDefinition {
   return { kind: "string", description, ...options };
 }
@@ -88,7 +90,7 @@ export function arrayArg(
 
 function objectSchema(fields: FieldMap): Anthropic.Tool.InputSchema {
   const modelFields = Object.entries(fields).filter(([, field]) => (
-    !(field.kind === "array" && field.runtimeOnly)
+    !((field.kind === "array" || field.kind === "string") && field.runtimeOnly)
   ));
   const required = modelFields.flatMap(([name, field]) => (
     field.required ? [name] : []

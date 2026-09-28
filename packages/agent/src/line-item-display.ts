@@ -1,10 +1,11 @@
 import { APPROVAL_LINE_ITEM_CHANGES, type ApprovalLineItem } from "./tools/registry/types.js";
 
 /**
- * How an approval card names the items a line-item write targets, from the
- * `approval_line_items` the planner bound from Shopify. Both the dashboard and
- * the phone card render through here, so the two cannot describe one proposal
- * differently. A proposal without bound items renders as it did before.
+ * How an approval card names what a write will do, from the approval facts the
+ * planner bound from Shopify: the items a line-item write targets, and the
+ * refund a cancellation makes. Both the dashboard and the phone card render
+ * through here, so the two cannot describe one proposal differently. A proposal
+ * without bound facts renders as it did before.
  */
 
 function isApprovalLineItem(value: unknown): value is ApprovalLineItem {
@@ -27,7 +28,7 @@ function listItems(items: readonly ApprovalLineItem[]): string {
   return items.map((item) => `${item.quantity}x ${item.name.trim()}`).join(", ");
 }
 
-/** A partial refund's Shopify quote as the card shows it: "$8.50", or "EUR 8.50". */
+/** A partial refund's or cancellation's Shopify quote as the card shows it: "$8.50", or "EUR 8.50". */
 export function formatApprovalQuote(input: unknown): string | null {
   if (!input || typeof input !== "object") return null;
   const { approval_amount: amount, approval_currency: rawCurrency } = input as Record<string, unknown>;
@@ -51,6 +52,14 @@ export function lineItemWriteSentence(tool: string, input: unknown): string | nu
       if (!refunded) return null;
       const quote = formatApprovalQuote(input);
       return quote ? `Refund ${quote} for ${refunded}` : `Refund ${refunded}`;
+    }
+    case "cancel_order": {
+      const quote = formatApprovalQuote(input);
+      if (!quote) return null;
+      const amount = (input as { approval_amount?: unknown }).approval_amount;
+      return Number(amount) === 0
+        ? "Cancel the order (nothing to refund)"
+        : `Cancel the order and refund ${quote}`;
     }
     case "create_return": {
       const returned = of("return");

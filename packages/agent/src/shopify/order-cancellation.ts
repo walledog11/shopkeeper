@@ -21,6 +21,41 @@ import { shopifyFailureReceipt, shopifyReceiptEnvelope } from "./receipts.js";
 
 type RequestedRefund = { amount: string; currency: string } | null;
 
+const CANCELLATION_ORDER_FIELDS =
+  "id,name,currency,line_items,cancelled_at,cancel_reason,financial_status,fulfillment_status,refunds";
+
+function refundPhrase(cents: number, currency: string | null): string {
+  return cents === 0 ? "no refund" : `a refund of ${centsToMoney(cents)} ${currency ?? ""}`.trimEnd();
+}
+
+/**
+ * Bind what cancelling the order refunds into the proposal (decision H), as the
+ * refund tools bind their quotes, so the merchant approves an amount rather than
+ * "refund payment". An order that cannot be cancelled, or whose refund Shopify
+ * cannot price in one currency, is left unbound: execution refuses it with the
+ * reason.
+ */
+export async function quoteCancellationForApproval(
+  input: CancelOrderInput,
+  ctx: ShopifyContext,
+): Promise<CancelOrderInput> {
+  // Only the runtime names the amount, so a value the model wrote is dropped.
+  const call = { ...input };
+  delete call.approval_amount;
+  delete call.approval_currency;
+  const orderId = requireNumericId(call.order_id, "order_id");
+  const { order } = await shopifyRestJson<{ order?: ShopifyOrder }>(ctx, `orders/${orderId}.json`, {
+    query: { fields: CANCELLATION_ORDER_FIELDS },
+  });
+  const shipped = order?.fulfillment_status && order.fulfillment_status !== "unfulfilled";
+  if (!order || order.cancelled_at || shipped) return call;
+  const quote = await quoteCancellationRefund(ctx, orderId, order);
+  if (quote.kind === "currency_mismatch") return call;
+  return quote.kind === "refund"
+    ? { ...call, approval_amount: quote.amount, approval_currency: quote.currency }
+    : { ...call, approval_amount: "0.00" };
+}
+
 /**
  * What this cancellation refunded: successful refund transactions on refunds
  * that did not exist before it. Null when none did.
@@ -172,7 +207,7 @@ export async function cancelOrder(
   try {
     const orderId = requireNumericId(input.order_id, "order_id");
     const before = await shopifyRestJson<{ order?: ShopifyOrder }>(ctx, `orders/${orderId}.json`, {
-      query: { fields: "id,name,currency,line_items,cancelled_at,cancel_reason,financial_status,fulfillment_status,refunds" },
+      query: { fields: CANCELLATION_ORDER_FIELDS },
     });
     if (!before.order) {
       return cancellationNoEffect(
@@ -220,6 +255,26 @@ export async function cancelOrder(
         refund.id === undefined ? [] : [String(refund.id)]
       ))),
     };
+    // The approval named an amount; a different one needs approving again. A
+    // call with no bound quote predates binding or never went through a card.
+    if (input.approval_amount !== undefined) {
+      const approvedCents = moneyToCents(input.approval_amount);
+      const approvedCurrency = input.approval_currency?.trim().toUpperCase() || null;
+      const quotedCents = requested.refund ? moneyToCents(requested.refund.amount) : 0;
+      const quotedCurrency = requested.refund?.currency ?? null;
+      if (approvedCents !== quotedCents || (quotedCents > 0 && approvedCurrency !== quotedCurrency)) {
+        return cancellationNoEffect(
+          ctx,
+          orderId,
+          toolPolicyBlock(
+            `Error: failed to cancel order - Shopify now calculates ${refundPhrase(quotedCents, quotedCurrency)} for order ${before.order.name ?? orderId}, but ${refundPhrase(approvedCents, approvedCurrency)} was approved; ask for approval again.`,
+            { code: "amount_mismatch", approvedCents, quotedCents },
+          ),
+          "rejected",
+          "amount_mismatch",
+        );
+      }
+    }
 
     let data: { order?: ShopifyOrder };
     try {

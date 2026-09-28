@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsonResponse } from "../testing/json-response.js";
-import { cancelOrder } from "./order-cancellation.js";
+import { cancelOrder, quoteCancellationForApproval } from "./order-cancellation.js";
 
 const ctx = {
   shop: "test-store.myshopify.com",
@@ -402,6 +402,32 @@ describe("cancelOrder", () => {
       });
     });
 
+    it("refuses before cancelling when Shopify's quote changed after approval", async () => {
+      // Approved at $49.95; a $10.00 refund was issued in Shopify admin before execution.
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce(jsonResponse(paidOrder({
+          financial_status: "partially_refunded",
+          refunds: [{ id: 400 }],
+        })))
+        .mockResolvedValueOnce(jsonResponse(calculation("39.95")));
+      vi.stubGlobal("fetch", fetchMock);
+
+      const result = await cancelOrder({
+        order_id: "123",
+        reason: "customer",
+        approval_amount: "49.95",
+        approval_currency: "USD",
+      }, ctx);
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/cancel.json"))).toBe(false);
+      expect(result).toMatchObject({
+        status: "policy_block",
+        receipt: { outcome: "rejected", code: "amount_mismatch" },
+      });
+      expect(result.message).toContain("now calculates a refund of 39.95 USD for order #1032, but a refund of 49.95 USD was approved");
+    });
+
     it("confirms the refund when an interrupted cancellation is reconciled", async () => {
       const fetchMock = vi.fn()
         .mockResolvedValueOnce(jsonResponse(paidOrder()))
@@ -416,5 +442,36 @@ describe("cancelOrder", () => {
       expect(result.status).toBe("ok");
       expect(result.receipt).toMatchObject({ facts: { refund: { amount: "49.95", currency: "USD" } } });
     });
+  });
+});
+
+describe("quoteCancellationForApproval", () => {
+  const order = (overrides: Record<string, unknown> = {}) => ({
+    order: {
+      id: 123,
+      name: "#1036",
+      cancelled_at: null,
+      fulfillment_status: null,
+      financial_status: "paid",
+      currency: "USD",
+      line_items: [{ id: 9, quantity: 1, current_quantity: 1 }],
+      refunds: [],
+      ...overrides,
+    },
+  });
+  const calculation = (transactions: unknown[], currency = "USD") => ({ refund: { currency, transactions } });
+  const suggested = (amount: string, currency = "USD") => ({ kind: "suggested_refund", gateway: "manual", amount, currency, parent_id: 77 });
+
+  it("binds Shopify's quote and drops an amount the model wrote", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(jsonResponse(order()))
+      .mockResolvedValueOnce(jsonResponse(calculation([suggested("49.95")]))));
+
+    const bound = await quoteCancellationForApproval(
+      { order_id: "123", reason: "customer", approval_amount: "1.00", approval_currency: "EUR" },
+      ctx,
+    );
+
+    expect(bound).toEqual({ order_id: "123", reason: "customer", approval_amount: "49.95", approval_currency: "USD" });
   });
 });

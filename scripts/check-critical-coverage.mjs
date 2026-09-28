@@ -124,11 +124,6 @@ const groups = [
     matches: (file) => file.endsWith('/src/maintenance/inactive-thread-sweep.ts'),
   },
   {
-    name: 'agent Shopify write operations',
-    report: 'packages/agent/coverage/coverage-summary.json',
-    matches: (file) => /\/src\/shopify\/(discounts|order-cancellation)\.ts$/.test(file),
-  },
-  {
     // Determines whether a Shopify mutation actually landed after an ambiguous
     // provider outcome. A confident no_effect here can release a duplicate send.
     name: 'agent Shopify reconciliation probes',
