@@ -8,10 +8,11 @@ provider or customer delivery. Retained capability scope comes from the
 
 ## Package 5: capability migration
 
-For each row, check availability, validated inputs and fresh evidence, authority,
+Each row checks availability, validated inputs and fresh evidence, authority,
 effect receipt, recovery, conversational variants, delivery, and v1 compatibility
-as defined in the plan. Reuse shared contract tests; add a host case where the
-operation has a distinct provider precondition or recovery mode.
+as defined in the plan. Do not add a test to fill a row; a new test is warranted
+only for a refusal or recovery a live run cannot safely show
+([TESTING.md](../TESTING.md), *When a test is worth writing*).
 
 | Row | Evidence recorded | Next release evidence |
 | --- | --- | --- |

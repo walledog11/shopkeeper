@@ -1,5 +1,33 @@
 # Testing
 
+## When a test is worth writing
+
+A change is done when its behavior has been seen working in the real app (the
+dev store, the phone, a real channel), or when it is reported as not verified.
+A test is never the done criterion, so no test goes in an item's *done when*.
+
+Write a test only for what a live run cannot safely or reliably show:
+
+- money: refund and spend caps, amounts, currencies;
+- one organization's data, credentials or actions reaching another;
+- a refusal before a write: a stale, edited, replayed or concurrent approval, a
+  revoked grant, a balance that changed while waiting;
+- an uncertain provider outcome, which must be reconciled and never replayed;
+- a bug that actually happened, when the fix does not already make it
+  unrepresentable (one owner for the decision, a required parameter, a type).
+
+Do not write tests that pin wording (UI copy, notifications, briefings, prompt
+text), restate configuration, a registry or constants, assert calls to mocks,
+mock the database, or test the test, eval, gate or one-off-script tooling. A
+test with a fake model or fake provider shows only that the runtime refuses or
+recovers whatever the model does; it never shows that a feature works.
+
+A red gate is not a reason to write a test. When coverage, Knip or a test that
+enumerates the registry blocks a change, bring the choice to the user: a test
+that meets this rule, or a change to the gate.
+
+## Running the suites
+
 Use the root PR verification path before sending changes that touch app behavior:
 
 ```sh
@@ -74,8 +102,8 @@ invocation that requires it.
 
 ## Test Ownership
 
-Unit tests belong next to deterministic business logic, validation, formatting,
-policy, and component helpers. Dashboard and gateway unit tests use the
+When a test meets *When a test is worth writing*, its suffix decides which suite
+runs it. Dashboard and gateway unit tests use the
 `*.unit.test.ts` or `*.unit.test.tsx` suffix and should not need Postgres,
 Redis, Playwright, provider credentials, or live network calls. Email package
 tests are unit-owned. Agent tests are unit-owned except explicit
@@ -207,4 +235,4 @@ Fixtures can set `expectedPlan.mustIncludeActionWhenMutativeIntent: true` to ass
 
 ## Expected Error Logs
 
-Tests that intentionally trigger OAuth CSRF failures, webhook signature failures, API error handling, worker drops, or provider failure alerts should mock or inject the logger and assert the important log call. This keeps CI output readable while preserving coverage for security-relevant logging.
+Tests that deliberately trigger OAuth CSRF failures, webhook signature failures, provider failures, or worker drops can inject a silent logger to keep CI output readable. Assert on a log call only when the log is the behavior, such as a security or ops alert that must fire.

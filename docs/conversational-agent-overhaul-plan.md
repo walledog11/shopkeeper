@@ -50,16 +50,18 @@ contract was unbuilt.
    prose matcher, or a per-phrase carve-out (CLAUDE.md, *Never branch on
    prose*). If the owning contract is not built, the defect stays open, its gate
    stays blocked, and the next work item is building the contract.
-3. **Prove the cause before fixing it.** Reproduce with stored data or a free
-   deterministic test first. A fix built on an unproven cause is reverted, not
-   kept.
+3. **Prove the cause before fixing it.** Reproduce it with stored data or on the
+   dev store first. A deterministic test is for a cause a live run cannot safely
+   show: a race, a crash, a refusal before a write, a money limit. A fix built on
+   an unproven cause is reverted, not kept.
 4. **A checkbox is a claim. Check it before building on it.** Read the code path
    behind any `[x]` you rely on. If the code contradicts it, add the defect to
    [Open work](#open-work-in-order) in the same change.
 5. **A passing test proves only what it asserts.** Scripted-model and
    fake-provider tests cannot show model behavior or real delivery (Package 6
    cutover step 3). Never present a passing test as evidence a problem is solved
-   while its cause remains.
+   while its cause remains. An item is done when it has been seen working on the
+   dev store or phone; a green test is never an item's done criterion.
 6. **Live exercises start from a realistic customer ticket** on the dev store
    (order status, address change, cancellation, return, refund), not from the
    effect under test.
@@ -220,12 +222,13 @@ original list so references in the release evidence stay valid; items 1–7 and
       a committed but undelivered reply keeps working.
     - `executeFreeFormInstruction` no longer calls `runOperatorFreeFormTurn`
       directly.
-    - Done when a phone instruction creates exactly one request and one task
-      (also on redelivery), charges the task budget, can be stopped, recovers
-      from a dead worker as `reconciling` without replaying a write, and sends
-      its phone reply once. Deterministic tests, then a live Telegram and
-      iMessage round-trip (CLAUDE.md: operator changes are verified by live
-      phone round-trip, not evals).
+    - Done when a live Telegram and iMessage round-trip shows a phone
+      instruction creating exactly one request and one task, charging the task
+      budget, stopping when told to, and sending its phone reply once
+      (CLAUDE.md: operator changes are verified by live phone round-trip, not
+      evals). Deterministic tests cover only what a live run cannot show: a
+      redelivered message reaches the same request, and a dead worker leaves
+      the task `reconciling` without replaying a write.
 
 10a. **Ticket-composer instructions as durable tasks** (the same contract as
     item 10: *Target architecture*, "Support and operator turns … share request
@@ -248,8 +251,9 @@ original list so references in the release evidence stay valid; items 1–7 and
       organization's runtime version, as a customer message already is. The
       route stops calling `planAgent`.
     - Not yet established: what a composer plan written over a waiting v2
-      task's cached plan does to that task and its proposal. Establish it with
-      a deterministic test before building (rule 3).
+      task's cached plan does to that task and its proposal. Establish it
+      before building (rule 3) from the code path and one composer instruction
+      on a controlled-store thread whose v2 task is waiting for approval.
     - Done when a composer instruction creates exactly one request and one
       task, plans on the task's runtime, its approval goes through
       `authorizeAgentProposal` against a persisted proposal, and a waiting task
@@ -768,9 +772,9 @@ Read this section before starting a work package. The architecture above describ
 
 ### How to execute this plan
 
-1. Work through packages 0–6 in order. Within a package, finish one contract and its tests before moving to the next. Package 3 may use a small explicit refund tool selection until package 4 adds discovery.
+1. Work through packages 0–6 in order. Within a package, finish one contract and see it work before moving to the next. Package 3 may use a small explicit refund tool selection until package 4 adds discovery.
 2. Keep old callers working through additive contracts and a versioned compatibility boundary. Do not change legacy persisted plan interpretation in place.
-3. For each change, record the files changed, invariant implemented, tests run, remaining failures, and rollback behavior in the work-package checklist. A checkbox means implemented and verified, not merely coded.
+3. For each change, record the files changed, invariant implemented, what was seen working (or "not verified"), remaining failures, and rollback behavior in the work-package checklist. A checkbox means implemented and seen working, not merely coded or tested.
 4. Use existing functions for tenant checks, policy, claims, refund reservations, sending, and reconciliation. Extract a shared function only when two concrete callers need it. Do not add a service container, event-sourcing framework, workflow DSL, generic repository layer, or second capability registry.
 5. Keep the configured model and provider adapters stable during the first slice so runtime regressions can be isolated. Do not compensate for broken claims, receipts, or tool selection by adding prompt instructions.
 6. If a decision affects which merchant operations remain supported, preserve current merchant availability until the inventory provides a documented scope decision. Lack of usage data is not evidence that a capability is unused.
@@ -966,13 +970,13 @@ Rollback: route new tasks to the prior runtime while existing new-runtime tasks 
 | New phrasing, language, or brand voice | Maintains conversational quality and uses real outcome evidence |
 | Capability unavailable | Discovers a legitimate alternative or explains a useful handoff |
 
-Use deterministic tests for runtime invariants, provider contract tests for receipts and recovery, model evals for judgment and conversation, and end-to-end tests for continuity and delivery. Test paraphrases and held-out combinations. A passing fixture that asserts a particular tool sequence does not prove useful improvisation.
+A row is met when it has been seen working on the dev store or phone. A deterministic test belongs only to a row a live run cannot safely show (a stale or concurrent approval, an uncertain provider outcome, a crash mid-effect), and it shows only that the runtime refuses or recovers whatever the model does. Model evals follow *Model evaluation cases and scoring* below. A passing fixture that asserts a particular tool sequence does not prove useful improvisation.
 
 ## Verification specification
 
 ### Deterministic failure and race cases
 
-Use fake model/provider responses, a real test database for claims, and explicit barriers to control concurrent workers. Check provider call counts and stored records as well as user-visible text. At minimum, implement these cases:
+These are the runtime's race and crash invariants: the behavior every change must keep, and the cases a live run cannot safely produce. They are the only cases in this plan that warrant a deterministic test, and only where no existing test covers them. Check `task-ledger.integration.test.ts`, `task-approval.integration.test.ts`, `plan-execution.integration.test.ts` and `unknown-outcome-reconciliation.integration.test.ts` first, and never write a test to fill the table. Such a test uses a fake model and provider, a real test database for claims, and explicit barriers for concurrent workers, and checks provider call counts and stored records. It shows the runtime refuses or recovers; it never shows a feature works.
 
 | Case | Injection | Required assertion |
 | --- | --- | --- |
@@ -997,15 +1001,15 @@ Use fake model/provider responses, a real test database for claims, and explicit
 | D19 | Two open tasks, ambiguous “yes” | Clarification; neither consequential action executes |
 | D20 | Rollout setting flips with a task underway | Task keeps its runtime version and operation identities |
 
-For each injected crash, test recovery from persisted storage in a fresh worker/context. Reusing the original in-memory action array does not prove recovery. For cancellation/approval races, test both orderings explicitly.
+When one of these cases does get a test, recover from persisted storage in a fresh worker/context (reusing the original in-memory action array does not prove recovery), and for a cancellation/approval race cover both orderings.
 
 ### Model evaluation cases and scoring
 
-Extend the existing dashboard `src/lib/agent/__evals__/` harness and fixtures. Use the existing gateway eval infrastructure where merchant-only tools require it. Do not introduce a second evaluation framework. Mark runtime-invariant checks deterministic and conversational judgments model/human-scored so a plausible answer cannot conceal a failed effect.
+Paid eval runs, and new or extended fixtures, happen only when the release owner asks for an eval run (standing rule since 2026-09-27). The families below are what such a run covers, and what live exercises draw their tickets from in the meantime. When a run is requested, use the existing dashboard `src/lib/agent/__evals__/` harness and fixtures, and the existing gateway eval infrastructure where merchant-only tools require it. Do not introduce a second evaluation framework. Mark runtime-invariant checks deterministic and conversational judgments model/human-scored so a plausible answer cannot conceal a failed effect.
 
 Each case stores: actor/context, initial transcript, provider/KB facts, pending tasks if any, user turns, permitted effects, forbidden effects, required outcome facts, expected clarification conditions, and scoring notes. Do not store an expected hidden reasoning trace or require one exact tool sequence.
 
-Minimum families, each with routine and held-out paraphrase/combination variants:
+Families a requested run covers, each with routine and held-out paraphrase/combination variants:
 
 - Investigate an order problem under an explicit “ask before refund” constraint; useful investigation succeeds without issuing money.
 - Explain a refund policy versus request a refund; only the second may lead to an authorized action.
@@ -1041,11 +1045,11 @@ npm run test:e2e:send-reply-hop
 npm run test:e2e:browser
 ```
 
-The named targeted tests are existing regression starting points, not the complete new test list. Add receipt/task/proposal tests beside their owners. Agent database tests use `*.integration.test.ts`; dashboard/gateway database/route tests use regular `*.test.ts`, and their deterministic unit tests use `*.unit.test.ts`. Do not accidentally exclude new tests by copying another workspace's suffix.
+The named tests are existing regression checks to run, not a list to extend. Write a new test only under [TESTING.md](../TESTING.md), *When a test is worth writing*. When one is warranted, agent database tests use `*.integration.test.ts`; dashboard/gateway database/route tests use regular `*.test.ts`, and their deterministic unit tests use `*.unit.test.ts`. Copying another workspace's suffix silently excludes the test.
 
-Live evals skip by default in ordinary integration runs. Select the appropriate existing `test:evals*` script and record its scope, model, repetitions, cost budget and results; a green `verify:pr` without live eval execution is not model acceptance evidence. Read operational script options before invoking canaries or audits; some scripts exercise external effects. Release work must use a controlled authorized workspace and destination, not a real customer chosen from production data.
+Live evals skip by default in ordinary integration runs and run only when the release owner asks; a requested run records its `test:evals*` script, scope, model, repetitions, cost budget and results. A green `verify:pr` is not acceptance evidence. Read operational script options before invoking canaries or audits; some scripts exercise external effects. Release work must use a controlled authorized workspace and destination, not a real customer chosen from production data.
 
-Each package's evidence entry must contain the commit/diff, migrated capability names and runtime routes, schema/compatibility changes, commands and pass/fail/skip counts, failure cases covered, observed limitations, and rollback steps. Record unavailable credentials/services as an unrun gate, not as a pass. Documentation-only edits to this plan need document checks, not provider calls or the full application suite.
+Each package's evidence entry must contain the commit/diff, migrated capability names and runtime routes, schema/compatibility changes, what was seen working on the dev store or phone (or "not verified"), observed limitations, and rollback steps. Test counts are not evidence. Record unavailable credentials/services as an unrun gate, not as a pass. Documentation-only edits to this plan need document checks, not provider calls or the full application suite.
 
 ## Success criteria and scope discipline
 
@@ -1053,6 +1057,6 @@ Track task completion without merchant correction, appropriate versus avoidable 
 
 For the acceptance set, require no unauthorized actions, duplicate effects, or known unsupported completion claims. Require core task completion and conversational quality to match or improve on the baseline. Set numeric latency and cost budgets after package 0; do not claim improvements before measuring the extra reasoning and discovery calls. Report sample size and limitations alongside results.
 
-Review maintainability through actual change impact: adding a capability should primarily require its definition, adapter, and tests; a display wording change must not change execution; adding a channel should not copy policy or orchestration. Shared contract changes still deserve broader testing.
+Review maintainability through actual change impact: adding a capability should primarily require its definition and adapter; a display wording change must not change execution or break a test; adding a channel should not copy policy or orchestration. Shared contract changes still deserve a broader live check.
 
 Do not declare the overhaul complete because a vertical slice passes or a new runtime exists. Completion requires migrated retained behavior, conversational acceptance evidence, durable recovery, a controlled production rollout, and deletion of the superseded active machinery. Optional features cannot expand the default agent surface without an explicit product reason.
