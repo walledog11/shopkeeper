@@ -550,6 +550,13 @@ customer's inbox received the reply with the approved text unchanged.
 
 Release owner, 2026-09-28: a cancellation refunds (plan decision H).
 
+Item 8b's fix deployed, confirmed 2026-09-28T08:30Z: the dashboard (Vercel
+production, build log `Commit: e8ee951`, aliased to `app.useshopkeeper.com`),
+`shopkeeper` and `Gateway Worker` (Railway, `SUCCESS`) all run `e8ee951c`.
+Both Railway services keep `AGENT_RUNTIME_VERSION=1` with
+`AGENT_RUNTIME_V2_ORG_IDS` set, and neither sets `OUTBOUND_EMAIL_ASYNC`, so the
+repeat's reply goes through `sendEmailSynchronously`, the path #132 fixed.
+
 ## Gate D — observation and rollback rehearsal
 
 During the agreed observation window, record at least:

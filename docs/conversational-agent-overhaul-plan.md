@@ -82,10 +82,10 @@ contract was unbuilt.
 | Packages 0–5 | Built. Tested only with a scripted model and fake Shopify, which cannot show that they work. 2 of the 16 retained Shopify writes (customer note, address change) have ever run on the real store. |
 | Gate A: comparison tooling | Done. |
 | Gate B: v1/v2 model comparison | **Not passed.** Both workflow runs on `cf41c169` (2026-09-26) reported failure. v2 failed the C08 held-out 2 of 2 and `refund-partial-placeholder` 1 of 2. Those misses were recorded as a runtime defect and a harness gap and the gate was called passed; a runtime defect is a v2 failure, so it was not a pass. #125 then changed the runtime to fix C08's failure, so C08 can no longer count as held-out. A new unseen C08 variant is needed. |
-| Gate C: real provider and delivery | 0 of 6 real-store attempts worked cleanly: four runs on 2026-09-25 (run 4 reached the customer but is stored as failed) and one on 2026-09-27 that misnamed the variant and made no write (item 8a, since fixed; not counted as a Gate C run). Rerun setup complete 2026-09-28 (orders, run order and deploy state in the release evidence); run 1 (`cancel_order`, 2026-09-28) cancelled correctly but told the customer a refund was coming that Shopify never made; rerun stopped at item 8b. |
+| Gate C: real provider and delivery | 0 of 6 real-store attempts worked cleanly: four runs on 2026-09-25 (run 4 reached the customer but is stored as failed) and one on 2026-09-27 that misnamed the variant and made no write (item 8a, since fixed; not counted as a Gate C run). Rerun setup complete 2026-09-28 (orders, run order and deploy state in the release evidence); run 1 (`cancel_order`, 2026-09-28) cancelled correctly but told the customer a refund was coming that Shopify never made; rerun stopped at item 8b, whose fix (#132) is deployed on all three services. |
 | Gate D, staged rollout, Gate E | Not started. |
 | Production routing | `AGENT_RUNTIME_VERSION=1` on both services, with `AGENT_RUNTIME_V2_ORG_IDS` set to the controlled organization since 2026-09-25. New tasks for every other organization run v1. |
-| Work in flight | Item 8b on `fix/cancel-refunds-payment`; then repeat Gate C run 1. |
+| Work in flight | None. Next: repeat Gate C run 1 on a new paid, unfulfilled one-item order, which closes item 8b. |
 
 ## Open work, in order
 
@@ -115,7 +115,10 @@ in [What has been done](#what-has-been-done).
    requests are durable tasks; a phone instruction creates no task and would not
    exercise the v2 path. One run may prepare state for the next (a fulfilled
    order before a return, a return before its label), and each run is recorded
-   on its own.
+   on its own. Run 1 went to `cancel_order` ahead of
+   `update_shopify_customer_info`, which the release evidence's run order puts
+   first; that run is still owed. The 2026-09-25 address changes used
+   `update_shopify_order_address`, a different tool.
 
    Each customer-ticket run is done when its execution is stored as succeeded,
    the typed receipt matches Shopify's actual state, the customer receives the
@@ -136,8 +139,8 @@ in [What has been done](#what-has-been-done).
     refund as fact rather than as an outcome-dependent placeholder, and the
     approved draft promised the customer a refund. The receipt recorded
     `financialStatus: "paid"`, and nothing bound the claim to it.
-    - Decision H: a cancellation refunds. Built on
-      `fix/cancel-refunds-payment`: `cancelOrder` asks Shopify's refund
+    - Decision H: a cancellation refunds. Merged as #132 (`e8ee951c`) and
+      deployed on all three services 2026-09-28: `cancelOrder` asks Shopify's refund
       calculation for the paid balance (`quoteCancellationRefund`) and sends it
       as `amount` and `currency` in the cancel call, which Shopify's REST
       documentation names as the only way that call refunds. The receipt
@@ -153,7 +156,7 @@ in [What has been done](#what-has-been-done).
     - The missing `providerMessageId`: production has no
       `OUTBOUND_EMAIL_ASYNC`, so the reply went through the dashboard's
       `sendEmailSynchronously`, which discarded the id its sender returned.
-      Fixed on the same branch. The dashboard's `send_email` sink
+      Fixed in #132. The dashboard's `send_email` sink
       (`thread-io/send.ts`) drops it the same way and is not fixed: nothing
       tests that sink directly, so it needs a test first.
     - Done when run 1 is repeated on the real store on a new paid, unfulfilled
