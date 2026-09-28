@@ -6,10 +6,14 @@ paid run.
 
 | Mode | Purpose | Dashboard fixtures | Repeats | Semantic judges | Release blocking |
 | --- | --- | ---: | ---: | --- | --- |
-| `release` | Certify a release candidate | 48 core, hard-gated | 1 | Only objective `gate: true` checks | Yes |
+| `release` | Certify a release candidate | 48 core, hard-gated | 1 | Only objective `gate: true` checks | No — advisory since 2026-09-28 |
 | `targeted` | Diagnose named fixtures | Selected IDs | 1–3 | Caller choice | Selected hard fixtures only |
 | `drift` | Measure the complete model surface | All 84 | 3 | All rubric checks | Hard drift only; advisory is reported |
 | `baseline` | Replace comparable three-repeat evidence | All 84 | 3 | All rubric checks | Capture must complete |
+
+No paid mode blocks a release. A paid run happens only when the release owner
+asks, and rollout rests on the controlled real-provider runs (Gate C in the
+[overhaul plan](conversational-agent-overhaul-plan.md)).
 
 Pull requests run only the deterministic preflight. They validate fixture
 structure, selection/retry/cache behavior, cost accounting, and the gateway

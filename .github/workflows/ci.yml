@@ -81,6 +81,7 @@ jobs:
             packages/analytics/coverage/
             packages/email/coverage/
             packages/integrations/coverage/
+            packages/db/coverage/
           retention-days: 7
 
   build:

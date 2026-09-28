@@ -49,9 +49,11 @@ Execution evidence is recorded in the
    default remains v1. Both support and dashboard requests now use this
    selector at task creation; existing tasks keep their persisted version.
    Clear the list only when promoting the global `AGENT_RUNTIME_VERSION`.
-2. Run deterministic gates and the budgeted live-model release set on the same
-   baseline and held-out inputs for v1 and v2. Record effect correctness, task
-   completion, clarification, delivery, model calls, latency, and cost separately.
+2. Run deterministic gates. The budgeted live-model release set (v1 and v2 on
+   the same baseline and held-out inputs, recording effect correctness, task
+   completion, clarification, delivery, model calls, latency, and cost
+   separately) is advisory since 2026-09-28: it runs when the release owner asks
+   and does not block steps 3 and 4.
 3. In an authorized controlled store, run approval → real provider → typed
    receipt → actual customer delivery with a bounded effect budget and test
    destination. Record redacted provider and message references.

@@ -38,6 +38,7 @@
     "dev": "npm run db:generate && tsc --watch --preserveWatchOutput",
     "lint": "cd ../.. && eslint packages/db/*.ts --max-warnings 0",
     "test:integration": "node ../../scripts/with-test-env.mjs vitest run --config vitest.integration.config.ts",
+    "test:coverage": "node ../../scripts/with-test-env.mjs vitest run --coverage --config vitest.integration.config.ts",
     "db:generate": "prisma generate",
     "db:push": "prisma db push"
   },

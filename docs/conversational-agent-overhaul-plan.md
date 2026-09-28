@@ -83,7 +83,7 @@ contract was unbuilt.
 | --- | --- |
 | Packages 0–5 | Built. Tested only with a scripted model and fake Shopify, which cannot show that they work. 2 of the 16 retained Shopify writes (customer note, address change) have ever run on the real store. |
 | Gate A: comparison tooling | Done. |
-| Gate B: v1/v2 model comparison | **Not passed.** Both workflow runs on `cf41c169` (2026-09-26) reported failure. v2 failed the C08 held-out 2 of 2 and `refund-partial-placeholder` 1 of 2. Those misses were recorded as a runtime defect and a harness gap and the gate was called passed; a runtime defect is a v2 failure, so it was not a pass. #125 then changed the runtime to fix C08's failure, so C08 can no longer count as held-out. A new unseen C08 variant is needed. |
+| Gate B: v1/v2 model comparison | **Advisory since 2026-09-28** (decision I): a paid run happens only when the release owner asks, and it does not block rollout, which rests on Gate C's live runs. Last result, **not passed.** Both workflow runs on `cf41c169` (2026-09-26) reported failure. v2 failed the C08 held-out 2 of 2 and `refund-partial-placeholder` 1 of 2. Those misses were recorded as a runtime defect and a harness gap and the gate was called passed; a runtime defect is a v2 failure, so it was not a pass. #125 then changed the runtime to fix C08's failure, so C08 can no longer count as held-out. A new unseen C08 variant is needed. |
 | Gate C: real provider and delivery | Rerun in progress. 1 of 14 effects done cleanly: `cancel_order`, repeated on #1036 on 2026-09-28 after its first run (#1032) promised a refund Shopify never made (item 8b). Before the rerun, 0 of 5 real-store attempts worked cleanly (four runs on 2026-09-25, one on 2026-09-27; setup, run order and deploy state in the release evidence). The repeat surfaced items 8c–8e, which stop the rerun until they land. |
 | Gate D, staged rollout, Gate E | Not started. |
 | Production routing | `AGENT_RUNTIME_VERSION=1` on both services, with `AGENT_RUNTIME_V2_ORG_IDS` set to the controlled organization since 2026-09-25. New tasks for every other organization run v1. |
@@ -283,13 +283,13 @@ original list so references in the release evidence stay valid; items 1–7 and
       these limits.
 
 11. **Staged rollout** (Package 6, cutover step 4). Expand v2 routing beyond the
-    controlled organization only after the comparison passes, then make v2 the
-    default for new tasks. Before the first expansion, the C08 held-out
-    (`withheld-cancellation-follow-up`) re-confirms in a paid runtime-v2 suite
-    run with its expectation unchanged (decision G), plus a new C08 variant
-    written after #125, since C08 itself was fixed against. A held-out fixture cannot
-    run alone, so this is the whole v2 suite. Stop expansion on any unauthorized or duplicate
-    effect. Existing tasks keep their runtime version. Until items 10 and 10a
+    controlled organization once Gate C's live runs pass, then make v2 the
+    default for new tasks. The paid comparison (Gate B) is advisory: if the
+    release owner asks for one before an expansion, it includes the C08
+    held-out (`withheld-cancellation-follow-up`) with its expectation unchanged
+    (decision G) and a new C08 variant written after #125, since C08 itself was
+    fixed against. A held-out fixture cannot run alone, so that is the whole v2
+    suite. Stop expansion on any unauthorized or duplicate effect. Existing tasks keep their runtime version. Until items 10 and 10a
     land, phone and ticket-composer instructions create no task, so "new
     tasks" means customer messages and dashboard chat.
 12. **Gate E**, persisted-state inventory and deletion, using the targets below.
@@ -634,6 +634,11 @@ and commits cite it.
   daily compensation limits: returning payment for goods never shipped is not
   goodwill. Found when Gate C rerun run 1 cancelled paid #1032, kept the
   payment, and told the customer a refund was coming.
+- **I. The paid model comparison is advisory** (2026-09-28). Gate B, the
+  budgeted v1/v2 eval comparison, runs only when the release owner asks and
+  does not block rollout, which rests on Gate C's live runs. Paid evals had
+  already stopped by standing rule (2026-09-27), so a blocking Gate B could
+  never pass.
 - **Task budget** (2026-09-26, item 7). Active latency p95 at most 10 seconds
   and mean task cost at most $0.035, measured over a runtime's comparison runs
   by the eval report's `[eval:task]` line.
@@ -934,14 +939,14 @@ Cutover sequence:
 1. Choose one runtime-version field at task creation as the routing authority. The rollout configuration selects the value only for new tasks. Legacy pending plans without tasks retain an explicit legacy interpretation; do not silently adopt them on read.
 2. Deploy compatible schema/readers and the new runtime disabled. Run deterministic and compatibility gates. Enable the new runtime only in a controlled workspace first.
 3. Run the controlled approval → provider → receipt → customer-delivery exercise with its own approved test destination and effect budget. Record provider and message references, redacted as appropriate. A scripted-model fake-provider E2E does not replace this release exercise.
-4. Expand routing only after the comparison manifest passes. Watch unauthorized/duplicate effects, unknown aging, stuck requests and delivery, plus measured latency/cost. Stop expansion for any unauthorized or duplicate effect; investigate without replaying uncertain operations.
+4. Expand routing only after the controlled real-provider runs (Gate C) pass; the comparison manifest (Gate B) is advisory and runs when the release owner asks. Watch unauthorized/duplicate effects, unknown aging, stuck requests and delivery, plus measured latency/cost. Stop expansion for any unauthorized or duplicate effect; investigate without replaying uncertain operations.
 5. Re-run the persisted-state inventory before deleting each legacy path. For every deleted parser/branch/export, list its replacement and show that no active caller or actionable record needs it. Keep historical readers explicitly named and bounded by versions.
 6. Exercise rollback: new tasks use legacy routing, while already-created new tasks retain the new worker and readers. Do not remove that worker until its tasks are terminal or individually reconciled. Schema rollback is not part of routine runtime rollback.
 
 Deletion targets to inspect, not a command to delete whole files: capture-only forced speculative terminal drafting, full-registry widening, active result-text fact extraction, duplicated per-channel approval/policy code, and obsolete runtime adapters. Files such as `planner.ts`, `plan-execution.ts`, and `completion-facts.ts` may retain shared or historical responsibilities. Delete by responsibility and callers, not filename.
 
-- [ ] Compare old and new behavior on the same baseline and unseen variants. Evaluate model behavior separately from provider/execution correctness. (Item 7 on `cf41c169` failed; see *Current state*, Gate B.)
-- [ ] Run the required full deterministic suites and a justified, budgeted model release gate. Exercise the real approval-to-provider-to-delivery path on a controlled workspace.
+- [ ] Advisory, when the release owner asks: compare old and new behavior on the same baseline and unseen variants. Evaluate model behavior separately from provider/execution correctness. (Item 7 on `cf41c169` failed; see *Current state*, Gate B.)
+- [ ] Run the full deterministic suites and exercise the real approval-to-provider-to-delivery path on a controlled workspace. A budgeted model release gate is advisory and runs when the release owner asks.
 - [ ] Roll out through a single controlled runtime routing mechanism. Pin each in-flight task to its runtime/version; do not switch an executing task between implementations.
 - [ ] Use shadow comparisons only for decisions/proposals. Never shadow-execute external writes or deliver duplicate messages.
 - [ ] Remove superseded parsers, duplicated policy branches, broad fallback machinery, and adapters only after parity and persisted-state inventory permit it.

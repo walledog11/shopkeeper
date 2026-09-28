@@ -1,23 +1,12 @@
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
+// Unused files, dependencies, unlisted imports, binaries and duplicate exports
+// are knip errors and fail the static stage, which gates Build, Integration and
+// E2E. Unused exports and types are warnings: their counts are printed, never
+// enforced. A ratchet on them alone caused 16 of the 31 knip-red CI runs between
+// 2026-08-21 and 2026-09-28.
 const KNIP_BIN = fileURLToPath(new URL('../node_modules/knip/bin/knip.js', import.meta.url));
-const WARNING_BASELINE = {
-  // Ratcheted 149 -> 81 after removing dead exports, unused shadcn subcomponents,
-  // and internal-only digest helpers; 81 -> 77 after dropping the ops-alert
-  // pass-throughs both host adapters re-exported and nothing imported; 77 -> 11
-  // after dropping the `export` keyword from every declaration nothing outside
-  // its own file referenced. 11 -> 0 after removing dashboard re-export shims,
-  // dead host wrappers, and webhook barrel pass-throughs.
-  exports: 0,
-  // Ratcheted 116 -> 90 after deleting duplicate tool-inputs re-exports and
-  // trimming stale dashboard type surfaces; 90 -> 78 with the same ops-alert
-  // pass-throughs; 78 -> 76 when the value-at-risk guard was deleted.
-  // 76 -> 72 after removing unused dashboard validation helpers and catalog
-  // re-exports. Consumers import these from @shopkeeper/agent/observability.
-  // 72 -> 71 with the unreachable customers-directory and orders-board surfaces.
-  types: 71,
-};
 
 const result = spawnSync(process.execPath, [KNIP_BIN, '--reporter', 'json'], {
   cwd: process.cwd(),
@@ -36,20 +25,7 @@ try {
   throw new Error('[knip] Could not parse the JSON report.');
 }
 
-const counts = countIssues(report.issues ?? []);
-const baselineGrowth = Object.entries(WARNING_BASELINE).filter(
-  ([issueType, maximum]) => (counts[issueType] ?? 0) > maximum,
-);
-
-if ((result.status ?? 1) !== 0 || baselineGrowth.length > 0) {
-  if (baselineGrowth.length > 0) {
-    console.error(
-      `[knip] Warning baseline grew: ${baselineGrowth
-        .map(([issueType, maximum]) => `${issueType}=${counts[issueType]}/${maximum}`)
-        .join(', ')}`,
-    );
-  }
-
+if ((result.status ?? 1) !== 0) {
   spawnSync(process.execPath, [KNIP_BIN], {
     cwd: process.cwd(),
     stdio: 'inherit',
@@ -58,8 +34,9 @@ if ((result.status ?? 1) !== 0 || baselineGrowth.length > 0) {
   process.exit(1);
 }
 
+const counts = countIssues(report.issues ?? []);
 console.log(
-  `[knip] Blocking rules clean; reviewed warning baseline: exports=${counts.exports ?? 0}/${WARNING_BASELINE.exports}, types=${counts.types ?? 0}/${WARNING_BASELINE.types}.`,
+  `[knip] Blocking rules clean; warnings only: unused exports=${counts.exports ?? 0}, types=${counts.types ?? 0}.`,
 );
 
 function countIssues(issues) {

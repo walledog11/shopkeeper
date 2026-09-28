@@ -78,15 +78,11 @@ see `__evals__/selection.ts:evalsEnabled`. Fixture loading and validation still
 run on every integration pass, and the gateway's free `order-ops deterministic
 pre-filter` suite is deliberately left ungated.
 
-Knip's reviewed baseline is zero findings for unused files, dependencies, dev
-dependencies, unlisted imports, binaries, and duplicate exports; those rules are
-blocking. Export and exported-type analysis is enabled at warning severity with
-the reviewed 2026-08-14 baseline of 151 exports and 121 types. This includes
-exports referenced only inside their declaring file; Knip's broad
-`ignoreExportsUsedInFile` escape hatch is deliberately not used. Reduce those
-counts in focused cleanup slices, then promote each rule to blocking at zero. The
-`lint:knip` wrapper rejects growth above either count, so warning severity is a
-ratchet rather than permission to add new debt.
+Knip fails the static stage on unused files, dependencies, dev dependencies,
+unlisted imports, binaries, and duplicate exports. Unused exports and exported
+types are warnings: the `lint:knip` wrapper prints their counts and never fails
+on them. This includes exports referenced only inside their declaring file;
+Knip's broad `ignoreExportsUsedInFile` escape hatch is deliberately not used.
 
 The two ignored `.d.mts` files declare types for sibling runtime modules. The two
 ignored binaries (`docker-compose` and `ngrok`) are host tools spawned by local
@@ -146,7 +142,8 @@ npm run test:services:up
 ```
 
 Coverage bootstraps the DB package, waits for test services, and runs migrations
-before collecting dashboard, gateway, agent, and email coverage:
+before collecting dashboard, gateway, agent, email, analytics, integrations, and
+`packages/db` coverage:
 
 ```sh
 npm run test:coverage
@@ -155,19 +152,15 @@ npm run test:coverage
 Each V8 config includes every eligible production `src/**/*.{ts,tsx}` file.
 Tests, declarations, eval harnesses, fixtures, and build outputs are excluded.
 Unimported production files remain in the report at 0%; coverage is not limited
-to modules reached by the tests. CI uploads all four `coverage/` directories.
+to modules reached by the tests. CI uploads each workspace's `coverage/` directory.
 
-## Coverage Threshold Policy
+## Coverage Is Reported, Not Enforced
 
-Global statement, branch, function, and line thresholds are set one percentage
-point below the measured comprehensive baseline in each workspace. Security,
-billing writes, webhook validation, order-risk safety, Shopify operations, and
-planner safety additionally require at least 80% line and 70% branch coverage
-through `scripts/check-critical-coverage.mjs`.
-
-Thresholds are ratchets. Increasing them after coverage improves is expected.
-Decreasing any threshold requires an explicit reviewed change that explains the
-lost behavior coverage; do not lower a threshold merely to make CI green.
+No coverage threshold fails a run. A percentage says which lines ran, not
+whether the behavior is right, and enforcing one rewarded tests written to walk
+defensive branches. Read the reports to find untested code worth a look; a
+coverage number is never a reason to write a test (see *When a test is worth
+writing*).
 
 ## Network Calls
 

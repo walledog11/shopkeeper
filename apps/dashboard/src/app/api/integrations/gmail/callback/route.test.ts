@@ -298,29 +298,31 @@ describe('POST /api/integrations/gmail/callback', () => {
       'http://dashboard.test/dashboard/integrations/oauth/complete?provider=gmail&status=connected&mode=redirect',
     );
 
-    await vi.waitFor(() => {
+    // The watch runs after the response, un-awaited (see
+    // scheduleGmailWatchRegistration), and writes the degraded status after its
+    // fetch returns. Waiting on the fetch count alone raced that write.
+    await vi.waitFor(async () => {
       expect(mockFetch).toHaveBeenCalledTimes(3);
+      const integration = await db.integration.findFirstOrThrow({
+        where: { organizationId: org!.id, platform: ChannelType.email },
+      });
+      expect(integration.accessToken).toBe('gmail_access_token');
+      expect(integration.refreshToken).toBe('gmail_refresh_token');
+      expect(integration.metadata).toMatchObject({
+        provider: 'gmail',
+        gmail: {
+          inboundStatus: 'degraded',
+          lastError: 'watch_quota',
+        },
+      });
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        {
+          integrationId: integration.id,
+          errorCategory: 'watch_quota',
+        },
+        '[Gmail Watch] Watch registration failed',
+      );
     });
-
-    const integration = await db.integration.findFirstOrThrow({
-      where: { organizationId: org!.id, platform: ChannelType.email },
-    });
-    expect(integration.accessToken).toBe('gmail_access_token');
-    expect(integration.refreshToken).toBe('gmail_refresh_token');
-    expect(integration.metadata).toMatchObject({
-      provider: 'gmail',
-      gmail: {
-        inboundStatus: 'degraded',
-        lastError: 'watch_quota',
-      },
-    });
-    expect(mockLogger.warn).toHaveBeenCalledWith(
-      {
-        integrationId: integration.id,
-        errorCategory: 'watch_quota',
-      },
-      '[Gmail Watch] Watch registration failed',
-    );
   });
 
   it('records the read scope after a successful watch when Google omits scope', async () => {
