@@ -545,7 +545,10 @@ Findings:
 - The receipt's `restockResult` is null while Shopify reports the order
   `restocked`: the receipt omits a fact rather than contradicting one.
 
-Customer-inbox delivery: pending the operator's confirmation.
+Customer-inbox delivery: confirmed by the operator, 2026-09-28. The test
+customer's inbox received the reply with the approved text unchanged.
+
+Release owner, 2026-09-28: a cancellation refunds (plan decision H).
 
 ## Gate D — observation and rollback rehearsal
 

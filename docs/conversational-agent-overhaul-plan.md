@@ -4,7 +4,7 @@ Status, 2026-09-27: not complete, and not working on a real store. Packages 0–
 are built and pass tests against a scripted model and fake Shopify only. No
 real-store attempt has worked cleanly (Gate C row below). Package 6 (certify,
 cut over, and delete the old runtime) has the steps in
-[Open work](#open-work-in-order) left. Decision H waits on the release owner.
+[Open work](#open-work-in-order) left. No question waits on the release owner.
 Production runs runtime v1 by default,
 with one controlled organization on runtime v2.
 
@@ -85,7 +85,7 @@ contract was unbuilt.
 | Gate C: real provider and delivery | 0 of 6 real-store attempts worked cleanly: four runs on 2026-09-25 (run 4 reached the customer but is stored as failed) and one on 2026-09-27 that misnamed the variant and made no write (item 8a, since fixed; not counted as a Gate C run). Rerun setup complete 2026-09-28 (orders, run order and deploy state in the release evidence); run 1 (`cancel_order`, 2026-09-28) cancelled correctly but told the customer a refund was coming that Shopify never made; rerun stopped at item 8b. |
 | Gate D, staged rollout, Gate E | Not started. |
 | Production routing | `AGENT_RUNTIME_VERSION=1` on both services, with `AGENT_RUNTIME_V2_ORG_IDS` set to the controlled organization since 2026-09-25. New tasks for every other organization run v1. |
-| Work in flight | Gate C rerun stopped after run 1. Next: decision H, then item 8b. |
+| Work in flight | Gate C rerun stopped after run 1. Next: item 8b. |
 
 ## Open work, in order
 
@@ -136,13 +136,12 @@ in [What has been done](#what-has-been-done).
     refund as fact rather than as an outcome-dependent placeholder, and the
     approved draft promised the customer a refund. The receipt recorded
     `financialStatus: "paid"`, and nothing bound the claim to it.
-    - Blocked on the open decision below: whether `cancel_order` refunds.
-    - Whichever way it is decided, the fix is in the tool and its receipt, not
-      in the prompt alone (rule 2). If it refunds, the receipt records the
-      refunded amount and state, and the draft names the refund through a
-      placeholder bound to that fact, so a refund that did not happen withholds
-      the message (decision A). If it does not, both prompt statements are
-      corrected in the same change, which is eval-gated.
+    - Decision H: a cancellation refunds. The fix is in the tool and its
+      receipt, not in the prompt (rule 2): the tool refunds the paid amount as
+      part of the cancellation, the receipt records the refunded amount and
+      state, and the draft names the refund through a placeholder bound to that
+      fact, so a refund that did not happen withholds the message
+      (decision A).
     - Also from run 1, cause not yet established: the reply was marked `sent`
       with no `providerMessageId` on the message or the `send_reply` receipt,
       although the gateway's `handleOutboundEmailJob` records one. Find which path marked it
@@ -216,6 +215,29 @@ in [What has been done](#what-has-been-done).
       `authorizeAgentProposal` against a persisted proposal, and a waiting task
       on the same thread is superseded or left intact by a stated rule.
 
+10b. **Refund limits ignore currency** (*Capability and result contracts*,
+    the policy each write is checked against). Found 2026-09-28 while closing
+    PR #91, whose headline fix no longer applies (the model no longer names a
+    refund amount or currency). `maxRefundAmount` and the daily compensation cap
+    are amounts in the shop's currency, but both refund paths compare them with
+    Shopify's quote in the currency the customer was charged:
+    `checkParsedStaticToolPolicy` reads `create_refund`'s runtime-supplied
+    `amount`, `createPartialRefund` compares its calculated presentment cents,
+    and the executor reserves the daily budget in the same presentment cents.
+    On a multi-currency order the comparison is wrong in both directions: a
+    customer charged in a stronger currency gets past a limit they exceed. This
+    store has presented CAD (PR #91 probed order #1031).
+    - Established by reading the code, not reproduced. Reproduce it first with a
+      deterministic test: a USD shop, a customer charged in a stronger
+      currency, a refund over the limit in shop money and under it in
+      presentment money (rule 3).
+    - The change: compare shop money with shop money, from Shopify's own
+      shop-money figure for the refund, or refuse as not comparable when that
+      figure is unavailable. Never convert with a rate of our own.
+    - Does not block Gate C: every Gate C order is USD with no other
+      presentment currency. Blocks item 11, which would put other stores on
+      these limits.
+
 11. **Staged rollout** (Package 6, cutover step 4). Expand v2 routing beyond the
     controlled organization only after the comparison passes, then make v2 the
     default for new tasks. Before the first expansion, the C08 held-out
@@ -267,23 +289,7 @@ marked as having no caller.
 Blocks the work named until the release owner answers it. When answered, it
 moves to [Settled decisions](#settled-decisions).
 
-- **H. Does `cancel_order` refund a paid order?** Blocks item 8b, and so the
-  Gate C rerun. Facts: the tool cancels through REST `cancel.json` without an
-  amount, and on 2026-09-28 Shopify cancelled paid #1032 and kept the payment.
-  The prompt, and so the agent, assumes cancellation refunds, and the customer
-  was told so. Shopify's `orderCancel` mutation takes a `refundMethod` for how
-  the paid amount is refunded; an authorization is voided either way. The
-  prompt also says a cancellation "is not compensation", so today it is outside
-  the per-call and daily refund limits.
-  **Recommendation: yes.** A customer asking to cancel a paid order expects
-  their money back, and the merchant approving the card reads it that way. Keep
-  one approval: the card says the cancellation refunds the full payment to the
-  original method, the receipt records the refunded amount, and the reply binds
-  to it. Keep it outside the compensation limits, as the prompt already states,
-  because returning payment for goods never shipped is not goodwill.
-  The alternative (cancel only; the refund is a separate `create_refund` the
-  model must propose) makes every cancellation a two-write plan and needs the
-  prompt rewritten through the eval gate.
+None.
 
 ## What has been done
 
@@ -564,6 +570,15 @@ and commits cite it.
   that cannot write. The fix follows the follow-up contract and is keyed on
   the typed follow-up flag, not on phrasing. The keyword checks themselves
   stay outside this plan. C08's expectation stands.
+- **H. A cancellation refunds the order's payment** (2026-09-28, item 8b).
+  `cancel_order` on a paid order refunds the full paid amount to the original
+  payment method as part of the same approved write. The card says so, the
+  receipt records the refunded amount, and the customer message names the
+  refund through a placeholder bound to that fact, so a refund that did not
+  happen withholds the message (decision A). It stays outside the per-call and
+  daily compensation limits: returning payment for goods never shipped is not
+  goodwill. Found when Gate C rerun run 1 cancelled paid #1032, kept the
+  payment, and told the customer a refund was coming.
 - **Task budget** (2026-09-26, item 7). Active latency p95 at most 10 seconds
   and mean task cost at most $0.035, measured over a runtime's comparison runs
   by the eval report's `[eval:task]` line.
