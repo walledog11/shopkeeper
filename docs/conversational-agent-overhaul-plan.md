@@ -82,18 +82,18 @@ contract was unbuilt.
 | Packages 0–5 | Built. Tested only with a scripted model and fake Shopify, which cannot show that they work. 2 of the 16 retained Shopify writes (customer note, address change) have ever run on the real store. |
 | Gate A: comparison tooling | Done. |
 | Gate B: v1/v2 model comparison | **Not passed.** Both workflow runs on `cf41c169` (2026-09-26) reported failure. v2 failed the C08 held-out 2 of 2 and `refund-partial-placeholder` 1 of 2. Those misses were recorded as a runtime defect and a harness gap and the gate was called passed; a runtime defect is a v2 failure, so it was not a pass. #125 then changed the runtime to fix C08's failure, so C08 can no longer count as held-out. A new unseen C08 variant is needed. |
-| Gate C: real provider and delivery | 0 of 6 real-store attempts worked cleanly: four runs on 2026-09-25 (run 4 reached the customer but is stored as failed) and one on 2026-09-27 that misnamed the variant and made no write (item 8a, since fixed; not counted as a Gate C run). Rerun setup complete 2026-09-28 (orders, run order and deploy state in the release evidence); run 1 (`cancel_order`, 2026-09-28) cancelled correctly but told the customer a refund was coming that Shopify never made; rerun stopped at item 8b, whose fix (#132) is deployed on all three services. |
+| Gate C: real provider and delivery | Rerun in progress. 1 of 14 effects done cleanly: `cancel_order`, repeated on #1036 on 2026-09-28 after its first run (#1032) promised a refund Shopify never made (item 8b). Before the rerun, 0 of 5 real-store attempts worked cleanly (four runs on 2026-09-25, one on 2026-09-27; setup, run order and deploy state in the release evidence). The repeat surfaced items 8c–8e, which stop the rerun until they land. |
 | Gate D, staged rollout, Gate E | Not started. |
 | Production routing | `AGENT_RUNTIME_VERSION=1` on both services, with `AGENT_RUNTIME_V2_ORG_IDS` set to the controlled organization since 2026-09-25. New tasks for every other organization run v1. |
-| Work in flight | None. Next: repeat Gate C run 1 on a new paid, unfulfilled one-item order, which closes item 8b. |
+| Work in flight | None. Next: item 8c. |
 
 ## Open work, in order
 
 Do these in order, one change each. Each item names the contract it implements
 and what done means. Items that touch the agent path land through a pull
 request. Doc-only changes go straight to master. The numbers continue the
-original list so references in the release evidence stay valid; items 1–7 are
-in [What has been done](#what-has-been-done).
+original list so references in the release evidence stay valid; items 1–7 and
+8b are in [What has been done](#what-has-been-done).
 
 8. **Re-run Gate C** (decision F): one controlled run per retained Shopify
    write that has never touched a real store, each from a realistic ticket
@@ -129,40 +129,57 @@ in [What has been done](#what-has-been-done).
    contract (rule 2); stop, record it, and fix it before continuing. The release
    evidence also offers an optional step 7: retry a deliberately induced
    definite delivery failure and confirm the write does not repeat.
-8b. **A cancellation promises a refund Shopify does not make** (*Capability and
-    result contracts*; decision A). Found by the Gate C rerun's run 1,
-    2026-09-28, which is stopped until this lands. `cancelOrder` posts
-    `orders/{id}/cancel.json` with `reason`, `restock` and `email` only; Shopify
-    cancelled paid order #1032 and kept the payment. The prompt states that
-    cancellation refunds the payment in `buildGuardrailClauses`' cap bullet and
-    in `SUPPORT_INSTRUCTIONS`' cancellation bullet, so the model wrote the
-    refund as fact rather than as an outcome-dependent placeholder, and the
-    approved draft promised the customer a refund. The receipt recorded
-    `financialStatus: "paid"`, and nothing bound the claim to it.
-    - Decision H: a cancellation refunds. Merged as #132 (`e8ee951c`) and
-      deployed on all three services 2026-09-28: `cancelOrder` asks Shopify's refund
-      calculation for the paid balance (`quoteCancellationRefund`) and sends it
-      as `amount` and `currency` in the cancel call, which Shopify's REST
-      documentation names as the only way that call refunds. The receipt
-      records what the cancellation refunded (`facts.refund`, null when nothing
-      was captured; absent on receipts written before). A refund that was asked
-      for and is missing from Shopify's answer makes the outcome `unknown`, so
-      the approved message is held whatever its wording. `{{refund_amount}}`
-      now binds to `cancel_order`, and a cancellation that refunded nothing
-      leaves it unfilled. The card, the tool description and both prompt
-      statements now say the tool refunds; those are eval-gated prompt bytes,
-      verified by repeating run 1 rather than by a paid run (release owner,
-      2026-09-27: no paid evals).
-    - The missing `providerMessageId`: production has no
-      `OUTBOUND_EMAIL_ASYNC`, so the reply went through the dashboard's
-      `sendEmailSynchronously`, which discarded the id its sender returned.
-      Fixed in #132. The dashboard's `send_email` sink
-      (`thread-io/send.ts`) drops it the same way and is not fixed: nothing
-      tests that sink directly, so it needs a test first.
-    - Done when run 1 is repeated on the real store on a new paid, unfulfilled
-      one-item order (#1032 is now cancelled): Shopify shows the refund, the
-      receipt's `facts.refund` matches it, the reply claims no refund Shopify
-      does not show, and the message carries a provider message id.
+8c. **Phone cards never show the exact draft** (*Approval and communication
+    contract*: the merchant approves the customer message as it will be sent).
+    Found by the Gate C repeat of run 1, 2026-09-28. `toGatewayAgentPlan`
+    (`agent-plan-adapter.ts`) copies a plan's steps, calls, signals and
+    validation but not `communication`, so `sendOperatorPlanNotification`
+    never has the exact draft and `formatOperatorPlanMessage` falls back to the
+    legacy excerpt of the `send_reply` call. The card then shows placeholders
+    as raw tokens ("your {{refund_amount}} refund") instead of
+    `displayApprovedDraft`'s labels, and uses the legacy lead. Every v2 phone
+    card since #111 took this path; the card tests pass `communication` to the
+    formatter directly and never go through the adapter.
+    - Done when the adapter carries `communication`, a test drives a v2 plan
+      through the adapter into the card and sees the labeled draft, and the
+      next Gate C run's phone card shows it.
+
+8d. **A cancellation's refund is approved without its amount** (*Approval and
+    communication contract*; decision H). Found by the same run. #132 made
+    `cancel_order` refund Shopify's quoted paid balance, but quotes it only at
+    execution. `create_refund` and `create_partial_refund` bind Shopify's quote
+    into the approval at planning (`bindProviderApprovalFacts`, `planner.ts`),
+    show it on the card, and refuse to execute when the quote has changed.
+    `cancel_order` does none of that, so the merchant approved "Cancel order
+    and refund payment" with no amount, and the only amount on the card was the
+    `{{refund_amount}}` placeholder.
+    - The change: bind the cancellation's refund quote into the approved call
+      as the refund quotes are bound, render it on every card ("Cancel #1036
+      and refund $49.95"), and refuse before the cancel call when execution's
+      quote differs. The placeholder stays filled from the receipt.
+    - Done when the card names the amount, a changed quote refuses before any
+      write in a deterministic test, and a Gate C cancellation shows it live.
+
+8e. **The approval confirmation is one tool's result string** (*Response
+    grounding and delivery*; CLAUDE.md, *Compose from fields*). Found by the
+    same run. After a phone approval the merchant is sent
+    `summarizeApprovedDashboardActions` (`run-approved-actions.ts`), which is
+    the last non-read action's `result` text. After a cancel-and-reply plan
+    that was "Reply sent to customer via email.": it omits the cancellation
+    and the refund, and reads as a log line.
+    - The change: compose the confirmation from the typed receipts of the
+      actions that ran (what was cancelled, refunded, sent and to whom), never
+      from result text. A failure keeps its existing failure copy.
+    - Done when a cancel-and-reply approval confirms both effects with the
+      refunded amount from the receipt, in a deterministic test and on the next
+      Gate C run.
+
+8f. **The dashboard's `send_email` sink drops the provider message id**
+    (*Typed receipts and operation identity*). Found while fixing item 8b:
+    `thread-io/send.ts` discards the id its sender returns, as
+    `sendEmailSynchronously` did before #132. Nothing tests that sink
+    directly, so it needs a test first. Gate C's customer-ticket runs reply
+    through `send_reply`, which #132 fixed, so this does not stop the rerun.
 
 9. **Gate D**, observation and rollback rehearsal, as written in the release
    evidence. Needs the observation window and operator, which the release
@@ -498,6 +515,17 @@ billed tokens: Gate B measured v2 at about 33% more per suite than v1.
     item 4, passed one conclusive attempt; the other failed on a read the
     fixture does not simulate. The C08 miss was a runtime defect (decision G).
     Both workflow runs reported failure, and the gate did not pass.
+- *Item 8b, a cancellation refunds* (#132, decision H). Gate C run 1
+  cancelled paid #1032 through `orders/{id}/cancel.json` with no amount;
+  Shopify kept the payment, and the approved reply promised a refund.
+  `cancelOrder` now asks Shopify's refund calculation for the paid balance
+  (`quoteCancellationRefund`) and sends it as `amount` and `currency`. The
+  receipt records the refund in `facts.refund`; a requested refund missing
+  from Shopify's answer makes the outcome `unknown`, which holds the approved
+  message. `{{refund_amount}}` binds to `cancel_order`. The dashboard's
+  `sendEmailSynchronously` now keeps the provider message id. Verified by
+  repeating run 1 on #1036 (release evidence): refunded 49.95 USD, receipt
+  matching, reply sent with its provider id.
     The first paid
     attempt, on `a78f91e1`, was a harness gap that #123 fixed and now guards
     for free.

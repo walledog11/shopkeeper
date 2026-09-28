@@ -557,6 +557,48 @@ Both Railway services keep `AGENT_RUNTIME_VERSION=1` with
 `AGENT_RUNTIME_V2_ORG_IDS` set, and neither sets `OUTBOUND_EMAIL_ASYNC`, so the
 repeat's reply goes through `sendEmailSynchronously`, the path #132 fixed.
 
+### Gate C rerun, run 1 repeated — `cancel_order` on #1036, 2026-09-28
+
+Deployed commit `e8ee951c` on all three services (item 8b, #132). **Clean:
+the order is cancelled and refunded, the receipt matches, and the customer was
+sent the approved draft with only its placeholder filled.** Read from
+production 2026-09-28 by a read-only script.
+
+#1036 was reserved for `fulfill_order` and then `create_refund`; it is now
+cancelled, so those runs need a new paid, unfulfilled one-item order.
+
+Ticket from the test customer's inbox, on the same thread as run 1: "Hi could
+you cancel order #1036? Thanks"
+
+| Record | State |
+| --- | --- |
+| Request | `bc864eef`, one, `attached` to task `f5232d3e` |
+| Task | `f5232d3e`, `runtimeVersion=2`, `completed`, 3 of 20 model calls |
+| Proposal | `81975a2f`: `cancel_order` (#1036, reason `customer`) and an `exact_draft` reply; `allowedResultBindings` binds `refund_amount` to the `cancel_order` call's `facts.refund.amount`; approved once from a member key, approved hash equals proposal hash; `completed` |
+| Execution | `5c2ca9e2`, `human_approved`, `committed` |
+| `cancel_order` action | `97ba3446`, `settled`, operation and provider key `c2b9526b`; receipt v1 `succeeded`, facts `refund` 49.95 USD, `financialStatus: "refunded"`, `cancelledAt` 2026-09-28T08:41:41Z, `restockResult: null` |
+| `send_reply` action | `aa0ebcc7`, `settled`, operation `f6306ca2`; receipt `deliveryState: "sent"`, `providerMessageId` set (`1a0e72d6…`) |
+| Reply message | `5e3a45cb`, `sendStatus=sent`, `agentTaskId=f5232d3e`, provider id set |
+| Shopify #1036 after | cancelled and refunded, confirmed by the operator |
+| Duplicates | none org-wide by provider operation key |
+
+Approved draft: "Hi Walle, order #1036 has been cancelled since it hadn't
+shipped, and your {{refund_amount}} refund will process automatically as part
+of the cancellation." Sent: the same text with `$49.95` in place of the
+placeholder.
+
+Findings, none of which affected what the customer received:
+
+- The phone card showed the draft with the raw `{{refund_amount}}` token and
+  the legacy "The reply:" lead: the gateway's plan adapter drops the proposal's
+  `communication`. Plan item 8c.
+- The card never named the refund amount; `cancel_order` is quoted only at
+  execution. Plan item 8d.
+- After "Yes", the phone was sent "Reply sent to customer via email.", the
+  `send_reply` result string, with no mention of the cancellation or refund.
+  Plan item 8e.
+- `restockResult` is null again while the order was restocked, as in run 1.
+
 ## Gate D — observation and rollback rehearsal
 
 During the agreed observation window, record at least:
