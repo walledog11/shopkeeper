@@ -140,9 +140,8 @@ original list so references in the release evidence stay valid; items 1–7 and
     `displayApprovedDraft`'s labels, and uses the legacy lead. Every v2 phone
     card since #111 took this path; the card tests pass `communication` to the
     formatter directly and never go through the adapter.
-    - Done when the adapter carries `communication`, a test drives a v2 plan
-      through the adapter into the card and sees the labeled draft, and the
-      next Gate C run's phone card shows it.
+    - Done when the adapter carries `communication` and the next Gate C run's
+      phone card shows the draft with its placeholders labeled.
 
 8d. **A cancellation's refund is approved without its amount** (*Approval and
     communication contract*; decision H). Found by the same run. #132 made
@@ -157,8 +156,9 @@ original list so references in the release evidence stay valid; items 1–7 and
       as the refund quotes are bound, render it on every card ("Cancel #1036
       and refund $49.95"), and refuse before the cancel call when execution's
       quote differs. The placeholder stays filled from the receipt.
-    - Done when the card names the amount, a changed quote refuses before any
-      write in a deterministic test, and a Gate C cancellation shows it live.
+    - Done when a Gate C cancellation's card names the amount. The one
+      deterministic test is that a quote changed after approval refuses before
+      any write, which a live run cannot show without corrupting an order.
 
 8e. **The approval confirmation is one tool's result string** (*Response
     grounding and delivery*; CLAUDE.md, *Compose from fields*). Found by the
@@ -170,15 +170,13 @@ original list so references in the release evidence stay valid; items 1–7 and
     - The change: compose the confirmation from the typed receipts of the
       actions that ran (what was cancelled, refunded, sent and to whom), never
       from result text. A failure keeps its existing failure copy.
-    - Done when a cancel-and-reply approval confirms both effects with the
-      refunded amount from the receipt, in a deterministic test and on the next
-      Gate C run.
+    - Done when a cancel-and-reply approval on the next Gate C run confirms
+      both effects with the refunded amount from the receipt.
 
 8f. **The dashboard's `send_email` sink drops the provider message id**
     (*Typed receipts and operation identity*). Found while fixing item 8b:
     `thread-io/send.ts` discards the id its sender returns, as
-    `sendEmailSynchronously` did before #132. Nothing tests that sink
-    directly, so it needs a test first. Gate C's customer-ticket runs reply
+    `sendEmailSynchronously` did before #132. Gate C's customer-ticket runs reply
     through `send_reply`, which #132 fixed, so this does not stop the rerun.
 
 9. **Gate D**, observation and rollback rehearsal, as written in the release

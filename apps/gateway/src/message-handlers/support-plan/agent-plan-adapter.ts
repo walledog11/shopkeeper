@@ -2,7 +2,8 @@ import type { AgentPlan as PackageAgentPlan } from '@shopkeeper/agent/types';
 import type { AgentPlan as GatewayAgentPlan } from '../../types.js';
 
 // Gateway notifications only need the JSON view used by Telegram/operator
-// approval: visible steps plus raw tool calls. Keep this adapter explicit so a
+// approval: visible steps, raw tool calls, and the exact customer message the
+// approval sends. Keep this adapter explicit so a
 // package AgentPlan shape change does not cross the boundary via a broad cast.
 export function toGatewayAgentPlan(plan: PackageAgentPlan | null): GatewayAgentPlan | null {
   if (!plan) return null;
@@ -26,5 +27,6 @@ export function toGatewayAgentPlan(plan: PackageAgentPlan | null): GatewayAgentP
         ? { status: 'valid', issues: [] }
         : { status: 'invalid', issues: plan.validation.issues.map((issue) => ({ ...issue })) },
     } : {}),
+    ...(plan.communication ? { communication: plan.communication } : {}),
   };
 }
