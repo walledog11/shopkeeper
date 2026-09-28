@@ -385,7 +385,10 @@ async function runPlanAttempt(scope: PlanAttemptScope): Promise<GeneratedThreadP
     };
   }
 
-  const ctx = await buildContext(threadId, organizationId, gatewayThreadSink);
+  const ctx = await buildContext(threadId, organizationId, gatewayThreadSink,
+    scope.durableTurn?.runtimeVersion !== undefined
+      ? { runtimeVersion: scope.durableTurn.runtimeVersion }
+      : undefined);
   const taskBudget = supportTaskModelBudget(organizationId, scope.durableTurn);
   if (taskBudget) ctx.taskBudget = taskBudget;
   const plan = await planAgent(

@@ -211,7 +211,9 @@ export async function planAgent(
   const baseMessages = buildMessageHistory(historyWindow, modelInstruction, {
     segregateUntrusted: !operatorMode,
   });
-  const { stable, volatile } = buildSystemPromptParts(ctx, settings, { exactDraftProposal });
+  // Decided once so the prompt describes the tool set the model is offered.
+  const capabilityDiscovery = usesCapabilityDiscovery(options?.runtimeVersion);
+  const { stable, volatile } = buildSystemPromptParts(ctx, settings, { exactDraftProposal, capabilityDiscovery });
   const systemPromptBlocks = buildSplitCachedSystemPrompt(stable, volatile);
   const resolvedSettings = resolveAgentSettings(settings);
 
@@ -248,7 +250,7 @@ export async function planAgent(
     storefrontMode: Boolean(storefrontTools),
     merchantAnswerReplan,
     merchantInstruction: options?.merchantInstruction === true,
-    capabilityDiscovery: usesCapabilityDiscovery(options?.runtimeVersion),
+    capabilityDiscovery,
     ambiguousCustomerFollowUp: isAmbiguousCustomerFollowUp(ctx),
     withheldMessageFollowUp: options?.withheldMessageFollowUp === true,
   });

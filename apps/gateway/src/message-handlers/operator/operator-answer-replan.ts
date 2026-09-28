@@ -294,6 +294,7 @@ async function runAnswerReplan(
   const doReplan = async (): Promise<{ plan: AgentPlan; cacheRecord: ReturnType<typeof buildAgentPlanCacheRecord> }> => {
     const ctx = await buildContext(threadId, organizationId, gatewayThreadSink, {
       pinKbArticles: [{ title: saved.title, body: saved.body }],
+      ...(runtimeVersion !== undefined ? { runtimeVersion } : {}),
     });
     const replanned = await planAgent(
       ctx,
