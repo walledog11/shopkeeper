@@ -162,6 +162,34 @@ in [What has been done](#what-has-been-done).
       iMessage round-trip (CLAUDE.md: operator changes are verified by live
       phone round-trip, not evals).
 
+10a. **Ticket-composer instructions as durable tasks** (the same contract as
+    item 10: *Target architecture*, "Support and operator turns … share request
+    identity, budgets, receipts, and recovery semantics"; Package 6 acceptance,
+    "all retained capabilities have one execution owner"). Found 2026-09-27. A
+    merchant instruction typed in a ticket's composer, and a plan regenerate,
+    reach `POST /api/agent/plan` (`apps/dashboard/src/app/api/agent/plan/route.ts`,
+    called by `fetchAgentPlan` in `useConversationAgentFlow`). The route builds
+    context and calls `planAgent` inside the dashboard with no request, no task
+    and no runtime version, so it plans as runtime v1 whatever the
+    organization's routing says, and writes the plan to `Thread.cachedPlan`
+    with no `AgentProposal`. Approving it then takes the no-proposal branch of
+    `executeCurrentCachedHomePlan` ("those execute exactly as they did
+    before"). The controlled organization's ticket-composer instructions
+    therefore never exercise v2. Package 2 made the dashboard *chat*
+    (`/api/agent/chat`) durable; Package 5 made *customer* messages durable;
+    neither covered this route, and item 10 names only phone instructions.
+    - The change: a ticket-composer instruction becomes an accepted
+      `AgentRequest` run as a claimed `AgentTask` on the thread, pinned to the
+      organization's runtime version, as a customer message already is. The
+      route stops calling `planAgent`.
+    - Not yet established: what a composer plan written over a waiting v2
+      task's cached plan does to that task and its proposal. Establish it with
+      a deterministic test before building (rule 3).
+    - Done when a composer instruction creates exactly one request and one
+      task, plans on the task's runtime, its approval goes through
+      `authorizeAgentProposal` against a persisted proposal, and a waiting task
+      on the same thread is superseded or left intact by a stated rule.
+
 11. **Staged rollout** (Package 6, cutover step 4). Expand v2 routing beyond the
     controlled organization only after the comparison passes, then make v2 the
     default for new tasks. Before the first expansion, the C08 held-out
@@ -169,11 +197,12 @@ in [What has been done](#what-has-been-done).
     run with its expectation unchanged (decision G), plus a new C08 variant
     written after #125, since C08 itself was fixed against. A held-out fixture cannot
     run alone, so this is the whole v2 suite. Stop expansion on any unauthorized or duplicate
-    effect. Existing tasks keep their runtime version. Until item 10 lands,
-    phone instructions create no task, so "new tasks" means support and
-    dashboard work.
+    effect. Existing tasks keep their runtime version. Until items 10 and 10a
+    land, phone and ticket-composer instructions create no task, so "new
+    tasks" means customer messages and dashboard chat.
 12. **Gate E**, persisted-state inventory and deletion, using the targets below.
-    It includes the synchronous operator path item 10 replaces.
+    It includes the synchronous operator path item 10 replaces and the
+    taskless composer planning item 10a replaces.
 13. **Documentation.** Update the architecture and product docs to describe the
     single runtime (Package 6, last checkbox). Remove conflicting directions
     rather than adding another layer.
@@ -203,6 +232,9 @@ marked as having no caller.
 - After item 10: the direct `runOperatorFreeFormTurn` call in
   `executeFreeFormInstruction` (`apps/gateway/src/routes/telegram/agent-execution.ts`)
   and anything left that only it used.
+- After item 10a: the `planAgent` call in `POST /api/agent/plan`
+  (`apps/dashboard/src/app/api/agent/plan/route.ts`) and anything left that
+  only it used.
 
 ## Open decision
 
