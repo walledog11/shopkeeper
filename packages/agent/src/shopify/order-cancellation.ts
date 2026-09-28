@@ -14,9 +14,30 @@ import {
   shopifyRestJson,
   type ShopifyContext,
 } from "./client.js";
+import { quoteCancellationRefund } from "./refunds.js";
 import type { ShopifyOrder } from "./types.js";
-import { requireNumericId } from "./validation.js";
+import { centsToMoney, moneyToCents, requireNumericId } from "./validation.js";
 import { shopifyFailureReceipt, shopifyReceiptEnvelope } from "./receipts.js";
+
+type RequestedRefund = { amount: string; currency: string } | null;
+
+/**
+ * What this cancellation refunded: successful refund transactions on refunds
+ * that did not exist before it. Null when none did.
+ */
+function cancellationRefund(
+  order: ShopifyOrder,
+  priorRefundIds: ReadonlySet<string>,
+): { amount: string; currency: string } | null {
+  const transactions = (order.refunds ?? [])
+    .filter((refund) => refund.id === undefined || !priorRefundIds.has(String(refund.id)))
+    .flatMap((refund) => refund.transactions ?? [])
+    .filter((transaction) => transaction.kind === "refund" && transaction.status === "success");
+  const cents = transactions.reduce((total, transaction) => total + moneyToCents(transaction.amount), 0);
+  const currency = transactions.find((transaction) => transaction.currency)?.currency?.toUpperCase()
+    ?? order.currency?.toUpperCase();
+  return cents > 0 && currency ? { amount: centsToMoney(cents), currency } : null;
+}
 
 function cancellationNoEffect(
   ctx: ShopifyContext,
@@ -55,6 +76,7 @@ function cancellationResult(
   order: ShopifyOrder,
   orderId: string,
   input: CancelOrderInput,
+  requested: { refund: RequestedRefund; priorRefundIds: ReadonlySet<string> },
   reconciled = false,
 ): ToolResult {
   const cancelledAt = order.cancelled_at?.trim();
@@ -65,6 +87,19 @@ function cancellationResult(
     return {
       ...toolUnknown(
         `Unknown: Shopify cancelled order ${orderId}, but did not return complete confirmed cancellation state. Do not retry or confirm it to the customer until it is reconciled.`,
+      ),
+      ...(receipt ? { receipt } : {}),
+    };
+  }
+  const refund = cancellationRefund(order, requested.priorRefundIds);
+  // The cancellation committed, so it cannot be reported as failed; but a
+  // refund that was asked for and is not in Shopify's answer is not a success
+  // either. Unknown holds the approved message and sends the merchant to look.
+  if (requested.refund && !refund) {
+    const receipt = unknownCancellationReceipt(ctx, orderId, "confirmed_refund_missing");
+    return {
+      ...toolUnknown(
+        `Unknown: Shopify cancelled order ${order.name ?? orderId}, but its answer shows no refund of the ${requested.refund.amount} ${requested.refund.currency} that was requested (financial_status "${financialStatus}"). Do not tell the customer a refund was made until it is reviewed.`,
       ),
       ...(receipt ? { receipt } : {}),
     };
@@ -81,11 +116,13 @@ function cancellationResult(
       reason,
       financialStatus,
       restockResult: null,
+      refund,
     },
   } : undefined;
   const result = toolOk(
     `Order ${order.name ?? orderId} cancelled successfully${reconciled ? " (confirmed after an interrupted provider response)" : ""}. `
     + `Reason: ${reason}. Restock requested: ${input.restock !== false ? "yes" : "no"}. `
+    + (refund ? `Refunded ${refund.amount} ${refund.currency}. ` : "No payment was refunded. ")
     + `Refund status: Shopify returned financial_status "${financialStatus}".`,
   );
   return receipt ? { ...result, receipt } : result;
@@ -95,17 +132,18 @@ async function reconcileCancellation(
   ctx: ShopifyContext,
   orderId: string,
   input: CancelOrderInput,
+  requested: { refund: RequestedRefund; priorRefundIds: ReadonlySet<string> },
   mutationError: unknown,
 ): Promise<ToolResult> {
   try {
     const state = await shopifyRestJson<{ order?: ShopifyOrder }>(ctx, `orders/${orderId}.json`, {
-      query: { fields: "id,name,cancelled_at,cancel_reason,financial_status" },
+      query: { fields: "id,name,currency,cancelled_at,cancel_reason,financial_status,refunds" },
     });
     if (state.order?.cancelled_at) {
       const actualReason = state.order.cancel_reason?.toLowerCase();
       const expectedReason = (input.reason ?? "other").toLowerCase();
       if (!actualReason || actualReason === expectedReason) {
-        return cancellationResult(ctx, state.order, orderId, input, true);
+        return cancellationResult(ctx, state.order, orderId, input, requested, true);
       }
       const result = toolUnknown(
         `Unknown: order ${orderId} is cancelled, but Shopify recorded reason "${actualReason}" instead of "${expectedReason}" after the provider response was interrupted. Do not retry or confirm the cancellation until it is reviewed.`,
@@ -134,7 +172,7 @@ export async function cancelOrder(
   try {
     const orderId = requireNumericId(input.order_id, "order_id");
     const before = await shopifyRestJson<{ order?: ShopifyOrder }>(ctx, `orders/${orderId}.json`, {
-      query: { fields: "id,name,cancelled_at,cancel_reason,financial_status,fulfillment_status" },
+      query: { fields: "id,name,currency,line_items,cancelled_at,cancel_reason,financial_status,fulfillment_status,refunds" },
     });
     if (!before.order) {
       return cancellationNoEffect(
@@ -164,6 +202,25 @@ export async function cancelOrder(
       );
     }
 
+    // Decision H: cancelling a paid order refunds it. Shopify's cancel refunds
+    // only the amount it is sent; without one it keeps the payment.
+    const quote = await quoteCancellationRefund(ctx, orderId, before.order);
+    if (quote.kind === "currency_mismatch") {
+      return cancellationNoEffect(
+        ctx,
+        orderId,
+        toolPolicyBlock(`Error: failed to cancel order - Shopify could not price the refund for order ${before.order.name ?? orderId} in one currency.`, { code: "currency_mismatch" }),
+        "rejected",
+        "currency_mismatch",
+      );
+    }
+    const requested = {
+      refund: quote.kind === "refund" ? { amount: quote.amount, currency: quote.currency } : null,
+      priorRefundIds: new Set((before.order.refunds ?? []).flatMap((refund) => (
+        refund.id === undefined ? [] : [String(refund.id)]
+      ))),
+    };
+
     let data: { order?: ShopifyOrder };
     try {
       data = await shopifyRestJson<{ order?: ShopifyOrder }>(ctx, `orders/${orderId}/cancel.json`, {
@@ -172,11 +229,12 @@ export async function cancelOrder(
           reason: input.reason ?? "other",
           restock: input.restock ?? true,
           email: false,
+          ...(requested.refund ? requested.refund : {}),
         },
       });
     } catch (err) {
       if (isAmbiguousShopifyMutationError(err)) {
-        return reconcileCancellation(ctx, orderId, input, err);
+        return reconcileCancellation(ctx, orderId, input, requested, err);
       }
       throw err;
     }
@@ -187,7 +245,7 @@ export async function cancelOrder(
       return receipt ? { ...result, receipt } : result;
     }
 
-    return cancellationResult(ctx, data.order, orderId, input);
+    return cancellationResult(ctx, data.order, orderId, input, requested);
   } catch (err) {
     return cancellationNoEffect(
       ctx,

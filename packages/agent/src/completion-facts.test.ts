@@ -271,8 +271,26 @@ describe("completion facts", () => {
       },
     }]);
 
+    // The refund the cancellation recorded is the evidence, whatever status
+    // Shopify reports beside it.
+    const recordedRefund = executedCompletionFacts([{
+      ...action,
+      receipt: {
+        ...common,
+        facts: {
+          orderId: "123",
+          cancelledAt: "2026-09-12T07:00:00.000Z",
+          reason: "customer",
+          financialStatus: "voided",
+          restockResult: null,
+          refund: { amount: "49.95", currency: "USD" },
+        },
+      },
+    }]);
+
     expect(paid.map((fact) => fact.action)).toEqual(["cancellation"]);
     expect(refunded.map((fact) => fact.action)).toEqual(["cancellation", "refund"]);
+    expect(recordedRefund.map((fact) => fact.action)).toEqual(["cancellation", "refund"]);
   });
 
   it("grounds a completed return in its receipt instead of display wording", () => {

@@ -39,6 +39,12 @@ export interface CancellationReceiptFactsV1 {
   reason: string;
   financialStatus: string;
   restockResult: string | null;
+  /**
+   * What the cancellation refunded (decision H), in the currency the customer
+   * was charged; null when nothing was refunded. Absent on receipts written
+   * before cancellations refunded, which never refunded anything.
+   */
+  refund?: { amount: string; currency: string } | null;
 }
 
 export interface ReturnReceiptFactsV1 {

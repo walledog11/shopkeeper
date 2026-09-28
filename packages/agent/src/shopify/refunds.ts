@@ -125,6 +125,39 @@ async function calculateRefund(
   });
 }
 
+export type CancellationRefundQuote =
+  | { kind: "none" }
+  | { kind: "refund"; amount: string; currency: string }
+  | { kind: "currency_mismatch" };
+
+// Statuses with captured money left to return. An authorization is voided by
+// the cancellation itself; an unpaid or fully refunded order has nothing left.
+const CAPTURED_FINANCIAL_STATUSES = new Set(["paid", "partially_paid", "partially_refunded"]);
+
+/**
+ * What cancelling the order refunds (decision H): Shopify's own calculation of
+ * the complete refundable balance, in the currency the customer was charged.
+ * The order must carry `financial_status`, `currency` and `line_items`.
+ */
+export async function quoteCancellationRefund(
+  ctx: ShopifyContext,
+  orderId: string,
+  order: ShopifyOrder,
+): Promise<CancellationRefundQuote> {
+  if (!CAPTURED_FINANCIAL_STATUSES.has(order.financial_status?.trim().toLowerCase() ?? "")) {
+    return { kind: "none" };
+  }
+  const calculation = await calculateRefund(ctx, orderId, buildRefundLineItems(order));
+  const transactions = buildFullRefundTransactions(calculation);
+  const currency = calculation.refund?.currency?.toUpperCase() ?? order.currency?.toUpperCase();
+  if (!currency) return { kind: "currency_mismatch" };
+  if (transactions.some((transaction) => transaction.currency && transaction.currency.toUpperCase() !== currency)) {
+    return { kind: "currency_mismatch" };
+  }
+  const cents = transactions.reduce((total, transaction) => total + moneyToCents(transaction.amount), 0);
+  return cents > 0 ? { kind: "refund", amount: centsToMoney(cents), currency } : { kind: "none" };
+}
+
 function gid(resource: "Order" | "LineItem" | "Location" | "OrderTransaction", id: string | number): string {
   return `gid://shopify/${resource}/${id}`;
 }

@@ -53,6 +53,10 @@ const PLACEHOLDERS: Record<ReplyPlaceholderName, PlaceholderDefinition> = {
     sources: {
       create_refund: { field: "facts.amount", read: refundAmount },
       create_partial_refund: { field: "facts.amount", read: refundAmount },
+      cancel_order: {
+        field: "facts.refund.amount",
+        read: (receipt) => (receipt.facts.refund ? refundAmount({ facts: receipt.facts.refund }) : null),
+      },
     },
   },
   return_name: {

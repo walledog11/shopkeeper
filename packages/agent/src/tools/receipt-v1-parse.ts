@@ -633,6 +633,13 @@ function parseCancellationFacts(value: unknown): CancellationReceiptFactsV1 {
   if (value.restockResult !== null && typeof value.restockResult !== "string") {
     throw new ReceiptValidationError("facts.restockResult must be a string or null");
   }
+  if (value.refund !== undefined && value.refund !== null) {
+    if (!isRecord(value.refund)) throw new ReceiptValidationError("facts.refund must be an object or null");
+    requireMoneyDecimal(value.refund.amount, "facts.refund.amount");
+    if (typeof value.refund.currency !== "string" || !/^[A-Z]{3}$/.test(value.refund.currency)) {
+      throw new ReceiptValidationError("facts.refund.currency must be a three-letter uppercase code");
+    }
+  }
   return value as unknown as CancellationReceiptFactsV1;
 }
 

@@ -202,7 +202,7 @@ export const ORDER_TOOL_DEFINITIONS = [
   defineTool({
     name: "cancel_order",
     description:
-      "Use when nothing on the order has shipped and the customer wants the whole order stopped. Only works for orders that have not yet been fulfilled; the result reports the financial status Shopify left the order in, so no separate create_refund call is needed. If the order has already shipped, the goods have to come back instead - use create_return. If the order is still going ahead and only some items should come off it, use edit_shopify_order.",
+      "Use when nothing on the order has shipped and the customer wants the whole order stopped. Only works for orders that have not yet been fulfilled; it refunds what the customer paid as part of the cancellation, so no separate create_refund call is needed. If the order has already shipped, the goods have to come back instead - use create_return. If the order is still going ahead and only some items should come off it, use edit_shopify_order.",
     fields: {
       order_id: stringArg("Shopify order ID (numeric).", { required: true }),
       reason: stringArg("Reason for cancellation.", { enum: cancelReasons }),
@@ -214,7 +214,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     requiredScopes: ["write_orders"],
     requiredReceiptVersion: 1,
     label: "Cancelled order",
-    planStepLabel: "Cancel order",
+    planStepLabel: "Cancel order and refund payment",
     policy: {
       cancellationDisabled: true,
     },

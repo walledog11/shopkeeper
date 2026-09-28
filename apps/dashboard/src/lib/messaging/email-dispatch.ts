@@ -165,8 +165,9 @@ export async function sendEmailSynchronously(
   })
   if (recorded) return { ok: true, integrationId: integration.id }
 
+  let providerMessageId: string
   try {
-    await getEmailSender(integration).send({
+    const sent = await getEmailSender(integration).send({
       to: thread.customer.platformId,
       fromAddress: fromEmail,
       fromName: org.name,
@@ -176,6 +177,7 @@ export async function sendEmailSynchronously(
       headers,
       ...(outboundAttachments.length > 0 && { attachments: outboundAttachments }),
     })
+    providerMessageId = sent.providerMessageId
   } catch (err) {
     if (err instanceof EmailNotConfiguredError) {
       return { ok: false, error: "Email not configured", detail: err.message }
@@ -196,7 +198,7 @@ export async function sendEmailSynchronously(
     return { ok: false, outcome: "unknown", error: "Email dispatch failed", detail: msg }
   }
 
-  return { ok: true, integrationId: integration.id }
+  return { ok: true, integrationId: integration.id, providerMessageId }
 }
 
 export type { DispatchFailure }
