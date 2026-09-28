@@ -13,7 +13,6 @@ import {
   truncateContextText,
 } from "./context-budget.js";
 import { buildMerchantPreferencesPromptSection } from "./merchant-preferences.js";
-import { usesCapabilityDiscovery } from "./runtime-modes.js";
 import { replyPlaceholderInstructions } from "./reply-placeholders.js";
 
 function promptText(value: string | null | undefined, maxChars: number): string {
@@ -287,7 +286,7 @@ ${OPERATOR_PRODUCT_HELP_INSTRUCTIONS}`;
 export function buildSystemPromptParts(
   ctx: AgentContext,
   settings?: Partial<OrgSettings>,
-  options?: { exactDraftProposal?: boolean },
+  options?: { exactDraftProposal?: boolean; capabilityDiscovery?: boolean },
 ): { stable: string; volatile: string } {
   const s = resolveAgentSettings(settings);
   const isOperatorMode = isOperatorChannel(ctx.thread.channelType);
@@ -425,9 +424,10 @@ ${shopifyCustomerNote}${buildGuardrailSection(s)}${buildAutonomySection(s)}${bui
 
   // Storefront turns never held create_gift_card, so their prefix does not
   // depend on the gate; the branch only has to match what a support turn was
-  // offered.
+  // offered. The caller that chose the tools says whether discovery was among
+  // them — reading the environment here would miss a v2 task's own version.
   return {
-    stable: usesCapabilityDiscovery() ? SUPPORT_STABLE_PREFIX_DISCOVERY : SUPPORT_STABLE_PREFIX,
+    stable: options?.capabilityDiscovery ? SUPPORT_STABLE_PREFIX_DISCOVERY : SUPPORT_STABLE_PREFIX,
     volatile,
   };
 }

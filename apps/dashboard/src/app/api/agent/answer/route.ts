@@ -151,9 +151,12 @@ export const POST = withOrgRoute(
 
     let plan;
     try {
-      const ctx = await buildContext(threadId, org.id, savedArticle
-        ? { pinKbArticles: [savedArticle] }
-        : undefined);
+      const ctx = await buildContext(threadId, org.id, {
+        ...(savedArticle ? { pinKbArticles: [savedArticle] } : {}),
+        ...(continuation?.runtimeVersion !== undefined
+          ? { runtimeVersion: continuation.runtimeVersion }
+          : {}),
+      });
       plan = await planAgent(
         ctx,
         planningInstruction,

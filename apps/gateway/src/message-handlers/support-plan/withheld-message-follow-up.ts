@@ -109,7 +109,9 @@ export async function runWithheldMessageFollowUp(
       actions,
     });
 
-    const ctx = await buildContext(threadId, organizationId, gatewayThreadSink);
+    const ctx = await buildContext(threadId, organizationId, gatewayThreadSink, {
+      runtimeVersion: claim.runtimeVersion,
+    });
     ctx.taskBudget = taskBudget;
     const plan = await planAgent(ctx, instruction, settings, {
       exactDraftProposal: true,

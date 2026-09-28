@@ -666,9 +666,10 @@ describe('buildSystemPromptParts caching split', () => {
 // compensation tree's gift-card branch has to stop naming a tool that turn does
 // not hold — and has to keep naming it while the legacy bucket still loads it.
 describe('gift-card issuance follows the runtime that offers it', () => {
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
+  function discoveryPrompt() {
+    const { stable, volatile } = buildSystemPromptParts(makeCtx(), undefined, { capabilityDiscovery: true });
+    return `${stable}\n\n${volatile}`;
+  }
 
   it('names create_gift_card while the legacy mutation bucket still loads it', () => {
     const prompt = buildSystemPrompt(makeCtx());
@@ -678,8 +679,7 @@ describe('gift-card issuance follows the runtime that offers it', () => {
   });
 
   it('points at discovery instead of the tool on the discovery runtime', () => {
-    vi.stubEnv('AGENT_CAPABILITY_DISCOVERY_MODE', 'discover');
-    const prompt = buildSystemPrompt(makeCtx());
+    const prompt = discoveryPrompt();
 
     expect(prompt).not.toContain('Call create_gift_card only when the merchant instruction explicitly directs a fixed amount');
     expect(prompt).toContain('discover the gift-card capability');
@@ -689,8 +689,7 @@ describe('gift-card issuance follows the runtime that offers it', () => {
 
   it('leaves the rest of the compensation tree identical between runtimes', () => {
     const legacy = buildSystemPromptParts(makeCtx()).stable;
-    vi.stubEnv('AGENT_CAPABILITY_DISCOVERY_MODE', 'discover');
-    const discovery = buildSystemPromptParts(makeCtx()).stable;
+    const discovery = buildSystemPromptParts(makeCtx(), undefined, { capabilityDiscovery: true }).stable;
 
     // One bullet differs and nothing else, so the gate cannot quietly carry a
     // second prompt change in with it.

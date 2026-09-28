@@ -151,8 +151,9 @@ function prefetchesKnowledgeBase(
   signals: ReturnType<typeof parseClassifierSignals>,
   requestSourceMessageId: string | null,
   latestCustomerMessageId: string | null,
+  runtimeVersion: number | undefined,
 ): boolean {
-  if (!usesCapabilityDiscovery()) return true;
+  if (!usesCapabilityDiscovery(runtimeVersion)) return true;
   if (!signals) return true;
   // Same alignment rule tool selection narrows on: a classification taken from
   // an older message is not evidence about this one.
@@ -186,6 +187,9 @@ export interface BuildContextOptions {
   operatorLedger?: string;
   // Dashboard Concierge only: navigation tools and prompt guidance apply.
   operatorDeskMode?: boolean;
+  // The planning task's pinned runtime, which the knowledge-base deferral
+  // follows the same way planAgent's tool selection does.
+  runtimeVersion?: number;
 }
 
 function mergePinnedKbArticles(
@@ -259,6 +263,7 @@ export async function buildContext(
     classifierSignals,
     thread.requestSourceMessageId,
     thread.messages.find((message) => message.senderType === "customer")?.id ?? null,
+    options?.runtimeVersion,
   );
 
   // Operation evidence. Rank matching tags before the limit, so newer unrelated
