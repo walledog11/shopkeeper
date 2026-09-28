@@ -504,17 +504,32 @@ describe('durable order-status host path', () => {
       cancelled_at: null,
       customer: { id: 1234 },
     };
+    // Shopify's cancel refunds only the amount it is sent (decision H), so the
+    // refund appears on the cancelled order only because one was requested.
     const cancelled = {
       ...cancellable,
       cancelled_at: '2026-09-20T12:00:00Z',
       cancel_reason: 'customer',
       financial_status: 'refunded',
+      refunds: [{
+        id: 5001,
+        transactions: [{ kind: 'refund', status: 'success', gateway: 'manual', amount: '42.00', currency: 'USD' }],
+      }],
     };
     let cancelCalls = 0;
     providerFetch.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
       const method = init?.method ?? 'GET';
+      if (url.includes('/orders/9000001001/refunds/calculate.json')) {
+        return new Response(JSON.stringify({
+          refund: {
+            currency: 'USD',
+            transactions: [{ kind: 'suggested_refund', gateway: 'manual', amount: '42.00', currency: 'USD', parent_id: 6001 }],
+          },
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
       if (url.includes('/orders/9000001001/cancel.json')) {
+        expect(JSON.parse(String(init?.body))).toMatchObject({ amount: '42.00', currency: 'USD' });
         cancelCalls += 1;
         if (providerOutcome !== 'direct') {
           return new Response(JSON.stringify({ errors: 'response lost after commit' }), { status: 503 });

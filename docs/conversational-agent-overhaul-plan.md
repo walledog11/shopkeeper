@@ -85,7 +85,7 @@ contract was unbuilt.
 | Gate C: real provider and delivery | 0 of 6 real-store attempts worked cleanly: four runs on 2026-09-25 (run 4 reached the customer but is stored as failed) and one on 2026-09-27 that misnamed the variant and made no write (item 8a, since fixed; not counted as a Gate C run). Rerun setup complete 2026-09-28 (orders, run order and deploy state in the release evidence); run 1 (`cancel_order`, 2026-09-28) cancelled correctly but told the customer a refund was coming that Shopify never made; rerun stopped at item 8b. |
 | Gate D, staged rollout, Gate E | Not started. |
 | Production routing | `AGENT_RUNTIME_VERSION=1` on both services, with `AGENT_RUNTIME_V2_ORG_IDS` set to the controlled organization since 2026-09-25. New tasks for every other organization run v1. |
-| Work in flight | Gate C rerun stopped after run 1. Next: item 8b. |
+| Work in flight | Item 8b on `fix/cancel-refunds-payment`; then repeat Gate C run 1. |
 
 ## Open work, in order
 
@@ -136,20 +136,30 @@ in [What has been done](#what-has-been-done).
     refund as fact rather than as an outcome-dependent placeholder, and the
     approved draft promised the customer a refund. The receipt recorded
     `financialStatus: "paid"`, and nothing bound the claim to it.
-    - Decision H: a cancellation refunds. The fix is in the tool and its
-      receipt, not in the prompt (rule 2): the tool refunds the paid amount as
-      part of the cancellation, the receipt records the refunded amount and
-      state, and the draft names the refund through a placeholder bound to that
-      fact, so a refund that did not happen withholds the message
-      (decision A).
-    - Also from run 1, cause not yet established: the reply was marked `sent`
-      with no `providerMessageId` on the message or the `send_reply` receipt,
-      although the gateway's `handleOutboundEmailJob` records one. Find which path marked it
-      sent (rule 3) before changing anything.
-    - Done when a deterministic test shows a paid unfulfilled order's
-      cancellation producing the decided payment outcome in its receipt and a
-      draft that cannot claim a refund the receipt does not show, and run 1 is
-      repeated on the real store.
+    - Decision H: a cancellation refunds. Built on
+      `fix/cancel-refunds-payment`: `cancelOrder` asks Shopify's refund
+      calculation for the paid balance (`quoteCancellationRefund`) and sends it
+      as `amount` and `currency` in the cancel call, which Shopify's REST
+      documentation names as the only way that call refunds. The receipt
+      records what the cancellation refunded (`facts.refund`, null when nothing
+      was captured; absent on receipts written before). A refund that was asked
+      for and is missing from Shopify's answer makes the outcome `unknown`, so
+      the approved message is held whatever its wording. `{{refund_amount}}`
+      now binds to `cancel_order`, and a cancellation that refunded nothing
+      leaves it unfilled. The card, the tool description and both prompt
+      statements now say the tool refunds; those are eval-gated prompt bytes,
+      verified by repeating run 1 rather than by a paid run (release owner,
+      2026-09-27: no paid evals).
+    - The missing `providerMessageId`: production has no
+      `OUTBOUND_EMAIL_ASYNC`, so the reply went through the dashboard's
+      `sendEmailSynchronously`, which discarded the id its sender returned.
+      Fixed on the same branch. The dashboard's `send_email` sink
+      (`thread-io/send.ts`) drops it the same way and is not fixed: nothing
+      tests that sink directly, so it needs a test first.
+    - Done when run 1 is repeated on the real store on a new paid, unfulfilled
+      one-item order (#1032 is now cancelled): Shopify shows the refund, the
+      receipt's `facts.refund` matches it, the reply claims no refund Shopify
+      does not show, and the message carries a provider message id.
 
 9. **Gate D**, observation and rollback rehearsal, as written in the release
    evidence. Needs the observation window and operator, which the release

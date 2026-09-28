@@ -259,7 +259,7 @@ function buildHomeActionDisplayFromTool(
       detailLines = formatAddressDetailLines(input)
       break
     case "cancel_order":
-      chipLabel = "Cancel order"
+      chipLabel = "Cancel order and refund payment"
       if (typeof input.reason === "string" && input.reason.trim()) {
         detailLines = [input.reason.trim()]
       }

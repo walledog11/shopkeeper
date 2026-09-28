@@ -227,7 +227,7 @@ function receiptCompletionFacts(
     const facts = [fact("cancellation", receipt.tool, outcome, executionReference, { target })];
     if (
       receipt.outcome === "succeeded"
-      && /^(?:partially_)?refunded$/i.test(receipt.facts.financialStatus.trim())
+      && (receipt.facts.refund || /^(?:partially_)?refunded$/i.test(receipt.facts.financialStatus.trim()))
     ) {
       facts.push(fact("refund", receipt.tool, outcome, executionReference, { target }));
     }

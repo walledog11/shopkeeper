@@ -23,7 +23,7 @@ function describeTool(name: string, input: unknown): string {
     case "create_refund":
       return a.amount ? `Issue $${a.amount} refund` : "Issue full refund";
     case "cancel_order":
-      return `Cancel order${a.reason ? ` (${a.reason})` : ""}`;
+      return `Cancel order and refund payment${a.reason ? ` (${a.reason})` : ""}`;
     case "create_shopify_order": {
       const items = (a.line_items as { title?: string; variant_id?: string; quantity: number }[] ?? [])
         .map(li => `${li.quantity}x ${li.title ?? `variant ${li.variant_id}`}`)

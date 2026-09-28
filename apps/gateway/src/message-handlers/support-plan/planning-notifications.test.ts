@@ -358,7 +358,7 @@ describe('formatOperatorPlanMessage', () => {
       { rawToolCalls: [{ name: 'cancel_order', input: {} }] },
     );
 
-    expect(message).toContain("I'd cancel order for Jane.");
+    expect(message).toContain("I'd cancel order and refund payment for Jane.");
     expect(message).not.toContain("Here's what I'd do:");
     expect(message).not.toMatch(/^1\. /m);
     expect(message).toContain('Sound good?');

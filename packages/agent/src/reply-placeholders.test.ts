@@ -166,6 +166,50 @@ describe("fillApprovedDraft", () => {
     expect(fillApprovedDraft("{{refund_amount}}", [], [refundAction()]))
       .toEqual({ status: "unfilled", placeholder: "refund_amount" });
   });
+
+  describe("a cancellation's refund (decision H)", () => {
+    const cancelCall: RawToolCall = { id: "cancel_1", name: "cancel_order", input: { order_id: "123", reason: "customer" } };
+    const cancelAction = (refund: { amount: string; currency: string } | null): ActionEntry => ({
+      tool: "cancel_order",
+      toolCallId: "cancel_1",
+      input: cancelCall.input,
+      result: "Order #1032 cancelled successfully.",
+      status: "success",
+      receipt: {
+        version: 1,
+        operationId: "operation-1",
+        executionId: "execution-1",
+        tool: "cancel_order",
+        target: { kind: "order", id: "123" },
+        observedAt: "2026-09-28T06:20:41.000Z",
+        outcome: "succeeded",
+        providerReference: null,
+        facts: {
+          orderId: "123",
+          cancelledAt: "2026-09-28T06:20:40Z",
+          reason: "customer",
+          financialStatus: refund ? "refunded" : "paid",
+          restockResult: null,
+          refund,
+        },
+      },
+    });
+    const draft = "Hi Walle, order #1032 is cancelled and {{refund_amount}} is on its way back to you.";
+
+    it("binds to the cancellation and fills from the refund it recorded", () => {
+      const { bindings, unbound } = bindReplyPlaceholders(draft, [cancelCall]);
+      expect(unbound).toEqual([]);
+      expect(bindings).toEqual([{ placeholder: "refund_amount", toolCallId: "cancel_1", tool: "cancel_order", field: "facts.refund.amount" }]);
+      expect(fillApprovedDraft(draft, bindings, [cancelAction({ amount: "49.95", currency: "USD" })]))
+        .toEqual({ status: "filled", text: "Hi Walle, order #1032 is cancelled and $49.95 is on its way back to you." });
+    });
+
+    it("withholds the message when the cancellation refunded nothing", () => {
+      const { bindings } = bindReplyPlaceholders(draft, [cancelCall]);
+      expect(fillApprovedDraft(draft, bindings, [cancelAction(null)]))
+        .toEqual({ status: "unfilled", placeholder: "refund_amount" });
+    });
+  });
 });
 
 describe("customerMoney", () => {
@@ -181,6 +225,6 @@ describe("replyPlaceholderInstructions", () => {
     for (const name of ["refund_amount", "return_name", "order_name", "gift_card_amount", "tracking_number"]) {
       expect(text).toContain(`{{${name}}}`);
     }
-    expect(text).toContain("create_refund or create_partial_refund");
+    expect(text).toContain("create_refund or create_partial_refund or cancel_order");
   });
 });

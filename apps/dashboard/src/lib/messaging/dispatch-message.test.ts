@@ -223,6 +223,7 @@ describe('dispatchMessage', () => {
     });
     expect(sent.sendStatus).toBe('sent');
     expect(sent.sendAttemptedAt).not.toBeNull();
+    expect(sent.providerMessageId).toBe('agent-attempt-message-id');
   });
 
   it('records email provider failures without persisting an agent message', async () => {

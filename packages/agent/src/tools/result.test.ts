@@ -537,6 +537,33 @@ describe("receipt v1", () => {
     })).toThrow("facts.cancelledAt");
   });
 
+  it("accepts a cancellation's refund, a null one, and the receipts written before it existed", () => {
+    const cancellation = (refund?: unknown) => ({
+      version: 1 as const,
+      operationId: "operation-1",
+      executionId: "execution-1",
+      tool: "cancel_order",
+      target: { kind: "order", id: "123" },
+      observedAt: "2026-09-28T06:20:41.000Z",
+      outcome: "succeeded",
+      providerReference: null,
+      facts: {
+        orderId: "123",
+        cancelledAt: "2026-09-28T06:20:40Z",
+        reason: "customer",
+        financialStatus: "refunded",
+        restockResult: null,
+        ...(refund === undefined ? {} : { refund }),
+      },
+    });
+    expect(() => parseReceiptV1(cancellation())).not.toThrow();
+    expect(() => parseReceiptV1(cancellation(null))).not.toThrow();
+    expect(() => parseReceiptV1(cancellation({ amount: "49.95", currency: "USD" }))).not.toThrow();
+    expect(() => parseReceiptV1(cancellation({ amount: "49.95", currency: "usd" }))).toThrow("facts.refund.currency");
+    expect(() => parseReceiptV1(cancellation({ amount: "-1", currency: "USD" }))).toThrow("facts.refund.amount");
+    expect(() => parseReceiptV1(cancellation("49.95"))).toThrow("facts.refund");
+  });
+
   it("validates observed return facts and binds them to the provider return", () => {
     expect(() => parseReceiptV1(returnReceipt())).not.toThrow();
     expect(() => parseReceiptV1(returnReceipt({ providerReference: "different-return" }))).toThrow(
