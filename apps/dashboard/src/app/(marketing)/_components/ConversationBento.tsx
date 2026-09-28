@@ -49,6 +49,7 @@ function BentoCard({
       className="m-bento-card group relative flex h-full min-h-[320px] flex-col overflow-hidden rounded-[1.25rem] p-6 sm:min-h-0 sm:p-8"
     >
       {gradientSrc ? (
+        // eslint-disable-next-line @next/next/no-img-element -- decorative SVG burst
         <img
           src={gradientSrc}
           alt=""
@@ -81,6 +82,7 @@ function ConvertBentoCard({ index }: { index: number }) {
       variants={cardReveal}
       className="m-bento-card m-bento-card--horizontal group relative flex h-full min-h-[320px] flex-col overflow-hidden rounded-[1.25rem] p-6 sm:min-h-0 sm:p-8"
     >
+      {/* eslint-disable-next-line @next/next/no-img-element -- decorative SVG burst */}
       <img
         src="/marketing/bento/bento-4-gradient.svg"
         alt=""
@@ -91,6 +93,7 @@ function ConvertBentoCard({ index }: { index: number }) {
           Engage. Guide. Convert.
         </h3>
         <div className="m-bento-stat-card">
+          {/* eslint-disable-next-line @next/next/no-img-element -- static SVG logo */}
           <img
             src="/marketing/bento/bareminerals-logo.svg"
             alt="bareMinerals"
@@ -107,6 +110,7 @@ function ConvertBentoCard({ index }: { index: number }) {
             </p>
           </div>
         </div>
+        {/* eslint-disable-next-line @next/next/no-img-element -- static SVG chart */}
         <img
           src="/marketing/bento/bento-chart.svg"
           alt=""
@@ -184,6 +188,7 @@ export function ConversationBento() {
               title="High-quality answers. Measurable results."
               contentClassName="relative z-[1] mt-auto flex min-h-0 flex-1 flex-col"
             >
+              {/* eslint-disable-next-line @next/next/no-img-element -- static SVG illustration */}
               <img
                 src="/marketing/bento/bento-3-ui.svg"
                 alt=""
