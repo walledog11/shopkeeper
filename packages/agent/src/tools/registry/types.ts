@@ -96,6 +96,13 @@ export interface CancelOrderInput {
   order_id: string;
   reason?: "customer" | "fraud" | "inventory" | "declined" | "other";
   restock?: boolean;
+  /**
+   * What the cancellation refunds, as Shopify quoted it when the plan was made;
+   * "0.00" when nothing was captured. Runtime-authored, never shown to the model.
+   */
+  approval_amount?: string;
+  /** Currency paired with approval_amount; absent when it is "0.00". */
+  approval_currency?: string;
 }
 
 export interface CreateShopifyOrderLineItem {

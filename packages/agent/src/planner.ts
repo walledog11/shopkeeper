@@ -46,11 +46,13 @@ import {
 } from "./shopify/approval-line-items.js";
 import { quotePartialRefundForApproval } from "./shopify/partial-refunds.js";
 import { quoteFullRefundForApproval } from "./shopify/refunds.js";
+import { quoteCancellationForApproval } from "./shopify/order-cancellation.js";
 import { enforceSpendCap } from "./spend.js";
 import {
   parseToolInput,
   selectAgentTools,
   ToolInputValidationError,
+  type CancelOrderInput,
   type CreateExchangeInput,
   type CreatePartialRefundInput,
   type CreateRefundInput,
@@ -155,7 +157,11 @@ async function bindProviderApprovalFacts(
   const bound = await Promise.all(rawToolCalls.map(async (authored) => {
     const call = withoutAuthoredLineItems(authored);
     if (!shopify) return call;
-    if (call.name !== "create_refund" && !(exactDraftProposal && LINE_ITEM_WRITES.has(call.name))) return call;
+    if (
+      call.name !== "create_refund"
+      && call.name !== "cancel_order"
+      && !(exactDraftProposal && LINE_ITEM_WRITES.has(call.name))
+    ) return call;
     if (
       call.name === "create_refund"
       && typeof (call.input as { amount?: unknown })?.amount === "string"
@@ -176,6 +182,9 @@ async function bindProviderApprovalFacts(
     }
     if (call.name === "create_refund") {
       return { ...call, input: await quoteFullRefundForApproval(parsed as CreateRefundInput, shopify) };
+    }
+    if (call.name === "cancel_order") {
+      return { ...call, input: await quoteCancellationForApproval(parsed as CancelOrderInput, shopify) };
     }
     if (call.name === "create_partial_refund") {
       return { ...call, input: await quotePartialRefundForApproval(parsed as CreatePartialRefundInput, shopify) };

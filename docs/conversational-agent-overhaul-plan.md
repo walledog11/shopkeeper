@@ -85,7 +85,7 @@ contract was unbuilt.
 | Gate C: real provider and delivery | Rerun in progress. 1 of 14 effects done cleanly: `cancel_order`, repeated on #1036 on 2026-09-28 after its first run (#1032) promised a refund Shopify never made (item 8b). Before the rerun, 0 of 5 real-store attempts worked cleanly (four runs on 2026-09-25, one on 2026-09-27; setup, run order and deploy state in the release evidence). The repeat surfaced items 8c–8e, which stop the rerun until they land. |
 | Gate D, staged rollout, Gate E | Not started. |
 | Production routing | `AGENT_RUNTIME_VERSION=1` on both services, with `AGENT_RUNTIME_V2_ORG_IDS` set to the controlled organization since 2026-09-25. New tasks for every other organization run v1. |
-| Work in flight | None. Next: item 8c. |
+| Work in flight | Items 8c and 8d are built; each closes when the next Gate C run shows it on the card. Next: item 8e. |
 
 ## Open work, in order
 
@@ -142,6 +142,7 @@ original list so references in the release evidence stay valid; items 1–7 and
     formatter directly and never go through the adapter.
     - Done when the adapter carries `communication` and the next Gate C run's
       phone card shows the draft with its placeholders labeled.
+    - Built in `9914f3d9`; the live run is owed.
 
 8d. **A cancellation's refund is approved without its amount** (*Approval and
     communication contract*; decision H). Found by the same run. #132 made
@@ -159,6 +160,17 @@ original list so references in the release evidence stay valid; items 1–7 and
     - Done when a Gate C cancellation's card names the amount. The one
       deterministic test is that a quote changed after approval refuses before
       any write, which a live run cannot show without corrupting an order.
+    - Built; the live run is owed. `quoteCancellationForApproval`
+      (`order-cancellation.ts`) binds the quote as the runtime-only
+      `approval_amount` and `approval_currency`, which the model's tool schema
+      does not show; `"0.00"` means nothing is refunded. An order that cannot
+      be cancelled is left unbound for execution to refuse, rather than failing
+      the plan. The card sentence is `lineItemWriteSentence` ("Cancel the order
+      and refund $49.95"), so the dashboard and phone cards read the same.
+      `cancelOrder` refuses with `amount_mismatch` before the cancel call when
+      the bound amount differs from Shopify's quote. A call with no bound
+      amount — an approval made before this change, or a merchant instruction
+      run under its own authority — executes as before.
 
 8e. **The approval confirmation is one tool's result string** (*Response
     grounding and delivery*; CLAUDE.md, *Compose from fields*). Found by the

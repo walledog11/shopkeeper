@@ -24,6 +24,49 @@
         "contentText": "Can I get a refund on order #7030? I ordered it three days ago and it still hasn't gone out, and I've found the same thing locally."
       }
     ],
+    "simulateShopifyRest": [
+      {
+        "path": "orders/9000007030.json",
+        "response": {
+          "order": {
+            "id": 9000007030,
+            "name": "#7030",
+            "currency": "USD",
+            "financial_status": "paid",
+            "fulfillment_status": null,
+            "cancelled_at": null,
+            "refunds": [],
+            "line_items": [
+              {
+                "id": "lineitem_7030",
+                "title": "Cast Iron Skillet",
+                "quantity": 1,
+                "current_quantity": 1,
+                "price": "62.00"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "method": "POST",
+        "path": "orders/9000007030/refunds/calculate.json",
+        "response": {
+          "refund": {
+            "currency": "USD",
+            "transactions": [
+              {
+                "kind": "suggested_refund",
+                "gateway": "shopify_payments",
+                "parent_id": 7007030,
+                "amount": "62.00",
+                "currency": "USD"
+              }
+            ]
+          }
+        }
+      }
+    ],
     "recentOrders": [
       {
         "id": "9000007030",

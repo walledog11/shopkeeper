@@ -259,7 +259,8 @@ function buildHomeActionDisplayFromTool(
       detailLines = formatAddressDetailLines(input)
       break
     case "cancel_order":
-      chipLabel = "Cancel order and refund payment"
+      // The refund Shopify quoted at planning, when the planner bound it.
+      chipLabel = lineItemWriteSentence(step.tool, input) ?? "Cancel order and refund payment"
       if (typeof input.reason === "string" && input.reason.trim()) {
         detailLines = [input.reason.trim()]
       }
@@ -295,7 +296,7 @@ function buildHomeActionDisplayFromTool(
 
   // Which items the IDs point at, ahead of the model's reason for the change.
   const lineItemSentence = lineItemWriteSentence(step.tool, input)
-  if (lineItemSentence) detailLines = [lineItemSentence, ...detailLines]
+  if (lineItemSentence && lineItemSentence !== chipLabel) detailLines = [lineItemSentence, ...detailLines]
 
   return { chipLabel, orderRef, detailLines }
 }

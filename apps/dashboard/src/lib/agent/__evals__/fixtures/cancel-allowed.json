@@ -21,6 +21,49 @@
         "contentText": "Hi - please cancel order #1020. I changed my mind and don't need the item."
       }
     ],
+    "simulateShopifyRest": [
+      {
+        "path": "orders/9000001020.json",
+        "response": {
+          "order": {
+            "id": 9000001020,
+            "name": "#1020",
+            "currency": "USD",
+            "financial_status": "paid",
+            "fulfillment_status": null,
+            "cancelled_at": null,
+            "refunds": [],
+            "line_items": [
+              {
+                "id": "lineitem_1020",
+                "title": "Wool Beanie",
+                "quantity": 1,
+                "current_quantity": 1,
+                "price": "89.00"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "method": "POST",
+        "path": "orders/9000001020/refunds/calculate.json",
+        "response": {
+          "refund": {
+            "currency": "USD",
+            "transactions": [
+              {
+                "kind": "suggested_refund",
+                "gateway": "shopify_payments",
+                "parent_id": 7001020,
+                "amount": "89.00",
+                "currency": "USD"
+              }
+            ]
+          }
+        }
+      }
+    ],
     "recentOrders": [
       {
         "id": "9000001020",

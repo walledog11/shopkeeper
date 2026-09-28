@@ -207,6 +207,8 @@ export const ORDER_TOOL_DEFINITIONS = [
       order_id: stringArg("Shopify order ID (numeric).", { required: true }),
       reason: stringArg("Reason for cancellation.", { enum: cancelReasons }),
       restock: booleanArg("Whether to restock the items. Defaults to true."),
+      approval_amount: stringArg("Runtime-supplied Shopify quote of the refund, for approval.", { runtimeOnly: true }),
+      approval_currency: stringArg("Runtime-supplied quote currency, for approval.", { runtimeOnly: true }),
     },
     category: "action",
     group: "order",

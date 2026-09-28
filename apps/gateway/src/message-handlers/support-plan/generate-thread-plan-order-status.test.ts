@@ -708,6 +708,15 @@ describe('durable order-status host path', () => {
         cancelCalls += 1;
         throw new Error('A stale approved action must not reach Shopify cancellation.');
       }
+      // Planning binds the cancellation's refund quote into the approval.
+      if (url.includes('/orders/9000001001/refunds/calculate.json')) {
+        return new Response(JSON.stringify({
+          refund: {
+            currency: 'USD',
+            transactions: [{ kind: 'suggested_refund', gateway: 'manual', amount: '42.00', currency: 'USD', parent_id: 6001 }],
+          },
+        }), { status: 200 });
+      }
       if (url.includes('/orders/9000001001.json')) {
         return new Response(JSON.stringify({ order: currentOrder }), { status: 200 });
       }
@@ -796,6 +805,15 @@ describe('durable order-status host path', () => {
       if (url.includes('/orders/9000001001/cancel.json')) {
         cancelCalls += 1;
         throw new Error('A revoked write grant must not reach Shopify cancellation.');
+      }
+      // Planning binds the cancellation's refund quote into the approval.
+      if (url.includes('/orders/9000001001/refunds/calculate.json')) {
+        return new Response(JSON.stringify({
+          refund: {
+            currency: 'USD',
+            transactions: [{ kind: 'suggested_refund', gateway: 'manual', amount: '42.00', currency: 'USD', parent_id: 6001 }],
+          },
+        }), { status: 200 });
       }
       if (url.includes('/orders.json')) {
         return new Response(JSON.stringify({ orders: [cancellable] }), { status: 200 });
