@@ -12,6 +12,13 @@ import { POST } from './route';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
 
+const agentBudget = {
+  runtimeVersion: 1,
+  modelCallLimit: 20,
+  activeTimeMsLimit: 300_000,
+  spendNanoUsdLimit: BigInt(1_000_000_000),
+};
+
 beforeEach(async () => {
   vi.stubEnv('INTERNAL_API_SECRET', 'storefront-dispatch-secret');
   org = await createTestOrg();
@@ -41,12 +48,7 @@ describe('POST /api/agent/io-send-internal storefront persistence', () => {
       threadId: thread.id,
       sourceMessageId: sourceMessage.id,
       objective: 'Answer the order-status question',
-      budget: {
-        runtimeVersion: 1,
-        modelCallLimit: 20,
-        activeTimeMsLimit: 300_000,
-        spendNanoUsdLimit: BigInt(1_000_000_000),
-      },
+      budget: agentBudget,
     });
     await db.storefrontChatSession.create({
       data: {
@@ -87,5 +89,68 @@ describe('POST /api/agent/io-send-internal storefront persistence', () => {
     expect(saved.providerMessageId).toBeNull();
     expect(saved.agentRequestId).toBe(agentRequest.id);
     expect(saved.agentTaskId).toBe(agentTask.id);
+  });
+});
+
+describe('POST /api/agent/io-send-internal ownership', () => {
+  function internalPost(body: Record<string, unknown>) {
+    return POST(new Request('http://localhost/api/agent/io-send-internal', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-internal-secret': 'storefront-dispatch-secret',
+      },
+      body: JSON.stringify(body),
+    }));
+  }
+
+  it('refuses a thread that belongs to another organization', async () => {
+    const otherOrg = await createTestOrg();
+    try {
+      const customer = await createTestCustomer(otherOrg.id, `foreign:${otherOrg.id}`);
+      const thread = await createTestThread(otherOrg.id, customer.id, ChannelType.shopify_chat);
+
+      const response = await internalPost({
+        orgId: org.id,
+        threadId: thread.id,
+        op: 'send_reply',
+        input: { text: 'Hello' },
+      });
+
+      expect(response.status).toBe(404);
+      await expect(db.message.count({
+        where: { threadId: thread.id, senderType: SenderType.agent },
+      })).resolves.toBe(0);
+    } finally {
+      await cleanupTestData(otherOrg.id);
+    }
+  });
+
+  it('refuses durable work identity that belongs to another thread', async () => {
+    const customer = await createTestCustomer(org.id, `owner:${org.id}`);
+    const thread = await createTestThread(org.id, customer.id, ChannelType.shopify_chat);
+    const otherCustomer = await createTestCustomer(org.id, `other:${org.id}`);
+    const otherThread = await createTestThread(org.id, otherCustomer.id, ChannelType.shopify_chat);
+    const otherMessage = await createTestMessage(otherThread.id, 'Where is my order?');
+    const { task: otherTask } = await acceptCustomerAgentRequest({
+      organizationId: org.id,
+      threadId: otherThread.id,
+      sourceMessageId: otherMessage.id,
+      objective: 'Answer the order-status question',
+      budget: agentBudget,
+    });
+
+    const response = await internalPost({
+      orgId: org.id,
+      threadId: thread.id,
+      op: 'send_reply',
+      input: { text: 'Hello' },
+      agentTaskId: otherTask.id,
+    });
+
+    expect(response.status).toBe(404);
+    await expect(db.message.count({
+      where: { threadId: thread.id, senderType: SenderType.agent },
+    })).resolves.toBe(0);
   });
 });

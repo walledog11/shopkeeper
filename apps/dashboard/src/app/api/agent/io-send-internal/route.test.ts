@@ -1,26 +1,18 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ChannelType } from '@shopkeeper/db';
+import {
+  cleanupTestData,
+  createTestCustomer,
+  createTestOrg,
+  createTestThread,
+} from '@shopkeeper/db/test-helpers';
 
-const { findOwnedRequest, findOwnedTask, findOwnedThread, sendEmail, sendReply } = vi.hoisted(() => ({
-  findOwnedRequest: vi.fn(),
-  findOwnedTask: vi.fn(),
-  findOwnedThread: vi.fn(),
+const { sendEmail, sendReply } = vi.hoisted(() => ({
   sendEmail: vi.fn(),
   sendReply: vi.fn(),
 }));
 
 vi.mock('@/lib/agent/thread-io/send', () => ({ sendEmail, sendReply }));
-vi.mock('@shopkeeper/db', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@shopkeeper/db')>();
-  return {
-    ...actual,
-    db: {
-      ...actual.db,
-      thread: { findFirst: findOwnedThread },
-      agentRequest: { findFirst: findOwnedRequest },
-      agentTask: { findFirst: findOwnedTask },
-    },
-  };
-});
 
 import { POST } from './route';
 
@@ -35,15 +27,18 @@ function request(body: unknown, secret = 'internal-secret') {
   });
 }
 
+let organizationId: string | undefined;
+
 describe('POST /api/agent/io-send-internal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubEnv('INTERNAL_API_SECRET', 'internal-secret');
-    findOwnedThread.mockResolvedValue({ organization: { name: 'Acme' } });
-    findOwnedRequest.mockResolvedValue({ id: 'request-1', taskId: 'task-1' });
-    findOwnedTask.mockResolvedValue({ id: 'task-1' });
     sendReply.mockResolvedValue({ status: 'ok', message: 'Reply sent' });
-    sendEmail.mockResolvedValue({ status: 'ok', message: 'Email sent' });
+  });
+
+  afterEach(async () => {
+    await cleanupTestData(organizationId);
+    organizationId = undefined;
   });
 
   it('rejects invalid internal authentication', async () => {
@@ -53,30 +48,15 @@ describe('POST /api/agent/io-send-internal', () => {
     expect(sendReply).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ['send_reply', sendReply, { text: 'Hello' }],
-    ['send_email', sendEmail, { to: 'buyer@example.com', subject: 'Hello', text: 'Body' }],
-  ] as const)('dispatches %s through the matching provider tool', async (op, sender, input) => {
-    const response = await POST(request({
-      orgId: 'org-1',
-      threadId: 'thread-1',
-      orgName: 'Acme',
-      op,
-      input,
-    }));
-
-    expect(response.status).toBe(200);
-    expect(sender).toHaveBeenCalledWith(input, {
-      orgId: 'org-1',
-      threadId: 'thread-1',
-      orgName: 'Acme',
-    });
-  });
-
   it('forwards the durable operation identity as an inseparable pair', async () => {
+    const organization = await createTestOrg();
+    organizationId = organization.id;
+    const customer = await createTestCustomer(organization.id, `pair:${organization.id}`);
+    const thread = await createTestThread(organization.id, customer.id, ChannelType.email);
+
     const response = await POST(request({
-      orgId: 'org-1',
-      threadId: 'thread-1',
+      orgId: organization.id,
+      threadId: thread.id,
       op: 'send_reply',
       input: { text: 'Hello' },
       operationId: 'operation-1',
@@ -90,47 +70,13 @@ describe('POST /api/agent/io-send-internal', () => {
     }));
 
     const invalid = await POST(request({
-      orgId: 'org-1',
-      threadId: 'thread-1',
+      orgId: organization.id,
+      threadId: thread.id,
       op: 'send_reply',
       input: { text: 'Hello' },
       operationId: 'operation-1',
     }));
     expect(invalid.status).toBe(400);
-  });
-
-  it('forwards durable request and task attribution to the sender', async () => {
-    const response = await POST(request({
-      orgId: 'org-1',
-      threadId: 'thread-1',
-      op: 'send_reply',
-      input: { text: 'Your order is on the way.' },
-      operationId: 'operation-1',
-      executionId: 'execution-1',
-      agentRequestId: 'request-1',
-      agentTaskId: 'task-1',
-    }));
-
-    expect(response.status).toBe(200);
-    expect(sendReply).toHaveBeenCalledWith(
-      { text: 'Your order is on the way.' },
-      expect.objectContaining({ agentRequestId: 'request-1', agentTaskId: 'task-1' }),
-    );
-  });
-
-  it('rejects durable work identity from another thread', async () => {
-    findOwnedTask.mockResolvedValueOnce(null);
-
-    const response = await POST(request({
-      orgId: 'org-1',
-      threadId: 'thread-1',
-      op: 'send_reply',
-      input: { text: 'Your order is on the way.' },
-      agentTaskId: 'task-on-another-thread',
-    }));
-
-    expect(response.status).toBe(404);
-    expect(sendReply).not.toHaveBeenCalled();
   });
 
   it('validates operation and input before dispatch', async () => {
@@ -142,26 +88,6 @@ describe('POST /api/agent/io-send-internal', () => {
     }));
 
     expect(response.status).toBe(400);
-    expect(sendReply).not.toHaveBeenCalled();
-    expect(sendEmail).not.toHaveBeenCalled();
-  });
-
-  it('rejects a thread that is not owned by the supplied organization', async () => {
-    findOwnedThread.mockResolvedValueOnce(null);
-
-    const response = await POST(request({
-      orgId: 'org-1',
-      threadId: 'thread-from-another-org',
-      orgName: 'Untrusted name',
-      op: 'send_reply',
-      input: { text: 'Hello' },
-    }));
-
-    expect(response.status).toBe(404);
-    expect(findOwnedThread).toHaveBeenCalledWith({
-      where: { id: 'thread-from-another-org', organizationId: 'org-1' },
-      select: { organization: { select: { name: true } } },
-    });
     expect(sendReply).not.toHaveBeenCalled();
     expect(sendEmail).not.toHaveBeenCalled();
   });
