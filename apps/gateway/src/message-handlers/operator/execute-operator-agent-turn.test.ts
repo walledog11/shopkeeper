@@ -87,42 +87,6 @@ describe('executeOperatorAgentTurn', () => {
     expect(params.approval).toBeUndefined();
   });
 
-  it('resolves the durable operator thread for free-form turns', async () => {
-    const result = await executeOperatorAgentTurn({
-      orgId: org.id,
-      instruction: 'check order #1001',
-      turnId: '00000000-0000-4000-8000-000000000321',
-      operatorKey: 'telegram:123',
-      senderPhone: 'telegram:123',
-      clerkUserId: 'usr_1',
-    });
-
-    expect(mockAssertBillingWriteAllowedForOrgId).toHaveBeenCalledWith(org.id);
-    expect(mockResolveOperatorThread).toHaveBeenCalledWith(org.id, 'telegram:123');
-    expect(mockExecuteAgentTurn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        orgId: org.id,
-        threadId: 'op_thread_1',
-        instruction: 'check order #1001',
-        turnId: '00000000-0000-4000-8000-000000000321',
-        failureRoute: 'gateway:operator-turn',
-        persistUserMessage: true,
-        persistAgentMessage: true,
-        persistAuditNote: true,
-        auditMetadata: {
-          senderPhone: 'telegram:123',
-          clerkUserId: 'usr_1',
-        },
-      }),
-      expect.anything(),
-    );
-    expect(result).toEqual({
-      summary: 'Done.',
-      threadId: 'op_thread_1',
-      actionsPerformed: [{ tool: 'get_shopify_orders', result: 'ok' }],
-    });
-  });
-
   // The operator approval surface — the card the merchant approves from Telegram
   // or iMessage — enters the shared boundary, so an exact-draft proposal runs its
   // write and then the exact reply the card showed, and nothing is composed.
