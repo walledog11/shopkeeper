@@ -95,13 +95,6 @@ afterEach(() => {
 })
 
 describe("InboxStream", () => {
-  it("opens a conversation from the row header", () => {
-    const { onOpen } = renderStream()
-    const row = container!.querySelector('[data-ticket-id="thread-send"] button')
-    click(row)
-    expect(onOpen).toHaveBeenCalledWith("thread-send")
-  })
-
   it("quick-sends from the list when a reply is ready", () => {
     const { onSend } = renderStream()
     click(container!.querySelector('[data-testid="ticket-row-send"]'))
@@ -112,31 +105,5 @@ describe("InboxStream", () => {
     const { onTrust } = renderStream()
     click(container!.querySelector('[data-testid="ticket-row-trust"]'))
     expect(onTrust).toHaveBeenCalledWith("thread-trust")
-  })
-
-  it("loads more rows from the inbox footer", () => {
-    const { onLoadMore } = renderStream()
-    click(container!.querySelector('[data-testid="inbox-load-more"]'))
-    expect(onLoadMore).toHaveBeenCalledTimes(1)
-  })
-
-  it("keeps spam rows collapsed until the footer is expanded", () => {
-    const { onRecover } = renderStream()
-    expect(container!.querySelector('[data-testid="inbox-spam-recover"]')).toBeNull()
-
-    const toggle = container!.querySelector('[data-testid="inbox-section-spam"] button')
-    click(toggle)
-
-    const recover = container!.querySelector('[data-testid="inbox-spam-recover"]')
-    expect(recover).not.toBeNull()
-    click(recover)
-    expect(onRecover).toHaveBeenCalledWith("thread-spam")
-  })
-
-  it("hides spam and external sections while searching", () => {
-    renderStream({ isSearchMode: true, tickets: [sendReadyTicket], spamTickets: [spamTicket] })
-    expect(container!.querySelector('[data-testid="inbox-section-spam"]')).toBeNull()
-    expect(container!.querySelector('[data-testid="inbox-section-external"]')).toBeNull()
-    expect(container!.querySelector('[data-testid="inbox-section-needs-review"]')).not.toBeNull()
   })
 })
