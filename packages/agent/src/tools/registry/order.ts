@@ -139,6 +139,7 @@ export const ORDER_TOOL_DEFINITIONS = [
       order_id: stringArg("Shopify order ID (numeric).", { required: true }),
       amount: stringArg("Runtime-supplied Shopify quote for approval. Always omit this field."),
       currency: stringArg("Runtime-supplied quote currency for approval. Always omit this field."),
+      approval_shop_amount: stringArg("Runtime-supplied cost of the refund in the shop's currency, for approval.", { runtimeOnly: true }),
       reason: stringArg("Reason for the refund (e.g. 'Item not received', 'Wrong item sent')."),
     },
     category: "action",

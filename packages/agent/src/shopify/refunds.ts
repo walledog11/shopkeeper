@@ -11,6 +11,7 @@ import {
 } from "./client.js";
 import { toolError, toolOk, toolPolicyBlock, toolUnknown, type ReceiptV1, type ToolResult } from "../tools/result.js";
 import { shopifyFailureReceipt, shopifyReceiptEnvelope } from "./receipts.js";
+import { committedShopCents, refundShopCents } from "./refund-shop-money.js";
 import type {
   ShopifyCalculatedRefundLineItem,
   ShopifyOrder,
@@ -35,6 +36,7 @@ interface RefundCreateData {
       id: string;
       totalRefundedSet?: {
         presentmentMoney?: { amount?: string };
+        shopMoney?: { amount?: string };
       };
       transactions?: {
         nodes?: Array<{
@@ -59,6 +61,7 @@ export const REFUND_CREATE_MUTATION = `
             id
             totalRefundedSet {
               presentmentMoney { amount }
+              shopMoney { amount }
             }
             transactions(first: 20) {
               nodes {
@@ -229,6 +232,8 @@ interface PreparedFullRefund {
   calculation: RefundCalculation;
   transactions: ShopifyTransaction[];
   refundableCents: number;
+  /** What the refund costs the shop, in the shop's currency: the unit the workspace limits use. */
+  shopCents: number;
 }
 
 async function prepareFullRefund(
@@ -302,7 +307,35 @@ async function prepareFullRefund(
     ), "rejected", "amount_mismatch");
   }
 
-  return { orderId, note, currency, refundLineItems, calculation, transactions, refundableCents };
+  const shopCents = await refundShopCents(ctx, {
+    orderGid: gid("Order", orderId),
+    shopCurrency: orderData.order.currency,
+    quote: { cents: refundableCents, currency },
+    refundLineItems: graphqlRefundLineItems(calculation.refund?.refund_line_items ?? refundLineItems),
+    refundShipping: true,
+  });
+  if (shopCents === null) {
+    return refundNoEffect(ctx, orderId, toolPolicyBlock(
+      "Error: refund policy blocked - Shopify did not report what this refund costs in the shop's currency, so the workspace limits cannot be applied.",
+      { code: "shop_amount_unavailable", currency },
+    ), "rejected", "shop_amount_unavailable");
+  }
+  if (approvedCents !== null) {
+    // The quote is in the customer's currency and the limits are in the shop's.
+    // The proposal carries the shop-currency figure only when the two differ, so
+    // without one the approved amount is that figure.
+    const approvedShopCents = input.approval_shop_amount === undefined
+      ? approvedCents
+      : moneyToCents(requireAmount(input.approval_shop_amount, "approval_shop_amount"));
+    if (approvedShopCents !== shopCents) {
+      return refundNoEffect(ctx, orderId, toolPolicyBlock(
+        `Error: refund policy blocked - Shopify now calculates ${centsToMoney(shopCents)} in the shop's currency, not the approved ${centsToMoney(approvedShopCents)}; ask for approval again.`,
+        { code: "amount_mismatch", approvedShopCents, shopCents },
+      ), "rejected", "amount_mismatch");
+    }
+  }
+
+  return { orderId, note, currency, refundLineItems, calculation, transactions, refundableCents, shopCents };
 }
 
 /** Bind Shopify's current complete refundable balance into the proposal. */
@@ -312,11 +345,18 @@ export async function quoteFullRefundForApproval(
 ): Promise<CreateRefundInput> {
   const prepared = await prepareFullRefund(input, ctx, false);
   if ("status" in prepared) throw new ShopifyInputError(prepared.message);
-  return {
+  const bound: CreateRefundInput = {
     ...input,
     amount: centsToMoney(prepared.refundableCents),
     currency: prepared.currency,
   };
+  // Only the runtime names what the refund costs the shop, and only when that is
+  // not the amount quoted in the customer's currency.
+  delete bound.approval_shop_amount;
+  if (prepared.shopCents !== prepared.refundableCents) {
+    bound.approval_shop_amount = centsToMoney(prepared.shopCents);
+  }
+  return bound;
 }
 
 export async function createRefund(
@@ -424,7 +464,10 @@ export async function createRefund(
 
     return {
       ...toolOk(`Refund of $${centsToMoney(totalRefunded)} issued successfully for order ${orderId}.${note ? ` Reason: ${note}.` : ""}`),
-      refundedCents: totalRefunded,
+      refundedCents: committedShopCents(refund.totalRefundedSet, {
+        presentmentCents: prepared.refundableCents,
+        shopCents: prepared.shopCents,
+      }),
       ...(receipt ? { receipt } : {}),
     };
   } catch (err) {

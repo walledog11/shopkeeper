@@ -357,16 +357,46 @@ and 9a are in [What has been done](#what-has-been-done).
     On a multi-currency order the comparison is wrong in both directions: a
     customer charged in a stronger currency gets past a limit they exceed. This
     store has presented CAD (PR #91 probed order #1031).
-    - Established by reading the code, not reproduced. Reproduce it first with a
-      deterministic test: a USD shop, a customer charged in a stronger
-      currency, a refund over the limit in shop money and under it in
-      presentment money (rule 3).
+    - Reproduced 2026-09-29 (rule 3) by a deterministic test on the unfixed
+      code: a USD shop, a customer charged 45.00 GBP that costs the shop 60.00
+      USD, a $50 limit. The refund passed the limit and the daily budget
+      booked 4500 cents, not 6000.
     - The change: compare shop money with shop money, from Shopify's own
       shop-money figure for the refund, or refuse as not comparable when that
       figure is unavailable. Never convert with a rate of our own.
+    - Built; not seen against Shopify. `refundShopCents` (`refund-shop-money.ts`)
+      is the one answer to "what does this refund cost the shop": the quote
+      itself when the customer was charged in the shop's currency (no extra
+      Shopify call), otherwise Shopify's own shop-money figure for the same
+      selection (`Order.suggestedRefund`), accepted only when its presentment
+      side equals the quote and refused as `shop_amount_unavailable` when not.
+      The full-refund quote binds it as the runtime-only `approval_shop_amount`,
+      only when the two currencies differ (absent means the quote is that
+      figure), and execution refuses when a fresh figure differs from the
+      approved one. `shopMoneyAmountOf` (`static-policy.ts`) is the one reader
+      for the per-refund limit and the executor's reservation;
+      `createPartialRefund` applies the limit to the same figure and reserves
+      it. A refund's committed spend is now `totalRefundedSet.shopMoney`, so
+      `RefundToolResult.refundedCents` is shop money, and the `create_refund`
+      reconciliation probe commits the reservation's own figure instead of its
+      presentment total. `RefundShopMoney` is registered in
+      `SHOPIFY_QUERY_DOCUMENTS` for the live `--validate` check. Owed: that
+      check, and a read-only quote on order #1031 (59.90 CAD, 43.48 USD).
     - Does not block Gate C: every Gate C order is USD with no other
-      presentment currency. Blocks item 11, which would put other stores on
-      these limits.
+      presentment currency, and USD orders make the same Shopify calls as
+      before. Blocks item 11, which would put other stores on these limits.
+
+10c. **A partial refund with an unknown outcome can never be reconciled**
+    (*Typed receipts and operation identity*: unknown outcomes go to
+    reconciliation). Found 2026-09-29 while fixing item 10b. The
+    `create_partial_refund` probe (`reconciliation-probes/registry.ts`) calls
+    `probeRefund` with `amount: ""`, which `requireAmount` rejects, so it
+    returns `still_unknown` ("amount is required") even when Shopify lists the
+    matching refund. Run against a stubbed Shopify that lists one successful
+    refund, the `create_refund` probe returned `committed` and the partial probe
+    `still_unknown`. The action and its budget reservation stay unknown until
+    someone resolves them by hand. Does not block Gate C; land it before Gate D
+    counts unknown operations.
 
 11. **Staged rollout** (Package 6, cutover step 4). Expand v2 routing beyond the
     controlled organization once Gate C's live runs pass, then make v2 the
