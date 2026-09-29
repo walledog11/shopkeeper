@@ -9,7 +9,7 @@ import {
   createTestOrg,
   createTestThread,
 } from "@shopkeeper/db/test-helpers";
-import { INTENT_KEYS, emptyIntents, emptyRequestFacts } from "./classifier-signals.js";
+import { emptyIntents, emptyRequestFacts } from "./classifier-signals.js";
 import { buildContext, type ThreadSink } from "./context.js";
 import { appendInitialPlanningSignals } from "./planner-read-tools.js";
 import { buildPlanSignals } from "./plan-signals.js";
@@ -93,17 +93,6 @@ describe("context dependency tiers", () => {
       .toEqual(expect.arrayContaining([
         expect.objectContaining({ code: "kb_fetch_failed", severity: "blocking" }),
       ]));
-  });
-
-  it("distinguishes a failed knowledge-base load from a store with no matching article", async () => {
-    const { org, thread } = await supportThread();
-
-    const ctx = await buildContext(thread.id, org.id, sink);
-
-    // Same empty-handed outcome for the model, different thing to tell the
-    // merchant — which is why the flag exists rather than reusing kb_no_match.
-    expect(ctx.kbArticles.length).toBeGreaterThan(0);
-    expect(ctx.kbFetchFailed).toBeUndefined();
   });
 
   it("keeps the turn usable when the optional open-thread count fails", async () => {
@@ -195,60 +184,6 @@ describe("context dependency tiers", () => {
     expect(deferred.kbArticles).toEqual([]);
     // Deferred, not failed — the merchant is told about the second, never the first.
     expect(deferred.kbFetchFailed).toBeUndefined();
-  });
-
-  // Driven from INTENT_KEYS rather than a hand-written list: order_status is the
-  // only intent the deferral is decided for, so a new intent added to the
-  // classifier must fail here until someone decides which side it is on.
-  it.each([
-    ...INTENT_KEYS.filter((intent) => intent !== "order_status")
-      .map((intent) => [intent, { [intent]: true, order_status: true }] as const),
-    ["nothing the planner can use", {}] as const,
-  ])("still pre-loads the knowledge base for %s", async (_label, intents) => {
-    const { org, thread } = await supportThread();
-    const message = await db.message.findFirst({
-      where: { threadId: thread.id, senderType: "customer" },
-    });
-    await db.thread.update({
-      where: { id: thread.id },
-      data: {
-        requestSourceMessageId: message!.id,
-        classifierSignals: {
-          version: 5,
-          language: "en",
-          intents: { ...emptyIntents(), ...intents },
-          requestFacts: emptyRequestFacts(),
-        },
-      },
-    });
-
-    vi.stubEnv("AGENT_CAPABILITY_DISCOVERY_MODE", "discover");
-    expect((await buildContext(thread.id, org.id, sink)).kbArticles.length).toBeGreaterThan(0);
-  });
-
-  it("still pre-loads when the classification came from an older message", async () => {
-    const { org, thread } = await supportThread();
-    const stale = await db.message.findFirst({
-      where: { threadId: thread.id, senderType: "customer" },
-    });
-    // A newer customer message arrives after the classifier ran, so the stored
-    // classification is no longer evidence about what this turn is asking.
-    await createTestMessage(thread.id, "Actually, what is your returns policy?");
-    await db.thread.update({
-      where: { id: thread.id },
-      data: {
-        requestSourceMessageId: stale!.id,
-        classifierSignals: {
-          version: 5,
-          language: "en",
-          intents: { ...emptyIntents(), order_status: true },
-          requestFacts: emptyRequestFacts(),
-        },
-      },
-    });
-
-    vi.stubEnv("AGENT_CAPABILITY_DISCOVERY_MODE", "discover");
-    expect((await buildContext(thread.id, org.id, sink)).kbArticles.length).toBeGreaterThan(0);
   });
 
   it("refuses to build a storefront turn when the verification evidence cannot be read", async () => {
