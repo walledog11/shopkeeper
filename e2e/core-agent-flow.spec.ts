@@ -422,7 +422,7 @@ test('blocks cross-org thread API and UI access in an authenticated session', as
 
   await page.goto(`/dashboard/tickets?thread=${otherThread.id}`);
 
-  await expect(page.getByText('Unable to load conversation')).toBeVisible();
+  await expect(page.getByTestId('conversation-load-error')).toBeVisible();
   await expect(page.locator(`[data-testid="ticket-row"][data-ticket-id="${otherThread.id}"]`)).toHaveCount(0);
   await expect(page.getByText(otherCustomerName)).toHaveCount(0);
   await expect(page.getByText(otherMessageText)).toHaveCount(0);

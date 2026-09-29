@@ -73,7 +73,7 @@ export function ConversationLoadState({
     >
       <AlertCircle className="size-5 text-red-500" />
       <div>
-        <p className="text-sm font-semibold text-strong">{copy.title}</p>
+        <p data-testid="conversation-load-error" className="text-sm font-semibold text-strong">{copy.title}</p>
         <p className="mt-1 max-w-sm text-xs text-faint">{copy.detail}</p>
       </div>
       {onRetry && (
