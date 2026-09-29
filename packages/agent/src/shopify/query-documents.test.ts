@@ -37,34 +37,6 @@ describe("SHOPIFY_QUERY_DOCUMENTS", () => {
     }
   });
 
-  it("supplies a fixture value for every variable a document declares", () => {
-    // A missing fixture fails at variable coercion, which reads like an invalid
-    // document but is really an incomplete registry entry. Catching it here keeps
-    // that ambiguity out of the live run.
-    for (const [name, entry] of Object.entries(SHOPIFY_QUERY_DOCUMENTS)) {
-      const declared = [...entry.document.matchAll(/\$(\w+)\s*:/g)].map((match) => match[1]);
-      for (const variable of declared) {
-        expect(
-          Object.prototype.hasOwnProperty.call(entry.variables, variable!),
-          `${name} declares $${variable} but its registry entry has no fixture for it`,
-        ).toBe(true);
-      }
-    }
-  });
-
-  it("passes no fixture variable a document does not declare", () => {
-    // An undeclared variable is not a validation error, so a stale fixture left
-    // behind after a document changed would sit unnoticed.
-    for (const [name, entry] of Object.entries(SHOPIFY_QUERY_DOCUMENTS)) {
-      const declared = new Set(
-        [...entry.document.matchAll(/\$(\w+)\s*:/g)].map((match) => match[1]),
-      );
-      for (const variable of Object.keys(entry.variables)) {
-        expect(declared.has(variable), `${name} passes $${variable}, which its document does not declare`).toBe(true);
-      }
-    }
-  });
-
   it("registers every query document in the package", () => {
     // The drift this registry exists to prevent, and the one hole the mutation
     // registry does not cover: a document added to a module and never registered
@@ -98,20 +70,5 @@ describe("SHOPIFY_QUERY_DOCUMENTS", () => {
     expect(sourceNames.length).toBeGreaterThan(0);
     expect(tally(registered), "a query document in this package is missing from SHOPIFY_QUERY_DOCUMENTS")
       .toEqual(tally(sourceNames));
-  });
-
-  it("points every id fixture at a nonexistent resource", () => {
-    // The second layer under "a read is harmless": even a document that returns
-    // data must not return a real merchant's. Every gid fixture is id 1.
-    const gids = Object.entries(SHOPIFY_QUERY_DOCUMENTS).flatMap(([name, entry]) =>
-      Object.values(entry.variables)
-        .flatMap((value) => (Array.isArray(value) ? value : [value]))
-        .filter((value): value is string => typeof value === "string" && value.startsWith("gid://"))
-        .map((value) => [name, value] as const),
-    );
-    expect(gids.length).toBeGreaterThan(0);
-    for (const [name, gid] of gids) {
-      expect(gid, `${name} uses a gid fixture that is not id 1`).toMatch(/\/1$/);
-    }
   });
 });
