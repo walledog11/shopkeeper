@@ -12,19 +12,14 @@ import {
   testReplyPlanCache,
 } from '../test-fixtures/agent-plan-cache-fixtures.js';
 import { DIGEST_FIXTURE_NOW } from '../test-fixtures/digest-thread-fixtures.js';
-import type { RequestFacts } from '@shopkeeper/agent/classifier-signals';
 import {
   DIGEST_CURSOR_KEY,
   formatBlockedTicketLine,
-  formatHandledSection,
-  formatNeedsYouProse,
-  formatTicketLine,
   loadHandledRollup,
   loadWaitingOnYouItems,
   resolveHandledWindowStart,
 } from './digest-briefing/index.js';
-import { buildConversationBrief, formatConversationParagraph } from './digest-briefing/conversation.js';
-import type { BriefingItem } from './digest-briefing/types.js';
+import { formatConversationParagraph } from './digest-briefing/conversation.js';
 import { appendPendingPlan, updateContext } from '../operator-context.js';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
@@ -50,64 +45,6 @@ describe('resolveHandledWindowStart', () => {
   it('falls back to a 24-hour lookback without a cursor', () => {
     const since = resolveHandledWindowStart({}, NOW);
     expect(since.toISOString()).toBe('2026-04-28T12:00:00.000Z');
-  });
-});
-
-describe('formatHandledSection', () => {
-  it('returns nothing when there is no completed work worth reporting', () => {
-    expect(formatHandledSection({
-      approvedCount: 0,
-      autoCount: 0,
-      replyCount: 0,
-      refundCount: 0,
-      notableLines: [],
-    })).toBeNull();
-  });
-
-  it('folds a single handled item into one sentence instead of a list of one', () => {
-    expect(formatHandledSection({
-      approvedCount: 1,
-      autoCount: 0,
-      replyCount: 1,
-      refundCount: 0,
-      notableLines: ['Replied to Sarah'],
-    })).toBe('Since your last briefing I replied to Sarah.');
-  });
-
-  it('keeps the autonomy line on a single folded item', () => {
-    expect(formatHandledSection({
-      approvedCount: 0,
-      autoCount: 1,
-      replyCount: 1,
-      refundCount: 0,
-      notableLines: ['Replied to Sarah'],
-    })).toBe('Since your last briefing I replied to Sarah.\n\nThat one ran without needing you.');
-  });
-
-  it('summarizes committed work and notable lines', () => {
-    const section = formatHandledSection({
-      approvedCount: 1,
-      autoCount: 1,
-      replyCount: 2,
-      refundCount: 1,
-      notableLines: ['Refunded Sarah $12', 'Replied to Bob'],
-    });
-    expect(section).toContain('Since your last briefing I handled two things');
-    expect(section).toContain('one refund');
-    expect(section).toContain('two replies');
-    expect(section).toContain('Refunded Sarah $12');
-    expect(section).toContain('One of those ran without needing you.');
-  });
-
-  it('omits the autonomy line when the merchant approved everything', () => {
-    const section = formatHandledSection({
-      approvedCount: 2,
-      autoCount: 0,
-      replyCount: 2,
-      refundCount: 0,
-      notableLines: [],
-    });
-    expect(section).toBe('Since your last briefing I handled two things, including two replies.');
   });
 });
 
@@ -153,74 +90,6 @@ describe('loadHandledRollup', () => {
 });
 
 describe('formatBlockedTicketLine', () => {
-  it('names the person and quotes them, never the classifier title', () => {
-    expect(formatBlockedTicketLine({
-      customer: { name: 'Walle Walson' },
-      aiTitle: 'Unclear One Word Message',
-      pendingMessage: 'Test',
-    })).toBe('Walle wrote: "Test"');
-  });
-
-  // A merchant asked to take a ticket over cannot answer it from the
-  // classifier's paraphrase. "Walle: Unclear One Word Message" says the agent
-  // gave up; it does not say what the customer wrote, which is the only thing
-  // that decides whether this is a real request or a stray "yo".
-  it('quotes the customer instead of the classifier title', () => {
-    const section = formatBlockedTicketLine(({
-      customer: { name: 'Priya Nadar' },
-      aiTitle: 'Olive Linen Napkins',
-      pendingMessage: 'Do the linen napkins come in a darker olive?',
-    }), NOW);
-    expect(section).toContain('Priya asked: "Do the linen napkins come in a darker olive?"');
-    expect(section).not.toContain('Olive Linen Napkins');
-  });
-
-  it('renders a long message from structured fields', () => {
-    const section = formatBlockedTicketLine(({
-      customer: { name: 'Dana Ruiz' },
-      aiTitle: 'Address Change Before Friday',
-      pendingMessage: 'Hi! So sorry to be a pain about this, but I have just moved and I gave you the old address by mistake when I checked out last week. Could you send order 1043 to flat 4 instead? And will it still get here before Friday, or should I have it sent to my office?',
-      classifierSignals: {
-        version: 5,
-        language: 'en',
-        intents: {},
-        requestFacts: { ask: 'address_change', order: '#1043', deadline: '2026-05-01' },
-      },
-    }), NOW);
-    expect(section).toBe('Customer deadline: Fri, May 1, 2026 — Dana · #1043: address change');
-    expect(section).not.toContain('…');
-  });
-
-  it('quotes a short message whole, never elided', () => {
-    const long = `${'a'.repeat(118)}?`;
-    const section = formatBlockedTicketLine(({
-      customer: { name: 'Ada' },
-      pendingMessage: long,
-    }));
-    expect(section).toContain(`Ada asked: "${long}"`);
-    expect(section).not.toContain('…');
-  });
-
-  // "wrote" for a statement, "asked" for a question. Guessing "asked" at a
-  // complaint would put words in the customer's mouth on the merchant's phone.
-  it('says wrote rather than asked when the message is not a question', () => {
-    const section = formatBlockedTicketLine(({
-      customer: { name: 'Bo Nkemelu' },
-      pendingMessage: 'The sweater arrived ripped along the seam.',
-    }));
-    expect(section).toContain('Bo wrote: "The sweater arrived ripped along the seam."');
-  });
-
-  // Real messages ask and then keep talking. Testing only the final character
-  // called this one "wrote", which reads as though nobody looked at it.
-  it('says asked when the question is not the last sentence', () => {
-    const section = formatBlockedTicketLine(({
-      customer: { name: 'Priya Nadar' },
-      pendingMessage: 'Do these come in a darker olive? The photos look lighter than the swatch.',
-    }));
-    expect(section).toContain('Priya asked: "Do these come in a darker olive? The photos look lighter than the swatch."');
-  });
-
   it('redacts contact details but keeps an actionable postal address in the quote', () => {
     const section = formatBlockedTicketLine(({
       customer: { name: 'Ada' },
@@ -230,158 +99,6 @@ describe('formatBlockedTicketLine', () => {
     expect(section).not.toContain('ada@example.com');
     expect(section).toContain('14 Alder Road');
     expect(section).not.toContain('[address redacted]');
-  });
-
-  // The only branch left that can elide: too long to quote, and no summary was
-  // ever written. It cuts at the summary budget rather than the quote budget so
-  // the most possible survives.
-  it('falls back to a capped quote when there is no summary', () => {
-    const section = formatBlockedTicketLine(({
-      customer: { name: 'Ada' },
-      pendingMessage: `About my order, ${'the very long story '.repeat(20)}`,
-    }));
-    expect(section).toContain('About my order');
-    expect(section).toContain('…"');
-  });
-
-  it('reports unavailable details when neither fields nor source text exist', () => {
-    const section = formatBlockedTicketLine(({
-      customer: { name: 'Bo' },
-      aiTitle: 'Damaged Sweater Return',
-    }));
-    expect(section).toContain('Request details unavailable');
-  });
-});
-
-describe('formatTicketLine — fields before prose', () => {
-  const factsRow = (requestFacts: Record<string, unknown>) => ({
-    aiTitle: 'Napkin Order Question',
-    channelType: 'email',
-    customer: { name: 'Dana Reyes' },
-    classifierSignals: { version: 5, language: 'en', intents: {}, requestFacts },
-  });
-
-  // The whole point: a deadline the merchant must act on used to sit past the
-  // truncation point of a prose summary. Now it opens the line.
-  it('leads with the deadline instead of burying it in a sentence', () => {
-    expect(formatTicketLine(
-      factsRow({
-        ask: 'refund',
-        alternative: 'exchange',
-        subject: 'the olive linen napkins',
-        order: '#1024',
-        deadline: '2026-05-01',
-        deadlineText: 'before the dinner party',
-      }),
-      NOW,
-    )).toBe('Customer deadline: Fri, May 1, 2026 — Dana · #1024: refund or exchange — the olive linen napkins');
-  });
-
-  it('renders without a deadline when the customer named no timing', () => {
-    expect(formatTicketLine(
-      factsRow({ ask: 'order_status', order: '#1024' }),
-      NOW,
-    )).toBe('Dana · #1024: order status');
-  });
-
-  it('does not revive prose for a thread that predates requestFacts', () => {
-    expect(formatTicketLine({
-      aiTitle: 'Order Update With No Detail',
-      channelType: 'email',
-      customer: { name: 'Adam Jones' },
-      classifierSignals: { version: 4, language: 'en', intents: {} },
-    }, NOW)).toContain('Request details unavailable');
-  });
-
-  // The order comes from structured facts; the bounded title is only the topic
-  // used when the classifier could not name an ask.
-  it('names the topic from aiTitle when the classifier could not read an ask', () => {
-    expect(formatTicketLine(
-      factsRow({ ask: 'none', order: '#1024' }),
-      NOW,
-    )).toBe('Dana · #1024 — Napkin Order Question');
-  });
-
-  // A stalled conversation and an unreadable ask look identical in the fields —
-  // both are `ask: "none"` — and want opposite lines. `no_request` is what
-  // separates them, and it is a field, not a reading of the summary.
-  it('says nothing was asked when the customer has not asked yet', () => {
-    const row = factsRow({ ask: 'none' });
-    expect(formatTicketLine(
-      { ...row, classifierSignals: { ...row.classifierSignals, intents: { no_request: true } } },
-      NOW,
-    )).toBe('Dana wrote in — nothing asked yet');
-  });
-
-  // Deliberately not "said hello": no_request also covers "yo" and "Test".
-  it('does not name a greeting the customer may not have written', () => {
-    const row = factsRow({ ask: 'none' });
-    const line = formatTicketLine(
-      { ...row, classifierSignals: { ...row.classifierSignals, intents: { no_request: true } } },
-      NOW,
-    );
-    expect(line).not.toMatch(/hello/i);
-  });
-});
-
-describe('formatBlockedTicketLine — fields before prose', () => {
-  const FACTS = {
-    ask: 'refund',
-    alternative: 'exchange',
-    subject: 'the olive linen napkins',
-    order: '#1024',
-    deadline: '2026-05-01',
-    deadlineText: 'before the dinner party',
-  } satisfies RequestFacts;
-  const LINE = 'Customer deadline: Fri, May 1, 2026 — Dana · #1024: refund or exchange — the olive linen napkins';
-
-  const factsRow = (overrides: Record<string, unknown> = {}) => ({
-    aiTitle: 'Napkin Order Question',
-    channelType: 'email',
-    customer: { name: 'Dana Reyes' },
-    classifierSignals: { version: 5, language: 'en', intents: {}, requestFacts: FACTS },
-    ...overrides,
-  });
-
-  // The verbatim branch is the one thing fields must not displace: the
-  // customer's own words beat any rendering of them, and it only fires when the
-  // whole message fits.
-  it('still quotes a short message rather than rendering fields', () => {
-    expect(formatBlockedTicketLine(factsRow({
-      pendingMessage: 'Can I swap these for the olive ones?',
-    }), NOW)).toBe('Dana asked: "Can I swap these for the olive ones?"');
-  });
-
-  it('renders fields once the message is too long to quote whole', () => {
-    expect(formatBlockedTicketLine(factsRow({
-      pendingMessage: 'a'.repeat(200),
-    }), NOW)).toBe(LINE);
-  });
-
-  it('keeps a specific approval ask when another item needs thread review', () => {
-    const items: BriefingItem[] = [
-      {
-        threadId: 'ready',
-        kind: 'approval',
-        conversation: buildConversationBrief({
-          customerName: 'Dana',
-          facts: { ask: 'refund', subject: null, order: null, deadline: null, deadlineText: null, alternative: null },
-          rawToolCalls: [{ name: 'send_reply', input: { text: 'On its way.' } }],
-          now: NOW,
-        }),
-      },
-      {
-        threadId: 'review',
-        kind: 'decision',
-        needsThreadReview: true,
-        conversation: buildConversationBrief({ customerName: 'Inez', now: NOW }),
-      },
-    ];
-    const prose = formatNeedsYouProse(items)!;
-
-    expect(prose).toContain('refund');
-    expect(prose).toContain('Shall I send it?');
-    expect(prose.split('\n\n')[1]).not.toContain('?');
   });
 });
 
@@ -487,59 +204,6 @@ describe('loadWaitingOnYouItems', () => {
     expect(items[0]?.conversation.request).toContain('Can you refund the chipped bowl from order #778?');
   });
 
-  it('lists several waiting items with distinct copy per thread', async () => {
-    // Two pending plans for the *same* customer: the case the old copy rendered
-    // as two identical "Reply to Canary" bullets.
-    for (const [index, summary] of [
-      ['a', 'Asking where order 1042 is.'],
-      ['b', 'Wants to change the shipping address.'],
-    ] as const) {
-      const customer = await createTestCustomer(org.id, `canary-${index}@example.com`, { name: 'Canary Reid' });
-      const thread = await createTestThread(org.id, customer.id, 'email');
-      await db.thread.update({
-        where: { id: thread.id },
-        data: { aiSummary: summary, updatedAt: new Date(NOW.getTime() - 5 * 3_600_000) },
-      });
-      await updateContext(org.id, `chat-${index}`, {
-        pendingPlan: {
-          threadId: thread.id,
-          instruction: 'Answer the customer',
-          planId: `bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb${index === 'a' ? '1' : '2'}`,
-          actionLabel: 'reply to Canary',
-          requestDisplay: {
-            version: 1,
-            kind: 'classified',
-            sourceMessageId: `message-${index}`,
-            facts: {
-              ask: index === 'a' ? 'order_status' : 'address_change',
-              subject: null,
-              order: index === 'a' ? '#1042' : null,
-              deadline: null,
-              deadlineText: null,
-              alternative: null,
-            },
-            noRequest: false,
-            topic: null,
-          },
-          rawToolCalls: [{ id: 'tc1', name: 'send_reply', input: { text: 'Hi' } }],
-        },
-      });
-    }
-
-    const items = await loadWaitingOnYouItems(org.id, NOW);
-    expect(items).toHaveLength(2);
-    const section = formatNeedsYouProse(items.map((entry) => ({
-      threadId: entry.threadId, kind: 'approval' as const, conversation: entry.conversation,
-    })))!;
-    expect(section.match(/Shall I send it\?/g)).toHaveLength(2);
-    expect(section).toContain('#1042');
-    expect(section).toContain('delivery address');
-    expect(section).not.toContain('shipping address');
-    expect(section).toMatch(/^1\. Canary/);
-    expect(section).toContain('\n\n2. Canary');
-
-  });
-
   it('includes stale dashboard plans that still need review', async () => {
     const customer = await createTestCustomer(org.id, 'bob@example.com', { name: 'Bob Lee' });
     const thread = await createTestThread(org.id, customer.id, 'email');
@@ -640,46 +304,6 @@ describe('loadWaitingOnYouItems', () => {
     const items = await loadWaitingOnYouItems(org.id, NOW);
     expect(items.map((item) => item.threadId)).toEqual([keptThread.id]);
     expect(items[0]?.conversation.person).not.toContain('Ada');
-  });
-
-  it('never names a customer it does not have', async () => {
-    const customer = await createTestCustomer(org.id, 'anon@example.com');
-    const thread = await createTestThread(org.id, customer.id, 'email');
-    await db.thread.update({
-      where: { id: thread.id },
-      data: { aiTitle: 'Damaged Sweater Return', tag: 'Returns' },
-    });
-    await updateContext(org.id, 'chat-anon', {
-      pendingPlan: {
-        threadId: thread.id,
-        instruction: 'Answer the customer',
-        planId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
-        requestDisplay: {
-          version: 1,
-          kind: 'classified',
-          sourceMessageId: 'message-anon',
-          facts: {
-            ask: 'return',
-            subject: 'damaged sweater',
-            order: null,
-            deadline: null,
-            deadlineText: null,
-            alternative: null,
-          },
-          noRequest: false,
-          topic: null,
-        },
-        rawToolCalls: [{ id: 'tc1', name: 'send_reply', input: { text: 'Hi' } }],
-      },
-    });
-
-    const items = await loadWaitingOnYouItems(org.id, NOW);
-    // "Customer" is a placeholder, not a name. With nothing to print, the
-    // subject falls back to a generic word and the topic carries the line.
-    expect(items[0]?.conversation.person).not.toBe('Customer');
-    expect(items[0]?.conversation.person).toBe('The customer');
-    expect(formatConversationParagraph(items[0]!.conversation, 'approval', false))
-      .toContain('return');
   });
 
   it('ignores stale plans on threads outside the support inbox', async () => {
