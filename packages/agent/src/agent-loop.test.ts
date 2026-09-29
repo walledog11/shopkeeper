@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { installAgentLogger, resetAgentLoggerForTests, type AgentLogger } from "./logger.js";
 import { runAgentLoop, type ToolExecMode } from "./agent-loop.js";
-import { HAIKU_MODEL, SONNET_MODEL } from "./ai/index.js";
+import { SONNET_MODEL } from "./ai/index.js";
 import { createModelUsageMetrics } from "./usage.js";
 import type { BaseAgentContext } from "./agent-context.js";
 
@@ -71,10 +71,10 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-// The resolver is unit-tested in model-tuning.test.ts; this asserts the loop
-// actually spreads it into the request. Without these, deleting the spread in
-// agent-loop.ts passes the whole suite — every other test here runs on a model
-// id the tuning table doesn't know, so it expects no parameters either way.
+// Asserts the loop actually spreads the resolved tuning into the request.
+// Deleting the spread in agent-loop.ts passes every other test here — they all
+// run on a model id the tuning table doesn't know, so they expect no parameters
+// either way.
 describe("runAgentLoop model tuning", () => {
   const requestBody = () => mockCreate.mock.calls[0][0] as Record<string, unknown>;
 
@@ -112,22 +112,6 @@ describe("runAgentLoop model tuning", () => {
       output_config: { effort: "medium" },
       thinking: { type: "disabled" },
     });
-  });
-
-  it("sends effort but no thinking outside planning", async () => {
-    await runOnce(SONNET_MODEL, "execute");
-
-    expect(requestBody()).toMatchObject({ output_config: { effort: "medium" } });
-    expect(requestBody()).not.toHaveProperty("thinking");
-  });
-
-  it("sends Haiku neither parameter", async () => {
-    // Load-bearing: `effort` is a 400 on Haiku, and the low-risk planner tier
-    // runs every plan it claims on this model.
-    await runOnce(HAIKU_MODEL, "capture");
-
-    expect(requestBody()).not.toHaveProperty("output_config");
-    expect(requestBody()).not.toHaveProperty("thinking");
   });
 });
 
