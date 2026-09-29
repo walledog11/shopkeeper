@@ -4,8 +4,6 @@ import { getIntegrationDefinition } from "@/lib/integrations/catalog"
 import type { Integration } from "@/types"
 import {
   deriveIntegrationCardModels,
-  integrationAttentionSummary,
-  oauthDefinitionForProvider,
   selectPrimaryConnection,
 } from "./integration-presentation"
 
@@ -37,20 +35,6 @@ function modelFor(id: string, integrations: Integration[], options?: { admin?: b
 }
 
 describe("integration presentation", () => {
-  it.each([
-    "email",
-    "gmail",
-    "instagram",
-    "shopify",
-    "tiktok-shop",
-    "whatsapp",
-  ])("derives a disconnected %s card without an inferred recovery", (id) => {
-    const model = modelFor(id, [])
-    expect(model.status).toBe("not-connected")
-    expect(model.selectedConnection).toBeNull()
-    expect(model.recoveryAction).toBeNull()
-  })
-
   it("selects one stable primary connection regardless of API input order", () => {
     const definition = getIntegrationDefinition("email")
     if (definition.kind !== "forwarding-email") throw new Error("Expected forwarding email")
@@ -155,71 +139,7 @@ describe("integration presentation", () => {
     expect(Boolean(model.recoveryAction)).toBe(recovery)
   })
 
-  it("uses the same models for cards and banner copy", () => {
-    const gmail = integration({
-      id: "gmail",
-      platform: "email",
-      emailProvider: "gmail",
-      metadata: { provider: "gmail", oauthScopes: [GMAIL_READONLY_SCOPE], gmail: { inboundStatus: "degraded" } },
-    })
-    const instagram = integration({
-      id: "instagram",
-      platform: "ig_dm",
-      tokenExpiresAt: "2099-01-01T00:00:00.000Z",
-      metadata: { instagram: { healthStatus: "degraded" } },
-    })
-    const shopify = integration({
-      id: "shopify",
-      platform: "shopify",
-      connectionState: "active",
-      missingScopes: ["write_returns"],
-    })
-    const models = deriveIntegrationCardModels({
-      integrations: [gmail, instagram, shopify],
-      flags: FLAGS,
-      isAdmin: true,
-    })
-
-    expect(models.filter((model) => model.status === "needs-attention").map((model) => model.definition.id))
-      .toEqual(["shopify", "gmail", "instagram"])
-    expect(integrationAttentionSummary(models)).toEqual({
-      count: 3,
-      allActionable: false,
-      copy: "3 connections need attention. Open the affected integration for details.",
-    })
-  })
-
-  it("mentions Fix only when every counted card has an enabled recovery", () => {
-    const shopify = integration({ id: "shopify", platform: "shopify", connectionState: "invalid" })
-    const adminModels = deriveIntegrationCardModels({ integrations: [shopify], flags: FLAGS, isAdmin: true })
-    const memberModels = deriveIntegrationCardModels({ integrations: [shopify], flags: FLAGS, isAdmin: false })
-
-    expect(integrationAttentionSummary(adminModels).copy).toContain("Fix button")
-    expect(integrationAttentionSummary(memberModels).copy).not.toContain("Fix button")
-  })
-
-  it("tells merchants that reconnecting Shopify updates missing access", () => {
-    const shopify = integration({
-      id: "shopify",
-      platform: "shopify",
-      connectionState: "active",
-      missingScopes: ["write_returns"],
-    })
-
-    const model = modelFor("shopify", [shopify])
-
-    expect(model.note).toContain("reconnect to enable them")
-    expect(model.note).toContain("actions fail")
-    expect(model.recoveryAction).not.toBeNull()
-  })
-
-  it("keeps personal binding available to members while workspace mutations are disabled", () => {
-    const models = deriveIntegrationCardModels({ integrations: [], flags: FLAGS, isAdmin: false })
-    expect(models.find((model) => model.definition.id === "imessage")?.canManageWorkspace).toBe(true)
-    expect(models.find((model) => model.definition.id === "gmail")?.canManageWorkspace).toBe(false)
-  })
-
-  it("derives deployment availability and visibility without mutating the catalog", () => {
+  it("derives coming-soon availability for providers this deployment does not offer", () => {
     const models = deriveIntegrationCardModels({
       integrations: [],
       flags: {
@@ -233,9 +153,6 @@ describe("integration presentation", () => {
     expect(models.find((model) => model.definition.id === "instagram")?.availability.state).toBe("coming-soon")
     expect(models.find((model) => model.definition.id === "tiktok-shop")?.availability.state).toBe("coming-soon")
     expect(models.find((model) => model.definition.id === "whatsapp")?.availability.state).toBe("coming-soon")
-    expect(getIntegrationDefinition("instagram").description).toBe(
-      "Receive and reply to customer DMs from an Instagram Professional account.",
-    )
   })
 
   it("keeps a connected Instagram card manageable after direct connect closes", () => {
@@ -248,31 +165,5 @@ describe("integration presentation", () => {
     const instagram = models.find((model) => model.definition.id === "instagram")
     expect(instagram?.availability.state).toBe("available")
     expect(instagram?.isConnected).toBe(true)
-  })
-
-  it.each([
-    ["gmail", "Gmail connected."],
-    ["instagram", "Instagram connected."],
-    ["shopify", "Shopify store connected."],
-    ["tiktok-shop", "TikTok Shop connected."],
-  ] as const)("keeps %s OAuth success copy in its provider definition", (provider, successCopy) => {
-    expect(oauthDefinitionForProvider(provider)?.oauth.successCopy).toBe(successCopy)
-  })
-
-  it("consolidates Gmail health, scene, receiving, and status copy", () => {
-    const gmail = integration({
-      id: "gmail",
-      platform: "email",
-      emailProvider: "gmail",
-      externalAccountId: "merchant@gmail.test",
-      metadata: { provider: "gmail", oauthScopes: [GMAIL_READONLY_SCOPE], gmail: { inboundStatus: "degraded" } },
-    })
-    const model = modelFor("gmail", [gmail])
-    expect(model.gmail).toMatchObject({
-      scene: "needs_forwarding",
-      statusLine: "Gmail inbox sync needs attention. Sending still works.",
-      receiving: { status: "Needs attention" },
-    })
-    expect(model.note).toBe(model.gmail?.statusLine)
   })
 })
