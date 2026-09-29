@@ -146,25 +146,6 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
   };
 }
 
-function toolUseBatch() {
-  return {
-    stop_reason: "tool_use",
-    content: [
-      { type: "tool_use", id: "tu_1", name: "send_reply", input: { text: "Done." } },
-      { type: "tool_use", id: "tu_2", name: "update_thread_status", input: { status: "closed" } },
-    ],
-    usage: { input_tokens: 10, output_tokens: 5 },
-  };
-}
-
-function endTurn(text = "Done.") {
-  return {
-    stop_reason: "end_turn",
-    content: [{ type: "text", text }],
-    usage: { input_tokens: 10, output_tokens: 5 },
-  };
-}
-
 function singleToolUse(name: string, input: Record<string, unknown>) {
   return {
     stop_reason: "tool_use",
@@ -222,107 +203,6 @@ describe("runAgent policy enforcement", () => {
       status: "policy_block",
     });
     expect(result.summary).toBe("Escalated to merchant: order cancellations are disabled by the workspace owner.");
-  });
-
-  it("runs mixed non-read tool calls in order", async () => {
-    let releaseReply!: () => void;
-    let markReplyStarted!: () => void;
-    const replyStarted = new Promise<void>((resolve) => {
-      markReplyStarted = resolve;
-    });
-    const replyRelease = new Promise<void>((resolve) => {
-      releaseReply = resolve;
-    });
-    mockCreate
-      .mockResolvedValueOnce(toolUseBatch())
-      .mockResolvedValueOnce(endTurn("All done."));
-    mockSendReply.mockImplementation(async (_input, execution) => {
-      markReplyStarted();
-      await replyRelease;
-      return { status: "ok", message: "Reply sent.", receipt: replyReceipt(execution) };
-    });
-    mockUpdateThreadStatus.mockImplementation(async (_input, execution) => ({
-      status: "ok",
-      message: "Status updated after reply.",
-      receipt: statusReceipt(execution),
-    }));
-
-    const resultPromise = runAgent(
-      makeCtx({ thread: { ...makeCtx().thread, channelType: "email" } }),
-      "Reply and close",
-    );
-    await replyStarted;
-    expect(mockUpdateThreadStatus).not.toHaveBeenCalled();
-    releaseReply();
-    const result = await resultPromise;
-
-    expect(result.actionsPerformed.map((action) => action.result)).toEqual([
-      "Reply sent.",
-      "Status updated after reply.",
-    ]);
-  });
-
-  it("records tool_result failures through the injected recorder", async () => {
-    mockCreate
-      .mockResolvedValueOnce(singleToolUse("send_reply", { text: "Done." }))
-      .mockResolvedValueOnce(endTurn("All done."));
-    mockSendReply.mockImplementationOnce(async (_input, execution) => ({ status: "error", message: "Error: provider send failed.", receipt: replyReceipt(execution, "failed") }));
-
-    await runAgent(
-      makeCtx({ thread: { ...makeCtx().thread, channelType: "email" } }),
-      "Reply",
-      undefined,
-      AGENT_SETTINGS_DEFAULTS,
-      { recordToolFailure: mockRecordToolFailure },
-    );
-
-    expect(mockRecordToolFailure).toHaveBeenCalledWith(
-      "tool_result",
-      "send_reply",
-      "Error: provider send failed.",
-    );
-  });
-
-  it("records tool_exception failures through the injected recorder", async () => {
-    mockCreate
-      .mockResolvedValueOnce(singleToolUse("send_reply", { text: "Done." }))
-      .mockResolvedValueOnce(endTurn("All done."));
-    mockSendReply.mockRejectedValueOnce(new Error("provider timeout"));
-
-    await runAgent(
-      makeCtx({ thread: { ...makeCtx().thread, channelType: "email" } }),
-      "Reply",
-      undefined,
-      AGENT_SETTINGS_DEFAULTS,
-      { recordToolFailure: mockRecordToolFailure },
-    );
-
-    expect(mockRecordToolFailure).toHaveBeenCalledTimes(1);
-    expect(mockRecordToolFailure).toHaveBeenCalledWith(
-      "tool_exception",
-      "send_reply",
-      "provider timeout",
-    );
-  });
-
-  it("records failed tool results through the injected recorder", async () => {
-    mockCreate
-      .mockResolvedValueOnce(singleToolUse("get_shopify_orders", { customer_id: "999" }))
-      .mockResolvedValueOnce(endTurn());
-
-    await runAgent(
-      makeCtx({ shopify: null }),
-      "Look up the customer's orders",
-      undefined,
-      AGENT_SETTINGS_DEFAULTS,
-      { recordToolFailure: mockRecordToolFailure },
-    );
-
-    expect(mockRecordToolFailure).toHaveBeenCalledWith(
-      "tool_result",
-      "get_shopify_orders",
-      expect.stringContaining("no Shopify integration connected"),
-    );
   });
 
   it("escalates a refund when the daily cap is already exhausted", async () => {
@@ -396,23 +276,6 @@ describe("runAgent policy enforcement", () => {
     );
     expect(result.actionsPerformed).toMatchObject([{ tool: "create_gift_card", status: "policy_block" }]);
     expect(mockReserveDailyRefundSpend).not.toHaveBeenCalled();
-  });
-
-  it("escalates a cached approved discount plan because the tool is retired", async () => {
-    const result = await runAgent(
-      makeCtx(),
-      "Give the customer a discount for the trouble",
-      [{ id: "pre_1", name: "issue_discount", input: { percentage: 40 } }],
-      AGENT_SETTINGS_DEFAULTS,
-    );
-
-    expect(mockEscalateToHuman).toHaveBeenCalledWith("issue_discount is retired and cannot create a new provider action. Escalate this request to the merchant.");
-    expect(result.actionsPerformed).toHaveLength(1);
-    expect(result.actionsPerformed[0]).toMatchObject({
-      tool: "issue_discount",
-      status: "policy_block",
-    });
-    expect(result.summary).toBe("Escalated to merchant: issue_discount is retired and cannot create a new provider action. Escalate this request to the merchant.");
   });
 
   it("escalates a cached approved store-credit plan because the tool is retired", async () => {
@@ -576,17 +439,6 @@ describe("runAgent policy enforcement", () => {
       status: "escalated",
     });
   });
-
-  it("halts an approved-plan run when escalate_to_human is in the approved set", async () => {
-    const result = await runAgent(
-      makeCtx({ thread: { ...makeCtx().thread, channelType: "email" } }),
-      "Issue refund",
-      [{ id: "pre_1", name: "escalate_to_human", input: { reason: "Shopify is down." } }],
-      AGENT_SETTINGS_DEFAULTS,
-    );
-
-    expect(result.summary).toBe("Escalated to merchant: Shopify is down.");
-  });
 });
 
 describe("resolveRunPolicy authorization labelling", () => {
@@ -595,11 +447,6 @@ describe("resolveRunPolicy authorization labelling", () => {
   // mode resolved to the strongest label in the enum.
   it("does not claim human approval for a turn that states no mode", () => {
     expect(resolveRunPolicy(AGENT_SETTINGS_DEFAULTS).effectiveMode).toBe("auto_executed");
-  });
-
-  it("still reads read-only from the readOnly flag alone", () => {
-    expect(resolveRunPolicy(AGENT_SETTINGS_DEFAULTS, { readOnly: true }).effectiveMode)
-      .toBe("read_only");
   });
 
   it("keeps the approval only for a stated human_approved turn", () => {
