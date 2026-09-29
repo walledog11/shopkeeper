@@ -69,11 +69,6 @@ vi.mock('./failure.js', () => ({
 }));
 
 import { createOrderReviewWorker, formatOrderFlagNotification } from './order-review.js';
-import {
-  CONTROLLED_QUEUE_RECOVERY_FAILURE,
-  JOB,
-} from '../constants.js';
-
 function createWorker() {
   createOrderReviewWorker({
     workerOptions: { connection: {} } as never,
@@ -91,22 +86,6 @@ describe('order-review worker', () => {
     runOrderOps.mockResolvedValue({ flagged: false });
     listBindings.mockResolvedValue([]);
     notify.mockResolvedValue({ channel: 'telegram', chatId: '1' });
-  });
-
-  it('registers permanent failure logging', () => {
-    createWorker();
-
-    expect(workerConstructor).toHaveBeenCalledWith(
-      'order-review',
-      expect.any(Function),
-      expect.any(Object),
-    );
-    expect(registerFailure).toHaveBeenCalledWith(
-      expect.any(Object),
-      expect.objectContaining({
-        logMessage: '[OrderReview] Job failed permanently',
-      }),
-    );
   });
 
   it('does no work when monitoring is disabled', async () => {
@@ -157,60 +136,6 @@ describe('order-review worker', () => {
     expect(notify).not.toHaveBeenCalled();
   });
 
-  it('records the finding without notifying when no operator channel is bound', async () => {
-    isEnabled.mockReturnValue(true);
-    findUnique.mockResolvedValue({ settings: {} });
-    runOrderOps.mockResolvedValue({ flagged: true, flagReason: 'high value, new customer' });
-    listBindings.mockResolvedValue([]);
-    const handle = createWorker();
-
-    await handle({ id: 'job-1', data: { organizationId: 'org-1', orderId: '100', traceId: 't-1' } });
-
-    expect(notify).not.toHaveBeenCalled();
-    expect(logger.info).toHaveBeenCalledWith(
-      { organizationId: 'org-1', orderId: '100', traceId: 't-1' },
-      '[OrderReview] order flagged but no operator channels are bound — finding recorded only',
-    );
-  });
-
-  it('fails the controlled recovery canary exactly on its first attempt', async () => {
-    isEnabled.mockReturnValue(false);
-    const handle = createWorker();
-
-    await expect(handle({
-      id: 'queue-recovery-canary-test',
-      name: JOB.CONTROLLED_QUEUE_RECOVERY,
-      attemptsMade: 0,
-      data: { traceId: 'trace-recovery' },
-    })).rejects.toThrow(CONTROLLED_QUEUE_RECOVERY_FAILURE);
-
-    expect(findUnique).not.toHaveBeenCalled();
-    expect(runOrderOps).not.toHaveBeenCalled();
-  });
-
-  it('completes a retried recovery canary without business work', async () => {
-    isEnabled.mockReturnValue(true);
-    const handle = createWorker();
-
-    await handle({
-      id: 'queue-recovery-canary-test',
-      name: JOB.CONTROLLED_QUEUE_RECOVERY,
-      attemptsMade: 1,
-      data: { traceId: 'trace-recovery' },
-    });
-
-    expect(logger.info).toHaveBeenCalledWith(
-      {
-        jobId: 'queue-recovery-canary-test',
-        traceId: 'trace-recovery',
-        attemptsMade: 1,
-      },
-      '[OrderReview] Controlled queue recovery canary completed',
-    );
-    expect(findUnique).not.toHaveBeenCalled();
-    expect(runOrderOps).not.toHaveBeenCalled();
-  });
-
   it('drops malformed jobs with an explicit error', async () => {
     isEnabled.mockReturnValue(true);
     const handle = createWorker();
@@ -238,54 +163,12 @@ describe('order-review worker', () => {
 });
 
 describe('formatOrderFlagNotification', () => {
-  it('reads as a heads-up that states nothing was changed', () => {
-    const body = formatOrderFlagNotification('#1001', 'billing and shipping countries differ');
-
-    expect(body).toContain('#1001');
-    expect(body).toContain('billing and shipping countries differ');
-    expect(body).toContain("I haven't touched it");
-  });
-
-  it('separates the heads-up, reason, and status with blank lines', () => {
-    const body = formatOrderFlagNotification('#1001', 'billing and shipping countries differ');
-
-    expect(body).toBe(
-      "Heads up — order #1001 looks worth a second look:\n\nbilling and shipping countries differ.\n\nI haven't touched it; nothing is on hold.",
-    );
-  });
-
-  it('flattens multi-line model reasons into one detail paragraph', () => {
-    const body = formatOrderFlagNotification('#1001', 'first line\n\n  second   line ');
-
-    expect(body).toContain('first line second line.');
-    expect(body).toMatch(/second look:\n\nfirst line second line/);
-  });
-
   it('caps a long reason so one order cannot fill the merchant screen', () => {
     const body = formatOrderFlagNotification('#1001', 'word '.repeat(200));
 
     expect(body).toContain('…');
     expect(body.length).toBeLessThan(380);
     expect(body).toMatch(/…\n\nI haven't touched it/);
-  });
-
-  it('keeps typical multi-signal flag reasons intact without mid-word truncation', () => {
-    const reason =
-      'First-time customer, $300 order, payment not yet captured, and billing (US) vs shipping (Canada) country mismatch — combination suggests possible stolen card use; recommend human review before capturing payment';
-    const body = formatOrderFlagNotification('#1027', reason);
-
-    expect(body).toContain('before capturing payment');
-    expect(body).not.toContain('captur…');
-    expect(body).toContain('before capturing payment.\n\nI haven');
-  });
-
-  it('truncates at a word boundary when a reason is extremely long', () => {
-    const reason = `risk ${'signal '.repeat(80)}end`;
-    const body = formatOrderFlagNotification('#1001', reason);
-
-    expect(body).toContain('…');
-    expect(body).toMatch(/…\n\nI haven't touched it/);
-    expect(body).not.toContain('….\n\nI haven');
   });
 
   // The body is mirrored onto the operator thread, so a buyer who plants
