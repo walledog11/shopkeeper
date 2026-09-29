@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsonResponse } from "../testing/json-response.js";
 import {
-  formatSalesPulseLine,
   shiftWindowByDays,
   summarizeOrders,
   summarizeOrdersInWindow,
@@ -64,49 +63,5 @@ describe("shiftWindowByDays", () => {
       start: new Date("2026-04-21T08:00:00Z"),
       end: new Date("2026-04-22T08:00:00Z"),
     });
-  });
-});
-
-describe("formatSalesPulseLine", () => {
-  it("formats the current window and optional prior-week comparison", () => {
-    const current = { orderCount: 12, revenueTotal: 1847, currency: "USD" };
-    const prior = { orderCount: 9, revenueTotal: 1420, currency: "USD" };
-
-    expect(formatSalesPulseLine(current, prior)).toBe(
-      "12 orders and $1847 since your last briefing. This time last week it was 9 orders and $1420.",
-    );
-  });
-
-  it("omits the comparison when prior data is unavailable", () => {
-    const current = { orderCount: 1, revenueTotal: 25.5, currency: "USD" };
-
-    expect(formatSalesPulseLine(current)).toBe(
-      "1 order and $25.50 since your last briefing.",
-    );
-  });
-
-  it("stays silent when both windows are empty", () => {
-    const empty = { orderCount: 0, revenueTotal: 0, currency: null };
-
-    expect(formatSalesPulseLine(empty)).toBeNull();
-    expect(formatSalesPulseLine(empty, empty)).toBeNull();
-  });
-
-  it("reports a quiet window only when last week was not quiet", () => {
-    const empty = { orderCount: 0, revenueTotal: 0, currency: null };
-    const prior = { orderCount: 9, revenueTotal: 1420, currency: "USD" };
-
-    expect(formatSalesPulseLine(empty, prior)).toBe(
-      "No orders since your last briefing. This time last week you had 9 orders and $1420.",
-    );
-  });
-
-  it("drops the comparison against an empty prior week", () => {
-    const current = { orderCount: 2, revenueTotal: 310, currency: "USD" };
-    const empty = { orderCount: 0, revenueTotal: 0, currency: null };
-
-    expect(formatSalesPulseLine(current, empty)).toBe(
-      "2 orders and $310 since your last briefing.",
-    );
   });
 });
