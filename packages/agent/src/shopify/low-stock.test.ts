@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsonResponse } from "../testing/json-response.js";
-import { formatLowStockLine, listLowStockVariants } from "./low-stock.js";
+import { listLowStockVariants } from "./low-stock.js";
 
 const ctx = {
   shop: "test-store.myshopify.com",
@@ -33,31 +33,5 @@ describe("listLowStockVariants", () => {
       { productTitle: "Canvas Hat", variantTitle: "Blue", inventoryQuantity: 2 },
       { productTitle: "Classic Tee", variantTitle: "M", inventoryQuantity: 1 },
     ]);
-  });
-});
-
-describe("formatLowStockLine", () => {
-  it("formats a digest line for low-stock variants", () => {
-    const line = formatLowStockLine([
-      { productTitle: "Canvas Hat", variantTitle: "Blue", inventoryQuantity: 2 },
-      { productTitle: "Classic Tee", variantTitle: "M", inventoryQuantity: 1 },
-    ]);
-
-    expect(line).toBe(
-      "Running low:\n- Canvas Hat (Blue) is down to 2\n- Classic Tee (M) is down to 1",
-    );
-  });
-
-  it("appends an overflow bullet when more variants were found than shown", () => {
-    const line = formatLowStockLine(
-      [{ productTitle: "Canvas Hat", variantTitle: "Blue", inventoryQuantity: 2 }],
-      4,
-    );
-
-    expect(line).toBe("Running low:\n- Canvas Hat (Blue) is down to 2\n- …and 3 more");
-  });
-
-  it("returns null when there are no low-stock variants", () => {
-    expect(formatLowStockLine([])).toBeNull();
   });
 });
