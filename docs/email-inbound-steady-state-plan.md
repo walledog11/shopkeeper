@@ -46,8 +46,8 @@ Owner: engineering / release, with product sign-off on forward-only Postmark ret
 - `packages/email/src/inbound-transport.test.ts`
 - `packages/email/src/inbound-transport-policy.test.ts`
 - `packages/email/src/inbound-email-job.test.ts`
-- `packages/db/email-inbound-transport-audit.unit.test.ts`
-- `apps/dashboard/src/lib/integrations/email-inbound-path.unit.test.ts`
+- `packages/db/email-inbound-transport-audit.unit.test.ts` (removed 2026-09-28; no config ever ran it)
+- `apps/dashboard/src/lib/integrations/email-inbound-path.unit.test.ts` (removed 2026-09-28)
 - `apps/dashboard/src/app/api/integrations/_lib/email-integration.test.ts` (dual-path rejection, hybrid metadata strip)
 - `apps/dashboard/src/app/api/integrations/route.test.ts` (forward blocked when Gmail watch active)
 - `apps/dashboard/src/app/api/integrations/gmail/callback/route.test.ts` (OAuth reconnect; no `inboundMode: 'native'`)
@@ -282,7 +282,7 @@ HAVING count(*) > 1;
 - [x] Dashboard + API: validation on all email upserts (not only new forward connect).
 - [x] Gate script: `npm run audit:email-inbound-transport` — flags orgs violating
   invariant 1 (shipped Phase 0; use `--strict` for CI/Phase 1 gate).
-- [x] CI: `scripts/email-inbound-transport-audit-fixture.test.mjs` runs `--strict` on test DB (coverage stage).
+- [x] CI: `scripts/email-inbound-transport-audit-fixture.test.mjs` runs `--strict` on test DB (coverage stage). Removed 2026-09-28: it only showed the audit passes on an empty database.
 
 **Acceptance**
 
@@ -367,11 +367,11 @@ removed from Vercel and Railway (`shopkeeper` + Gateway Worker).
 | Layer | What to prove | Status (2026-09-26) |
 | --- | --- | --- |
 | Unit | `InboundEmailEvent` ↔ job payload round-trip | Done — `inbound-email-job.test.ts` |
-| Unit | Dual-path policy helpers | Done — `inbound-transport.test.ts`, `inbound-transport-policy.test.ts`, `email-inbound-path.unit.test.ts`, `email-inbound-transport-audit.unit.test.ts` |
+| Unit | Dual-path policy helpers | Done — `inbound-transport.test.ts`, `inbound-transport-policy.test.ts` |
 | Integration | DB-backed `processInboundMessage` idempotency on `externalMessageId` | Unchanged — `worker-inbound-email.test.ts` |
 | Integration | Forward connect blocked when Gmail watch active | Done — `route.test.ts`, `email-integration.test.ts` |
 | Gateway | Webhook auth; Gmail sync enqueue shape | Done — `webhooks-email-shopify.test.ts`, `gmail-sync.unit.test.ts` |
-| CI | Audit `--strict` on empty test DB | Done — `email-inbound-transport-audit-fixture.test.mjs` (coverage stage) |
+| CI | Audit `--strict` on empty test DB | Removed 2026-09-28 — it only showed the audit passes on an empty database |
 | Production | Post-ship `--strict` | Done — 2026-09-26 after migration deploy |
 | CI | No stray `process-email` enqueue | Done — `check-inbound-email-enqueue-surface.mjs` |
 | Canary | Fleet-appropriate inbound paths | Done — [Phase 1 acceptance](./email-inbound-phase-1-acceptance.md) |

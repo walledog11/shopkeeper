@@ -10,7 +10,7 @@ Companion to [steady-state plan](./email-inbound-steady-state-plan.md). Records 
 | Criterion | Status | Evidence |
 | --- | --- | --- |
 | No dual-integration orgs with dual-delivery risk in production | Done | [Phase 0 snapshot](./email-inbound-phase-0-inventory.md) — 0 dual risk (2026-09-26) |
-| `npm run audit:email-inbound-transport -- --strict` green | Done | Production snapshot in phase-0 doc; fixture DB gate in CI (`scripts/email-inbound-transport-audit-fixture.test.mjs`) |
+| `npm run audit:email-inbound-transport -- --strict` green | Done | Production snapshot in phase-0 doc; fixture DB gate in CI (`scripts/email-inbound-transport-audit-fixture.test.mjs`, removed 2026-09-28: it only showed the audit passes on an empty database) |
 | Integrations UI + API block parallel inbound connect | Done | Shipped 2026-09-26; tests in `route.test.ts`, `email-integration.test.ts` |
 | Runbook steady-state (no hybrid as default) | Done | [runbook § Gmail inbound steady state](./production/runbook.md) |
 | Palette / internal canary | Done (current fleet) | Single production org is **Gmail watch only** (no active Postmark row). Forwarding-path canary deferred until a forward-only test org exists; Gmail path covered by existing watch health. Distinct-message protocol documented in [runbook § Independent-email canary](./production/runbook.md). |

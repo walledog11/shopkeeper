@@ -15,10 +15,7 @@ const STAGES = {
     ['npm', ['run', 'test:node']],
   ],
   e2e: [['npm', ['run', 'test:e2e:smoke']]],
-  coverage: [
-    ['npm', ['run', 'test:coverage']],
-    ['node', ['--test', 'scripts/email-inbound-transport-audit-fixture.test.mjs']],
-  ],
+  coverage: [['npm', ['run', 'test:coverage']]],
   build: [['npm', ['run', 'build']]],
 };
 
