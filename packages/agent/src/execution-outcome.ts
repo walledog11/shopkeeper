@@ -8,12 +8,19 @@ const FAILED_ACTION_STATUSES = new Set<string>(["error", "policy_block"]);
 // ActionEntry are judged by the same rule.
 type OutcomeAction = { status?: string | undefined; tool?: string; category?: string | undefined };
 
-function actionCategory(action: OutcomeAction): string | undefined {
+export function actionCategory(action: OutcomeAction): string | undefined {
   return action.category ?? (action.tool ? TOOL_CATEGORIES[action.tool] : undefined);
 }
 
 function isDefiniteFailure(action: OutcomeAction): boolean {
   return action.status !== undefined && FAILED_ACTION_STATUSES.has(action.status);
+}
+
+/** True for an action that took effect. */
+export function isCommittedAction(action: OutcomeAction): boolean {
+  return action.status === undefined
+    || action.status === "success"
+    || action.status === "escalated";
 }
 
 // A reply is delivery, not an effect: a completed refund whose reply was withheld
@@ -38,12 +45,17 @@ export function planExecutionOutcomeForActions(
   const effects = effectActions(actions);
   if (!effects.some(isDefiniteFailure)) return "committed";
 
-  const hasCommittedAction = effects.some((action) => (
-    action.status === undefined
-    || action.status === "success"
-    || action.status === "escalated"
-  ));
-  return hasCommittedAction ? "partial" : "failed";
+  return effects.some(isCommittedAction) ? "partial" : "failed";
+}
+
+/**
+ * The action a plan that did not commit is judged by: the first unknown one, or
+ * failing that the first definite failure among the effects. Undefined when the
+ * plan committed. A confirmation names this action, not whichever ran last.
+ */
+export function outcomeCause<T extends OutcomeAction>(actions: readonly T[]): T | undefined {
+  return actions.find((action) => action.status === "unknown")
+    ?? effectActions(actions).find(isDefiniteFailure);
 }
 
 /** True when the plan's effects committed but a reply to the customer did not go out. */

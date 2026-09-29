@@ -163,6 +163,23 @@ export function displayApprovedDraft(draft: string): string {
   ));
 }
 
+/**
+ * What a successful receipt can show the merchant: every value a placeholder
+ * could take from it, under the label the approval card gives that placeholder.
+ * Empty for a receipt no placeholder reads.
+ */
+export function receiptPlaceholderValues(
+  receipt: ReceiptSuccessV1,
+): { label: string; value: string }[] {
+  const shown: { label: string; value: string }[] = [];
+  for (const definition of Object.values(PLACEHOLDERS)) {
+    const source = (definition.sources as Record<string, PlaceholderSource | undefined>)[receipt.tool];
+    const value = source?.read(receipt as never);
+    if (value?.trim()) shown.push({ label: definition.label, value });
+  }
+  return shown;
+}
+
 export type FilledDraft =
   | { status: "filled"; text: string }
   | { status: "unfilled"; placeholder: string };
