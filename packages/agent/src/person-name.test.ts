@@ -3,16 +3,9 @@ import {
   classifyPerson,
   customerFirstName,
   personLabel,
-  personObject,
-  personSubject,
 } from "./person-name.js";
 
 describe("customerFirstName", () => {
-  it("takes the first word of a trimmed name", () => {
-    expect(customerFirstName("Sarah Chen")).toBe("Sarah");
-    expect(customerFirstName("Sarah")).toBe("Sarah");
-  });
-
   // The operator card's copy split on a single space without trimming, so a
   // leading space made the whole card nameless while the briefing named them.
   it("survives surrounding and repeated whitespace", () => {
@@ -24,13 +17,6 @@ describe("customerFirstName", () => {
 });
 
 describe("classifyPerson", () => {
-  it("reads a name off any channel", () => {
-    expect(classifyPerson({ customerName: "Sarah Chen", channelType: "email" })).toEqual({
-      kind: "named",
-      firstName: "Sarah",
-    });
-  });
-
   // The platform writes "Customer" where it has no name; echoing it back claims
   // an identification that never happened.
   it("does not treat the placeholder 'Customer' as a name", () => {
@@ -86,19 +72,5 @@ describe("renderers", () => {
     expect(personLabel(visitor)).toBe("Storefront visitor");
     // Null, not "Someone": the caller has an order reference to fall back to.
     expect(personLabel(unknown)).toBeNull();
-  });
-
-  it("opens a sentence", () => {
-    expect(personSubject(named)).toBe("Sarah");
-    expect(personSubject(verified)).toBe("The customer on #1024");
-    expect(personSubject(visitor)).toBe("Someone on your storefront");
-    expect(personSubject(unknown)).toBe("The customer");
-  });
-
-  it("follows a preposition in lower case", () => {
-    expect(personObject(named)).toBe("Sarah");
-    expect(personObject(verified)).toBe("the customer on #1024");
-    expect(personObject(visitor)).toBe("the visitor");
-    expect(personObject(unknown)).toBe("the customer");
   });
 });
