@@ -180,12 +180,34 @@ original list so references in the release evidence stay valid; items 1–7 and
     `summarizeApprovedDashboardActions` (`run-approved-actions.ts`), which is
     the last non-read action's `result` text. After a cancel-and-reply plan
     that was "Reply sent to customer via email.": it omits the cancellation
-    and the refund, and reads as a log line.
+    and the refund, and reads as a log line. The same rule drops effects
+    whenever a reply comes last: a reply skipped because its approved write
+    failed is reported as the skip, not as the write's failure, and a
+    committed write followed by a reply that was withheld or not delivered is
+    reported as the reply alone. Observed 2026-09-28 by running the function
+    on hand-built action lists (a withheld reply after a commit, and after a
+    failure).
     - The change: compose the confirmation from the typed receipts of the
       actions that ran (what was cancelled, refunded, sent and to whom), never
-      from result text. A failure keeps its existing failure copy.
+      from result text. A failure keeps its existing failure copy and names
+      every effect that committed before it. A committed write whose reply did
+      not go out is a committed execution (item 5), so the merchant is told
+      the customer has not been told.
+    - The text is also a control signal. After a run, `runApprovedPendingPlan`
+      (`pending-plan-actions.ts`) clears the parked phone card only when the
+      summary does not begin with `Error:` or `Unknown:`
+      (`isPlanExecutionFailureMessage`, `message-dispatch.ts`), and the
+      `approve_pending_plan` tool and the keyword approval reply
+      (`pending-plan-commands.ts`) pick their copy the same way. A committed
+      write must not read as a failure to them, and an unknown outcome must
+      keep its `Unknown:` prefix. Moving that decision from the prefix to the
+      typed outcome is a separate change, not part of this item. If the text
+      and the decision cannot be kept in agreement, stop and report (rule 1)
+      rather than add a case to the matcher.
     - Done when a cancel-and-reply approval on the next Gate C run confirms
-      both effects with the refunded amount from the receipt.
+      both effects with the refunded amount from the receipt. The mixed
+      cases are seen on the release evidence's optional step 7 (a
+      deliberately induced delivery failure), or reported as not verified.
 
 8f. **The dashboard's `send_email` sink drops the provider message id**
     (*Typed receipts and operation identity*). Found while fixing item 8b:
@@ -198,6 +220,39 @@ original list so references in the release evidence stay valid; items 1–7 and
    evidence lists as "pending". Production carries no merchant traffic besides
    the controlled organization, so the window will measure only controlled runs.
    The evidence must say so rather than present it as rollout observation.
+
+9a. **The crash-recovery tests share one global sweep** (*Verification
+    specification*, the deterministic race and crash cases). Found 2026-09-28
+    while reading two of the four files that specification says to check first.
+    `reconcileStaleClaimedPlanExecutions` (`execution-ledger.ts`) takes no
+    organization and sweeps every claimed execution in the database.
+    `task-approval.integration.test.ts` backdates its claimed execution to
+    January and asserts that its own sweep returns exactly one row.
+    `unknown-outcome-reconciliation.integration.test.ts` runs the same sweep
+    from three tests (directly, and through `runUnknownOutcomeReconciliation`
+    twice) with a ten-minute cutoff, which also matches a January row. The
+    files run in parallel against one Postgres. A sweep from the
+    unknown-outcome file that lands between the task-approval file's backdate
+    and its own sweep takes the row, so the task-approval sweep reads 0. While
+    the row exists, the unknown-outcome file's direct count reads 2.
+    - Reproduced 2026-09-28 on the local test database. Forcing the order gave
+      0 where task-approval asserts 1, and 2 where unknown-outcome asserts 1.
+      Running `task-approval.integration.test.ts` beside a test file that
+      repeats the production sweep for a few seconds failed 2 of 6 runs with
+      `expected +0 to be 1`, once in each of its two stale-sweep tests.
+    - The change: an optional `organizationId` on the sweep. The maintenance
+      job (`runUnknownOutcomeReconciliation`) passes none and still sweeps
+      every organization. `task-approval.integration.test.ts` keeps its row
+      fresh and sweeps its own organization with a cutoff after the claim, so
+      no ten-minute sweep can see it, and
+      `unknown-outcome-reconciliation.integration.test.ts` scopes its direct
+      sweep to its own organization. The two sibling sweeps in
+      `unknown-outcome-reconciliation.ts` are global too, but no other test
+      file backdates a row either would match, so they stay.
+    - Done when rerunning the forced order and the paired run no longer
+      changes either file's count. Independent of items 8c–8f, so it does not
+      wait for a Gate C run. Blocks item 10, whose dead-worker test would
+      likely join these files.
 
 10. **Phone instructions as durable tasks** (decision E; *Target architecture*,
     "Support and operator turns … share request identity, budgets, receipts,
