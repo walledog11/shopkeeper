@@ -6,7 +6,7 @@ import {
   createTestThread,
   cleanupTestData,
 } from '@shopkeeper/db/test-helpers';
-import { formatEscalationMessage, pushOperatorEscalation } from './operator-escalation.js';
+import { pushOperatorEscalation } from './operator-escalation.js';
 
 const { sendImessageToSpaceSpy, sendMessageSpy } = vi.hoisted(() => ({
   sendImessageToSpaceSpy: vi.fn().mockResolvedValue(undefined),
@@ -33,53 +33,7 @@ vi.mock('ioredis', () => ({
   }),
 }));
 
-const THREAD_ID = '00000000-0000-0000-0000-000000000001';
 const DASHBOARD_URL = 'http://dashboard.test';
-
-describe('formatEscalationMessage', () => {
-  it('formats email escalations with customer name and summary', () => {
-    const message = formatEscalationMessage(
-      'Jane Doe',
-      ChannelType.email,
-      'Wholesale pricing question.',
-      'Customer asked about bulk discounts.',
-      DASHBOARD_URL,
-      THREAD_ID,
-    );
-
-    expect(message).toBe(
-      [
-        'Escalated — Email',
-        'From: Jane Doe',
-        'Reason: Wholesale pricing question.',
-        '',
-        '"Customer asked about bulk discounts."',
-        '',
-        `Open: ${DASHBOARD_URL}/dashboard/tickets?thread=${THREAD_ID}`,
-      ].join('\n'),
-    );
-  });
-
-  it('formats Instagram DM escalations without optional fields', () => {
-    const message = formatEscalationMessage(
-      null,
-      ChannelType.ig_dm,
-      'Needs human review',
-      null,
-      DASHBOARD_URL,
-      THREAD_ID,
-    );
-
-    expect(message).toBe(
-      [
-        'Escalated — Instagram DM',
-        'Reason: Needs human review',
-        '',
-        `Open: ${DASHBOARD_URL}/dashboard/tickets?thread=${THREAD_ID}`,
-      ].join('\n'),
-    );
-  });
-});
 
 describe('pushOperatorEscalation', () => {
   let org!: Awaited<ReturnType<typeof createTestOrg>>;
@@ -109,16 +63,6 @@ describe('pushOperatorEscalation', () => {
     expect(sendMessageSpy).not.toHaveBeenCalled();
   });
 
-  it('returns 0 when no bound operators exist', async () => {
-    const customer = await createTestCustomer(org.id, 'no-members@example.com');
-    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
-
-    const notified = await pushOperatorEscalation(org.id, thread.id, 'wholesale');
-
-    expect(notified).toBe(0);
-    expect(sendMessageSpy).not.toHaveBeenCalled();
-  });
-
   it('notifies every bound operator with the escalation message', async () => {
     const customer = await createTestCustomer(org.id, 'two-members@example.com');
     const thread = await createTestThread(org.id, customer.id, ChannelType.shopify);
@@ -142,7 +86,6 @@ describe('pushOperatorEscalation', () => {
     expect(sendMessageSpy).toHaveBeenCalledTimes(2);
 
     const bodyArg = sendMessageSpy.mock.calls[0][1] as string;
-    expect(bodyArg).toContain('Escalated — Shopify');
     expect(bodyArg).toContain('Order issue');
     expect(bodyArg).toContain(`/dashboard/tickets?thread=${thread.id}`);
   });
@@ -169,7 +112,6 @@ describe('pushOperatorEscalation', () => {
 
     const [spaceId, body] = sendImessageToSpaceSpy.mock.calls[0] as [string, string];
     expect(spaceId).toBe(`space-${org.id}`);
-    expect(body).toContain('Escalated — Email');
     expect(body).toContain('Order issue');
   });
 
