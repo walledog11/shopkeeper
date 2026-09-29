@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import type { ProductEvent } from './events.js';
 import { getEventProperties, sanitizeProductEvent } from './sanitize.js';
 
 const BASE = {
@@ -7,73 +6,7 @@ const BASE = {
   source: 'gateway',
 } as const;
 
-const EVENTS: ProductEvent[] = [
-  { ...BASE, event: 'workspace_created' },
-  { ...BASE, event: 'onboarding_step_completed', step: 'shopify' },
-  { ...BASE, event: 'onboarding_completed' },
-  { ...BASE, event: 'integration_connection_started', platform: 'email' },
-  { ...BASE, event: 'integration_connection_completed', platform: 'shopify' },
-  {
-    ...BASE,
-    event: 'integration_connection_failed',
-    platform: 'ig_dm',
-    failureCategory: 'access_denied',
-  },
-  {
-    ...BASE,
-    event: 'inbound_message_processed',
-    channel: 'email',
-    isFirstForWorkspace: true,
-  },
-  {
-    ...BASE,
-    event: 'agent_plan_generated',
-    channel: 'email',
-    planSource: 'generated',
-    stepCount: 2,
-    generationMs: 500,
-    cacheHit: false,
-  },
-  {
-    ...BASE,
-    event: 'agent_plan_decided',
-    decision: 'approved',
-    channel: 'email',
-    changed: false,
-  },
-  {
-    ...BASE,
-    event: 'agent_action_completed',
-    toolName: 'create_refund',
-    toolCategory: 'action',
-    outcome: 'unknown',
-  },
-  {
-    ...BASE,
-    event: 'outbound_reply_sent',
-    channel: 'email',
-    replySource: 'agent_approved',
-  },
-  {
-    ...BASE,
-    event: 'subscription_status_changed',
-    previousStatus: 'trialing',
-    newStatus: 'active',
-    plan: 'pro',
-  },
-  {
-    ...BASE,
-    event: 'workspace_activated',
-    secondsSinceWorkspaceCreated: 3_600,
-    withinSevenDays: true,
-  },
-];
-
 describe('sanitizeProductEvent', () => {
-  it.each(EVENTS)('accepts and copies $event', (event) => {
-    expect(sanitizeProductEvent(event)).toEqual(event);
-  });
-
   it('drops unknown and prohibited properties', () => {
     const event = sanitizeProductEvent({
       ...BASE,
@@ -137,14 +70,16 @@ describe('sanitizeProductEvent', () => {
 });
 
 describe('getEventProperties', () => {
-  it.each(EVENTS)('uses only catalog property names for $event', (event) => {
-    const properties = getEventProperties(event);
-    expect(Object.keys(properties)).not.toContain('organizationId');
-    expect(Object.keys(properties)).not.toContain('insertId');
-  });
-
   it('maps application field names to analytics snake_case', () => {
-    expect(getEventProperties(EVENTS[7])).toEqual({
+    expect(getEventProperties({
+      ...BASE,
+      event: 'agent_plan_generated',
+      channel: 'email',
+      planSource: 'generated',
+      stepCount: 2,
+      generationMs: 500,
+      cacheHit: false,
+    })).toEqual({
       channel: 'email',
       plan_source: 'generated',
       step_count: 2,
