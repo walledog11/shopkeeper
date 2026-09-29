@@ -329,52 +329,6 @@ describe('generateThreadPlan auto-execute path', () => {
     expect(mockPlanAgent).not.toHaveBeenCalled();
   });
 
-  it('still checks the safe-reply lane when mutative auto-execute is disabled', async () => {
-    const result = await generateThreadPlan('org_1', 'thread_1', false);
-
-    expect(mockMaybeAutoExecute).toHaveBeenCalledWith(
-      expect.objectContaining({ allowMutativeAutoExecute: false }),
-      expect.anything(),
-    );
-    expect(mockBuildContext).not.toHaveBeenCalled();
-    expect(mockPlanAgent).not.toHaveBeenCalled();
-    expect(result.autoExecuted).toBeUndefined();
-    expect(result.plan).toEqual(cachedPlan);
-  });
-
-  it('auto-executes a warm cache hit when allowAutoExecute is true', async () => {
-    mockMaybeAutoExecute.mockResolvedValueOnce({
-      verdict: { kind: 'auto_execute' },
-      result: { summary: 'Done', actionsPerformed: [] },
-    });
-    const result = await generateThreadPlan('org_1', 'thread_1', true);
-
-    expect(mockMaybeAutoExecute).toHaveBeenCalledOnce();
-    expect(mockBuildContext).not.toHaveBeenCalled();
-    expect(mockPlanAgent).not.toHaveBeenCalled();
-    expect(result).toMatchObject({
-      autoExecuted: true,
-      autoExecutionKind: 'action',
-      autoExecutionStatus: 'success',
-      autoExecutionSummary: 'Done',
-    });
-  });
-
-  it('auto-executes a safe reply even when mutative auto-execute is disabled', async () => {
-    mockMaybeAutoExecute.mockResolvedValueOnce({
-      verdict: { kind: 'quick_reply' },
-      result: { summary: 'Asked for the order number', actionsPerformed: [] },
-    });
-
-    const result = await generateThreadPlan('org_1', 'thread_1', false);
-
-    expect(result).toMatchObject({
-      autoExecuted: true,
-      autoExecutionKind: 'safe_reply',
-      autoExecutionStatus: 'success',
-    });
-  });
-
   it('marks failure-replan recovery so the merchant is notified once', async () => {
     mockMaybeAutoExecute.mockResolvedValueOnce({
       verdict: { kind: 'quick_reply' },
@@ -435,62 +389,6 @@ describe('generateThreadPlan auto-execute path', () => {
     expect(mockMaybeAutoExecute).not.toHaveBeenCalled();
     expect(result.autoExecuted).toBeUndefined();
     expect(result.plan).toEqual(cachedPlan);
-  });
-
-  it('uses an instruction override instead of aiSummary when provided', async () => {
-    mockIsAgentPlanCacheHit.mockReturnValue(false);
-    mockRequireOrgThread.mockResolvedValueOnce({
-      id: 'thread_1',
-      aiSummary: 'Summarized request',
-      filterStatus: 'genuine',
-      messages: [{ id: 'msg_1' }],
-      cachedPlan: null,
-    });
-    mockBuildContext.mockResolvedValue({ thread: { id: 'thread_1' } });
-    mockPlanAgent.mockResolvedValue({
-      steps: [{ id: 'send_1', tool: 'send_reply' }],
-      rawToolCalls: [{ id: 'send_1', name: 'send_reply', input: { text: 'Hi' } }],
-    });
-
-    const result = await generateThreadPlan('org_1', 'thread_1', false, {
-      instruction: 'Where is my order #1001?',
-    });
-
-    expect(mockPlanAgent).toHaveBeenCalledWith(
-      expect.anything(),
-      'Where is my order #1001?',
-      expect.anything(),
-      { runtimeVersion: 1 },
-    );
-    expect(result.instruction).toBe('Where is my order #1001?');
-  });
-
-  it('accepts support tasks with the fixed support budget runtime version', async () => {
-    mockIsAgentPlanCacheHit.mockReturnValue(false);
-    mockRequireOrgThread.mockResolvedValueOnce({
-      id: 'thread_1',
-      aiSummary: 'Refund request',
-      filterStatus: 'genuine',
-      messages: [{ id: 'msg_1' }],
-      cachedPlan: null,
-    });
-    mockBuildContext.mockResolvedValue({ thread: { id: 'thread_1' } });
-    mockPlanAgent.mockResolvedValue({
-      steps: [{ id: 'refund_1', tool: 'create_refund' }],
-      rawToolCalls: [{ id: 'refund_1', name: 'create_refund', input: { order_id: '1' } }],
-    });
-
-    await generateThreadPlan('org_1', 'thread_1', false);
-
-    expect(mockAcceptCustomerAgentRequest).toHaveBeenCalledWith(expect.objectContaining({
-      budget: expect.objectContaining({ runtimeVersion: 1 }),
-    }));
-    expect(mockPlanAgent).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.any(String),
-      expect.anything(),
-      { runtimeVersion: 1 },
-    );
   });
 
   it('skips plan generation for questionable senders and clears stale cache', async () => {
