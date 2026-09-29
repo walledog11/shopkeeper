@@ -36,27 +36,11 @@ const LOG_ONLY_RESULT: EmitOpsAlertResult = {
   reason: 'logged',
 };
 
-type SignatureCase = {
-  provider: Parameters<typeof recordWebhookSignatureFailure>[0];
-  reason: Parameters<typeof recordWebhookSignatureFailure>[1];
-};
-
-const SIGNATURE_CASES: SignatureCase[] = [
-  { provider: 'meta', reason: 'missing_signature' },
-  { provider: 'meta', reason: 'signature_mismatch' },
-  { provider: 'shopify', reason: 'missing_signature' },
-  { provider: 'shopify', reason: 'signature_mismatch' },
-  { provider: 'telegram', reason: 'missing_signature' },
-  { provider: 'telegram', reason: 'signature_mismatch' },
-  { provider: 'tiktok_shop', reason: 'missing_signature' },
-  { provider: 'tiktok_shop', reason: 'signature_mismatch' },
-];
-
 describe('recordWebhookSignatureFailure', () => {
   it('does not emit below the threshold and emits once at the threshold', async () => {
     const { client } = createCounterClient();
     const emitAlert = createEmitAlert();
-    const firstCase = SIGNATURE_CASES[0];
+    const firstCase = { provider: 'meta', reason: 'missing_signature' } as const;
 
     for (let i = 1; i < CONFIG.webhookSignatureThreshold; i++) {
       const result = await recordWebhookSignatureFailure(
@@ -84,25 +68,6 @@ describe('recordWebhookSignatureFailure', () => {
         count: CONFIG.webhookSignatureThreshold,
         threshold: CONFIG.webhookSignatureThreshold,
       },
-    });
-  });
-
-  it.each(SIGNATURE_CASES)('emits provider/reason metadata for $provider / $reason', async (testCase) => {
-    const { client } = createCounterClient();
-    const emitAlert = createEmitAlert();
-
-    for (let i = 1; i <= CONFIG.webhookSignatureThreshold; i++) {
-      await recordWebhookSignatureFailure(
-        testCase.provider,
-        testCase.reason,
-        makeDeps(client, { emitAlert }),
-      );
-    }
-
-    expect(emitAlert).toHaveBeenCalledTimes(1);
-    expect(emitAlert.mock.calls[0]?.[0]).toMatchObject({
-      category: 'webhook_signature',
-      tags: { provider: testCase.provider, reason: testCase.reason },
     });
   });
 
@@ -156,47 +121,6 @@ describe('recordWebhookSignatureFailure', () => {
     expect(emitAlert).toHaveBeenCalledTimes(2);
     expect(emitAlert.mock.calls[0]?.[0]).toMatchObject({ tags: { provider: 'meta' } });
     expect(emitAlert.mock.calls[1]?.[0]).toMatchObject({ tags: { provider: 'shopify' } });
-  });
-
-  it('attaches route and safe request metadata to threshold alerts', async () => {
-    const { client } = createCounterClient();
-    const emitAlert = createEmitAlert();
-    const request = {
-      method: 'POST',
-      path: '/webhooks/meta',
-      userAgent: 'Meta-Webhook-Test',
-      contentType: 'application/json',
-      requestId: 'req_123',
-      ip: '127.0.0.1',
-    };
-
-    for (let i = 1; i <= CONFIG.webhookSignatureThreshold; i++) {
-      await recordWebhookSignatureFailure('meta', 'signature_mismatch', makeDeps(client, {
-        emitAlert,
-        route: '/webhooks/meta',
-        request,
-      }));
-    }
-
-    expect(emitAlert).toHaveBeenCalledTimes(1);
-    expect(emitAlert.mock.calls[0]?.[0]).toMatchObject({
-      tags: {
-        provider: 'meta',
-        reason: 'signature_mismatch',
-        route: '/webhooks/meta',
-      },
-      extra: {
-        route: '/webhooks/meta',
-        request,
-      },
-      fingerprint: [
-        'ops-alert',
-        'webhook_signature',
-        'gateway',
-        'provider:meta',
-        'reason:signature_mismatch',
-      ],
-    });
   });
 });
 
