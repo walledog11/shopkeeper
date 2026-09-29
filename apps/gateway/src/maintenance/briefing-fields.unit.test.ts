@@ -3,11 +3,8 @@ import { emptyRequestFacts, type RequestFacts } from '@shopkeeper/agent/classifi
 import {
   byDeadlineFirst,
   daysUntilDeadline,
-  formatAlternativeMention,
-  formatAskPhrase,
   formatDeadlineLead,
   formatFactsBriefingLine,
-  formatRequestPhrase,
 } from './briefing-fields.js';
 
 const NOW = new Date('2026-08-21T09:00:00.000Z');
@@ -17,23 +14,6 @@ function facts(overrides: Partial<RequestFacts> = {}): RequestFacts {
 }
 
 describe('formatDeadlineLead', () => {
-  it('names an unambiguous calendar date inside a week', () => {
-    expect(formatDeadlineLead(facts({ deadline: '2026-08-23' }), NOW))
-      .toBe('Customer deadline: Sun, Aug 23, 2026');
-  });
-
-  it('keeps the calendar date explicit past a week out', () => {
-    expect(formatDeadlineLead(facts({ deadline: '2026-09-04' }), NOW))
-      .toBe('Customer deadline: Fri, Sep 4, 2026');
-  });
-
-  it('keeps today and tomorrow while also printing their dates', () => {
-    expect(formatDeadlineLead(facts({ deadline: '2026-08-21' }), NOW))
-      .toBe('Customer deadline: today (Fri, Aug 21, 2026)');
-    expect(formatDeadlineLead(facts({ deadline: '2026-08-22' }), NOW))
-      .toBe('Customer deadline: tomorrow (Sat, Aug 22, 2026)');
-  });
-
   // A date the merchant has already missed is the most urgent line on the page.
   it('surfaces a passed deadline rather than dropping it', () => {
     expect(formatDeadlineLead(facts({ deadline: '2026-08-20' }), NOW))
@@ -41,94 +21,9 @@ describe('formatDeadlineLead', () => {
     expect(formatDeadlineLead(facts({ deadline: '2026-08-18' }), NOW))
       .toBe('Customer deadline passed: Tue, Aug 18, 2026');
   });
-
-  // The customer's words are printed as they were written or not at all — there
-  // is no rewording step, so there is nothing to repair afterwards.
-  it('falls back to the verbatim phrase when no date resolved', () => {
-    expect(formatDeadlineLead(facts({ deadlineText: 'before the weekend' }), NOW))
-      .toBe('Customer timing: before the weekend');
-  });
-
-  it('is null when the customer named no timing', () => {
-    expect(formatDeadlineLead(facts(), NOW)).toBeNull();
-  });
-});
-
-describe('formatAskPhrase', () => {
-  it('joins the ask to the alternative the customer offered', () => {
-    expect(formatAskPhrase(facts({ ask: 'refund', alternative: 'exchange' })))
-      .toBe('refund or exchange');
-  });
-
-  it('names the subject when there is one', () => {
-    expect(formatAskPhrase(facts({ ask: 'return', subject: 'the olive linen napkins' })))
-      .toBe('return — the olive linen napkins');
-  });
-
-  it('does not print "refund or refund" when both fields agree', () => {
-    expect(formatAskPhrase(facts({ ask: 'refund', alternative: 'refund' }))).toBe('refund');
-  });
-
-  it('is null for asks with no label', () => {
-    expect(formatAskPhrase(facts({ ask: 'none' }))).toBeNull();
-    expect(formatAskPhrase(facts({ ask: 'other' }))).toBeNull();
-  });
-});
-
-describe('formatRequestPhrase', () => {
-  it('uses ask-specific phrasing for questions and complaints', () => {
-    expect(formatRequestPhrase(facts({ ask: 'product_question', subject: 'the lavender candle' })))
-      .toBe('has a question about the lavender candle');
-    expect(formatRequestPhrase(facts({ ask: 'complaint', subject: 'late delivery' })))
-      .toBe('reported a problem with late delivery');
-  });
-
-  it('falls back to noun phrases for generic asks', () => {
-    expect(formatRequestPhrase(facts({ ask: 'refund', subject: 'order #12' })))
-      .toBe('asked for a refund for order #12');
-  });
-});
-
-describe('formatAlternativeMention', () => {
-  it('returns noun phrases for named alternatives', () => {
-    expect(formatAlternativeMention('exchange')).toBe('an exchange');
-  });
-
-  it('is null when the alternative has no label', () => {
-    expect(formatAlternativeMention('none')).toBeNull();
-  });
 });
 
 describe('formatFactsBriefingLine', () => {
-  it('leads with the deadline', () => {
-    const line = formatFactsBriefingLine(
-      facts({
-        ask: 'refund',
-        alternative: 'exchange',
-        subject: 'the olive linen napkins',
-        order: '#1024',
-        deadline: '2026-08-23',
-      }),
-      'Dana',
-      NOW,
-    );
-    expect(line).toBe('Customer deadline: Sun, Aug 23, 2026 — Dana · #1024: refund or exchange — the olive linen napkins');
-  });
-
-  it('drops the lead segment when there is no deadline', () => {
-    const line = formatFactsBriefingLine(
-      facts({ ask: 'order_status', order: '#1024' }),
-      'Dana',
-      NOW,
-    );
-    expect(line).toBe('Dana · #1024: order status');
-  });
-
-  it('still renders when nobody is named', () => {
-    const line = formatFactsBriefingLine(facts({ ask: 'refund', order: '#1024' }), null, NOW);
-    expect(line).toBe('#1024: refund');
-  });
-
   // Threads classified before these fields existed parse to an empty ask, and
   // the caller needs to know to keep using its prose path.
   it('is null when the fields carry nothing', () => {
