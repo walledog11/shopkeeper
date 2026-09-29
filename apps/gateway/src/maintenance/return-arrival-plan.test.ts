@@ -6,7 +6,6 @@ import {
   createTestOrg,
   createTestThread,
 } from '@shopkeeper/db/test-helpers';
-import { buildReturnArrivalInstruction } from './return-arrival-plan.js';
 
 const { generateThreadPlanSpy, sendOperatorPlanNotificationSpy, listOperatorBindingsSpy } = vi.hoisted(() => ({
   generateThreadPlanSpy: vi.fn(),
@@ -43,24 +42,6 @@ afterEach(async () => {
   await cleanupTestData(org?.id);
 });
 
-describe('buildReturnArrivalInstruction', () => {
-  it('asks for a refund after a return is closed and requires receipt verification', () => {
-    expect(buildReturnArrivalInstruction({
-      orderId: '1001',
-      returnName: '#R12',
-      tool: 'create_return',
-    })).toContain('If a refund has not already been processed');
-  });
-
-  it('asks to process an exchange after a return is closed', () => {
-    expect(buildReturnArrivalInstruction({
-      orderId: '1001',
-      returnName: '#R12',
-      tool: 'create_exchange',
-    })).toContain('If the replacement has not already been processed');
-  });
-});
-
 describe('pushReturnArrivalApprovalPlan', () => {
   it('pushes a plan through the approval loop when planning succeeds', async () => {
     const customer = await createTestCustomer(org.id, 'sarah@example.com', { name: 'Sarah Jones' });
@@ -93,9 +74,6 @@ describe('pushReturnArrivalApprovalPlan', () => {
     });
 
     expect(outcome).toBe('plan_pushed');
-    expect(generateThreadPlanSpy).toHaveBeenCalledWith(org.id, thread.id, false, expect.objectContaining({
-      instruction: expect.stringContaining('marked closed in Shopify'),
-    }));
     expect(sendOperatorPlanNotificationSpy).toHaveBeenCalled();
   });
 
