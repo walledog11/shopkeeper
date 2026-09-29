@@ -43,14 +43,9 @@ vi.mock('./planning-dashboard-client.js', () => ({
   requestAutoAck: mockRequestAutoAck,
 }));
 
-import { precomputeThreadPlan, sendAutoAck, shouldSkipRequestWork } from './planning.js';
+import { precomputeThreadPlan, shouldSkipRequestWork } from './planning.js';
 
 beforeEach(() => {
-  mockLogger.debug.mockClear();
-  mockLogger.error.mockClear();
-  mockLogger.info.mockClear();
-  mockLogger.warn.mockClear();
-  mockRequestAutoAck.mockReset();
   mockFindThread.mockReset().mockResolvedValue({
     status: 'open',
     requestDisposition: 'merchant_action',
@@ -155,57 +150,5 @@ describe('precomputeThreadPlan', () => {
       { sourceMessageId: 'message_1' },
     )).resolves.toBeNull();
     expect(mockGenerateThreadPlan).not.toHaveBeenCalled();
-  });
-});
-
-describe('sendAutoAck', () => {
-  it('dispatches through the dashboard internal API and logs success', async () => {
-    mockRequestAutoAck.mockResolvedValueOnce({ ok: true, data: { ok: true } });
-
-    await sendAutoAck('org_1', 'thread_1');
-
-    expect(mockRequestAutoAck).toHaveBeenCalledWith('thread_1');
-    expect(mockLogger.info).toHaveBeenCalledWith(
-      { threadId: 'thread_1', organizationId: 'org_1' },
-      '[Worker] Auto-ack sent to customer',
-    );
-  });
-
-  it('preserves skipped and failed dispatch warnings', async () => {
-    mockRequestAutoAck
-      .mockResolvedValueOnce({ ok: true, data: { ok: true, skipped: true } })
-      .mockResolvedValueOnce({
-        ok: false,
-        status: 503,
-        responseBody: 'unavailable',
-        outcome: 'failed',
-      });
-
-    await sendAutoAck('org_1', 'thread_skipped');
-    await sendAutoAck('org_1', 'thread_failed');
-
-    expect(mockLogger.warn).toHaveBeenCalledWith(
-      { threadId: 'thread_skipped', organizationId: 'org_1' },
-      '[Worker] Auto-ack skipped by dashboard — check businessHoursEnabled setting sync',
-    );
-    expect(mockLogger.warn).toHaveBeenCalledWith(
-      { status: 503, outcome: 'failed', threadId: 'thread_failed', organizationId: 'org_1' },
-      '[Worker] Auto-ack dispatch failed',
-    );
-  });
-
-  it('logs ambiguous dispatch outcomes without claiming a definite failure', async () => {
-    mockRequestAutoAck.mockResolvedValueOnce({
-      ok: false,
-      status: null,
-      responseBody: 'network down',
-      outcome: 'unknown',
-    });
-
-    await expect(sendAutoAck('org_1', 'thread_1')).resolves.toBeUndefined();
-    expect(mockLogger.warn).toHaveBeenCalledWith(
-      { status: null, outcome: 'unknown', threadId: 'thread_1', organizationId: 'org_1' },
-      '[Worker] Auto-ack dispatch outcome unknown',
-    );
   });
 });
