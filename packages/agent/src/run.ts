@@ -245,7 +245,12 @@ export async function runAgent(
       }
 
       return finish({
-        summary: summarizeApprovedDashboardActions(actionsPerformed),
+        summary: summarizeApprovedDashboardActions(
+          actionsPerformed,
+          supportThread && supportCustomer
+            ? { name: supportCustomer.name, channelType: supportThread.channelType }
+            : undefined,
+        ),
         actionsPerformed,
       }, approvedActionsCompleteOutcome());
     }

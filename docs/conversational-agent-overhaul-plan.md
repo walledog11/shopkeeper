@@ -83,10 +83,10 @@ contract was unbuilt.
 | Packages 0–5 | Built. Tested only with a scripted model and fake Shopify, which cannot show that they work. Of the retained Shopify writes, only the customer note, address change and cancellation have run on the real store. |
 | Gate A: comparison tooling | Done. |
 | Gate B: v1/v2 model comparison | **Advisory since 2026-09-28** (decision I): a paid run happens only when the release owner asks, and it does not block rollout, which rests on Gate C's live runs. Last result, **not passed.** Both workflow runs on `cf41c169` (2026-09-26) reported failure. v2 failed the C08 held-out 2 of 2 and `refund-partial-placeholder` 1 of 2. Those misses were recorded as a runtime defect and a harness gap and the gate was called passed; a runtime defect is a v2 failure, so it was not a pass. #125 then changed the runtime to fix C08's failure, so C08 can no longer count as held-out. A new unseen C08 variant is needed. |
-| Gate C: real provider and delivery | Rerun in progress. 1 of 14 effects done cleanly: `cancel_order`, repeated on #1036 on 2026-09-28 after its first run (#1032) promised a refund Shopify never made (item 8b). Before the rerun, 0 of 5 real-store attempts worked cleanly (four runs on 2026-09-25, one on 2026-09-27; setup, run order and deploy state in the release evidence). The repeat surfaced items 8c–8e, which stop the rerun until they land. |
+| Gate C: real provider and delivery | Rerun in progress. 1 of 14 effects done cleanly: `cancel_order`, repeated on #1036 on 2026-09-28 after its first run (#1032) promised a refund Shopify never made (item 8b). Before the rerun, 0 of 5 real-store attempts worked cleanly (four runs on 2026-09-25, one on 2026-09-27; setup, run order and deploy state in the release evidence). The repeat surfaced items 8c–8e, which stopped the rerun; all three are built and close on the next run. |
 | Gate D, staged rollout, Gate E | Not started. |
 | Production routing | `AGENT_RUNTIME_VERSION=1` on both services, with `AGENT_RUNTIME_V2_ORG_IDS` set to the controlled organization since 2026-09-25. New tasks for every other organization run v1. |
-| Work in flight | Items 8c and 8d are built; each closes when the next Gate C run shows it on the card. Next: item 8e. |
+| Work in flight | Items 8c, 8d and 8e are built; each closes when the next Gate C run shows it (8c and 8d on the phone card, 8e in the confirmation after approval). Next: resume the Gate C rerun, `update_shopify_customer_info` first. |
 
 ## Open work, in order
 
@@ -209,6 +209,23 @@ and 9a are in [What has been done](#what-has-been-done).
       both effects with the refunded amount from the receipt. The mixed
       cases are seen on the release evidence's optional step 7 (a
       deliberately induced delivery failure), or reported as not verified.
+    - Built; the live run is owed. `summarizeApprovedDashboardActions`
+      (`run-approved-actions.ts`) writes one clause per action that took effect,
+      from the tool's registered past-tense label (`TOOL_LABELS`) and its
+      receipt: the values a reply placeholder can read from it
+      (`receiptPlaceholderValues`, so the refunded amount is the one
+      `{{refund_amount}}` would fill), and for a reply its recipient from the
+      receipt, else the ticket's customer (`classifyPerson`). A cancel-and-reply
+      approval reads "Cancelled order (refund amount $49.95). Sent reply to
+      Walle." A committed plan whose reply did not go out adds "The message to
+      Walle wasn't sent, so they haven't been told" and carries no prefix. A plan
+      that did not commit starts with its first unknown action or definite
+      failure among the effects (`outcomeCause`, `execution-outcome.ts`), in
+      `formatOperatorDispatchFailure`'s copy, then "Already done:" and the
+      effects that committed. The prefix comes from that action's typed status,
+      so a tool that omitted `Error:` no longer reads as a success to the phone.
+      Seen on hand-built action lists shaped like the executor's, before and
+      after; not yet on the phone.
 
 8f. **The dashboard's `send_email` sink drops the provider message id**
     (*Typed receipts and operation identity*). Found while fixing item 8b:
@@ -227,7 +244,14 @@ and 9a are in [What has been done](#what-has-been-done).
     (`pending-plan-commands.ts`), the `approve_pending_plan` tool
     (`operator-session-tools.ts`) and `summarizeOperatorTurnDispatchFailure`
     read it too. A decision that a merchant's parked card rides on is read from
-    English that one module wrote for display.
+    English that one module wrote for display. Two symptoms remain after item
+    8e, both seen by running the summary on hand-built action lists.
+    `summarizeApprovedDashboardActions` formats a failure with
+    `formatOperatorDispatchFailure` and each consumer formats it again, so an
+    unknown outcome shows its "Check the ticket…" advice twice on the phone. And
+    a plan whose only work is a reply that failed to send is typed `failed`, but
+    its friendly copy carries no prefix, so it clears the card while every other
+    failure leaves it parked.
     - The change: an approved run returns the typed outcome that
       `planExecutionOutcomeForActions` already computes, beside its summary, and
       each caller above branches on that. The summary becomes display-only and
