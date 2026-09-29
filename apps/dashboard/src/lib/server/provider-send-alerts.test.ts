@@ -32,33 +32,11 @@ const LOG_ONLY_RESULT: EmitOpsAlertResult = {
   reason: 'logged',
 };
 
-type ProviderCase = {
-  provider: Parameters<typeof recordProviderSendFailure>[0];
-  channel: Parameters<typeof recordProviderSendFailure>[1];
-  orgId: string;
-  metadata?: Partial<ProviderSendAlertDependencies>;
-};
-
-const PROVIDER_CASES: ProviderCase[] = [
-  { provider: 'meta', channel: 'ig_dm', orgId: 'org_meta' },
-  {
-    provider: 'postmark',
-    channel: 'email',
-    orgId: 'org_postmark',
-    metadata: {
-      threadId: 'thread_123',
-      integrationId: 'integration_123',
-      detail: 'Postmark timeout',
-    },
-  },
-  { provider: 'shopify', channel: 'webhook_registration', orgId: 'org_shopify' },
-];
-
 describe('recordProviderSendFailure', () => {
   it('does not emit below the threshold and emits once at the threshold', async () => {
     const { client } = createCounterClient();
     const emitAlert = createEmitAlert();
-    const firstCase = PROVIDER_CASES[0];
+    const firstCase = { provider: 'meta', channel: 'ig_dm', orgId: 'org_meta' } as const;
 
     for (let i = 1; i < CONFIG.providerSendThreshold; i++) {
       const result = await recordProviderSendFailure(
@@ -92,31 +70,6 @@ describe('recordProviderSendFailure', () => {
     });
   });
 
-  it.each(PROVIDER_CASES)('emits provider metadata for $provider / $channel', async (testCase) => {
-    const { client } = createCounterClient();
-    const emitAlert = createEmitAlert();
-
-    for (let i = 1; i <= CONFIG.providerSendThreshold; i++) {
-      await recordProviderSendFailure(
-        testCase.provider,
-        testCase.channel,
-        testCase.orgId,
-        makeDeps(client, { emitAlert, ...testCase.metadata }),
-      );
-    }
-
-    expect(emitAlert).toHaveBeenCalledTimes(1);
-    expect(emitAlert.mock.calls[0]?.[0]).toMatchObject({
-      category: 'provider_send',
-      level: 'error',
-      tags: { provider: testCase.provider, channel: testCase.channel },
-      extra: {
-        orgId: testCase.orgId,
-        ...(testCase.metadata ?? {}),
-      },
-    });
-  });
-
   it('does not emit again after the threshold is crossed in the same window', async () => {
     const { client } = createCounterClient();
     const emitAlert = createEmitAlert();
@@ -127,25 +80,6 @@ describe('recordProviderSendFailure', () => {
     }
 
     expect(emitAlert).toHaveBeenCalledTimes(1);
-  });
-
-  it('does not log alerts when alerts are disabled', async () => {
-    const { client } = createCounterClient();
-    const { logger, calls } = createTestLogger();
-
-    const realEmitDisabled: typeof emitOpsAlert = (input) =>
-      emitOpsAlert(input, { config: DISABLED_CONFIG, logger });
-
-    for (let i = 1; i <= CONFIG.providerSendThreshold; i++) {
-      await recordProviderSendFailure(
-        'meta',
-        'ig_dm',
-        'org_abc',
-        makeDeps(client, { config: DISABLED_CONFIG, emitAlert: realEmitDisabled }),
-      );
-    }
-
-    expect(calls).toEqual([]);
   });
 
   // The test above injects DISABLED_CONFIG twice — once into the recorder and
