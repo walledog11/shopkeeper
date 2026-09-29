@@ -56,6 +56,13 @@ function approval(input: { organizationId: string; clerkUserId: string }, propos
 }
 
 /**
+ * A stale-sweep cutoff for a claim made a moment ago. The row stays fresh, so
+ * no other file's "ten minutes ago" sweep of the shared database can take it,
+ * and the sweep under test is scoped to its own organization.
+ */
+const cutoffAfterClaim = () => new Date(Date.now() + 60_000);
+
+/**
  * A support task parked on a proposal: the customer initiates it, the thread is
  * a customer conversation with no operator key, and the card is pushed to every
  * bound member, so the wait names them all.
@@ -273,14 +280,11 @@ describe("shared proposal approval boundary", () => {
       taskId: task.id,
       proposalId: planId,
     });
-    await db.planExecution.update({
-      where: { id: execution.execution.id },
-      data: { claimedAt: new Date("2026-01-01T00:00:00.000Z") },
-    });
 
     expect(await reconcileStaleClaimedPlanExecutions(
-      new Date("2026-01-02T00:00:00.000Z"),
+      cutoffAfterClaim(),
       "worker_crashed",
+      input.organizationId,
     )).toBe(1);
     expect(await db.agentTask.findUniqueOrThrow({ where: { id: task.id } }))
       .toMatchObject({ status: "reconciling", activeProposalId: null });
@@ -315,10 +319,6 @@ describe("shared proposal approval boundary", () => {
       taskId: task.id,
       proposalId: planId,
     });
-    await db.planExecution.update({
-      where: { id: execution.execution.id },
-      data: { claimedAt: new Date("2026-01-01T00:00:00.000Z") },
-    });
     await db.agentTask.update({
       where: { id: task.id },
       data: {
@@ -329,8 +329,9 @@ describe("shared proposal approval boundary", () => {
     });
 
     expect(await reconcileStaleClaimedPlanExecutions(
-      new Date("2026-01-02T00:00:00.000Z"),
+      cutoffAfterClaim(),
       "worker_crashed",
+      input.organizationId,
     )).toBe(1);
     expect(await db.planExecution.findUniqueOrThrow({ where: { id: execution.execution.id } }))
       .toMatchObject({ status: "unknown", lastError: "worker_crashed" });

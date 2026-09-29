@@ -49,6 +49,7 @@ describe("unknown outcome reconciliation", () => {
     const count = await reconcileStaleClaimedPlanExecutions(
       new Date(Date.now() - 10 * 60 * 1000),
       STALE_CLAIMED_EXECUTION_ERROR,
+      org.id,
     );
 
     expect(count).toBe(1);

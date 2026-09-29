@@ -442,14 +442,20 @@ export async function getPlanExecution(
 
 // A worker that dies after claiming but before completePlanExecution leaves a
 // stuck `claimed` row. Reconcile it to `unknown` so operators can review it
-// without ever replaying the approved plan.
+// without ever replaying the approved plan. The maintenance job sweeps every
+// organization; pass one to sweep only its executions.
 export async function reconcileStaleClaimedPlanExecutions(
   staleBefore: Date,
   reason: string,
+  organizationId?: string,
 ): Promise<number> {
   return db.$transaction(async (tx) => {
     const stale = await tx.planExecution.findMany({
-      where: { status: "claimed", claimedAt: { lt: staleBefore } },
+      where: {
+        status: "claimed",
+        claimedAt: { lt: staleBefore },
+        ...(organizationId ? { organizationId } : {}),
+      },
       select: { id: true, organizationId: true, taskId: true, proposalId: true },
     });
     if (stale.length === 0) return 0;

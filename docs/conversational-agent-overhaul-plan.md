@@ -94,8 +94,8 @@ contract was unbuilt.
 Do these in order, one change each. Each item names the contract it implements
 and what done means. Items that touch the agent path land through a pull
 request. Doc-only changes go straight to master. The numbers continue the
-original list so references in the release evidence stay valid; items 1–7 and
-8b are in [What has been done](#what-has-been-done).
+original list so references in the release evidence stay valid; items 1–7, 8b
+and 9a are in [What has been done](#what-has-been-done).
 
 8. **Re-run Gate C** (decision F): one controlled run per retained Shopify
    write that has never touched a real store, each from a realistic ticket
@@ -220,39 +220,6 @@ original list so references in the release evidence stay valid; items 1–7 and
    evidence lists as "pending". Production carries no merchant traffic besides
    the controlled organization, so the window will measure only controlled runs.
    The evidence must say so rather than present it as rollout observation.
-
-9a. **The crash-recovery tests share one global sweep** (*Verification
-    specification*, the deterministic race and crash cases). Found 2026-09-28
-    while reading two of the four files that specification says to check first.
-    `reconcileStaleClaimedPlanExecutions` (`execution-ledger.ts`) takes no
-    organization and sweeps every claimed execution in the database.
-    `task-approval.integration.test.ts` backdates its claimed execution to
-    January and asserts that its own sweep returns exactly one row.
-    `unknown-outcome-reconciliation.integration.test.ts` runs the same sweep
-    from three tests (directly, and through `runUnknownOutcomeReconciliation`
-    twice) with a ten-minute cutoff, which also matches a January row. The
-    files run in parallel against one Postgres. A sweep from the
-    unknown-outcome file that lands between the task-approval file's backdate
-    and its own sweep takes the row, so the task-approval sweep reads 0. While
-    the row exists, the unknown-outcome file's direct count reads 2.
-    - Reproduced 2026-09-28 on the local test database. Forcing the order gave
-      0 where task-approval asserts 1, and 2 where unknown-outcome asserts 1.
-      Running `task-approval.integration.test.ts` beside a test file that
-      repeats the production sweep for a few seconds failed 2 of 6 runs with
-      `expected +0 to be 1`, once in each of its two stale-sweep tests.
-    - The change: an optional `organizationId` on the sweep. The maintenance
-      job (`runUnknownOutcomeReconciliation`) passes none and still sweeps
-      every organization. `task-approval.integration.test.ts` keeps its row
-      fresh and sweeps its own organization with a cutoff after the claim, so
-      no ten-minute sweep can see it, and
-      `unknown-outcome-reconciliation.integration.test.ts` scopes its direct
-      sweep to its own organization. The two sibling sweeps in
-      `unknown-outcome-reconciliation.ts` are global too, but no other test
-      file backdates a row either would match, so they stay.
-    - Done when rerunning the forced order and the paired run no longer
-      changes either file's count. Independent of items 8c–8f, so it does not
-      wait for a Gate C run. Blocks item 10, whose dead-worker test would
-      likely join these files.
 
 10. **Phone instructions as durable tasks** (decision E; *Target architecture*,
     "Support and operator turns … share request identity, budgets, receipts,
@@ -633,6 +600,22 @@ billed tokens: Gate B measured v2 at about 33% more per suite than v1.
   `withheldMessageFollowUp`. Read-grounding, identity and classifier evidence
   still apply. A planner test with a scripted model reproduced the C08
   escalation before the change and keeps the draft, for review, after it.
+- *Item 9a, the crash-recovery tests' shared sweep* (#134).
+  `reconcileStaleClaimedPlanExecutions` takes an optional `organizationId`;
+  the maintenance job passes none and still sweeps every organization.
+  `task-approval.integration.test.ts` keeps its claimed row fresh and sweeps
+  its own organization with a cutoff after the claim, so no ten-minute sweep
+  can see it, and `unknown-outcome-reconciliation.integration.test.ts` scopes
+  its direct sweep. Two files ran against one Postgres with the sweep
+  unscoped: a sweep from the unknown-outcome file between the task-approval
+  file's backdate and its own sweep took the row and left it reading 0, and
+  while that row existed the unknown-outcome file's count read 2. Seen on the
+  local test database, forcing that order, and by running task-approval
+  beside a test file that repeats the sweep: 2 of 6 runs failed with
+  `expected +0 to be 1` before the change and 0 of 12 after, with the sweeping
+  file taking no row. The two sibling sweeps in
+  `unknown-outcome-reconciliation.ts` stay global; no other test file
+  backdates a row either would match.
 
 ## Settled decisions
 
