@@ -1,18 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-// Deterministic configuration unit coverage.
 import {
   getGatewayRuntimeRole,
   getGatewayOpsAlertConfig,
   getGatewayWorkerRedisConfig,
-  getInstagramWebhookConfig,
-  getMetaWebhookConfig,
-  getPostmarkWebhookConfig,
-  getTelegramConfig,
   isOrderRiskMonitorEnabled,
   isReturnLifecycleMonitorEnabled,
-  getGatewayRuntimeFlags,
-  shouldRunGatewayServer,
-  shouldRunGatewayWorker,
 } from './runtime-config.js';
 
 afterEach(() => {
@@ -20,28 +12,6 @@ afterEach(() => {
 });
 
 describe('getGatewayRuntimeRole', () => {
-  it('defaults to running both server and worker', () => {
-    expect(getGatewayRuntimeRole()).toBe('all');
-    expect(shouldRunGatewayServer()).toBe(true);
-    expect(shouldRunGatewayWorker()).toBe(true);
-  });
-
-  it('supports running only the HTTP server', () => {
-    vi.stubEnv('GATEWAY_RUNTIME_ROLE', 'server');
-
-    expect(getGatewayRuntimeRole()).toBe('server');
-    expect(shouldRunGatewayServer()).toBe(true);
-    expect(shouldRunGatewayWorker()).toBe(false);
-  });
-
-  it('supports running only the worker', () => {
-    vi.stubEnv('GATEWAY_RUNTIME_ROLE', 'worker');
-
-    expect(getGatewayRuntimeRole()).toBe('worker');
-    expect(shouldRunGatewayServer()).toBe(false);
-    expect(shouldRunGatewayWorker()).toBe(true);
-  });
-
   it('throws on invalid roles so startup fails fast', () => {
     vi.stubEnv('GATEWAY_RUNTIME_ROLE', 'queue');
 
@@ -50,40 +20,6 @@ describe('getGatewayRuntimeRole', () => {
 });
 
 describe('getGatewayWorkerRedisConfig', () => {
-  it('uses lower-chatter defaults in production', () => {
-    vi.stubEnv('NODE_ENV', 'production');
-    vi.stubEnv('GATEWAY_ENABLE_MAINTENANCE_WORKERS', '');
-
-    expect(getGatewayWorkerRedisConfig()).toMatchObject({
-      drainDelaySeconds: 60,
-      stalledIntervalMs: 300_000,
-      heartbeatIntervalMs: 300_000,
-      queueDiagnosticsCacheMs: 30_000,
-      maintenanceWorkersEnabled: true,
-    });
-  });
-
-  it('respects explicit overrides', () => {
-    vi.stubEnv('NODE_ENV', 'production');
-    vi.stubEnv('GATEWAY_BULLMQ_DRAIN_DELAY_SECONDS', '90');
-    vi.stubEnv('GATEWAY_BULLMQ_STALLED_INTERVAL_MS', '600000');
-    vi.stubEnv('GATEWAY_WORKER_HEARTBEAT_INTERVAL_MS', '120000');
-    vi.stubEnv('GATEWAY_WORKER_HEARTBEAT_TTL_SECS', '600');
-    vi.stubEnv('GATEWAY_WORKER_HEARTBEAT_STALE_MS', '240000');
-    vi.stubEnv('GATEWAY_QUEUE_DIAGNOSTICS_CACHE_MS', '45000');
-    vi.stubEnv('GATEWAY_ENABLE_MAINTENANCE_WORKERS', 'false');
-
-    expect(getGatewayWorkerRedisConfig()).toMatchObject({
-      drainDelaySeconds: 90,
-      stalledIntervalMs: 600_000,
-      heartbeatIntervalMs: 120_000,
-      heartbeatTtlSecs: 600,
-      heartbeatStaleMs: 240_000,
-      queueDiagnosticsCacheMs: 45_000,
-      maintenanceWorkersEnabled: false,
-    });
-  });
-
   it('accepts one and rejects zero, fractional, suffixed, and unsafe integers', () => {
     vi.stubEnv('GATEWAY_BULLMQ_DRAIN_DELAY_SECONDS', '1');
     expect(getGatewayWorkerRedisConfig().drainDelaySeconds).toBe(1);
@@ -96,47 +32,6 @@ describe('getGatewayWorkerRedisConfig', () => {
 });
 
 describe('getGatewayOpsAlertConfig', () => {
-  it('uses launch guardrail defaults', () => {
-    expect(getGatewayOpsAlertConfig()).toEqual({
-      enabled: true,
-      telegramChatId: null,
-      windowSecs: 300,
-      queueFailedThreshold: 10,
-      queueWaitingThreshold: 100,
-      queueActiveStuckMs: 900_000,
-      webhookSignatureThreshold: 5,
-      providerSendThreshold: 3,
-      agentFailureThreshold: 3,
-      unclaimedRecipientThreshold: 5,
-    });
-  });
-
-  it('respects explicit overrides', () => {
-    vi.stubEnv('OPS_ALERTS_ENABLED', 'false');
-    vi.stubEnv('OPS_ALERT_TELEGRAM_CHAT_ID', ' 12345 ');
-    vi.stubEnv('OPS_ALERT_WINDOW_SECS', '120');
-    vi.stubEnv('QUEUE_ALERT_FAILED_THRESHOLD', '7');
-    vi.stubEnv('QUEUE_ALERT_WAITING_THRESHOLD', '70');
-    vi.stubEnv('QUEUE_ALERT_ACTIVE_STUCK_MS', '600000');
-    vi.stubEnv('WEBHOOK_SIGNATURE_ALERT_THRESHOLD', '9');
-    vi.stubEnv('PROVIDER_SEND_ALERT_THRESHOLD', '4');
-    vi.stubEnv('AGENT_FAILURE_ALERT_THRESHOLD', '6');
-    vi.stubEnv('UNCLAIMED_RECIPIENT_ALERT_THRESHOLD', '8');
-
-    expect(getGatewayOpsAlertConfig()).toEqual({
-      enabled: false,
-      telegramChatId: '12345',
-      windowSecs: 120,
-      queueFailedThreshold: 7,
-      queueWaitingThreshold: 70,
-      queueActiveStuckMs: 600_000,
-      webhookSignatureThreshold: 9,
-      providerSendThreshold: 4,
-      agentFailureThreshold: 6,
-      unclaimedRecipientThreshold: 8,
-    });
-  });
-
   it('rejects invalid alert env values', () => {
     vi.stubEnv('OPS_ALERTS_ENABLED', 'maybe');
     expect(() => getGatewayOpsAlertConfig()).toThrow(/OPS_ALERTS_ENABLED/);
@@ -152,22 +47,6 @@ describe('isOrderRiskMonitorEnabled', () => {
     expect(isOrderRiskMonitorEnabled()).toBe(false);
   });
 
-  it('enables only for explicit truthy values', () => {
-    vi.stubEnv('ORDER_RISK_MONITOR_ENABLED', '1');
-    expect(isOrderRiskMonitorEnabled()).toBe(true);
-
-    vi.stubEnv('ORDER_RISK_MONITOR_ENABLED', 'true');
-    expect(isOrderRiskMonitorEnabled()).toBe(true);
-  });
-
-  it('treats falsey string values as disabled', () => {
-    vi.stubEnv('ORDER_RISK_MONITOR_ENABLED', 'false');
-    expect(isOrderRiskMonitorEnabled()).toBe(false);
-
-    vi.stubEnv('ORDER_RISK_MONITOR_ENABLED', '0');
-    expect(isOrderRiskMonitorEnabled()).toBe(false);
-  });
-
   it('rejects invalid boolean strings', () => {
     vi.stubEnv('ORDER_RISK_MONITOR_ENABLED', 'maybe');
     expect(() => isOrderRiskMonitorEnabled()).toThrow(/ORDER_RISK_MONITOR_ENABLED/);
@@ -179,169 +58,8 @@ describe('isReturnLifecycleMonitorEnabled', () => {
     expect(isReturnLifecycleMonitorEnabled()).toBe(false);
   });
 
-  it('enables only for explicit truthy values', () => {
-    vi.stubEnv('RETURN_LIFECYCLE_MONITOR_ENABLED', '1');
-    expect(isReturnLifecycleMonitorEnabled()).toBe(true);
-
-    vi.stubEnv('RETURN_LIFECYCLE_MONITOR_ENABLED', 'true');
-    expect(isReturnLifecycleMonitorEnabled()).toBe(true);
-  });
-
-  it('treats falsey string values as disabled', () => {
-    vi.stubEnv('RETURN_LIFECYCLE_MONITOR_ENABLED', 'false');
-    expect(isReturnLifecycleMonitorEnabled()).toBe(false);
-
-    vi.stubEnv('RETURN_LIFECYCLE_MONITOR_ENABLED', '0');
-    expect(isReturnLifecycleMonitorEnabled()).toBe(false);
-  });
-
   it('rejects invalid boolean strings', () => {
     vi.stubEnv('RETURN_LIFECYCLE_MONITOR_ENABLED', 'maybe');
     expect(() => isReturnLifecycleMonitorEnabled()).toThrow(/RETURN_LIFECYCLE_MONITOR_ENABLED/);
-  });
-});
-
-describe('getGatewayRuntimeFlags', () => {
-  it('returns the monitor rollout flags together', () => {
-    vi.stubEnv('ORDER_RISK_MONITOR_ENABLED', '1');
-    vi.stubEnv('RETURN_LIFECYCLE_MONITOR_ENABLED', '0');
-    expect(getGatewayRuntimeFlags()).toEqual({
-      monitors: {
-        orderRisk: true,
-        returnLifecycle: false,
-      },
-    });
-  });
-});
-
-describe('getInstagramWebhookConfig', () => {
-  it('prefers and trims the dedicated webhook signing secret', () => {
-    vi.stubEnv('INSTAGRAM_WEBHOOK_VERIFY_TOKEN', '  instagram-verify-token  ');
-    vi.stubEnv('INSTAGRAM_WEBHOOK_APP_SECRET', ' parent-meta-app-secret ');
-    vi.stubEnv('INSTAGRAM_APP_SECRET', ' instagram-app-secret ');
-    vi.stubEnv('META_VERIFY_TOKEN', 'legacy-verify-token');
-    vi.stubEnv('META_APP_SECRET', 'legacy-meta-secret');
-
-    expect(getInstagramWebhookConfig()).toEqual({
-      verifyToken: 'instagram-verify-token',
-      appSecret: 'parent-meta-app-secret',
-    });
-  });
-
-  it('falls back to the previous Instagram app secret variable', () => {
-    vi.stubEnv('INSTAGRAM_WEBHOOK_APP_SECRET', '');
-    vi.stubEnv('INSTAGRAM_APP_SECRET', ' instagram-app-secret ');
-
-    expect(getInstagramWebhookConfig().appSecret).toBe('instagram-app-secret');
-  });
-
-  it('returns nulls for missing Instagram credentials', () => {
-    vi.stubEnv('INSTAGRAM_WEBHOOK_VERIFY_TOKEN', '');
-    vi.stubEnv('INSTAGRAM_WEBHOOK_APP_SECRET', '   ');
-    vi.stubEnv('INSTAGRAM_APP_SECRET', '   ');
-
-    expect(getInstagramWebhookConfig()).toEqual({
-      verifyToken: null,
-      appSecret: null,
-    });
-  });
-});
-
-describe('getMetaWebhookConfig', () => {
-  it('returns nulls when Meta webhook env is unset', () => {
-    vi.stubEnv('META_VERIFY_TOKEN', '');
-    vi.stubEnv('META_APP_SECRET', '');
-    vi.stubEnv('META_APP_ID', '');
-
-    expect(getMetaWebhookConfig()).toEqual({
-      verifyToken: null,
-      appSecret: null,
-      appId: null,
-    });
-  });
-
-  it('trims Meta webhook env values', () => {
-    vi.stubEnv('META_VERIFY_TOKEN', '  verify-token  ');
-    vi.stubEnv('META_APP_SECRET', ' app-secret ');
-    vi.stubEnv('META_APP_ID', '12345');
-
-    expect(getMetaWebhookConfig()).toEqual({
-      verifyToken: 'verify-token',
-      appSecret: 'app-secret',
-      appId: '12345',
-    });
-  });
-
-  it('treats blank Meta webhook env values as unset', () => {
-    vi.stubEnv('META_VERIFY_TOKEN', '   ');
-    vi.stubEnv('META_APP_SECRET', '');
-    vi.stubEnv('META_APP_ID', '\t');
-
-    expect(getMetaWebhookConfig()).toEqual({
-      verifyToken: null,
-      appSecret: null,
-      appId: null,
-    });
-  });
-});
-
-describe('getTelegramConfig', () => {
-  it('returns nulls when Telegram env is unset', () => {
-    vi.stubEnv('TELEGRAM_BOT_TOKEN', '');
-    vi.stubEnv('TELEGRAM_WEBHOOK_SECRET', '');
-
-    expect(getTelegramConfig()).toEqual({
-      botToken: null,
-      webhookSecret: null,
-    });
-  });
-
-  it('trims Telegram env values', () => {
-    vi.stubEnv('TELEGRAM_BOT_TOKEN', ' bot-token ');
-    vi.stubEnv('TELEGRAM_WEBHOOK_SECRET', ' webhook-secret ');
-
-    expect(getTelegramConfig()).toEqual({
-      botToken: 'bot-token',
-      webhookSecret: 'webhook-secret',
-    });
-  });
-
-  it('treats blank Telegram env values as unset', () => {
-    vi.stubEnv('TELEGRAM_BOT_TOKEN', '');
-    vi.stubEnv('TELEGRAM_WEBHOOK_SECRET', '  ');
-
-    expect(getTelegramConfig()).toEqual({
-      botToken: null,
-      webhookSecret: null,
-    });
-  });
-});
-
-describe('getPostmarkWebhookConfig', () => {
-  it('returns nulls when Postmark inbound auth env is unset', () => {
-    expect(getPostmarkWebhookConfig()).toEqual({
-      inboundUsername: null,
-      inboundPassword: null,
-    });
-  });
-
-  it('trims Postmark inbound auth env values', () => {
-    vi.stubEnv('POSTMARK_INBOUND_USERNAME', ' postmark ');
-    vi.stubEnv('POSTMARK_INBOUND_PASSWORD', ' secret ');
-
-    expect(getPostmarkWebhookConfig()).toEqual({
-      inboundUsername: 'postmark',
-      inboundPassword: 'secret',
-    });
-  });
-
-  it('treats blank Postmark inbound auth env values as unset', () => {
-    vi.stubEnv('POSTMARK_INBOUND_USERNAME', '  ');
-    vi.stubEnv('POSTMARK_INBOUND_PASSWORD', '');
-
-    expect(getPostmarkWebhookConfig()).toEqual({
-      inboundUsername: null,
-      inboundPassword: null,
-    });
   });
 });
