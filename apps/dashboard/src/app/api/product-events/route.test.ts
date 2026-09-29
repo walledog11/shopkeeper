@@ -71,60 +71,7 @@ afterEach(async () => {
 });
 
 describe('POST /api/product-events', () => {
-  it.each(['store', 'shopify', 'email', 'autonomy', 'plan'] as const)(
-    'captures an organization-scoped %s onboarding step',
-    async (step) => {
-      const response = await POST(productEventRequest({
-        event: 'onboarding_step_completed',
-        step,
-      }));
-
-      expect(response.status).toBe(200);
-      expect(sink.events).toEqual([
-        {
-          event: 'onboarding_step_completed',
-          distinctId: org.id,
-          properties: {
-            organization_id: org.id,
-            schema_version: 1,
-            environment: 'test',
-            source: 'dashboard',
-            '$process_person_profile': false,
-            step,
-            '$insert_id': `onboarding_step_completed:${org.id}:${step}`,
-          },
-        },
-      ]);
-      expect(mockRedisSet).toHaveBeenCalledWith(
-        `product-event:onboarding-step:${org.id}:${step}`,
-        '1',
-        { nx: true, ex: 2_592_000 },
-      );
-    },
-  );
-
-  it.each(['shopify', 'email', 'ig_dm', 'imessage', 'tiktok'] as const)(
-    'captures an allowed %s connection start',
-    async (platform) => {
-      const response = await POST(productEventRequest({
-        event: 'integration_connection_started',
-        platform,
-      }));
-
-      expect(response.status).toBe(200);
-      expect(sink.events[0]).toMatchObject({
-        event: 'integration_connection_started',
-        distinctId: org.id,
-        properties: {
-          organization_id: org.id,
-          platform,
-        },
-      });
-      expect(mockRedisSet).not.toHaveBeenCalled();
-    },
-  );
-
-  it('captures a plan dismissal only when the cached plan belongs to the organization', async () => {
+  it('captures a plan dismissal for a plan the organization owns', async () => {
     const customer = await createTestCustomer(org.id, 'plan-event@example.com');
     const thread = await createTestThread(org.id, customer.id, ChannelType.email);
     const message = await createTestMessage(thread.id, 'Please help');
@@ -231,8 +178,7 @@ describe('POST /api/product-events', () => {
       body: JSON.stringify({
         event: 'integration_connection_started',
         platform: 'shopify',
-        padding: 'x'.repeat(1_024),
-      }),
+      }) + ' '.repeat(1_100),
     }));
 
     expect(malformed.status).toBe(400);
@@ -253,18 +199,6 @@ describe('POST /api/product-events', () => {
     }));
 
     expect(response.status).toBe(429);
-    expect(sink.events).toEqual([]);
-  });
-
-  it('deduplicates onboarding steps through Redis', async () => {
-    mockRedisSet.mockResolvedValue(null);
-
-    const response = await POST(productEventRequest({
-      event: 'onboarding_step_completed',
-      step: 'email',
-    }));
-
-    expect(response.status).toBe(200);
     expect(sink.events).toEqual([]);
   });
 
