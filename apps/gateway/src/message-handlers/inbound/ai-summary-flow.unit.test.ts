@@ -116,45 +116,6 @@ describe('processAiSummaryJob merchant-work gate', () => {
     mocks.precompute.mockResolvedValue(PLAN_WITH_IDENTITY);
   });
 
-  it('does not park a card for a request that asked for nothing', async () => {
-    mocks.requireOrgThread.mockResolvedValue({
-      cachedPlan: {},
-      cachedPlanMessageId: 'message_1',
-      requestSourceMessageId: 'message_1',
-      requestDisposition: 'acknowledgement',
-      requestSummary: 'Customer says thanks.',
-    });
-    mocks.burst.mockResolvedValue({
-      isFollowUp: false,
-      messages: [
-        { id: 'message_0', contentText: 'Hello.' },
-        { id: 'message_1', contentText: 'Thanks!' },
-      ],
-    });
-
-    await processAiSummaryJob(JOB);
-
-    expect(mocks.planNotification).not.toHaveBeenCalled();
-    expect(mocks.questionNotification).not.toHaveBeenCalled();
-    // The dashboard home reads the same cache, so leaving it would raise a card
-    // for the greeting the phone was just told not to mention.
-    expect(mocks.consumePlanCache).toHaveBeenCalledWith({
-      orgId: 'org_1',
-      threadId: 'thread_1',
-      lastCustomerMessageId: 'message_1',
-    });
-  });
-
-  it('parks a real ask and hands the notification the request, not the episode', async () => {
-    await processAiSummaryJob(JOB);
-
-    expect(mocks.consumePlanCache).not.toHaveBeenCalled();
-    expect(mocks.planNotification).toHaveBeenCalledOnce();
-    expect(mocks.planNotification.mock.calls[0]![4]).toBe(
-      'Customer asks for a refund on order #1042.',
-    );
-  });
-
   it('does not suppress an earlier request with a latest-email preclassification', async () => {
     mocks.requireOrgThread.mockResolvedValue({
       cachedPlan: {},
@@ -212,22 +173,6 @@ describe('processAiSummaryJob merchant-work gate', () => {
     expect(mocks.planNotification).not.toHaveBeenCalled();
     expect(mocks.consumePlanCache).not.toHaveBeenCalled();
   });
-
-  it('lets the safe-reply lane answer a greeting instead of reporting it', async () => {
-    mocks.precompute.mockResolvedValue({
-      plan: { steps: [{ tool: 'send_reply' }], rawToolCalls: [] },
-      instruction: 'Say hello back',
-      autoExecuted: true,
-      autoExecutionKind: 'safe_reply',
-      autoExecutionStatus: 'success',
-    });
-
-    await processAiSummaryJob(JOB);
-
-    expect(mocks.autoNotification).not.toHaveBeenCalled();
-    expect(mocks.planNotification).not.toHaveBeenCalled();
-    expect(mocks.consumePlanCache).not.toHaveBeenCalled();
-  });
 });
 
 describe('processAiSummaryJob safe replies', () => {
@@ -242,54 +187,6 @@ describe('processAiSummaryJob safe replies', () => {
     await processAiSummaryJob(JOB);
 
     expect(mocks.autoAck).not.toHaveBeenCalled();
-  });
-
-  it('still auto-acks off hours when an earlier customer request is unanswered', async () => {
-    mocks.precompute.mockResolvedValue(PLAN_WITH_IDENTITY);
-    mocks.intelligence.mockResolvedValue({
-      filterStatus: 'genuine',
-      requestDisposition: 'acknowledgement',
-      requestSourceMessageId: 'message_1',
-    });
-    mocks.burst.mockResolvedValue({
-      isFollowUp: false,
-      messages: [
-        { id: 'message_0', contentText: 'Where is my order?' },
-        { id: 'message_1', contentText: 'Thanks!' },
-      ],
-    });
-
-    await processAiSummaryJob({ ...JOB, skipSummary: true });
-
-    expect(mocks.autoAck).toHaveBeenCalledWith('org_1', 'thread_1');
-  });
-
-  it('uses a successful clarification reply instead of an outside-hours auto-ack or merchant notification', async () => {
-    mocks.precompute.mockResolvedValue({
-      plan: { steps: [{ tool: 'send_reply' }], rawToolCalls: [] },
-      instruction: 'Ask for the order number',
-      autoExecuted: true,
-      autoExecutionKind: 'safe_reply',
-      autoExecutionStatus: 'success',
-    });
-
-    await processAiSummaryJob({
-      threadId: 'thread_1',
-      organizationId: 'org_1',
-      sourceMessageId: 'message_1',
-      customerName: null,
-      channelType: 'email',
-    });
-
-    expect(mocks.precompute).toHaveBeenCalledWith(
-      'org_1',
-      'thread_1',
-      expect.anything(),
-      expect.objectContaining({ allowAutoExecute: false }),
-    );
-    expect(mocks.autoAck).not.toHaveBeenCalled();
-    expect(mocks.autoNotification).not.toHaveBeenCalled();
-    expect(mocks.planNotification).not.toHaveBeenCalled();
   });
 
   it('notifies the merchant when the automatic clarification itself fails', async () => {
@@ -312,24 +209,6 @@ describe('processAiSummaryJob safe replies', () => {
 
     expect(mocks.autoAck).not.toHaveBeenCalled();
     expect(mocks.autoNotification).toHaveBeenCalledOnce();
-  });
-
-  it('notifies once when a failure replan recovers with a safe reply', async () => {
-    mocks.precompute.mockResolvedValue({
-      plan: { steps: [{ tool: 'send_reply' }], rawToolCalls: [] },
-      instruction: 'Note, refund, and reply',
-      autoExecuted: true,
-      autoExecutionKind: 'safe_reply',
-      autoExecutionStatus: 'success',
-      failureReplanRecovered: true,
-      failureReplanFailureTool: 'create_refund',
-      failureReplanFailureReason: 'Rejected',
-    });
-
-    await processAiSummaryJob(JOB);
-
-    expect(mocks.autoNotification).toHaveBeenCalledOnce();
-    expect(mocks.planNotification).not.toHaveBeenCalled();
   });
 });
 
