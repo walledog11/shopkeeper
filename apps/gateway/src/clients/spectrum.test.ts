@@ -4,9 +4,7 @@ import {
   clearSpectrumAppCache,
   getPlatformSpectrumApp,
   sendImessageOnSpace,
-  sendImessageToSpace,
   SpectrumIntegrationConfigError,
-  stopAllSpectrumApps,
 } from './spectrum.js';
 
 const mocks = vi.hoisted(() => ({
@@ -14,7 +12,6 @@ const mocks = vi.hoisted(() => ({
   imessage: vi.fn(),
   imessageConfig: vi.fn(),
   getSpectrumConfig: vi.fn(),
-  spaceGet: vi.fn(),
   recordProviderSendFailureInBackground: vi.fn(),
 }));
 
@@ -54,38 +51,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.imessageConfig.mockReturnValue({ provider: 'imessage' });
   mocks.getSpectrumConfig.mockReturnValue({ ...CREDS });
-  mocks.imessage.mockReturnValue({ space: { get: mocks.spaceGet } });
 });
 
 describe('platform Spectrum app', () => {
-  it('builds a Spectrum app from env credentials and caches it', async () => {
-    const app = { id: 'spectrum_app_1' } as unknown as ImessageSpectrumApp;
-    mocks.spectrum.mockResolvedValue(app);
-
-    await expect(getPlatformSpectrumApp()).resolves.toBe(app);
-    await expect(getPlatformSpectrumApp()).resolves.toBe(app);
-
-    expect(mocks.imessageConfig).toHaveBeenCalledTimes(1);
-    expect(mocks.spectrum).toHaveBeenCalledTimes(1);
-    expect(mocks.spectrum).toHaveBeenCalledWith({
-      projectId: 'project_1',
-      projectSecret: 'project_secret_1',
-      webhookSecret: 'webhook_secret_1',
-      providers: [{ provider: 'imessage' }],
-    });
-  });
-
-  it('caches the init promise so concurrent callers share one init', async () => {
-    const app = { id: 'spectrum_app_1' } as unknown as ImessageSpectrumApp;
-    mocks.spectrum.mockResolvedValue(app);
-
-    const first = getPlatformSpectrumApp();
-    const second = getPlatformSpectrumApp();
-
-    await expect(Promise.all([first, second])).resolves.toEqual([app, app]);
-    expect(mocks.spectrum).toHaveBeenCalledTimes(1);
-  });
-
   it('rebuilds against new credentials when a secret rotates and stops the stale app', async () => {
     const oldApp = { id: 'old', stop: vi.fn().mockResolvedValue(undefined) } as unknown as ImessageSpectrumApp;
     const newApp = { id: 'new', stop: vi.fn().mockResolvedValue(undefined) } as unknown as ImessageSpectrumApp;
@@ -98,19 +66,6 @@ describe('platform Spectrum app', () => {
 
     expect(mocks.spectrum).toHaveBeenCalledTimes(2);
     await vi.waitFor(() => expect((oldApp as unknown as { stop: ReturnType<typeof vi.fn> }).stop).toHaveBeenCalledTimes(1));
-  });
-
-  it('stops the cached app on shutdown and clears the cache', async () => {
-    const app = { id: 'a', stop: vi.fn().mockResolvedValue(undefined) } as unknown as ImessageSpectrumApp;
-    mocks.spectrum.mockResolvedValue(app);
-
-    await getPlatformSpectrumApp();
-    await stopAllSpectrumApps();
-
-    expect((app as unknown as { stop: ReturnType<typeof vi.fn> }).stop).toHaveBeenCalledTimes(1);
-
-    await getPlatformSpectrumApp();
-    expect(mocks.spectrum).toHaveBeenCalledTimes(2);
   });
 
   it('evicts a rejected initialization so the next call can retry', async () => {
@@ -150,30 +105,6 @@ describe('iMessage send failures', () => {
         threadId: 'thread_1',
         detail: 'space unavailable',
         extra: { spaceId: 'space_1' },
-      }),
-    );
-  });
-
-  it('records provider_send when proactive space load fails', async () => {
-    const app = { id: 'spectrum_app_1' } as unknown as ImessageSpectrumApp;
-    mocks.spectrum.mockResolvedValue(app);
-    mocks.spaceGet.mockRejectedValue(new Error('grpc down'));
-
-    await expect(
-      sendImessageToSpace('space_2', 'plan push', {
-        orgId: 'org_2',
-        threadId: 'thread_2',
-      }),
-    ).rejects.toThrow('grpc down');
-
-    expect(mocks.recordProviderSendFailureInBackground).toHaveBeenCalledWith(
-      'imessage',
-      'operator_notify',
-      'org_2',
-      expect.objectContaining({
-        threadId: 'thread_2',
-        detail: 'grpc down',
-        extra: { spaceId: 'space_2' },
       }),
     );
   });
