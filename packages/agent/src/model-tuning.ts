@@ -46,7 +46,7 @@ const MODEL_SUPPORT: Record<string, { effort: boolean; thinking: boolean }> = {
  * `high`: on Sonnet 5, medium is roughly Sonnet 4.6 at high, which is the
  * quality bar this product was built and eval-gated against.
  */
-export function resolveModelEffort(
+function resolveModelEffort(
   value: string | undefined = process.env.AGENT_MODEL_EFFORT,
 ): EffortLevel {
   if (value === undefined || value.trim() === "") return "medium";
@@ -65,7 +65,7 @@ export function resolveModelEffort(
  * take the saving from effort alone — that combination is the vendor's own
  * recommendation for callers who would otherwise disable thinking.
  */
-export function resolvePlannerThinking(
+function resolvePlannerThinking(
   value: string | undefined = process.env.AGENT_PLANNER_THINKING,
 ): PlannerThinkingMode {
   if (value === undefined || value.trim() === "") return "disabled";

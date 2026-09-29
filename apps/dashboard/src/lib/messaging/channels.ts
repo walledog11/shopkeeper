@@ -9,10 +9,6 @@ export interface ChannelInfo {
   badgeClassName: string
 }
 
-interface ChannelLabelOptions {
-  operatorLabel?: "canonical" | "internal"
-}
-
 const DEFAULT_CHANNEL_INFO: ChannelInfo = {
   name: 'Workspace',
   label: 'Workspace',
@@ -76,18 +72,4 @@ export function getActionLogChannelInfo(entry: {
     return getChannelInfo('shopify')
   }
   return getChannelInfo(entry.channelType)
-}
-
-export function getChannelLabel(
-  channelType: ChannelType | string | null | undefined,
-  { operatorLabel = "canonical" }: ChannelLabelOptions = {},
-): string {
-  if (operatorLabel === "internal" && channelType === "operator") {
-    return "Internal"
-  }
-  return getChannelInfo(channelType).label
-}
-
-export function getChannelBadgeClassName(channelType: ChannelType | string | null | undefined): string {
-  return getChannelInfo(channelType).badgeClassName
 }

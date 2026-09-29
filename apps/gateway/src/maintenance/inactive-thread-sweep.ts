@@ -13,7 +13,7 @@ import { parseStoredPendingPlan } from '../operator-context.js';
 import { ONE_DAY_MS } from './registration.js';
 
 /** Fixed product default — not a merchant setting. */
-export const CLOSE_AFTER_QUIET_DAYS = 7;
+const CLOSE_AFTER_QUIET_DAYS = 7;
 
 /**
  * How recently a thread can have changed and still be spared the
@@ -56,7 +56,7 @@ function hasMerchantWorkCachedPlan(
  * Whether an open inbox thread should close in the inactive sweep. Notes are
  * ignored when deciding who spoke last; a note-only thread is non-conversational.
  */
-export function classifyInactiveThreadClose(
+function classifyInactiveThreadClose(
   thread: InactiveThreadSweepRow,
   now: Date,
   settings: ReturnType<typeof resolveAgentSettings>,

@@ -31,7 +31,7 @@ export interface ThreadBriefingContext {
   customerName?: string
 }
 
-export function formatChannelList(channels: string[]): string {
+function formatChannelList(channels: string[]): string {
   if (channels.length === 0) return ""
   if (channels.length === 1) return channels[0]
   if (channels.length === 2) return `${channels[0]} and ${channels[1]}`

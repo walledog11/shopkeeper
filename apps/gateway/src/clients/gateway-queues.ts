@@ -66,7 +66,3 @@ export async function closeGatewayBullMqQueues(): Promise<void> {
   queueCache.clear();
   await Promise.all(queues.map((queue) => queue.close()));
 }
-
-export function resetGatewayBullMqQueuesForTests(): void {
-  queueCache.clear();
-}

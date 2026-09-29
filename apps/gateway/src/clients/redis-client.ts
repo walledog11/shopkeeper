@@ -127,10 +127,3 @@ export async function closeGatewayRedisConnections(): Promise<void> {
 
   await Promise.all(closers);
 }
-
-export function resetGatewayRedisConnectionsForTests(): void {
-  sharedRedis = null;
-  subscriberConnection = null;
-  producerConnection = null;
-  workerConnection = null;
-}

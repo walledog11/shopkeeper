@@ -148,7 +148,7 @@ export async function captureOutboundReplySent(args: {
   }
 }
 
-export async function captureWorkspaceActivation(organizationId: string): Promise<void> {
+async function captureWorkspaceActivation(organizationId: string): Promise<void> {
   try {
     const snapshot = await loadWorkspaceActivationSnapshot(organizationId);
     if (!snapshot) return;

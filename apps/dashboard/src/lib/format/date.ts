@@ -151,7 +151,7 @@ export function formatRelativeTime(iso: DateInput): string {
   return parts.date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-export function formatShortRelativeTime(
+function formatShortRelativeTime(
   input: DateInput,
   {
     includeSeconds = false,

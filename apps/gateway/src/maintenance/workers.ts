@@ -14,8 +14,6 @@ import { registerQueueHealthMaintenanceJob } from './queue-health.js';
 import { registerRetentionMaintenanceJobs } from './retention.js';
 import {
   buildMaintenanceResources,
-  closeMaintenanceQueues,
-  closeMaintenanceWorkers,
   type MaintenanceJobRegistration,
   type ProducerConnection,
   type SharedWorkerOptions,
@@ -24,7 +22,7 @@ import { registerTokenHealthMaintenanceJob } from './token-health.js';
 import { registerVoiceSynthesisMaintenanceJob } from './voice-synthesis.js';
 import { registerPlanRecoveryMaintenanceJob } from './plan-recovery.js';
 
-export const maintenanceJobRegistrations: MaintenanceJobRegistration[] = [
+const maintenanceJobRegistrations: MaintenanceJobRegistration[] = [
   registerInboundProcessingMaintenanceJob,
   registerTokenHealthMaintenanceJob,
   registerEmailTokenHealthMaintenanceJob,
@@ -54,11 +52,6 @@ export async function createMaintenanceWorkers(
     workerOptions,
   });
 }
-
-export {
-  closeMaintenanceQueues,
-  closeMaintenanceWorkers,
-};
 
 export type {
   MaintenanceResources,

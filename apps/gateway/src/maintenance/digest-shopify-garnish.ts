@@ -13,11 +13,11 @@ import { resolveHandledWindowStart } from './digest-briefing/index.js';
 
 const SHOPIFY_GARNISH_TIMEOUT_MS = 10_000;
 
-export function isSalesPulseEnabled(settings: Record<string, unknown>): boolean {
+function isSalesPulseEnabled(settings: Record<string, unknown>): boolean {
   return settings.salesPulseEnabled !== false;
 }
 
-export function resolveLowStockThreshold(settings: Record<string, unknown>): number | null {
+function resolveLowStockThreshold(settings: Record<string, unknown>): number | null {
   const threshold = settings.lowStockThreshold;
   if (threshold == null) return null;
   if (typeof threshold !== 'number' || !Number.isFinite(threshold) || threshold < 0) return null;

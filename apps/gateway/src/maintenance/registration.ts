@@ -91,14 +91,6 @@ export async function buildMaintenanceResources(
   return resources;
 }
 
-export async function closeMaintenanceWorkers(resources: MaintenanceResources): Promise<void> {
-  await Promise.all(resources.workers.map((worker) => worker.close()));
-}
-
-export async function closeMaintenanceQueues(resources: MaintenanceResources): Promise<void> {
-  await Promise.all(resources.queues.map((queue) => queue.close()));
-}
-
 function registerWorkerFailure(worker: Worker, label: string, failureQueue: string): void {
   registerJobFailureLogging(worker, {
     logMessage: `[${label}] Job failed`,
