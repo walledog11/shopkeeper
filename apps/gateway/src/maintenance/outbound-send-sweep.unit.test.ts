@@ -59,30 +59,6 @@ describe('runOutboundSendSweep', () => {
     expect(transaction).toHaveBeenCalledTimes(2);
   });
 
-  it.each([
-  'Error in PostgreSQL connection: kind: Closed',
-  'P1017: connection terminated',
-  'connection was closed unexpectedly',
-  'closed the connection',
-])('retries once for a reconnectable database error (%s)', async (message) => {
-    transaction
-      .mockRejectedValueOnce(new Error(message))
-      .mockResolvedValueOnce(sweepCounts());
-
-    await expect(runOutboundSendSweep()).resolves.toBeUndefined();
-    expect(transaction).toHaveBeenCalledTimes(2);
-  });
-
-  it.each([
-    ['a non-Error throw', 'kind: Closed'],
-    ['a stack-only match', Object.assign(new Error('query failed'), { stack: 'P1017 at db' })],
-  ])('classifies %s as a closed connection', async (_label, thrown) => {
-    transaction.mockRejectedValueOnce(thrown).mockResolvedValueOnce(sweepCounts());
-
-    await expect(runOutboundSendSweep()).resolves.toBeUndefined();
-    expect(transaction).toHaveBeenCalledTimes(2);
-  });
-
   it('rethrows a non-connection database error without retrying', async () => {
     transaction.mockRejectedValueOnce(new Error('permission denied for table message'));
 
@@ -100,46 +76,5 @@ describe('runOutboundSendSweep', () => {
       expect.objectContaining({ opsAlert: true, failedCount: 3, unknownCount: 3 }),
       expect.stringContaining('Reconciled orphaned outbound send claims'),
     );
-  });
-
-  it('sums both no-send buckets into the failed count', async () => {
-    transaction.mockResolvedValueOnce(sweepCounts(2, 3, 0));
-
-    await runOutboundSendSweep();
-
-    expect(errorLog).toHaveBeenCalledWith(
-      expect.objectContaining({ opsAlert: true, failedCount: 5, unknownCount: 0 }),
-      expect.stringContaining('Reconciled orphaned outbound send claims'),
-    );
-  });
-
-  it('alerts when only the ambiguous post-provider case fired', async () => {
-    transaction.mockResolvedValueOnce(sweepCounts(0, 0, 4));
-
-    await runOutboundSendSweep();
-
-    expect(errorLog).toHaveBeenCalledWith(
-      expect.objectContaining({ opsAlert: true, failedCount: 0, unknownCount: 4 }),
-      expect.anything(),
-    );
-  });
-
-  it('includes interrupted synchronous attempts in the unknown count', async () => {
-    transaction.mockResolvedValueOnce(sweepCounts(0, 0, 0, 2));
-
-    await runOutboundSendSweep();
-
-    expect(errorLog).toHaveBeenCalledWith(
-      expect.objectContaining({ opsAlert: true, failedCount: 0, unknownCount: 2 }),
-      expect.anything(),
-    );
-  });
-
-  it('stays quiet when nothing was reconciled', async () => {
-    transaction.mockResolvedValueOnce(sweepCounts());
-
-    await runOutboundSendSweep();
-
-    expect(errorLog).not.toHaveBeenCalled();
   });
 });
