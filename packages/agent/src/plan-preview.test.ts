@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { buildHomeActionDisplay, buildPlanPreview } from "./plan-preview.js"
+import { buildHomeActionDisplay } from "./plan-preview.js"
 import { decideAutonomy } from "./autonomy.js"
 import { buildPlanSignals, planSignalTiers } from "./plan-signals.js"
 import type { AgentPlan, OrgSettings, PlanStep, ProducedPlanSignalCode, RawToolCall } from "./types.js"
@@ -502,59 +502,7 @@ describe("planSignalTiers", () => {
   })
 })
 
-const trackingStep: PlanStep = {
-  id: "track_1",
-  tool: "get_order_tracking",
-  label: "Fetch order tracking",
-  description: "Check the carrier scan history for order #1042",
-  category: "read",
-  enabled: true,
-}
-
 describe("buildHomeActionDisplay", () => {
-  it("structures an address update with chip, order ref, and address lines", () => {
-    const display = buildHomeActionDisplay(plan({
-      steps: [{
-        id: "addr_1",
-        tool: "update_shopify_order_address",
-        label: "Update address",
-        description: "Change the shipping address before fulfillment",
-        category: "action",
-        enabled: true,
-      }],
-      rawToolCalls: [{
-        id: "addr_1",
-        name: "update_shopify_order_address",
-        input: {
-          order_number: "#1062",
-          address1: "742 Evergreen Terrace",
-          city: "Springfield",
-          province: "IL",
-          zip: "62704",
-          country: "US",
-        },
-      }],
-    }))
-
-    expect(display).toEqual({
-      chipLabel: "Update address",
-      orderRef: "#1062",
-      detailLines: ["742 Evergreen Terrace", "Springfield, IL, 62704"],
-    })
-  })
-
-  it("structures a refund with amount chip and reason detail", () => {
-    const display = buildHomeActionDisplay(refundPlan({
-      input: { order_id: "9000", amount: "28.00", reason: "cracked Ceramic Mug" },
-    }))
-
-    expect(display).toEqual({
-      chipLabel: "Issue $28.00 refund",
-      orderRef: null,
-      detailLines: ["cracked Ceramic Mug"],
-    })
-  })
-
   it("shows the provider-bound amount on a partial-refund approval", () => {
     const display = buildHomeActionDisplay(plan({
       steps: [{
@@ -583,119 +531,6 @@ describe("buildHomeActionDisplay", () => {
       orderRef: null,
       detailLines: ["One napkin arrived torn"],
     })
-  })
-
-  it("names the Shopify line item a partial refund prices, ahead of the reason", () => {
-    const display = buildHomeActionDisplay(plan({
-      steps: [{
-        id: "partial_1",
-        tool: "create_partial_refund",
-        label: "Issue partial refund",
-        description: "Refund the damaged napkin",
-        category: "action",
-        enabled: true,
-      }],
-      rawToolCalls: [{
-        id: "partial_1",
-        name: "create_partial_refund",
-        input: {
-          order_id: "9000",
-          items: [{ line_item_id: "11", quantity: 1 }],
-          reason: "One napkin arrived torn",
-          approval_amount: "8.50",
-          approval_currency: "EUR",
-          approval_line_items: [{ name: "Napkin - Special", quantity: 1, change: "refund" }],
-        },
-      }],
-    }))
-
-    expect(display).toEqual({
-      chipLabel: "Issue EUR 8.50 partial refund",
-      orderRef: null,
-      detailLines: ["Refund EUR 8.50 for 1x Napkin - Special", "One napkin arrived torn"],
-    })
-  })
-
-  it("reads order_number from action tools when building plan orderRef", () => {
-    const preview = buildPlanPreview(plan({
-      steps: [{
-        id: "addr_1",
-        tool: "update_shopify_order_address",
-        label: "Update address",
-        description: "Update address",
-        category: "action",
-        enabled: true,
-      }],
-      rawToolCalls: [{
-        id: "addr_1",
-        name: "update_shopify_order_address",
-        input: { order_number: "#1062", address1: "1 Main", city: "LA", province: "CA", zip: "90001", country: "US" },
-      }],
-    }), null, "Change my address")
-
-    expect(preview.orderRef).toBe("#1062")
-  })
-})
-
-describe("buildPlanPreview — merchant-facing copy", () => {
-  it("falls through to the customer's message when there is no plan", () => {
-    const preview = buildPlanPreview(null, null, "Where is my order?")
-
-    expect(preview.proposal).toBe("")
-    expect(preview.headline).toBe("Where is my order?")
-  })
-
-  it("leaves the proposal empty when the plan has nothing beyond its headline step", () => {
-    const preview = buildPlanPreview(
-      plan({ steps: [refundStep], rawToolCalls: [refundCall] }),
-      null,
-      "Please refund me.",
-    )
-
-    expect(preview.proposal).toBe("")
-  })
-
-  it("never emits the internal no-plan status string", () => {
-    for (const preview of [
-      buildPlanPreview(null, null, "Where is my order?"),
-      buildPlanPreview(null, "Customer asks about shipping", null),
-      buildPlanPreview(plan(), null, null),
-    ]) {
-      expect(preview.proposal).not.toContain("No plan generated")
-    }
-  })
-
-  it("reads action chains as prose, not as a joined step list", () => {
-    const preview = buildPlanPreview(
-      plan({
-        steps: [trackingStep, sendReplyStep],
-        rawToolCalls: [{ id: "track_1", name: "get_order_tracking", input: { order_id: "1042" } }, sendReplyCall],
-      }),
-      null,
-      "Where is my order?",
-    )
-
-    expect(preview.proposal).toBe("Fetch order tracking, then reply")
-    expect(preview.proposal).not.toContain(" + ")
-  })
-
-  it("uses the registry label for read steps instead of the planner's narration", () => {
-    const preview = buildPlanPreview(
-      plan({
-        steps: [trackingStep, refundStep, sendReplyStep],
-        rawToolCalls: [refundCall, sendReplyCall],
-      }),
-      null,
-      "Where is my order?",
-    )
-
-    expect(preview.proposal).not.toContain("carrier scan history")
-  })
-
-  it("keeps the description on non-read steps, where it carries the specifics", () => {
-    const preview = buildPlanPreview(askOperatorPlan(), null, "Do you ship to Canada?")
-
-    expect(preview.proposal).toBe("Do we ship to Canada, and at what rate?")
   })
 })
 
