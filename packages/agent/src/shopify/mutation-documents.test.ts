@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import { SHOPIFY_MUTATION_DOCUMENTS, skippedMutationDocument } from "./mutation-documents.js";
+import { SHOPIFY_MUTATION_DOCUMENTS } from "./mutation-documents.js";
 
 describe("SHOPIFY_MUTATION_DOCUMENTS", () => {
   // The registry's whole purpose is that --validate fails on an unregistered
@@ -32,52 +32,6 @@ describe("SHOPIFY_MUTATION_DOCUMENTS", () => {
     }
 
     expect(missing, "unregistered Shopify mutation documents").toEqual([]);
-  });
-});
-
-describe("skippedMutationDocument", () => {
-  it("attaches @skip to the root field, not the operation definition", () => {
-    // Most operations are named after their root field. Matching the operation's
-    // variable list instead puts @skip on a MUTATION, which is invalid GraphQL -
-    // every document would then fail validation for a reason we introduced.
-    for (const [name, entry] of Object.entries(SHOPIFY_MUTATION_DOCUMENTS)) {
-      const skipped = skippedMutationDocument(entry);
-      const operationLine = skipped.trim().split("\n")[0];
-      expect(operationLine, `${name} put @skip on the operation definition`).not.toContain("@skip");
-      expect(skipped, `${name} did not get a @skip directive`).toContain("@skip(if: true)");
-    }
-  });
-
-  it("places the directive after the root field's full argument list", () => {
-    const skipped = skippedMutationDocument(SHOPIFY_MUTATION_DOCUMENTS.orderEditAddVariant);
-    expect(skipped).toContain(
-      "orderEditAddVariant(id: $id, variantId: $variantId, quantity: $quantity) @skip(if: true)",
-    );
-  });
-
-  it("handles an argument list that spans multiple lines", () => {
-    const skipped = skippedMutationDocument(
-      SHOPIFY_MUTATION_DOCUMENTS.reverseDeliveryCreateWithShipping,
-    );
-    expect(skipped).toContain(") @skip(if: true) {");
-    expect(skipped.match(/@skip/g)).toHaveLength(1);
-  });
-
-  it("preserves a directive the document already carries", () => {
-    for (const name of ["refundCreate", "partialRefundCreate"] as const) {
-      const skipped = skippedMutationDocument(SHOPIFY_MUTATION_DOCUMENTS[name]);
-      expect(skipped).toContain("@skip(if: true)");
-      expect(skipped).toContain("@idempotent(key: $idempotencyKey)");
-      expect(skipped).not.toContain("refundCreate(input: $input, idempotencyKey:");
-    }
-  });
-
-  it("handles a root field with no arguments", () => {
-    const skipped = skippedMutationDocument({
-      document: "mutation doThing { doThing { id } }",
-      rootField: "doThing",
-    });
-    expect(skipped).toBe("mutation doThing { doThing @skip(if: true) { id } }");
   });
 
   it("declares no GraphQL variable a document does not use", () => {
