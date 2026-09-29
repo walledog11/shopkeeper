@@ -1,11 +1,10 @@
 # Conversational agent overhaul plan
 
-Status, 2026-09-27: not complete, and not working on a real store. Packages 0–5
-are built and pass tests against a scripted model and fake Shopify only. No
-real-store attempt has worked cleanly (Gate C row below). Package 6 (certify,
-cut over, and delete the old runtime) has the steps in
-[Open work](#open-work-in-order) left. No question waits on the release owner.
-Production runs runtime v1 by default,
+Status, 2026-09-29: not complete. Packages 0–5 are built and pass tests against
+a scripted model and fake Shopify. Real-store proof is partial: the Gate C row
+below says which effects have run. Package 6 (certify, cut over, and delete the
+old runtime) has the steps in [Open work](#open-work-in-order) left. No
+question waits on the release owner. Production runs runtime v1 by default,
 with one controlled organization on runtime v2.
 
 Created 2026-09-11. This file holds the open work, the rules for doing it, and
@@ -81,7 +80,7 @@ contract was unbuilt.
 
 | Area | State |
 | --- | --- |
-| Packages 0–5 | Built. Tested only with a scripted model and fake Shopify, which cannot show that they work. 2 of the 16 retained Shopify writes (customer note, address change) have ever run on the real store. |
+| Packages 0–5 | Built. Tested only with a scripted model and fake Shopify, which cannot show that they work. Of the retained Shopify writes, only the customer note, address change and cancellation have run on the real store. |
 | Gate A: comparison tooling | Done. |
 | Gate B: v1/v2 model comparison | **Advisory since 2026-09-28** (decision I): a paid run happens only when the release owner asks, and it does not block rollout, which rests on Gate C's live runs. Last result, **not passed.** Both workflow runs on `cf41c169` (2026-09-26) reported failure. v2 failed the C08 held-out 2 of 2 and `refund-partial-placeholder` 1 of 2. Those misses were recorded as a runtime defect and a harness gap and the gate was called passed; a runtime defect is a v2 failure, so it was not a pass. #125 then changed the runtime to fix C08's failure, so C08 can no longer count as held-out. A new unseen C08 variant is needed. |
 | Gate C: real provider and delivery | Rerun in progress. 1 of 14 effects done cleanly: `cancel_order`, repeated on #1036 on 2026-09-28 after its first run (#1032) promised a refund Shopify never made (item 8b). Before the rerun, 0 of 5 real-store attempts worked cleanly (four runs on 2026-09-25, one on 2026-09-27; setup, run order and deploy state in the release evidence). The repeat surfaced items 8c–8e, which stop the rerun until they land. |
@@ -130,7 +129,9 @@ and 9a are in [What has been done](#what-has-been-done).
    in place of customer delivery. A failure is a finding against its owning
    contract (rule 2); stop, record it, and fix it before continuing. The release
    evidence also offers an optional step 7: retry a deliberately induced
-   definite delivery failure and confirm the write does not repeat.
+   definite delivery failure and confirm the write does not repeat. Choose each
+   ticket to also show a conversational acceptance row where a realistic ticket
+   allows (item 8h).
 8c. **Phone cards never show the exact draft** (*Approval and communication
     contract*: the merchant approves the customer message as it will be sent).
     Found by the Gate C repeat of run 1, 2026-09-28. `toGatewayAgentPlan`
@@ -201,7 +202,7 @@ and 9a are in [What has been done](#what-has-been-done).
       (`pending-plan-commands.ts`) pick their copy the same way. A committed
       write must not read as a failure to them, and an unknown outcome must
       keep its `Unknown:` prefix. Moving that decision from the prefix to the
-      typed outcome is a separate change, not part of this item. If the text
+      typed outcome is item 8g, not part of this item. If the text
       and the decision cannot be kept in agreement, stop and report (rule 1)
       rather than add a case to the matcher.
     - Done when a cancel-and-reply approval on the next Gate C run confirms
@@ -214,6 +215,45 @@ and 9a are in [What has been done](#what-has-been-done).
     `thread-io/send.ts` discards the id its sender returns, as
     `sendEmailSynchronously` did before #132. Gate C's customer-ticket runs reply
     through `send_reply`, which #132 fixed, so this does not stop the rerun.
+
+8g. **Approval outcomes are decided by reading the confirmation's prefix**
+    (*Durable request and work state*, item 5's typed outcome; CLAUDE.md,
+    *Never branch on prose*). Found 2026-09-29 while scoping item 8e, which
+    keeps the prefix in agreement with the outcome and does no more.
+    `isPlanExecutionFailureMessage` (`message-dispatch.ts`) is
+    `startsWith("Error:")` or `startsWith("Unknown:")`, and it is the control
+    signal. `runApprovedPendingPlan` (`pending-plan-actions.ts`) clears the
+    parked phone card by it, and the keyword approval reply
+    (`pending-plan-commands.ts`), the `approve_pending_plan` tool
+    (`operator-session-tools.ts`) and `summarizeOperatorTurnDispatchFailure`
+    read it too. A decision that a merchant's parked card rides on is read from
+    English that one module wrote for display.
+    - The change: an approved run returns the typed outcome that
+      `planExecutionOutcomeForActions` already computes, beside its summary, and
+      each caller above branches on that. The summary becomes display-only and
+      the prefix matcher is deleted.
+    - Done when no path decides an approval's outcome from summary text, a
+      committed write whose reply was withheld still clears the card on the
+      phone, and an unknown outcome still leaves it parked. The unknown case
+      cannot be shown live, so look for existing coverage before writing any.
+      Does not block Gate C.
+
+8h. **Conversational acceptance is not scheduled** (*Acceptance matrix*: "A row
+    is met when it has been seen working on the dev store or phone"; the
+    closing paragraph: completion requires "conversational acceptance
+    evidence"). Found 2026-09-29 by reading this plan against its own
+    completion sentence. No item walks the matrix. Every row except the four
+    covered by induced or deterministic failures (a committed write followed by
+    a failed delivery, a provider timeout, a refresh retry, concurrent
+    approvals) describes conversation. Their evidence so far is the Gate B
+    evals, which are advisory, and Package 5's two live-model continuity cases;
+    neither is a dev-store or phone sighting.
+    - The change: no separate campaign. Each remaining Gate C ticket (item 8)
+      is chosen to also exercise a conversational row where a realistic ticket
+      allows (rule 6), and the release evidence records which rows the run
+      showed.
+    - Done when each conversational row is recorded as seen in a Gate C run or
+      listed in the release evidence as not verified.
 
 9. **Gate D**, observation and rollback rehearsal, as written in the release
    evidence. Needs the observation window and operator, which the release
