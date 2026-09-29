@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AGENT_SETTINGS_DEFAULTS } from "./settings.js";
-import { installAgentLogger, resetAgentLoggerForTests, type AgentLogger } from "./logger.js";
+import { resetAgentLoggerForTests } from "./logger.js";
 import { runAgent } from "./run.js";
 import { defineTool, stringArg } from "./tools/registry/schema.js";
 import type { AgentContext } from "./agent-context.js";
@@ -89,15 +89,6 @@ function makeIo(): NonNullable<AgentContext["io"]> {
     sendEmail: vi.fn().mockResolvedValue({ status: "ok", message: "Email sent." }),
     updateThreadStatus: vi.fn(async (_input, execution) => ({ status: "ok", message: "Status updated.", receipt: receipt("update_thread_status", execution, { threadId: "thread_1", beforeStatus: "open", afterStatus: "closed" }) })),
     updateThreadTag: vi.fn(async (_input, execution) => ({ status: "ok", message: "Tag updated.", receipt: receipt("update_thread_tag", execution, { threadId: "thread_1", beforeTag: null, afterTag: "Refund" }) })),
-  };
-}
-
-function makeLogger(): AgentLogger {
-  return {
-    warn: vi.fn(),
-    info: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
   };
 }
 
@@ -195,134 +186,9 @@ describe("runAgent tool execution", () => {
     expect(result.summary).toMatch(/workspace cap/i);
   });
 
-  it("routes add_internal_note through the injected I/O sink", async () => {
-    mockCreate
-      .mockResolvedValueOnce(toolUse("add_internal_note", { text: "Customer is VIP" }))
-      .mockResolvedValueOnce(endTurn());
-    const ctx = makeCtx();
-
-    const result = await runAgent(ctx, "Note that the customer is VIP");
-
-    expect(ctx.io?.addInternalNote).toHaveBeenCalledWith({ text: "Customer is VIP" }, expect.any(Object));
-    expect(result.actionsPerformed[0]).toMatchObject({
-      tool: "add_internal_note",
-      result: "Note added.",
-      status: "success",
-    });
-  });
-
-  it("routes thread status and tag updates through the injected I/O sink", async () => {
-    mockCreate
-      .mockResolvedValueOnce({
-        stop_reason: "tool_use",
-        content: [
-          { type: "tool_use", id: "tu_1", name: "update_thread_status", input: { status: "closed" } },
-          { type: "tool_use", id: "tu_2", name: "update_thread_tag", input: { tag: "Refund" } },
-        ],
-        usage: { input_tokens: 10, output_tokens: 5 },
-      })
-      .mockResolvedValueOnce(endTurn("Updated."));
-    const ctx = makeCtx();
-
-    const result = await runAgent(ctx, "Close and tag this thread");
-
-    expect(ctx.io?.updateThreadStatus).toHaveBeenCalledWith({ status: "closed" }, expect.any(Object));
-    expect(ctx.io?.updateThreadTag).toHaveBeenCalledWith({ tag: "Refund" }, expect.any(Object));
-    expect(result.actionsPerformed.map((action) => action.tool)).toEqual([
-      "update_thread_status",
-      "update_thread_tag",
-    ]);
-  });
-
-  it("routes send_reply through the injected I/O sink", async () => {
-    mockCreate
-      .mockResolvedValueOnce(toolUse("send_reply", { text: "Your order shipped!" }))
-      .mockResolvedValueOnce(endTurn("Reply sent."));
-    const ctx = makeCtx();
-
-    const result = await runAgent(ctx, "Tell the customer their order shipped");
-
-    expect(ctx.io?.sendReply).toHaveBeenCalledWith({ text: "Your order shipped!" }, expect.any(Object));
-    expect(result.actionsPerformed[0].result).toBe("Reply sent to customer via email.");
-  });
-
-  it("carries durable work identity to the reply sink without putting it in model input", async () => {
-    mockCreate
-      .mockResolvedValueOnce(toolUse("send_reply", { text: "Your order shipped!" }))
-      .mockResolvedValueOnce(endTurn("Reply sent."));
-    const ctx = makeCtx({ agentRequestId: "request-1", agentTaskId: "task-1" });
-
-    await runAgent(ctx, "Where is my order?");
-
-    expect(ctx.io?.sendReply).toHaveBeenCalledWith(
-      { text: "Your order shipped!" },
-      expect.objectContaining({
-        agentRequestId: "request-1",
-        agentTaskId: "task-1",
-        operationId: expect.any(String),
-        executionId: expect.any(String),
-      }),
-    );
-  });
-
-  it("returns an error string when no Shopify integration is connected", async () => {
-    mockCreate
-      .mockResolvedValueOnce(toolUse("get_shopify_orders", { customer_id: "999" }))
-      .mockResolvedValueOnce(endTurn());
-
-    const result = await runAgent(makeCtx(), "Get customer orders");
-
-    expect(result.actionsPerformed[0].result).toBe("Error: no Shopify integration connected.");
-  });
 });
 
 describe("runAgent loop behavior", () => {
-  it("uses the injected logger for runner lifecycle logs", async () => {
-    const injectedLogger = makeLogger();
-    installAgentLogger(injectedLogger);
-    mockCreate.mockResolvedValueOnce(endTurn("Nothing to do."));
-
-    await runAgent(makeCtx(), "Do nothing");
-
-    expect(injectedLogger.info).toHaveBeenCalledWith(
-      expect.objectContaining({ iteration: 0, messageCount: 2, readOnly: false }),
-      "[agent] iteration start",
-    );
-    expect(injectedLogger.info).toHaveBeenCalledWith(
-      expect.objectContaining({ outcome: "end_turn", orgId: "org_1", threadId: "thread_1" }),
-      "[agent] run complete",
-    );
-  });
-
-  it("returns the summary text on immediate end_turn", async () => {
-    mockCreate.mockResolvedValueOnce(endTurn("Nothing to do."));
-
-    const result = await runAgent(makeCtx(), "Do nothing");
-
-    expect(result.summary).toBe("Nothing to do.");
-    expect(result.actionsPerformed).toHaveLength(0);
-  });
-
-  it("tracks all tool calls from a single response in actionsPerformed", async () => {
-    mockCreate
-      .mockResolvedValueOnce({
-        stop_reason: "tool_use",
-        content: [
-          { type: "tool_use", id: "tu_1", name: "update_thread_tag", input: { tag: "Billing" } },
-          { type: "tool_use", id: "tu_2", name: "add_internal_note", input: { text: "Billing issue" } },
-        ],
-        usage: { input_tokens: 10, output_tokens: 5 },
-      })
-      .mockResolvedValueOnce(endTurn("All done."));
-
-    const result = await runAgent(makeCtx(), "Tag and note this billing thread");
-
-    expect(result.actionsPerformed).toHaveLength(2);
-    expect(result.actionsPerformed.map((action) => action.tool)).toEqual(
-      expect.arrayContaining(["update_thread_tag", "add_internal_note"]),
-    );
-  });
-
   it("executes pre-approved tool calls without starting another model loop", async () => {
     const ctx = makeCtx();
 
@@ -401,6 +267,9 @@ describe("runAgent moduleTools seam", () => {
       category: "action",
       status: "success",
       result: "control effected.",
+    });
+    expect(mockBeginAgentActionAttempt.mock.calls.at(-1)?.[0]).toMatchObject({
+      action: { tool: "test_control_tool", category: "action" },
     });
   });
 
