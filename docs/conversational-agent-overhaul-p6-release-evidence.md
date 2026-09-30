@@ -847,3 +847,18 @@ deterministic preflight and Vercel preview checks passed. The implementation
 was reviewed against the recorded stopped-task/current-instruction defect;
 live iMessage acceptance remains open until the merged fix is deployed and a
 fresh read-only message is received.
+
+### Current CI blocker, 2026-09-30
+
+The scope update on `d0cabdaa` passed documentation checks, unit checks and free
+deterministic preflight, but CI run `36765813145` failed its production dependency
+audit on newly indexed advisories. Static verification consequently skipped the
+build, integration and E2E stages. This is a dependency blocker, not evidence of
+an iMessage regression.
+
+The targeted patch updates Next.js from `16.3.4` to `16.3.8`, gRPC from `1.14.4`
+to `1.14.5`, and Axios from `1.18.1` to `1.20.0`. Only those dependency families
+and Next's required platform binaries changed in the lockfile. The same
+production high/critical audit passes against the updated lockfile. The existing
+PR checks must pass on this final head before merge and deployment; no paid
+comparison or repository-wide test cleanup is added.
