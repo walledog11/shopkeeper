@@ -8,7 +8,7 @@ import {
 import { hashInstruction } from '@shopkeeper/agent/agent-actions';
 import type { AgentActionTaskAuthority } from '@shopkeeper/agent/agent-actions';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
-import type { RawToolCall } from '@shopkeeper/agent/types';
+import type { PlanExecutionOutcome, RawToolCall } from '@shopkeeper/agent/types';
 import type { AgentToolDefinition } from '@shopkeeper/agent/tools';
 import type { TaskModelBudget } from '@shopkeeper/agent/context';
 import { db } from '@shopkeeper/db';
@@ -45,6 +45,10 @@ export interface ExecuteOperatorAgentTurnResult {
   actionsPerformed: AgentActionResult[];
 }
 
+export interface ExecuteOperatorApprovedCachedPlanResult extends ExecuteOperatorAgentTurnResult {
+  outcome: PlanExecutionOutcome;
+}
+
 export async function executeOperatorApprovedCachedPlan(params: {
   orgId: string;
   threadId: string;
@@ -52,7 +56,7 @@ export async function executeOperatorApprovedCachedPlan(params: {
   clerkUserId?: string;
   approvedToolCalls: RawToolCall[];
   expectedIdentity?: ExpectedPlanIdentity;
-}): Promise<ExecuteOperatorAgentTurnResult> {
+}): Promise<ExecuteOperatorApprovedCachedPlanResult> {
   await assertBillingWriteAllowedForOrgId(params.orgId);
   const [org, approver] = await Promise.all([
     db.organization.findUnique({
@@ -73,6 +77,7 @@ export async function executeOperatorApprovedCachedPlan(params: {
   }, buildGatewayPlanExecutionDeps());
 
   return {
+    outcome: executed.execution.status,
     summary: executed.result.summary,
     actionsPerformed: executed.result.actionsPerformed,
     threadId: params.threadId,

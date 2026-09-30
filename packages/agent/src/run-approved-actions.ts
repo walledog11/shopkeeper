@@ -40,12 +40,8 @@ function doneClause(action: ActionEntry, customer: string): string {
  * typed receipts of the actions that ran, never from a tool's result text; a
  * failure keeps its existing copy and names what had already committed. A reply
  * that did not go out is not a failure of a plan whose effects committed, so it
- * is said plainly and carries no failure prefix.
- *
- * The text is still read as a control signal (`isPlanExecutionFailureMessage`),
- * so the prefix comes from the typed outcome rather than from whatever a tool
- * wrote: `Unknown:` for an unknown outcome, `Error:` for a definite failure, and
- * neither for a committed plan.
+ * is said plainly. The summary is display-only; callers use the plan's typed
+ * execution outcome and must not format this summary again.
  */
 export function summarizeApprovedDashboardActions(
   actions: ActionEntry[],

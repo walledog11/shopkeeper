@@ -256,7 +256,7 @@ export function registerInternalOperatorRoutes(router: Router): void {
       }
 
       const identity = expectedPlanIdentity(plan);
-      const summary = await runApprovedPendingPlan({
+      const { summary } = await runApprovedPendingPlan({
         organizationId,
         memberKey,
         clerkUserId,

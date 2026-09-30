@@ -10,6 +10,7 @@ import {
 } from '@shopkeeper/db/test-helpers';
 import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
+import { formatOperatorDispatchFailure } from '@shopkeeper/agent/message-dispatch';
 import type { BaseAgentContext } from '@shopkeeper/agent/context';
 import { BadRequestError, ConflictError } from '@shopkeeper/shared/errors';
 import {
@@ -67,7 +68,7 @@ async function buildTools(memberKey: string, clerkUserId = 'usr_1') {
 beforeEach(async () => {
   org = await createTestOrg();
   mockExecuteOperatorAgentTurn.mockReset();
-  mockExecuteOperatorAgentTurn.mockResolvedValue({ summary: 'Done.', threadId: 'ticket', actionsPerformed: [] });
+  mockExecuteOperatorAgentTurn.mockResolvedValue({ outcome: 'committed', summary: 'Done.', threadId: 'ticket', actionsPerformed: [] });
   planAgentSpy.mockReset();
   sendOperatorPlanNotificationSpy.mockReset();
   sendOperatorPlanNotificationSpy.mockResolvedValue(undefined);
@@ -309,7 +310,8 @@ describe('approve_pending_plan', () => {
   it('returns a tool error when plan execution reports a dispatch failure', async () => {
     const memberKey = 'member:dispatch_fail';
     mockExecuteOperatorAgentTurn.mockResolvedValueOnce({
-      summary: 'Error: message dispatch failed (500). Reference: req-1.',
+      outcome: 'failed',
+      summary: formatOperatorDispatchFailure('Error: message dispatch failed (500). Reference: req-1.'),
       threadId: 'ticket_thread_1',
       actionsPerformed: [],
     });
@@ -350,7 +352,7 @@ describe('approve_pending_plan', () => {
       planId: 'plan-jake', customerName: 'Jake Long',
     }, 3);
     mockExecuteOperatorAgentTurn.mockResolvedValueOnce({
-      summary: 'Refunded Sarah.', threadId: 'thread_sarah', actionsPerformed: [],
+      outcome: 'committed', summary: 'Refunded Sarah.', threadId: 'thread_sarah', actionsPerformed: [],
     });
     const tools = await buildTools(memberKey);
 

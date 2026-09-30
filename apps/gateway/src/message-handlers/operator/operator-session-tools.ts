@@ -1,5 +1,4 @@
-import { defineTool, stringArg, toolError, toolOk, type AgentToolDefinition } from '@shopkeeper/agent/tools';
-import { formatOperatorDispatchFailure, isPlanExecutionFailureMessage } from '@shopkeeper/agent/message-dispatch';
+import { defineTool, stringArg, toolError, toolOk, toolUnknown, type AgentToolDefinition } from '@shopkeeper/agent/tools';
 import { ConflictError } from '@shopkeeper/shared/errors';
 import type { BaseAgentContext, SupportContext } from '@shopkeeper/agent/context';
 import logger from '../../logger.js';
@@ -108,9 +107,9 @@ export function buildOperatorSessionTools(
         return toolError('Error: the pending plan targets the current thread and cannot be approved from here.');
       }
 
-      let summary: string;
+      let execution: Awaited<ReturnType<typeof runApprovedPendingPlan>>;
       try {
-        summary = await runApprovedPendingPlan({
+        execution = await runApprovedPendingPlan({
           organizationId,
           memberKey,
           clerkUserId,
@@ -125,11 +124,14 @@ export function buildOperatorSessionTools(
         return toolError('Error: something went wrong running the plan. Please try again.');
       }
 
-      if (isPlanExecutionFailureMessage(summary)) {
-        return toolError(formatOperatorDispatchFailure(summary));
+      if (execution.outcome === 'unknown') {
+        return toolUnknown(execution.summary);
+      }
+      if (execution.outcome !== 'committed') {
+        return toolError(execution.summary);
       }
 
-      return toolOk(summary);
+      return toolOk(execution.summary);
     },
   });
 

@@ -5,13 +5,13 @@ import {
 } from "./message-dispatch.js";
 
 describe("message-dispatch helpers", () => {
-  // The approve tool returns success even when the send it ran failed, so the failure is in its result.
-  it("surfaces a failed approval even when the approve tool itself succeeded", () => {
+  it("surfaces the already-formatted approval failure from its typed status", () => {
+    const failure = formatOperatorDispatchFailure("Error: message dispatch failed (503). Reference: req-9.");
     const summary = summarizeOperatorTurnDispatchFailure([
-      { tool: "approve_pending_plan", result: "Error: message dispatch failed (503). Reference: req-9.", status: "success", durationMs: 1 },
+      { tool: "approve_pending_plan", result: failure, status: "error", durationMs: 1 },
     ] as never);
 
-    expect(summary).toContain("req-9");
+    expect(summary).toBe(failure);
   });
 
   // Keyed on the declared category, not a list of tool names. The list held

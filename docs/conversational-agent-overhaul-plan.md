@@ -233,34 +233,18 @@ and 9a are in [What has been done](#what-has-been-done).
     `sendEmailSynchronously` did before #132. Gate C's customer-ticket runs reply
     through `send_reply`, which #132 fixed, so this does not stop the rerun.
 
-8g. **Approval outcomes are decided by reading the confirmation's prefix**
-    (*Durable request and work state*, item 5's typed outcome; CLAUDE.md,
-    *Never branch on prose*). Found 2026-09-29 while scoping item 8e, which
-    keeps the prefix in agreement with the outcome and does no more.
-    `isPlanExecutionFailureMessage` (`message-dispatch.ts`) is
-    `startsWith("Error:")` or `startsWith("Unknown:")`, and it is the control
-    signal. `runApprovedPendingPlan` (`pending-plan-actions.ts`) clears the
-    parked phone card by it, and the keyword approval reply
-    (`pending-plan-commands.ts`), the `approve_pending_plan` tool
-    (`operator-session-tools.ts`) and `summarizeOperatorTurnDispatchFailure`
-    read it too. A decision that a merchant's parked card rides on is read from
-    English that one module wrote for display. Two symptoms remain after item
-    8e, both seen by running the summary on hand-built action lists.
-    `summarizeApprovedDashboardActions` formats a failure with
-    `formatOperatorDispatchFailure` and each consumer formats it again, so an
-    unknown outcome shows its "Check the ticket…" advice twice on the phone. And
-    a plan whose only work is a reply that failed to send is typed `failed`, but
-    its friendly copy carries no prefix, so it clears the card while every other
-    failure leaves it parked.
-    - The change: an approved run returns the typed outcome that
-      `planExecutionOutcomeForActions` already computes, beside its summary, and
-      each caller above branches on that. The summary becomes display-only and
-      the prefix matcher is deleted.
-    - Done when no path decides an approval's outcome from summary text, a
-      committed write whose reply was withheld still clears the card on the
-      phone, and an unknown outcome still leaves it parked. The unknown case
-      cannot be shown live, so look for existing coverage before writing any.
-      Does not block Gate C.
+8g. **Typed phone approval outcomes — implemented, live verification open.**
+    `executeOperatorApprovedCachedPlan` returns the shared executor's typed
+    `execution.status` beside its display summary. `runApprovedPendingPlan`
+    clears parked contexts only for `committed`; the keyword approval and
+    `approve_pending_plan` tool branch on that outcome. Unknown remains
+    `toolUnknown`, and failed/partial remains `toolError`.
+    `summarizeOperatorTurnDispatchFailure` reads the tool status and keeps the
+    formatted summary, so unknown advice is not formatted twice. The summary
+    prefix matcher is deleted.
+    Existing targeted checks, builds, typecheck and changed-file lint passed.
+    Still owed with 8c–8e: normal phone approval and a definite reply failure.
+    Do not induce an uncertain Shopify write to verify the display path.
 
 8h. **Conversational acceptance is not scheduled** (*Acceptance matrix*: "A row
     is met when it has been seen working on the dev store or phone"; the
