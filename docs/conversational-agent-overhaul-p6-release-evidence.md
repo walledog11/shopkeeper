@@ -862,3 +862,33 @@ and Next's required platform binaries changed in the lockfile. The same
 production high/critical audit passes against the updated lockfile. The existing
 PR checks must pass on this final head before merge and deployment; no paid
 comparison or repository-wide test cleanup is added.
+
+## PR #141 deployment and actual phone follow-up, 2026-09-30
+
+Final head `8c643aad` passed existing CI and free preflight. PR #141 merged as
+`34c98203` at 19:47:48 UTC. Gateway deployment `431d6a04`, worker `dbba1583`
+and dashboard `dpl_9GxwFkXGR2MqBxMoSLVAywa9Ldii` serve that commit; the public
+dashboard alias and all production verification checks passed.
+
+The owner sent "Check order 1035 and tell me its payment and shipment status."
+Event `aea088a3` arrived at 19:56:28 UTC, linked request `9d868b4f`, completed
+v2 task `9fce6474` and reply `923ac1fc`. The reply was delivered at 19:56:38 UTC
+and pasted by the owner. One model call and 69,670,000 nano-USD were charged.
+There were no actions under either the task or request turn: it answered from
+conversation history without a current provider observation. No mutation ran.
+
+Scope passed for this request: the answer mentioned only #1035. Wording failed:
+it included the zero current total, raw null fulfillment state, fulfillable
+quantities and a recap of the earlier cancellation/refund. Full acceptance
+remains open.
+
+The response guidance's demand to include actual data and its examples of
+totals/items conflict with a narrow status answer. Its order-status guidance
+also ignores the new supported shipping field and does not distinguish old
+assistant replies from current observations. The follow-up corrects those
+instructions in the operator owner and identifies historical replies as
+conversation. Current-state questions use a fresh named-order/customer lookup;
+ordinary replies contain the requested business facts, with technical details
+only when requested. No phrase matching, output rewriting or new tests are added.
+The owner explicitly stopped unnecessary testing; verification is the cheap
+compiler check and the actual phone flow through the existing PR process.

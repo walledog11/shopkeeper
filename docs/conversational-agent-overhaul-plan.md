@@ -2,7 +2,7 @@
 
 Status, 2026-09-30: typed phone outcomes (#137), durable phone instructions and
 dashboard Stop (#138), and durable ticket-composer planning (#140) are merged
-and deployed. Gateway, worker and dashboard serve `6031e3b4`; required CI and
+and deployed. Gateway, worker and dashboard serve `34c98203` (PR #141); required CI and
 production health checks passed. The composer instruction → regenerate → reload
 → approval flow passed on the existing reopened #1035 ticket: one cancellation,
 a $34.90 refund confirmed by Shopify, and one sent exact-draft email. Recipient
@@ -12,10 +12,12 @@ reached production automatically, ran on one durable v2 task, and its reply
 arrived on the owner's phone. The stalled Photon webhook was replaced and the
 old production registration retired after that confirmation. The reply's scope
 and wording failed acceptance: it revived the earlier stopped five-order
-comparison and exposed provider fields. The 8h candidate now preserves task
-state in operator history and separates prior conversation from the current
-instruction. Order reads also expose cancellation and supported shipping state.
-The candidate is not yet deployed or verified through iMessage.
+comparison and exposed provider fields. PR #141 preserves task state in history,
+separates the current instruction and supplies cancellation/shipping evidence.
+Its actual iMessage follow-up stayed on #1035 and arrived, but exposed provider
+fields and repeated earlier work. It made no current provider read. The next
+small change fixes the operator's conflicting response guidance and labels
+historical replies as conversation rather than current provider observations.
 The owner removed Telegram from product and release scope on 2026-09-30: it is
 a test surface, with no further implementation or verification required.
 iMessage is the primary phone channel. Cancellation quote display (8d) was
@@ -43,19 +45,21 @@ and history construction merged the unanswered stopped comparison with the
 fresh merchant instruction. The candidate retains task state and renders prior
 conversation as reference data, with the current instruction in its own block.
 The order adapter now returns cancellation and independently supported shipping
-state; restocking alone leaves shipment unknown. Finish the candidate PR and
-verify the focused read-only follow-up through iMessage; no broad testing or paid
-eval campaign. Short natural wording remains unverified until that reply arrives.
+state; restocking alone leaves shipment unknown. PR #141 is deployed; its real
+follow-up passed scope/delivery but failed wording and freshness. Finish the
+operator response guidance change, then verify the same read-only question
+through iMessage. No new tests, broad local suite or paid eval campaign. Short
+natural wording remains unverified until that reply arrives.
 #1035 is already cancelled/refunded: do not repeat that mutation.
 
 iMessage is the main channel. Telegram is excluded from product and release
 acceptance; do not build or test it. Customer-email receipt confirmation,
 phone approval, phone-started Stop and definite delivery-failure checks remain
 unverified; resume those after the conversation issue, not as prerequisites for
-fixing it. The candidate is implemented in the isolated
-`codex/imessage-conversation-scope` checkout based on deployed `6031e3b4`.
+fixing it. The follow-up is in the isolated `codex/operator-status-language`
+checkout based on deployed `34c98203`.
 
-**Workspace handoff:** production/main is `6031e3b4`. The shared root checkout
+**Workspace handoff:** production/main is `34c98203`. The shared root checkout
 still has HEAD `606da169` and pre-existing uncommitted phone, marketing and
 documentation edits; the deployed composer was implemented in an isolated
 worktree. Preserve those edits and use the deployed baseline when starting the
