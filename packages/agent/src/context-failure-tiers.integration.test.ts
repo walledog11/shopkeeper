@@ -69,6 +69,29 @@ async function supportThread(options: { withIntegration?: boolean } = {}) {
 }
 
 describe("context dependency tiers", () => {
+  it("retains the recorded state of earlier operator tasks in conversation history", async () => {
+    const org = await createTestOrg();
+    orgIds.push(org.id);
+    const customer = await createTestCustomer(org.id, `operator:${randomUUID()}`);
+    const thread = await createTestThread(org.id, customer.id, ChannelType.operator);
+    const task = await db.agentTask.create({ data: {
+      organizationId: org.id, threadId: thread.id,
+      initiatingActorKind: "member", initiatingActorKey: "member:test",
+      objective: "Compare five orders", runtimeVersion: 2, status: "cancelled", cancelledAt: new Date(),
+      checkpointVersion: 1, checkpoint: {},
+      modelCallLimit: 20, activeTimeMsLimit: 120_000, spendNanoUsdLimit: 1_000_000_000n,
+    } });
+    const message = await createTestMessage(thread.id, "Compare five orders");
+    await db.message.update({ where: { id: message.id }, data: { agentTaskId: task.id } });
+    await createTestMessage(thread.id, "Check only order #1035");
+
+    const context = await buildContext(thread.id, org.id, sink);
+    expect(context.recentMessages.find((entry) => entry.contentText === "Compare five orders"))
+      .toMatchObject({ task: { id: task.id, status: "cancelled" } });
+    expect(context.recentMessages.find((entry) => entry.contentText === "Check only order #1035"))
+      .not.toHaveProperty("task");
+  });
+
   it("keeps the turn usable when the optional knowledge-base load fails, and names the gap", async () => {
     const { org, thread } = await supportThread();
 

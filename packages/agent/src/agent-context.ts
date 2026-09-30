@@ -80,6 +80,8 @@ export interface AgentRecentMessage {
   senderType: string;
   contentText: string | null;
   attachments?: AgentMessageAttachment[];
+  /** Runtime-owned state of the task this historical message belongs to. */
+  task?: { id: string; status: import("@prisma/client").AgentTaskStatus };
 }
 
 // Who the agent is talking to, when that is not simply "the merchant's known

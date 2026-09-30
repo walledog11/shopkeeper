@@ -68,6 +68,7 @@ export interface ShopifyOrder {
   cancel_reason?: string | null;
   fulfillment_status?: string | null;
   total_price?: string;
+  fulfillments?: ShopifyFulfillment[] | null;
   current_total_price?: string;
   currency?: string;
   // Shop currency is what the merchant's books are in; presentment currency is

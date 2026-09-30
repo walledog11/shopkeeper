@@ -8,7 +8,7 @@ itself.
 Started 2026-09-23 from commit `c2195343` (`Close conversational agent overhaul
 package 5`).
 
-## Current production posture
+## Initial production posture — 2026-09-23
 
 - Railway project `proud-dream`, production environment, has the `shopkeeper`
   and `Gateway Worker` services online.
@@ -20,6 +20,15 @@ package 5`).
   existing application. Values were not copied into this document.
 - No production routing variable has been changed and no external effect or
   customer delivery has been attempted for Package 6.
+
+These bullets record the starting posture, not today's state. As of
+2026-09-30, #137, #138 and #140 are deployed through `6031e3b4`, with one
+controlled organization on v2 and the default still v1. Composer and dashboard
+Stop/reload passed; the owner confirmed actual iMessage delivery after the
+Photon registration repair. Conversation scope/wording remains unfixed.
+See [the latest session evidence](#2026-09-30-durable-composer-and-phone-verification)
+and the plan's [next session](conversational-agent-overhaul-plan.md#next-session).
+The owner stopped Telegram testing and made iMessage the primary phone channel.
 
 ## Required controlled-release inputs
 
@@ -678,3 +687,178 @@ architecture/product documentation describes the single active runtime.
 | 2026-09-29 | Phone outcomes and durable phone tasks deployed, #137 and #138 (`7eafc511`) | Required CI passed on both PRs. #137 merged as `b4cdc8be` at 04:12:54 UTC, #138 as `7eafc511` at 04:26:56 UTC on 2026-09-30. Railway gateway `c9ee6aba-5348-469d-8742-498957cacaa2` and worker `ca2e09bf-3529-4962-9000-a108a62beb05` report SUCCESS; Vercel production reports READY at the same source. Production dashboard/gateway deep health, worker/queues, internal authentication and Photon route checks passed. No customer-message smoke or Shopify write was performed by the health checks. Production runtime defaults remain v1 with the same controlled v2 organization. Live phone delivery, approval, Stop/reload and definite reply-failure recovery remain open. The required production audit also needed patched nodemailer and brace-expansion overrides before merge. |
 | 2026-09-29 | Durable composer implementation (10a), `codex/durable-ticket-composer` | Composer/regenerate now accepts a stable member request, runs on the existing task worker, preserves pinned runtime and accumulated budgets, and commits the draft projection with its durable proposal. Reload recovers request history; approval binds the displayed plan id. An unexecuted waiting task is advanced under the approval lock; old proposals are superseded, while claimed/approved/uncertain/ambiguous work is retained and refused with 409. Package build, dashboard/gateway typechecks, changed-file lint and targeted existing checks passed (155 agent lifecycle/approval/execution, 20 gateway, 13 dashboard route, 28 client/validation checks). Two regression cases were added to the existing ledger file for regeneration/idempotency and the approval race, which is unsafe to reproduce with simultaneous real money actions. No new test files, paid eval campaign or provider write. PR/deployment and live pending-task/instruction/regenerate/reload/approval verification remain open. |
 | 2026-09-29 | Dashboard Stop/reload diagnosis on `7eafc511` | Two read-only dev-store dashboard instructions completed with persisted v2 tasks and charged budgets. On a reload immediately after 202 acceptance, the shared agent panel lost the active task and Stop control because `AgentPanelContext` explicitly passed `restoreHistory: false`. PR #140 enables the existing durable recovery in that caller. Observed task `ee354fdf` completed after about 16 seconds, using 2 model calls and 23,721,701 nano-USD; all five recorded actions were reads. This run does not count as a successful Stop check. The answer also recalled an earlier cancellation for #1035 despite its fresh read showing paid/unfulfilled; that conversational claim remains an item 8h finding, not a verified provider outcome. No Shopify mutation or customer reply occurred in these dashboard instructions. |
+
+## 2026-09-30 durable composer and phone verification
+
+PRs #137 and #138 merged as `b4cdc8be` and `7eafc511`. PR #140 merged as
+`6031e3b4`, with all required CI passed on head `307f377c`. Gateway deployment
+`5eeacd6f`, worker `be00b238`, and the Vercel production deployment reported
+ready at the same source commit. Production deep health, queues, worker,
+internal authentication and Photon route checks passed. Runtime defaults and
+controlled-v2 scope were unchanged; no paid eval campaign ran.
+
+| Actual app check | Recorded result on `6031e3b4` |
+| --- | --- |
+| Composer instruction | Existing reopened #1035 customer email; authenticated `/api/agent/plan` accepted 202 request `db8c009b`, task `7d9d38cc`, pinned runtime 2. Reload restored the running request and then exact-draft proposal `b6c5bcd8`. |
+| Rewrite and pending-task rule | Actual Rewrite accepted request `85fc39c5`; the same task advanced to revision 1, old proposal became superseded, and replacement `fd28b2dc` became ready. The old request became cancelled; submitting its old approval returned 409. Reload restored the replacement. |
+| Actual approval | Approve & send / Confirm & send committed execution `d5500ee6`. One `cancel_order` operation `6e52a292` and one `send_reply` operation `9faf81ce` settled successfully; task completed. |
+| Independent provider check | Shopify #1035, test order ending `60330`, changed from paid/unfulfilled to cancelled/refunded, $34.90 USD, at 07:20:09 UTC. Its typed receipt agrees with the independent read. |
+| Exact draft and delivery | Approved `{{refund_amount}}` was filled with `$34.90`. Response `5c27019f` is attributed to the task; receipt has `deliveryState=sent`, provider message id `1a0f12f6…`. Recipient receipt confirmation is pending. |
+| Dashboard summary | Actual approval returned “Cancelled order (refund amount $34.90). Sent reply to Walle.” |
+| Budget continuity | The same task retained 4 model calls, 19,930 ms active time, and 75,436,601 nano-USD across initial planning and regeneration. |
+| Dashboard Stop/reload | Request `79ad7d35`, task `cca2c8aa`: reload after 202 restored Stop; the existing cancellation route recorded Stop at 07:06:54 UTC, reload retained honest work-underway status, then the task settled cancelled. Five recorded actions were reads, no Shopify mutation or customer message. Budget: 1 model call, 6,896 ms active time, 19,917,901 nano-USD. |
+
+Sent exact draft: “Hi Walle, done — order #1035 has been cancelled since it
+hadn't shipped yet, and your $34.90 refund will process automatically as part
+of the cancellation.” This run does not close the phone approval/delivery
+checks or recipient receipt gate.
+
+A composer action instruction containing “Draft” took the existing private-ask
+route and produced no proposal. The actual durable check used an explicit
+cancel/refund instruction without that trigger. Together with the earlier
+read-only dashboard answer recalling a cancellation despite fresh paid state,
+this is a recorded item 8h conversation-routing finding; it was not repaired
+with a prompt or matcher exception in this change.
+
+### Phone ingress diagnosis
+
+The owner sent both requested read-only tests and received neither response.
+No corresponding production OperatorEvent was recorded. Actual deployed
+Telegram configuration pointed at an old `trycloudflare.com` tunnel; setting
+its webhook to the production gateway succeeded, with pending updates retained.
+The controlled organization has zero Telegram bindings and one iMessage
+binding; its normal Telegram account-connect link was supplied. The owner later
+explicitly stopped Telegram testing; linking and a round-trip are excluded
+from the current work and must not be requested again unless reopened.
+
+A connection-check iMessage sent through the deployed Spectrum credentials and
+existing linked DM was received by the owner. Photon retained the real inbound
+“ping” at 07:34:59 UTC, provider id `spc-msg-645787aa…`, sequence `1012147677`.
+The authenticated provider catch-up API returned it, but production still had
+no matching OperatorEvent or Photon webhook request. The production webhook
+registration exists, is active, and points at the correct gateway; the break
+is in forwarding that provider event to the production receiver. Outbound
+receipt alone does not close inbound verification.
+
+Automatic approval review rejected registering a fresh production receiver,
+citing persistent configuration changes and possible duplicate inbound actions.
+The owner explicitly approved the concrete replacement plan: register the
+new receiver, deploy its signing secret on gateway and worker, verify actual
+inbound/reply delivery, then retire the old production registration. The
+rejected attempt made no change. After explicit approval, replacement
+receiver `a74b975d` was registered, its legacy signing secret was set on gateway
+and worker, and both services were redeployed on unchanged source `6031e3b4`.
+Gateway deployment `6402bedf` and worker `5f06cb06` both report SUCCESS at
+`6031e3b4`; the existing production readiness checks passed after redeployment.
+An actual new instruction reached production automatically and its reply was
+received by the owner, as recorded below. After that confirmation, old production
+receiver `7f8567b2` was deleted successfully; replacement `a74b975d` is the active
+production receiver. Its URL is
+`https://clerk-production-e37f.up.railway.app/webhooks/photon?receiver=production-20260930`.
+The existing Photon project, phone binding and project secret were retained.
+
+### iMessage delivery passed; response quality failed
+
+The owner sent: "Check order 1035 and tell me it's payment and shipment status"
+(the received message used “it’s”). Unlike the retained ping recovery, this
+instruction reached production through Photon's new receiver automatically.
+
+| Record | Observed result |
+| --- | --- |
+| Actual inbound | Event `e40abca0`, provider id `imessage:spc-msg-f9478c86…`, accepted at 08:00:12 UTC. |
+| Durable linkage | One request `1360b8c6`, one task `3a98cbb8`, persisted runtime 2; completed. |
+| Usage and actions | Two model calls, 83,801,700 nano-USD charged; five successful `get_order_by_name` reads. No Shopify write or customer message. |
+| Stored reply | Response `aafa9a1d`, attributed to the task; event reply delivered at 08:00:36 UTC. |
+| Actual receipt | Owner answered “Yes, it arrived” and pasted the received message. This closes the basic iMessage inbound/task/reply delivery check, not conversational acceptance. |
+| Retained ping recovery | Original provider id `spc-msg-645787aa…` was read through authenticated provider access and forwarded once with the original id. Event `c2f6f4f9`, request `7954edc0`, task `470e613c`, reply `e2f85109`; completed with one model call, 9,448,400 nano-USD, no actions, reply delivered at 08:02:01 UTC. Record this as manual recovery, not automatic ingress. |
+
+The reply correctly said #1035 was refunded and unshipped, but continued with
+the earlier five-order comparison that the dashboard Stop run had cancelled.
+It listed #1030–#1033, exposed `fulfillment status is null` and zero fulfillable
+quantities, repeated #1035's status and added another summary. It also asserted
+that an order's `restocked` status means it shipped and came back; shipment and
+return history were not independently established in this check.
+
+The owner called the reply “so AI generated” and “blabbering,” stopped the
+session and explicitly said iMessage is the main channel and Telegram testing
+is irrelevant. **Next session: fix conversation scope and natural, concise
+wording (8h).** The latest one-order question must not revive stopped work or
+expose provider internals. A suitable answer is: "Order #1035 is cancelled and
+fully refunded. It wasn't shipped."
+
+The exact cause in instruction/history handling and response composition has
+not been established. The earlier task really settled cancelled; this output
+does not establish that the cancellation ledger failed. No response-quality
+code fix or further live test was made after the stop request.
+
+Still open: conversation scope/wording and grounded explanations; customer-email
+receipt confirmation; phone-started Stop/reload; normal iMessage approval;
+definite delivery-failure recovery; honest display for an already-dispatched
+write. Telegram testing is excluded from the current work, not a release-session
+prerequisite. #1035 is already cancelled/refunded; do not repeat its mutation.
+
+## 2026-09-30 item 8h candidate: conversation scope and status evidence
+
+Candidate branch: `codex/imessage-conversation-scope`, isolated checkout based
+on deployed `6031e3b4`. The shared root's pre-existing edits were preserved.
+
+The production history before event `e40abca0` contains message `096d21f5`,
+the unanswered five-order comparison attributed to task `cca2c8aa`. Its recorded
+status is `cancelled`, with cancellation at 07:06:54 UTC. The fresh request's
+stored normalized instruction asks only for #1035. `buildContext` omitted the
+historical task state, and `buildMessageHistory` merged adjacent merchant
+messages into one instruction string. This establishes a context-construction
+defect; the earlier cancellation ledger did record Stop correctly.
+
+The candidate carries task identity/state from scoped database reads into
+operator history, renders earlier conversation as reference data, and separates
+the current instruction from that history. It retains conversation needed for
+references and does not edit the model's response or match special phrases.
+
+The order read also omitted `cancelled_at` and fulfillment records. The adapter
+now requests them, and the serializer exposes cancellation separately from
+supported shipment state. A restock flag alone yields unknown shipment history.
+[Shopify's Order documentation](https://shopify.dev/docs/api/admin-rest/2026-10/resources/order)
+describes restocking/cancellation, not proof that an order shipped and returned.
+
+| Candidate verification | Result |
+| --- | --- |
+| Read-only dev-store #1035 | `cancelled_at=2026-09-30T03:20:09-04:00`, financial status `refunded`, shipping `not_shipped_yet`. No repeated cancellation/refund. |
+| Read-only dev-store #1032 | Cancellation timestamp present, financial status `paid`, shipping `unknown`; no shipment or return history inferred from restocking. |
+| Real operator context | The stopped comparison retains its linked task's `cancelled` state. The current-instruction block contains only the recorded one-order request. |
+| Existing focused checks | Prompt/history boundary, operator-loop wiring, order evidence and database-backed context checks passed. |
+| Compilation/static checks | Agent package typecheck/build, gateway and dashboard typechecks, changed-file lint and documentation structure checks passed. |
+| Actual iMessage follow-up | Not yet verified. Candidate has not been deployed; concise natural wording and full conversational acceptance remain open. |
+
+No Shopify write, customer message, phone send or paid model campaign was used
+for these inspections. Recipient email receipt, phone approval/Stop/failure and
+the rest of the retained-effects work remain open. Telegram testing remains
+excluded.
+
+### Owner scope decision and candidate review, 2026-09-30
+
+The owner removed Telegram from product and release scope, describing it as a
+test surface. No further Telegram construction, binding or verification is
+required for this overhaul. Existing transport code is not removed by this
+decision.
+
+The existing candidate is PR #141, head `f344252d`. Required CI, free
+deterministic preflight and Vercel preview checks passed. The implementation
+was reviewed against the recorded stopped-task/current-instruction defect;
+live iMessage acceptance remains open until the merged fix is deployed and a
+fresh read-only message is received.
+
+### Current CI blocker, 2026-09-30
+
+The scope update on `d0cabdaa` passed documentation checks, unit checks and free
+deterministic preflight, but CI run `36765813145` failed its production dependency
+audit on newly indexed advisories. Static verification consequently skipped the
+build, integration and E2E stages. This is a dependency blocker, not evidence of
+an iMessage regression.
+
+The targeted patch updates Next.js from `16.3.4` to `16.3.8`, gRPC from `1.14.4`
+to `1.14.5`, and Axios from `1.18.1` to `1.20.0`. Only those dependency families
+and Next's required platform binaries changed in the lockfile. The same
+production high/critical audit passes against the updated lockfile. The existing
+PR checks must pass on this final head before merge and deployment; no paid
+comparison or repository-wide test cleanup is added.

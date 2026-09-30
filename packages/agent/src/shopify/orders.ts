@@ -5,12 +5,12 @@ import type {
 } from "../tools/index.js";
 import { toolError, toolNotFound, toolOk, type ToolResult } from "../tools/result.js";
 import { formatShopifyToolError, shopifyRestJson, type ShopifyContext } from "./client.js";
-import { serializeOrder } from "./serializers.js";
-import type { ShopifyFulfillment, ShopifyOrder } from "./types.js";
+import { describeShippingStatus, serializeOrder } from "./serializers.js";
+import type { ShopifyOrder } from "./types.js";
 import { optionalString, requireNonEmptyString, requireNumericId } from "./validation.js";
 
 function orderFields(): string {
-  return "id,name,created_at,financial_status,fulfillment_status,total_price,current_total_price,currency,presentment_currency,total_price_set,current_total_price_set,line_items,shipping_address";
+  return "id,name,created_at,cancelled_at,financial_status,fulfillment_status,fulfillments,total_price,current_total_price,currency,presentment_currency,total_price_set,current_total_price_set,line_items,shipping_address";
 }
 
 export async function getShopifyOrders(
@@ -109,7 +109,7 @@ export async function getOrderFulfillmentStatus(
     return toolOk(JSON.stringify({
       order: order.name ?? rawName ?? null,
       placed_on: order.created_at ?? null,
-      shipping_status: describeShippingStatus(order),
+      shipping_status: order.cancelled_at ? "cancelled" : describeShippingStatus(order),
       shipped_on: order.fulfillments?.find((f) => f.created_at)?.created_at ?? null,
     }));
   } catch (err) {
@@ -119,21 +119,6 @@ export async function getOrderFulfillmentStatus(
 
 interface OrderStatusExtras {
   email?: string | null;
-  fulfillments?: ShopifyFulfillment[] | null;
-}
-
-function describeShippingStatus(order: ShopifyOrder & OrderStatusExtras): string {
-  if (order.cancelled_at) return "cancelled";
-  const delivered = order.fulfillments?.some((f) => f.shipment_status === "delivered");
-  if (delivered) return "delivered";
-  switch (order.fulfillment_status) {
-    case "fulfilled":
-      return "shipped";
-    case "partial":
-      return "partially_shipped";
-    default:
-      return "not_shipped_yet";
-  }
 }
 
 export async function listRecentUnfulfilledOrderIds(

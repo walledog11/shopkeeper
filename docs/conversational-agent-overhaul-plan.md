@@ -1,14 +1,26 @@
 # Conversational agent overhaul plan
 
-Status, 2026-09-29: implementation is substantial; the overhaul is not shipped.
-The core contracts exist. Typed phone outcomes (#137), durable phone instructions
-and dashboard Stop (#138) are merged and deployed on `7eafc511`. Required CI and
-production health checks passed. Live phone approval, delivery and Stop verification
-remain open. Ticket-composer planning (10a) is implemented on
-`codex/durable-ticket-composer`; PR and live instruction/regenerate/reload/approval
-verification are in progress. Cancellation refund amount display (8d) was manually
-verified on `6616da7f` (#139) by the release owner on 2026-09-29.
-One of the fourteen remaining Shopify effects has a clean recorded live run.
+Status, 2026-09-30: typed phone outcomes (#137), durable phone instructions and
+dashboard Stop (#138), and durable ticket-composer planning (#140) are merged
+and deployed. Gateway, worker and dashboard serve `6031e3b4`; required CI and
+production health checks passed. The composer instruction → regenerate → reload
+→ approval flow passed on the existing reopened #1035 ticket: one cancellation,
+a $34.90 refund confirmed by Shopify, and one sent exact-draft email. Recipient
+receipt confirmation remains pending. Dashboard Stop after reload passed.
+iMessage delivery is restored and manually verified: a fresh #1035 instruction
+reached production automatically, ran on one durable v2 task, and its reply
+arrived on the owner's phone. The stalled Photon webhook was replaced and the
+old production registration retired after that confirmation. The reply's scope
+and wording failed acceptance: it revived the earlier stopped five-order
+comparison and exposed provider fields. The 8h candidate now preserves task
+state in operator history and separates prior conversation from the current
+instruction. Order reads also expose cancellation and supported shipping state.
+The candidate is not yet deployed or verified through iMessage.
+The owner removed Telegram from product and release scope on 2026-09-30: it is
+a test surface, with no further implementation or verification required.
+iMessage is the primary phone channel. Cancellation quote display (8d) was
+manually verified on `6616da7f` (#139) on 2026-09-29. One of the fourteen retained
+Shopify effects has a clean recorded live run; the other thirteen remain.
 Runtime v1 remains the production default, with one controlled organization on v2.
 
 Created 2026-09-11. Shipping priorities revised 2026-09-29 at the release
@@ -16,13 +28,51 @@ owner's direction: this app is in development; finish working user flows,
 verify them manually, and ship. New tests and repository-wide test cleanup
 are exceptions, not work packages.
 
+## Next session
+
+Start with **8h: iMessage conversation scope and response quality**, using the
+delivered #1035 reply recorded in the release evidence. A one-order status
+question must answer that order briefly in ordinary language. It must not
+continue the stopped comparison, list unrelated orders, expose fulfillment
+fields/quantities, or infer shipment and return history from a restock flag.
+For this request, an appropriate answer is: "Order #1035 is cancelled and fully
+refunded. It wasn't shipped."
+
+The cause is established: context loading discarded each message's task state,
+and history construction merged the unanswered stopped comparison with the
+fresh merchant instruction. The candidate retains task state and renders prior
+conversation as reference data, with the current instruction in its own block.
+The order adapter now returns cancellation and independently supported shipping
+state; restocking alone leaves shipment unknown. Finish the candidate PR and
+verify the focused read-only follow-up through iMessage; no broad testing or paid
+eval campaign. Short natural wording remains unverified until that reply arrives.
+#1035 is already cancelled/refunded: do not repeat that mutation.
+
+iMessage is the main channel. Telegram is excluded from product and release
+acceptance; do not build or test it. Customer-email receipt confirmation,
+phone approval, phone-started Stop and definite delivery-failure checks remain
+unverified; resume those after the conversation issue, not as prerequisites for
+fixing it. The candidate is implemented in the isolated
+`codex/imessage-conversation-scope` checkout based on deployed `6031e3b4`.
+
+**Workspace handoff:** production/main is `6031e3b4`. The shared root checkout
+still has HEAD `606da169` and pre-existing uncommitted phone, marketing and
+documentation edits; the deployed composer was implemented in an isolated
+worktree. Preserve those edits and use the deployed baseline when starting the
+next code change. Do not reset the root or mistake its older files for current
+production behavior.
+
 ## Shipping objective
 
-A merchant can give Shopkeeper a realistic instruction from the dashboard,
-Telegram or iMessage, review or revise what it proposes, and receive an honest
+A merchant can give Shopkeeper a realistic instruction from the dashboard or
+iMessage, review or revise what it proposes, and receive an honest
 account of what happened. Customer requests use the same durable execution
 contracts. The approved action happens once, Shopify's state agrees with its
 receipt, and the intended message reaches its destination.
+
+Telegram is a test-only surface, excluded from the shipping objective at the
+release owner's direction (2026-09-30). Existing transport code can remain;
+building, linking and verifying Telegram are not completion requirements.
 
 Finish the existing scope using the existing runtime. Preserve the
 [settled decisions](#settled-decisions) and contracts below. A narrower release
@@ -85,12 +135,12 @@ These are the last recorded results, not a fresh production inspection.
 
 | Area | State |
 | --- | --- |
-| Core implementation | Receipts, task storage, claims, budgets, proposal binding, discovery and customer-task routing exist. Phone integration is deployed in PR #138. Composer integration is implemented; its PR and live verification remain open. |
-| Manual provider runs (Gate C) | Cancellation is clean on #1036 after the first attempt falsely promised a refund. Customer note and address change previously reached Shopify, but their complete flows were not clean. The other thirteen effects in item 8 still need clean runs. |
+| Core implementation | Receipts, task storage, claims, budgets, proposal binding, discovery and customer-task routing exist. Phone and composer integration are deployed through #140. Composer and dashboard Stop/reload passed. Actual iMessage inbound/task/reply delivery is verified; customer-email receipt confirmation remains pending. |
+| Manual provider runs (Gate C) | Cancellation is clean on #1036; the #1035 composer rerun also has a committed receipt and matching Shopify state, with recipient receipt confirmation pending. Customer note and address change previously reached Shopify, but their complete flows were not clean. The other thirteen effects in item 8 still need clean runs. |
 | Manually verified approval display | Cancellation quote display (8d) confirmed by the release owner on `6616da7f`, 2026-09-29. |
-| Built changes awaiting manual verification | Typed phone approval outcomes (8g, PR #137), phone draft display (8c), confirmation from receipts (8e), durable phone instructions and dashboard Stop (10, 10c, PR #138). |
-| Known implementation gaps | Email provider id (8f). Durable composer planning (10a) is implemented, awaiting PR and live verification. Refund currency limits (10b) have an existing implementation in PR #136, awaiting review and live verification. |
-| Conversational acceptance | Still incomplete; demonstrate it during the same app sessions as the provider runs (8h). |
+| Built changes awaiting manual verification | Typed iMessage approval outcomes (8g), phone draft display (8c), phone receipt confirmation (8e), phone-started Stop and in-flight outcome display (10c), definite reply-failure recovery. Durable iMessage instruction/task/reply (10), dashboard Stop/reload and composer cancel/refund/recipient summary passed on #140. Telegram testing is out of current scope. |
+| Known implementation gaps | Email provider id (8f). Composer planning (10a) is deployed and exercised; recipient receipt confirmation is pending. Refund currency limits (10b) have an existing implementation in PR #136, awaiting review and live verification. |
+| Conversational acceptance | Next priority (8h): the delivered one-order iMessage answer revived stopped work, exposed provider fields and rambled. The candidate fixes history/current-instruction boundaries and supplies cancellation/shipping evidence. Deployment and live scope, wording and grounding verification remain open. |
 | Rollout and runtime retirement | Observation/rollback (9), broader routing (11), persisted-state inventory and legacy deletion (12), final docs (13) remain. |
 | Optional paid comparison (Gate B) | Last comparison on `cf41c169` failed; it was incorrectly called passed before correction. #125 fixed the C08 runtime defect, so that input is no longer held out. Comparison tooling (Gate A) exists; neither a rerun nor new fixtures are required unless requested. |
 | Last recorded routing | `AGENT_RUNTIME_VERSION=1`; the controlled organization is selected through `AGENT_RUNTIME_V2_ORG_IDS`. |
@@ -104,18 +154,21 @@ runs also happen as soon as the affected flow is ready.
 
 | Order | Deliverable | Items | Completion |
 | --- | --- | --- | --- |
-| 1 | Finish phone approval outcomes | 8g | PR #137 merged and deployed; required CI and production health checks passed. Live approval and reply-failure verification remains with step 2. |
-| 2 | Verify the remaining built approval fixes | 8c, 8e, start/resume 8 | Cancellation refund quote display (8d) is verified. Verify the exact draft and complete confirmation; then run the still-owed customer-info ticket. |
-| 3 | Finish the merchant entry points | 10, 10a, 10c | Phone and dashboard Stop are deployed in PR #138; manual verification is open. Composer is implemented on `codex/durable-ticket-composer`; PR and manual verification are in progress. |
-| 4 | Finish provider and delivery correctness | 8f, 10b | Email retains its provider id; refund limits compare the correct currency before broader routing. |
-| 5 | Finish retained behavior in the app | remaining 8, 8h | Remaining Shopify effects and conversational behavior work in realistic app sessions. Reuse sessions and setup from earlier steps. |
-| 6 | Ship v2 and retire the old active path | 9, 11–13 | Release-candidate checks, controlled observation, routing rollback, rollout and safe legacy deletion are complete. |
+| 1 | Fix iMessage response scope and wording | 8h | Candidate implemented: historical task state and the latest request stay distinct; order reads carry cancellation/shipping evidence. Finish the PR, deploy and verify the focused #1035 read-only reply. Natural wording and full conversational acceptance remain open. |
+| 2 | Finish phone approval outcomes | 8g | PR #137 merged and deployed; required CI and production health checks passed. Live iMessage approval and reply-failure verification remains open. |
+| 3 | Verify the remaining built approval fixes | 8c, 8e, start/resume 8 | Cancellation refund quote display (8d) and dashboard cancel/refund/recipient confirmation are verified. Verify the iMessage draft and full confirmation; then run the still-owed customer-info ticket. |
+| 4 | Finish the merchant entry points | 10, 10a, 10c | Composer instruction/regenerate/reload/approval, dashboard Stop/reload and durable iMessage round-trip passed. Phone-started Stop, definite reply-failure recovery and customer-email receipt confirmation remain open. Telegram testing is excluded. |
+| 5 | Finish provider and delivery correctness | 8f, 10b | Preserve the other email sink's provider id and finish refund currency correctness before broader routing. |
+| 6 | Finish retained behavior in the app | remaining 8, 8h | Verify remaining Shopify effects and conversational behavior in focused realistic app sessions. Reuse sessions and setup from earlier steps. |
+| 7 | Ship v2 and retire the old active path | 9, 11–13 | Release-candidate checks, controlled observation, routing rollback, rollout and safe legacy deletion remain open. |
 
 ### Approval and communication
 
 - **8g — Typed approval outcome.** Implemented in
   [PR #137](https://github.com/walledog11/shopkeeper/pull/137), with required CI
-  passed on 2026-09-29; merged and deployed on `7eafc511`, with production health checks passed. Live phone verification remains open. `executeOperatorApprovedCachedPlan`
+  passed on 2026-09-29; merged and deployed on `7eafc511`, with production
+  health checks passed. Live iMessage approval verification remains open.
+  `executeOperatorApprovedCachedPlan`
   returns the shared executor's `execution.status` beside its summary.
   `runApprovedPendingPlan` clears parked contexts only for `committed`;
   keyword approval branches on that outcome, and `approve_pending_plan`
@@ -146,8 +199,9 @@ runs also happen as soon as the affected flow is ready.
   Existing pre-write refusal checks remain sufficient.
 - **8e — Complete approval confirmation.** Built in #135:
   `summarizeApprovedDashboardActions` composes committed effects from
-  registered labels and receipts. Verify that a cancel-and-reply approval
-  names the cancellation, refunded amount and recipient. If a committed
+  registered labels and receipts. The actual #1035 dashboard approval on
+  `6031e3b4` named cancellation, $34.90 refund and recipient; iMessage approval
+  confirmation remains unverified. If a committed
   write's message cannot be sent, the merchant must be told the customer has
   not been told; retrying delivery must not repeat the write.
 - **8f — Provider id from the email sink.** The dashboard's `send_email`
@@ -159,7 +213,9 @@ runs also happen as soon as the affected flow is ready.
 
 - **10 — Phone instructions.** Implemented in
   [PR #138](https://github.com/walledog11/shopkeeper/pull/138) on 2026-09-29;
-  merged and deployed on `7eafc511`; live verification remains open. `executeFreeFormInstruction` accepts a member
+  deployed through `6031e3b4`. Actual iMessage inbound, durable task and received
+  reply were verified on 2026-09-30 after restoring Photon delivery.
+  `executeFreeFormInstruction` accepts a member
   request using `operator-event:<event id>` as its key and atomically links the
   existing event, request and task. The existing task worker revalidates the
   phone binding, charges the task budget, observes stop, and persists the
@@ -168,11 +224,20 @@ runs also happen as soon as the affected flow is ready.
   or question stays with that ticket's task. Missing provider ids use an event
   for that accepted occurrence; there is no provider identity to deduplicate.
   Agent/gateway builds, both app typechecks, changed-file lint and existing
-  relevant checks passed. **Still owed:** Telegram and iMessage round-trips,
-  one request/task and reply, budget charged, dashboard Stop plus reload, and
-  definite reply-failure recovery without repeating the action.
-- **10a — Ticket composer and regenerate.** Implemented on
-  `codex/durable-ticket-composer`. `POST /api/agent/plan` accepts a stable member
+  relevant checks passed. Real event `e40abca0` linked one request `1360b8c6`,
+  task `3a98cbb8` and stored reply `aafa9a1d`; runtime 2, two model calls,
+  persistent spend charged, five reads and no writes. The owner confirmed the
+  reply arrived. Photon replacement receiver `a74b975d` is active; old production
+  receiver `7f8567b2` was retired after confirmation. A retained ping was
+  separately recovered using its original provider id; that manual recovery
+  is not evidence of automatic ingress. **Still owed:** phone-started Stop/reload
+  and definite reply-failure recovery without repeating the action. The received
+  answer failed conversation scope/wording acceptance (8h). Telegram's stale
+  destination was corrected earlier, but the owner explicitly stopped Telegram
+  testing; linking and round-trip are excluded from the current work.
+- **10a — Ticket composer and regenerate.** Merged in
+  [PR #140](https://github.com/walledog11/shopkeeper/pull/140), deployed on
+  `6031e3b4`. `POST /api/agent/plan` accepts a stable member
   request and returns 202; the existing gateway task worker plans with the pinned
   runtime and persistent budget. The draft cache and durable proposal commit
   together. Reload recovers server request history and an interrupted submission
@@ -183,19 +248,27 @@ runs also happen as soon as the affected flow is ready.
   proposal, retaining runtime and accumulated usage. Claimed, approved, uncertain
   or ambiguous work returns 409 and retains its authority. Old requests cannot
   expose or approve the replacement draft. Targeted checks, both app typechecks
-  and the package build pass. **Still owed:** the live pending-task reproduction,
-  instruction, regenerate, reload and approval in the composer; PR and deployment.
+  and the package build pass; all required PR CI passed. The existing reopened
+  #1035 ticket produced a durable v2 proposal; Rewrite advanced the same task to
+  revision 1 and superseded the first proposal. Reload restored the new draft;
+  approving the old plan returned 409. Actual approval committed one cancellation
+  and one reply. Shopify independently confirms cancelled/refunded $34.90 USD;
+  the email provider returned a message id and the task completed. **Still owed:**
+  recipient confirmation that the exact-draft email arrived.
 - **10c — Dashboard stop control.** Implemented in PR #138 on 2026-09-29;
-  merged and deployed on `7eafc511`; manual verification remains open. The chat tracks the server's request and
+  deployed through `6031e3b4`; dashboard Stop/reload passed, phone-started Stop
+  remains unverified. The chat tracks the server's request and
   revision and calls the existing cancellation route. It shows a recorded stop,
   work still underway, and outcomes requiring review; it retains errors when
   recording the stop fails. A live reload exercise found that the shared agent panel passed
-  `restoreHistory: false`, bypassing that recovery. The composer branch fixes
-  the caller to restore the durable transcript and controls, including
-  phone-started work; deployment and another live Stop exercise remain owed. Polling no longer treats an earlier
-  attempt's response as completion of a currently running task.
-  **Still owed:** Stop on a running dashboard request and a phone-started task,
-  reload, and honest display when an action is already underway.
+  `restoreHistory: false`, bypassing that recovery. #140 fixes the caller.
+  On `6031e3b4`, reload restored Stop for a running dashboard request; recording
+  Stop and reloading preserved the pending-stop state, and the task settled
+  cancelled. All five actions were reads; its in-flight read was allowed to
+  finish. Polling no longer treats an earlier attempt's response as completion
+  of a currently running task.
+  **Still owed:** Stop/reload on a phone-started task and honest display when a
+  write is already underway. Do not manufacture or replay an uncertain write.
 
 ### Refund correctness
 
@@ -234,8 +307,8 @@ fulfillment prepares a refundable/returnable order, a return prepares its
 label, and order creation prepares editing. Record each effect's result.
 #1036 has been cancelled and needs replacing for fulfillment/full refund.
 
-Use the dashboard for merchant instructions until item 10 is deployed;
-then verify real phone entry as well. Confirm each task's runtime before
+Use the dashboard and iMessage for merchant instructions; item 10 is deployed
+and iMessage delivery is verified. Confirm each task's runtime before
 execution. A successful customer flow has the intended provider state, a
 matching stored receipt and execution outcome, and actual receipt of the
 approved customer draft with only its bound placeholders filled. A merchant
@@ -256,6 +329,34 @@ seen in one conversation. Record the rows actually observed; no separate paid
 eval or fixture campaign. A conversational row stays open until seen working.
 A runtime race that cannot be safely produced live may rely on existing
 failure coverage and inspection, with that evidence described accurately.
+
+**Next-session defect, 2026-09-30:** after a dashboard five-order comparison
+was stopped, the owner's iMessage asked only for #1035 payment/shipment status.
+The delivered answer added all five orders, technical fulfillment fields and
+repeated summaries. It also claimed that `restocked` proves shipment and return
+history, which this run did not verify. The phone instruction itself completed
+normally; task cancellation had already been verified separately. Inspect
+how stopped instructions/history affect the current turn and how facts are
+worded; do not assume a cancellation-ledger failure without establishing it.
+The owner rejected the response as verbose and artificial. Fix scoped,
+concise, natural answers first; the exact reproduction is in the release evidence.
+
+**Candidate implementation, 2026-09-30:** the stopped comparison's message
+remained unanswered on the shared operator thread. `buildContext` dropped its
+task identity/state, and `buildMessageHistory` merged it with the new instruction.
+Operator context now reads the linked tasks within the same organization/thread;
+operator history retains their state as reference data and gives the current
+instruction a separate block. Earlier conversation remains available for
+references without presenting it as current work. `getOrderByName` and
+`getShopifyOrders` now read cancellation and fulfillment records;
+`serializeOrder` exposes cancellation and supported shipping state, using
+`unknown` when restocking alone cannot establish shipment. The shared shipping
+description also serves the existing limited shipping read. Relevant existing
+checks, package build, both app typechecks and lint passed. A read-only dev-store
+inspection confirms the new fields on #1035 and #1032, and real context loading
+retains the cancelled comparison's state. No Shopify mutation, message delivery
+or paid model evaluation occurred. Deployment and the actual concise iMessage
+follow-up remain owed; this does not close 8h.
 
 ### Release and runtime retirement
 
@@ -323,8 +424,11 @@ this work unless a current defect needs one.
 Cleanup is worth doing only when a specific test or check blocks the current
 change, falsely rejects working behavior, or measurably slows the required
 verification. Make the smallest correction, retain checks that catch actual
-failures, and continue the shipping queue. Item 8g is in PR #137;
-manual verification of 8c, 8e, 8g, 10 and 10c remains open. The durable composer (10a) is implemented; its PR, deployment and live verification are in progress.
+failures, and continue the shipping queue. #137, #138 and #140 are deployed.
+Composer, dashboard Stop/reload and durable iMessage delivery passed; customer
+email receipt and the remaining iMessage approval/Stop/failure checks stay open.
+Fix the iMessage conversation scope and wording defect (8h) next. Telegram
+implementation and testing are excluded from product and release scope.
 
 ## Open decision
 
@@ -337,13 +441,13 @@ choice; do not reopen settled product decisions as a testing prerequisite.
 | --- | --- |
 | 0 — Baseline | Capability/identity inventory, persisted-state inventory, budgets and evaluation manifest. |
 | 1 — Receipts | Versioned per-tool results, durable action identity and dispatch lifecycle, typed Shopify/internal/communication outcomes, explicit compatibility readers. |
-| 2 — Dashboard requests | Request/task/proposal storage, 202 submission/status recovery, worker claims, model budgets, stop route and shared proposal authorization. Phone and UI stop are implemented; composer and manual verification remain above. |
+| 2 — Dashboard requests | Request/task/proposal storage, 202 submission/status recovery, worker claims, budgets, Stop and shared proposal authorization. Durable composer is deployed and exercised; dashboard Stop/reload and iMessage delivery passed. Remaining manual checks are above. |
 | 3 — Adaptive slice | Write proposal suspension and receipt-based execution; partial-refund spend reservation moved to provider pricing. Customer composition later changed by decision A. |
 | 4 — Discovery | Registry-derived bounded discovery, restricted starter sets and context load tiers. |
 | 5 — Customer tasks | Durable inbound customer requests, proposal/runtime pinning, wait continuation, revisions, task settlement and attributed delivery. Broad real-app verification remains open. |
 | 6 — Release fixes | Canonical approval hash, exact draft/receipt placeholders, committed-effect vs delivery outcome, close-thread cancellation, withheld-message follow-up, line-item display and C08 routing correction. |
 | Cancellation (#132) | Clean dev-store cancellation/refund on #1036, matching receipt and approved customer delivery with provider id. |
-| Approval presentation | 8d is completed and manually verified on `6616da7f`; 8c and 8e are built, with manual verification remaining above. |
+| Approval presentation | 8d is manually verified on `6616da7f`; dashboard receipt summary (8e) passed on `6031e3b4`. iMessage draft and approval confirmation checks remain open. |
 | Crash-sweep isolation (#134) | Existing recovery tests no longer race across organizations. No further cleanup is scheduled. |
 
 These entries describe implementation, not universal live proof. Detailed
