@@ -46,12 +46,14 @@ describe("agent api validation", () => {
       threadId: "thread_123",
       instruction: "  Handle this  ",
       approvedToolCalls: [{ id: "tool_1", name: "lookup_order", input: { orderId: "123" } }],
+      planId: "reviewed-plan",
     });
 
     expect(parsed).toEqual({
       threadId: "thread_123",
       instruction: "Handle this",
       approvedToolCalls: [{ id: "tool_1", name: "lookup_order", input: { orderId: "123" } }],
+      planId: "reviewed-plan",
     });
   });
 

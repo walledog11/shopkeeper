@@ -10,12 +10,14 @@ import type { AgentRequestResult } from "./conversation-agent-requests"
 const requestMocks = vi.hoisted(() => ({
   dismissAgentPlan: vi.fn().mockResolvedValue(undefined),
   executeApprovedAgentPlan: vi.fn(),
+  recoverAgentPlan: vi.fn().mockResolvedValue(null),
 }))
 
 vi.mock("./conversation-agent-requests", async (importOriginal) => ({
   ...await importOriginal<typeof import("./conversation-agent-requests")>(),
   dismissAgentPlan: requestMocks.dismissAgentPlan,
   executeApprovedAgentPlan: requestMocks.executeApprovedAgentPlan,
+  recoverAgentPlan: requestMocks.recoverAgentPlan,
 }))
 
 import {

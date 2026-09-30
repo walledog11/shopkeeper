@@ -9,6 +9,7 @@ import {
   dismissAgentPlan,
   executeApprovedAgentPlan,
   fetchAgentPlan,
+  recoverAgentPlan,
   planRequestErrorTurn,
 } from "./conversation-agent-requests"
 import { REPLAN_CUSTOMER_REPLY_INSTRUCTION } from "@/lib/agent/replan-instruction"
@@ -124,6 +125,7 @@ export function useConversationAgentFlow({
   const [isRegenerating, setIsRegenerating] = useState(false)
   const [planExecutionState, setPlanExecutionState] = useState<PlanExecutionState | null>(null)
   const successDismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const planningEpoch = useRef(0)
 
   const { agentInstruction, isAgentMode } = getAgentCommandState(replyText)
   const pendingPlan = pendingPlanState.ticketId === ticket.id && pendingPlanState.hasOverride
@@ -147,6 +149,31 @@ export function useConversationAgentFlow({
     if (successDismissTimer.current) clearTimeout(successDismissTimer.current)
   }, [])
 
+  useEffect(() => {
+    const controller = new AbortController()
+    const epoch = planningEpoch.current
+    const current = () => !controller.signal.aborted && planningEpoch.current === epoch
+    void recoverAgentPlan(ticket.id, controller.signal, instruction => {
+      if (!current()) return
+      setIsPlanLoading(true)
+      setPendingInstruction(instruction)
+    }).then(plan => {
+      if (!current() || !plan) return
+      dispatchPendingPlan({ type: "set", ticketId: ticket.id, plan })
+    }).catch(error => {
+      if (!current()) return
+      onAgentTurnAdd(createAgentTurn(planRequestErrorTurn(NO_MERCHANT_INSTRUCTION, error)))
+    }).finally(() => {
+      if (!current()) return
+      setIsPlanLoading(false)
+      setPendingInstruction(null)
+    })
+    return () => controller.abort()
+    // Restore once per ticket; callbacks and refreshed cache data are views of
+    // that ticket, not new planning requests.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ticket.id])
+
   const executeApprovedPlan = async (plan: AgentPlan, approvedToolCalls: RawToolCall[]) => {
     const instruction = plan.instruction
     const executionIdentity = {
@@ -161,7 +188,7 @@ export function useConversationAgentFlow({
     onAgentRunningChange(true)
 
     try {
-      const result = await executeApprovedAgentPlan(ticket.id, instruction, approvedToolCalls)
+      const result = await executeApprovedAgentPlan(ticket.id, instruction, approvedToolCalls, plan.planId)
       const replyNotSent = result.ok && result.replyNotSent
       setPlanExecutionState({ ...executionIdentity, outcome: replyNotSent ? "reply_not_sent" : result.outcome })
       const turn = createAgentTurn({ ...result.turn, instruction: NO_MERCHANT_INSTRUCTION })
@@ -212,6 +239,7 @@ export function useConversationAgentFlow({
       }
 
       onReplyChange("")
+      planningEpoch.current += 1
       setPendingInstruction(instruction)
       setIsPlanLoading(true)
 
@@ -289,6 +317,7 @@ export function useConversationAgentFlow({
     if (!pendingPlan || isRegenerating) return
 
     const instruction = REPLAN_CUSTOMER_REPLY_INSTRUCTION
+    planningEpoch.current += 1
     setIsRegenerating(true)
 
     try {
@@ -317,6 +346,7 @@ export function useConversationAgentFlow({
   }
 
   const requestAgentPlan = async (instruction: string, options: { force?: boolean } = {}) => {
+    planningEpoch.current += 1
     onReplyChange("")
     setPendingInstruction(NO_MERCHANT_INSTRUCTION)
     setIsPlanLoading(true)

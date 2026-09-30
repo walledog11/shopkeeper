@@ -1,320 +1,64 @@
+import { randomUUID } from 'node:crypto';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { ChannelType, SenderType, db } from '@shopkeeper/db';
-import {
-  createTestOrg,
-  createTestCustomer,
-  createTestThread,
-  createTestMessage,
-  cleanupTestData,
-} from '@shopkeeper/db/test-helpers';
+import { ChannelType, db } from '@shopkeeper/db';
+import { createTestOrg, createTestCustomer, createTestThread, createTestMessage, cleanupTestData } from '@shopkeeper/db/test-helpers';
 import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
-import type { AgentPlan } from '@/types';
 
-vi.mock('@clerk/nextjs/server', () => ({
-  auth: vi.fn(),
-  clerkClient: vi.fn(),
-}));
-
-// Mock the agent runner so tests don't call Anthropic
-const { mockPlanAgent, mockBuildContext, mockUsesExactDraftProposals } = vi.hoisted(() => ({
-  mockBuildContext: vi.fn().mockResolvedValue({ messages: [] }),
-  mockUsesExactDraftProposals: vi.fn(() => false),
-  mockPlanAgent: vi.fn().mockResolvedValue({
-    instruction: 'Resolve order issue',
-    steps: [{ id: 'step_1', tool: 'send_reply', label: 'Send reply', description: 'Reply to customer', category: 'communication', enabled: true }],
-    rawToolCalls: [],
-  }),
-}));
-
-vi.mock('@/lib/agent/runner', () => ({
-  buildContext: mockBuildContext,
-  hashInstructionForLog: vi.fn(() => 'test-hash'),
-  planAgent: mockPlanAgent,
-  usesExactDraftProposals: mockUsesExactDraftProposals,
-}));
-
-vi.mock('@shopkeeper/agent/settings', () => ({
-  resolveAgentSettings: vi.fn().mockReturnValue({}),
-}));
-
-import { DELETE, POST } from './route';
+vi.mock('@clerk/nextjs/server', () => ({ auth: vi.fn(), clerkClient: vi.fn() }));
+const { submit, list } = vi.hoisted(() => ({ submit: vi.fn(), list: vi.fn() }));
+vi.mock('@/lib/agent/api/gateway-operator-turn', () => ({ postGatewayPlanRequest: submit, listGatewayAgentRequests: list }));
+import { DELETE, GET, POST } from './route';
 import { auth } from '@clerk/nextjs/server';
-
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
-
 beforeEach(async () => {
   org = await createTestOrg();
   vi.mocked(auth).mockResolvedValue({ userId: 'usr_test', orgId: org.clerkOrgId } as ReturnType<typeof auth> extends Promise<infer T> ? T : never);
+  submit.mockResolvedValue({ status: 202, payload: { requestId: randomUUID(), taskId: randomUUID(), status: 'queued' } });
+  list.mockResolvedValue({ status: 200, payload: { requests: [] } });
 });
-
-afterEach(async () => {
-  await cleanupTestData(org?.id);
-  vi.clearAllMocks();
-});
-
+afterEach(async () => { await cleanupTestData(org?.id); vi.clearAllMocks(); });
+function request(body: Record<string, unknown>) {
+  return new Request('http://localhost:3000/api/agent/plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+}
 describe('POST /api/agent/plan', () => {
-  it('returns 400 when threadId or instruction is missing', async () => {
-    const req = new Request('http://localhost:3000/api/agent/plan', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ threadId: 'some-id' }),
-    });
-
-    const res = await POST(req);
-    expect(res.status).toBe(400);
-    const body = await res.json() as { error: string; details?: Array<{ field?: string; code: string; message: string }> };
-    expect(body.error).toBe('Validation failed');
-    expect(body.details).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          field: 'instruction',
-          code: 'required',
-          message: 'Instruction is required',
-        }),
-      ])
-    );
+  it('requires a stable client request ID and instruction', async () => {
+    const result = await POST(request({ threadId: randomUUID() }));
+    expect(result.status).toBe(400);
+    expect(submit).not.toHaveBeenCalled();
   });
-
-  it('returns empty steps when there are no customer messages', async () => {
-    const customer = await createTestCustomer(org.id, 'no_msgs@test.com');
+  it('accepts durable planning and passes the authenticated member and regeneration intent', async () => {
+    const customer = await createTestCustomer(org.id, 'composer@test.com');
     const thread = await createTestThread(org.id, customer.id, ChannelType.email);
-
-    const req = new Request('http://localhost:3000/api/agent/plan', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ threadId: thread.id, instruction: 'Handle this' }),
-    });
-
-    const res = await POST(req);
-    expect(res.status).toBe(200);
-    const body = await res.json() as { steps: unknown[] };
-    expect(body.steps).toHaveLength(0);
-    expect(mockPlanAgent).not.toHaveBeenCalled();
+    const clientRequestId = randomUUID();
+    const result = await POST(request({ threadId: thread.id, clientRequestId, instruction: 'Revise the reply', force: true }));
+    expect(result.status).toBe(202);
+    expect(submit).toHaveBeenCalledWith({ organizationId: org.id, clerkUserId: 'usr_test', threadId: thread.id, clientRequestId, instruction: 'Revise the reply', force: true });
+    expect(await result.json()).toMatchObject({ status: 'queued', requestId: expect.any(String) });
+    expect((await db.thread.findUniqueOrThrow({ where: { id: thread.id } })).cachedPlan).toBeNull();
   });
-
-  it('returns empty steps and clears stale cache when the thread was already answered', async () => {
-    const customer = await createTestCustomer(org.id, 'answered@test.com');
+  it('preserves a gateway conflict instead of reporting a generated plan', async () => {
+    const customer = await createTestCustomer(org.id, 'composer@test.com');
     const thread = await createTestThread(org.id, customer.id, ChannelType.email);
-    const message = await createTestMessage(thread.id, 'Please update my address');
-    await createTestMessage(thread.id, 'All set — address updated.', SenderType.agent);
-
-    await db.thread.update({
-      where: { id: thread.id },
-      data: {
-        cachedPlanMessageId: message.id,
-        cachedPlan: buildAgentPlanCacheRecord({
-          instruction: 'Handle address change',
-          lastCustomerMessageId: message.id,
-          settings: {},
-          plan: {
-            instruction: 'Handle address change',
-            steps: [{ id: 'step_1', tool: 'send_reply', label: 'Reply', description: 'Reply', category: 'communication', enabled: true }],
-            rawToolCalls: [{ id: 'step_1', name: 'send_reply', input: { text: 'All set.' } }],
-          },
-        }) as unknown as Parameters<typeof db.thread.update>[0]['data']['cachedPlan'],
-      },
-    });
-
-    const req = new Request('http://localhost:3000/api/agent/plan', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ threadId: thread.id, instruction: 'Handle address change' }),
-    });
-
-    const res = await POST(req);
-    expect(res.status).toBe(200);
-    const body = await res.json() as { steps: unknown[] };
-    expect(body.steps).toHaveLength(0);
-    expect(mockPlanAgent).not.toHaveBeenCalled();
-
-    const updatedThread = await db.thread.findUnique({ where: { id: thread.id } });
-    expect(updatedThread?.cachedPlan).toBeNull();
-    expect(updatedThread?.cachedPlanMessageId).toBeNull();
+    submit.mockResolvedValue({ status: 409, payload: { error: 'Work is already underway' } });
+    const result = await POST(request({ threadId: thread.id, clientRequestId: randomUUID(), instruction: 'Revise' }));
+    expect(result.status).toBe(409);
+    expect(await result.json()).toEqual({ error: 'Work is already underway' });
   });
-
-  it('calls planAgent and caches result on cache miss', async () => {
-    const customer = await createTestCustomer(org.id, 'has_msgs@test.com');
-    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
-    await createTestMessage(thread.id, 'I need help with order #1234');
-
-    const req = new Request('http://localhost:3000/api/agent/plan', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ threadId: thread.id, instruction: 'Resolve order issue' }),
-    });
-
-    const res = await POST(req);
-    expect(res.status).toBe(200);
-    const body = await res.json() as { steps: unknown[] };
-    expect(body.steps).toHaveLength(1);
-    expect(mockPlanAgent).toHaveBeenCalledOnce();
-
-    // Verify plan was persisted in DB
-    const updatedThread = await db.thread.findUnique({ where: { id: thread.id } });
-    expect(updatedThread?.cachedPlan).not.toBeNull();
-    expect(updatedThread?.cachedPlanMessageId).not.toBeNull();
-  });
-
-  // The merchant's own plan request on a ticket reads the same gate as the
-  // inbound auto-plan, so a thread's proposals bind their exact draft on both.
-  it('binds the exact draft only when the proposal contract is on', async () => {
-    const customer = await createTestCustomer(org.id, 'suspend@test.com');
-    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
-    await createTestMessage(thread.id, 'The candle arrived cracked');
-
-    async function planOnce(instruction: string) {
-      const res = await POST(new Request('http://localhost:3000/api/agent/plan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ threadId: thread.id, instruction }),
-      }));
-      expect(res.status).toBe(200);
-      return mockPlanAgent.mock.calls.at(-1)?.[3];
-    }
-
-    mockUsesExactDraftProposals.mockReturnValue(false);
-    expect(await planOnce('Resolve order issue')).toEqual({ merchantInstruction: true });
-
-    mockUsesExactDraftProposals.mockReturnValue(true);
-    // A changed instruction, so this is a cache miss rather than the first plan.
-    expect(await planOnce('Refund the candle only'))
-      .toEqual({ merchantInstruction: true, exactDraftProposal: true });
-  });
-
-  it('returns cached plan on cache hit without calling planAgent', async () => {
-    const customer = await createTestCustomer(org.id, 'cached@test.com');
-    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
-    const message = await createTestMessage(thread.id, 'Problem with my shipment');
-
-    const cachedPlan: AgentPlan = {
-      instruction: 'Check shipping',
-      steps: [{ id: 'step_1', tool: 'lookup_order', label: 'Lookup order', description: 'Look up the order', category: 'read', enabled: true }],
-      rawToolCalls: [],
-    };
-
-    await db.thread.update({
-      where: { id: thread.id },
-      data: {
-        cachedPlanMessageId: message.id,
-        cachedPlan: buildAgentPlanCacheRecord({
-          instruction: 'Check shipping',
-          lastCustomerMessageId: message.id,
-          settings: {},
-          plan: cachedPlan,
-        }) as unknown as Parameters<typeof db.thread.update>[0]['data']['cachedPlan'],
-      },
-    });
-
-    const req = new Request('http://localhost:3000/api/agent/plan', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ threadId: thread.id, instruction: 'Check shipping' }),
-    });
-
-    const res = await POST(req);
-    expect(res.status).toBe(200);
-    const body = await res.json() as { steps: unknown[] };
-    expect(body.steps).toHaveLength(1);
-    expect(mockPlanAgent).not.toHaveBeenCalled();
-  });
-
-  it('generates a new plan when a new customer message arrives after a cached plan', async () => {
-    const customer = await createTestCustomer(org.id, 'stale_cache@test.com');
-    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
-    const oldMessage = await createTestMessage(thread.id, 'Old message');
-
-    await db.thread.update({
-      where: { id: thread.id },
-      data: {
-        cachedPlanMessageId: oldMessage.id,
-        cachedPlan: buildAgentPlanCacheRecord({
-          instruction: 'old',
-          lastCustomerMessageId: oldMessage.id,
-          settings: {},
-          plan: { instruction: 'old', steps: [], rawToolCalls: [] },
-        }) as unknown as Parameters<typeof db.thread.update>[0]['data']['cachedPlan'],
-      },
-    });
-
-    // New message arrives — cache is now stale
-    await createTestMessage(thread.id, 'New message with new issue');
-
-    const req = new Request('http://localhost:3000/api/agent/plan', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ threadId: thread.id, instruction: 'Handle new issue' }),
-    });
-
-    const res = await POST(req);
-    expect(res.status).toBe(200);
-    expect(mockPlanAgent).toHaveBeenCalledOnce();
-  });
-
-  it('does not return another orgs cached plan', async () => {
-    const otherOrg = await createTestOrg();
+  it('refuses another organization’s ticket before submitting work', async () => {
+    const other = await createTestOrg();
     try {
-      const customer = await createTestCustomer(otherOrg.id, 'cross-org@test.com');
-      const thread = await createTestThread(otherOrg.id, customer.id, ChannelType.email);
-      const message = await createTestMessage(thread.id, 'Cross org message');
-
-      await db.thread.update({
-        where: { id: thread.id },
-        data: {
-          cachedPlanMessageId: message.id,
-          cachedPlan: buildAgentPlanCacheRecord({
-            instruction: 'Cross org message',
-            lastCustomerMessageId: message.id,
-            settings: {},
-            plan: { instruction: 'Cross org message', steps: [], rawToolCalls: [] },
-          }) as unknown as Parameters<typeof db.thread.update>[0]['data']['cachedPlan'],
-        },
-      });
-
-      const req = new Request('http://localhost:3000/api/agent/plan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ threadId: thread.id, instruction: 'Cross org message' }),
-      });
-
-      const res = await POST(req);
-      expect(res.status).toBe(404);
-      expect(mockPlanAgent).not.toHaveBeenCalled();
-    } finally {
-      await cleanupTestData(otherOrg.id);
-    }
+      const customer = await createTestCustomer(other.id, 'other@test.com');
+      const thread = await createTestThread(other.id, customer.id, ChannelType.email);
+      expect((await POST(request({ threadId: thread.id, clientRequestId: randomUUID(), instruction: 'Reply' }))).status).toBe(404);
+      expect(submit).not.toHaveBeenCalled();
+    } finally { await cleanupTestData(other.id); }
   });
-
-  it('invalidates the cache when the instruction changes', async () => {
-    const customer = await createTestCustomer(org.id, 'cache-miss@test.com');
+  it('restores planning history on the scoped ticket', async () => {
+    const customer = await createTestCustomer(org.id, 'composer@test.com');
     const thread = await createTestThread(org.id, customer.id, ChannelType.email);
-    const message = await createTestMessage(thread.id, 'Problem with billing');
-
-    await db.thread.update({
-      where: { id: thread.id },
-      data: {
-        cachedPlanMessageId: message.id,
-        cachedPlan: buildAgentPlanCacheRecord({
-          instruction: 'Old instruction',
-          lastCustomerMessageId: message.id,
-          settings: {},
-          plan: {
-            instruction: 'Old instruction',
-            steps: [{ id: 'step_1', tool: 'lookup_order', label: 'Old', description: 'Old', category: 'read', enabled: true }],
-            rawToolCalls: [],
-          },
-        }) as unknown as Parameters<typeof db.thread.update>[0]['data']['cachedPlan'],
-      },
-    });
-
-    const req = new Request('http://localhost:3000/api/agent/plan', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ threadId: thread.id, instruction: 'New instruction' }),
-    });
-
-    const res = await POST(req);
-    expect(res.status).toBe(200);
-    expect(mockPlanAgent).toHaveBeenCalledOnce();
+    const result = await GET(new Request(`http://localhost:3000/api/agent/plan?threadId=${thread.id}`));
+    expect(result.status).toBe(200);
+    expect(list).toHaveBeenCalledWith({ organizationId: org.id, clerkUserId: 'usr_test', threadId: thread.id });
   });
 });
 

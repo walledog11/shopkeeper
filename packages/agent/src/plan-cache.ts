@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { Prisma, db } from "@shopkeeper/db";
+import type { Prisma as PrismaTypes } from "@prisma/client";
 import type { AgentPlan } from "./types.js";
 import { AGENT_PLAN_CACHE_VERSION, readAgentPlanCacheRecordShape, type PlanFailureReplanContext } from "./plan-cache-shape.js";
 
@@ -76,8 +77,9 @@ export async function commitThreadPlanCacheIfCurrent(params: {
   threadId: string;
   sourceMessageId: string;
   cache: AgentPlanCacheRecord;
-}): Promise<boolean> {
-  const updated = await db.$executeRaw(Prisma.sql`
+  taskClaim?: { taskId: string; expectedRevision: number; claimToken: string };
+}, client: Pick<PrismaTypes.TransactionClient, "$executeRaw"> = db): Promise<boolean> {
+  const updated = await client.$executeRaw(Prisma.sql`
     UPDATE "threads" AS thread
     SET
       "cached_plan_message_id" = ${params.sourceMessageId}::uuid,
@@ -91,6 +93,14 @@ export async function commitThreadPlanCacheIfCurrent(params: {
       AND source."organization_id" = thread."organization_id"
       AND source."deleted_at" IS NULL
       AND source."sender_type"::text = 'customer'
+      ${params.taskClaim ? Prisma.sql`AND EXISTS (
+        SELECT 1 FROM agent_tasks task
+        WHERE task.id = ${params.taskClaim.taskId}::uuid
+          AND task.organization_id = thread.organization_id AND task.thread_id = thread.id
+          AND task.revision = ${params.taskClaim.expectedRevision}
+          AND task.claim_token = ${params.taskClaim.claimToken}::uuid
+          AND task.status = 'running' AND task.cancelled_at IS NULL
+      )` : Prisma.empty}
       AND NOT EXISTS (
         SELECT 1
         FROM "messages" AS newer
