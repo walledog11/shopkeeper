@@ -892,3 +892,24 @@ ordinary replies contain the requested business facts, with technical details
 only when requested. No phrase matching, output rewriting or new tests are added.
 The owner explicitly stopped unnecessary testing; verification is the cheap
 compiler check and the actual phone flow through the existing PR process.
+
+### Second phone reply: guidance alone did not fix the behavior
+
+PR #142 merged and deployed as `135626c3`. The owner's read-only iMessage at
+20:20:48 UTC produced event `2e2322cf`, request `a92f5838`, task `ffdb00cf` and
+reply `060da1ce`, delivered at 20:20:58 UTC. It again included null fulfillment,
+raw quantities and an earlier-cancellation recap. One model call used
+69,330,000 nano-USD; no actions were recorded. This is a failed acceptance run.
+
+Read-only inspection confirmed an operator thread with no linked Shopify
+customer and no preloaded orders. The lookup tool is available, the new guidance
+is present, and worker build logs show the agent package rebuilt with a cache
+miss. This was not an old deployment or an automatic order prefetch. The model
+copied history despite the guidance.
+
+The next candidate supplies history as a native reference document, with the
+current instruction outside it. It retains task state and applies this boundary
+to operator planning as well as execution. A generic concise status example
+shows the intended style. The existing history assertion was adapted to the
+document source; no tests were added or run locally. Agent typecheck passed.
+Actual phone acceptance remains open; no paid evaluation or provider write ran.

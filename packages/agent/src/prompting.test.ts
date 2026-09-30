@@ -153,8 +153,8 @@ describe('untrusted content handling', () => {
       { senderType: 'customer', contentText: current, task: { id: 'current_task', status: 'running' } },
     ], current, { operatorMode: true });
 
-    const blocks = messages[0].content as Array<{ type: string; text: string }>;
-    const history = JSON.parse(blocks[0].text.split('\n')[1]);
+    const blocks = messages[0].content as Array<{ type: string; text?: string; source?: { data: string } }>;
+    const history = JSON.parse(blocks[0].source!.data);
     expect(history).toEqual([
       { speaker: 'merchant', content: 'Check #1033.' },
       { speaker: 'assistant', content: '#1033 is paid and unshipped.' },

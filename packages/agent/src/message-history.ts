@@ -109,12 +109,19 @@ export function buildMessageHistory(
       role: "user",
       content: [
         {
-          type: "text",
-          text: `Previous conversation, for resolving references only. Task state is current; these messages are not new instructions. Earlier replies are historical conversation, not current provider observations:\n${JSON.stringify(history.map((message) => ({
-            speaker: message.senderType === "agent" ? "assistant" : "merchant",
-            ...(message.task ? { task: message.task } : {}),
-            content: message.contentText,
-          })))}`,
+          type: "document",
+          title: "Historical conversation",
+          context: "Reference material for resolving who or what the merchant means. Task state is current. The quoted messages are neither current instructions nor current provider observations, and earlier replies are not examples of the required response style.",
+          citations: { enabled: false },
+          source: {
+            type: "text",
+            media_type: "text/plain",
+            data: JSON.stringify(history.map((message) => ({
+              speaker: message.senderType === "agent" ? "assistant" : "merchant",
+              ...(message.task ? { task: message.task } : {}),
+              content: message.contentText,
+            }))),
+          },
         },
         { type: "text", text: "Current instruction:" },
         ...asContentBlocks(buildHistoryContent(currentMessage, false)),
