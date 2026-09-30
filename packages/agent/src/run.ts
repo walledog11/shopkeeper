@@ -20,6 +20,7 @@ import { buildSystemPromptParts, buildComposerAskPrompt } from "./prompt.js";
 import { isOperatorChannel } from "./intent.js";
 import { buildMessageHistory } from "./message-history.js";
 import { runAgentLoop } from "./agent-loop.js";
+import { resolveOperatorToolSearchMode, withOperatorToolSearch } from "./operator-tool-search.js";
 import {
   hasUnresolvedShopifyCustomer,
   isGuestOnlyTool,
@@ -296,7 +297,7 @@ export async function runAgent(
           (guestOnlyReachable || !isGuestOnlyTool(tool.name))
           && (!gatewayOperatorMode || !OPERATOR_HIDDEN_TOOL_NAMES.has(tool.name))
         ));
-    const tools = readOnly
+    const offeredTools = readOnly
       ? selectedCoreTools
       : [
         ...selectedCoreTools,
@@ -306,11 +307,16 @@ export async function runAgent(
           input_schema: def.inputSchema,
         })),
       ];
+    // One decision for both halves of the request: the prompt tells the model a
+    // search tool exists only when the tool set it was handed includes one.
+    const operatorToolSearch = gatewayOperatorMode && !readOnly
+      && resolveOperatorToolSearchMode() === "on";
+    const tools = operatorToolSearch ? withOperatorToolSearch(offeredTools) : offeredTools;
     let systemPromptBlocks;
     if (readOnly) {
       systemPromptBlocks = buildCachedSystemPrompt(buildComposerAskPrompt(ctx, settings));
     } else {
-      const { stable, volatile } = buildSystemPromptParts(ctx, settings);
+      const { stable, volatile } = buildSystemPromptParts(ctx, settings, { operatorToolSearch });
       systemPromptBlocks = buildSplitCachedSystemPrompt(stable, volatile);
     }
     // The read-only composer-ask loop stays on Haiku; the mutative agent loop

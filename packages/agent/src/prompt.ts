@@ -281,12 +281,19 @@ ${OPERATOR_INSTRUCTIONS}
 ${OPERATOR_INTEGRATION_GUIDANCE}
 ${OPERATOR_PRODUCT_HELP_INSTRUCTIONS}`;
 
+// The same prefix for a turn that was handed the tool search tool (see
+// operator-tool-search.ts), built once so one of the two is live per flag value.
+// It names examples the model can search for, not the deferred set: that set is
+// whatever the turn was offered, which this constant cannot know.
+const OPERATOR_STABLE_PREFIX_TOOL_SEARCH = `${OPERATOR_STABLE_PREFIX}
+- Some of your tools are not loaded until you search for them. When a request needs an action or lookup that is not among your current tools, search for it by tool name or keyword (for example "create_refund" or "flash sale") and then use what you find. Do not tell the merchant you cannot do something until you have searched.`;
+
 // Splits the system prompt into a stable prefix (cached across requests) and a
 // volatile suffix (per-thread/per-store).
 export function buildSystemPromptParts(
   ctx: AgentContext,
   settings?: Partial<OrgSettings>,
-  options?: { exactDraftProposal?: boolean; capabilityDiscovery?: boolean },
+  options?: { exactDraftProposal?: boolean; capabilityDiscovery?: boolean; operatorToolSearch?: boolean },
 ): { stable: string; volatile: string } {
   const s = resolveAgentSettings(settings);
   const isOperatorMode = isOperatorChannel(ctx.thread.channelType);
@@ -344,7 +351,7 @@ export function buildSystemPromptParts(
     ].join("\n");
 
     return {
-      stable: OPERATOR_STABLE_PREFIX,
+      stable: options?.operatorToolSearch ? OPERATOR_STABLE_PREFIX_TOOL_SEARCH : OPERATOR_STABLE_PREFIX,
       volatile: composeSystemPrompt({
         identity: `You are ${s.agentName}, an AI action assistant for ${ctx.orgName}. You are receiving instructions from a team member. They reach you from wherever they are — Telegram, iMessage, or the dashboard — and it is the same conversation either way.`,
         context: `## Integrations\n${shopifyNote}\n${shopifyCustomerNote}${linkedCustomerSection}${ordersSection}${buildStoreProfileSection(ctx.orgName, s.aiContext)}${pendingStateSection}`,

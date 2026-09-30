@@ -70,7 +70,7 @@ export interface RunAgentLoopParams {
   // Mutated in place as the loop appends assistant / tool-result turns.
   messages: Anthropic.MessageParam[];
   systemPromptBlocks: Anthropic.Messages.MessageCreateParams["system"];
-  tools: Anthropic.Tool[];
+  tools: Anthropic.ToolUnion[];
   model: string;
   maxIterations: number;
   maxTokensPerCall: number;
@@ -318,6 +318,11 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
     }
 
     if (response.stop_reason === "max_tokens") return done("max_tokens", finalText, i + 1);
+
+    // A server-side tool (tool search) can hand a long turn back unfinished. The
+    // continuation is the same conversation with the assistant content appended and
+    // nothing owed back, so no user turn is added; without this it would end here.
+    if (response.stop_reason === "pause_turn") return iterate(i + 1);
 
     if (response.stop_reason === "end_turn" || toolUseBlocks.length === 0) {
       if (mode === "capture" && params.captureReprompt && !reprompted) {
