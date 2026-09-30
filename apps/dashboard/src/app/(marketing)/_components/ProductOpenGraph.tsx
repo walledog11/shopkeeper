@@ -22,8 +22,8 @@ export function createProductOpenGraph({
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
-          background: "#f6f2eb",
-          color: "#2b2118",
+          background: "#f5f4f2",
+          color: "#1b1a19",
           padding: "70px 76px",
           fontFamily: "Georgia, serif",
         }}
@@ -41,9 +41,9 @@ export function createProductOpenGraph({
               key={tag}
               style={{
                 padding: "11px 19px",
-                border: `2px solid ${index === 0 ? accent : "#2b2118"}`,
+                border: `2px solid ${index === 0 ? accent : "#1b1a19"}`,
                 background: index === 0 ? accent : "transparent",
-                color: index === 0 ? "#f6f2eb" : "#2b2118",
+                color: index === 0 ? "#f5f4f2" : "#1b1a19",
                 borderRadius: 999,
               }}
             >

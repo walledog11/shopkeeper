@@ -162,7 +162,15 @@ and 9a are in [What has been done](#what-has-been-done).
     - Done when a Gate C cancellation's card names the amount. The one
       deterministic test is that a quote changed after approval refuses before
       any write, which a live run cannot show without corrupting an order.
-    - Built; the live run is owed. `quoteCancellationForApproval`
+    - The 2026-09-29 phone run on #1035 still omitted the amount.
+      `toGatewayAgentPlan` dropped `steps[].id`, so the phone formatter could
+      not match the visible step to its quoted raw tool call and used the
+      generic label. The adapter now preserves that identity. The existing
+      line-item/quote notification check runs through the adapter; it failed
+      before the fix and passes afterward. A local cancellation rendering
+      diagnostic also shows the quoted amount while retaining the receipt-bound
+      draft placeholder. A fresh phone card after deployment is still owed.
+    - Quoting is built. `quoteCancellationForApproval`
       (`order-cancellation.ts`) binds the quote as the runtime-only
       `approval_amount` and `approval_currency`, which the model's tool schema
       does not show; `"0.00"` means nothing is refunded. An order that cannot
