@@ -39,12 +39,46 @@ interface AgentChatPayload {
   requestId?: string
   statusUrl?: string
   status?: string
+  taskRevision?: number | null
+  cancelledAt?: string | null
   response?: {
     summary: string
     actionsPerformed: ActionEntry[]
     awaitingApproval?: boolean
   } | null
   error?: string
+}
+
+export interface AgentRequestControl {
+  requestId: string
+  taskRevision: number
+  status: string
+  cancelledAt?: string | null
+}
+
+export function canStopAgentRequest(request: AgentRequestControl | null): boolean {
+  return request !== null && !request.cancelledAt
+    && ["queued", "running", "waiting_input", "waiting_approval"].includes(request.status)
+}
+
+function requestControl(data: AgentChatPayload | null): AgentRequestControl | null {
+  return data?.requestId && typeof data.taskRevision === "number" && data.status
+    ? { requestId: data.requestId, taskRevision: data.taskRevision, status: data.status, cancelledAt: data.cancelledAt }
+    : null
+}
+
+export async function stopAgentChatRequest(request: AgentRequestControl, fetchImpl: FetchLike = fetch) {
+  const response = await fetchImpl(`/api/agent/requests/${request.requestId}/cancel`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ taskRevision: request.taskRevision }),
+  })
+  const data = await response.json().catch(() => null) as AgentChatPayload | null
+  if (!response.ok) return { ok: false as const, error: data?.error ?? "Could not record the stop. Try again." }
+  const control = requestControl(data)
+  return control
+    ? { ok: true as const, request: control }
+    : { ok: false as const, error: "The stop response could not be confirmed. Refresh to check the instruction." }
 }
 
 export type SendAgentChatResult =
@@ -61,16 +95,27 @@ async function pollAgentRequest(
   fetchImpl: FetchLike,
   pollIntervalMs: number,
   onStatus?: (status: string) => void,
+  onRequest?: (request: AgentRequestControl) => void,
 ): Promise<SendAgentChatResult> {
   let data = initial
   for (let poll = 0; poll < 800; poll += 1) {
     if (data?.status) onStatus?.(data.status)
-    if (data?.status === "failed" || data?.status === "cancelled" || data?.status === "reconciling") {
+    const control = requestControl(data)
+    if (control) onRequest?.(control)
+    if (data?.status === "cancelled") {
+      return {
+        ok: true, summary: "Stopped. No further work will run for this instruction.",
+        actionsPerformed: data.response?.actionsPerformed ?? [],
+      }
+    }
+    if (data?.status === "failed" || data?.status === "reconciling") {
       return { ok: false, error: data.status === "reconciling"
-        ? "This request needs review before it can continue."
+        ? data.cancelledAt
+          ? "Stopped further work. An action had already started; check its outcome before continuing."
+          : "This request needs review before it can continue."
         : "The request did not complete." }
     }
-    if (data?.response) {
+    if (data?.response && !["accepted", "attached", "queued", "running"].includes(data.status ?? "")) {
       return {
         ok: true,
         summary: data.response.summary,
@@ -93,8 +138,9 @@ export function resumeAgentChatRequest(
   fetchImpl: FetchLike = fetch,
   pollIntervalMs = 750,
   onStatus?: (status: string) => void,
+  onRequest?: (request: AgentRequestControl) => void,
 ): Promise<SendAgentChatResult> {
-  return pollAgentRequest(`/api/agent/requests/${requestId}`, null, fetchImpl, pollIntervalMs, onStatus)
+  return pollAgentRequest(`/api/agent/requests/${requestId}`, null, fetchImpl, pollIntervalMs, onStatus, onRequest)
 }
 
 export async function sendAgentChatInstruction({
@@ -103,12 +149,14 @@ export async function sendAgentChatInstruction({
   clientRequestId = crypto.randomUUID(),
   pollIntervalMs = 750,
   onStatus,
+  onRequest,
 }: {
   fetchImpl?: FetchLike
   instruction: string
   clientRequestId?: string
   pollIntervalMs?: number
   onStatus?: (status: string) => void
+  onRequest?: (request: AgentRequestControl) => void
 }): Promise<SendAgentChatResult> {
   const submit = () => fetchImpl("/api/agent/chat", {
     method: "POST",
@@ -133,5 +181,5 @@ export async function sendAgentChatInstruction({
   const statusUrl = data?.statusUrl ?? (data?.requestId ? `/api/agent/requests/${data.requestId}` : null)
   if (!statusUrl) return { ok: false, error: "The request was accepted without a recovery identity." }
 
-  return pollAgentRequest(statusUrl, data, fetchImpl, pollIntervalMs, onStatus)
+  return pollAgentRequest(statusUrl, data, fetchImpl, pollIntervalMs, onStatus, onRequest)
 }

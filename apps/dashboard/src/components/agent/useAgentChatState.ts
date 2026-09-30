@@ -15,11 +15,14 @@ import {
 } from "@/lib/agent/concierge-navigation"
 import {
   fetchOperatorTranscript,
+  canStopAgentRequest,
+  stopAgentChatRequest,
   isAgentRequestActive,
   resumeAgentChatRequest,
   sendAgentChatInstruction,
   transcriptToChatMessages,
   type ChatMessage,
+  type AgentRequestControl,
 } from "./agent-chat-session"
 
 const DEFAULT_FILLER_PHRASES = getConciergeFillerPhrases("")
@@ -69,11 +72,52 @@ export function useAgentChatState({ restoreHistory = true }: UseAgentChatStatePr
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState("")
   const [isRunning, setIsRunning] = useState(false)
+  const [activeRequest, setActiveRequest] = useState<AgentRequestControl | null>(null)
+  const [stopBusy, setStopBusy] = useState(false)
+  const [stopError, setStopError] = useState<string | null>(null)
   const [fillerPhrases, setFillerPhrases] = useState<string[]>([...DEFAULT_FILLER_PHRASES])
   const fillerPhrase = useFillerPhrase(fillerPhrases, isRunning)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const restoreHistoryRef = useRef(restoreHistory)
+
+  const updateRequest = useCallback((request: AgentRequestControl) => {
+    setActiveRequest(request)
+    setMessages(prev => prev.map((message, index) =>
+      index === prev.length - 1 && message.role === "thinking"
+        ? { ...message, status: request.cancelledAt
+            ? "Stopping. Work already in progress may finish…"
+            : taskStatusLabel(request.status) }
+        : message))
+  }, [])
+
+  const handleStop = useCallback(async () => {
+    if (!activeRequest || !canStopAgentRequest(activeRequest) || stopBusy) return
+    setStopBusy(true)
+    setStopError(null)
+    try {
+      const result = await stopAgentChatRequest(activeRequest)
+      if (!result.ok) {
+        setStopError(result.error)
+        return
+      }
+      updateRequest(result.request)
+      if (!isRunning) {
+        setMessages(prev => [...prev, {
+          role: "agent", actions: [], timestamp: new Date(),
+          summary: result.request.status === "reconciling"
+            ? "Stopped further work. An action had already started; check its outcome before continuing."
+            : result.request.status === "cancelled"
+              ? "Stopped. No further work will run for this instruction."
+              : "This instruction had already finished.",
+        }])
+      }
+    } catch {
+      setStopError("Could not confirm the stop. Refresh to check the instruction.")
+    } finally {
+      setStopBusy(false)
+    }
+  }, [activeRequest, isRunning, stopBusy, updateRequest])
 
   // Clears the panel only. The conversation itself is the merchant's durable
   // operator thread — shared with their phone — and is not something a button
@@ -94,12 +138,15 @@ export function useAgentChatState({ restoreHistory = true }: UseAgentChatStatePr
         if (result.status !== "ok") return
         const restored = transcriptToChatMessages(result.transcript)
         const active = result.transcript.requests?.find(isAgentRequestActive)
+        const waiting = result.transcript.requests?.find(request => ["waiting_input", "waiting_approval"].includes(request.status))
         if (!active) {
+          if (waiting?.taskRevision != null) updateRequest({ ...waiting, taskRevision: waiting.taskRevision })
           setMessages(restored)
           window.localStorage.removeItem(PENDING_REQUEST_STORAGE_KEY)
           return
         }
         window.localStorage.setItem(PENDING_REQUEST_STORAGE_KEY, active.requestId)
+        if (active.taskRevision != null) updateRequest({ ...active, taskRevision: active.taskRevision })
         const last = restored.at(-1)
         const withRequest = last?.role === "user" && last.text === active.instruction
           ? restored
@@ -111,7 +158,7 @@ export function useAgentChatState({ restoreHistory = true }: UseAgentChatStatePr
             index === prev.length - 1 && message.role === "thinking"
               ? { ...message, status: taskStatusLabel(status) }
               : message))
-        }).then((requestResult) => {
+        }, updateRequest).then((requestResult) => {
           setMessages(prev => [
             ...prev.slice(0, -1),
             requestResult.ok
@@ -137,7 +184,7 @@ export function useAgentChatState({ restoreHistory = true }: UseAgentChatStatePr
       .catch((err) => {
         console.error("[AgentChat] fetchOperatorTranscript failed:", err)
       })
-  }, [])
+  }, [updateRequest])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -166,6 +213,8 @@ export function useAgentChatState({ restoreHistory = true }: UseAgentChatStatePr
     const sentAt = new Date()
     setFillerPhrases([...getConciergeFillerPhrases(trimmed)])
     setIsRunning(true)
+    setActiveRequest(null)
+    setStopError(null)
     setMessages(prev => [
       ...prev,
       { role: "user", text: displayText, timestamp: sentAt },
@@ -178,6 +227,7 @@ export function useAgentChatState({ restoreHistory = true }: UseAgentChatStatePr
       const result = await sendAgentChatInstruction({
         instruction: trimmed,
         clientRequestId,
+        onRequest: updateRequest,
         onStatus: (status) => {
           setMessages(prev => prev.map((message, index) =>
             index === prev.length - 1 && message.role === "thinking"
@@ -221,7 +271,7 @@ export function useAgentChatState({ restoreHistory = true }: UseAgentChatStatePr
       setIsRunning(false)
       textareaRef.current?.focus()
     }
-  }, [isRunning, navigateConcierge])
+  }, [isRunning, navigateConcierge, updateRequest])
 
   const handleSend = useCallback(async () => {
     const text = input.trim()
@@ -252,6 +302,10 @@ export function useAgentChatState({ restoreHistory = true }: UseAgentChatStatePr
     initial,
     input,
     isRunning,
+    canStop: canStopAgentRequest(activeRequest),
+    isStopping: stopBusy || (isRunning && !!activeRequest?.cancelledAt),
+    stopError,
+    handleStop,
     messages,
     messagesEndRef,
     setInput,

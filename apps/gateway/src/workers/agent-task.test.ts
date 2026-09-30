@@ -14,7 +14,14 @@ import {
   cancelMemberAgentTask,
 } from '@shopkeeper/agent/task-ledger';
 
-const { anthropicCreate } = vi.hoisted(() => ({ anthropicCreate: vi.fn() }));
+const { anthropicCreate, sendPhone } = vi.hoisted(() => ({
+  anthropicCreate: vi.fn(), sendPhone: vi.fn().mockResolvedValue(true),
+}));
+vi.mock('../clients/telegram-client.js', () => ({
+  sendMessage: sendPhone,
+  sendChatAction: vi.fn().mockResolvedValue(true),
+  setMessageReaction: vi.fn().mockResolvedValue(true),
+}));
 
 // Only the model provider, the Redis lock and the network are stood in for. The
 // task ledger, the operator turn, the agent loop, dispatch authorization and the
@@ -32,6 +39,7 @@ vi.mock('../clients/agent-runtime.js', () => ({
 }));
 
 import { processAgentTaskJob } from './agent-task.js';
+import { getContext, updateContext } from '../operator-context.js';
 
 const fetchMock = vi.fn();
 let orgId: string | undefined;
@@ -65,13 +73,20 @@ async function seedQueuedTask() {
     dedupeKey: randomUUID(),
     instruction: 'Put the whole store on 20% off for the weekend',
   };
-  const { request } = await acceptMemberAgentRequest(input);
+  const chatId = `task-stop-${randomUUID()}`;
+  await db.orgMemberTelegramChat.create({ data: { orgMemberId: member.id, chatId } });
+  const event = await db.operatorEvent.create({ data: {
+    organizationId: org.id, clerkUserId: member.clerkUserId, channel: 'telegram', chatId,
+    providerMessageId: randomUUID(), operatorKey: `member:${member.id}`, body: input.instruction,
+    status: 'claimed', claimToken: randomUUID(), claimedAt: new Date(),
+  } });
+  const { request } = await acceptMemberAgentRequest({ ...input, sourceOperatorEventId: event.id });
   const task = await attachMemberAgentTask({
     ...input,
     requestId: request.id,
     budget: { runtimeVersion: 1, modelCallLimit: 10, activeTimeMsLimit: 120_000, spendNanoUsdLimit: 1_000_000_000n },
   });
-  return { input, task };
+  return { input, task, event };
 }
 
 const storewideSale = {
@@ -93,6 +108,7 @@ const finished = {
 
 beforeEach(() => {
   anthropicCreate.mockReset();
+  sendPhone.mockClear().mockResolvedValue(true);
   fetchMock.mockReset();
   fetchMock.mockResolvedValue(new Response(JSON.stringify({
     data: {
@@ -116,7 +132,7 @@ describe('processAgentTaskJob', () => {
   // asks for next, the stop owns the task: its write must not reach Shopify and no
   // further model call is bought on the task's budget.
   it('keeps a write the model asks for after the merchant stops the task from reaching Shopify', async () => {
-    const { input, task } = await seedQueuedTask();
+    const { input, task, event } = await seedQueuedTask();
     anthropicCreate.mockImplementationOnce(async () => {
       await cancelMemberAgentTask({
         organizationId: input.organizationId,
@@ -140,12 +156,22 @@ describe('processAgentTaskJob', () => {
     const stored = await db.agentTask.findUniqueOrThrow({ where: { id: task.id } });
     expect(stored.status).toBe('cancelled');
     expect(stored.modelCallsUsed).toBe(1);
+    const phoneEvent = await db.operatorEvent.findUniqueOrThrow({ where: { id: event.id } });
+    expect(phoneEvent.status).toBe('committed');
+    expect(phoneEvent.replyText).toContain('Stopped');
+    expect(phoneEvent.replyDeliveredAt).toBeTruthy();
+    expect(sendPhone).toHaveBeenCalledOnce();
   });
 
   // Same task, same model output, no stop: the write does reach Shopify, so the
   // case above is held back by the stop and not by anything in the setup.
   it('sends the same write to Shopify when the task was not stopped', async () => {
     const { input, task } = await seedQueuedTask();
+    const ticketCustomer = await createTestCustomer(input.organizationId, randomUUID());
+    const ticket = await createTestThread(input.organizationId, ticketCustomer.id, ChannelType.email);
+    await updateContext(input.organizationId, task.initiatingActorKey, {
+      pendingQuestion: { threadId: ticket.id, question: 'Does the customer want a replacement?' },
+    });
     anthropicCreate.mockResolvedValueOnce(storewideSale).mockResolvedValue(finished);
 
     await processAgentTaskJob({ organizationId: input.organizationId, taskId: task.id, revision: task.revision });
@@ -154,5 +180,7 @@ describe('processAgentTaskJob', () => {
     const stored = await db.agentTask.findUniqueOrThrow({ where: { id: task.id } });
     expect(stored.modelCallsUsed).toBe(2);
     expect(stored.spentNanoUsd).toBeGreaterThan(0n);
+    expect(stored.status).toBe('completed');
+    expect((await getContext(input.organizationId, task.initiatingActorKey)).pendingQuestion?.threadId).toBe(ticket.id);
   });
 });

@@ -112,9 +112,8 @@ and 9a are in [What has been done](#what-has-been-done).
    A merchant-instruction run is the realistic ticket for an effect no customer
    can request. It runs its write under the instruction's own authority
    (`executeOperatorAgentTurn`), with no approval card, so item 8a's card
-   binding does not reach it. Until item 10 lands, those runs go through the dashboard, whose
-   requests are durable tasks; a phone instruction creates no task and would not
-   exercise the v2 path. One run may prepare state for the next (a fulfilled
+   binding does not reach it. Until item 10 is deployed and manually verified,
+   use the dashboard for these runs. Then verify the durable phone path as well. One run may prepare state for the next (a fulfilled
    order before a return, a return before its label), and each run is recorded
    on its own. Run 1 went to `cancel_order` ahead of
    `update_shopify_customer_info`, which the release evidence's run order puts
@@ -277,36 +276,29 @@ and 9a are in [What has been done](#what-has-been-done).
    the controlled organization, so the window will measure only controlled runs.
    The evidence must say so rather than present it as rollout observation.
 
-10. **Phone instructions as durable tasks** (decision E; *Target architecture*,
-    "Support and operator turns … share request identity, budgets, receipts,
-    and recovery semantics"; Package 6 acceptance, "all retained capabilities
-    have one execution owner"). Today a free-form Telegram or iMessage
-    instruction reaches `runOperatorFreeFormTurn` through
-    `executeFreeFormInstruction` (`apps/gateway/src/routes/telegram/agent-execution.ts`,
-    which the iMessage handler also calls) with no request or task, so the turn
-    gets no task budget, stop, or task recovery. Only the inbound message is
-    durable, as an `OperatorEvent`. The dashboard reaches the same function
-    through the durable task worker (`workers/agent-task.ts`). Package 2
-    deferred the phone surfaces and no later package scheduled them. The
-    change: a phone instruction becomes an accepted `AgentRequest` run as a
-    claimed `AgentTask`, as a dashboard instruction already is.
-    - Reuse, do not replace, the `OperatorEvent` claim and its
-      `operator-event-sweep`. The event stays the inbound record and the
-      dedupe boundary; the request's dedupe key derives from the event, so a
-      redelivered provider message reaches the same request.
-    - The turn runs through the same task claim, budget, stop and lease
-      recovery as `workers/agent-task.ts`. The reply to the phone still goes
-      out through the event's committed-reply path, so the sweep's re-send of
-      a committed but undelivered reply keeps working.
-    - `executeFreeFormInstruction` no longer calls `runOperatorFreeFormTurn`
-      directly.
-    - Done when a live Telegram and iMessage round-trip shows a phone
-      instruction creating exactly one request and one task, charging the task
-      budget, stopping when told to, and sending its phone reply once
-      (CLAUDE.md: operator changes are verified by live phone round-trip, not
-      evals). Deterministic tests cover only what a live run cannot show: a
-      redelivered message reaches the same request, and a dead worker leaves
-      the task `reconciling` without replaying a write.
+10. **Phone instructions as durable tasks — implemented, manual verification open.**
+    Free-form Telegram and iMessage instructions now reuse the dashboard's
+    accepted `AgentRequest` and claimed `AgentTask` lifecycle. The inbound
+    `OperatorEvent` remains the dedupe boundary; acceptance atomically links
+    it to the request. The task worker owns budget, stop and lease recovery.
+    - `executeFreeFormInstruction` queues work instead of running a model turn
+      directly. The task worker reconstructs the channel and revalidates the
+      binding before execution and before reply delivery.
+    - Replies are persisted and linked before phone dispatch. The event sweep
+      recovers finished tasks and definite delivery failures without rerunning
+      the instruction; ambiguous sends remain for review. The task sweep owns
+      queued and running work. An event without a stable provider ID uses the
+      same lifecycle but cannot deduplicate a later provider redelivery.
+    - An unrelated ticket's pending question or proposal stays with its own
+      task; it cannot suspend the merchant instruction's task.
+    - Existing database concurrency, ownership, worker stop and transport
+      checks were adapted to this path. Relevant builds, typechecks and lint
+      passed. No new test files, paid model calls or live provider operations.
+    - Still owed after deployment: one Telegram and one iMessage instruction
+      creates one request/task, charges its persistent budget and receives one
+      reply. Open or reload the dashboard during phone work, stop it (10c),
+      and confirm future actions do not start. Verify definite reply-failure
+      recovery without repeating a Shopify action; never replay an unknown write.
 
 10a. **Ticket-composer instructions as durable tasks** (the same contract as
     item 10: *Target architecture*, "Support and operator turns … share request
@@ -360,6 +352,15 @@ and 9a are in [What has been done](#what-has-been-done).
       presentment currency. Blocks item 11, which would put other stores on
       these limits.
 
+10c. **Dashboard Stop — implemented, manual verification open.** The chat now
+    calls the existing `api/agent/requests/[requestId]/cancel` route with the
+    observed task revision. It restores an active or waiting request on reload,
+    including phone-originated work, and shows cancellation and reconciliation
+    honestly. A submitted tool call may finish; Stop prevents later dispatches.
+    Polling waits for the current attempt rather than returning an old response
+    while the task is queued or running. Still owed: dashboard Stop/reload and
+    Stop on a phone-started task in the real app after deployment.
+
 11. **Staged rollout** (Package 6, cutover step 4). Expand v2 routing beyond the
     controlled organization once Gate C's live runs pass, then make v2 the
     default for new tasks. The paid comparison (Gate B) is advisory: if the
@@ -367,9 +368,10 @@ and 9a are in [What has been done](#what-has-been-done).
     held-out (`withheld-cancellation-follow-up`) with its expectation unchanged
     (decision G) and a new C08 variant written after #125, since C08 itself was
     fixed against. A held-out fixture cannot run alone, so that is the whole v2
-    suite. Stop expansion on any unauthorized or duplicate effect. Existing tasks keep their runtime version. Until items 10 and 10a
-    land, phone and ticket-composer instructions create no task, so "new
-    tasks" means customer messages and dashboard chat.
+    suite. Stop expansion on any unauthorized or duplicate effect. Existing tasks
+    keep their runtime version. Phone task integration and the Stop UI (10, 10c)
+    still need deployment and manual verification; ticket-composer integration
+    (10a) remains unimplemented. Finish those entry points before expansion.
 12. **Gate E**, persisted-state inventory and deletion, using the targets below.
     It includes the synchronous operator path item 10 replaces and the
     taskless composer planning item 10a replaces.
@@ -765,9 +767,6 @@ contract. It is listed so nobody rediscovers it as new.
   (`loadLiveOperatorContext`) stays parked on the organization-wide task until
   the customer writes again. One member's card must not close a task, so this is
   intended.
-- The dashboard chat has no stop control. The route
-  (`api/agent/requests/[requestId]/cancel`) exists, and nothing in the UI calls
-  it.
 - A stop is observed at loop-iteration boundaries, so a tool call already in
   flight finishes. This is the intended bound.
 

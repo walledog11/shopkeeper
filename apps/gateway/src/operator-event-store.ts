@@ -93,19 +93,21 @@ export async function finalizeOperatorEventCommitted(
   id: string,
   claimToken: string,
   replyText: string,
-  options: { replyDeliveryUnknown?: boolean } = {},
-): Promise<void> {
-  await db.operatorEvent.updateMany({
+  options: { replyDeliveryUnknown?: boolean; replyMessageId?: string } = {},
+): Promise<boolean> {
+  const committed = await db.operatorEvent.updateMany({
     where: { id, status: 'claimed', claimToken },
     data: {
       status: 'committed',
       processedAt: new Date(),
       replyText,
+      ...(options.replyMessageId ? { replyMessageId: options.replyMessageId } : {}),
       ...(options.replyDeliveryUnknown
         ? { lastError: OPERATOR_REPLY_DELIVERY_UNKNOWN_ERROR }
         : {}),
     },
   });
+  return committed.count === 1;
 }
 
 // claimed -> failed. The turn threw after a possible side effect, so it is never
@@ -149,7 +151,10 @@ export async function reconcileStaleClaimedOperatorEvents(
   error: string,
 ): Promise<number> {
   const { count } = await db.operatorEvent.updateMany({
-    where: { status: 'claimed', claimedAt: { lt: cutoff } },
+    where: {
+      status: 'claimed', claimedAt: { lt: cutoff },
+      NOT: { agentRequest: { task: { status: { in: ['queued', 'running'] } } } },
+    },
     data: { status: 'unknown', processedAt: new Date(), lastError: error.slice(0, 2000) },
   });
   return count;

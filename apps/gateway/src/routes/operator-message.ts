@@ -29,6 +29,7 @@ export interface OperatorMessageContext {
   // Durable operator-event UUID when this turn came through the queued P4-03
   // path. It becomes the AgentAction turnId for direct recovery correlation.
   turnId?: string;
+  spaceId?: string | null;
 }
 
 /**

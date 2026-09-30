@@ -6,7 +6,8 @@ import {
   markOperatorEventReplyDeliveryUnknown,
   reconcileStaleClaimedOperatorEvents,
 } from '../operator-event-store.js';
-import { sendOperatorEventReply } from '../operator-event-reply.js';
+import { sendOperatorEventReply, completeOperatorTaskReply } from '../operator-event-reply.js';
+import { db } from '@shopkeeper/db';
 import {
   createMaintenanceQueue,
   createMaintenanceWorker,
@@ -14,10 +15,10 @@ import {
   type MaintenanceJobRegistration,
 } from './registration.js';
 
-// Recovery backstop for durable operator events (P4-03). Free-form operator
-// turns carry no plan claim, so a claim is their only single-use guard: a worker
-// that died mid-turn leaves a `claimed` row that is never auto-replayed. This
-// sweep is that row's only recovery. It is channel-agnostic — the claimed ->
+// Recovery backstop for durable operator events (P4-03). Phone instructions
+// hand their claimed event to the task worker. Finished tasks recover their
+// committed confirmation here; active tasks recover through the task sweep.
+// Legacy claimed turns are never auto-replayed. It is channel-agnostic — the claimed ->
 // unknown reconciliation is pure status; only the confirmation re-send dispatches
 // per channel (which also closes Telegram's undelivered-reply recovery).
 
@@ -36,6 +37,23 @@ const STALE_CLAIM_ERROR =
 
 export async function runOperatorEventSweep(): Promise<void> {
   const now = Date.now();
+
+  const finished = await db.operatorEvent.findMany({
+    where: {
+      status: 'claimed', agentRequestId: { not: null },
+      agentRequest: { task: { status: { notIn: ['queued', 'running'] } } },
+    },
+    include: { agentRequest: { select: { taskId: true } } },
+    take: RESEND_BATCH,
+  });
+  for (const event of finished) {
+    if (!event.agentRequestId || !event.agentRequest?.taskId) continue;
+    await completeOperatorTaskReply({
+      organizationId: event.organizationId,
+      taskId: event.agentRequest.taskId,
+      requestId: event.agentRequestId,
+    });
+  }
 
   const reconciledUnknown = await reconcileStaleClaimedOperatorEvents(
     new Date(now - STALE_CLAIMED_MS),

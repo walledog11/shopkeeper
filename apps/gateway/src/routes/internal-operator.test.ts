@@ -32,7 +32,8 @@ vi.mock('@shopkeeper/agent/turn', () => ({
   executeAgentTurn: executeAgentTurnSpy,
 }));
 
-vi.mock('../agent-task-ingest.js', () => ({
+vi.mock('../agent-task-ingest.js', async (importActual) => ({
+  ...await importActual<typeof import('../agent-task-ingest.js')>(),
   ensureAgentTaskEnqueued: ensureAgentTaskEnqueuedSpy,
 }));
 

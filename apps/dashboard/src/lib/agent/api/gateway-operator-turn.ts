@@ -40,6 +40,7 @@ export interface GatewayAgentRequestPayload {
   } | null;
   delivery: { status: "pending" | "available"; messageId: string | null };
   failureCode: string | null;
+  cancelledAt?: string | null;
 }
 
 function gatewayAuth() {

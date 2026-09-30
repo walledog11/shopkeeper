@@ -72,6 +72,20 @@ describe("durable dashboard persistence foundation", () => {
     expect(new Set(results.map(result => result.task?.id)).size).toBe(1);
     expect(results.every(result => result.request.state === "attached")).toBe(true);
     expect(await db.agentTask.count({ where: { organizationId: input.organizationId } })).toBe(1);
+    const event = await db.operatorEvent.create({ data: {
+      organizationId: input.organizationId, clerkUserId: input.clerkUserId,
+      channel: "telegram", chatId: randomUUID(), providerMessageId: randomUUID(),
+      operatorKey: `member:${input.member.id}`, body: input.instruction,
+      status: "claimed", claimToken: randomUUID(), claimedAt: new Date(),
+    } });
+    const phone = await Promise.all(Array.from({ length: 6 }, () => acceptMemberAgentRequest({
+      ...input, dedupeKey: `operator-event:${event.id}`, sourceOperatorEventId: event.id, budget,
+    })));
+    expect(new Set(phone.map(result => result.request.id)).size).toBe(1);
+    expect(new Set(phone.map(result => result.task?.id)).size).toBe(1);
+    expect(phone[0].request.sourceOperatorEventId).toBe(event.id);
+    expect((await db.operatorEvent.findUniqueOrThrow({ where: { id: event.id } })).agentRequestId)
+      .toBe(phone[0].request.id);
   });
 
   it("conflicts on changed payload while preserving the original request", async () => {
@@ -94,6 +108,14 @@ describe("durable dashboard persistence foundation", () => {
     expect(await getMemberAgentRequest({ ...otherMember, requestId: request.id })).toBeNull();
     await expect(acceptMemberAgentRequest(otherMember)).rejects.toBeInstanceOf(ForbiddenError);
     await expect(attachMemberAgentTask({ ...otherMember, requestId: request.id, budget }))
+      .rejects.toBeInstanceOf(ForbiddenError);
+    const event = await db.operatorEvent.create({ data: {
+      organizationId: other.organizationId, clerkUserId: other.clerkUserId,
+      channel: "telegram", chatId: randomUUID(), providerMessageId: randomUUID(),
+      operatorKey: `member:${other.member.id}`, body: input.instruction,
+      status: "claimed", claimToken: randomUUID(), claimedAt: new Date(),
+    } });
+    await expect(acceptMemberAgentRequest({ ...input, sourceOperatorEventId: event.id, budget }))
       .rejects.toBeInstanceOf(ForbiddenError);
     await db.orgMember.delete({ where: { id: input.member.id } });
     await expect(getMemberAgentRequest({ ...input, requestId: request.id })).rejects.toBeInstanceOf(ForbiddenError);

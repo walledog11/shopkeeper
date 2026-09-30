@@ -97,7 +97,9 @@ describe("sendAgentChatInstruction", () => {
         requestId: "request-1", statusUrl: "/api/agent/requests/request-1",
         status: "queued", response: null,
       }, { status: 202 }))
-      .mockResolvedValueOnce(jsonResponse({ status: "running", response: null }))
+      .mockResolvedValueOnce(jsonResponse({
+        status: "running", response: { summary: "An earlier attempt's response", actionsPerformed: [] },
+      }))
       .mockResolvedValueOnce(jsonResponse({
         status: "completed",
         response: { summary: "Eventually done", actionsPerformed: [] },

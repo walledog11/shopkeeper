@@ -20,21 +20,7 @@ import { resolveOperatorMemberKey } from '../operator-identity.js';
 import { pushOperatorEscalation } from '../operator-escalation.js';
 import { internalJsonParser } from './body-parsers.js';
 import { authorizeInternalRequest } from './internal-auth.js';
-import { ensureAgentTaskEnqueued } from '../agent-task-ingest.js';
-import { resolveAgentRuntimeVersionForOrg } from '@shopkeeper/agent/runtime-modes';
-
-const DASHBOARD_TASK_LIMITS = {
-  modelCallLimit: 20,
-  activeTimeMsLimit: 120_000,
-  spendNanoUsdLimit: 1_000_000_000n,
-} as const;
-
-function dashboardTaskBudget(organizationId: string) {
-  return {
-    ...DASHBOARD_TASK_LIMITS,
-    runtimeVersion: resolveAgentRuntimeVersionForOrg(organizationId),
-  };
-}
+import { ensureAgentTaskEnqueued, memberAgentTaskBudget } from '../agent-task-ingest.js';
 
 function stringField(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -68,6 +54,7 @@ function durableRequestPayload(request: MemberRequestRecord) {
     } : null,
     delivery: response ? { status: 'available', messageId: response.id } : { status: 'pending', messageId: null },
     failureCode: task?.failureCode ?? null,
+    cancelledAt: task?.cancelledAt ?? null,
   };
 }
 
@@ -93,7 +80,7 @@ export function registerInternalOperatorRoutes(router: Router): void {
         threadId: thread.id,
         dedupeKey: clientRequestId,
         instruction,
-        budget: dashboardTaskBudget(organizationId),
+        budget: memberAgentTaskBudget(organizationId),
       });
       if (!accepted.task) throw new Error('Accepted dashboard request has no task.');
       try {
