@@ -92,22 +92,22 @@ const faqs = [
 
 function OrderWorkflowWalkthrough() {
   return (
-    <div className="rounded-3xl bg-[#2b2118] px-6 py-10 text-[#f6f2eb] sm:px-10 sm:py-14">
+    <div className="rounded-3xl m-chapter--dark px-6 py-10 sm:px-10 sm:py-14">
       <div className="max-w-2xl">
-        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#f6f2eb]/55">Seeded walkthrough · Order #3102</p>
-        <h2 className="m-display mt-3 text-[clamp(36px,5vw,62px)]">
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#fcfaf8]/55">Seeded walkthrough · Order #3102</p>
+        <h2 className="m-display m-h2 mt-3">
           Swap Medium to Small before fulfillment.
         </h2>
-        <p className="mt-4 text-sm leading-relaxed text-[#f6f2eb]/65">
+        <p className="mt-4 text-sm leading-relaxed text-[#fcfaf8]/65">
           Fictional customer and store data illustrate the intended product path without presenting a customer result.
         </p>
       </div>
       <ol className="mt-9 grid gap-3 md:grid-cols-5">
         {workflow.map(([step, body], index) => (
           <li key={step} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-            <span className="text-xs font-semibold text-[#f6f2eb]/40">0{index + 1}</span>
-            <h3 className="mt-3 text-[21px] font-bold leading-none [font-family:var(--m-hand)]">{step}</h3>
-            <p className="mt-3 text-[13px] leading-relaxed text-[#f6f2eb]/65">{body}</p>
+            <span className="text-xs font-semibold text-[#fcfaf8]/40">0{index + 1}</span>
+            <h3 className="mt-3 text-[21px] m-display">{step}</h3>
+            <p className="mt-3 text-[13px] leading-relaxed text-[#fcfaf8]/65">{body}</p>
           </li>
         ))}
       </ol>

@@ -17,8 +17,8 @@ import { PRIMARY_CTA_LABEL, PRODUCT_NAME } from "@/lib/brand";
 import { cn } from "@/lib/ui/cn";
 import { partners, productCards } from "./nav-config";
 
-/* Slot outside the frosted navbar pill — backdrop-filter on a descendant of
-   another backdrop-filter (or a `translate`) cannot see the page behind it. */
+/* Slot under the navbar bar, so the Product panel spans the content column
+   instead of hanging off the trigger's box. */
 export const MegaMenuSlotContext = createContext<HTMLElement | null>(null);
 
 /* Menu keyboard behavior shared by the desktop dropdowns and the mobile menu:
@@ -91,7 +91,7 @@ function useMenuKeyboard(
 }
 
 /* Open immediately; delay close so the pointer can cross the gap between the
-   Product trigger and a panel that's positioned against the whole pill. */
+   Product trigger and a panel that's positioned against the whole bar. */
 function useHoverMenu(setOpen: (value: boolean) => void) {
   const timeoutRef = useRef<number>(0);
 
@@ -282,7 +282,7 @@ export function MobileNav() {
           </span>
         </Link>
         <div className="flex items-center gap-2">
-          <Link href="/signup" className="m-nav-cta" onClick={close}>
+          <Link href="/signup" className="m-btn m-btn-primary m-nav-cta" onClick={close}>
             {PRIMARY_CTA_LABEL}
           </Link>
           <button
@@ -346,7 +346,7 @@ export function MobileNav() {
         )}
       </nav>
 
-      <Link href="/signup" className="m-nav-sheet-cta" onClick={close}>
+      <Link href="/signup" className="m-btn m-btn-primary m-btn-lg m-nav-sheet-cta" onClick={close}>
         {PRIMARY_CTA_LABEL}
       </Link>
     </div>
@@ -365,7 +365,9 @@ export function MobileNav() {
       >
         <Menu className="size-5" strokeWidth={2} />
       </button>
-      {open ? createPortal(sheet, document.body) : null}
+      {/* Portal into the page wrapper, not <body>: the font and color tokens the
+          sheet reads are declared on `.m-page`. */}
+      {open ? createPortal(sheet, document.querySelector<HTMLElement>(".m-page") ?? document.body) : null}
     </div>
   );
 }

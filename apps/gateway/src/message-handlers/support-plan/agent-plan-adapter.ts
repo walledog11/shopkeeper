@@ -10,6 +10,7 @@ export function toGatewayAgentPlan(plan: PackageAgentPlan | null): GatewayAgentP
 
   return {
     steps: plan.steps.map((step) => ({
+      id: step.id,
       label: step.label,
       description: step.description,
       category: step.category,
