@@ -20,6 +20,8 @@ import { runWithheldMessageFollowUp } from '../message-handlers/support-plan/wit
 import type { AgentTaskJobData } from '../types.js';
 import { registerJobFailureLogging } from './failure.js';
 import type { SharedGatewayWorkerOptions } from './resources.js';
+import { operatorBindingStillValid, operatorTaskMessage } from './operator-event.js';
+import { completeOperatorTaskReply } from '../operator-event-reply.js';
 
 const LEASE_MS = 300_000;
 const RENEW_MS = 60_000;
@@ -107,8 +109,22 @@ export async function processAgentTaskJob(data: AgentTaskJobData): Promise<void>
         select: { clerkUserId: true },
       })
     : null;
+  const event = request?.sourceOperatorEventId
+    ? await db.operatorEvent.findFirst({
+        where: {
+          id: request.sourceOperatorEventId, organizationId: data.organizationId,
+          agentRequestId: request.id, clerkUserId: member?.clerkUserId,
+        },
+      })
+    : null;
 
-  if (!request || !member) {
+  if (
+    !request || !member
+    || (request.sourceOperatorEventId && (
+      !event?.claimToken || event.status !== 'claimed'
+      || !(await operatorBindingStillValid(event, event.claimToken))
+    ))
+  ) {
     await failAgentTaskClaim({
       organizationId: data.organizationId,
       taskId: data.taskId,
@@ -133,6 +149,7 @@ export async function processAgentTaskJob(data: AgentTaskJobData): Promise<void>
       requestId: request.id,
       failureCode: 'task_budget_exhausted',
     });
+    await completeOperatorTaskReply({ organizationId: data.organizationId, taskId: data.taskId, requestId: request.id });
     return;
   }
 
@@ -155,6 +172,7 @@ export async function processAgentTaskJob(data: AgentTaskJobData): Promise<void>
   }, RENEW_MS);
   renewal.unref();
 
+  let summary: string | undefined;
   try {
     const memberKey = claimed.task.initiatingActorKey;
     const context = await loadLiveOperatorContext(
@@ -177,7 +195,7 @@ export async function processAgentTaskJob(data: AgentTaskJobData): Promise<void>
       assertExecutionAllowed: () => {
         if (leaseLost) throw new Error('Task lease ownership was lost.');
       },
-      message: {
+      message: event ? operatorTaskMessage(event, memberKey) : {
         chatId: memberKey,
         body: request.normalizedInstruction,
         senderRef: memberKey,
@@ -189,22 +207,24 @@ export async function processAgentTaskJob(data: AgentTaskJobData): Promise<void>
     if (leaseLost) throw new Error('Task lease ownership was lost before completion.');
 
     const after = await getContext(data.organizationId, memberKey);
-    // The parked queue is the merchant-facing projection; the task records the
-    // same wait durably, so a trimmed card cannot lose what was asked.
+    // Ticket cards belong to their support tasks. A merchant's new instruction
+    // must not copy another thread's waiting proposal onto its operator task.
+    const question = after.pendingQuestion?.threadId === claimed.task.threadId ? after.pendingQuestion : null;
+    const plan = after.pendingPlans.find((pending) => pending.threadId === claimed.task.threadId);
     const hasUnknownOutcome = result.actionsPerformed.some((action) => action.status === 'unknown');
     const settlement: TaskSettlement = hasUnknownOutcome
       ? { status: 'reconciling', failureCode: 'unknown_provider_outcome' }
-      : after.pendingQuestion
-        ? { status: 'waiting_input', question: after.pendingQuestion.question }
-        : after.pendingPlan
+      : question
+        ? { status: 'waiting_input', question: question.question }
+        : plan
           ? {
               status: 'waiting_approval',
               proposal: {
                 // The parked card's plan ID becomes the proposal's ID, so an
                 // approval from any surface names the exact durable snapshot.
-                ...(after.pendingPlan.planId ? { proposalId: after.pendingPlan.planId } : {}),
-                instruction: after.pendingPlan.instruction,
-                rawToolCalls: normalizeApprovedToolCalls(after.pendingPlan.rawToolCalls),
+                ...(plan.planId ? { proposalId: plan.planId } : {}),
+                instruction: plan.instruction,
+                rawToolCalls: normalizeApprovedToolCalls(plan.rawToolCalls),
                 sourceRequestIds: [request.id],
               },
             }
@@ -215,6 +235,7 @@ export async function processAgentTaskJob(data: AgentTaskJobData): Promise<void>
       settlement,
     });
     if (!settled) throw new Error('Task claim was lost before its result could be recorded.');
+    summary = result.summary;
   } catch (error) {
     logger.error({ err: error, taskId: data.taskId, requestId: request.id }, '[AgentTask] Turn failed');
     await failAgentTaskClaim({
@@ -225,6 +246,7 @@ export async function processAgentTaskJob(data: AgentTaskJobData): Promise<void>
   } finally {
     clearInterval(renewal);
   }
+  await completeOperatorTaskReply({ organizationId: data.organizationId, taskId: data.taskId, requestId: request.id, summary });
 }
 
 export function createAgentTaskWorker(options: { workerOptions: SharedGatewayWorkerOptions }) {

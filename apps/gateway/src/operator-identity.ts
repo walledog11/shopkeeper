@@ -9,6 +9,17 @@
 
 import { db } from '@shopkeeper/db';
 import { memberOperatorKey } from '@shopkeeper/agent/internal-thread';
+import type { OperatorEvent } from '@prisma/client';
+
+export async function operatorEventBindingIsCurrent(event: OperatorEvent): Promise<boolean> {
+  const binding = event.channel === 'telegram'
+    ? await db.orgMemberTelegramChat.findUnique({ where: { chatId: event.chatId }, include: { orgMember: true } })
+    : event.channel === 'imessage'
+      ? await db.orgMemberImessageBinding.findUnique({ where: { senderId: event.chatId }, include: { orgMember: true } })
+      : null;
+  return binding?.orgMember.organizationId === event.organizationId
+    && binding.orgMember.clerkUserId === event.clerkUserId;
+}
 
 // Upserts because a Clerk user can reach the Concierge before ever binding a
 // phone, and OrgMember rows are otherwise only created by the bind routes.

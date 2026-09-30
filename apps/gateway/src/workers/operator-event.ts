@@ -11,13 +11,15 @@ import {
 } from '../operator-event-store.js';
 import { sendOperatorEventReply } from '../operator-event-reply.js';
 import {
-  resolveBoundTelegramMember,
   runTelegramOperatorTurn,
 } from '../routes/telegram/message-handler.js';
 import {
-  resolveBoundImessageMember,
   runImessageOperatorTurn,
+  imessagePresence,
 } from '../routes/imessage/message-handler.js';
+import { withOperatorPresence } from '../routes/telegram/presence.js';
+import type { OperatorMessageContext } from '../routes/operator-message.js';
+import { operatorEventBindingIsCurrent } from '../operator-identity.js';
 import type { OperatorEventJobData } from '../types.js';
 import { registerJobFailureLogging } from './failure.js';
 import type { SharedGatewayWorkerOptions } from './resources.js';
@@ -44,7 +46,7 @@ function readTelegramMessageId(metadata: OperatorEvent['metadata']): number {
 async function runClaimedOperatorTurn(
   event: OperatorEvent,
   claimToken: string,
-  runTurn: (reply: OperatorEventReply) => Promise<void>,
+  runTurn: (reply: OperatorEventReply) => Promise<void | 'queued'>,
 ): Promise<void> {
   const deliveredTexts: string[] = [];
   let deliveryFailed = false;
@@ -57,7 +59,7 @@ async function runClaimedOperatorTurn(
   };
 
   try {
-    await runTurn(reply);
+    if (await runTurn(reply) === 'queued') return;
   } catch (err) {
     // Post-claim throw: the turn may have partially acted, so it is recorded and
     // never auto-replayed. Tell the merchant once.
@@ -78,15 +80,8 @@ async function runClaimedOperatorTurn(
 // Re-validate ownership at claim time (P5-01): the binding may have been revoked
 // or reassigned between enqueue and processing. Never trust the org / user parked
 // on the event JSON. Returns false (and records the drop) when it no longer holds.
-async function operatorBindingStillValid(event: OperatorEvent, claimToken: string): Promise<boolean> {
-  const member = event.channel === 'telegram'
-    ? await resolveBoundTelegramMember(event.chatId)
-    : await resolveBoundImessageMember(event.chatId);
-  if (
-    !member
-    || member.organizationId !== event.organizationId
-    || member.clerkUserId !== event.clerkUserId
-  ) {
+export async function operatorBindingStillValid(event: OperatorEvent, claimToken: string): Promise<boolean> {
+  if (!(await operatorEventBindingIsCurrent(event))) {
     logger.warn(
       { operatorEventId: event.id, chatId: event.chatId, channel: event.channel },
       '[OperatorEvent] Binding no longer valid — dropping',
@@ -95,6 +90,26 @@ async function operatorBindingStillValid(event: OperatorEvent, claimToken: strin
     return false;
   }
   return true;
+}
+
+export function operatorTaskMessage(event: OperatorEvent, memberKey: string): OperatorMessageContext {
+  const reply: OperatorEventReply = async (text) => { await sendOperatorEventReply(event, text); };
+  return {
+    chatId: event.chatId,
+    body: event.body,
+    senderRef: memberKey,
+    deliveryRef: `${event.channel}:${event.chatId}`,
+    turnId: event.id,
+    spaceId: event.spaceId,
+    reply,
+    presence: event.channel === 'telegram'
+      ? (progress, work) => withOperatorPresence({
+          chatId: event.chatId,
+          ...(readTelegramMessageId(event.metadata) ? { messageId: readTelegramMessageId(event.metadata) } : {}),
+          reply, progress,
+        }, work)
+      : imessagePresence(reply, event.spaceId),
+  };
 }
 
 // Run one claimed Telegram operator event. Rebuilds the turn from the persisted

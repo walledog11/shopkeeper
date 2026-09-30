@@ -1,6 +1,16 @@
 import { getGatewayBullMqQueue } from './clients/gateway-queues.js';
 import { JOB, QUEUE } from './constants.js';
 import type { AgentTaskJobData } from './types.js';
+import { resolveAgentRuntimeVersionForOrg } from '@shopkeeper/agent/runtime-modes';
+
+export function memberAgentTaskBudget(organizationId: string) {
+  return {
+    runtimeVersion: resolveAgentRuntimeVersionForOrg(organizationId),
+    modelCallLimit: 20,
+    activeTimeMsLimit: 120_000,
+    spendNanoUsdLimit: 1_000_000_000n,
+  };
+}
 
 export async function ensureAgentTaskEnqueued(task: {
   id: string;

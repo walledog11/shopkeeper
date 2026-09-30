@@ -25,6 +25,7 @@ export interface MemberRequestInput {
   dedupeKey: string;
   instruction: string;
   budget?: TaskBudget;
+  sourceOperatorEventId?: string;
 }
 
 export interface TaskBudget {
@@ -115,13 +116,27 @@ export async function acceptMemberAgentRequest(input: MemberRequestInput) {
     throw new BadRequestError("A bounded, stable request key is required.");
   }
   // Fixed, server-authored envelope; the client cannot supply a hash.
-  const payload = { version: 1, threadId: input.threadId, instruction };
+  const payload = {
+    version: 1, threadId: input.threadId, instruction,
+    ...(input.sourceOperatorEventId ? { sourceOperatorEventId: input.sourceOperatorEventId } : {}),
+  };
   const payloadHash = hashInstruction(JSON.stringify(payload));
   if (Buffer.byteLength(JSON.stringify(payload)) > 60000) {
     throw new BadRequestError("Request payload is too large.");
   }
   return db.$transaction(async (tx) => {
     const actorKey = await requireMemberActorKey(tx, input);
+    if (input.sourceOperatorEventId) {
+      const event = await tx.operatorEvent.findFirst({
+        where: {
+          id: input.sourceOperatorEventId, organizationId: input.organizationId,
+          clerkUserId: input.clerkUserId, status: "claimed",
+        },
+      });
+      if (!event || event.body.trim() !== instruction) {
+        throw new ForbiddenError("A claimed operator event belonging to the member is required.");
+      }
+    }
     const id = randomUUID();
     await tx.agentRequest.createMany({
       data: {
@@ -129,6 +144,7 @@ export async function acceptMemberAgentRequest(input: MemberRequestInput) {
         channel: "operator", threadId: input.threadId,
         dedupeKey: input.dedupeKey, payloadVersion: 1, payloadHash, payload,
         normalizedInstruction: instruction,
+        ...(input.sourceOperatorEventId ? { sourceOperatorEventId: input.sourceOperatorEventId } : {}),
       },
       skipDuplicates: true,
     });
@@ -140,6 +156,17 @@ export async function acceptMemberAgentRequest(input: MemberRequestInput) {
     });
     if (request.payloadVersion !== 1 || request.payloadHash !== payloadHash) {
       throw new ConflictError("This request key was already used with a different instruction.");
+    }
+    if (input.sourceOperatorEventId) {
+      const linked = await tx.operatorEvent.updateMany({
+        where: {
+          id: input.sourceOperatorEventId, organizationId: input.organizationId,
+          clerkUserId: input.clerkUserId, status: "claimed",
+          OR: [{ agentRequestId: null }, { agentRequestId: request.id }],
+        },
+        data: { agentRequestId: request.id },
+      });
+      if (linked.count !== 1) throw new ConflictError("The operator event already belongs to another request.");
     }
     let task = null;
     if (input.budget) {
