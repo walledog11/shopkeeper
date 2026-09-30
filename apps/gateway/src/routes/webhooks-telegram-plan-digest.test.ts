@@ -121,6 +121,7 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
     });
 
     executeOperatorAgentTurnSpy.mockResolvedValueOnce({
+      outcome: 'committed',
       summary: 'Refunded.',
       threadId,
       actionsPerformed: [],

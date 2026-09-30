@@ -34,6 +34,7 @@ const {
   sendChatActionSpy: vi.fn().mockResolvedValue(true),
   setMessageReactionSpy: vi.fn().mockResolvedValue(true),
   executeOperatorAgentTurnSpy: vi.fn().mockResolvedValue({
+    outcome: 'committed',
     summary: 'Done.',
     threadId: '00000000-0000-4000-8000-000000000001',
     actionsPerformed: [],
@@ -174,6 +175,7 @@ beforeEach(async () => {
   queueAddSpy.mockClear().mockResolvedValue({ id: 'test-job-id' });
   queueGetJobSpy.mockClear().mockResolvedValue(null);
   executeOperatorAgentTurnSpy.mockResolvedValue({
+    outcome: 'committed',
     summary: 'Done.',
     threadId: '00000000-0000-4000-8000-000000000001',
     actionsPerformed: [],
