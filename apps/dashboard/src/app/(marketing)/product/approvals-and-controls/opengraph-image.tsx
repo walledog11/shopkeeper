@@ -14,8 +14,8 @@ export default function OpenGraphImage() {
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
-          background: "#f6f2eb",
-          color: "#2b2118",
+          background: "#f5f4f2",
+          color: "#1b1a19",
           padding: "70px 76px",
           fontFamily: "Georgia, serif",
         }}
@@ -27,9 +27,9 @@ export default function OpenGraphImage() {
           Set the boundary before the request arrives.
         </div>
         <div style={{ display: "flex", gap: 18, fontSize: 24 }}>
-          <span style={{ padding: "12px 20px", border: "2px solid #2b2118", borderRadius: 999 }}>Draft only</span>
-          <span style={{ padding: "12px 20px", background: "#2b2118", color: "#f6f2eb", borderRadius: 999 }}>Ask first</span>
-          <span style={{ padding: "12px 20px", border: "2px solid #2b2118", borderRadius: 999 }}>Trusted</span>
+          <span style={{ padding: "12px 20px", border: "2px solid #1b1a19", borderRadius: 999 }}>Draft only</span>
+          <span style={{ padding: "12px 20px", background: "#1b1a19", color: "#f5f4f2", borderRadius: 999 }}>Ask first</span>
+          <span style={{ padding: "12px 20px", border: "2px solid #1b1a19", borderRadius: 999 }}>Trusted</span>
         </div>
       </div>
     ),

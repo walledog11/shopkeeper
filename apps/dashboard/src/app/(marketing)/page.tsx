@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { Navbar } from "./_components/Navbar";
-import { MarginThread } from "./_components/MarginThread";
 import { Hero } from "./_components/Hero";
+import { MerchantTasks } from "./_components/MerchantTasks";
+import { CustomerSupportShowcase } from "./_components/CustomerSupportShowcase";
 import { ConversationBento } from "./_components/ConversationBento";
-import { CoreProductOverview, ProactiveOperations, TrustSection } from "./_components/ProductOverview";
 import { Onboarding } from "./_components/Onboarding";
+import { ProactiveOperations } from "./_components/ProductOverview";
 import { Pricing } from "./_components/Pricing";
 import { FAQ as Faq } from "./_components/FAQ";
 import { CTA as Cta } from "./_components/CTA";
@@ -27,16 +28,23 @@ export const metadata: Metadata = {
 export default function Home() {
   return (
     <main className="relative">
-      <MarginThread />
       <Navbar />
       <Hero />
-      <ConversationBento />
-      <CoreProductOverview />
-      <ProactiveOperations />
+      <div className="m-chapter m-chapter--alt">
+        <MerchantTasks />
+      </div>
+      <CustomerSupportShowcase />
+      <div className="m-chapter m-chapter--alt">
+        <ConversationBento />
+      </div>
       <Onboarding />
-      <TrustSection />
+      <div className="m-chapter m-chapter--dark">
+        <ProactiveOperations />
+      </div>
       <Pricing />
-      <Faq />
+      <div className="m-chapter m-chapter--alt">
+        <Faq />
+      </div>
       <Cta />
       <Footer />
     </main>

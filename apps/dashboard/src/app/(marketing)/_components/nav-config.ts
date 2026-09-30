@@ -27,7 +27,7 @@ export const productCards: ProductCard[] = [
     icon: Store,
   },
   {
-    href: "/product/customer-support",
+    href: "/#customers",
     title: "Customer support",
     subtitle: "Answer from orders, inventory, policies, and approved voice guidance.",
     icon: MessageCircle,

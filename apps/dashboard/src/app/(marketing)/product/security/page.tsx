@@ -25,7 +25,7 @@ function SecurityModel() {
   return (
     <figure
       aria-labelledby="security-model-caption"
-      className="overflow-hidden rounded-3xl border border-stone-900/10 bg-[#2b2118] p-5 text-[#f6f2eb] shadow-[0_35px_70px_-42px_rgba(22,20,19,0.9)] sm:p-8"
+      className="overflow-hidden rounded-3xl border border-stone-900/10 m-chapter--dark p-5 shadow-[0_35px_70px_-42px_rgba(22,20,19,0.9)] sm:p-8"
     >
       <figcaption id="security-model-caption" className="sr-only">
         Product security model showing organization-scoped access, protected provider credentials,
@@ -33,31 +33,31 @@ function SecurityModel() {
       </figcaption>
       <div className="flex flex-wrap items-end justify-between gap-3 border-b border-white/10 pb-5">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-[#f6f2eb]/40">Product security model</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-[#fcfaf8]/40">Product security model</p>
           <h2 className="m-display mt-2 text-[30px] sm:text-[38px]">Protect access. Bound actions. Preserve the record.</h2>
         </div>
-        <span className="rounded-full border border-white/10 px-3 py-1 text-[10px] text-[#f6f2eb]/50">Principles, not certification claims</span>
+        <span className="rounded-full border border-white/10 px-3 py-1 text-[10px] text-[#fcfaf8]/50">Principles, not certification claims</span>
       </div>
       <div className="grid gap-3 py-6 sm:grid-cols-2 lg:grid-cols-4">
         {controls.map(({ icon: Icon, label, body }, index) => (
           <div key={label} className="relative rounded-2xl border border-white/10 bg-white/[0.05] p-4">
             <div className="flex items-center justify-between gap-3">
               <span className="grid size-9 place-items-center rounded-full bg-white/[0.07]"><Icon className="size-4" aria-hidden /></span>
-              <span className="text-[10px] text-[#f6f2eb]/25">0{index + 1}</span>
+              <span className="text-[10px] text-[#fcfaf8]/25">0{index + 1}</span>
             </div>
             <p className="mt-5 text-sm font-semibold">{label}</p>
-            <p className="mt-2 text-[11px] leading-relaxed text-[#f6f2eb]/45">{body}</p>
+            <p className="mt-2 text-[11px] leading-relaxed text-[#fcfaf8]/45">{body}</p>
           </div>
         ))}
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
           <Database className="mt-0.5 size-5 shrink-0 text-sky-200" aria-hidden />
-          <div><p className="text-sm font-semibold">Data stays tied to the owning workspace</p><p className="mt-1 text-[11px] leading-relaxed text-[#f6f2eb]/45">Store, customer, conversation, and action access follows the organization scope.</p></div>
+          <div><p className="text-sm font-semibold">Data stays tied to the owning workspace</p><p className="mt-1 text-[11px] leading-relaxed text-[#fcfaf8]/45">Store, customer, conversation, and action access follows the organization scope.</p></div>
         </div>
         <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
           <Download className="mt-0.5 size-5 shrink-0 text-emerald-200" aria-hidden />
-          <div><p className="text-sm font-semibold">Exports provide a path out</p><p className="mt-1 text-[11px] leading-relaxed text-[#f6f2eb]/45">Workspace and customer data export as JSON; action history exports as CSV.</p></div>
+          <div><p className="text-sm font-semibold">Exports provide a path out</p><p className="mt-1 text-[11px] leading-relaxed text-[#fcfaf8]/45">Workspace and customer data export as JSON; action history exports as CSV.</p></div>
         </div>
       </div>
     </figure>

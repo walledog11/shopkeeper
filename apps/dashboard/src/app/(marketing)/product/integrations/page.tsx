@@ -18,7 +18,7 @@ function IntegrationsMap() {
   return (
     <figure
       aria-labelledby="integrations-map-caption"
-      className="overflow-hidden rounded-3xl border border-stone-900/10 bg-[#2b2118] p-5 text-[#f6f2eb] shadow-[0_35px_70px_-42px_rgba(22,20,19,0.9)] sm:p-8"
+      className="overflow-hidden rounded-3xl border border-stone-900/10 m-chapter--dark p-5 shadow-[0_35px_70px_-42px_rgba(22,20,19,0.9)] sm:p-8"
     >
       <figcaption id="integrations-map-caption" className="sr-only">
         Integration map showing Instagram and email as customer intake, Shopkeeper as the planning
@@ -26,45 +26,45 @@ function IntegrationsMap() {
       </figcaption>
       <div className="flex flex-wrap items-end justify-between gap-3 border-b border-white/10 pb-5">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-[#f6f2eb]/40">Four roles, kept distinct</p>
-          <h2 className="mt-2 text-[30px] font-bold leading-none [font-family:var(--m-hand)] sm:text-[38px]">One request. The right surface at each step.</h2>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-[#fcfaf8]/40">Four roles, kept distinct</p>
+          <h2 className="mt-2 text-[30px] m-display sm:text-[38px]">One request. The right surface at each step.</h2>
         </div>
-        <span className="rounded-full bg-white/[0.07] px-3 py-1 text-[10px] text-[#f6f2eb]/55">Representative system map</span>
+        <span className="rounded-full bg-white/[0.07] px-3 py-1 text-[10px] text-[#fcfaf8]/55">Representative system map</span>
       </div>
       <div className="grid gap-3 py-6 lg:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr] lg:items-stretch">
         <div className="rounded-2xl border border-sky-200/15 bg-sky-200/[0.06] p-4">
           <Mail className="size-5 text-sky-100" aria-hidden />
           <p className="mt-4 text-[10px] font-semibold uppercase tracking-[0.1em] text-sky-100/50">Customer intake</p>
           <p className="mt-2 text-sm font-semibold">Instagram, email, chat</p>
-          <p className="mt-2 text-[11px] leading-relaxed text-[#f6f2eb]/50">Customers ask for help where support is available.</p>
+          <p className="mt-2 text-[11px] leading-relaxed text-[#fcfaf8]/50">Customers ask for help where support is available.</p>
         </div>
-        <ArrowDown className="mx-auto size-4 text-[#f6f2eb]/25 lg:-rotate-90 lg:self-center" aria-hidden />
+        <ArrowDown className="mx-auto size-4 text-[#fcfaf8]/25 lg:-rotate-90 lg:self-center" aria-hidden />
         <div className="rounded-2xl border border-violet-200/15 bg-violet-200/[0.06] p-4">
           <MessageCircle className="size-5 text-violet-100" aria-hidden />
           <p className="mt-4 text-[10px] font-semibold uppercase tracking-[0.1em] text-violet-100/50">Plan</p>
           <p className="mt-2 text-sm font-semibold">Shopkeeper</p>
-          <p className="mt-2 text-[11px] leading-relaxed text-[#f6f2eb]/50">Resolves store context and prepares the supported action.</p>
+          <p className="mt-2 text-[11px] leading-relaxed text-[#fcfaf8]/50">Resolves store context and prepares the supported action.</p>
         </div>
-        <ArrowDown className="mx-auto size-4 text-[#f6f2eb]/25 lg:-rotate-90 lg:self-center" aria-hidden />
+        <ArrowDown className="mx-auto size-4 text-[#fcfaf8]/25 lg:-rotate-90 lg:self-center" aria-hidden />
         <div className="rounded-2xl border border-amber-200/15 bg-amber-200/[0.06] p-4">
           <Smartphone className="size-5 text-amber-100" aria-hidden />
           <p className="mt-4 text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-100/50">Merchant control</p>
           <p className="mt-2 text-sm font-semibold">iMessage</p>
-          <p className="mt-2 text-[11px] leading-relaxed text-[#f6f2eb]/50">Consequential work arrives with the facts needed to decide.</p>
+          <p className="mt-2 text-[11px] leading-relaxed text-[#fcfaf8]/50">Consequential work arrives with the facts needed to decide.</p>
         </div>
-        <ArrowDown className="mx-auto size-4 text-[#f6f2eb]/25 lg:-rotate-90 lg:self-center" aria-hidden />
+        <ArrowDown className="mx-auto size-4 text-[#fcfaf8]/25 lg:-rotate-90 lg:self-center" aria-hidden />
         <div className="rounded-2xl border border-emerald-200/15 bg-emerald-200/[0.06] p-4">
           <ShoppingBag className="size-5 text-emerald-100" aria-hidden />
           <p className="mt-4 text-[10px] font-semibold uppercase tracking-[0.1em] text-emerald-100/50">System of action</p>
           <p className="mt-2 text-sm font-semibold">Shopify</p>
-          <p className="mt-2 text-[11px] leading-relaxed text-[#f6f2eb]/50">Eligible order and customer changes happen in the store.</p>
+          <p className="mt-2 text-[11px] leading-relaxed text-[#fcfaf8]/50">Eligible order and customer changes happen in the store.</p>
         </div>
       </div>
       <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.05] p-4">
-        <MonitorCheck className="mt-0.5 size-5 shrink-0 text-[#f6f2eb]/70" aria-hidden />
+        <MonitorCheck className="mt-0.5 size-5 shrink-0 text-[#fcfaf8]/70" aria-hidden />
         <div>
           <p className="text-sm font-semibold">Dashboard · configuration, review, and audit</p>
-          <p className="mt-1 text-[11px] leading-relaxed text-[#f6f2eb]/45">Connect services, set policies and limits, inspect conversations, and review action history without making the dashboard the only place a merchant can work.</p>
+          <p className="mt-1 text-[11px] leading-relaxed text-[#fcfaf8]/45">Connect services, set policies and limits, inspect conversations, and review action history without making the dashboard the only place a merchant can work.</p>
         </div>
       </div>
     </figure>
