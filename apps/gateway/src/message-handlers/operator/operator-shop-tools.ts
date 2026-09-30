@@ -50,7 +50,7 @@ interface ShopContext {
   grantedScopes: readonly string[];
 }
 
-async function loadShopContext(organizationId: string): Promise<ShopContext | null> {
+export async function loadShopContext(organizationId: string): Promise<ShopContext | null> {
   const integration = await db.integration.findFirst({
     where: { organizationId, platform: 'shopify' },
     select: { externalAccountId: true, accessToken: true, metadata: true },
