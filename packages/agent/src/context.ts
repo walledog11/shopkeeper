@@ -334,6 +334,16 @@ export async function buildContext(
 
   const isOperator = isOperatorChannel(thread.channelType);
   const isGatewayOperator = thread.channelType === "operator";
+  const historyTaskIds = isOperator
+    ? [...new Set(thread.messages.flatMap((message) => message.agentTaskId ? [message.agentTaskId] : []))]
+    : [];
+  const historyTasks = historyTaskIds.length > 0
+    ? await db.agentTask.findMany({
+        where: { organizationId: orgId, threadId, id: { in: historyTaskIds } },
+        select: { id: true, status: true },
+      })
+    : [];
+  const historyTaskById = new Map(historyTasks.map((task) => [task.id, task]));
   // The single place a conversation becomes a guest. Storefront chat is the only
   // channel whose sender is anonymous by construction: every other channel
   // carries an identity the merchant's provider already established.
@@ -461,13 +471,15 @@ export async function buildContext(
     senderType: message.senderType,
     contentText: message.contentText,
     attachmentRefs: message.attachments,
+    ...(message.agentTaskId && historyTaskById.has(message.agentTaskId)
+      ? { task: historyTaskById.get(message.agentTaskId)! } : {}),
   }));
   const budgetedMessages = budgetRecentMessages(rawRecentMessages, {
     maxCount: fetchedMessageWindow,
   });
   const contextMessages = budgetedMessages.messages;
   const strippedMessages = (): AgentRecentMessage[] => contextMessages.map(
-    ({ senderType, contentText }) => ({ senderType, contentText }),
+    ({ senderType, contentText, task }) => ({ senderType, contentText, ...(task ? { task } : {}) }),
   );
   // Conversational context: an unreachable attachment costs the model the
   // picture, never the conversation, so the text of the same messages stands.

@@ -76,13 +76,26 @@ function presentmentCharge(order: ShopifyOrder): { presentment_total_price: stri
   return { presentment_total_price: presentment.amount, presentment_currency: currency };
 }
 
+export function describeShippingStatus(order: ShopifyOrder): string {
+  const successful = order.fulfillments?.filter((fulfillment) => fulfillment.status === "success") ?? [];
+  if (successful.some((fulfillment) => fulfillment.shipment_status === "delivered")) return "delivered";
+  switch (order.fulfillment_status) {
+    case "fulfilled": return "shipped";
+    case "partial": return "partially_shipped";
+    case null: return successful.length > 0 ? "shipped" : "not_shipped_yet";
+    default: return successful.length > 0 ? "shipped" : "unknown";
+  }
+}
+
 export function serializeOrder(order: ShopifyOrder) {
   return {
     id: String(order.id),
     name: order.name ?? null,
     created_at: order.created_at ?? null,
+    cancelled_at: order.cancelled_at ?? null,
     financial_status: order.financial_status ?? null,
     fulfillment_status: order.fulfillment_status ?? null,
+    shipping_status: describeShippingStatus(order),
     total_price: order.current_total_price ?? order.total_price ?? null,
     currency: order.currency ?? null,
     // The customer paid this, not total_price above. Quote it to them, and refund it.

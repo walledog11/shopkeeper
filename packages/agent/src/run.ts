@@ -267,7 +267,10 @@ export async function runAgent(
     const messageInstruction = readOnly
       ? `Private question from the support operator. Do not contact the customer.\n\n${boundedInstruction}`
       : boundedInstruction;
-    const messages = buildMessageHistory(history, messageInstruction, { segregateUntrusted: !operatorMode });
+    const messages = buildMessageHistory(history, messageInstruction, {
+      segregateUntrusted: !operatorMode,
+      operatorMode,
+    });
     // runAgent is the support/composer entry: it builds a support-shaped system
     // prompt and tool set. Thread-less modules (order-ops and later) run through the
     // shared loop (runAgentLoop) via their own entrypoint, not here — the executor
