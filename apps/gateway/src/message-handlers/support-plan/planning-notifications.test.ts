@@ -56,6 +56,7 @@ import { OperatorNotifyError } from '../../operator-notify.js';
 import { appendPendingPlan, getContext } from '../../operator-context.js';
 import type { AgentPlan } from '../../types.js';
 import type { RequestDisplay } from '../shared/request-display.js';
+import { toGatewayAgentPlan } from './agent-plan-adapter.js';
 
 // Send paths look up conversation stage by thread id, a uuid column in Postgres.
 const THREAD_ID = '00000000-0000-4000-8000-0000000000aa';
@@ -103,23 +104,29 @@ describe('formatOperatorPlanMessage', () => {
   // Found at the first Gate C rerun: the agent called the Special variant "the
   // sample", and a card that said only "Issue partial refund" could not show it.
   it('names the Shopify line item and quote a single line-item write targets', () => {
+    const rawToolCalls = [{
+      id: 'tc_refund',
+      name: 'create_partial_refund',
+      input: {
+        order_id: '1032',
+        items: [{ line_item_id: '11', quantity: 1 }],
+        approval_amount: '8.50',
+        approval_currency: 'USD',
+        approval_line_items: [{ name: 'Linen Napkin - Special', quantity: 1, change: 'refund' }],
+      },
+    }];
+    const adapted = toGatewayAgentPlan({
+      instruction: 'Refund the torn napkin',
+      steps: [{ id: 'tc_refund', category: 'action', tool: 'create_partial_refund', description: 'Refund', label: 'Issue partial refund', enabled: true }],
+      rawToolCalls,
+    })!;
     const message = formatOperatorPlanMessage(
       'Jane Doe',
       ChannelType.email,
       requestDisplay('Torn napkin'),
-      [{ id: 'tc_refund', category: 'action', tool: 'create_partial_refund', description: 'Refund', label: 'Issue partial refund', enabled: true }],
+      adapted.steps,
       {
-        rawToolCalls: [{
-          id: 'tc_refund',
-          name: 'create_partial_refund',
-          input: {
-            order_id: '1032',
-            items: [{ line_item_id: '11', quantity: 1 }],
-            approval_amount: '8.50',
-            approval_currency: 'USD',
-            approval_line_items: [{ name: 'Linen Napkin - Special', quantity: 1, change: 'refund' }],
-          },
-        }],
+        rawToolCalls: adapted.rawToolCalls,
       },
     );
 
