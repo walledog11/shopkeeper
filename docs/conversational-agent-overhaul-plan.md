@@ -189,8 +189,10 @@ runs also happen as soon as the affected flow is ready.
   merged and deployed on `7eafc511`; manual verification remains open. The chat tracks the server's request and
   revision and calls the existing cancellation route. It shows a recorded stop,
   work still underway, and outcomes requiring review; it retains errors when
-  recording the stop fails. Reload restores the control for active and waiting
-  tasks, including phone-started work. Polling no longer treats an earlier
+  recording the stop fails. A live reload exercise found that the shared agent panel passed
+  `restoreHistory: false`, bypassing that recovery. The composer branch fixes
+  the caller to restore the durable transcript and controls, including
+  phone-started work; deployment and another live Stop exercise remain owed. Polling no longer treats an earlier
   attempt's response as completion of a currently running task.
   **Still owed:** Stop on a running dashboard request and a phone-started task,
   reload, and honest display when an action is already underway.
