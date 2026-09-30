@@ -2,6 +2,7 @@ import { ApiRequestError, requestJson } from "@/lib/api/fetcher"
 import { committedWithUnsentReply, planExecutionOutcomeForActions } from "@shopkeeper/agent/execution-outcome"
 import type { ActionEntry } from "@/lib/agent/runner"
 import type { AgentPlan, AgentTurn, PlanExecutionOutcome, RawToolCall } from "@/types"
+import type { GatewayAgentRequestPayload } from "@/lib/agent/api/gateway-operator-turn"
 
 const JSON_HEADERS = { "Content-Type": "application/json" } as const
 const NETWORK_ERROR = "Network error — please try again."
@@ -128,6 +129,7 @@ export async function executeApprovedAgentPlan(
   threadId: string,
   instruction: string,
   approvedToolCalls: RawToolCall[],
+  planId?: string | null,
 ): Promise<AgentRequestResult> {
   try {
     const payload = await requestJson<AgentActionPayload>(
@@ -135,7 +137,7 @@ export async function executeApprovedAgentPlan(
       {
         method: "POST",
         headers: JSON_HEADERS,
-        body: JSON.stringify({ threadId, instruction, approvedToolCalls }),
+        body: JSON.stringify({ threadId, instruction, approvedToolCalls, ...(planId ? { planId } : {}) }),
       },
       "Agent failed.",
     )
@@ -185,17 +187,81 @@ export async function askAgentPrivately(
 export async function fetchAgentPlan(
   threadId: string,
   instruction: string,
-  options: { force?: boolean } = {},
+  options: { force?: boolean; signal?: AbortSignal } = {},
 ): Promise<AgentPlan> {
-  return requestJson<AgentPlan>(
+  const stored = readPlanningSubmission(threadId)
+  const submission = stored && stored.instruction === instruction && stored.force === (options.force ?? false)
+    ? stored : { clientRequestId: crypto.randomUUID(), instruction, force: options.force ?? false }
+  storePlanningSubmission(threadId, submission)
+  const payload = await requestJson<GatewayAgentRequestPayload>(
     "/api/agent/plan",
     {
       method: "POST",
       headers: JSON_HEADERS,
-      body: JSON.stringify({ threadId, instruction, force: options.force ?? false }),
+      body: JSON.stringify({ threadId, ...submission }),
+      signal: options.signal,
     },
     "Plan request failed",
   )
+  storePlanningSubmission(threadId, { ...submission, requestId: payload.requestId })
+  return waitForAgentPlan(threadId, payload, options.signal)
+}
+
+interface PlanningSubmission {
+  clientRequestId: string; instruction: string; force: boolean; requestId?: string
+}
+
+function planningStorageKey(threadId: string) { return `shopkeeper:ticket-plan:${threadId}` }
+function readPlanningSubmission(threadId: string): PlanningSubmission | null {
+  try {
+    const value = JSON.parse(sessionStorage.getItem(planningStorageKey(threadId)) ?? "null")
+    return value && typeof value.clientRequestId === "string" && typeof value.instruction === "string" && typeof value.force === "boolean" ? value : null
+  } catch { return null }
+}
+function storePlanningSubmission(threadId: string, value: PlanningSubmission | null) {
+  try {
+    if (value) sessionStorage.setItem(planningStorageKey(threadId), JSON.stringify(value))
+    else sessionStorage.removeItem(planningStorageKey(threadId))
+  } catch { /* The server's request history also restores accepted work. */ }
+}
+
+async function waitForAgentPlan(threadId: string, initial: GatewayAgentRequestPayload, signal?: AbortSignal): Promise<AgentPlan> {
+  let payload = initial
+  while (true) {
+    signal?.throwIfAborted()
+    if (payload.plan) {
+      storePlanningSubmission(threadId, null)
+      return payload.plan
+    }
+    if (["failed", "cancelled", "reconciling", "waiting_input", "completed"].includes(payload.status)) {
+      storePlanningSubmission(threadId, null)
+      throw new Error(payload.pendingQuestion ?? (payload.failureCode === "superseded_request"
+        ? "A newer instruction replaced this planning request. Review the current draft."
+        : payload.status === "cancelled" ? "Planning was stopped."
+        : "Planning did not produce a current draft. Review the ticket before trying again."))
+    }
+    await new Promise<void>((resolve, reject) => {
+      const abort = () => { clearTimeout(timer); reject(signal?.reason) }
+      const timer = setTimeout(() => { signal?.removeEventListener("abort", abort); resolve() }, 1500)
+      signal?.addEventListener("abort", abort, { once: true })
+    })
+    payload = await requestJson<GatewayAgentRequestPayload>(`/api/agent/requests/${payload.requestId}`, { signal }, "Could not load planning progress")
+  }
+}
+
+export async function recoverAgentPlan(threadId: string, signal: AbortSignal, onProgress?: (instruction: string) => void): Promise<AgentPlan | null> {
+  const history = await requestJson<{ requests: GatewayAgentRequestPayload[] }>(`/api/agent/plan?threadId=${encodeURIComponent(threadId)}`, { signal }, "Could not load planning progress")
+  const latest = history.requests[0]
+  if (latest && ["queued", "running", "waiting_approval"].includes(latest.status)) {
+    if (["queued", "running"].includes(latest.status)) onProgress?.(latest.instruction)
+    return waitForAgentPlan(threadId, latest, signal)
+  }
+  const stored = readPlanningSubmission(threadId)
+  if (!latest && stored) {
+    onProgress?.(stored.instruction)
+    return fetchAgentPlan(threadId, stored.instruction, { force: stored.force, signal })
+  }
+  return null
 }
 
 export async function dismissAgentPlan(threadId: string, planId: string): Promise<void> {

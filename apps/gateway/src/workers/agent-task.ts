@@ -22,6 +22,7 @@ import { registerJobFailureLogging } from './failure.js';
 import type { SharedGatewayWorkerOptions } from './resources.js';
 import { operatorBindingStillValid, operatorTaskMessage } from './operator-event.js';
 import { completeOperatorTaskReply } from '../operator-event-reply.js';
+import { runComposerTask } from '../message-handlers/support-plan/composer-task.js';
 
 const LEASE_MS = 300_000;
 const RENEW_MS = 60_000;
@@ -96,12 +97,19 @@ export async function processAgentTaskJob(data: AgentTaskJobData): Promise<void>
 
   // Newest first: a resumed task carries both the original instruction and the
   // answer that woke it, and the answer is what this attempt is running.
+  const checkpoint = claimed.task.checkpoint;
+  const planRequestId = checkpoint && typeof checkpoint === 'object' && !Array.isArray(checkpoint)
+    && checkpoint.nextWork === 'ticket_plan' && typeof checkpoint.planRequestId === 'string'
+    ? checkpoint.planRequestId : null;
   const request = await db.agentRequest.findFirst({
-    where: { organizationId: data.organizationId, taskId: data.taskId },
+    where: { organizationId: data.organizationId, taskId: data.taskId, ...(planRequestId ? { id: planRequestId } : {}) },
     orderBy: [{ acceptedAt: 'desc' }, { id: 'desc' }],
   });
-  const memberId = claimed.task.initiatingActorKey.startsWith('member:')
-    ? claimed.task.initiatingActorKey.slice('member:'.length)
+  const isComposer = request?.payload && typeof request.payload === 'object' && !Array.isArray(request.payload)
+    && request.payload.kind === 'ticket_plan';
+  const actorKey = isComposer ? request!.actorKey : claimed.task.initiatingActorKey;
+  const memberId = actorKey.startsWith('member:')
+    ? actorKey.slice('member:'.length)
     : null;
   const member = memberId
     ? await db.orgMember.findFirst({
@@ -174,6 +182,16 @@ export async function processAgentTaskJob(data: AgentTaskJobData): Promise<void>
 
   let summary: string | undefined;
   try {
+    if (isComposer) {
+      if (!request.sourceMessageId) throw new Error('Composer request has no customer message source.');
+      await runComposerTask({
+        ...claim, requestId: request.id, threadId: claimed.task.threadId,
+        sourceMessageId: request.sourceMessageId, instruction: request.normalizedInstruction,
+        runtimeVersion: claimed.task.runtimeVersion,
+        assertExecutionAllowed: () => { if (leaseLost) throw new Error('Task lease ownership was lost.'); },
+      }, taskBudget);
+      return;
+    }
     const memberKey = claimed.task.initiatingActorKey;
     const context = await loadLiveOperatorContext(
       data.organizationId,

@@ -99,6 +99,7 @@ export function parseAgentRouteBody(body: unknown) {
     threadId: requireNonEmptyString(candidate.threadId, "threadId"),
     instruction: requireTrimmedInstruction(candidate.instruction),
     approvedToolCalls: parseApprovedToolCalls(candidate.approvedToolCalls),
+    planId: parseOptionalString(candidate.planId, "planId"),
   };
 }
 
@@ -167,7 +168,9 @@ export function parseAgentChatBody(body: unknown) {
 
 export function parseAgentPlanBody(body: unknown) {
   const candidate = requireObject(body);
+  const { clientRequestId } = parseAgentChatBody(candidate);
   return {
+    clientRequestId,
     threadId: requireNonEmptyString(candidate.threadId, "threadId"),
     instruction: requireTrimmedInstruction(candidate.instruction),
     force: parseOptionalBoolean(candidate.force, "force") ?? false,

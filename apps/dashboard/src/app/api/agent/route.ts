@@ -49,7 +49,7 @@ export const POST = withOrgRoute(
       forceForE2E: request.headers.get("x-e2e-rate-limit") === "enforce",
     });
     if (!rl.success) return tooManyRequests(rl.reset);
-    const { threadId, instruction, approvedToolCalls } = parseAgentRouteBody(await readRequiredJsonObject(request));
+    const { threadId, instruction, approvedToolCalls, planId } = parseAgentRouteBody(await readRequiredJsonObject(request));
     const instructionHash = hashInstructionForLog(instruction);
     const thread = await requireOrgThread(threadId, org.id);
     const settings = resolveAgentSettings(org.settings as Partial<OrgSettings> | null);
@@ -74,7 +74,7 @@ export const POST = withOrgRoute(
       executionIntent: "merchant_approved",
       failureRoute: "/api/agent",
       approvedToolCalls,
-      expectedIdentity: { instructionHash: hashInstruction(instruction) },
+      expectedIdentity: { instructionHash: hashInstruction(instruction), ...(planId ? { planId } : {}) },
       ...(approver ? { approver } : {}),
     });
     const result = executed.result;
