@@ -16,8 +16,9 @@ comparison and exposed provider fields. The 8h candidate now preserves task
 state in operator history and separates prior conversation from the current
 instruction. Order reads also expose cancellation and supported shipping state.
 The candidate is not yet deployed or verified through iMessage.
-The owner stopped further testing and explicitly removed Telegram testing from
-the current work; iMessage is the primary phone channel. Cancellation quote display (8d) was
+The owner removed Telegram from product and release scope on 2026-09-30: it is
+a test surface, with no further implementation or verification required.
+iMessage is the primary phone channel. Cancellation quote display (8d) was
 manually verified on `6616da7f` (#139) on 2026-09-29. One of the fourteen retained
 Shopify effects has a clean recorded live run; the other thirteen remain.
 Runtime v1 remains the production default, with one controlled organization on v2.
@@ -47,8 +48,8 @@ verify the focused read-only follow-up through iMessage; no broad testing or pai
 eval campaign. Short natural wording remains unverified until that reply arrives.
 #1035 is already cancelled/refunded: do not repeat that mutation.
 
-iMessage is the main channel. Do not test Telegram or ask the owner to link it
-unless they explicitly reopen that work. Customer-email receipt confirmation,
+iMessage is the main channel. Telegram is excluded from product and release
+acceptance; do not build or test it. Customer-email receipt confirmation,
 phone approval, phone-started Stop and definite delivery-failure checks remain
 unverified; resume those after the conversation issue, not as prerequisites for
 fixing it. The candidate is implemented in the isolated
@@ -69,8 +70,9 @@ account of what happened. Customer requests use the same durable execution
 contracts. The approved action happens once, Shopify's state agrees with its
 receipt, and the intended message reaches its destination.
 
-Telegram remains a secondary implemented channel; its testing is out of the
-current work at the release owner's direction (2026-09-30).
+Telegram is a test-only surface, excluded from the shipping objective at the
+release owner's direction (2026-09-30). Existing transport code can remain;
+building, linking and verifying Telegram are not completion requirements.
 
 Finish the existing scope using the existing runtime. Preserve the
 [settled decisions](#settled-decisions) and contracts below. A narrower release
@@ -425,8 +427,8 @@ verification. Make the smallest correction, retain checks that catch actual
 failures, and continue the shipping queue. #137, #138 and #140 are deployed.
 Composer, dashboard Stop/reload and durable iMessage delivery passed; customer
 email receipt and the remaining iMessage approval/Stop/failure checks stay open.
-Fix the iMessage conversation scope and wording defect (8h) next. Do not resume
-Telegram testing unless the owner explicitly requests it.
+Fix the iMessage conversation scope and wording defect (8h) next. Telegram
+implementation and testing are excluded from product and release scope.
 
 ## Open decision
 

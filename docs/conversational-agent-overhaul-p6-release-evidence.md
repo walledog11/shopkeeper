@@ -834,3 +834,16 @@ No Shopify write, customer message, phone send or paid model campaign was used
 for these inspections. Recipient email receipt, phone approval/Stop/failure and
 the rest of the retained-effects work remain open. Telegram testing remains
 excluded.
+
+### Owner scope decision and candidate review, 2026-09-30
+
+The owner removed Telegram from product and release scope, describing it as a
+test surface. No further Telegram construction, binding or verification is
+required for this overhaul. Existing transport code is not removed by this
+decision.
+
+The existing candidate is PR #141, head `f344252d`. Required CI, free
+deterministic preflight and Vercel preview checks passed. The implementation
+was reviewed against the recorded stopped-task/current-instruction defect;
+live iMessage acceptance remains open until the merged fix is deployed and a
+fresh read-only message is received.
