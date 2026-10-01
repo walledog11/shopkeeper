@@ -4,6 +4,15 @@
     "build": {
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"],
+      "passThroughEnv": [
+        "DATABASE_URL",
+        "DIRECT_DATABASE_URL",
+        "NEON_SERVERLESS_HTTP",
+        "DB_POOL_MAX",
+        "DB_CONNECT_TIMEOUT_MS",
+        "DB_POOL_WAIT_TIMEOUT_MS",
+        "DB_QUERY_TIMEOUT_MS"
+      ],
       "env": [
         "APP_URL",
         "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",

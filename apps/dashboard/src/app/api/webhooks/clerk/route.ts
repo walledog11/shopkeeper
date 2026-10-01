@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { db } from '@shopkeeper/db'
+import { beginWorkspaceDeletion, db } from '@shopkeeper/db'
 import { verifyWebhook, type WebhookEvent } from '@clerk/nextjs/webhooks'
 import logger from '@/lib/server/logger'
 
@@ -38,8 +38,18 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ received: true, skipped: true })
       }
 
-      const result = await db.organization.deleteMany({ where: { clerkOrgId } })
-      return NextResponse.json({ received: true, deleted: result.count })
+      const org = await db.organization.findUnique({ where: { clerkOrgId }, select: { id: true } })
+      if (!org) return NextResponse.json({ received: true, deleted: 0 })
+      const started = await beginWorkspaceDeletion(org.id)
+      if (started) {
+        // A signed provider event is evidence that this external step finished.
+        // Preserve local credentials and billing references until cleanup completes.
+        await db.workspaceDeletion.update({
+          where: { id: started.operation.id },
+          data: { clerkDeletedAt: new Date() },
+        })
+      }
+      return NextResponse.json({ received: true, deletionPending: Boolean(started) })
     }
 
     case 'user.deleted': {

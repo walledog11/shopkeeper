@@ -48,8 +48,9 @@ afterEach(async () => {
 })
 
 describe('POST /api/webhooks/clerk', () => {
-  it('deletes local organization data when Clerk deletes an organization', async () => {
+  it('retains billing and credentials until cleanup after Clerk deletes an organization', async () => {
     const testOrg = await createOrg()
+    await db.organization.update({ where: { id: testOrg.id }, data: { stripeSubscriptionId: 'sub_cleanup' } })
 
     const response = await POST(createSignedRequest({
       object: 'event',
@@ -62,11 +63,14 @@ describe('POST /api/webhooks/clerk', () => {
     }))
 
     expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ received: true, deleted: 1 })
+    expect(await response.json()).toEqual({ received: true, deletionPending: true })
 
     const organization = await db.organization.findUnique({ where: { id: testOrg.id } })
-    expect(organization).toBeNull()
-    org = null
+    expect(organization?.lifecycleStatus).toBe('deleting')
+    expect(organization?.stripeSubscriptionId).toBe('sub_cleanup')
+    const cleanup = await db.workspaceDeletion.findUniqueOrThrow({ where: { organizationId: testOrg.id } })
+    expect(cleanup.clerkDeletedAt).not.toBeNull()
+    expect(cleanup.stripeCanceledAt).toBeNull()
   })
 
   it('removes local org memberships when Clerk deletes a user', async () => {

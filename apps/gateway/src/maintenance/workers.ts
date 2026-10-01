@@ -4,6 +4,7 @@ import { registerDigestMaintenanceJob } from './digest.js';
 import { registerEmailTokenHealthMaintenanceJob } from './email-token-health.js';
 import { registerGmailWatchMaintenanceJob } from './gmail-watch.js';
 import { registerIntegrationDisconnectSweepMaintenanceJob } from './integration-disconnect-sweep.js';
+import { registerWorkspaceDeletionSweepMaintenanceJob } from './workspace-deletion-sweep.js';
 import { registerOperatorEventSweepMaintenanceJob } from './operator-event-sweep.js';
 import { registerAgentTaskSweepMaintenanceJob } from './agent-task-sweep.js';
 import { registerUnknownOutcomeSweepMaintenanceJob } from './unknown-outcome-sweep.js';
@@ -28,6 +29,7 @@ const maintenanceJobRegistrations: MaintenanceJobRegistration[] = [
   registerEmailTokenHealthMaintenanceJob,
   registerGmailWatchMaintenanceJob,
   registerIntegrationDisconnectSweepMaintenanceJob,
+  registerWorkspaceDeletionSweepMaintenanceJob,
   registerRetentionMaintenanceJobs,
   registerPlanRecoveryMaintenanceJob,
   registerDigestMaintenanceJob,

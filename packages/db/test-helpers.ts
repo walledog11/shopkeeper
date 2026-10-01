@@ -101,5 +101,6 @@ export async function cleanupTestData(orgId?: string | null) {
   // IntegrationDisconnect deliberately survives Integration deletion and has
   // no Organization foreign key, so it cannot be left to cascade cleanup.
   await db.integrationDisconnect.deleteMany({ where: { organizationId: orgId } });
+  await db.workspaceDeletion.deleteMany({ where: { organizationId: orgId } });
   await db.organization.delete({ where: { id: orgId } }).catch(() => undefined);
 }

@@ -32,6 +32,7 @@ import {
   fulfillOrder,
 } from "./shopify.js";
 import { checkParsedStaticToolPolicy, checkStorefrontToolAllowed } from "./static-policy.js";
+import { checkSupportAuthorization } from "./support-authorization.js";
 import { getSupportStats } from "./support-stats.js";
 import {
   ReceiptValidationError,
@@ -163,7 +164,8 @@ async function enforceToolPolicy(
     }
   }
 
-  return null;
+  const supportBlock = await checkSupportAuthorization(definition, input, ctx);
+  return supportBlock ? formatPolicyError(supportBlock) : null;
 }
 
 const TOOL_EXECUTION_DEPS: ToolExecutionDeps = {

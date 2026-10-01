@@ -99,6 +99,19 @@ describe('/api/org PATCH settings', () => {
     });
   }
 
+  it('allows only one concurrent save of the same settings version', async () => {
+    const version = org.updatedAt.toISOString();
+    const responses = await Promise.all([
+      PATCH(patchReq({ version, settings: { maxRefundAmount: 25 } })),
+      PATCH(patchReq({ version, settings: { maxRefundAmount: 75 } })),
+    ]);
+    expect(responses.map(response => response.status).sort()).toEqual([200, 409]);
+    const winner = await responses.find(response => response.status === 200)!.json();
+    const after = await db.organization.findUniqueOrThrow({ where: { id: org.id } });
+    expect(after.settings).toEqual(winner.settings);
+    expect(after.updatedAt.toISOString()).toBe(winner.version);
+  });
+
   it('refuses to let a member widen the agent\'s spend authority', async () => {
     setAuth({ orgRole: 'org:member' });
 
@@ -317,7 +330,7 @@ describe('/api/org DELETE', () => {
     expect(stillThere).not.toBeNull();
   });
 
-  it('deletes the workspace when the user has another workspace', async () => {
+  it('persists cleanup before deleting a workspace with another membership', async () => {
     mockGetOrganizationMembershipList.mockResolvedValueOnce({
       data: [
         { organization: { id: org.clerkOrgId } },
@@ -327,10 +340,17 @@ describe('/api/org DELETE', () => {
 
     const res = await DELETE(deleteReq(org.name));
 
-    expect(res.status).toBe(204);
-    expect(mockDeleteOrganization).toHaveBeenCalledWith(org.clerkOrgId);
-    const gone = await db.organization.findUnique({ where: { id: org.id } });
-    expect(gone).toBeNull();
+    expect(res.status).toBe(202);
+    const body = await res.json();
+    expect(mockDeleteOrganization).not.toHaveBeenCalled();
+    const retained = await db.organization.findUniqueOrThrow({ where: { id: org.id } });
+    expect(retained.lifecycleStatus).toBe('deleting');
+    const operation = await db.workspaceDeletion.findUniqueOrThrow({ where: { id: body.operationId } });
+    expect(operation.organizationId).toBe(org.id);
+    expect(operation.status).toBe('pending');
+    expect((await PATCH(new Request('http://localhost/api/org', {
+      method: 'PATCH', body: JSON.stringify({ name: 'Late rename' }),
+    }))).status).toBe(409);
   });
 
   it('rejects non-admin callers before touching memberships', async () => {

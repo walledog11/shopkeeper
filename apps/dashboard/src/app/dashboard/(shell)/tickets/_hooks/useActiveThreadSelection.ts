@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr'
 import { fetcher } from '@/lib/api/fetcher'
 import { REALTIME_ENABLED } from '@/lib/realtime/config'
@@ -45,6 +45,21 @@ function createLoadingTicket(threadId: string): Ticket {
 /** Fallback poll while a conversation is open — complements SSE list revalidation. */
 const ACTIVE_THREAD_REFRESH_MS = REALTIME_ENABLED ? 30_000 : 15_000
 
+function mergeMessages(older: ActiveThreadData, newer: ActiveThreadData): ActiveThreadData {
+  const messages = new Map(older.thread.messages.map(message => [message.id, message]))
+  for (const message of newer.thread.messages) messages.set(message.id, message)
+  return {
+    ...newer,
+    nextMessageCursor: older.nextMessageCursor,
+    thread: {
+      ...newer.thread,
+      messages: [...messages.values()].sort((a, b) =>
+        new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime() || a.id.localeCompare(b.id)),
+    },
+    agentActionsByTurnId: { ...older.agentActionsByTurnId, ...newer.agentActionsByTurnId },
+  }
+}
+
 export function useActiveThreadSelection({
   queryThreadId,
   knownThreads,
@@ -65,13 +80,38 @@ export function useActiveThreadSelection({
   }, [activeTicketId, queryActiveTicketId])
 
   const activeThreadKey = activeTicketId ? `/api/threads/${activeTicketId}` : null
+  const [history, setHistory] = useState<ActiveThreadData | null>(null)
+  const [olderLoad, setOlderLoad] = useState<{ id: string; error: string | null; loading: boolean } | null>(null)
+  const loadingOlder = useRef(false)
   const {
-    data: activeThreadData,
+    data: latestThreadData,
     error: activeThreadError,
     mutate: mutateActiveThread,
   } = useSWR<ActiveThreadData>(activeThreadKey, fetcher, {
     refreshInterval: activeThreadKey && isVisible ? ACTIVE_THREAD_REFRESH_MS : 0,
+    onSuccess: data => setHistory(current => current?.thread.id === data.thread.id
+      ? mergeMessages(current, data) : current),
   })
+  const activeThreadData = useMemo(() => latestThreadData && history?.thread.id === latestThreadData.thread.id
+    ? mergeMessages(history, latestThreadData) : latestThreadData, [history, latestThreadData])
+  const loadOlderMessages = useCallback(async () => {
+    const cursor = activeThreadData?.nextMessageCursor
+    if (!activeTicketId || !activeThreadData || !cursor || loadingOlder.current) return
+    const id = activeTicketId
+    loadingOlder.current = true
+    setHistory(current => current?.thread.id === id ? current : activeThreadData)
+    setOlderLoad({ id, error: null, loading: true })
+    try {
+      const older = await fetcher<ActiveThreadData>(`/api/threads/${id}?before=${encodeURIComponent(cursor)}`)
+      setHistory(current => mergeMessages(older, current?.thread.id === id
+        ? current : activeThreadData))
+      setOlderLoad({ id, error: null, loading: false })
+    } catch {
+      setOlderLoad({ id, error: 'Could not load earlier messages. Try again.', loading: false })
+    } finally {
+      loadingOlder.current = false
+    }
+  }, [activeThreadData, activeTicketId])
   const activeThread = activeThreadData?.thread
 
   const activeTicket = activeThread ? threadToTicket(activeThread) : undefined
@@ -106,5 +146,9 @@ export function useActiveThreadSelection({
     conversationTicket,
     isConversationLoading,
     mutateActiveThread,
+    hasOlderMessages: Boolean(activeThreadData?.nextMessageCursor),
+    isLoadingOlderMessages: olderLoad?.id === activeTicketId && olderLoad.loading,
+    olderMessagesError: olderLoad?.id === activeTicketId ? olderLoad.error : null,
+    loadOlderMessages,
   }
 }

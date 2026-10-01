@@ -24,6 +24,7 @@ type QueueHealthQueueLabel =
   | 'gmailSync'
   | 'orderReview'
   | 'operatorEvent'
+  | 'agentTask'
   | 'integrationDisconnect';
 type QueueHealthMetric = 'failed' | 'waiting' | 'active_stuck';
 
@@ -196,6 +197,7 @@ export async function checkGatewayQueueHealth(
 // and `failed` stays global everywhere (it's cumulative over the 7-day window).
 const OUTBOUND_EMAIL_THRESHOLDS: QueueHealthThresholds = { waiting: 20, activeStuckMs: 300_000 };
 const OPERATOR_EVENT_THRESHOLDS: QueueHealthThresholds = { waiting: 20 };
+const AGENT_TASK_THRESHOLDS: QueueHealthThresholds = { waiting: 20, activeStuckMs: 300_000 };
 const INTEGRATION_DISCONNECT_THRESHOLDS: QueueHealthThresholds = {
   waiting: 20,
   activeStuckMs: 5 * 60 * 1000,
@@ -209,6 +211,7 @@ export const registerQueueHealthMaintenanceJob: MaintenanceJobRegistration = asy
   const gmailSyncQueue = createMaintenanceQueue(context, QUEUE.GMAIL_SYNC);
   const orderReviewQueue = createMaintenanceQueue(context, QUEUE.ORDER_REVIEW);
   const operatorEventQueue = createMaintenanceQueue(context, QUEUE.OPERATOR_EVENT);
+  const agentTaskQueue = createMaintenanceQueue(context, QUEUE.AGENT_TASK);
   const integrationDisconnectQueue = createMaintenanceQueue(
     context,
     QUEUE.INTEGRATION_DISCONNECT,
@@ -227,6 +230,12 @@ export const registerQueueHealthMaintenanceJob: MaintenanceJobRegistration = asy
         thresholds: OUTBOUND_EMAIL_THRESHOLDS,
       },
       { label: 'gmailSync', queueName: QUEUE.GMAIL_SYNC, queue: gmailSyncQueue },
+      {
+        label: 'agentTask',
+        queueName: QUEUE.AGENT_TASK,
+        queue: agentTaskQueue,
+        thresholds: AGENT_TASK_THRESHOLDS,
+      },
       { label: 'orderReview', queueName: QUEUE.ORDER_REVIEW, queue: orderReviewQueue },
       {
         label: 'operatorEvent',
@@ -258,6 +267,7 @@ export const registerQueueHealthMaintenanceJob: MaintenanceJobRegistration = asy
       gmailSyncQueue,
       orderReviewQueue,
       operatorEventQueue,
+      agentTaskQueue,
       integrationDisconnectQueue,
     ],
   };

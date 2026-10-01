@@ -5,7 +5,7 @@ interface UseConversationViewportEffectsOptions {
   activeTab: "open" | "closed"
   composerRef: RefObject<HTMLDivElement | null>
   conversationRef: RefObject<HTMLDivElement | null>
-  displayMessageCount: number
+  lastMessageId: string | undefined
   failedMessageCount: number
   isMobile: boolean
   keyboardInset: number
@@ -19,7 +19,7 @@ export function useConversationViewportEffects({
   activeTab,
   composerRef,
   conversationRef,
-  displayMessageCount,
+  lastMessageId,
   failedMessageCount,
   isMobile,
   keyboardInset,
@@ -71,7 +71,7 @@ export function useConversationViewportEffects({
       window.clearTimeout(second)
     }
   }, [
-    displayMessageCount,
+    lastMessageId,
     failedMessageCount,
     keyboardInset,
     keyboardLayoutOpen,

@@ -85,7 +85,7 @@
     "@shopkeeper/agent": "*",
     "@shopkeeper/db": "*",
     "@vercel/blob": "2.3.3",
-    "mailparser": "3.9.23",
+    "mailparser": "3.9.32",
     "postmark": "4.0.7"
   }
 }

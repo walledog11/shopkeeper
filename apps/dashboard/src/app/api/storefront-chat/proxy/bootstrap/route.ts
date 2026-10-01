@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@shopkeeper/db";
+import { rateLimit, tooManyRequests } from "@/lib/server/rate-limit";
 import { normalizeShopifyShopDomain } from "@/lib/shopify/oauth";
 import { verifyAppProxySignature, isProxyTimestampFresh } from "@/lib/shopify/app-proxy";
 import {
@@ -37,7 +38,10 @@ export async function POST(request: Request) {
   }
 
   const integration = await db.integration.findFirst({
-    where: { platform: "shopify", externalAccountId: shopDomain },
+    where: {
+      platform: "shopify", externalAccountId: shopDomain, lifecycleStatus: 'active',
+      organization: { lifecycleStatus: 'active' },
+    },
     select: { id: true, organizationId: true, metadata: true },
   });
   if (!integration) {
@@ -48,6 +52,9 @@ export async function POST(request: Request) {
   if (!isStorefrontChatEnabledForIntegration(integration.metadata)) {
     return NextResponse.json({ error: "disabled" }, { status: 403 });
   }
+
+  const bootstrapLimit = await rateLimit(`storefront:bootstrap:${integration.id}`, 300, 60);
+  if (!bootstrapLimit.success) return tooManyRequests(bootstrapLimit.reset);
 
   const body = await request.json().catch(() => ({}));
   const priorSessionId = typeof body.sessionId === "string" ? body.sessionId : null;
@@ -74,6 +81,8 @@ export async function POST(request: Request) {
       data: { lastSeenAt: new Date() },
     });
   } else {
+    const creationLimit = await rateLimit(`storefront:session-create:${integration.id}`, 100, 60);
+    if (!creationLimit.success) return tooManyRequests(creationLimit.reset);
     // Deliberately no customer or thread here — an abandoned widget open costs
     // one row and never an empty ticket in the merchant's inbox.
     const { secret, hash } = createResumeSecret();
@@ -93,9 +102,11 @@ export async function POST(request: Request) {
     ? await db.message.findMany({
         where: {
           threadId: session.threadId,
+          organizationId: integration.organizationId,
+          deletedAt: null,
           senderType: { in: ["customer", "agent", "ai"] },
         },
-        orderBy: { sentAt: "asc" },
+        orderBy: [{ sentAt: 'desc' }, { id: 'desc' }],
         take: 50,
         select: { id: true, contentText: true, senderType: true, sentAt: true },
       })
@@ -120,7 +131,7 @@ export async function POST(request: Request) {
       integrationId: integration.id,
       shop: shopDomain,
     }),
-    messages: messages.map((m) => ({
+    messages: messages.reverse().map((m) => ({
       id: m.id,
       text: m.contentText ?? "",
       from: m.senderType === "customer" ? "customer" : "agent",

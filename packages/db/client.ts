@@ -2,6 +2,7 @@ import { createRequire } from 'node:module';
 import type { PrismaClient as PrismaClientType } from '@prisma/client';
 import { decryptToken, encryptToken } from './crypto.js';
 import { PrismaClient } from './prisma-enums.js';
+import { databasePoolConfig } from './pool-config.js';
 
 const require = createRequire(import.meta.url);
 
@@ -88,12 +89,13 @@ function decryptResultRows(result: unknown): unknown {
 function createClient() {
   const log = (process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error']) as ('query' | 'error' | 'warn')[];
   let base: PrismaClientType;
+  const pool = databasePoolConfig();
   if (process.env.NEON_SERVERLESS_HTTP === 'true' && process.env.NODE_ENV !== 'test') {
     const { PrismaNeon } = require('@prisma/adapter-neon') as typeof import('@prisma/adapter-neon');
-    const adapter = new PrismaNeon({ connectionString: process.env.DATABASE_URL! });
+    const adapter = new PrismaNeon(pool.driver);
     base = new PrismaClient({ adapter, log });
   } else {
-    base = new PrismaClient({ log });
+    base = new PrismaClient({ log, datasources: { db: { url: pool.nativeUrl } } });
   }
 
   return base.$extends({

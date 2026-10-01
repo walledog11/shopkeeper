@@ -12,6 +12,7 @@ declare const helpers: {
       externalAccountId?: string;
       accessToken?: string | null;
       fromEmail?: string | null;
+      metadata?: import('@prisma/client').Prisma.InputJsonValue;
     },
   ) => Promise<unknown>;
   createTestOrg: () => Promise<{ id: string }>;

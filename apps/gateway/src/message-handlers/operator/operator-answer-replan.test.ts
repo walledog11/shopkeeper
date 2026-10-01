@@ -473,6 +473,7 @@ describe('applyOperatorAnswerReplan', () => {
         customerText: `Please ${capability} the black shirt from order #1001.`,
         objective,
         plan: originalPlan,
+        shopifyCustomerId: '1234',
       });
       await createTestIntegration(org.id, {
         platform: 'shopify',
@@ -484,6 +485,10 @@ describe('applyOperatorAnswerReplan', () => {
       const mutationInputs: Record<string, unknown>[] = [];
       const providerFetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
         const url = String(input);
+        if (url.includes('/orders/9000001001.json')) {
+          return new Response(JSON.stringify({ order: { id: 9000001001, customer: { id: 1234 } } }), { status: 200 });
+        }
+        if (url.includes('/customers/1234.json')) return new Response(null, { status: 404 });
         if (url.includes('/orders.json')) {
           return new Response(JSON.stringify({ orders: [] }), { status: 200 });
         }
@@ -862,6 +867,7 @@ describe('applyOperatorAnswerReplan', () => {
         objective: 'Attach the merchant-provided label to the open return for order #1001.',
         question: 'What return label URL should I use for order #1001?',
       });
+      await db.thread.update({ where: { id: thread.id }, data: { shopifyCustomerId: '1234' } });
       await createTestIntegration(org.id, {
         platform: 'shopify',
         externalAccountId: `test-store-${org.id}.myshopify.com`,
@@ -870,6 +876,10 @@ describe('applyOperatorAnswerReplan', () => {
       });
       const providerFetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
         const url = String(input);
+        if (url.includes('/orders/9000001001.json')) {
+          return new Response(JSON.stringify({ order: { id: 9000001001, customer: { id: 1234 } } }), { status: 200 });
+        }
+        if (url.includes('/customers/1234.json')) return new Response(null, { status: 404 });
         if (url.includes('/orders.json')) {
           return new Response(JSON.stringify({ orders: [] }), { status: 200 });
         }

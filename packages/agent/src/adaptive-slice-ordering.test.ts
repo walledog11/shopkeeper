@@ -49,6 +49,17 @@ vi.mock("./spend.js", () => ({
   getDailySpendNano: vi.fn().mockResolvedValue(0),
 }));
 
+// This ordering fixture supplies ownership independently of refund/delivery
+// sequencing; authorization failures are exercised in the executor's tests.
+vi.mock('./shopify/client.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('./shopify/client.js')>();
+  const order = { id: 456, customer: { id: 1234 } };
+  return { ...actual, shopifyRestJson: (...args: Parameters<typeof actual.shopifyRestJson>) =>
+    args[2]?.query?.fields === 'id,customer'
+      ? Promise.resolve({ order, orders: [order] })
+      : actual.shopifyRestJson(...args) };
+});
+
 vi.mock("./agent-actions.js", () => ({
   beginAgentActionAttempt: vi.fn().mockResolvedValue({ id: "action_1", operationId: "operation_1" }),
   authorizeAgentActionDispatch: vi.fn().mockResolvedValue(undefined),
@@ -231,7 +242,7 @@ function supportCtx() {
       channelType: "email",
       tag: "Support",
       aiSummary: null,
-      shopifyCustomerId: null,
+      shopifyCustomerId: '1234',
       requestSourceMessageId: "message_1",
       latestCustomerMessageId: "message_1",
     },

@@ -261,7 +261,7 @@ function DeleteWorkspaceDialog({ orgName, state }: { orgName: string; state: Wor
         <DialogHeader>
           <DialogTitle className="text-foreground">Delete {orgName}?</DialogTitle>
           <DialogDescription>
-            This permanently removes the workspace, all tickets, customers, integrations, and memory. Any active subscription will be cancelled. This cannot be undone.
+            This permanently removes the workspace, all tickets, customers, integrations, attachments, and memory. Billing is cancelled before deletion completes. You will switch workspaces while cleanup continues in the background. This cannot be undone.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">

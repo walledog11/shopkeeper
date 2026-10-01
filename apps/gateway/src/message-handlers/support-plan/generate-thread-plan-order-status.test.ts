@@ -75,6 +75,7 @@ const customerNotFound = () => new Response(JSON.stringify({ errors: 'Not Found'
 
 const order = {
   id: 9000001001,
+  customer: { id: 1234 },
   name: '#1001',
   created_at: '2026-09-18T10:00:00-07:00',
   financial_status: 'paid',
@@ -402,11 +403,13 @@ describe('durable order-status host path', () => {
       expect(blocked).toMatchObject({
         proposalId: generated.identity!.planId,
         status: 'policy_block',
-        receiptVersion: 1,
-        receipt: {
-          outcome: 'rejected',
-          code: fulfillmentAfterApproval ? 'order_already_fulfilled' : 'customer_order_mismatch',
-        },
+        ...(customerAfterApproval !== 1234 ? {
+          output: expect.stringContaining('identity could not be verified'),
+          receipt: null,
+        } : {
+          receiptVersion: 1,
+          receipt: { outcome: 'rejected', code: 'order_already_fulfilled' },
+        }),
       });
       expect(postDashboardInternal.mock.calls.every(([, body]) =>
         !JSON.stringify(body).includes('has been updated'))).toBe(true);
@@ -1223,6 +1226,9 @@ describe('durable order-status host path', () => {
     let currentReturnableQuantity = 1;
     providerFetch.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
+      if (url.includes('/orders/9000001001.json')) {
+        return new Response(JSON.stringify({ order }), { status: 200 });
+      }
       if (url.includes('/orders.json')) {
         return new Response(JSON.stringify({ orders: [order] }), { status: 200 });
       }
@@ -1397,6 +1403,9 @@ describe('durable order-status host path', () => {
     let currentReplacementPrice = '42.00';
     providerFetch.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
+      if (url.includes('/orders/9000001001.json')) {
+        return new Response(JSON.stringify({ order }), { status: 200 });
+      }
       if (url.includes('/orders.json')) {
         return new Response(JSON.stringify({ orders: [order] }), { status: 200 });
       }

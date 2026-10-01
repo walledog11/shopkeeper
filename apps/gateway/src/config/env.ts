@@ -97,9 +97,6 @@ export function validateGatewayEnv(): void {
   if (!dbUrl.includes('pgbouncer=true')) {
     logger.warn('[Gateway] DATABASE_URL is missing pgbouncer=true — add it to avoid connection exhaustion in production');
   }
-  if (!dbUrl.includes('connection_limit=')) {
-    logger.warn('[Gateway] DATABASE_URL is missing connection_limit — add it (e.g. connection_limit=1) to avoid connection exhaustion in production');
-  }
 
   if (process.env.NODE_ENV === 'production') {
     const directDbUrl = requireEnv('DIRECT_DATABASE_URL');

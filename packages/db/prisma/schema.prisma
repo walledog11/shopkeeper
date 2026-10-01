@@ -662,6 +662,7 @@ model Message {
   @@index([integrationId])
   @@index([sendStatus, sendClaimedAt])
   @@index([sentAt])
+  @@index([organizationId, threadId, sentAt(sort: Desc), id(sort: Desc)], map: "messages_org_thread_chronology_idx")
   @@index([deletedAt])
   @@map("messages")
 }

@@ -1,6 +1,8 @@
 import type { NextRequest } from 'next/server';
+import { auth } from '@clerk/nextjs/server';
+import { getE2EAuthIdentity } from '@/lib/e2e-auth';
 import { getOrCreateOrg } from '@/lib/server/org';
-import { handleApiError, NotFoundError } from '@/lib/api/errors';
+import { ConflictError, handleApiError, NotFoundError, UnauthorizedError } from '@/lib/api/errors';
 import { assertOrgAdmin } from '@/lib/api/permissions';
 import { assertBillingWriteAllowed } from '@shopkeeper/db/billing-write-gate';
 import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit';
@@ -14,7 +16,7 @@ export interface OrgRouteOptions {
   // which operations are admin-only and why.
   requireAdmin?: boolean;
   requireBillingWriteAllowed?: boolean;
-  rateLimit?: { key: string; limit: number; windowSecs: number };
+  rateLimit?: { key: string; limit: number; windowSecs: number; scope?: 'user' | 'organization' };
   // Called from the catch before handleApiError so routes can record failure
   // side effects (e.g. agent-failure alerts) without re-wrapping the handler.
   onError?: (err: unknown, orgId: string | null) => Promise<void> | void;
@@ -45,10 +47,17 @@ export function withOrgRoute<P = Record<string, never>>(
       // Before the billing gate and rate limit so a forbidden caller neither
       // learns the org's billing state nor spends its budget.
       if (options.requireAdmin) await assertOrgAdmin();
+      if (org.lifecycleStatus !== 'active') throw new ConflictError('Workspace deletion is in progress.');
       if (options.requireBillingWriteAllowed) assertBillingWriteAllowed(org);
       if (options.rateLimit) {
         const { key, limit, windowSecs } = options.rateLimit;
-        const rl = await rateLimit(`${key}:${org.id}`, limit, windowSecs);
+        let identity = org.id;
+        if (options.rateLimit.scope === 'user') {
+          const userId = getE2EAuthIdentity()?.userId ?? (await auth()).userId;
+          if (!userId) throw new UnauthorizedError();
+          identity = `${org.id}:${userId}`;
+        }
+        const rl = await rateLimit(`${key}:${identity}`, limit, windowSecs);
         if (!rl.success) return tooManyRequests(rl.reset);
       }
       const params = (routeCtx ? await routeCtx.params : {}) as P;

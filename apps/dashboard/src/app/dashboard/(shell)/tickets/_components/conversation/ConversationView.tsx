@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useMemo, useRef, useState, type ComponentProps, type CSSProperties, type RefObject } from "react"
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ComponentProps, type CSSProperties, type RefObject } from "react"
 import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import { NeedsYouCardBody, NeedsYouCardHeader } from "@/app/dashboard/_components/home/needs-you-card-ui"
 import { useFillerPhrase } from "@/hooks/useFillerPhrase"
@@ -56,6 +56,7 @@ interface Props {
   onTicketRefresh?: () => void | Promise<void>
   onActionError?: (message: string) => void
   embedded?: boolean
+  history?: { hasMore: boolean; loading: boolean; error: string | null; load?: () => Promise<void> }
 }
 
 const EMPTY_FAILED_MESSAGES: FailedMessage[] = []
@@ -93,6 +94,7 @@ export default function ConversationView({
   onTicketRefresh,
   onActionError,
   embedded = false,
+  history,
 }: Props) {
   const {
     threadLoading: isThreadLoading = false,
@@ -103,6 +105,7 @@ export default function ConversationView({
   const isMobile = useIsMobile()
   const conversationRef = useRef<HTMLDivElement>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
+  const historyScroll = useRef<{ height: number; top: number } | null>(null)
   const composerRef = useRef<HTMLDivElement>(null)
   const planCardRef = useRef<HTMLDivElement>(null)
   const { keyboardInset, visualViewportHeight } = useVisualKeyboard(conversationRef, activeTab === 'open')
@@ -126,6 +129,19 @@ export default function ConversationView({
   }, [onTicketRefresh])
 
   const { displayMessages } = partitionConversationMessages(ticket.messages)
+  const handleLoadHistory = useCallback(async () => {
+    const timeline = timelineRef.current
+    if (!timeline || !history?.load || history.loading) return
+    historyScroll.current = { height: timeline.scrollHeight, top: timeline.scrollTop }
+    await history.load()
+  }, [history])
+  useLayoutEffect(() => {
+    const timeline = timelineRef.current
+    const previous = historyScroll.current
+    if (!timeline || !previous || history?.loading) return
+    timeline.scrollTop = previous.top + timeline.scrollHeight - previous.height
+    historyScroll.current = null
+  }, [history?.loading, ticket.messages])
   const {
     agentInstruction,
     handlePlanApprove,
@@ -217,7 +233,7 @@ export default function ConversationView({
     activeTab,
     composerRef,
     conversationRef,
-    displayMessageCount: displayMessages.length,
+    lastMessageId: displayMessages.at(-1)?.id,
     failedMessageCount: failedMessages.length,
     isMobile,
     keyboardInset,
@@ -282,6 +298,7 @@ export default function ConversationView({
         }}
         ticketId={ticket.id}
         timelineRef={timelineRef}
+        history={history ? { ...history, load: handleLoadHistory } : undefined}
       />
 
       <ConversationOpenComposer
@@ -430,6 +447,7 @@ function ConversationOpenComposer({
 }
 
 interface ConversationTimelinePanelProps {
+  history?: Props['history']
   agentTurns: AgentTurn[]
   failedMessages: FailedMessage[]
   messages: ConversationDisplayMessages
@@ -449,6 +467,7 @@ interface ConversationTimelinePanelProps {
 }
 
 function ConversationTimelinePanel({
+  history,
   agentTurns,
   failedMessages,
   messages,
@@ -472,6 +491,15 @@ function ConversationTimelinePanel({
         data-thread-id={ticketId}
         className="flex min-h-full flex-col gap-3"
       >
+        {history?.hasMore && !status.isThreadLoading && (
+          <div className="text-center text-sm">
+            <button type="button" className="text-muted-foreground hover:text-foreground py-2"
+              disabled={history.loading} onClick={() => { void history.load?.() }}>
+              {history.loading ? 'Loading earlier messages…' : 'Load earlier messages'}
+            </button>
+            {history.error && <p role="alert" className="text-destructive">{history.error}</p>}
+          </div>
+        )}
         {status.isThreadLoading ? (
           <TimelineSkeleton />
         ) : (
