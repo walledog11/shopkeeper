@@ -31,7 +31,7 @@ import {
   attachReturnLabel,
   fulfillOrder,
 } from "./shopify.js";
-import { checkParsedStaticToolPolicy, checkStorefrontToolAllowed } from "./static-policy.js";
+import { checkParsedStaticToolPolicy, checkStorefrontToolAllowed, shopMoneyAmountOf } from "./static-policy.js";
 import { getSupportStats } from "./support-stats.js";
 import {
   ReceiptValidationError,
@@ -360,7 +360,7 @@ async function executePreparedTool(
 
   const providerPriced = definition.policy.dailyRefundSpendLimit === "provider";
   if (!providerPriced) {
-    const amount = Number((input as { amount?: unknown }).amount);
+    const amount = Number(shopMoneyAmountOf(input as { amount?: string; approval_shop_amount?: string }));
     const requestedCents = Math.round(amount * 100);
     if (!Number.isSafeInteger(requestedCents) || requestedCents <= 0) {
       return {

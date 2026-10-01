@@ -10,6 +10,7 @@ import {
 } from "./client.js";
 import { toolError, toolOk, toolPolicyBlock, toolUnknown, type ReceiptV1 } from "../tools/result.js";
 import { shopifyFailureReceipt, shopifyReceiptEnvelope } from "./receipts.js";
+import { committedShopCents, refundShopCents } from "./refund-shop-money.js";
 import {
   ShopifyInputError,
   centsToMoney,
@@ -43,7 +44,7 @@ export const PARTIAL_REFUND_MUTATION = `mutation partialRefundCreate($input: Ref
   refundCreate(input: $input) @idempotent(key: $idempotencyKey) {
     refund {
       id
-      totalRefundedSet { presentmentMoney { amount } }
+      totalRefundedSet { presentmentMoney { amount } shopMoney { amount } }
       transactions(first: 20) {
         nodes { id status amountSet { presentmentMoney { amount } } }
       }
@@ -74,7 +75,7 @@ interface RefundCreateData {
   refundCreate: {
     refund?: {
       id: string;
-      totalRefundedSet?: { presentmentMoney?: { amount?: string } };
+      totalRefundedSet?: { presentmentMoney?: { amount?: string }; shopMoney?: { amount?: string } };
       transactions?: { nodes?: { id?: string | null; status?: string }[] };
     } | null;
     userErrors?: ShopifyGraphqlUserError[];
@@ -151,6 +152,14 @@ function gid(resource: "Order" | "LineItem" | "OrderTransaction", id: string | n
   return `gid://shopify/${resource}/${id}`;
 }
 
+function graphqlRefundLineItems(items: readonly RequestedRefundItem[]) {
+  return items.map((item) => ({
+    lineItemId: gid("LineItem", item.lineItemId),
+    quantity: item.quantity,
+    restockType: "NO_RESTOCK",
+  }));
+}
+
 function unknownPartialRefundReceipt(
   ctx: ShopifyContext,
   orderId: string,
@@ -190,6 +199,8 @@ interface PreparedPartialRefund {
   note: string;
   currency: string;
   calculatedCents: number;
+  /** What the selection costs the shop, in the shop's currency: the unit the workspace limits use. */
+  shopCents: number;
   suggested: { amount?: string; gateway?: string; parent_id?: number; kind?: string }[];
   /** The selection as Shopify names it, for the approval card. */
   lineItems: ApprovalLineItem[];
@@ -280,6 +291,19 @@ async function preparePartialRefund(
       { code: "no_refundable_balance" },
     ), "rejected", "no_refundable_balance");
   }
+  const shopCents = await refundShopCents(ctx, {
+    orderGid: gid("Order", orderId),
+    shopCurrency: order.currency,
+    quote: { cents: calculatedCents, currency },
+    refundLineItems: graphqlRefundLineItems(items),
+    refundShipping: false,
+  });
+  if (shopCents === null) {
+    return partialRefundNoEffect(ctx, orderId, toolPolicyBlock(
+      "Error: refund policy blocked - Shopify did not report what those items cost in the shop's currency, so the workspace limits cannot be applied.",
+      { code: "shop_amount_unavailable", currency },
+    ), "rejected", "shop_amount_unavailable");
+  }
   const orderLines = new Map((order.line_items ?? []).map((lineItem) => [String(lineItem.id), lineItem]));
   const lineItems = items.map((item): ApprovalLineItem => ({
     // unrefundableItems has already refused an ID that is not on the order.
@@ -287,7 +311,7 @@ async function preparePartialRefund(
     quantity: item.quantity,
     change: "refund",
   }));
-  return { orderId, items, note, currency, calculatedCents, suggested, lineItems };
+  return { orderId, items, note, currency, calculatedCents, shopCents, suggested, lineItems };
 }
 
 /** Bind the current Shopify quote and the items it prices into the immutable proposal shown for approval. */
@@ -315,7 +339,7 @@ export async function createPartialRefund(
   try {
     const prepared = await preparePartialRefund(input, ctx);
     if ("status" in prepared) return prepared;
-    const { items, note, currency, calculatedCents, suggested } = prepared;
+    const { items, note, currency, calculatedCents, shopCents, suggested } = prepared;
     orderId = prepared.orderId;
 
     const approvedAmount = input.approval_amount?.trim();
@@ -337,13 +361,14 @@ export async function createPartialRefund(
       ), "rejected", "amount_mismatch");
     }
 
-    // The cap applies to Shopify's figure, because that is the only amount that
-    // exists. The static policy cannot do this: it runs before the calculation.
+    // The cap applies to Shopify's figure for what the items cost the shop, because
+    // that is the only amount that exists and the cap is in the shop's currency. The
+    // static policy cannot do this: it runs before the calculation.
     const perCallCap = settings.maxRefundAmount;
-    if (perCallCap !== null && perCallCap > 0 && calculatedCents > Math.round(perCallCap * 100)) {
+    if (perCallCap !== null && perCallCap > 0 && shopCents > Math.round(perCallCap * 100)) {
       return partialRefundNoEffect(ctx, orderId, toolPolicyBlock(
-          `Error: refund policy blocked - those items come to $${centsToMoney(calculatedCents)}, over the workspace limit of $${perCallCap}.`,
-          { code: "amount_over_cap", calculatedCents, capCents: Math.round(perCallCap * 100) },
+          `Error: refund policy blocked - those items come to $${centsToMoney(shopCents)}, over the workspace limit of $${perCallCap}.`,
+          { code: "amount_over_cap", shopCents, capCents: Math.round(perCallCap * 100) },
         ), "rejected", "amount_over_cap");
     }
 
@@ -357,7 +382,7 @@ export async function createPartialRefund(
           { code: "compensation_budget_unavailable" },
         ), "rejected", "compensation_budget_unavailable");
     }
-    const reserved = await ctx.reserveCompensation(calculatedCents);
+    const reserved = await ctx.reserveCompensation(shopCents);
     if (reserved.kind === "refused") {
       // An unknown refusal is a budget record this operation may already own, so
       // it keeps its own shape rather than being reported as this attempt failing.
@@ -381,11 +406,7 @@ export async function createPartialRefund(
         note,
         ...(currency ? { currency } : {}),
         shipping: { fullRefund: false },
-        refundLineItems: items.map((item) => ({
-          lineItemId: gid("LineItem", item.lineItemId),
-          quantity: item.quantity,
-          restockType: "NO_RESTOCK",
-        })),
+        refundLineItems: graphqlRefundLineItems(items),
         transactions: suggested.map((transaction) => ({
           orderId: gid("Order", orderId),
           gateway: transaction.gateway,
@@ -478,7 +499,10 @@ export async function createPartialRefund(
         `Refunded $${centsToMoney(totalRefunded)} for ${unitCount} item(s) on order ${orderId}.`
         + `${note ? ` Reason: ${note}.` : ""}`,
       ),
-      refundedCents: totalRefunded,
+      refundedCents: committedShopCents(refund.totalRefundedSet, {
+        presentmentCents: calculatedCents,
+        shopCents,
+      }),
       ...(receipt ? { receipt } : {}),
     };
   } catch (err) {

@@ -32,10 +32,10 @@ export async function probeRefund(
     const total = (matches[0]!.transactions ?? [])
       .filter((transaction) => transaction.status?.toUpperCase() === "SUCCESS")
       .reduce((sum, transaction) => sum + moneyToCents(transaction.amount ?? "0"), 0);
-    return committed(
-      `Reconciled refund on order ${orderId} for $${(total / 100).toFixed(2)}.`,
-      total,
-    );
+    // Names no spend on purpose: this total is in the currency the customer was
+    // charged, while the daily budget counts the shop's. The reservation's own
+    // figure, reserved in the shop's currency, is what gets committed.
+    return committed(`Reconciled refund on order ${orderId} for $${(total / 100).toFixed(2)}.`);
   }
   if (matches.length > 1) {
     return stillUnknown(`Multiple successful refunds match order ${orderId}; manual review required.`);

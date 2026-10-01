@@ -16,6 +16,7 @@ import {
 } from "./planner-safety/refunds.js";
 import { getToolDefinition, TOOL_CATEGORIES } from "./tools/registry/index.js";
 import type { ToolStatus } from "./tools/result.js";
+import { shopMoneyAmountOf } from "./tools/static-policy.js";
 import type {
   ClassifierAlignmentState,
   OrgSettings,
@@ -88,7 +89,7 @@ function planExceedsCompensationCap(
   if (cap === null || cap === undefined || cap <= 0) return false;
   return rawToolCalls.some((toolCall) => {
     if (!getToolDefinition(toolCall.name)?.policy.refundAmountLimits) return false;
-    const amount = Number((toolCall.input as { amount?: unknown })?.amount);
+    const amount = Number(shopMoneyAmountOf((toolCall.input ?? {}) as Parameters<typeof shopMoneyAmountOf>[0]));
     return Number.isFinite(amount) && amount > cap;
   });
 }

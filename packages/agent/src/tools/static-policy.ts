@@ -84,6 +84,19 @@ function checkVerifiedOrderScope(
   return { blocked: true, reason: orderScopeBlockReason(definition.name) };
 }
 
+/**
+ * A compensation call's amount in the shop's currency, which is what the
+ * workspace limits and the daily budget are counted in. A refund is quoted in the
+ * currency the customer was charged, so the runtime binds the shop-currency figure
+ * beside the quote when the two differ; without one the amount is already that
+ * figure.
+ */
+export function shopMoneyAmountOf(
+  input: Pick<CreateRefundInput, "amount" | "approval_shop_amount">,
+): string | undefined {
+  return input.approval_shop_amount ?? input.amount;
+}
+
 export function checkParsedStaticToolPolicy(
   definition: AgentToolDefinition,
   input: unknown,
@@ -121,16 +134,17 @@ export function checkParsedStaticToolPolicy(
     const hasDailyCap = settings.dailyRefundCap !== null && settings.dailyRefundCap > 0;
 
     if (hasPerCallCap || hasDailyCap) {
-      if (!refundInput.amount) {
+      const amountText = shopMoneyAmountOf(refundInput);
+      if (!amountText) {
         const limit = hasPerCallCap ? settings.maxRefundAmount : settings.dailyRefundCap;
         return { blocked: true, reason: `${noun} amount must be specified and cannot exceed $${limit}.` };
       }
-      const amount = Number(refundInput.amount);
+      const amount = Number(amountText);
       if (!Number.isFinite(amount) || amount <= 0) {
         return { blocked: true, reason: `${noun} amount must be a positive decimal value.` };
       }
       if (hasPerCallCap && amount > (settings.maxRefundAmount as number)) {
-        return { blocked: true, reason: `${noun} amount $${refundInput.amount} exceeds the workspace limit of $${settings.maxRefundAmount}.` };
+        return { blocked: true, reason: `${noun} amount $${amountText} exceeds the workspace limit of $${settings.maxRefundAmount}.` };
       }
     }
   }

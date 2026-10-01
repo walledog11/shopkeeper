@@ -64,6 +64,12 @@ export interface CreateRefundInput {
   amount?: string;
   /** Currency paired with amount. Runtime-authored with the Shopify quote. */
   currency?: string;
+  /**
+   * What the refund costs the shop, in the shop's currency, which is what the
+   * workspace limits are set in. Runtime-authored beside the quote, and only when
+   * the customer was charged in another currency; absent means `amount` is it.
+   */
+  approval_shop_amount?: string;
   reason?: string;
 }
 
@@ -293,6 +299,7 @@ export type ToolGroup =
 export type ToolCapability = "shopify" | "thread-io" | "kb" | "stats";
 
 export interface RefundToolResult extends ToolResult {
+  /** What the refund cost the shop, in the shop's currency: the amount the daily budget counts. */
   refundedCents: number | null;
 }
 

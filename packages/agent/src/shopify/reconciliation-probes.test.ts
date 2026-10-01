@@ -79,7 +79,7 @@ describe("probeUnknownShopifyMutation", () => {
       ctx,
     );
 
-    expect(result).toMatchObject({ outcome: "committed", spentCents: 2000 });
+    expect(result).toMatchObject({ outcome: "committed" });
   });
 
   it("releases cancellation reconciliation when the order is not cancelled", async () => {

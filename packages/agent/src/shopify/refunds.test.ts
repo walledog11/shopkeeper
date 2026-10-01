@@ -265,10 +265,25 @@ describe("createRefund full-refund input", () => {
       }))
       .mockResolvedValueOnce(jsonResponse({
         data: {
+          order: {
+            suggestedRefund: {
+              amountSet: {
+                shopMoney: { amount: "43.48", currencyCode: "USD" },
+                presentmentMoney: { amount: "59.90", currencyCode: "CAD" },
+              },
+            },
+          },
+        },
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        data: {
           refundCreate: {
             refund: {
               id: "gid://shopify/Refund/9001",
-              totalRefundedSet: { presentmentMoney: { amount: "59.90" } },
+              totalRefundedSet: {
+                presentmentMoney: { amount: "59.90" },
+                shopMoney: { amount: "43.48" },
+              },
               transactions: { nodes: [{ id: "gid://shopify/OrderTransaction/7001", status: "SUCCESS" }] },
             },
             userErrors: [],
@@ -277,11 +292,17 @@ describe("createRefund full-refund input", () => {
       }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await createRefund({ order_id: "456", amount: "59.90", currency: "CAD" }, ctx);
+    const result = await createRefund({
+      order_id: "456",
+      amount: "59.90",
+      currency: "CAD",
+      approval_shop_amount: "43.48",
+    }, ctx);
 
-    expect(result).toMatchObject({ status: "ok", refundedCents: 5990 });
+    // What the refund cost the shop, which is what the daily budget counts.
+    expect(result).toMatchObject({ status: "ok", refundedCents: 4348 });
     // The mutation settles in the currency the customer was charged.
-    expect(JSON.parse(fetchMock.mock.calls[2][1].body as string).variables.input.currency).toBe("CAD");
+    expect(JSON.parse(fetchMock.mock.calls[3][1].body as string).variables.input.currency).toBe("CAD");
   });
 
   it("policy-blocks when Shopify returns no refund currency at all", async () => {
