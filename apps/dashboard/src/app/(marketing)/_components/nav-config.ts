@@ -1,54 +1,41 @@
-import {
-  MessageCircle,
-  ShieldCheck,
-  Store,
-  Workflow,
-  type LucideIcon,
-} from "lucide-react";
+/** Which scene the menu's preview panel shows while a row is active. */
+export type PreviewKind = "text" | "support" | "approvals" | "integrations";
 
 export type ProductCard = {
   href: string;
   title: string;
   subtitle: string;
-  icon: LucideIcon;
-};
-
-export type Partner = {
-  href: string;
-  name: string;
-  logo: string;
+  preview: PreviewKind;
 };
 
 export const productCards: ProductCard[] = [
   {
     href: "/#workflow",
-    title: "Your merchant agent",
-    subtitle: "Check stock, run sales, change orders, and work through the inbox by text.",
-    icon: Store,
+    title: "Text your shopkeeper",
+    subtitle: "Check stock, run a sale, or change an order, all by text.",
+    preview: "text",
   },
   {
     href: "/#customers",
     title: "Customer support",
-    subtitle: "Answer from orders, inventory, policies, and approved voice guidance.",
-    icon: MessageCircle,
+    subtitle: "Replies that use the order, your policies, and your voice.",
+    preview: "support",
   },
   {
     href: "/product/approvals-and-controls",
     title: "Approvals and controls",
-    subtitle: "Set the rules for what can reply, what must ask, and what stays blocked.",
-    icon: ShieldCheck,
+    subtitle: "Set what it does alone, what it asks first, and what’s off limits.",
+    preview: "approvals",
   },
   {
     href: "/product/integrations",
     title: "Integrations",
-    subtitle: "Follow a request from the customer channel to Shopify and the action log.",
-    icon: Workflow,
+    subtitle: "Shopify, Instagram, email, and iMessage: what each one is for.",
+    preview: "integrations",
   },
 ];
 
-export const partners: Partner[] = [
-  { href: "/product/integrations", name: "Shopify", logo: "/logos/shopify.svg" },
-  { href: "/product/integrations", name: "Instagram", logo: "/logos/instagram-outline.svg" },
-  { href: "/product/integrations", name: "Email", logo: "/logos/email.svg" },
-  { href: "/product/integrations", name: "iMessage", logo: "/logos/imessage.svg" },
-];
+export const logos = {
+  shopify: "/logos/shopify.svg",
+  instagram: "/logos/instagram-outline.svg",
+} as const;

@@ -20,7 +20,7 @@ const tasks = [
     label: "Check stock",
     headline: "Get a count in the words you already use.",
     about:
-      "Name the product, size, and color—the way you’d ask someone on the floor. Shopkeeper reads inventory and answers in the thread.",
+      "Ask the way you’d ask someone on the floor. Shopkeeper reads your inventory and answers in the thread.",
     prompt: "How many sand linen jumpsuits do we have in Small?",
     response: "Twelve in Small / Sand.",
     gradient: "/marketing/bento/bento-3-gradient.svg",
@@ -38,7 +38,7 @@ const tasks = [
     label: "Work the inbox",
     headline: "Your queue, in one ask.",
     about:
-      "Shopkeeper lists what needs your approval, what it can reply to on its own, and what only you can handle—then waits for your call on each.",
+      "Shopkeeper lists what needs your approval, what it can answer on its own, and what only you can handle. Then it waits for your call.",
     prompt: "What’s waiting on me?",
     response:
       "Maya’s swap is ready for your OK. Priya needs an answer about international shipping. Alex’s refund needs you — it’s above your limit.",
@@ -46,9 +46,9 @@ const tasks = [
   },
   {
     label: "Email a customer",
-    headline: "Reach out when you’re starting the thread.",
+    headline: "Start the conversation yourself.",
     about:
-      "Some updates don’t begin with a customer DM. Tell Shopkeeper the address and message; it sends the email and keeps a record.",
+      "Tell Shopkeeper who to email and what to say. It sends the message and keeps a record.",
     prompt: "Email jamie@example.com — their replacement ships tomorrow.",
     response: "Sent.",
     gradient: "/marketing/bento/bento-2-gradient.svg",

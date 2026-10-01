@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { LazyMotion, domAnimation, m } from "motion/react";
-import { ChannelsOrbit, ConvertChat, ConvertRings, GuidanceVisual, StatCards } from "./BentoVisuals";
+import { ActionLog, ChannelsOrbit, GuidanceVisual, ShopperChat } from "./BentoVisuals";
 import { SectionLabel } from "./SectionLabel";
 
 type BentoGradientPosition = "br" | "bottom-left";
@@ -71,19 +71,12 @@ function ConvertBentoCard({ index }: { index: number }) {
       {/* eslint-disable-next-line @next/next/no-img-element -- decorative SVG burst */}
       <img src="/marketing/bento/bento-4-gradient.svg" alt="" className="m-bento-gradient-burst" />
       <div className="m-bento-convert-copy relative z-[1] flex max-w-[18.3rem] shrink-0 flex-col">
-        <h3 className="m-display m-h3">Engage. Guide. Convert.</h3>
-        <div className="m-bento-stat-card">
-          <p className="m-bento-store">Linen &amp; Loom</p>
-          <div className="flex flex-col gap-2">
-            <p className="m-bento-stat">1.9× ROI</p>
-            <p className="text-base leading-relaxed text-[color:var(--m-ink-2)]">
-              “It suggested the matching pants without pushing. That’s exactly how I’d train a new hire.”
-            </p>
-          </div>
-        </div>
-        <ConvertRings />
+        <h3 className="m-display m-h3">Answers shoppers on your site.</h3>
+        <p className="mt-4 text-base leading-relaxed text-[color:var(--m-ink-2)]">
+          Shoppers ask where their order is. Shopkeeper looks it up in Shopify and replies with the status.
+        </p>
       </div>
-      <ConvertChat />
+      <ShopperChat />
     </m.article>
   );
 }
@@ -96,7 +89,7 @@ export function ConversationBento() {
         className="mx-auto max-w-6xl px-5 py-16 sm:px-6 sm:py-24"
       >
         <m.header
-          className="mb-10 max-w-[min(760px,100%)] text-left sm:mb-12"
+          className="mb-10 max-w-[min(900px,100%)] text-left sm:mb-12"
           initial={{ opacity: 0, y: 22 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.5 }}
@@ -104,8 +97,8 @@ export function ConversationBento() {
         >
           <SectionLabel align="start">Get to know Shopkeeper</SectionLabel>
           <h2 id="conversation-bento-heading" className="m-display m-h2">
-            Built for brands that know every conversation counts.{" "}
-            <span className="m-tail">Automate routine tickets and personalize the rest.</span>
+            Built for stores where every conversation counts.{" "}
+            <span className="m-tail">Shopkeeper handles the routine and brings you the rest.</span>
           </h2>
         </m.header>
 
@@ -114,7 +107,7 @@ export function ConversationBento() {
             <BentoCard
               index={0}
               gradientSrc="/marketing/bento/bento-1-gradient.svg"
-              title="AI Agent trained on your brand"
+              title="Writes in your voice, by your rules"
               headingClassName="max-w-[18.3rem]"
               contentClassName="mt-auto min-h-[400px] flex-1"
             >
@@ -138,10 +131,10 @@ export function ConversationBento() {
               index={2}
               gradientSrc="/marketing/bento/bento-3-gradient.svg"
               gradientPosition="bottom-left"
-              title="High-quality answers. Measurable results."
+              title="Every action on the record."
               contentClassName="relative z-[1] mt-auto flex min-h-0 flex-1 flex-col"
             >
-              <StatCards />
+              <ActionLog />
             </BentoCard>
           </div>
 
@@ -149,10 +142,6 @@ export function ConversationBento() {
             <ConvertBentoCard index={3} />
           </div>
         </div>
-
-        <p className="mt-5 text-[13px] text-[color:var(--m-ink-3)]">
-          Linen &amp; Loom is a demo store. The numbers, quote and conversations above are illustrative.
-        </p>
       </section>
     </LazyMotion>
   );

@@ -1,12 +1,11 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useUser } from "@clerk/nextjs";
 import {
-  ArrowUpRight,
+  ArrowRight,
   ChevronDown,
   ChevronRight,
   Menu,
@@ -15,7 +14,8 @@ import {
 } from "lucide-react";
 import { PRIMARY_CTA_LABEL, PRODUCT_NAME } from "@/lib/brand";
 import { cn } from "@/lib/ui/cn";
-import { partners, productCards } from "./nav-config";
+import { NavPreview } from "./NavPreviews";
+import { productCards } from "./nav-config";
 
 /* Slot under the navbar bar, so the Product panel spans the content column
    instead of hanging off the trigger's box. */
@@ -111,12 +111,17 @@ function useHoverMenu(setOpen: (value: boolean) => void) {
 
 function ProductMenu() {
   const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const slot = useContext(MegaMenuSlotContext);
   const onArrowKeys = useMenuKeyboard(open, setOpen, rootRef, triggerRef, panelRef);
   const { openMenu, closeMenu } = useHoverMenu(setOpen);
+
+  useEffect(() => {
+    if (open) setActive(0);
+  }, [open]);
 
   const panel = (
     <div
@@ -126,68 +131,34 @@ function ProductMenu() {
       onMouseLeave={closeMenu}
     >
       <div id="m-nav-product-menu" className="m-nav-mega" role="menu">
-          <div className="m-nav-mega-cards">
-            {productCards.map((card) => {
-              const Icon = card.icon;
-              return (
-                <Link
-                  key={card.title}
-                  href={card.href}
-                  role="menuitem"
-                  className="m-nav-mega-card"
-                  onClick={() => setOpen(false)}
-                >
-                  <span className="m-nav-mega-card-icon">
-                    <Icon className="size-4" strokeWidth={1.75} />
-                  </span>
-                  <span className="m-nav-mega-card-title">
-                    {card.title}
-                  </span>
-                  <ArrowUpRight
-                    className="m-nav-mega-arrow size-3.5"
-                    strokeWidth={1.75}
-                    aria-hidden
-                  />
-                  <span className="m-nav-mega-card-subtitle">{card.subtitle}</span>
-                </Link>
-              );
-            })}
-          </div>
-
-          <div className="m-nav-mega-rail">
-            <div className="m-nav-mega-rail-label">Works with</div>
-            {partners.map((partner) => (
-              <Link
-                key={partner.name}
-                href={partner.href}
-                role="menuitem"
-                className="m-nav-mega-partner"
-                onClick={() => setOpen(false)}
-              >
-                <span className="m-nav-mega-partner-logo">
-                  <Image
-                    src={partner.logo}
-                    alt=""
-                    width={16}
-                    height={16}
-                    className="size-4 object-contain"
-                  />
-                </span>
-                <span className="m-nav-mega-partner-name">{partner.name}</span>
-              </Link>
-            ))}
+        <div className="m-nav-mega-list">
+          {productCards.map((card, index) => (
             <Link
-              href="/product/integrations"
+              key={card.title}
+              href={card.href}
               role="menuitem"
-              className="m-nav-mega-more"
+              className={cn("m-nav-mega-item", index === active && "is-active")}
+              onMouseEnter={() => setActive(index)}
+              onFocus={() => setActive(index)}
               onClick={() => setOpen(false)}
             >
-              See how the system fits together
+              <span className="m-nav-mega-title">{card.title}</span>
+              <ArrowRight className="m-nav-mega-arrow size-4" strokeWidth={1.75} aria-hidden />
+              <span className="m-nav-mega-desc">{card.subtitle}</span>
             </Link>
-          </div>
+          ))}
+        </div>
+
+        <div aria-hidden className="m-nav-mega-stage">
+          {productCards.map((card, index) => (
+            <div key={card.title} className={cn("m-nav-mega-scene", index === active && "is-active")}>
+              <NavPreview kind={card.preview} />
+            </div>
+          ))}
         </div>
       </div>
-    );
+    </div>
+  );
 
 
   return (
@@ -237,7 +208,12 @@ export function MobileNav() {
   const [open, setOpen] = useState(false);
   const [productOpen, setProductOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const sheetRef = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  // Focus goes back to the menu button when the sheet is dismissed, not when a
+  // link in it is followed: after an in-page link the browser has already moved
+  // focus to the section it scrolled to.
+  const dismissed = useRef(false);
   const { isSignedIn } = useUser();
 
   useEffect(() => {
@@ -246,33 +222,43 @@ export function MobileNav() {
       return;
     }
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    // A native modal dialog makes the page behind it inert and handles Escape.
+    const sheet = sheetRef.current;
+    if (sheet && !sheet.open) sheet.showModal();
     closeRef.current?.focus();
 
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key !== "Escape") return;
-      setOpen(false);
-      triggerRef.current?.focus();
-    }
-
-    document.addEventListener("keydown", onKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", onKeyDown);
     };
   }, [open]);
 
   function close() {
+    sheetRef.current?.close();
+  }
+
+  function dismiss() {
+    dismissed.current = true;
+    close();
+  }
+
+  function onClosed() {
     setOpen(false);
+    if (!dismissed.current) return;
+    dismissed.current = false;
+    triggerRef.current?.focus();
   }
 
   const sheet = (
-    <div
+    <dialog
+      ref={sheetRef}
       className="m-nav-sheet"
-      role="dialog"
-      aria-modal="true"
       aria-label="Menu"
+      onCancel={() => {
+        dismissed.current = true;
+      }}
+      onClose={onClosed}
     >
       <div className="m-nav-sheet-bar">
         <Link href="/" aria-label={PRODUCT_NAME} className="m-nav-logo" onClick={close}>
@@ -281,20 +267,15 @@ export function MobileNav() {
             {WORDMARK}
           </span>
         </Link>
-        <div className="flex items-center gap-2">
-          <Link href="/signup" className="m-btn m-btn-primary m-nav-cta" onClick={close}>
-            {PRIMARY_CTA_LABEL}
-          </Link>
-          <button
-            ref={closeRef}
-            type="button"
-            className="m-nav-menu-btn"
-            aria-label="Close menu"
-            onClick={close}
-          >
-            <X className="size-5" strokeWidth={2} />
-          </button>
-        </div>
+        <button
+          ref={closeRef}
+          type="button"
+          className="m-nav-menu-btn"
+          aria-label="Close menu"
+          onClick={dismiss}
+        >
+          <X className="size-5" strokeWidth={2} />
+        </button>
       </div>
 
       <nav className="m-nav-sheet-list">
@@ -326,11 +307,11 @@ export function MobileNav() {
           </div>
         ) : null}
 
-        <Link href="/#pricing" className="m-nav-sheet-item" onClick={close}>
-          Pricing
-        </Link>
         <Link href="/product/security" className="m-nav-sheet-item" onClick={close}>
           Security
+        </Link>
+        <Link href="/#pricing" className="m-nav-sheet-item" onClick={close}>
+          Pricing
         </Link>
         <Link href="/#faq" className="m-nav-sheet-item" onClick={close}>
           FAQ
@@ -349,7 +330,7 @@ export function MobileNav() {
       <Link href="/signup" className="m-btn m-btn-primary m-btn-lg m-nav-sheet-cta" onClick={close}>
         {PRIMARY_CTA_LABEL}
       </Link>
-    </div>
+    </dialog>
   );
 
   return (

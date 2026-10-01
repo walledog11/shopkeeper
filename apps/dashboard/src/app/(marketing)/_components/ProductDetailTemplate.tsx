@@ -25,7 +25,7 @@ export function ProductDetailTemplate({
   title,
   lede,
   backHref = "/",
-  backLabel = "Back to overview",
+  backLabel = "Back to home",
   jumpLabel,
   jumpHref = "#product-view",
   visualSectionId = "product-view",

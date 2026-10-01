@@ -94,13 +94,10 @@ function OrderWorkflowWalkthrough() {
   return (
     <div className="rounded-3xl m-chapter--dark px-6 py-10 sm:px-10 sm:py-14">
       <div className="max-w-2xl">
-        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#fcfaf8]/55">Seeded walkthrough · Order #3102</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#fcfaf8]/55">Order #3102</p>
         <h2 className="m-display m-h2 mt-3">
           Swap Medium to Small before fulfillment.
         </h2>
-        <p className="mt-4 text-sm leading-relaxed text-[#fcfaf8]/65">
-          Fictional customer and store data illustrate the intended product path without presenting a customer result.
-        </p>
       </div>
       <ol className="mt-9 grid gap-3 md:grid-cols-5">
         {workflow.map(([step, body], index) => (

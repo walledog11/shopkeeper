@@ -2,11 +2,11 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { Check, Clock, MessageCircle, PackageCheck, Settings, Shirt, Sparkles, Store, X } from "lucide-react";
+import { Check, MessageCircle, PackageCheck, Sparkles, Store, X } from "lucide-react";
 
 /* Card visuals for the landing bento, built as live components so the copy can
-   be edited in place. All of the content is placeholder: Linen & Loom is the
-   demo store, and every number and quote here is illustrative. */
+   be edited in place. Linen & Loom is the demo store. Each visual shows
+   something the product does, so none of them carries a metric or a quote. */
 
 /** True once the element has scrolled into view; the CSS sequences key off it. */
 function useInViewOnce<T extends HTMLElement>() {
@@ -35,16 +35,7 @@ function delay(seconds: number) {
   return { "--d": `${seconds}s` } as CSSProperties;
 }
 
-function ShopifyChip({ children }: { children: string }) {
-  return (
-    <span className="m-bv-chip">
-      <Image src="/logos/shopify.svg" alt="" width={11} height={12} className="h-3 w-auto" />
-      {children}
-    </span>
-  );
-}
-
-/** "AI Agent trained on your brand": a store instruction next to a test chat. */
+/** "Writes in your voice, by your rules": store notes next to a chat that follows them. */
 export function GuidanceVisual() {
   const [ref, seen] = useInViewOnce<HTMLDivElement>();
 
@@ -52,32 +43,20 @@ export function GuidanceVisual() {
     <div ref={ref} aria-hidden className={`m-bv m-bv-guidance${seen ? " is-playing" : ""}`}>
       <div className="m-bv-win m-bv-guide m-bv-step" style={delay(0)}>
         <div className="m-bv-win-head">
-          <span className="m-bv-win-title">Guidance</span>
-          <span className="m-bv-pill">Test</span>
+          <span className="m-bv-win-title">Store notes</span>
           <X className="size-3.5 text-[color:var(--m-ink-3)]" />
         </div>
-        <p className="m-bv-rule">When a customer asks to edit the shipping address</p>
-        <p className="m-bv-note">Check order status before responding</p>
-        <p className="m-bv-label">IF:</p>
-        <div className="m-bv-cond">
-          <ShopifyChip>Order: Created Datetime</ShopifyChip>
-          <span>is less than 30min ago, and</span>
-        </div>
-        <div className="m-bv-cond">
-          <ShopifyChip>Order: Fulfillment Status</ShopifyChip>
-          <span>is “Unfulfilled”</span>
-        </div>
-        <p className="m-bv-label">THEN:</p>
-        <div className="m-bv-cond">
-          <Check className="size-3.5" strokeWidth={2.5} />
-          <span className="m-bv-chip">Use Action: Order Edit</span>
-        </div>
+        <p className="m-bv-rule">Address changes</p>
+        <p className="m-bv-note">Fine until the order ships. Check its status first.</p>
+        <p className="m-bv-rule">Tone</p>
+        <p className="m-bv-note">Short and warm. Don’t over-apologize.</p>
+        <p className="m-bv-rule">Delivery dates</p>
+        <p className="m-bv-note">Don’t promise one.</p>
       </div>
 
       <div className="m-bv-win m-bv-test m-bv-step" style={delay(0.35)}>
         <div className="m-bv-win-head">
-          <span className="m-bv-win-title">Test</span>
-          <Settings className="size-3.5 text-[color:var(--m-ink-3)]" />
+          <span className="m-bv-win-title">Website chat</span>
         </div>
         <div className="m-bv-chat">
           <div className="m-bv-msg m-bv-step" style={delay(1)}>
@@ -116,7 +95,8 @@ const ORBIT_NODES = [
   { label: "Shopify", logo: "/logos/shopify.svg" },
 ] as const;
 
-/** "One conversation. Everywhere.": the channels that are live, around the shop. */
+/** "One conversation. Everywhere.": the channels that are live, around the shop. Also the
+ *  Integrations preview in the Product menu. */
 export function ChannelsOrbit() {
   return (
     <div aria-hidden className="m-bv m-bv-orbit">
@@ -142,27 +122,27 @@ export function ChannelsOrbit() {
   );
 }
 
-const STATS = [
-  { value: "94%", label: "replies sent as drafted", icon: Check },
-  { value: "2.1 min", label: "median first response", icon: Clock },
-  { value: "31", label: "order fixes made in Shopify", icon: PackageCheck },
+const LOG = [
+  { title: "Swap approved", detail: "Order #3102, by you", icon: Check },
+  { title: "Order updated", detail: "Small / Sand in Shopify", icon: PackageCheck },
+  { title: "Reply sent", detail: "To Maya, after the update", icon: MessageCircle },
 ] as const;
 
-/** "High-quality answers. Measurable results.": three placeholder stat cards. */
-export function StatCards() {
+/** "Every action on the record.": the trail one approved change leaves behind. */
+export function ActionLog() {
   const [ref, seen] = useInViewOnce<HTMLDivElement>();
 
   return (
-    <div ref={ref} aria-hidden className={`m-bv m-bv-stats${seen ? " is-playing" : ""}`}>
-      {STATS.map((stat, index) => {
-        const Icon = stat.icon;
+    <div ref={ref} aria-hidden className={`m-bv m-bv-log${seen ? " is-playing" : ""}`}>
+      {LOG.map((entry, index) => {
+        const Icon = entry.icon;
         return (
-          <div key={stat.label} className="m-bv-stat m-bv-step" style={delay(0.1 + index * 0.18)}>
+          <div key={entry.title} className="m-bv-log-item m-bv-step" style={delay(0.1 + index * 0.18)}>
             <div>
-              <p className="m-bv-stat-value">{stat.value}</p>
-              <p className="m-bv-stat-label">{stat.label}</p>
+              <p className="m-bv-log-title">{entry.title}</p>
+              <p className="m-bv-log-detail">{entry.detail}</p>
             </div>
-            <span className="m-bv-stat-icon">
+            <span className="m-bv-log-icon">
               <Icon className="size-3.5" strokeWidth={2.25} />
             </span>
           </div>
@@ -172,51 +152,32 @@ export function StatCards() {
   );
 }
 
-function ProductTile({ name, price, tone, at }: { name: string; price: string; tone: "sand" | "oat"; at: number }) {
-  return (
-    <div className="m-bv-product m-bv-step" style={delay(at)}>
-      <span className={`m-bv-swatch is-${tone}`}>
-        <Shirt className="size-5" strokeWidth={1.5} />
-      </span>
-      <div>
-        <p className="m-bv-product-name">{name}</p>
-        <p className="m-bv-product-price">{price}</p>
-      </div>
-    </div>
-  );
-}
-
-/** "Engage. Guide. Convert.": a shopper asks, the agent recommends. */
-export function ConvertChat() {
+/** "Answers shoppers on your site.": a shopper asks where an order is, the agent looks it up. */
+export function ShopperChat() {
   const [ref, seen] = useInViewOnce<HTMLDivElement>();
 
   return (
     <div ref={ref} aria-hidden className={`m-bv m-bv-convert${seen ? " is-playing" : ""}`}>
       <p className="m-bv-bubble is-customer m-bv-step" style={delay(0.2)}>
-        Hi! I’m looking for something breezy to wear to a beach wedding.
+        Hi! Where’s my order? It’s #3099.
       </p>
       <div className="m-bv-products">
-        <ProductTile name="Linen Jumpsuit · Sand" price="$148" tone="sand" at={1} />
-        <ProductTile name="Wide-Leg Linen Pant · Oat" price="$98" tone="oat" at={1.35} />
+        <div className="m-bv-product m-bv-step" style={delay(1)}>
+          <span className="m-bv-swatch is-oat">
+            <PackageCheck className="size-5" strokeWidth={1.5} />
+          </span>
+          <div>
+            <p className="m-bv-product-name">Order #3099 · 2 items</p>
+            <p className="m-bv-product-price">Paid · Shipped</p>
+          </div>
+        </div>
       </div>
       <div className="m-bv-agent m-bv-step" style={delay(2.1)}>
         <p className="m-bv-name">
           <Sparkles className="size-3" /> Shopkeeper
         </p>
-        <p className="m-bv-bubble is-agent">The Sand jumpsuit pairs well with the Oat wrap for cooler evenings.</p>
+        <p className="m-bv-bubble is-agent">It shipped yesterday with UPS and should arrive Thursday.</p>
       </div>
     </div>
-  );
-}
-
-/** Faint concentric dashed rings behind the quote, standing in for a chart. */
-export function ConvertRings() {
-  return (
-    <svg aria-hidden viewBox="0 0 200 200" fill="none" className="m-bv-rings">
-      <circle cx="100" cy="100" r="92" stroke="currentColor" strokeWidth="1" strokeDasharray="3 5" />
-      <circle cx="100" cy="100" r="62" stroke="currentColor" strokeWidth="1" strokeDasharray="3 5" />
-      <path d="M100 8a92 92 0 0 1 79 45" stroke="var(--m-accent)" strokeWidth="2" strokeLinecap="round" opacity="0.55" />
-      <path d="M38 100a62 62 0 0 1 62-62" stroke="var(--m-accent)" strokeWidth="2" strokeLinecap="round" opacity="0.4" />
-    </svg>
   );
 }

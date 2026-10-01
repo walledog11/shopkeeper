@@ -29,7 +29,6 @@ function IntegrationsMap() {
           <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-[#fcfaf8]/40">Four roles, kept distinct</p>
           <h2 className="mt-2 text-[30px] m-display sm:text-[38px]">One request. The right surface at each step.</h2>
         </div>
-        <span className="rounded-full bg-white/[0.07] px-3 py-1 text-[10px] text-[#fcfaf8]/55">Representative system map</span>
       </div>
       <div className="grid gap-3 py-6 lg:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr] lg:items-stretch">
         <div className="rounded-2xl border border-sky-200/15 bg-sky-200/[0.06] p-4">

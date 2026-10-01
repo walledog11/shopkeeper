@@ -21,12 +21,12 @@ function SupportContextView() {
       className="overflow-hidden rounded-3xl border border-stone-900/10 bg-white shadow-[0_35px_70px_-45px_rgba(22,20,19,0.75)]"
     >
       <figcaption id="support-view-caption" className="sr-only">
-        A representative support workspace showing Maya&apos;s size-swap request, matching Shopify and
+        A support workspace showing Maya&apos;s size-swap request, matching Shopify and
         store-policy context, and a concise customer reply prepared after the approved order change.
       </figcaption>
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-900/10 m-chapter--dark px-5 py-4 sm:px-7">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#fcfaf8]/40">Support workspace · synthetic thread</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#fcfaf8]/40">Support workspace</p>
           <p className="mt-1 text-sm font-semibold">Maya Chen · Order #3102</p>
         </div>
         <span className="rounded-full bg-emerald-300/10 px-3 py-1 text-[10px] font-semibold text-emerald-100">Resolved</span>
@@ -66,7 +66,6 @@ function SupportContextView() {
           </div>
         </div>
       </div>
-      <p className="border-t border-stone-900/10 px-5 py-3 text-center text-[10px] text-stone-400 sm:px-7">Representative product composition using fictional details; not a customer transcript.</p>
     </figure>
   );
 }

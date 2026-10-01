@@ -1235,11 +1235,16 @@ html:has(.m-page) {
   background: var(--m-bg-alt);
 }
 
+/* A native <dialog>: reset its default centered, fit-content box to full screen. */
 .m-nav-sheet {
   position: fixed;
   inset: 0;
-  z-index: 80;
-  display: flex;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: 0;
   flex-direction: column;
   background: #fff;
   color: var(--m-ink);
@@ -1247,6 +1252,10 @@ html:has(.m-page) {
     env(safe-area-inset-top)
     1.25rem
     max(1.25rem, env(safe-area-inset-bottom));
+}
+
+.m-nav-sheet[open] {
+  display: flex;
 }
 
 .m-nav-sheet-bar {
@@ -1309,6 +1318,8 @@ html:has(.m-page) {
 /* Dropdown enter/exit — soft rise + fade. Visibility flips after the fade on
    the way out so the card stays visible while it leaves. */
 .m-nav-pop {
+  width: min(100%, 56rem);
+  margin-inline: auto;
   visibility: hidden;
   pointer-events: none;
   opacity: 0;
@@ -1346,138 +1357,240 @@ html:has(.m-page) {
   }
 }
 
-/* Product mega menu — a white panel under the bar, hairline cards inside. */
+/* Product menu: an index of the product on the left and a live scrap of it on
+   the right. Serif titles and the dark message stage keep it on the page's own
+   system instead of a grid of icon cards. The radii nest: panel 22 = stage 14 +
+   8 of padding. */
 .m-nav-mega {
   position: relative;
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.75rem;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.5rem;
   border: 1px solid var(--m-line);
-  border-radius: 1.25rem;
+  border-radius: 1.375rem;
   background: #fff;
-  padding: 0.75rem;
+  padding: 0.5rem;
   box-shadow:
     0 32px 72px -28px rgba(27, 26, 25, 0.28),
     0 10px 28px -14px rgba(27, 26, 25, 0.12);
 }
 
+/* Tablet widths get the list alone: beside the stage it is too narrow to keep
+   a description on one line. */
 @media (min-width: 56rem) {
   .m-nav-mega {
-    grid-template-columns: minmax(0, 1fr) 13.75rem;
-    gap: 0.85rem 1rem;
+    grid-template-columns: minmax(0, 1fr) 18rem;
   }
 }
 
-.m-nav-mega-cards {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.65rem;
+.m-nav-mega-list {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
-.m-nav-mega-card {
+.m-nav-mega-item {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   grid-template-areas:
-    "icon title arrow"
-    "icon body  body";
-  column-gap: 0.7rem;
-  row-gap: 0.2rem;
-  align-items: start;
-  border: 1px solid var(--m-line);
-  border-radius: 1rem;
-  background: #fff;
-  padding: 0.95rem 1rem 1rem;
+    "title arrow"
+    "desc  desc";
+  column-gap: 0.75rem;
+  row-gap: 0.3rem;
+  align-items: center;
+  border-radius: 0.875rem;
+  padding: 0.95rem 1.1rem;
   color: inherit;
   text-decoration: none;
-  transition:
-    background-color 0.15s ease,
-    border-color 0.15s ease;
+  transition: background-color 0.15s ease;
 }
 
-.m-nav-mega-card:hover,
-.m-nav-mega-card:focus-visible {
-  outline: none;
-  border-color: var(--m-line-strong);
+.m-nav-mega-item:hover,
+.m-nav-mega-item:focus-visible,
+.m-nav-mega-item.is-active {
   background: var(--m-bg-alt);
 }
 
-.m-nav-mega-card-icon {
-  grid-area: icon;
-  display: grid;
-  width: 2.15rem;
-  height: 2.15rem;
-  place-items: center;
-  border: 1px solid var(--m-line);
-  border-radius: 0.6rem;
-  background: var(--m-bg-alt);
-  color: var(--m-ink);
+.m-nav-mega-item:focus-visible {
+  outline: 2px solid var(--m-focus);
+  outline-offset: -2px;
 }
 
-.m-nav-mega-card-title {
+.m-nav-mega-title {
   grid-area: title;
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem;
-  padding-top: 0.2rem;
-  font-size: 0.9375rem;
-  font-weight: 600;
-  line-height: 1.3;
+  font-family: var(--m-font-display);
+  font-size: 1.375rem;
+  font-weight: 350;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
   color: var(--m-ink);
 }
 
-.m-nav-mega-arrow {
-  grid-area: arrow;
-  margin-top: 0.28rem;
-  color: var(--m-ink-3);
-  transition:
-    color 0.15s ease,
-    translate 0.15s ease;
-}
-
-.m-nav-mega-card:hover .m-nav-mega-arrow,
-.m-nav-mega-card:focus-visible .m-nav-mega-arrow {
-  color: var(--m-ink);
-  translate: 2px 0;
-}
-
-.m-nav-mega-card-subtitle {
-  grid-area: body;
-  padding-top: 0.15rem;
-  font-size: 0.8125rem;
+.m-nav-mega-desc {
+  grid-area: desc;
+  font-size: 0.875rem;
   line-height: 1.45;
+  text-wrap: pretty;
   color: var(--m-ink-2);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .m-nav-mega-card,
-  .m-nav-mega-arrow {
-    transition: none;
-  }
-
-  .m-nav-mega-card:hover .m-nav-mega-arrow,
-  .m-nav-mega-card:focus-visible .m-nav-mega-arrow {
-    translate: 0;
-  }
+/* The arrow stays out of the way until the row is the active one. */
+.m-nav-mega-arrow {
+  grid-area: arrow;
+  color: var(--m-ink-3);
+  opacity: 0;
+  translate: -4px 0;
+  transition:
+    opacity 0.15s ease,
+    translate 0.15s ease,
+    color 0.15s ease;
 }
 
-.m-nav-mega-rail {
-  display: flex;
-  flex-direction: column;
-  padding: 0.35rem 0.35rem 0.15rem;
-  border-top: 1px solid var(--m-line);
+.m-nav-mega-item:hover .m-nav-mega-arrow,
+.m-nav-mega-item:focus-visible .m-nav-mega-arrow,
+.m-nav-mega-item.is-active .m-nav-mega-arrow {
+  color: var(--m-ink);
+  opacity: 1;
+  translate: 0;
+}
+
+/* The stage previews whichever row is active (hovered or focused), so the panel
+   beside the list always explains the item you are on. It is the light well the
+   #workflow demo sits in: warm off-white with a peach glow underneath. Only shown
+   where the list can spare the width (see above). The scenes share one grid
+   cell, so the stage is as tall as the tallest of them. */
+.m-nav-mega-stage {
+  position: relative;
+  display: none;
+  grid-template: "scene" 1fr / minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--m-line);
+  border-radius: 0.875rem;
+  background:
+    radial-gradient(80% 50% at 50% 120%, rgba(253, 222, 208, 0.75) 0%, transparent 70%),
+    linear-gradient(165deg, #fdfcfb 0%, #f7f5f2 100%);
+  padding: 1.1rem;
 }
 
 @media (min-width: 56rem) {
-  .m-nav-mega-rail {
-    border-top: 0;
-    border-left: 1px solid var(--m-line);
-    padding: 0.2rem 0.15rem 0.15rem 0.85rem;
+  .m-nav-mega-stage {
+    display: grid;
   }
 }
 
-.m-nav-mega-rail-label {
-  margin: 0.2rem 0.5rem 0.45rem;
+.m-nav-mega-scene {
+  grid-area: scene;
+  align-self: center;
+  visibility: hidden;
+  opacity: 0;
+  transition:
+    opacity 0.15s ease,
+    visibility 0s linear 0.15s;
+}
+
+.m-nav-mega-scene.is-active {
+  visibility: visible;
+  opacity: 1;
+  transition: opacity 0.15s ease;
+}
+
+/* Scenes (NavPreviews.tsx) */
+.m-nav-pv {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--m-ink);
+}
+
+.m-nav-pv-bubble {
+  margin: 0;
+  max-width: 88%;
+  padding: 0.5rem 0.8rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  text-wrap: pretty;
+}
+
+.m-nav-pv-bubble.is-mine {
+  align-self: flex-end;
+  border-radius: 1rem 1rem 0.3rem 1rem;
+}
+
+.m-nav-pv-bubble.is-theirs {
+  align-self: flex-start;
+  border-radius: 1rem 1rem 1rem 0.3rem;
+}
+
+.m-nav-pv-bubble.is-green {
+  background: linear-gradient(180deg, #39d353 0%, #34c759 100%);
+  color: #fff;
+}
+
+.m-nav-pv-bubble.is-white {
+  border: 1px solid var(--m-line);
+  background: #fff;
+  box-shadow: 0 8px 20px -14px rgba(27, 26, 25, 0.3);
+}
+
+.m-nav-pv-bubble.is-grey {
+  background: rgba(27, 26, 25, 0.07);
+}
+
+.m-nav-pv-bubble.is-ink {
+  background: var(--m-ink);
+  color: var(--m-on-dark);
+}
+
+.m-nav-pv-who {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--m-ink-2);
+}
+
+.m-nav-pv-avatar {
+  display: grid;
+  width: 1.375rem;
+  height: 1.375rem;
+  place-items: center;
+  border-radius: 9999px;
+  background: #e9c9a8;
+  color: #5a3a1e;
+  font-size: 0.5625rem;
+  font-weight: 700;
+}
+
+.m-nav-pv-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  border: 1px solid var(--m-line);
+  border-radius: 0.75rem;
+  background: #fff;
+  padding: 0.6rem 0.75rem;
+  box-shadow: 0 8px 20px -14px rgba(27, 26, 25, 0.3);
+}
+
+.m-nav-pv-card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.m-nav-pv-card-sub {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--m-ink-2);
+}
+
+.m-nav-pv-label {
   font-family: var(--m-font-mono);
   font-size: 0.6875rem;
   font-weight: 500;
@@ -1487,57 +1600,65 @@ html:has(.m-page) {
   color: var(--m-ink-3);
 }
 
-.m-nav-mega-partner {
+.m-nav-pv-seg {
   display: flex;
-  align-items: center;
-  gap: 0.7rem;
-  border-radius: 0.75rem;
-  padding: 0.4rem 0.45rem;
-  color: inherit;
-  text-decoration: none;
-  transition: background-color 0.15s ease;
+  gap: 0.15rem;
+  border-radius: 9999px;
+  background: rgba(27, 26, 25, 0.07);
+  padding: 0.15rem;
 }
 
-.m-nav-mega-partner:hover,
-.m-nav-mega-partner:focus-visible {
-  background: var(--m-bg-alt);
-  outline: none;
-}
-
-.m-nav-mega-partner-logo {
-  display: grid;
-  width: 2.15rem;
-  height: 2.15rem;
-  flex-shrink: 0;
-  place-items: center;
-  border: 1px solid var(--m-line);
-  border-radius: 0.75rem;
-  background: var(--m-bg-alt);
-}
-
-.m-nav-mega-partner-name {
-  flex: 1;
-  font-size: 0.875rem;
-  font-weight: 600;
-  line-height: 1.25;
-  color: var(--m-ink);
-}
-
-.m-nav-mega-more {
-  margin: 0.2rem 0.5rem 0.15rem;
-  padding: 0.45rem 0;
-  font-size: 0.8125rem;
+.m-nav-pv-seg span {
+  flex: 1 1 auto;
+  border-radius: 9999px;
+  padding: 0.35rem 0.4rem;
+  font-size: 0.75rem;
   font-weight: 500;
-  line-height: 1.3;
-  color: var(--m-ink);
-  text-decoration: underline;
-  text-underline-offset: 0.18em;
+  text-align: center;
+  white-space: nowrap;
+  color: var(--m-ink-2);
 }
 
-.m-nav-mega-more:hover,
-.m-nav-mega-more:focus-visible {
+.m-nav-pv-seg .is-on {
+  background: #fff;
+  box-shadow:
+    0 1px 2px rgba(27, 26, 25, 0.12),
+    0 0 0 1px var(--m-line);
+  color: var(--m-ink);
+}
+
+.m-nav-pv-note {
+  margin: 0 0 0.35rem;
+  font-size: 0.75rem;
+  line-height: 1.45;
   color: var(--m-ink-2);
-  outline: none;
+}
+
+.m-nav-pv-approve {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  align-self: flex-start;
+  margin-top: 0.4rem;
+  border-radius: 9999px;
+  background: var(--m-good);
+  padding: 0.3rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .m-nav-mega-item,
+  .m-nav-mega-arrow,
+  .m-nav-mega-scene,
+  .m-nav-mega-scene.is-active {
+    transition: none;
+  }
+
+  .m-nav-mega-arrow {
+    translate: 0;
+  }
 }
 
 /* ── Onboarding sync mock (Zipchat-style coded UI loop) ── */
@@ -1998,32 +2119,6 @@ html:has(.m-page) {
   overflow: visible;
 }
 
-.m-bento-stat-card {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-  margin-top: 0.75rem;
-  padding: 0.75rem 0.75rem 0 1rem;
-  border-left: 1px solid var(--m-line-strong);
-}
-
-.m-bento-store {
-  font-family: var(--m-font-display);
-  font-size: 1.5rem;
-  font-weight: 350;
-  letter-spacing: -0.02em;
-  line-height: 1;
-  color: var(--m-ink);
-}
-
-.m-bento-stat {
-  font-size: 1.25rem;
-  font-weight: 500;
-  letter-spacing: -0.02em;
-  line-height: 1.3;
-  color: var(--m-ink);
-}
-
 /* Card visuals (BentoVisuals.tsx). Steps fade up in sequence once the visual
    is on screen (.is-playing); reduced-motion shows the finished state. */
 .m-bv {
@@ -2079,14 +2174,6 @@ html:has(.m-page) {
   letter-spacing: -0.01em;
 }
 
-.m-bv-pill {
-  border: 1px solid var(--m-line-strong);
-  border-radius: 0.4rem;
-  padding: 0.1rem 0.45rem;
-  font-size: 0.6875rem;
-  font-weight: 600;
-}
-
 .m-bv-rule {
   margin: 0 0 0.15rem;
   font-size: 0.875rem;
@@ -2096,32 +2183,6 @@ html:has(.m-page) {
 .m-bv-note {
   margin: 0 0 0.75rem;
   color: var(--m-ink-2);
-}
-
-.m-bv-label {
-  margin: 0.5rem 0 0.3rem;
-  color: var(--m-ink-3);
-}
-
-.m-bv-cond {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem 0.5rem;
-  margin-bottom: 0.35rem;
-  color: var(--m-ink-2);
-}
-
-.m-bv-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  border-radius: 0.4rem;
-  background: var(--m-bg-alt);
-  padding: 0.15rem 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--m-ink);
 }
 
 .m-bv-chat {
@@ -2333,17 +2394,17 @@ html:has(.m-page) {
   to   { transform: rotate(calc(-1 * var(--a) - 360deg)); }
 }
 
-/* Stat cards */
-.m-bv-stats {
+/* Action log */
+.m-bv-log {
   display: grid;
   gap: 0.5rem;
-  width: min(100%, 14.5rem);
+  width: min(100%, 16rem);
   margin: auto auto 0;
 }
 
-.m-bv-stat {
+.m-bv-log-item {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
   border: 1px solid rgba(236, 107, 79, 0.16);
@@ -2353,21 +2414,21 @@ html:has(.m-page) {
   box-shadow: 0 14px 34px -22px rgba(236, 107, 79, 0.55);
 }
 
-.m-bv-stat-value {
+.m-bv-log-title {
   margin: 0;
-  font-size: 1.625rem;
-  font-weight: 400;
-  letter-spacing: -0.03em;
-  line-height: 1.1;
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
 }
 
-.m-bv-stat-label {
-  margin: 0.25rem 0 0;
+.m-bv-log-detail {
+  margin: 0.2rem 0 0;
   font-size: 0.75rem;
   color: var(--m-ink-2);
 }
 
-.m-bv-stat-icon {
+.m-bv-log-icon {
   display: grid;
   flex: none;
   place-items: center;
@@ -2378,7 +2439,7 @@ html:has(.m-page) {
   color: var(--m-good);
 }
 
-/* Shopper chat with product recommendations */
+/* Shopper chat with an order lookup */
 .m-bv-convert {
   display: flex;
   flex: 1 1 auto;
@@ -2458,23 +2519,6 @@ html:has(.m-page) {
   flex-direction: column;
   align-items: flex-start;
   gap: 0.2rem;
-}
-
-.m-bv-rings {
-  position: absolute;
-  bottom: -30%;
-  left: 0;
-  width: 15rem;
-  color: var(--m-line-strong);
-  pointer-events: none;
-}
-
-/* The rings hang below the copy column, so they only fit beside the chat; when
-   the card stacks they would sit behind the quote. */
-@media (max-width: 1151px) {
-  .m-bv-rings {
-    display: none;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

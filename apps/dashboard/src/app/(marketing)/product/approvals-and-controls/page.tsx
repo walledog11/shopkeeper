@@ -101,7 +101,7 @@ function ControlModel() {
     >
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-5">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.13em] text-[#fcfaf8]/45">Control model · synthetic order #3102</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.13em] text-[#fcfaf8]/45">Order #3102</p>
           <p className="mt-1 text-lg font-semibold">Swap Medium / Sand → Small / Sand</p>
         </div>
         <span className="rounded-full border border-amber-300/25 bg-amber-300/10 px-3 py-1 text-xs font-semibold text-amber-100">
@@ -127,9 +127,6 @@ function ControlModel() {
           <p className="mt-1 text-xs leading-relaxed text-[#fcfaf8]/55">Human approved · Shopify updated</p>
         </div>
       </div>
-      <p className="border-t border-white/10 pt-4 text-xs leading-relaxed text-[#fcfaf8]/45">
-        This diagram explains the control model with fictional data; it is not presented as customer evidence.
-      </p>
     </div>
   );
 }
@@ -162,8 +159,6 @@ export default function ApprovalsAndControlsPage() {
       eyebrow="approvals and controls"
       title="Set the boundary before the request arrives."
       lede="Choose what stays a draft, what can reply, and what must pause. Shopkeeper carries the exact Shopify work to the merchant, then keeps the decision and result reviewable."
-      backHref="/"
-      backLabel="Back to control overview"
       jumpLabel="Follow an approval"
       jumpHref="#control-model"
       visualSectionId="control-model"

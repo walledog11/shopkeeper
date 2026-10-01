@@ -42,15 +42,15 @@ function PaperCard({
 const briefingOptions = [
   {
     title: "Morning briefing",
-    body: "An optional daily summary of completed work, unanswered questions, and actions waiting for approval.",
+    body: "A short text each morning: what got done and what’s waiting on you.",
   },
   {
     title: "Sales pulse",
-    body: "Include orders and revenue since your last briefing, with a comparison to the prior week when available.",
+    body: "Orders and revenue since your last briefing, and how that compares with last week.",
   },
   {
     title: "Low-stock alerts",
-    body: "Choose an inventory threshold. The briefing can flag product variants at or below that number of units.",
+    body: "Set a threshold and get flagged when a variant drops to it.",
   },
 ] as const;
 
@@ -58,48 +58,38 @@ export function ProactiveOperations() {
   return (
     <section id="proactive" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-16 sm:px-6 sm:py-24">
       <SectionHeading
-        label="your daily briefing"
+        label="Your daily briefing"
         title="Sales, stock, and the decisions waiting for you."
-        body="Turn on a morning briefing to catch up from iMessage. See the agent’s work and what needs your attention, with optional sales and inventory updates. Reply to ask about a customer or act on a pending decision."
+        body="Get a text each morning with what Shopkeeper did and what needs you. Add sales and low-stock updates if you want them, then reply to ask a question or settle a decision."
       />
 
       <div className="grid gap-5 lg:grid-cols-[1.3fr_0.9fr]">
-        <PaperCard className="flex flex-col justify-between !bg-white/[0.06]">
-          <div>
-            <div className="mb-5 flex items-center justify-between gap-3 text-xs text-[color:var(--m-ink-3)]">
-              <span>Morning briefing · iMessage</span>
-              <span>7:00 AM</span>
-            </div>
-            <div className="flex flex-col gap-4 text-[15px] leading-relaxed sm:text-[16px]">
-              <div>
-                <p>
-                  Since your last briefing: 12 customer replies sent and two
-                  order changes completed after your approval.
-                </p>
-                <ul className="m-0 flex list-none flex-col gap-1.5 p-0 text-[color:var(--m-ink-2)]">
-                  <li>• Jordan’s gift-note edit is complete.</li>
-                  <li>• Sam’s return label is attached.</li>
-                </ul>
-              </div>
-              <p>One decision is waiting: Riley wants to change the address on #3107 before it ships.</p>
-              <p>Sales: 8 orders, $624 in revenue.</p>
-              <p>Low stock: Linen Jumpsuit, Small / Sand — 3 left.</p>
-            </div>
+        <PaperCard className="!bg-white/[0.06]">
+          <div className="mb-5 flex items-center justify-between gap-3 text-xs text-[color:var(--m-ink-3)]">
+            <span>Morning briefing · iMessage</span>
+            <span>7:00 AM</span>
           </div>
-          <p className="mt-8 border-t border-[color:var(--m-line)] pt-5 text-xs leading-relaxed text-[color:var(--m-ink-3)]">
-            Illustrative briefing with fictional data. Sales pulse and low-stock alerts enabled.
-          </p>
+          <div className="flex flex-col gap-4 text-[15px] leading-relaxed sm:text-[16px]">
+            <div>
+              <p>
+                Since your last briefing: 12 customer replies sent and 2
+                order changes completed after your approval.
+              </p>
+              <ul className="m-0 mt-2 flex list-disc flex-col gap-1.5 pl-5 text-[color:var(--m-ink-2)] marker:text-[color:var(--m-ink-3)]">
+                <li>Jordan’s gift-note edit is complete.</li>
+                <li>Sam’s return label is attached.</li>
+              </ul>
+            </div>
+            <p>One decision is waiting: Riley wants to change the address on #3107 before it ships.</p>
+            <p>Sales: 8 orders, $624 in revenue.</p>
+            <p>Low stock: Linen Pant, Oat / M, 3 left.</p>
+          </div>
         </PaperCard>
 
         <div className="grid content-start gap-4">
           {briefingOptions.map((option) => (
             <PaperCard key={option.title}>
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="m-display text-[1.375rem]">{option.title}</h3>
-                <span className="shrink-0 rounded-full border border-[color:var(--m-line)] px-2.5 py-1 text-[11px] uppercase leading-none tracking-[0.04em] text-[color:var(--m-ink-3)] [font-family:var(--m-font-mono)]">
-                  Optional
-                </span>
-              </div>
+              <h3 className="m-display text-[1.375rem]">{option.title}</h3>
               <p className="mt-3 text-sm leading-relaxed text-[color:var(--m-ink-2)]">{option.body}</p>
             </PaperCard>
           ))}

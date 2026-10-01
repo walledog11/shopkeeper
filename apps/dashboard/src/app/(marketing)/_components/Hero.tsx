@@ -2,7 +2,7 @@ import { ButtonLink } from "./ButtonLink";
 import { PRIMARY_CTA_LABEL } from "@/lib/brand";
 import { Check, MessageSquareText } from "lucide-react";
 
-const heroProofPoints = ["Free for 14 days", "No card to start", "Connects to Shopify"] as const;
+const heroProofPoints = ["Free for 14 days", "Connects to Shopify"] as const;
 
 function rise(delayMs: number) {
   return {
@@ -40,7 +40,7 @@ function HeroFlow() {
       <div
         className="m-shimmer-panel relative overflow-hidden rounded-[1.75rem] px-5 pb-10 pt-10 sm:pt-12"
         role="img"
-        aria-label="A customer asks to swap their order to a medium. Shopkeeper checks the order in Shopify, replies, and the swap is approved from iMessage and updated in Shopify."
+        aria-label="A customer asks to switch their jumpsuit to a small. Shopkeeper checks the order in Shopify and asks the merchant, who approves from iMessage. The order is then updated in Shopify."
       >
         <div aria-hidden className="m-shimmer-sheen" />
         {sparkles.map((s, i) => (
@@ -58,7 +58,7 @@ function HeroFlow() {
               <span className="grid size-7 shrink-0 place-items-center rounded-full bg-[#e9c9a8] text-[12px] font-semibold text-[#5a3a1e] ring-2 ring-white/70">
                 M
               </span>
-              <span>Can I swap my order to a medium?</span>
+              <span>Can I switch my jumpsuit to S?</span>
             </div>
           </div>
 
@@ -66,7 +66,7 @@ function HeroFlow() {
 
           <div className="m-flow-step m-flow-chip" style={{ animationDelay: "900ms" }}>
             <SparkIcon className="size-3.5" />
-            Checking order #1042 in Shopify
+            Checking order #3102 in Shopify
           </div>
 
           <span aria-hidden className="m-flow-line" />
@@ -75,7 +75,7 @@ function HeroFlow() {
             <span className="grid size-7 shrink-0 place-items-center rounded-full bg-white/80 text-stone-800">
               <SparkIcon className="size-3.5" />
             </span>
-            <span>Good news, a medium is in stock. Swapping it for you now.</span>
+            <span>Maya wants a Small, and it’s in stock. Swap it?</span>
           </div>
 
           <span aria-hidden className="m-flow-line" />
@@ -109,8 +109,8 @@ export function Hero() {
       </h1>
 
       <p className="m-lede mx-auto mb-8 max-w-[560px]" style={rise(80)}>
-        Shopkeeper answers customers and does the work in Shopify, while you
-        approve anything that matters by text from iMessage or the dashboard.
+        Shopkeeper answers your customers and does the work in Shopify. You
+        approve anything that matters from iMessage or the dashboard.
       </p>
 
       <div style={rise(160)}>

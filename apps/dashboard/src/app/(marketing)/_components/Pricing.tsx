@@ -36,7 +36,7 @@ const tiers = [
       "No conversation limit",
       "Two seats",
     ],
-    cta: "Try Pro free →",
+    cta: "Start free trial",
     href: "/signup",
     featured: true,
   },
@@ -46,18 +46,18 @@ export function Pricing() {
   return (
     <section id="pricing" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-16 text-center sm:px-6 sm:py-24">
       <Reveal>
-        <SectionLabel>what it costs</SectionLabel>
+        <SectionLabel>What it costs</SectionLabel>
         <h2 className="m-display m-h2 mx-auto mb-5 max-w-[20ch]">
           The whole product, <span className="m-tail">on either plan.</span>
         </h2>
         <p className="m-lede mx-auto mb-8 max-w-[48ch]">
-          Two weeks free on either plan. Check the plan and total in checkout before you subscribe.
+          Try it free for 14 days.
         </p>
 
         <p className="mx-auto mb-12 max-w-[62ch] rounded-2xl border border-[color:var(--m-line)] bg-[color:var(--m-bg-alt)] px-5 py-4 text-[15px] leading-relaxed text-[color:var(--m-ink-2)]">
-          Both plans include the merchant agent, customer inbox, supported Shopify
-          actions, sales and stock tools, iMessage, store memory, and briefings.
-          Choose based on customer conversation volume and the number of people using the workspace.
+          Both plans include everything: the customer inbox, texting your shopkeeper
+          over iMessage, Shopify actions, store memory, and briefings. They differ
+          only in conversations and seats.
         </p>
       </Reveal>
 

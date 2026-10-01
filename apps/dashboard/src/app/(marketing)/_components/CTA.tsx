@@ -36,8 +36,8 @@ export function CTA() {
           Give your shop a shopkeeper.
         </h2>
         <p className="m-lede mx-auto mb-9 max-w-[46ch]">
-          Connect Shopify, add your store’s instructions, and give it its first job.
-          A stock check, an order change, or the customer inbox waiting for you.
+          Connect Shopify, add your store’s instructions, and give it a first job:
+          a stock check, an order change, or the customer inbox.
         </p>
         <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
           <ButtonLink href="/signup" variant="light" size="lg">

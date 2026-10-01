@@ -14,14 +14,14 @@ const STEPS = [
   {
     id: "connect",
     title: "Connect Shopify",
-    desc: "Connect your store for product information, policies, and access to orders. Add the store notes and voice guidance you want the agent to use.",
+    desc: "Connect your store so Shopkeeper can read your products, policies, and orders. Add store notes and voice guidance to tell it how you work.",
     aria: "Connecting a Shopify store. Products, policies, orders, FAQs, and about your store sync one by one.",
     duration: 10500,
   },
   {
     id: "channels",
     title: "Pick your channels",
-    desc: "Connect customer channels for incoming messages. Link iMessage to give the agent work and receive approvals, or use the dashboard. Set your trust level and action limits before handing work over.",
+    desc: "Connect Instagram, email, or website chat for customer messages. Link iMessage to give Shopkeeper work and approve from your phone, or use the dashboard. Set your trust level and limits before you hand anything over.",
     aria: "Turning on Instagram, email, website chat, and iMessage.",
     duration: 8000,
   },
@@ -154,9 +154,11 @@ export function Onboarding() {
     <section id="onboarding" className="scroll-mt-24 py-16 sm:py-24">
       <div className="mx-auto max-w-6xl px-6">
         <Reveal className="text-center">
-          <SectionLabel>day one</SectionLabel>
-          <h2 className={`${marketingSectionTitleClass} mb-10 max-w-[18ch]`}>
-            Your store. Your instructions. Your shopkeeper.
+          <SectionLabel>Day one</SectionLabel>
+          <h2 className={`${marketingSectionTitleClass} mb-10`}>
+            <span className="block">Your store.</span>
+            <span className="block">Your instructions.</span>
+            <span className="block">Your shopkeeper.</span>
           </h2>
         </Reveal>
 

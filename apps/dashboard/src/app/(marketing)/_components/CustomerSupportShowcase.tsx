@@ -20,8 +20,8 @@ export function CustomerSupportShowcase() {
             When customers write in, the order comes with the message.
           </h2>
           <p className={marketingSectionBodyClass}>
-            Instagram, email, or chat on your store — Shopkeeper reads the thread,
-            checks Shopify, and sends you anything that needs a yes on iMessage or in the dashboard.
+            Instagram, email, or chat on your store: Shopkeeper reads the thread,
+            checks Shopify, and sends you anything that needs a yes.
           </p>
         </div>
 
@@ -36,8 +36,8 @@ export function CustomerSupportShowcase() {
         </div>
 
         <div className="mt-8 flex flex-col items-center gap-4 sm:flex-row sm:justify-center sm:gap-8">
-          <MarketingHandoffLink href="/product/order-operations" label="Order workflows and requirements" />
-          <MarketingHandoffLink href="/product/customer-support" label="How store knowledge shapes the reply" />
+          <MarketingHandoffLink href="/product/order-operations" label="How order changes work" />
+          <MarketingHandoffLink href="/product/customer-support" label="How replies use your store’s knowledge" />
         </div>
       </div>
     </section>

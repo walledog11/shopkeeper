@@ -8,15 +8,15 @@ import { SectionLabel } from "./SectionLabel";
 const faqs = [
   {
     q: "Can I ask it to do things, or does it only answer customers?",
-    a: "You can give it work directly through iMessage or the dashboard. Ask it to look up a customer, check stock, edit an eligible order, create a timed sale, update a product variant’s price, or email a customer. Incoming customer support is another part of the same product.",
+    a: "You can give it work directly through iMessage or the dashboard: look up a customer, check stock, edit an eligible order, run a timed sale, change a variant’s price, or email a customer. Answering customer messages is part of the same product.",
   },
   {
     q: "Will it email a customer without me seeing it?",
-    a: "For incoming support, Draft only prepares replies for review. In Ask first, the default, routine information replies can go out automatically, while order changes, money, and exceptions wait for you. Separately, you can instruct the merchant agent to send a message yourself. Actions remain subject to your settings and account permissions.",
+    a: "Only if you allow it. In Draft only, every reply waits for your review. In Ask first, the default, routine information replies can go out on their own, while order changes, money, and exceptions wait for you.",
   },
   {
     q: "Do I need to use iMessage?",
-    a: "No. You can talk to the agent, review proposed actions, answer its questions, and manage conversations in the dashboard. Linking iMessage lets you do that work from your phone, including receiving the optional daily briefing.",
+    a: "No. Everything works from the dashboard: give it work, review proposed actions, and answer its questions. Linking iMessage lets you do the same from your phone, and get the daily briefing there.",
   },
   {
     q: "I don’t use Shopify. What do I get?",
@@ -24,7 +24,7 @@ const faqs = [
   },
   {
     q: "If I leave, do I get my data?",
-    a: "Yes. Store and customer data downloads as JSON. Your action history downloads as CSV. Another store cannot see your customers or orders; see the Privacy Policy and Security page for how logins and isolation work.",
+    a: "Yes. Store and customer data downloads as JSON, and your action history as CSV. Other stores can’t see your customers or orders. The Privacy Policy and Security page explain how logins and isolation work.",
   },
 ];
 
@@ -63,9 +63,9 @@ export function FAQ() {
   return (
     <section id="faq" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-16 text-center sm:px-6 sm:py-24">
       <Reveal>
-        <SectionLabel>how it works in practice</SectionLabel>
+        <SectionLabel>FAQ</SectionLabel>
         <h2 className="m-display m-h2 mx-auto mb-12 max-w-[20ch]">
-          What you can ask. <span className="m-tail">What happens next.</span>
+          Questions, <span className="m-tail">answered.</span>
         </h2>
       </Reveal>
 
