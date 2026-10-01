@@ -1,5 +1,4 @@
 import type { RawToolCall } from '@shopkeeper/agent/types';
-import { isPlanExecutionFailureMessage } from '@shopkeeper/agent/message-dispatch';
 import { resolvePendingPlanContexts, type PendingPlan } from '../../operator-context.js';
 import {
   dismissCurrentCachedPlan,
@@ -7,13 +6,16 @@ import {
 } from '@shopkeeper/agent/plan-execution';
 import { ConflictError } from '@shopkeeper/shared/errors';
 import { getPlanExecution } from '@shopkeeper/agent/execution-ledger';
-import { executeOperatorApprovedCachedPlan } from './execute-operator-agent-turn.js';
+import {
+  executeOperatorApprovedCachedPlan,
+  type ExecuteOperatorApprovedCachedPlanResult,
+} from './execute-operator-agent-turn.js';
 
 // Runs an approved plan's stored tool calls verbatim on its ticket thread (zero
-// model calls), then clears the parked plan. Shared by the keyword fast path
-// (handlePendingPlanCommand) and the approve_pending_plan control tool so both
-// approve identically. A throw propagates with the plan left parked — a failed
-// run is not a dismissal.
+// model calls), then clears the parked plan only on a committed outcome. Shared
+// by the keyword fast path (handlePendingPlanCommand) and approve_pending_plan
+// so both approve identically. Failed, partial, and unknown outcomes are not dismissals;
+// a throw propagates, retiring a stale or already-claimed card when appropriate.
 //
 // Authorizing the durable proposal is not done here. Every approval surface —
 // this one, and both dashboard routes — enters `executeCurrentCachedHomePlan`,
@@ -29,17 +31,17 @@ export async function runApprovedPendingPlan(params: {
   approvedToolCalls: RawToolCall[];
   expectedIdentity?: ExpectedPlanIdentity;
   pendingPlan: PendingPlan;
-}): Promise<string> {
-  let summary: string;
+}): Promise<ExecuteOperatorApprovedCachedPlanResult> {
+  let execution: ExecuteOperatorApprovedCachedPlanResult;
   try {
-    ({ summary } = await executeOperatorApprovedCachedPlan({
+    execution = await executeOperatorApprovedCachedPlan({
       orgId: params.organizationId,
       threadId: params.threadId,
       instruction: params.instruction,
       approvedToolCalls: params.approvedToolCalls,
       clerkUserId: params.clerkUserId,
       ...(params.expectedIdentity ? { expectedIdentity: params.expectedIdentity } : {}),
-    }));
+    });
   } catch (error) {
     // A stable plan that is stale, already claimed, or terminal is no longer
     // actionable on any device. Unknown pre-claim infrastructure failures leave
@@ -57,10 +59,10 @@ export async function runApprovedPendingPlan(params: {
     }
     throw error;
   }
-  if (!isPlanExecutionFailureMessage(summary)) {
+  if (execution.outcome === 'committed') {
     await resolvePendingPlanContexts(params.organizationId, params.memberKey, params.pendingPlan);
   }
-  return summary || 'Done.';
+  return { ...execution, summary: execution.summary || 'Done.' };
 }
 
 // Dismisses a parked plan without running it. Shared by the keyword `no`/`dismiss`

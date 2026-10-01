@@ -1,8 +1,8 @@
 "use client";
 
-import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, LazyMotion, domAnimation, m } from "motion/react";
+import { SectionLabel } from "./SectionLabel";
 
 const STORE = "Linen & Loom";
 
@@ -20,7 +20,7 @@ const tasks = [
     label: "Check stock",
     headline: "Get a count in the words you already use.",
     about:
-      "Name the product, size, and color—the way you’d ask someone on the floor. Shopkeeper reads inventory and answers in the thread.",
+      "Ask the way you’d ask someone on the floor. Shopkeeper reads your inventory and answers in the thread.",
     prompt: "How many sand linen jumpsuits do we have in Small?",
     response: "Twelve in Small / Sand.",
     gradient: "/marketing/bento/bento-3-gradient.svg",
@@ -38,7 +38,7 @@ const tasks = [
     label: "Work the inbox",
     headline: "Your queue, in one ask.",
     about:
-      "Shopkeeper lists what needs your approval, what it can reply to on its own, and what only you can handle—then waits for your call on each.",
+      "Shopkeeper lists what needs your approval, what it can answer on its own, and what only you can handle. Then it waits for your call.",
     prompt: "What’s waiting on me?",
     response:
       "Maya’s swap is ready for your OK. Priya needs an answer about international shipping. Alex’s refund needs you — it’s above your limit.",
@@ -46,9 +46,9 @@ const tasks = [
   },
   {
     label: "Email a customer",
-    headline: "Reach out when you’re starting the thread.",
+    headline: "Start the conversation yourself.",
     about:
-      "Some updates don’t begin with a customer DM. Tell Shopkeeper the address and message; it sends the email and keeps a record.",
+      "Tell Shopkeeper who to email and what to say. It sends the message and keeps a record.",
     prompt: "Email jamie@example.com — their replacement ships tomorrow.",
     response: "Sent.",
     gradient: "/marketing/bento/bento-2-gradient.svg",
@@ -123,10 +123,8 @@ function MerchantThread({
 function MerchantCopy({ headline, about }: { headline: string; about: string }) {
   return (
     <div className="flex flex-col justify-center">
-      <h3 className="m-display text-[clamp(1.45rem,2.2vw,1.85rem)] font-semibold leading-[1.12] tracking-[-0.035em] text-stone-950">
-        {headline}
-      </h3>
-      <p className="mt-4 max-w-[42ch] text-[16px] leading-[1.65] text-stone-600">{about}</p>
+      <h3 className="m-display m-h3">{headline}</h3>
+      <p className="m-lede mt-4 max-w-[42ch] text-[16px]">{about}</p>
     </div>
   );
 }
@@ -136,15 +134,20 @@ const SCROLL_SEGMENT_VH = 72;
 
 export function MerchantTasks() {
   const [active, setActive] = useState(0);
-  const [scrollScrub, setScrollScrub] = useState(true);
+  const [scrollScrub, setScrollScrub] = useState(false);
   const pinRef = useRef<HTMLDivElement>(null);
   const task = tasks[active];
 
+  // Pin-and-scrub only where the panel fits under the sticky navbar: desktop-size
+  // screens with motion allowed. On a phone the panel is taller than the screen, so
+  // it would stay pinned with its bottom cut off for several screens of scrolling;
+  // there the tabs are simply tapped.
   useEffect(() => {
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduce) {
-      setScrollScrub(false);
-    }
+    const media = window.matchMedia("(min-width: 1024px) and (prefers-reduced-motion: no-preference)");
+    const sync = () => setScrollScrub(media.matches);
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
   }, []);
 
   const updateActiveFromScroll = useCallback(() => {
@@ -191,7 +194,7 @@ export function MerchantTasks() {
 
   return (
     <LazyMotion features={domAnimation} strict>
-      <section id="workflow" aria-labelledby="merchant-tasks-heading" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-14 sm:px-6 sm:py-20">
+      <section id="workflow" aria-labelledby="merchant-tasks-heading" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-16 sm:px-6 sm:py-24">
         <m.header
           className="mb-8 max-w-[min(720px,100%)] text-left sm:mb-10"
           initial={{ opacity: 0, y: 22 }}
@@ -199,10 +202,8 @@ export function MerchantTasks() {
           viewport={{ once: true, amount: 0.5 }}
           transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
         >
-          <h2
-            id="merchant-tasks-heading"
-            className="m-display text-[clamp(2rem,4.2vw,3.35rem)] font-semibold leading-[1.08] tracking-[-0.04em] text-stone-950"
-          >
+          <SectionLabel align="start">Text your shopkeeper</SectionLabel>
+          <h2 id="merchant-tasks-heading" className="m-display m-h2">
             “Put the store on sale until Sunday.”
           </h2>
         </m.header>
@@ -213,7 +214,7 @@ export function MerchantTasks() {
           style={{ height: scrollScrub ? `${pinHeightVh}vh` : undefined }}
         >
           <m.div
-            className={`m-merchant-panel overflow-hidden rounded-[1.35rem] ${scrollScrub ? "sticky top-[5.5rem] z-[1] sm:top-24" : ""}`}
+            className={`m-merchant-panel overflow-hidden rounded-[1.5rem] ${scrollScrub ? "sticky top-[4.5rem] z-[1] sm:top-20" : ""}`}
             initial={{ opacity: 0, y: 28 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.2 }}
@@ -224,7 +225,7 @@ export function MerchantTasks() {
                 role="tablist"
                 aria-label="Example jobs"
                 aria-orientation="vertical"
-                className="m-merchant-tabs m-merchant-tabs-vertical shrink-0 border-b border-stone-900/8 bg-[#fcfcfb] px-3 py-3 sm:w-[10.5rem] sm:border-b-0 sm:border-r sm:px-3 sm:py-5 lg:w-[11.25rem]"
+                className="m-merchant-tabs m-merchant-tabs-vertical shrink-0 border-b border-[color:var(--m-line)] bg-white px-3 py-3 sm:w-[10.5rem] sm:border-b-0 sm:border-r sm:px-3 sm:py-5 lg:w-[11.25rem]"
               >
                 {tasks.map((item, index) => {
                   const selected = active === index;
@@ -261,21 +262,13 @@ export function MerchantTasks() {
                     exit="exit"
                     className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:min-h-[420px]"
                   >
-                    <div className="order-2 border-t border-stone-900/8 bg-white px-5 py-8 sm:px-8 sm:py-10 lg:order-1 lg:border-t-0 lg:border-r lg:py-12">
+                    <div className="order-2 border-t border-[color:var(--m-line)] bg-white px-5 py-8 sm:px-8 sm:py-10 lg:order-1 lg:border-t-0 lg:border-r lg:py-12">
                       <MerchantCopy headline={task.headline} about={task.about} />
                     </div>
                     <div className="m-merchant-well relative order-1 flex items-center justify-center px-4 py-10 sm:px-8 sm:py-12 lg:order-2 lg:py-14">
-                      <div
-                        aria-hidden
-                        className="pointer-events-none absolute inset-0 overflow-hidden [mask-image:linear-gradient(180deg,black_55%,transparent_100%)]"
-                      >
-                        <Image
-                          src="/atmosphere/hero-light.jpg"
-                          alt=""
-                          fill
-                          sizes="(min-width: 1024px) 480px, 100vw"
-                          className="object-cover opacity-70 [filter:blur(28px)_sepia(0.12)_saturate(0.9)_brightness(1.05)]"
-                        />
+                      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+                        {/* eslint-disable-next-line @next/next/no-img-element -- decorative SVG glow, same as bento cards */}
+                        <img src={task.gradient} alt="" className="size-full object-cover opacity-90" />
                       </div>
                       <MerchantThread
                         headline={task.headline}

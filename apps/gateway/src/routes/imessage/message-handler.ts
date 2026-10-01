@@ -113,7 +113,7 @@ export interface ImessageOperatorTurnParams {
 //
 // Without a space there is no bubble to raise, and the words become the only
 // acknowledgement the channel has — so they come quickly instead.
-function imessagePresence(reply: OperatorReply, spaceId: string | null | undefined): OperatorPresence {
+export function imessagePresence(reply: OperatorReply, spaceId: string | null | undefined): OperatorPresence {
   if (!spaceId) return progressOnlyPresence(reply, SILENT_CHANNEL_PROGRESS_THRESHOLD_MS);
 
   const withProgressText = progressOnlyPresence(reply, TYPING_INDICATOR_PROGRESS_THRESHOLD_MS);
@@ -125,7 +125,7 @@ function imessagePresence(reply: OperatorReply, spaceId: string | null | undefin
 // both the synchronous webhook path and the durable operator-event worker run
 // identical logic; they differ only in the injected reply (provider send) and
 // when the webhook is acknowledged. Mirrors runTelegramOperatorTurn.
-export async function runImessageOperatorTurn(params: ImessageOperatorTurnParams): Promise<void> {
+export async function runImessageOperatorTurn(params: ImessageOperatorTurnParams): Promise<void | 'queued'> {
   const { organizationId, clerkUserId, senderId, body, reply, turnId, spaceId } = params;
 
   const chatId = senderId;
@@ -148,6 +148,7 @@ export async function runImessageOperatorTurn(params: ImessageOperatorTurnParams
     reply,
     senderRef: memberKey,
     deliveryRef,
+    spaceId,
     ...(turnId ? { turnId } : {}),
     presence: imessagePresence(reply, spaceId),
   };
@@ -191,7 +192,7 @@ export async function runImessageOperatorTurn(params: ImessageOperatorTurnParams
   // Everything past the keyword fast path is one agent turn: the model reads the
   // pending-state ledger and drives approve/reject/revise/answer via control tools,
   // or handles a fresh instruction normally.
-  await executeFreeFormInstruction(organizationId, clerkUserId, baseMessage, context);
+  return executeFreeFormInstruction(organizationId, clerkUserId, baseMessage);
 }
 
 // Synchronous operator-channel iMessage dispatch — the iMessage equivalent of

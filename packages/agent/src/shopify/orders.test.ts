@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsonResponse } from "../testing/json-response.js";
-import { listRecentUnfulfilledOrderIds } from "./orders.js";
+import { getOrderByName, listRecentUnfulfilledOrderIds } from "./orders.js";
 import { serializeOrder } from "./serializers.js";
 
 const ctx = {
@@ -125,5 +125,36 @@ describe("serializeOrder line items", () => {
       "line_item_id", "variant_id", "title", "quantity",
       "fulfillable_quantity", "current_quantity", "fulfillment_status",
     ]);
+  });
+});
+
+describe("order status evidence", () => {
+  it("reads cancellation and shipment evidence independently for a refunded order", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ orders: [{
+      id: 1035, name: "#1035", cancelled_at: "2026-09-30T07:20:09Z",
+      financial_status: "refunded", fulfillment_status: null, fulfillments: [],
+    }] }));
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await getOrderByName({ order_name: "1035" }, ctx);
+    expect(result.status).toBe("ok");
+    expect(JSON.parse(result.message)).toMatchObject({
+      cancelled_at: "2026-09-30T07:20:09Z",
+      financial_status: "refunded", shipping_status: "not_shipped_yet",
+    });
+    const fields = new URL(String(fetchMock.mock.calls[0]?.[0])).searchParams.get("fields")?.split(",");
+    expect(fields).toEqual(expect.arrayContaining(["cancelled_at", "fulfillments"]));
+  });
+
+  it("does not infer shipment or return history from restocking", () => {
+    expect(serializeOrder({ id: 1032, fulfillment_status: "restocked", fulfillments: [] }))
+      .toMatchObject({ shipping_status: "unknown" });
+    expect(serializeOrder({
+      id: 1032, fulfillment_status: "restocked",
+      fulfillments: [{ status: "cancelled", shipment_status: "delivered" }],
+    })).toMatchObject({ shipping_status: "unknown" });
+    expect(serializeOrder({
+      id: 1032, fulfillment_status: "restocked",
+      fulfillments: [{ status: "success", shipment_status: "delivered" }],
+    })).toMatchObject({ shipping_status: "delivered" });
   });
 });

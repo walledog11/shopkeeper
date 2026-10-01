@@ -1,10 +1,7 @@
-import type { CSSProperties } from "react";
-import Link from "next/link";
-import { InkCheck } from "./InkCheck";
-import { InkDoodle } from "./Marginalia";
+import { Check } from "lucide-react";
+import { ButtonLink } from "./ButtonLink";
 import { Reveal } from "./Reveal";
 import { SectionLabel } from "./SectionLabel";
-import { cn } from "@/lib/ui/cn";
 
 // Both plans run the whole product. `PLAN_LIMITS` in `packages/db/plan-limits.ts`
 // sells volume and seats and gates no tool or capability, so a $19 subscriber
@@ -39,7 +36,7 @@ const tiers = [
       "No conversation limit",
       "Two seats",
     ],
-    cta: "Try Pro free →",
+    cta: "Start free trial",
     href: "/signup",
     featured: true,
   },
@@ -47,99 +44,64 @@ const tiers = [
 
 export function Pricing() {
   return (
-    <section id="pricing" className="mx-auto max-w-6xl scroll-mt-24 px-6 py-12 text-center">
+    <section id="pricing" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-16 text-center sm:px-6 sm:py-24">
       <Reveal>
-        <SectionLabel>what it costs</SectionLabel>
-        <h2 className="mx-auto mb-5 max-w-[20ch] text-[clamp(36px,5vw,68px)] font-bold leading-[1] tracking-[0.03em] [font-family:var(--m-hand)]">
-          The whole product, <em className="italic text-[var(--m-quill)]">on either plan.</em>
+        <SectionLabel>What it costs</SectionLabel>
+        <h2 className="m-display m-h2 mx-auto mb-5 max-w-[20ch]">
+          The whole product, <span className="m-tail">on either plan.</span>
         </h2>
-        <p className="mx-auto mb-8 max-w-[48ch] text-[16px] leading-relaxed text-stone-700">
-          <span className="relative inline-block whitespace-nowrap">
-            Two weeks free
-            <InkDoodle
-              kind="ellipse"
-              delay={500}
-              className="pointer-events-none absolute -inset-x-2 -inset-y-1 h-[calc(100%+8px)] w-[calc(100%+16px)] opacity-70 [color:var(--m-pen)]"
-            />
-          </span>{" "}
-          on either plan. Check the plan and total in checkout before you subscribe.
+        <p className="m-lede mx-auto mb-8 max-w-[48ch]">
+          Try it free for 14 days.
         </p>
 
-        <p className="mx-auto mb-12 max-w-[62ch] rounded-xl border border-stone-900/10 bg-[#fdfbf7]/80 px-5 py-4 text-[15px] leading-relaxed text-stone-700">
-          Both plans include the merchant agent, customer inbox, supported Shopify
-          actions, sales and stock tools, iMessage, store memory, and briefings.
-          Choose based on customer conversation volume and the number of people using the workspace.
+        <p className="mx-auto mb-12 max-w-[62ch] rounded-2xl border border-[color:var(--m-line)] bg-[color:var(--m-bg-alt)] px-5 py-4 text-[15px] leading-relaxed text-[color:var(--m-ink-2)]">
+          Both plans include everything: the customer inbox, texting your shopkeeper
+          over iMessage, Shopify actions, store memory, and briefings. They differ
+          only in conversations and seats.
         </p>
       </Reveal>
 
       <div className="mx-auto grid max-w-4xl gap-5 text-left md:grid-cols-2">
         {tiers.map((tier, i) => (
           <Reveal key={tier.name} delay={i * 100} className="h-full">
-          <div
-            style={{ "--m-tilt": i === 1 ? "0.5deg" : "-0.7deg", animationDelay: `${i * 100}ms` } as CSSProperties}
-            className={`relative flex h-full flex-col rounded-3xl border p-8 transition-transform duration-300 animate-[m-settle_0.7s_ease-out_backwards] motion-reduce:animate-none hover:-translate-y-1 ${
-              i === 1 ? "rotate-[0.5deg]" : "-rotate-[0.7deg]"
-            } ${
-              tier.featured
-                ? "border-[#2b2118] bg-[#2b2118] text-[#f6f2eb]"
-                : "border-stone-900/10 bg-[#fdfbf7] text-stone-900"
-            }`}
-          >
-            {!tier.featured && (
-              <span
-                aria-hidden
-                className={`absolute -top-2 h-[18px] w-20 rounded-[2px] bg-[#cdb896]/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] mix-blend-multiply ${
-                  i === 0 ? "left-7 -rotate-[5deg]" : "right-7 rotate-[5deg]"
-                }`}
-              />
-            )}
-            {tier.badge && (
-              <span
-                aria-label={tier.badge}
-                className="m-stamp absolute -right-3 -top-4 grid -rotate-[8deg] place-items-center rounded-[50%] border-2 border-[#b0472f]/85 px-4 py-2 text-[11px] font-extrabold uppercase leading-none tracking-[0.14em] text-[#b0472f]"
-              >
-                {tier.badge}
-              </span>
-            )}
-            <div className="mb-5 flex items-center gap-2.5">
-              <span className="text-[24px] font-bold tracking-[0.03em] [font-family:var(--m-hand)]">{tier.name}</span>
-            </div>
-            <div className="mb-2 flex items-baseline gap-1.5 text-[56px] font-bold leading-none tracking-[0.03em] [font-family:var(--m-hand)]">
-              {tier.price}
-              <small className={`text-sm font-bold ${tier.featured ? "text-[#f6f2eb]/60" : "text-stone-500"}`}>
-                {tier.per}
-              </small>
-            </div>
-            <p className={`mb-7 min-h-10 text-[13px] leading-relaxed ${tier.featured ? "text-[#f6f2eb]/70" : "text-stone-600"}`}>
-              {tier.desc}
-            </p>
-            <ul className="m-0 mb-8 flex list-none flex-col gap-2.5 p-0 text-[13.5px] leading-snug">
-              {tier.features.map((f) => (
-                <li key={f} className="flex items-start gap-2.5">
-                  <InkCheck
-                    className={`mt-[3px] size-[15px] shrink-0 ${
-                      tier.featured ? "text-[#f6f2eb]/85" : "text-[#2b2118]"
-                    }`}
-                  />
-                  {f}
-                </li>
-              ))}
-            </ul>
-            <Link
-              href={tier.href}
-              className={cn(
-                "mt-auto w-full p-3 text-center",
-                tier.featured ? "m-glass-btn m-glass-btn-light" : "m-glass-btn m-glass-btn-outline",
-              )}
+            <div
+              className={`relative flex h-full flex-col rounded-3xl border p-8 ${
+                tier.featured ? "m-chapter--dark border-transparent" : "m-card"
+              }`}
             >
-              {tier.cta}
-            </Link>
-          </div>
+              {tier.badge && (
+                <span className="m-eyebrow absolute right-7 top-8 rounded-full border border-[color:var(--m-line-strong)] px-3 py-1 text-[11px]">
+                  {tier.badge}
+                </span>
+              )}
+              <p className="mb-5 text-[15px] font-medium text-[color:var(--m-ink-2)]">{tier.name}</p>
+              <div className="m-display mb-3 flex items-baseline gap-1.5 text-[3.5rem] leading-none">
+                {tier.price}
+                <small className="text-sm font-normal text-[color:var(--m-ink-3)] [font-family:var(--m-font-sans)]">{tier.per}</small>
+              </div>
+              <p className="mb-7 min-h-10 text-[14px] leading-relaxed text-[color:var(--m-ink-2)]">{tier.desc}</p>
+              <ul className="m-0 mb-8 flex list-none flex-col gap-3 p-0 text-[14px] leading-snug">
+                {tier.features.map((f) => (
+                  <li key={f} className="flex items-start gap-2.5">
+                    <Check aria-hidden className="mt-[2px] size-4 shrink-0 text-[color:var(--m-good)]" strokeWidth={2.25} />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <ButtonLink
+                href={tier.href}
+                size="lg"
+                variant={tier.featured ? "light" : "outline"}
+                className="mt-auto w-full"
+              >
+                {tier.cta}
+              </ButtonLink>
+            </div>
           </Reveal>
         ))}
       </div>
 
-      <p className="mx-auto mt-8 max-w-[58ch] text-[14px] leading-relaxed text-stone-600">
+      <p className="mx-auto mt-8 max-w-[58ch] text-[14px] leading-relaxed text-[color:var(--m-ink-3)]">
         A conversation is a new customer thread opened in the calendar month, however long it runs. Your own
         messages to Shopkeeper don’t count.
       </p>

@@ -52,7 +52,7 @@ export interface TelegramOperatorTurnParams {
 // both the synchronous webhook path and the durable operator-event worker run
 // identical logic; they differ only in the injected reply (provider send) and
 // when the webhook is acknowledged.
-export async function runTelegramOperatorTurn(params: TelegramOperatorTurnParams): Promise<void> {
+export async function runTelegramOperatorTurn(params: TelegramOperatorTurnParams): Promise<void | 'queued'> {
   const { organizationId, clerkUserId, chatId, body, messageId, reply, turnId } = params;
   const deliveryRef = `telegram:${chatId}`;
   // State is keyed to the person, so this chat sees the same pending queue the
@@ -117,5 +117,5 @@ export async function runTelegramOperatorTurn(params: TelegramOperatorTurnParams
   // Everything past the keyword fast path is one agent turn: the model reads the
   // pending-state ledger and drives approve/reject/revise/answer via control tools,
   // or handles a fresh instruction normally.
-  await executeFreeFormInstruction(organizationId, clerkUserId, baseMessage, context);
+  return executeFreeFormInstruction(organizationId, clerkUserId, baseMessage);
 }

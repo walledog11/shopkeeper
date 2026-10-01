@@ -97,11 +97,11 @@ function ControlModel() {
     <div
       role="img"
       aria-label="Control model: a size-swap proposal pauses for merchant approval, then completes in Shopify and records the approver in the action history"
-      className="rounded-3xl border border-stone-900/10 bg-[#2b2118] p-5 text-[#f6f2eb] shadow-[0_35px_70px_-42px_rgba(22,20,19,0.9)] sm:p-8"
+      className="rounded-3xl border border-stone-900/10 m-chapter--dark p-5 shadow-[0_35px_70px_-42px_rgba(22,20,19,0.9)] sm:p-8"
     >
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-5">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.13em] text-[#f6f2eb]/45">Control model · synthetic order #3102</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.13em] text-[#fcfaf8]/45">Order #3102</p>
           <p className="mt-1 text-lg font-semibold">Swap Medium / Sand → Small / Sand</p>
         </div>
         <span className="rounded-full border border-amber-300/25 bg-amber-300/10 px-3 py-1 text-xs font-semibold text-amber-100">
@@ -110,26 +110,23 @@ function ControlModel() {
       </div>
       <div className="grid gap-3 py-5 sm:grid-cols-[1fr_auto_1fr_auto_1fr] sm:items-center">
         <div className="rounded-xl border border-white/10 bg-white/[0.05] p-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#f6f2eb]/40">Proposal</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#fcfaf8]/40">Proposal</p>
           <p className="mt-2 text-sm font-semibold">Paid · unfulfilled</p>
-          <p className="mt-1 text-xs leading-relaxed text-[#f6f2eb]/55">Same price · Small in stock · Ask first</p>
+          <p className="mt-1 text-xs leading-relaxed text-[#fcfaf8]/55">Same price · Small in stock · Ask first</p>
         </div>
-        <ArrowRight className="mx-auto size-4 rotate-90 text-[#f6f2eb]/30 sm:rotate-0" aria-hidden />
+        <ArrowRight className="mx-auto size-4 rotate-90 text-[#fcfaf8]/30 sm:rotate-0" aria-hidden />
         <div className="rounded-xl border border-amber-300/20 bg-amber-300/[0.08] p-4">
           <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-100/55">Merchant control</p>
           <p className="mt-2 text-sm font-semibold">Approved in iMessage</p>
-          <p className="mt-1 text-xs leading-relaxed text-[#f6f2eb]/55">The exact proposed change stays attached.</p>
+          <p className="mt-1 text-xs leading-relaxed text-[#fcfaf8]/55">The exact proposed change stays attached.</p>
         </div>
-        <ArrowRight className="mx-auto size-4 rotate-90 text-[#f6f2eb]/30 sm:rotate-0" aria-hidden />
+        <ArrowRight className="mx-auto size-4 rotate-90 text-[#fcfaf8]/30 sm:rotate-0" aria-hidden />
         <div className="rounded-xl border border-emerald-300/20 bg-emerald-300/[0.08] p-4">
           <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-emerald-100/55">Recorded result</p>
           <p className="mt-2 flex items-center gap-1.5 text-sm font-semibold"><Check className="size-4" aria-hidden /> Completed</p>
-          <p className="mt-1 text-xs leading-relaxed text-[#f6f2eb]/55">Human approved · Shopify updated</p>
+          <p className="mt-1 text-xs leading-relaxed text-[#fcfaf8]/55">Human approved · Shopify updated</p>
         </div>
       </div>
-      <p className="border-t border-white/10 pt-4 text-xs leading-relaxed text-[#f6f2eb]/45">
-        This diagram explains the control model with fictional data; it is not presented as customer evidence.
-      </p>
     </div>
   );
 }
@@ -139,7 +136,7 @@ function AutonomyModes() {
     <section aria-labelledby="modes-heading" className="mx-auto max-w-6xl px-6 py-14">
       <div className="mb-9 text-center">
         <SectionLabel>autonomy modes</SectionLabel>
-        <h2 id="modes-heading" className="m-display mx-auto max-w-[19ch] text-[clamp(36px,5vw,64px)]">
+        <h2 id="modes-heading" className="m-display m-h2 mx-auto max-w-[19ch]">
           Start cautious. Change the mode deliberately.
         </h2>
       </div>
@@ -147,7 +144,7 @@ function AutonomyModes() {
         {modes.map((mode) => (
           <div key={mode.label} className={`rounded-2xl border p-6 ${mode.tone}`}>
             <p className="text-xs font-semibold uppercase tracking-[0.1em] text-stone-500">{mode.eyebrow}</p>
-            <h3 className="mt-3 text-[30px] font-bold leading-none [font-family:var(--m-hand)]">{mode.label}</h3>
+            <h3 className="mt-3 text-[30px] m-display">{mode.label}</h3>
             <p className="mt-4 text-sm leading-relaxed text-stone-600">{mode.body}</p>
           </div>
         ))}
@@ -162,8 +159,6 @@ export default function ApprovalsAndControlsPage() {
       eyebrow="approvals and controls"
       title="Set the boundary before the request arrives."
       lede="Choose what stays a draft, what can reply, and what must pause. Shopkeeper carries the exact Shopify work to the merchant, then keeps the decision and result reviewable."
-      backHref="/#controls"
-      backLabel="Back to control overview"
       jumpLabel="Follow an approval"
       jumpHref="#control-model"
       visualSectionId="control-model"

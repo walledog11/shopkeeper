@@ -143,6 +143,27 @@ describe('untrusted content handling', () => {
     expect(messages[0].content).toBe("Cancel Scooby's order");
   });
 
+  it('keeps stopped operator work in history and the latest instruction separate', () => {
+    const stopped = 'Compare orders #1030, #1031, #1032, #1033 and #1035.';
+    const current = 'Check order #1035 and tell me its payment and shipment status.';
+    const messages = buildMessageHistory([
+      { senderType: 'customer', contentText: 'Check #1033.' },
+      { senderType: 'agent', contentText: '#1033 is paid and unshipped.' },
+      { senderType: 'customer', contentText: stopped, task: { id: 'stopped_task', status: 'cancelled' } },
+      { senderType: 'customer', contentText: current, task: { id: 'current_task', status: 'running' } },
+    ], current, { operatorMode: true });
+
+    const blocks = messages[0].content as Array<{ type: string; text: string }>;
+    const history = JSON.parse(blocks[0].text.split('\n')[1]);
+    expect(history).toEqual([
+      { speaker: 'merchant', content: 'Check #1033.' },
+      { speaker: 'assistant', content: '#1033 is paid and unshipped.' },
+      { speaker: 'merchant', task: { id: 'stopped_task', status: 'cancelled' }, content: stopped },
+    ]);
+    expect(blocks.at(-1)?.text).toBe(current);
+    expect(JSON.stringify(messages).split(current)).toHaveLength(2);
+  });
+
   it('defangs forged boundary tags in a message that carries an image', () => {
     const messages = buildMessageHistory(
       [{

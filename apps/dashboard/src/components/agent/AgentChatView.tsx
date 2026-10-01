@@ -44,6 +44,10 @@ export function AgentChatView({
     initial,
     input,
     isRunning,
+    canStop,
+    isStopping,
+    stopError,
+    handleStop,
     messages,
     messagesEndRef,
     setInput,
@@ -290,6 +294,10 @@ export function AgentChatView({
           currentWalkthroughItem={currentWalkthroughItem}
           input={input}
           isRunning={isRunning}
+          canStop={canStop}
+          isStopping={isStopping}
+          stopError={stopError}
+          onStop={() => void handleStop()}
           onComposerKeyDown={handleComposerKeyDown}
           onSend={() => void handleSendInput()}
           onStartFresh={() => setShowStartFreshConfirm(true)}
@@ -302,6 +310,10 @@ export function AgentChatView({
           currentWalkthroughItem={currentWalkthroughItem}
           input={input}
           isRunning={isRunning}
+          canStop={canStop}
+          isStopping={isStopping}
+          stopError={stopError}
+          onStop={() => void handleStop()}
           onComposerKeyDown={handleComposerKeyDown}
           onSend={() => void handleSendInput()}
           onStartFresh={() => setShowStartFreshConfirm(true)}

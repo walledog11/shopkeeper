@@ -12,7 +12,6 @@ import {
   type ToolCall,
 } from '../../operator-context.js';
 import { runApprovedPendingPlan, clearPendingPlan } from '../../message-handlers/operator/pending-plan-actions.js';
-import { formatOperatorDispatchFailure, isPlanExecutionFailureMessage } from '@shopkeeper/agent/message-dispatch';
 import { ConflictError } from '@shopkeeper/shared/errors';
 import { findTerminalSendTool } from '@shopkeeper/agent/planner-skip-reply';
 import type { PendingPlanCommand } from './command-parser.js';
@@ -111,9 +110,9 @@ export async function handlePendingPlanCommand(
 
   logger.info({ chatId, threadId, toolCallCount: approvedRawToolCalls.length }, '[Operator] Approving plan');
 
-  let summary: string;
+  let execution: Awaited<ReturnType<typeof runApprovedPendingPlan>>;
   try {
-    summary = await presence(
+    execution = await presence(
       {
         kind: 'plan-run',
         orderNumber: extractOrderNumber(instruction),
@@ -136,10 +135,10 @@ export async function handlePendingPlanCommand(
     return true;
   }
 
-  if (isPlanExecutionFailureMessage(summary)) {
-    await reply(formatOperatorDispatchFailure(summary));
+  if (execution.outcome !== 'committed') {
+    await reply(execution.summary);
     return true;
   }
-  await reply(`${summary}${stillWaitingSuffix(remaining)}`);
+  await reply(`${execution.summary}${stillWaitingSuffix(remaining)}`);
   return true;
 }

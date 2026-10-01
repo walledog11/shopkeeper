@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { BadRequestError, ConflictError } from "./errors.js";
 import { executeAgentTurn, type ExecuteAgentTurnDeps } from "./turn.js";
 import { getLatestConversationMessage, requireOrgThread } from "./thread-auth.js";
-import { isAgentPlanCacheHit, readAgentPlanCache } from "./plan-cache.js";
+import { isAgentPlanCacheHit, readAgentPlanCache, type AgentPlanCacheRecord } from "./plan-cache.js";
 import type { PlanFailureReplanContext } from "./plan-cache-shape.js";
 import { getPendingCustomerMessageId } from "./plan-cache-shape.js";
 import { hashInstruction, hashPlan, type AgentActionApproval } from "./agent-actions.js";
@@ -234,9 +234,10 @@ async function loadCurrentCachedHomePlan(params: {
   threadId: string;
   settings: OrgSettings;
   allowMutativeAutoExecute?: boolean;
+  proposedCache?: AgentPlanCacheRecord;
 }): Promise<CurrentCachedPlan> {
   const thread = await requireOrgThread(params.threadId, params.orgId);
-  const cachedPlan = readAgentPlanCache(thread.cachedPlan);
+  const cachedPlan = params.proposedCache ?? readAgentPlanCache(thread.cachedPlan);
   const latestConversation = await getLatestConversationMessage(params.threadId, params.orgId);
   const pendingCustomerMessageId = latestConversation
     ? getPendingCustomerMessageId([latestConversation])
@@ -244,7 +245,7 @@ async function loadCurrentCachedHomePlan(params: {
   const instruction = cachedPlan?.instruction ?? "";
   const plan = cachedPlan
     && pendingCustomerMessageId
-    && thread.cachedPlanMessageId === pendingCustomerMessageId
+    && (params.proposedCache?.lastCustomerMessageId ?? thread.cachedPlanMessageId) === pendingCustomerMessageId
     && isAgentPlanCacheHit({
       cache: cachedPlan,
       instruction,
@@ -334,11 +335,15 @@ export async function readParkedProposalForThread(params: {
   threadId: string;
   settings: OrgSettings;
   allowMutativeAutoExecute?: boolean;
+  manualReview?: boolean;
+  proposedCache?: AgentPlanCacheRecord;
 }): Promise<ProposalSnapshot | null> {
   const current = await loadCurrentCachedHomePlan(params);
   if (!current.plan || !current.planId) return null;
   const verdict = current.verdict;
-  if (verdict.kind !== "needs_review" || !verdict.approvalAllowed) return null;
+  const reviewable = verdict.kind === "needs_review" && verdict.approvalAllowed;
+  const explicitlyDrafted = params.manualReview && (allowsAutomaticExecution(verdict) || verdict.kind === "escalate");
+  if ((!reviewable && !explicitlyDrafted) || !("toolCalls" in verdict)) return null;
   // The verdict decides whether there is anything to approve; the plan decides
   // what the bundle is. Snapshotting `verdict.toolCalls` instead recorded only
   // the executable subset, while every surface approves the calls the card
@@ -381,6 +386,8 @@ export async function supportAttemptSettlement(params: {
   merchantQuestion: string | null;
   customerQuestion?: string | null;
   sourceRequestIds: string[];
+  manualReview?: boolean;
+  proposedCache?: AgentPlanCacheRecord;
 }): Promise<TaskSettlement> {
   if (params.merchantQuestion) {
     return {

@@ -1,6 +1,6 @@
-import Image from "next/image";
 import Link from "next/link";
-import { CONTACT_EMAIL } from "@/lib/brand";
+import { Store } from "lucide-react";
+import { CONTACT_EMAIL, PRODUCT_NAME } from "@/lib/brand";
 
 const COPYRIGHT_YEAR = 2026;
 
@@ -35,58 +35,47 @@ const footerGroups = [
 
 export function Footer() {
   return (
-    <footer className="relative isolate overflow-hidden px-6 pt-12">
-      {/* Dawn-sky atmosphere wash behind the wordmark. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-[460px] [mask-image:linear-gradient(180deg,transparent_0%,black_58%)]"
-      >
-        <Image
-          src="/atmosphere/footer-dawn.jpg"
-          alt=""
-          fill
-          sizes="100vw"
-          className="object-cover object-[center_42%] [filter:sepia(0.08)_saturate(0.9)_brightness(1.04)]"
-        />
-        <div className="absolute inset-0 bg-white/40" />
-      </div>
-      <div className="mx-auto max-w-6xl">
-        <nav
-          aria-label="Footer"
-          className="grid gap-x-8 gap-y-7 border-b border-stone-900/10 pb-8 sm:grid-cols-3"
-        >
-          {footerGroups.map((group) => (
-            <div key={group.label}>
-              <h2 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">
-                {group.label}
-              </h2>
-              <ul className="mt-3 space-y-2 text-[13px] text-stone-600">
-                {group.links.map((link) => (
-                  <li key={link.label}>
-                    <Link
-                      href={link.href}
-                      className="text-inherit transition-colors hover:text-stone-900"
-                    >
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </nav>
+    <footer className="m-chapter m-chapter--dark px-5 pb-10 sm:px-6">
+      <div className="mx-auto max-w-6xl border-t border-[color:var(--m-line)] pt-14">
+        <div className="grid gap-12 md:grid-cols-[1.1fr_2fr]">
+          <div>
+            <Link href="/" aria-label={PRODUCT_NAME} className="m-nav-logo">
+              <Store className="size-7" strokeWidth={1.75} aria-hidden />
+              <span className="m-nav-wordmark" aria-hidden>
+                {PRODUCT_NAME.toLowerCase()}
+              </span>
+            </Link>
+            <p className="mt-4 max-w-[26ch] text-[15px] leading-relaxed text-[color:var(--m-ink-2)]">
+              An AI agent for your Shopify store.
+            </p>
+          </div>
 
-        <div className="pt-6 text-[13px] text-stone-500">
-          © {COPYRIGHT_YEAR} Shopkeeper · An AI agent for your Shopify store.
+          <nav aria-label="Footer" className="grid gap-x-8 gap-y-10 sm:grid-cols-3">
+            {footerGroups.map((group) => (
+              <div key={group.label}>
+                <h2 className="text-[12px] font-medium uppercase tracking-[0.04em] text-[color:var(--m-ink-3)] [font-family:var(--m-font-mono)]">
+                  {group.label}
+                </h2>
+                <ul className="mt-3 text-[15px]">
+                  {group.links.map((link) => (
+                    <li key={link.label}>
+                      <Link
+                        href={link.href}
+                        className="inline-flex min-h-8 items-center text-[color:var(--m-ink-2)] transition-colors hover:text-[color:var(--m-ink)]"
+                      >
+                        {link.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </nav>
         </div>
 
-        {/* Giant wordmark outro, descenders cropped by the page edge */}
-        <div
-          aria-hidden
-          className="-mb-[0.26em] mt-2 select-none whitespace-nowrap text-center text-[clamp(72px,14.5vw,200px)] leading-none tracking-[0.03em] text-[#2b2118] [font-family:var(--m-hand)]"
-        >
-          shopkeeper
-        </div>
+        <p className="mt-14 border-t border-[color:var(--m-line)] pt-6 text-[13px] text-[color:var(--m-ink-3)]">
+          © {COPYRIGHT_YEAR} {PRODUCT_NAME}
+        </p>
       </div>
     </footer>
   );

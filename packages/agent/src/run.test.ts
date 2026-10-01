@@ -139,6 +139,10 @@ describe("runAgent tool execution", () => {
   it("hides support-only escalation, reply, and note tools in operator mode", async () => {
     mockCreate.mockResolvedValueOnce(endTurn("Ready."));
     const ctx = makeCtx({
+      recentMessages: [
+        { senderType: "customer", contentText: "Compare five orders", task: { id: "stopped", status: "cancelled" } },
+        { senderType: "customer", contentText: "What needs attention?" },
+      ],
       thread: {
         id: "operator_thread",
         status: "open",
@@ -157,6 +161,9 @@ describe("runAgent tool execution", () => {
     expect(names).not.toContain("send_reply");
     expect(names).not.toContain("add_internal_note");
     expect(names).toContain("send_email");
+    const messages = mockCreate.mock.calls[0]?.[0].messages;
+    expect(messages[0].content.at(-1)).toEqual({ type: "text", text: "What needs attention?" });
+    expect(messages[0].content[0].text).toContain('"status":"cancelled"');
   });
 
   it("returns an operator policy block to the model without invoking escalation", async () => {

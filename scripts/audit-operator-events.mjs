@@ -38,6 +38,7 @@ const stuckBefore = new Date(Date.now() - stuckMinutes * 60 * 1000);
 const windowWhere = { createdAt: { gte: since } };
 const reviewSelect = {
   id: true,
+  agentRequestId: true,
   organizationId: true,
   channel: true,
   status: true,
@@ -138,7 +139,7 @@ try {
     ]);
 
   const reviewEvents = [...failed, ...unknown];
-  const reviewIds = [...new Set(reviewEvents.map((event) => event.id))];
+  const reviewIds = [...new Set(reviewEvents.map((event) => event.agentRequestId ?? event.id))];
   const actions = reviewIds.length === 0
     ? []
     : await db.agentAction.findMany({

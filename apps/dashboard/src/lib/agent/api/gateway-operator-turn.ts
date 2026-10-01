@@ -1,6 +1,7 @@
 import { getGatewayBaseUrl } from "@/lib/server/gateway-url";
 import { fetchProviderWithDeadline } from "@/lib/server/provider-fetch";
 import type { ActionEntry } from "@shopkeeper/agent/context";
+import type { AgentPlan } from "@shopkeeper/agent/types";
 
 // Just under the route's maxDuration so a hung gateway surfaces as a timeout
 // here rather than the platform killing the function mid-request.
@@ -24,6 +25,7 @@ type DurableAgentTaskStatus =
   | "waiting_approval" | "reconciling" | "completed" | "failed" | "cancelled";
 
 export interface GatewayAgentRequestPayload {
+  threadId?: string;
   requestId: string;
   instruction: string;
   taskId: string | null;
@@ -40,6 +42,9 @@ export interface GatewayAgentRequestPayload {
   } | null;
   delivery: { status: "pending" | "available"; messageId: string | null };
   failureCode: string | null;
+  cancelledAt?: string | null;
+  plan?: AgentPlan | null;
+  pendingQuestion?: string | null;
 }
 
 function gatewayAuth() {
@@ -63,6 +68,17 @@ export async function postGatewayAgentRequest(params: {
   return { status: res.status, payload: await res.json().catch(() => null) };
 }
 
+export async function postGatewayPlanRequest(params: {
+  organizationId: string; clerkUserId: string; threadId: string;
+  clientRequestId: string; instruction: string; force: boolean;
+}): Promise<{ status: number; payload: GatewayAgentRequestPayload | (Record<string, unknown> & { error?: string }) | null }> {
+  const base = getGatewayBaseUrl({ required: true });
+  const res = await fetchProviderWithDeadline(`${base}/internal/operator/plan-requests`, {
+    method: "POST", headers: gatewayAuth(), body: JSON.stringify(params),
+  }, { provider: "gateway", operation: "ticket-plan-submit", timeoutMs: 10_000 });
+  return { status: res.status, payload: await res.json().catch(() => null) };
+}
+
 export async function getGatewayAgentRequest(params: {
   organizationId: string;
   clerkUserId: string;
@@ -79,6 +95,7 @@ export async function getGatewayAgentRequest(params: {
 export async function listGatewayAgentRequests(params: {
   organizationId: string;
   clerkUserId: string;
+  threadId?: string;
 }): Promise<{ status: number; payload: { requests?: GatewayAgentRequestPayload[]; error?: string } | null }> {
   const base = getGatewayBaseUrl({ required: true });
   const query = new URLSearchParams(params);

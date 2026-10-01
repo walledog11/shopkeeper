@@ -9,6 +9,7 @@ import { isOperatorChannel } from "./thread-constants.js";
 import { communicationColumns } from "./proposal-communication.js";
 import type { ProposalCommunication, RawToolCall } from "./types.js";
 import type { ApprovedMessageWithheld } from "./agent-context.js";
+import { commitThreadPlanCacheIfCurrent, type AgentPlanCacheRecord } from "./plan-cache.js";
 
 // A task whose actions reached any of these has touched a provider, so it is
 // never replayed from the top — claiming, settling, stopping, and resuming all
@@ -25,6 +26,7 @@ export interface MemberRequestInput {
   dedupeKey: string;
   instruction: string;
   budget?: TaskBudget;
+  sourceOperatorEventId?: string;
 }
 
 export interface TaskBudget {
@@ -115,13 +117,27 @@ export async function acceptMemberAgentRequest(input: MemberRequestInput) {
     throw new BadRequestError("A bounded, stable request key is required.");
   }
   // Fixed, server-authored envelope; the client cannot supply a hash.
-  const payload = { version: 1, threadId: input.threadId, instruction };
+  const payload = {
+    version: 1, threadId: input.threadId, instruction,
+    ...(input.sourceOperatorEventId ? { sourceOperatorEventId: input.sourceOperatorEventId } : {}),
+  };
   const payloadHash = hashInstruction(JSON.stringify(payload));
   if (Buffer.byteLength(JSON.stringify(payload)) > 60000) {
     throw new BadRequestError("Request payload is too large.");
   }
   return db.$transaction(async (tx) => {
     const actorKey = await requireMemberActorKey(tx, input);
+    if (input.sourceOperatorEventId) {
+      const event = await tx.operatorEvent.findFirst({
+        where: {
+          id: input.sourceOperatorEventId, organizationId: input.organizationId,
+          clerkUserId: input.clerkUserId, status: "claimed",
+        },
+      });
+      if (!event || event.body.trim() !== instruction) {
+        throw new ForbiddenError("A claimed operator event belonging to the member is required.");
+      }
+    }
     const id = randomUUID();
     await tx.agentRequest.createMany({
       data: {
@@ -129,6 +145,7 @@ export async function acceptMemberAgentRequest(input: MemberRequestInput) {
         channel: "operator", threadId: input.threadId,
         dedupeKey: input.dedupeKey, payloadVersion: 1, payloadHash, payload,
         normalizedInstruction: instruction,
+        ...(input.sourceOperatorEventId ? { sourceOperatorEventId: input.sourceOperatorEventId } : {}),
       },
       skipDuplicates: true,
     });
@@ -140,6 +157,17 @@ export async function acceptMemberAgentRequest(input: MemberRequestInput) {
     });
     if (request.payloadVersion !== 1 || request.payloadHash !== payloadHash) {
       throw new ConflictError("This request key was already used with a different instruction.");
+    }
+    if (input.sourceOperatorEventId) {
+      const linked = await tx.operatorEvent.updateMany({
+        where: {
+          id: input.sourceOperatorEventId, organizationId: input.organizationId,
+          clerkUserId: input.clerkUserId, status: "claimed",
+          OR: [{ agentRequestId: null }, { agentRequestId: request.id }],
+        },
+        data: { agentRequestId: request.id },
+      });
+      if (linked.count !== 1) throw new ConflictError("The operator event already belongs to another request.");
     }
     let task = null;
     if (input.budget) {
@@ -174,6 +202,116 @@ export async function acceptMemberAgentRequest(input: MemberRequestInput) {
   });
 }
 
+/** A composer command replaces unexecuted work on its ticket, under the same
+ * task lock as approval. The task's runtime and accumulated budget survive a
+ * regeneration. Approved, claimed, or uncertain work must finish first. */
+export async function acceptTicketAgentRequest(input: MemberRequestInput & {
+  force: boolean;
+}) {
+  if (!input.budget) throw new BadRequestError("A task budget is required.");
+  validateTaskBudget(input.budget);
+  const instruction = input.instruction.trim();
+  if (!instruction || instruction.length > 16000 || !input.dedupeKey.trim() || input.dedupeKey.length > 255) {
+    throw new BadRequestError("A bounded instruction and stable request key are required.");
+  }
+  const payload = { version: 1, kind: "ticket_plan", threadId: input.threadId, instruction, force: input.force };
+  const payloadHash = hashInstruction(JSON.stringify(payload));
+  return db.$transaction(async (tx) => {
+    const actorKey = await requireMemberActorKey(tx, {
+      organizationId: input.organizationId, clerkUserId: input.clerkUserId,
+    });
+    await tx.$queryRaw(Prisma.sql`
+      SELECT id FROM threads WHERE id = ${input.threadId}::uuid
+      AND organization_id = ${input.organizationId}::uuid FOR UPDATE
+    `);
+    const thread = await tx.thread.findFirst({
+      where: {
+        id: input.threadId, organizationId: input.organizationId,
+        channelType: { not: "operator" }, deletedAt: null, archivedAt: null,
+        organization: { lifecycleStatus: "active" },
+      },
+      select: { channelType: true, cachedPlan: true },
+    });
+    if (!thread) throw new ForbiddenError("This ticket is not available to the member.");
+    const existing = await tx.agentRequest.findUnique({
+      where: { organizationId_actorKind_actorKey_channel_dedupeKey: {
+        organizationId: input.organizationId, actorKind: "member", actorKey,
+        channel: thread.channelType, dedupeKey: input.dedupeKey,
+      } },
+    });
+    if (existing) {
+      if (existing.payloadHash !== payloadHash) throw new ConflictError("This request key was already used with a different instruction.");
+      const task = await tx.agentTask.findFirstOrThrow({ where: { id: existing.taskId!, organizationId: input.organizationId } });
+      return { request: existing, task, deduplicated: true };
+    }
+    const source = await tx.message.findFirst({
+      where: { organizationId: input.organizationId, threadId: input.threadId, deletedAt: null, senderType: { not: "note" } },
+      orderBy: [{ sentAt: "desc" }, { id: "desc" }],
+      select: { id: true, senderType: true },
+    });
+    if (source?.senderType !== "customer") throw new ConflictError("This ticket has no unanswered customer message to plan for.");
+    const candidates = await tx.agentTask.findMany({
+      where: {
+        organizationId: input.organizationId, threadId: input.threadId,
+        status: { in: ["queued", "running", "waiting_input", "waiting_approval", "reconciling"] },
+        cancelledAt: null,
+      },
+      select: { id: true, activeProposalId: true },
+    });
+    const cachedId = thread.cachedPlan && typeof thread.cachedPlan === "object" && !Array.isArray(thread.cachedPlan)
+      ? (thread.cachedPlan as { planId?: unknown }).planId : null;
+    const matching = candidates.filter(task => task.activeProposalId === cachedId && cachedId);
+    const candidate = matching.length === 1 ? matching[0] : candidates.length === 1 ? candidates[0] : null;
+    if (candidates.length && !candidate) throw new ConflictError("Several tasks are open on this ticket. Resolve the pending work before regenerating.");
+    let task;
+    const requestId = randomUUID();
+    if (candidate) {
+      await tx.$queryRaw(Prisma.sql`
+        SELECT id FROM agent_tasks WHERE id = ${candidate.id}::uuid
+        AND organization_id = ${input.organizationId}::uuid FOR UPDATE
+      `);
+      const resumable = await tx.agentTask.findFirst({
+        where: {
+          id: candidate.id, organizationId: input.organizationId,
+          status: { in: ["queued", "waiting_input", "waiting_approval"] },
+          claimToken: null, cancelledAt: null,
+          actions: { none: { dispatchState: { in: DISPATCHED_STATES } } },
+          executions: { none: { status: { in: ["claimed", "committed", "unknown"] } } },
+          OR: [{ activeProposalId: null }, { activeProposal: { is: { status: "ready", approverScopeKind: "member", approverScopeKey: { in: [actorKey, ANY_MEMBER_ACTOR_KEY] } } } }],
+        },
+      });
+      if (!resumable) throw new ConflictError("Work on this ticket is already underway. Review its outcome before regenerating.");
+      await supersedeActiveProposal(tx, { organizationId: input.organizationId, activeProposalId: resumable.activeProposalId }, new Date());
+      task = await tx.agentTask.update({
+        where: { id: resumable.id, organizationId: input.organizationId },
+        data: {
+          ...NO_SUSPENSION, status: "queued", revision: { increment: 1 },
+          objective: instruction.slice(0, 4000), lastProgressAt: new Date(),
+          checkpoint: { sourceRequestIds: [...checkpointSourceRequestIds(resumable.checkpoint), requestId], nextWork: "ticket_plan", planRequestId: requestId },
+        },
+      });
+    } else {
+      task = await tx.agentTask.create({ data: {
+        organizationId: input.organizationId, threadId: input.threadId,
+        initiatingActorKind: "member", initiatingActorKey: actorKey,
+        objective: instruction.slice(0, 4000), ...input.budget!, checkpointVersion: 1,
+        checkpoint: { sourceRequestIds: [requestId], nextWork: "ticket_plan", planRequestId: requestId },
+      } });
+    }
+    const request = await tx.agentRequest.create({ data: {
+      id: requestId, organizationId: input.organizationId, actorKey, actorKind: "member",
+      channel: thread.channelType, threadId: input.threadId, sourceMessageId: source.id,
+      dedupeKey: input.dedupeKey, payloadVersion: 1, payloadHash, payload,
+      normalizedInstruction: instruction, state: "attached", taskId: task.id, attachedAt: new Date(),
+    } });
+    await tx.thread.update({
+      where: { id: input.threadId, organizationId: input.organizationId },
+      data: { cachedPlan: Prisma.DbNull, cachedPlanMessageId: null },
+    });
+    return { request, task, deduplicated: false };
+  });
+}
+
 export async function getMemberAgentRequest(input: {
   organizationId: string; clerkUserId: string; requestId: string;
 }) {
@@ -185,11 +323,17 @@ export async function getMemberAgentRequest(input: {
       where: {
         id: input.requestId, organizationId: input.organizationId,
         actorKind: "member", actorKey,
-        thread: { operatorKey: actorKey, deletedAt: null, archivedAt: null },
+        thread: { deletedAt: null, archivedAt: null },
+        OR: [
+          { channel: "operator", thread: { operatorKey: actorKey } },
+          { channel: { not: "operator" }, thread: { channelType: { not: "operator" } } },
+        ],
       },
       include: {
+        thread: { select: { cachedPlan: true } },
         task: {
           include: {
+            activeProposal: true,
             messages: {
               where: { senderType: "agent", deletedAt: null },
               orderBy: [{ sentAt: "desc" }, { id: "desc" }],
@@ -204,7 +348,7 @@ export async function getMemberAgentRequest(input: {
 }
 
 export async function listMemberAgentRequests(input: {
-  organizationId: string; clerkUserId: string; limit?: number;
+  organizationId: string; clerkUserId: string; limit?: number; threadId?: string;
 }) {
   const limit = input.limit ?? 20;
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) {
@@ -215,13 +359,17 @@ export async function listMemberAgentRequests(input: {
     return tx.agentRequest.findMany({
       where: {
         organizationId: input.organizationId, actorKind: "member", actorKey,
-        thread: { operatorKey: actorKey, deletedAt: null, archivedAt: null },
+        ...(input.threadId
+          ? { threadId: input.threadId, channel: { not: "operator" as const }, thread: { channelType: { not: "operator" as const }, deletedAt: null, archivedAt: null } }
+          : { channel: "operator" as const, thread: { operatorKey: actorKey, deletedAt: null, archivedAt: null } }),
       },
       orderBy: [{ acceptedAt: "desc" }, { id: "desc" }],
       take: limit,
       include: {
+        thread: { select: { cachedPlan: true } },
         task: {
           include: {
+            activeProposal: true,
             messages: {
               where: { senderType: "agent", deletedAt: null },
               orderBy: [{ sentAt: "desc" }, { id: "desc" }],
@@ -1144,9 +1292,18 @@ export async function settleAgentTaskClaim(input: TaskClaimIdentity & {
   claimToken: string;
   requestId: string;
   settlement: TaskSettlement;
+  /** Publish the composer projection together with its durable wait. */
+  planCache?: { threadId: string; sourceMessageId: string; cache: AgentPlanCacheRecord };
 }) {
   return db.$transaction(async (tx) => {
     const now = new Date();
+    if (input.planCache) {
+      // Composer acceptance takes these locks in the same order.
+      await tx.$queryRaw(Prisma.sql`
+        SELECT id FROM threads WHERE id = ${input.planCache.threadId}::uuid
+        AND organization_id = ${input.organizationId}::uuid FOR UPDATE
+      `);
+    }
     await tx.$queryRaw(Prisma.sql`
       SELECT id FROM agent_tasks WHERE id = ${input.taskId}::uuid
       AND organization_id = ${input.organizationId}::uuid FOR UPDATE
@@ -1158,6 +1315,12 @@ export async function settleAgentTaskClaim(input: TaskClaimIdentity & {
       },
     });
     if (!ownedTask) return false;
+    if (input.planCache && !ownedTask.cancelledAt) {
+      const committed = await commitThreadPlanCacheIfCurrent({
+        orgId: input.organizationId, ...input.planCache, taskClaim: input,
+      }, tx);
+      if (!committed) throw new ConflictError("The customer message changed before this draft was published.");
+    }
     await tx.agentAction.updateMany({
       where: {
         organizationId: input.organizationId, turnId: input.requestId,
@@ -1405,6 +1568,7 @@ export async function findQueuedAgentTasks(limit = 100) {
           initiatingActorKind: "customer",
           checkpoint: { path: ["nextWork"], equals: WITHHELD_MESSAGE_FOLLOW_UP },
         },
+        { checkpoint: { path: ["nextWork"], equals: "ticket_plan" } },
       ],
     },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],

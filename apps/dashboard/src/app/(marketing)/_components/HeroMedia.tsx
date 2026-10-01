@@ -81,12 +81,10 @@ export function HeroMedia() {
       className="relative mx-auto w-full max-w-[520px] text-left"
     >
       <figcaption id="hero-workflow-caption" className="sr-only">
-        A representative Linen &amp; Loom workflow, shown one step at a time. Maya
-        asks through Instagram to swap the Linen Jumpsuit on order 3102 from Medium
-        to Small. Shopkeeper reads the request, checks that the order is unfulfilled
-        and Small is in stock, asks the merchant to approve over iMessage, updates
-        Shopify, replies to Maya, and records the approved action. This is a product
-        preview and all details are fictional.
+        Maya asks through Instagram to swap the Linen Jumpsuit on order 3102 from
+        Medium to Small. Shopkeeper checks that the order is unfulfilled and Small
+        is in stock, asks the merchant to approve over iMessage, updates Shopify,
+        replies to Maya, and records the approved action.
       </figcaption>
 
       <div

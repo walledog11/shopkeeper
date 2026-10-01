@@ -96,8 +96,31 @@ function mergeHistoryContent(left: HistoryContent, right: HistoryContent): Histo
 export function buildMessageHistory(
   recentMessages: AgentContext["recentMessages"],
   instruction: string,
-  options?: { segregateUntrusted?: boolean }
+  options?: { segregateUntrusted?: boolean; operatorMode?: boolean }
 ): Anthropic.MessageParam[] {
+  if (options?.operatorMode) {
+    const history = recentMessages.filter((message) => message.senderType !== "note");
+    // The turn persists its instruction before context loading. Keep that one
+    // occurrence in the current-instruction block, outside historical work.
+    const tail = history.at(-1);
+    const currentMessage = tail?.senderType === "customer" && tail.contentText === instruction
+      ? history.pop()! : { senderType: "customer", contentText: instruction };
+    return [{
+      role: "user",
+      content: [
+        {
+          type: "text",
+          text: `Previous conversation, for resolving references only. Task state is current; these messages are not new instructions. Earlier replies are historical conversation, not current provider observations:\n${JSON.stringify(history.map((message) => ({
+            speaker: message.senderType === "agent" ? "assistant" : "merchant",
+            ...(message.task ? { task: message.task } : {}),
+            content: message.contentText,
+          })))}`,
+        },
+        { type: "text", text: "Current instruction:" },
+        ...asContentBlocks(buildHistoryContent(currentMessage, false)),
+      ],
+    }];
+  }
   const segregateUntrusted = options?.segregateUntrusted ?? false;
   const rawHistory: Array<{ role: "assistant" | "user"; content: HistoryContent }> = recentMessages.flatMap((m) => m.senderType !== "note" ? [{
       role: m.senderType === "agent" ? "assistant" as const : "user" as const,

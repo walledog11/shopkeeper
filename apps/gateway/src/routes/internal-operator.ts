@@ -2,6 +2,7 @@ import express, { type Request, type Response, type Router } from 'express';
 import { ApiError } from '@shopkeeper/shared/errors';
 import {
   acceptMemberAgentRequest,
+  acceptTicketAgentRequest,
   cancelMemberAgentTask,
   getMemberAgentRequest,
   listMemberAgentRequests,
@@ -20,21 +21,9 @@ import { resolveOperatorMemberKey } from '../operator-identity.js';
 import { pushOperatorEscalation } from '../operator-escalation.js';
 import { internalJsonParser } from './body-parsers.js';
 import { authorizeInternalRequest } from './internal-auth.js';
-import { ensureAgentTaskEnqueued } from '../agent-task-ingest.js';
-import { resolveAgentRuntimeVersionForOrg } from '@shopkeeper/agent/runtime-modes';
-
-const DASHBOARD_TASK_LIMITS = {
-  modelCallLimit: 20,
-  activeTimeMsLimit: 120_000,
-  spendNanoUsdLimit: 1_000_000_000n,
-} as const;
-
-function dashboardTaskBudget(organizationId: string) {
-  return {
-    ...DASHBOARD_TASK_LIMITS,
-    runtimeVersion: resolveAgentRuntimeVersionForOrg(organizationId),
-  };
-}
+import { ensureAgentTaskEnqueued, memberAgentTaskBudget } from '../agent-task-ingest.js';
+import { readAgentPlanCache } from '@shopkeeper/agent/plan-cache';
+import { removePendingPlanForThread } from '../operator-context.js';
 
 function stringField(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -45,11 +34,18 @@ type MemberRequestRecord = NonNullable<Awaited<ReturnType<typeof getMemberAgentR
 function durableRequestPayload(request: MemberRequestRecord) {
   const task = request.task;
   const response = task?.messages[0];
+  const composer = request.channel !== 'operator';
+  const checkpoint = task?.checkpoint;
+  const current = !composer || (checkpoint && typeof checkpoint === 'object' && !Array.isArray(checkpoint) && checkpoint.planRequestId === request.id);
+  const cache = composer && current ? readAgentPlanCache(request.thread?.cachedPlan) : null;
+  const plan = cache && (task?.status === 'completed' || task?.status === 'waiting_input' || (task?.status === 'waiting_approval' && task.activeProposalId === cache.planId))
+    ? { ...cache.plan, planId: cache.planId, instruction: cache.instruction } : null;
   return {
+    threadId: request.threadId,
     requestId: request.id,
     instruction: request.normalizedInstruction,
     taskId: task?.id ?? null,
-    status: task?.status ?? request.state,
+    status: current ? task?.status ?? request.state : 'cancelled',
     taskRevision: task?.revision ?? null,
     acceptedAt: request.acceptedAt,
     updatedAt: task?.updatedAt ?? request.attachedAt ?? request.acceptedAt,
@@ -67,11 +63,47 @@ function durableRequestPayload(request: MemberRequestRecord) {
       awaitingApproval: task?.status === 'waiting_approval',
     } : null,
     delivery: response ? { status: 'available', messageId: response.id } : { status: 'pending', messageId: null },
-    failureCode: task?.failureCode ?? null,
+    failureCode: current ? task?.failureCode ?? null : 'superseded_request',
+    cancelledAt: task?.cancelledAt ?? null,
+    pendingQuestion: task?.pendingQuestion ?? null,
+    ...(composer ? { plan } : {}),
   };
 }
 
 export function registerInternalOperatorRoutes(router: Router): void {
+  router.post('/operator/plan-requests', internalJsonParser(), async (req: Request, res: Response) => {
+    if (!authorizeInternalRequest(req, res, 'InternalOperator')) return;
+    const body = req.body as Record<string, unknown>;
+    const organizationId = stringField(body.organizationId);
+    const clerkUserId = stringField(body.clerkUserId);
+    const threadId = stringField(body.threadId);
+    const clientRequestId = stringField(body.clientRequestId);
+    const instruction = stringField(body.instruction);
+    if (!organizationId || !clerkUserId || !threadId || !clientRequestId || !instruction || typeof body.force !== 'boolean') {
+      return res.status(400).json({ error: 'organizationId, clerkUserId, threadId, clientRequestId, instruction, and force are required' });
+    }
+    try {
+      const accepted = await acceptTicketAgentRequest({
+        organizationId, clerkUserId, threadId, dedupeKey: clientRequestId, instruction,
+        force: body.force, budget: memberAgentTaskBudget(organizationId),
+      });
+      if (!accepted.deduplicated) await removePendingPlanForThread(organizationId, threadId);
+      try {
+        if (accepted.task.status === 'queued') await ensureAgentTaskEnqueued(accepted.task);
+      } catch (error) {
+        logger.error({ err: error, taskId: accepted.task.id }, '[InternalOperator] Composer enqueue failed; sweep will recover');
+      }
+      const request = await getMemberAgentRequest({ organizationId, clerkUserId, requestId: accepted.request.id });
+      if (!request) throw new Error('Accepted composer request could not be read.');
+      return res.status(202).json({
+        ...durableRequestPayload(request), statusUrl: `/api/agent/requests/${request.id}`, deduplicated: accepted.deduplicated,
+      });
+    } catch (error) {
+      if (error instanceof ApiError && error.status < 500) return res.status(error.status).json({ error: error.message });
+      logger.error({ err: error, organizationId, threadId }, '[InternalOperator] Composer submission failed');
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
+  });
   router.post('/operator/requests', internalJsonParser(), async (req: Request, res: Response) => {
     if (!authorizeInternalRequest(req, res, 'InternalOperator')) return;
     const body = req.body as Record<string, unknown>;
@@ -93,7 +125,7 @@ export function registerInternalOperatorRoutes(router: Router): void {
         threadId: thread.id,
         dedupeKey: clientRequestId,
         instruction,
-        budget: dashboardTaskBudget(organizationId),
+        budget: memberAgentTaskBudget(organizationId),
       });
       if (!accepted.task) throw new Error('Accepted dashboard request has no task.');
       try {
@@ -104,7 +136,7 @@ export function registerInternalOperatorRoutes(router: Router): void {
         logger.error({ err: error, taskId: accepted.task.id }, '[InternalOperator] Task enqueue failed');
       }
       return res.status(202).json({
-        ...durableRequestPayload({ ...accepted.request, task: { ...accepted.task, messages: [], actions: [] } }),
+        ...durableRequestPayload({ ...accepted.request, thread: { cachedPlan: null }, task: { ...accepted.task, activeProposal: null, messages: [], actions: [] } }),
         statusUrl: `/api/agent/requests/${accepted.request.id}`,
         deduplicated: accepted.deduplicated,
       });
@@ -125,7 +157,8 @@ export function registerInternalOperatorRoutes(router: Router): void {
       return res.status(400).json({ error: 'organizationId and clerkUserId are required' });
     }
     try {
-      const requests = await listMemberAgentRequests({ organizationId, clerkUserId });
+      const threadId = stringField(req.query.threadId);
+      const requests = await listMemberAgentRequests({ organizationId, clerkUserId, ...(threadId ? { threadId } : {}) });
       return res.status(200).json({ requests: requests.map((request) => durableRequestPayload(request as MemberRequestRecord)) });
     } catch (err) {
       if (err instanceof ApiError && err.status < 500) return res.status(err.status).json({ error: err.message });
@@ -256,7 +289,7 @@ export function registerInternalOperatorRoutes(router: Router): void {
       }
 
       const identity = expectedPlanIdentity(plan);
-      const summary = await runApprovedPendingPlan({
+      const { summary } = await runApprovedPendingPlan({
         organizationId,
         memberKey,
         clerkUserId,

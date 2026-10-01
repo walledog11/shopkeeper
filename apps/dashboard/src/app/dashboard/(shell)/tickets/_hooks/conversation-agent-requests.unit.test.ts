@@ -122,18 +122,20 @@ describe("conversation agent requests", () => {
   it("requests agent plans without forcing regeneration by default", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({
-        instruction: "refund order",
-        rawToolCalls: [],
-        steps: [],
-      }), { status: 200 }),
+        requestId: "request-1", status: "waiting_approval",
+        plan: { instruction: "refund order", rawToolCalls: [], steps: [] },
+      }), { status: 202 }),
     )
     vi.stubGlobal("fetch", fetchMock)
 
     await fetchAgentPlan("thread-1", "refund order")
 
     expect(fetchMock).toHaveBeenCalledWith("/api/agent/plan", expect.objectContaining({
-      body: JSON.stringify({ threadId: "thread-1", instruction: "refund order", force: false }),
+      body: expect.any(String),
     }))
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
+      threadId: "thread-1", instruction: "refund order", force: false, clientRequestId: expect.any(String),
+    })
   })
 
   it("formats plan request failures for composer turns", () => {

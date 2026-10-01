@@ -18,26 +18,26 @@ function SupportContextView() {
   return (
     <figure
       aria-labelledby="support-view-caption"
-      className="overflow-hidden rounded-3xl border border-stone-900/10 bg-[#fdfbf7] shadow-[0_35px_70px_-45px_rgba(22,20,19,0.75)]"
+      className="overflow-hidden rounded-3xl border border-stone-900/10 bg-white shadow-[0_35px_70px_-45px_rgba(22,20,19,0.75)]"
     >
       <figcaption id="support-view-caption" className="sr-only">
-        A representative support workspace showing Maya&apos;s size-swap request, matching Shopify and
+        A support workspace showing Maya&apos;s size-swap request, matching Shopify and
         store-policy context, and a concise customer reply prepared after the approved order change.
       </figcaption>
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-900/10 bg-[#2b2118] px-5 py-4 text-[#f6f2eb] sm:px-7">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-900/10 m-chapter--dark px-5 py-4 sm:px-7">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#f6f2eb]/40">Support workspace · synthetic thread</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#fcfaf8]/40">Support workspace</p>
           <p className="mt-1 text-sm font-semibold">Maya Chen · Order #3102</p>
         </div>
         <span className="rounded-full bg-emerald-300/10 px-3 py-1 text-[10px] font-semibold text-emerald-100">Resolved</span>
       </div>
       <div className="grid lg:grid-cols-[0.9fr_1.2fr]">
-        <div className="border-b border-stone-900/10 bg-[#f8f4ed] p-5 sm:p-7 lg:border-r lg:border-b-0">
+        <div className="border-b border-stone-900/10 bg-[color:var(--m-bg-alt)] p-5 sm:p-7 lg:border-r lg:border-b-0">
           <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500"><MessageCircle className="size-3.5" aria-hidden /> Conversation</p>
           <div className="mt-5 rounded-2xl rounded-bl-md bg-white p-4 text-[13px] leading-relaxed text-stone-800 shadow-[0_12px_28px_-22px_rgba(22,20,19,0.6)]">
             hey! I ordered the linen jumpsuit in M but need S — can you switch it before it ships?
           </div>
-          <div className="mt-4 ml-auto rounded-2xl rounded-br-md bg-[#2b2118] p-4 text-[13px] leading-relaxed text-[#f6f2eb]">
+          <div className="mt-4 ml-auto rounded-2xl rounded-br-md m-chapter--dark p-4 text-[13px] leading-relaxed">
             Done — order #3102 is now Small / Sand. It is still unfulfilled, so there is nothing else you need to do.
             <p className="mt-2 flex items-center gap-1.5 text-[10px] text-emerald-200"><Check className="size-3" aria-hidden /> Sent after Shopify updated</p>
           </div>
@@ -66,7 +66,6 @@ function SupportContextView() {
           </div>
         </div>
       </div>
-      <p className="border-t border-stone-900/10 px-5 py-3 text-center text-[10px] text-stone-400 sm:px-7">Representative product composition using fictional details; not a customer transcript.</p>
     </figure>
   );
 }

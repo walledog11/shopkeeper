@@ -9,6 +9,10 @@ export function AgentChatComposer({
   currentWalkthroughItem,
   input,
   isRunning,
+  canStop,
+  isStopping,
+  stopError,
+  onStop,
   onComposerKeyDown,
   onSend,
   onStartFresh,
@@ -21,6 +25,10 @@ export function AgentChatComposer({
   currentWalkthroughItem: WalkthroughItem | null
   input: string
   isRunning: boolean
+  canStop: boolean
+  isStopping: boolean
+  stopError: string | null
+  onStop: () => void
   onComposerKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void
   onSend: () => void
   onStartFresh: () => void
@@ -32,6 +40,17 @@ export function AgentChatComposer({
     : compact
       ? "Check order #1042, draft a reply to Sarah\u2026"
       : "Ask about orders, draft replies, update customers\u2026"
+
+  const stopControl = (canStop || isStopping) && (
+    <button
+      type="button"
+      onClick={onStop}
+      disabled={isStopping}
+      className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent disabled:opacity-50"
+    >
+      {isStopping ? "Stopping…" : "Stop"}
+    </button>
+  )
 
   if (pill) {
     return (
@@ -49,6 +68,7 @@ export function AgentChatComposer({
             className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground resize-none outline-none leading-5 min-h-[24px] max-h-20"
             style={{ fieldSizing: "content" } as CSSProperties}
           />
+          {stopControl}
           <button
             type="button"
             onClick={onSend}
@@ -62,6 +82,7 @@ export function AgentChatComposer({
             }
           </button>
         </div>
+        {stopError && <p role="alert" className="mt-2 text-xs text-destructive">{stopError}</p>}
       </div>
     )
   }
@@ -96,6 +117,7 @@ export function AgentChatComposer({
             </button>
           )}
           <div className="flex shrink-0 items-center gap-2">
+            {stopControl}
             {!compact && (
               <span className="hidden md:block text-xs text-muted-foreground whitespace-nowrap">
                 Shift + {"\u21b5"} for new line
@@ -115,6 +137,7 @@ export function AgentChatComposer({
             </button>
           </div>
         </div>
+        {stopError && <p role="alert" className="mt-2 text-xs text-destructive">{stopError}</p>}
       </div>
     </div>
   )

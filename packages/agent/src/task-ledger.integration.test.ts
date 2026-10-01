@@ -6,9 +6,11 @@ import {
 } from "@shopkeeper/db/test-helpers";
 import { ConflictError, ForbiddenError } from "./errors.js";
 import { authorizeAgentProposal } from "./task-approval.js";
+import { buildAgentPlanCacheRecord } from "./plan-cache.js";
 import {
   ANY_MEMBER_ACTOR_KEY,
   acceptCustomerAgentRequest,
+  acceptTicketAgentRequest,
   acceptMemberAgentRequest, attachMemberAgentTask, getMemberAgentRequest,
   cancelMemberAgentTask, claimAgentTask, claimContinuedAgentTask,
   failAgentTaskClaim, findQueuedAgentTasks,
@@ -72,6 +74,20 @@ describe("durable dashboard persistence foundation", () => {
     expect(new Set(results.map(result => result.task?.id)).size).toBe(1);
     expect(results.every(result => result.request.state === "attached")).toBe(true);
     expect(await db.agentTask.count({ where: { organizationId: input.organizationId } })).toBe(1);
+    const event = await db.operatorEvent.create({ data: {
+      organizationId: input.organizationId, clerkUserId: input.clerkUserId,
+      channel: "telegram", chatId: randomUUID(), providerMessageId: randomUUID(),
+      operatorKey: `member:${input.member.id}`, body: input.instruction,
+      status: "claimed", claimToken: randomUUID(), claimedAt: new Date(),
+    } });
+    const phone = await Promise.all(Array.from({ length: 6 }, () => acceptMemberAgentRequest({
+      ...input, dedupeKey: `operator-event:${event.id}`, sourceOperatorEventId: event.id, budget,
+    })));
+    expect(new Set(phone.map(result => result.request.id)).size).toBe(1);
+    expect(new Set(phone.map(result => result.task?.id)).size).toBe(1);
+    expect(phone[0].request.sourceOperatorEventId).toBe(event.id);
+    expect((await db.operatorEvent.findUniqueOrThrow({ where: { id: event.id } })).agentRequestId)
+      .toBe(phone[0].request.id);
   });
 
   it("conflicts on changed payload while preserving the original request", async () => {
@@ -94,6 +110,14 @@ describe("durable dashboard persistence foundation", () => {
     expect(await getMemberAgentRequest({ ...otherMember, requestId: request.id })).toBeNull();
     await expect(acceptMemberAgentRequest(otherMember)).rejects.toBeInstanceOf(ForbiddenError);
     await expect(attachMemberAgentTask({ ...otherMember, requestId: request.id, budget }))
+      .rejects.toBeInstanceOf(ForbiddenError);
+    const event = await db.operatorEvent.create({ data: {
+      organizationId: other.organizationId, clerkUserId: other.clerkUserId,
+      channel: "telegram", chatId: randomUUID(), providerMessageId: randomUUID(),
+      operatorKey: `member:${other.member.id}`, body: input.instruction,
+      status: "claimed", claimToken: randomUUID(), claimedAt: new Date(),
+    } });
+    await expect(acceptMemberAgentRequest({ ...input, sourceOperatorEventId: event.id, budget }))
       .rejects.toBeInstanceOf(ForbiddenError);
     await db.orgMember.delete({ where: { id: input.member.id } });
     await expect(getMemberAgentRequest({ ...input, requestId: request.id })).rejects.toBeInstanceOf(ForbiddenError);
@@ -1196,7 +1220,7 @@ describe("support approval-wait continuation", () => {
 
   // A support conversation parked on a card, the way the planning job leaves
   // one: the customer initiated it, and the card went to every bound operator.
-  async function seedReviseable(options: { scopeToDrafter?: boolean } = {}) {
+  async function seedReviseable(options: { scopeToDrafter?: boolean; runtimeVersion?: number } = {}) {
     const org = await createTestOrg();
     orgIds.push(org.id);
     const customer = await createTestCustomer(org.id, randomUUID());
@@ -1210,7 +1234,7 @@ describe("support approval-wait continuation", () => {
     });
     const { request, task } = await acceptCustomerAgentRequest({
       organizationId: org.id, threadId: thread.id, sourceMessageId: message.id,
-      objective, budget,
+      objective, budget: { ...budget, runtimeVersion: options.runtimeVersion ?? budget.runtimeVersion },
     });
     const claim = await claimAgentTask({
       organizationId: org.id, taskId: task.id, expectedRevision: task.revision,
@@ -1252,6 +1276,45 @@ describe("support approval-wait continuation", () => {
       organizationId: seeded.organizationId, clerkUserId: seeded.clerkUserId,
       proposalId: seeded.proposalId, instruction: objective, approvedToolCalls: card,
     })).rejects.toBeInstanceOf(ConflictError);
+  });
+
+  it("queues composer regeneration on the waiting support task, retaining its budget and invalidating the old approval", async () => {
+    const seeded = await seedReviseable({ runtimeVersion: 2 });
+    await db.agentTask.update({ where: { id: seeded.task.id }, data: { modelCallsUsed: 3, activeTimeMsUsed: 250, spentNanoUsd: 123n } });
+    const input = { ...seeded, dedupeKey: randomUUID(), instruction: "Actually, draft a return instead", force: true, budget };
+    const results = await Promise.all([acceptTicketAgentRequest(input), acceptTicketAgentRequest(input)]);
+    expect(new Set(results.map(result => result.request.id)).size).toBe(1);
+    expect(results.filter(result => !result.deduplicated)).toHaveLength(1);
+    const continued = results[0];
+    expect(continued.task).toMatchObject({ id: seeded.task.id, status: "queued", revision: 1, runtimeVersion: 2, modelCallsUsed: 3, activeTimeMsUsed: 250, spentNanoUsd: 123n, activeProposalId: null });
+    expect(continued.request.sourceMessageId).toBe(seeded.message.id);
+    expect(await findQueuedAgentTasks()).toContainEqual(expect.objectContaining({ id: seeded.task.id, revision: 1 }));
+    expect(await getMemberAgentRequest({ ...seeded, requestId: continued.request.id })).not.toBeNull();
+    await expect(authorizeAgentProposal({ ...seeded, proposalId: seeded.proposalId, instruction: objective, approvedToolCalls: card })).rejects.toBeInstanceOf(ConflictError);
+    const claim = await claimAgentTask({ organizationId: seeded.organizationId, taskId: continued.task.id, expectedRevision: 1 });
+    const cache = buildAgentPlanCacheRecord({ instruction: input.instruction, lastCustomerMessageId: seeded.message.id, settings: {}, plan: { instruction: input.instruction, steps: [], rawToolCalls: card } });
+    expect(await settleAgentTaskClaim({
+      organizationId: seeded.organizationId, taskId: continued.task.id, expectedRevision: 1,
+      claimToken: claim!.claimToken, requestId: continued.request.id,
+      settlement: { status: "waiting_approval", approver: { kind: "member", key: ANY_MEMBER_ACTOR_KEY }, proposal: { proposalId: cache.planId!, instruction: input.instruction, rawToolCalls: card, sourceRequestIds: [continued.request.id] } },
+      planCache: { threadId: seeded.threadId, sourceMessageId: seeded.message.id, cache },
+    })).toBe(true);
+    const published = await db.thread.findUniqueOrThrow({ where: { id: seeded.threadId } });
+    const parked = await db.agentTask.findUniqueOrThrow({ where: { id: continued.task.id } });
+    expect(published.cachedPlan).toMatchObject({ planId: parked.activeProposalId });
+  });
+
+  it("orders composer regeneration against a concurrent approval without changing work that was approved", async () => {
+    const seeded = await seedReviseable();
+    const [approval, regeneration] = await Promise.allSettled([
+      authorizeAgentProposal({ ...seeded, proposalId: seeded.proposalId, instruction: objective, approvedToolCalls: card }),
+      acceptTicketAgentRequest({ ...seeded, dedupeKey: randomUUID(), instruction: "Draft a return instead", force: true, budget }),
+    ]);
+    expect([approval, regeneration].filter(result => result.status === "fulfilled")).toHaveLength(1);
+    const task = await db.agentTask.findUniqueOrThrow({ where: { id: seeded.task.id } });
+    expect(task.revision).toBe(approval.status === "fulfilled" ? 0 : 1);
+    const rejected = approval.status === "rejected" ? approval : regeneration;
+    expect(rejected.status === "rejected" && rejected.reason).toBeInstanceOf(ConflictError);
   });
 
   it("refuses guidance from outside the organization", async () => {

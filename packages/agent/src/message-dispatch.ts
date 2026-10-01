@@ -7,10 +7,6 @@ export function isMessageDispatchFailureMessage(message: string): boolean {
     || /^Unknown:.*message dispatch/i.test(message);
 }
 
-export function isPlanExecutionFailureMessage(message: string): boolean {
-  return message.startsWith("Error:") || message.startsWith("Unknown:");
-}
-
 export function extractDispatchReference(message: string): string | null {
   const match = message.match(/Reference:\s*([^\s.]+)/i);
   return match?.[1] ?? null;
@@ -50,8 +46,11 @@ export function formatOperatorDispatchFailure(message: string): string {
 export function summarizeOperatorTurnDispatchFailure(actions: ActionEntry[]): string | null {
   for (let index = actions.length - 1; index >= 0; index -= 1) {
     const action = actions[index]!;
-    if (action.tool === "approve_pending_plan" && isPlanExecutionFailureMessage(action.result)) {
-      return formatOperatorDispatchFailure(action.result);
+    if (
+      action.tool === "approve_pending_plan"
+      && (action.status === "error" || action.status === "policy_block" || action.status === "unknown")
+    ) {
+      return action.result;
     }
     if (
       action.category === "communication"

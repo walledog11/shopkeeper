@@ -1,9 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { Reveal } from "./Reveal";
 import { SectionLabel } from "./SectionLabel";
+import { marketingSectionTitleClass } from "./marketingUi";
 
 const STORE_URL = "linenandloom.com";
 const TYPE_START_MS = 850;
@@ -13,14 +14,14 @@ const STEPS = [
   {
     id: "connect",
     title: "Connect Shopify",
-    desc: "Connect your store for product information, policies, and access to orders. Add the store notes and voice guidance you want the agent to use.",
+    desc: "Connect your store so Shopkeeper can read your products, policies, and orders. Add store notes and voice guidance to tell it how you work.",
     aria: "Connecting a Shopify store. Products, policies, orders, FAQs, and about your store sync one by one.",
     duration: 10500,
   },
   {
     id: "channels",
     title: "Pick your channels",
-    desc: "Connect customer channels for incoming messages. Link iMessage to give the agent work and receive approvals, or use the dashboard. Set your trust level and action limits before handing work over.",
+    desc: "Connect Instagram, email, or website chat for customer messages. Link iMessage to give Shopkeeper work and approve from your phone, or use the dashboard. Set your trust level and limits before you hand anything over.",
     aria: "Turning on Instagram, email, website chat, and iMessage.",
     duration: 8000,
   },
@@ -41,13 +42,18 @@ const CHANNELS = [
   { label: "iMessage", logo: "/logos/imessage.svg" },
 ] as const;
 
+/** Pin height: one viewport segment per step so page scroll scrubs the active tab. */
+const SCROLL_SEGMENT_VH = 72;
+
 export function Onboarding() {
   const stageRef = useRef<HTMLDivElement>(null);
+  const pinRef = useRef<HTMLDivElement>(null);
   const [inView, setInView] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
   const [playId, setPlayId] = useState(0);
   const [staticPlay, setStaticPlay] = useState(false);
   const [started, setStarted] = useState(false);
+  const [scrollScrub, setScrollScrub] = useState(false);
 
   useEffect(() => {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -74,83 +80,153 @@ export function Onboarding() {
     return () => observer.disconnect();
   }, []);
 
+  // Same rule as the merchant tabs: pin-and-scrub only at desktop sizes. Below
+  // that the stage would overflow the screen while pinned, so the steps just
+  // advance on a timer once the stage is in view.
   useEffect(() => {
-    if (!inView || staticPlay) return;
+    const media = window.matchMedia("(min-width: 1024px) and (prefers-reduced-motion: no-preference)");
+    const sync = () => setScrollScrub(media.matches);
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
+
+  useEffect(() => {
+    if (!inView || staticPlay || scrollScrub) return;
     const timer = window.setTimeout(() => {
       setActiveStep((step) => (step + 1) % STEPS.length);
       setPlayId((id) => id + 1);
     }, STEPS[activeStep].duration);
     return () => window.clearTimeout(timer);
-  }, [inView, staticPlay, activeStep]);
+  }, [inView, staticPlay, activeStep, scrollScrub]);
+
+  const updateActiveFromScroll = useCallback(() => {
+    if (!scrollScrub) return;
+    const pin = pinRef.current;
+    if (!pin || STEPS.length <= 1) return;
+
+    const rect = pin.getBoundingClientRect();
+    const pinTop = window.scrollY + rect.top;
+    const viewport = window.innerHeight;
+    const scrollRange = Math.max(pin.offsetHeight - viewport, 1);
+    const progress = Math.min(1, Math.max(0, (window.scrollY - pinTop) / scrollRange));
+    const index = Math.min(STEPS.length - 1, Math.round(progress * (STEPS.length - 1)));
+
+    setActiveStep((prev) => {
+      if (prev === index) return prev;
+      setPlayId((id) => id + 1);
+      return index;
+    });
+  }, [scrollScrub]);
+
+  useEffect(() => {
+    if (!scrollScrub) return;
+    updateActiveFromScroll();
+    window.addEventListener("scroll", updateActiveFromScroll, { passive: true });
+    window.addEventListener("resize", updateActiveFromScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", updateActiveFromScroll);
+      window.removeEventListener("resize", updateActiveFromScroll);
+    };
+  }, [scrollScrub, updateActiveFromScroll]);
 
   function goToStep(index: number) {
     setActiveStep(index);
     setPlayId((id) => id + 1);
+    if (!scrollScrub) return;
+    const pin = pinRef.current;
+    if (!pin || STEPS.length <= 1) return;
+
+    const rect = pin.getBoundingClientRect();
+    const pinTop = window.scrollY + rect.top;
+    const scrollRange = Math.max(pin.offsetHeight - window.innerHeight, 1);
+    const progress = index / (STEPS.length - 1);
+    const top = pinTop + progress * scrollRange;
+    window.scrollTo({ top, behavior: "smooth" });
   }
 
   const step = STEPS[activeStep];
   const playing = started && !staticPlay;
+  const pinHeightVh =
+    STEPS.length > 1 ? (STEPS.length - 1) * SCROLL_SEGMENT_VH + 100 : 100;
 
   return (
-    <section id="onboarding" className="scroll-mt-24 py-12">
+    <section id="onboarding" className="scroll-mt-24 py-16 sm:py-24">
       <div className="mx-auto max-w-6xl px-6">
-        <Reveal>
-          <SectionLabel>day one</SectionLabel>
-          <h2 className="mx-auto mb-10 max-w-[18ch] text-center text-[clamp(36px,5vw,68px)] font-bold leading-[1] tracking-[0.03em] [font-family:var(--m-hand)]">
-            Your store. Your instructions.{" "}
-            <em className="italic text-[var(--m-quill)]">Your shopkeeper.</em>
+        <Reveal className="text-center">
+          <SectionLabel>Day one</SectionLabel>
+          <h2 className={`${marketingSectionTitleClass} mb-10`}>
+            <span className="block">Your store.</span>
+            <span className="block">Your instructions.</span>
+            <span className="block">Your shopkeeper.</span>
           </h2>
         </Reveal>
 
-        <div className="grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16">
-          <Reveal delay={40}>
-            <div
-              ref={stageRef}
-              className="m-onboard-stage"
-              role="img"
-              aria-label={step.aria}
-            >
-              {activeStep === 0 ? (
-                <ConnectScene
-                  key={`connect-${playId}`}
-                  staticPlay={staticPlay}
-                  playing={playing}
-                />
-              ) : (
-                <ChannelsScene
-                  key={`channels-${playId}`}
-                  staticPlay={staticPlay}
-                  playing={playing}
-                />
-              )}
-            </div>
-          </Reveal>
+        <div
+          ref={pinRef}
+          className="relative"
+          style={{ height: scrollScrub ? `${pinHeightVh}vh` : undefined }}
+        >
+          <div
+            className={`grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16 ${
+              scrollScrub ? "sticky top-[4.5rem] z-[1] sm:top-20" : ""
+            }`}
+          >
+            <Reveal delay={40}>
+              <div
+                ref={stageRef}
+                className="m-onboard-stage"
+                role="img"
+                aria-label={step.aria}
+              >
+                {activeStep === 0 ? (
+                  <ConnectScene
+                    key={`connect-${playId}`}
+                    staticPlay={staticPlay}
+                    playing={playing}
+                  />
+                ) : (
+                  <ChannelsScene
+                    key={`channels-${playId}`}
+                    staticPlay={staticPlay}
+                    playing={playing}
+                  />
+                )}
+              </div>
+            </Reveal>
 
-          <Reveal delay={80}>
-            <div className="flex flex-col gap-2">
-              {STEPS.map((item, index) => {
-                const active = index === activeStep;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => goToStep(index)}
-                    aria-current={active ? "step" : undefined}
-                    className={`rounded-2xl px-1 py-4 text-left transition-opacity duration-500 motion-reduce:transition-none ${
-                      active ? "opacity-100" : "opacity-35 hover:opacity-70"
-                    }`}
-                  >
-                    <h3 className="mb-2 text-[28px] font-bold leading-none tracking-[0.03em] [font-family:var(--m-hand)]">
-                      {item.title}
-                    </h3>
-                    <p className="max-w-[42ch] text-[16px] leading-relaxed text-stone-700">
-                      {item.desc}
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
-          </Reveal>
+            <Reveal delay={80}>
+              <div className="flex flex-col gap-2" role="group" aria-label="Setup steps">
+                {STEPS.map((item, index) => {
+                  const active = index === activeStep;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => goToStep(index)}
+                      aria-current={active ? "step" : undefined}
+                      className={`rounded-2xl border px-5 py-4 text-left transition-[border-color,background-color] duration-300 motion-reduce:transition-none ${
+                        active
+                          ? "border-[color:var(--m-line)] bg-white shadow-[0_18px_44px_-32px_rgba(27,26,25,0.35)]"
+                          : "border-transparent hover:bg-[color:var(--m-bg-alt)]"
+                      }`}
+                    >
+                      <h3 className={`m-display m-h3 ${active ? "" : "m-tail"}`}>{item.title}</h3>
+                      <div
+                        className={`grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none ${
+                          active ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                        }`}
+                      >
+                        <div className="overflow-hidden">
+                          <p className="m-lede mt-2 max-w-[42ch] text-[16px]">{item.desc}</p>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </Reveal>
+          </div>
         </div>
       </div>
     </section>
@@ -302,9 +378,9 @@ function PoliciesIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
       <path d="M7 3.5h7.2L19 8.4V19a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5.5a2 2 0 0 1 2-2Z" />
-      <path fill="#f6f2eb" d="M14 3.7v4.2h4.3" />
-      <circle cx="12" cy="14.2" r="3.1" fill="#f6f2eb" />
-      <path d="M12 12.4v2.2l1.4.8" fill="none" stroke="#161413" strokeWidth="1.3" strokeLinecap="round" />
+      <path fill="#fff" d="M14 3.7v4.2h4.3" />
+      <circle cx="12" cy="14.2" r="3.1" fill="#fff" />
+      <path d="M12 12.4v2.2l1.4.8" fill="none" stroke="#1b1a19" strokeWidth="1.3" strokeLinecap="round" />
     </svg>
   );
 }
@@ -313,7 +389,7 @@ function OrdersIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
       <path d="M4.8 8.2 12 4.6l7.2 3.6v8.6L12 20.4 4.8 16.8V8.2Z" />
-      <path d="M12 12.2 4.9 8.3M12 12.2v8M12 12.2l7.1-3.9" fill="none" stroke="#f6f2eb" strokeWidth="1.4" />
+      <path d="M12 12.2 4.9 8.3M12 12.2v8M12 12.2l7.1-3.9" fill="none" stroke="#fff" strokeWidth="1.4" />
     </svg>
   );
 }
@@ -325,11 +401,11 @@ function FaqIcon() {
       <path
         d="M9.7 9.5c.2-1.3 1.2-2.1 2.5-2.1 1.4 0 2.4.8 2.4 2.1 0 1.2-.7 1.7-1.6 2.2-.8.4-1.1.8-1.1 1.6"
         fill="none"
-        stroke="#f6f2eb"
+        stroke="#fff"
         strokeWidth="1.6"
         strokeLinecap="round"
       />
-      <circle cx="12.1" cy="16.4" r="1" fill="#f6f2eb" />
+      <circle cx="12.1" cy="16.4" r="1" fill="#fff" />
     </svg>
   );
 }
@@ -338,7 +414,7 @@ function InstructionsIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
       <path d="M5 5.4h14a1.6 1.6 0 0 1 1.6 1.6v8.1A1.6 1.6 0 0 1 19 16.7h-4.2L12 20.2l-2.8-3.5H5A1.6 1.6 0 0 1 3.4 15V7a1.6 1.6 0 0 1 1.6-1.6Z" />
-      <path d="M9.1 9.2h1.6l1.3 4.6h.1l1.3-4.6H15v6.1h-1.2v-4.7h-.1l-1.4 4.7h-1.6L9.3 10.6h-.1v4.7H8V9.2h1.1Z" fill="#f6f2eb" />
+      <path d="M9.1 9.2h1.6l1.3 4.6h.1l1.3-4.6H15v6.1h-1.2v-4.7h-.1l-1.4 4.7h-1.6L9.3 10.6h-.1v4.7H8V9.2h1.1Z" fill="#fff" />
     </svg>
   );
 }

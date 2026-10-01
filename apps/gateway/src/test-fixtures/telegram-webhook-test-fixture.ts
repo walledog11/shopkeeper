@@ -34,6 +34,7 @@ const {
   sendChatActionSpy: vi.fn().mockResolvedValue(true),
   setMessageReactionSpy: vi.fn().mockResolvedValue(true),
   executeOperatorAgentTurnSpy: vi.fn().mockResolvedValue({
+    outcome: 'committed',
     summary: 'Done.',
     threadId: '00000000-0000-4000-8000-000000000001',
     actionsPerformed: [],
@@ -101,6 +102,7 @@ vi.mock('../message-handlers/operator/execute-operator-agent-turn.js', () => ({
 
 import { registerTelegramWebhookRoutes } from '../routes/webhooks-telegram.js';
 import { processOperatorEventById } from '../workers/operator-event.js';
+import { processAgentTaskJob } from '../workers/agent-task.js';
 
 export const SECRET = process.env.TELEGRAM_WEBHOOK_SECRET!;
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
@@ -127,6 +129,13 @@ export async function processPendingOperatorEvents(organizationId: string): Prom
   });
   for (const event of pending) {
     await processOperatorEventById(event.id);
+    const linked = await db.operatorEvent.findUnique({
+      where: { id: event.id }, include: { agentRequest: { include: { task: true } } },
+    });
+    const task = linked?.agentRequest?.task;
+    if (task?.status === 'queued') {
+      await processAgentTaskJob({ organizationId, taskId: task.id, revision: task.revision });
+    }
   }
 }
 
@@ -174,6 +183,7 @@ beforeEach(async () => {
   queueAddSpy.mockClear().mockResolvedValue({ id: 'test-job-id' });
   queueGetJobSpy.mockClear().mockResolvedValue(null);
   executeOperatorAgentTurnSpy.mockResolvedValue({
+    outcome: 'committed',
     summary: 'Done.',
     threadId: '00000000-0000-4000-8000-000000000001',
     actionsPerformed: [],
