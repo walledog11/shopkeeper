@@ -23,6 +23,7 @@ import { recordEmailSendFailure } from "@/lib/messaging/provider-send-failures";
 import {
   markAgentMessageSendFailed,
   markLogicalResponseAttempted,
+  markLogicalResponseSent,
   markPendingAgentMessageSendUnknown,
 } from "@/lib/messaging/dispatch-message-common";
 import { captureDashboardOutboundReplySent } from "@/lib/server/product-analytics";
@@ -304,9 +305,11 @@ export async function sendEmail(
   });
 
   logger.info({ to: input.to, existingThreadId: existingThread?.id ?? null, targetThreadId }, '[sendEmail]');
+  // The provider's id for this send; undefined when the call was only recorded.
+  let providerMessageId: string | undefined;
   try {
     if (!recorded) {
-      await getEmailSender(emailIntegration).send({
+      ({ providerMessageId } = await getEmailSender(emailIntegration).send({
         to: input.to,
         fromAddress: fromEmail,
         fromName: ctx.orgName,
@@ -314,7 +317,7 @@ export async function sendEmail(
         subject,
         text: input.body,
         headers,
-      });
+      }));
     }
     logger.info({ threadId: targetThreadId, provider }, '[sendEmail] Provider accepted');
   } catch (err) {
@@ -336,10 +339,7 @@ export async function sendEmail(
   }
 
   // Send confirmed — settle the same response record that existed before dispatch.
-  const sentMessage = await db.message.update({
-    where: { id: pendingMessage.id },
-    data: { sendStatus: 'sent', sendError: null },
-  });
+  const sentMessage = await markLogicalResponseSent(pendingMessage.id, emailIntegration.id, providerMessageId);
   void captureDashboardOutboundReplySent({
     channel: CHANNEL_TYPE.EMAIL,
     messageId: sentMessage.id,
