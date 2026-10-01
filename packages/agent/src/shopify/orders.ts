@@ -62,6 +62,46 @@ export async function getOrderByName(
   }
 }
 
+// The merchant asked where an order stands, not what is in it. Built from an
+// explicit allowlist, as getOrderFulfillmentStatus is, rather than from
+// serializeOrder: handed line items, quantities and totals the model narrates
+// them, and a status answer cannot mention what its result does not contain.
+// Keys that say nothing notable (not cancelled, not shipped) are left out, so
+// there is no false or null value to read aloud.
+export async function getOrderStatusByName(
+  input: GetOrderByNameInput,
+  ctx: ShopifyContext
+): Promise<ToolResult> {
+  try {
+    const rawName = requireNonEmptyString(input.order_name, "order_name");
+    const name = rawName.startsWith("#") ? rawName : `#${rawName}`;
+    const data = await shopifyRestJson<{ orders?: ShopifyOrder[] }>(ctx, "orders.json", {
+      query: {
+        name,
+        status: "any",
+        limit: 1,
+        fields: "id,name,cancelled_at,financial_status,fulfillment_status,fulfillments",
+      },
+    });
+
+    const order = (data.orders ?? [])[0];
+    if (!order) return toolNotFound(`No order found with number ${name}.`);
+
+    const shippedOn = order.fulfillments
+      ?.find((fulfillment) => fulfillment.status === "success" && fulfillment.created_at)
+      ?.created_at?.slice(0, 10);
+    return toolOk(JSON.stringify({
+      order: order.name ?? name,
+      payment_status: order.financial_status ?? "unknown",
+      ...(order.cancelled_at ? { cancelled: true } : {}),
+      shipping_status: describeShippingStatus(order),
+      ...(shippedOn ? { shipped_on: shippedOn } : {}),
+    }));
+  } catch (err) {
+    return toolError(formatShopifyToolError("could not look up that order", err));
+  }
+}
+
 // The one order read an unverified stranger can reach, so it is built from the
 // opposite direction to every other order tool: an explicit allowlist of
 // non-identifying fields rather than serializeOrder, which carries the shipping

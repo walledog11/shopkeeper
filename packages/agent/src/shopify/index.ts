@@ -20,6 +20,7 @@ export {
 export {
   getOrderByName,
   getOrderFulfillmentStatus,
+  getOrderStatusByName,
   getShopifyOrders,
   listRecentUnfulfilledOrderIds,
 } from "./orders.js";

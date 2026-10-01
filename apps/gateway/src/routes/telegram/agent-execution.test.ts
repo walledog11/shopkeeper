@@ -93,6 +93,7 @@ describe('executeFreeFormInstruction', () => {
       'approve_pending_plan',
       'create_flash_sale',
       'end_flash_sale',
+      'get_order_status',
       'get_ticket',
       'list_active_tickets',
       'list_flash_sales',

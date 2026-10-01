@@ -3,6 +3,7 @@ import { buildOperatorSessionTools } from './operator-session-tools.js';
 import { buildOperatorInboxTools } from './operator-inbox-tools.js';
 import { buildOperatorActionHistoryTools } from './operator-action-history-tools.js';
 import { buildOperatorProductHelpTools } from './operator-product-help-tools.js';
+import { buildOperatorOrderTools } from './operator-order-tools.js';
 import { buildOperatorShopTools } from './operator-shop-tools.js';
 import { buildOperatorDashboardNavTools } from './operator-dashboard-nav-tools.js';
 import {
@@ -59,6 +60,7 @@ export async function runOperatorFreeFormTurn(
     ...buildOperatorInboxTools({ organizationId, pendingDigest: context.pendingDigest }),
     ...buildOperatorActionHistoryTools({ organizationId }),
     ...buildOperatorProductHelpTools(),
+    ...buildOperatorOrderTools({ organizationId }),
     ...buildOperatorShopTools({ organizationId }),
     ...(deskMode ? buildOperatorDashboardNavTools() : {}),
   };
