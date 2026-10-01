@@ -82,6 +82,24 @@ describe("probeUnknownShopifyMutation", () => {
     expect(result).toMatchObject({ outcome: "committed" });
   });
 
+  it("commits a partial refund from the order's one successful refund", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
+      refunds: [{
+        id: 1,
+        transactions: [{ status: "success", amount: "16.00" }],
+      }],
+    })));
+
+    // A partial refund's amount is priced at execution, so its input names none.
+    const result = await probeUnknownShopifyMutation(
+      "create_partial_refund",
+      { order_id: "456", items: [{ line_item_id: "9001", quantity: 1 }] },
+      ctx,
+    );
+
+    expect(result).toMatchObject({ outcome: "committed" });
+  });
+
   it("releases cancellation reconciliation when the order is not cancelled", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
       order: { id: 456, name: "#1001", cancelled_at: null },

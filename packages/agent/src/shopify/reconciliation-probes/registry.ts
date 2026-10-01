@@ -47,7 +47,7 @@ export const SHOPIFY_RECONCILIATION_PROBES = {
   // "any successful refund on this order confirms it".
   create_partial_refund: defineReconciliationProbe<CreatePartialRefundInput>(
     "create_partial_refund",
-    (input, ctx) => probeRefund({ order_id: input.order_id, amount: "" }, ctx),
+    (input, ctx) => probeRefund({ order_id: input.order_id }, ctx),
   ),
   cancel_order: defineReconciliationProbe<CancelOrderInput>("cancel_order", probeCancellation),
   create_shopify_order: defineReconciliationProbe<CreateShopifyOrderInput>("create_shopify_order", probeCreatedOrder),

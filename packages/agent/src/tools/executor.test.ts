@@ -257,6 +257,9 @@ describe("provider-priced spend reservation", () => {
     );
 
     expect(result.result).toContain("daily compensation cap");
+    // A cap is a policy refusal whichever kind of tool reserved: the tool passes the
+    // refusal back as its own result, and its status is what the caller reports.
+    expect(result.status).toBe("policy_block");
     // Nothing was reserved, so there is nothing to release or commit.
     expect(mockCommitDailyRefundSpendReservation).not.toHaveBeenCalled();
     expect(mockReleaseDailyRefundSpendReservation).not.toHaveBeenCalled();

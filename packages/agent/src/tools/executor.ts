@@ -341,7 +341,7 @@ async function executePreparedTool(
       const cap = resolvedSettings.dailyRefundCap;
       return {
         kind: "refused",
-        result: toolError(formatPolicyError(
+        result: toolPolicyBlock(formatPolicyError(
           `daily compensation cap of $${cap} reached (shared across refunds and gift cards); $${(reservation.remainingCents / 100).toFixed(2)} remaining today.`,
         )),
         policyBlocked: true,
