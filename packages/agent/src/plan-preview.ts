@@ -236,11 +236,8 @@ function buildHomeActionDisplayFromTool(
 
   switch (step.tool) {
     case "create_refund": {
-      const amount = input.amount
-      if (typeof amount === "string" || typeof amount === "number") {
-        const normalized = String(amount).replace(/^\$/, "").trim()
-        chipLabel = normalized ? `Issue $${normalized} refund` : "Issue refund"
-      }
+      // The quote Shopify gave at planning, in the currency the customer was charged.
+      chipLabel = lineItemWriteSentence(step.tool, input) ?? chipLabel
       if (typeof input.reason === "string" && input.reason.trim()) {
         detailLines = [input.reason.trim()]
       }
