@@ -10,7 +10,7 @@ import {
   notifyOperator,
 } from '../../../operator-notify.js';
 import { resolvePendingPlanContexts } from '../../../operator-context.js';
-import type { PrecomputedPlanResult } from '../planning-types.js';
+import { shouldNotifyAutoExecution, type PrecomputedPlanResult } from '../planning-types.js';
 import { formatAutoExecutionMessage } from './format-auto-execution.js';
 
 export async function sendOperatorAutoExecutionNotification(
@@ -21,6 +21,7 @@ export async function sendOperatorAutoExecutionNotification(
   requestSummary: string | null,
   result: PrecomputedPlanResult,
 ): Promise<void> {
+  if (!shouldNotifyAutoExecution(result)) return;
   try {
     const bindings = await listOperatorBindings(organizationId);
 

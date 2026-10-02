@@ -1,3 +1,4 @@
+import { isReadToolName } from '@shopkeeper/agent/tools';
 import type { DbThreadRequestDisposition } from '@shopkeeper/db';
 import type { AgentPlan } from '../../types.js';
 
@@ -63,9 +64,15 @@ export interface PrecomputedPlanResult {
 export function shouldNotifyAutoExecution(
   result: Pick<
     PrecomputedPlanResult,
-    'autoExecutionKind' | 'autoExecutionStatus' | 'failureReplanRecovered'
+    'autoExecutionKind' | 'autoExecutionStatus' | 'autoExecutionActions' | 'failureReplanRecovered' | 'failureReplanAwaitingApproval'
   >,
 ): boolean {
-  if (result.failureReplanRecovered) return true;
+  if (result.failureReplanRecovered || result.failureReplanAwaitingApproval) return true;
+  // The escalation sink already sends the handoff. A second completion report
+  // both duplicates it and claims the customer request was handled.
+  const effects = result.autoExecutionActions?.filter(action => !isReadToolName(action.tool));
+  if (result.autoExecutionStatus === 'success' && effects?.length
+    && effects.every(action => action.tool === 'escalate_to_human'
+      && (action.status === 'escalated' || action.status === 'success'))) return false;
   return result.autoExecutionKind !== 'safe_reply' || result.autoExecutionStatus !== 'success';
 }

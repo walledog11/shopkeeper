@@ -32,6 +32,16 @@ are exceptions, not work packages.
 
 ## Session update, 2026-10-02
 
+Follow-up: the owner's live fulfilled-order cancellation request produced two
+robotic reports: the escalation notice and an automatic-execution "Handled this
+one myself" report. A successful escalation is a handoff, not completion of
+the customer's request. The communication fix suppresses that duplicate and
+composes one short merchant message from the current request and actual blocker,
+asking how the merchant wants to respond. It persists the text before fan-out
+and reuses it on retry. No approval, refund or cancellation authority changes.
+Gateway build/typecheck, lint, the affected existing checks and a synthetic
+model wording preview passed. Not deployed; live handoff wording remains owed.
+
 The release owner clarified that testing is welcome, but redundant test loops
 are not. Decision F retains all fourteen effects. Reuse recorded evidence,
 group related flows, and repeat checks only for a failure, a relevant code

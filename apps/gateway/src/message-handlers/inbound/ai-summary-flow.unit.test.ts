@@ -62,7 +62,7 @@ vi.mock('../support-plan/planning-notifications.js', () => ({
 }));
 
 import { processAiSummaryJob } from './ai-summary-flow.js';
-import { mayParkMerchantWork } from '../support-plan/planning-types.js';
+import { shouldNotifyAutoExecution, mayParkMerchantWork } from '../support-plan/planning-types.js';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -233,5 +233,22 @@ describe('mayParkMerchantWork', () => {
     // plan that reaches the parking decision is one that lane declined. Dropping
     // it would answer nobody and tell nobody.
     expect(mayParkMerchantWork('informational')).toBe(true);
+  });
+});
+
+
+describe('handoff notification ownership', () => {
+  it('leaves successful handoffs to the escalation notice but keeps failures and other effects visible', () => {
+    const handoff = {
+      autoExecutionStatus: 'success' as const,
+      autoExecutionActions: [{ tool: 'escalate_to_human', status: 'escalated' as const, result: 'Handed over' }],
+    };
+    expect(shouldNotifyAutoExecution(handoff)).toBe(false);
+    expect(shouldNotifyAutoExecution({ ...handoff, autoExecutionStatus: 'error' })).toBe(true);
+    expect(shouldNotifyAutoExecution({ ...handoff, failureReplanAwaitingApproval: true })).toBe(true);
+    expect(shouldNotifyAutoExecution({
+      ...handoff, autoExecutionActions: [...handoff.autoExecutionActions,
+        { tool: 'create_refund', status: 'success', result: 'Refund committed' }],
+    })).toBe(true);
   });
 });
