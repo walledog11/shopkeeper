@@ -3,7 +3,7 @@ import { APPROVAL_LINE_ITEM_CHANGES, type ApprovalLineItem } from "./tools/regis
 /**
  * How an approval card names what a write will do, from the approval facts the
  * planner bound from Shopify: the items a line-item write targets, and the
- * refund a cancellation makes. Both the dashboard and the phone card render
+ * refund a cancellation or a full refund makes. Both the dashboard and the phone card render
  * through here, so the two cannot describe one proposal differently. A proposal
  * without bound facts renders as it did before.
  */
@@ -28,10 +28,8 @@ function listItems(items: readonly ApprovalLineItem[]): string {
   return items.map((item) => `${item.quantity}x ${item.name.trim()}`).join(", ");
 }
 
-/** A partial refund's or cancellation's Shopify quote as the card shows it: "$8.50", or "EUR 8.50". */
-export function formatApprovalQuote(input: unknown): string | null {
-  if (!input || typeof input !== "object") return null;
-  const { approval_amount: amount, approval_currency: rawCurrency } = input as Record<string, unknown>;
+/** An amount as the card shows it: "$8.50", or "EUR 8.50" when it is quoted in another currency. */
+function formatQuote(amount: unknown, rawCurrency: unknown): string | null {
   if (typeof amount !== "string" && typeof amount !== "number") return null;
   const normalized = String(amount).replace(/^\$/, "").trim();
   if (!normalized) return null;
@@ -39,14 +37,32 @@ export function formatApprovalQuote(input: unknown): string | null {
   return `${currency && currency !== "USD" ? `${currency} ` : "$"}${normalized}`;
 }
 
+/** A partial refund's or cancellation's Shopify quote as the card shows it: "$8.50", or "EUR 8.50". */
+export function formatApprovalQuote(input: unknown): string | null {
+  if (!input || typeof input !== "object") return null;
+  const { approval_amount: amount, approval_currency: currency } = input as Record<string, unknown>;
+  return formatQuote(amount, currency);
+}
+
 /**
  * The step as one sentence naming its items, e.g. "Refund $8.50 for 1x Linen
- * Napkin - Special". Null when the proposal carries no bound items.
+ * Napkin - Special", or a full refund's quote: "Refund CAD 48.65 for the whole
+ * order (costs you $34.90)". Null when the proposal carries nothing bound.
  */
 export function lineItemWriteSentence(tool: string, input: unknown): string | null {
   const items = approvalLineItems(input);
   const of = (change: ApprovalLineItem["change"]) => listItems(items.filter((item) => item.change === change));
   switch (tool) {
+    case "create_refund": {
+      // A full refund carries Shopify's quote as `amount` and `currency`, in the
+      // currency the customer was charged. What it costs the shop is named only
+      // when the two differ.
+      const fields = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
+      const quote = formatQuote(fields.amount, fields.currency);
+      if (!quote) return null;
+      const cost = formatQuote(fields.approval_shop_amount, null);
+      return `Refund ${quote} for the whole order${cost ? ` (costs you ${cost})` : ""}`;
+    }
     case "create_partial_refund": {
       const refunded = of("refund");
       if (!refunded) return null;
