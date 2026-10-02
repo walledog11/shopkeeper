@@ -892,3 +892,30 @@ ordinary replies contain the requested business facts, with technical details
 only when requested. No phrase matching, output rewriting or new tests are added.
 The owner explicitly stopped unnecessary testing; verification is the cheap
 compiler check and the actual phone flow through the existing PR process.
+
+
+## Conversational handoff follow-up, 2026-10-02
+
+The owner reported a live cancellation/refund request for an already-fulfilled
+order producing both an "Escalated — Email" notice and "Handled this one myself:
+1. escalate to human". The sink owns the first; the generic automatic-execution
+reporter owns the second. The second falsely frames handing off as handling the
+customer's request, while neither message asks the merchant for direction.
+
+The fix keeps one handoff and composes its explanation/question using the
+existing capped non-agent text helper. The current request and blocker are
+untrusted context, not instructions. The ticket URL is appended by code, and
+the full message is persisted as an idempotent internal note before delivery
+so retries reuse identical text. Model failure retains a grounded fallback.
+Failed escalations, other committed effects and awaiting-approval follow-ups
+remain eligible for execution reporting.
+
+Gateway build/typecheck, changed-file lint, existing affected pipeline,
+escalation and notification checks passed. The retry check confirms one stored
+handoff survives a failed delivery and is reused. A synthetic model preview
+initially invented return remedies, so the composition instruction was
+corrected to ask for direction without suggesting unsupplied options; the
+corrected preview passed. No customer message or Shopify action was sent in
+these checks. The real-customer preview was blocked by automatic approval review
+for disclosure to Anthropic; the substitute used entirely fictional data.
+Not deployed or live-verified.

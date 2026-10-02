@@ -33,6 +33,10 @@ vi.mock('ioredis', () => ({
   }),
 }));
 
+vi.mock('@shopkeeper/agent/ai', () => ({
+  generateText: vi.fn(async () => "I can't finish this: Order issue. How would you like me to respond?"),
+}));
+
 const DASHBOARD_URL = 'http://dashboard.test';
 
 describe('pushOperatorEscalation', () => {
@@ -113,6 +117,29 @@ describe('pushOperatorEscalation', () => {
     const [spaceId, body] = sendImessageToSpaceSpy.mock.calls[0] as [string, string];
     expect(spaceId).toBe(`space-${org.id}`);
     expect(body).toContain('Order issue');
+  });
+
+  it('persists one handoff before delivery and reuses it after a failed send', async () => {
+    const customer = await createTestCustomer(org.id, 'handoff-retry@example.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+    const member = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: `user-${org.id}-retry` },
+    });
+    await db.orgMemberTelegramChat.create({
+      data: { orgMemberId: member.id, chatId: `chat-${org.id}-retry` },
+    });
+    sendMessageSpy.mockResolvedValueOnce(false);
+    expect(await pushOperatorEscalation(org.id, thread.id, 'Order issue')).toBe(0);
+    const notes = await db.message.findMany({
+      where: { organizationId: org.id, threadId: thread.id, externalMessageId: { startsWith: 'merchant-handoff:' } },
+    });
+    expect(notes).toHaveLength(1);
+    await pushOperatorEscalation(org.id, thread.id, 'Order issue');
+    const after = await db.message.findMany({
+      where: { organizationId: org.id, threadId: thread.id, externalMessageId: { startsWith: 'merchant-handoff:' } },
+    });
+    expect(after).toEqual(notes);
+    expect(sendMessageSpy.mock.calls.at(-1)?.[1]).toBe(notes[0]!.contentText);
   });
 
   it('returns 0 when the only bound operator channel fails to send', async () => {
