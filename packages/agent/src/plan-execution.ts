@@ -8,7 +8,7 @@ import { isAgentPlanCacheHit, readAgentPlanCache, type AgentPlanCacheRecord } fr
 import type { PlanFailureReplanContext } from "./plan-cache-shape.js";
 import { getPendingCustomerMessageId } from "./plan-cache-shape.js";
 import { hashInstruction, hashPlan, type AgentActionApproval } from "./agent-actions.js";
-import { allowsAutomaticExecution, decideAutonomy, type AutonomyVerdict } from "./autonomy.js";
+import { allowsAutomaticExecution, decideAutonomy, isEscalationOnlyPlan, type AutonomyVerdict } from "./autonomy.js";
 import logger from "./logger.js";
 import { shouldBlockTrustedSendActions, shouldSkipAutoPlan } from "./sender-trust.js";
 import { resolveAutoExecuteMode } from "./settings.js";
@@ -339,7 +339,7 @@ export async function readParkedProposalForThread(params: {
   proposedCache?: AgentPlanCacheRecord;
 }): Promise<ProposalSnapshot | null> {
   const current = await loadCurrentCachedHomePlan(params);
-  if (!current.plan || !current.planId) return null;
+  if (!current.plan || !current.planId || isEscalationOnlyPlan(current.plan.rawToolCalls)) return null;
   const verdict = current.verdict;
   const reviewable = verdict.kind === "needs_review" && verdict.approvalAllowed;
   const explicitlyDrafted = params.manualReview && (allowsAutomaticExecution(verdict) || verdict.kind === "escalate");
@@ -588,7 +588,12 @@ export async function executeCurrentCachedHomePlan(params: {
   }
 
   const verdict = current.verdict;
-  const automaticAllowed = allowsAutomaticExecution(verdict);
+  const escalationOnly = isEscalationOnlyPlan(current.plan.rawToolCalls);
+  if (params.executionIntent === "merchant_approved" && escalationOnly) {
+    throw new BadRequestError("This ticket needs you; there is nothing to approve. No refund or customer reply was executed by this approval.");
+  }
+  const automaticAllowed = allowsAutomaticExecution(verdict)
+    || (verdict.kind === "escalate" && escalationOnly);
   const merchantAllowed = automaticAllowed
     || verdict.kind === "escalate"
     || (verdict.kind === "needs_review" && verdict.approvalAllowed);
@@ -953,7 +958,10 @@ export async function maybeAutoExecuteCurrentCachedHomePlan(params: {
   // without consuming merchant attention. The mutative rollout switch below is
   // deliberately irrelevant here; turning on clarifying questions must not turn
   // on refunds or order changes.
-  if (current.verdict.kind === "quick_reply") {
+  // A handoff cannot wait for the merchant to approve taking over. It uses the
+  // same execution claim as other plans, independently of store-write rollout.
+  if (current.verdict.kind === "quick_reply"
+    || (current.verdict.kind === "escalate" && isEscalationOnlyPlan(current.plan.rawToolCalls))) {
     return executeCurrentCachedHomePlan({
       ...params,
       executionIntent: "automatic",

@@ -1029,16 +1029,25 @@ describe("executeCurrentCachedHomePlan execution", () => {
     expect(execution.planHash).toBe(hashPlan(support.plan));
   });
 
-  it("executes an escalation only after explicit merchant approval", async () => {
+  it("refuses approval of an escalation-only plan before executing", async () => {
     const { org, thread, settings } = await seedThreadWithPlan({ plan: escalationPlan() });
-    const executed = await executeCurrentCachedHomePlan({
-      orgId: org.id,
-      threadId: thread.id,
-      settings,
-      executionIntent: "merchant_approved",
-      failureRoute: "test",
+    await expect(executeCurrentCachedHomePlan({
+      orgId: org.id, threadId: thread.id, settings,
+      executionIntent: "merchant_approved", failureRoute: "test",
+    }, makeDeps())).rejects.toBeInstanceOf(BadRequestError);
+    expect(await readParkedProposalForThread({
+      orgId: org.id, threadId: thread.id, settings, manualReview: true,
+    })).toBeNull();
+  });
+
+  it("executes a handoff without approval even with store-write rollout disabled", async () => {
+    const { org, thread, settings } = await seedThreadWithPlan({ plan: escalationPlan() });
+    const executed = await maybeAutoExecuteCurrentCachedHomePlan({
+      orgId: org.id, threadId: thread.id, settings,
+      allowMutativeAutoExecute: false, failureRoute: "test",
     }, makeDeps());
-    expect(executed.approvedToolCalls).toEqual(escalationPlan().rawToolCalls);
+    expect(executed?.approvedToolCalls).toEqual(escalationPlan().rawToolCalls);
+    expect(readAgentPlanCache((await db.thread.findUniqueOrThrow({ where: { id: thread.id } })).cachedPlan)).toBeNull();
   });
 
   it("runs the approved calls, records the approver, and consumes the cache", async () => {

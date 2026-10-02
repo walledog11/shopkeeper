@@ -93,6 +93,13 @@ export function allowsAutomaticExecution(verdict: AutonomyVerdict): boolean {
   return verdict.kind === "quick_reply" || verdict.kind === "auto_execute";
 }
 
+/** A handoff with optional investigation, but no action or customer message. */
+export function isEscalationOnlyPlan(toolCalls: readonly Pick<RawToolCall, "name">[]): boolean {
+  return toolCalls.some(call => call.name === "escalate_to_human")
+    && toolCalls.every(call => call.name === "escalate_to_human"
+      || TOOL_CATEGORIES[call.name] === "read");
+}
+
 const QUICK_REPLY_READ_TOOLS = new Set([
   "search_kb",
   "search_shopify_products",

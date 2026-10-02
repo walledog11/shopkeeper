@@ -1,4 +1,5 @@
 import { db, type DbChannelType } from '@shopkeeper/db';
+import { isEscalationOnlyPlan } from '@shopkeeper/agent/autonomy';
 import { classifyPerson } from '@shopkeeper/agent/person-name';
 import { memberOperatorKey } from '@shopkeeper/agent/internal-thread';
 import { SENDER_TYPE } from '@shopkeeper/agent/thread-constants';
@@ -67,6 +68,7 @@ export async function sendOperatorPlanNotification(
     systemRequest?: SystemRequestKind;
   },
 ): Promise<void> {
+  const escalationOnly = isEscalationOnlyPlan(plan.rawToolCalls);
   const bindings = await listOperatorBindings(organizationId);
 
   if (bindings.length === 0) {
@@ -140,10 +142,10 @@ export async function sendOperatorPlanNotification(
       // the critical push's failure surface, so drop the line silently.
       let queueNotice: QueueNotice | undefined;
       try {
-        const existing = await getContext(organizationId, memberOperatorKey(member.orgMemberId));
+        const existing = escalationOnly ? null : await getContext(organizationId, memberOperatorKey(member.orgMemberId));
         // A thread holds one pending plan, so a same-thread park is a replace, not
         // a stack — only other-thread plans matter for the disclosure.
-        const others = existing.pendingPlans.filter((parked) => parked.threadId !== threadId);
+        const others = (existing?.pendingPlans ?? []).filter((parked) => parked.threadId !== threadId);
         if (others.length > 0) {
           if (maxDepth === 1) {
             queueNotice = { kind: 'replaces', customerName: others[others.length - 1]!.customerName ?? null };
@@ -173,7 +175,7 @@ export async function sendOperatorPlanNotification(
           ...(sourceMessageText ? { sourceMessageText } : {}),
         }),
         contextPatch: {},
-        appendPlan: { plan: parkPlan, maxDepth },
+        ...(escalationOnly ? {} : { appendPlan: { plan: parkPlan, maxDepth } }),
         idempotencyKey,
       };
     },
