@@ -1,5 +1,6 @@
 import { db, Prisma } from '@shopkeeper/db';
 import type { Prisma as PrismaTypes } from '@prisma/client';
+import { isEscalationOnlyPlan } from '@shopkeeper/agent/autonomy';
 import type { RawToolCall } from '@shopkeeper/agent/types';
 import { getPlanExecution } from '@shopkeeper/agent/execution-ledger';
 import { AGENT_PLAN_CACHE_VERSION, readAgentPlanCacheRecordShape } from '@shopkeeper/agent/plan-cache-shape';
@@ -217,6 +218,12 @@ export function selectPendingPlan(
     return { error: 'Error: no plan is awaiting the merchant\'s approval.', code: 'none_pending' };
   }
   const selectable = (plan: PendingPlan): SelectPendingPlanResult => {
+    if (isEscalationOnlyPlan(plan.rawToolCalls)) {
+      return {
+        error: 'This ticket needs you; there is nothing to approve. No refund or customer reply was executed by this approval.',
+        code: 'needs_thread_review',
+      };
+    }
     const briefingItem = digest?.items.find((item) => item.threadId === plan.threadId
       && (!item.planId || item.planId === plan.planId));
     if (briefingItem && briefingItem.kind !== 'approval') {

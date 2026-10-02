@@ -412,6 +412,14 @@ describe('selectPendingPlan', () => {
   const a = pendingPlanFor('thread-a', 'plan-a', { customerName: 'Sarah Chen' });
   const b = pendingPlanFor('thread-b', 'plan-b', { customerName: 'Jake Long' });
 
+  it('refuses an old escalation-only card without treating it as approval', () => {
+    const escalation = { ...a, rawToolCalls: [{
+      id: 'handoff', name: 'escalate_to_human', input: { reason: 'Over the refund limit' },
+    }] };
+    expect(selectPendingPlan([escalation])).toHaveProperty('code', 'needs_thread_review');
+    expect(selectPendingPlan([escalation], 'plan-a')).toHaveProperty('code', 'needs_thread_review');
+  });
+
   it('errors when nothing is pending', () => {
     expect(selectPendingPlan([])).toEqual({ error: expect.stringContaining('no plan'), code: 'none_pending' });
   });

@@ -30,6 +30,25 @@ owner's direction: this app is in development; finish working user flows,
 verify them manually, and ship. New tests and repository-wide test cleanup
 are exceptions, not work packages.
 
+## Session update, 2026-10-02
+
+The release owner clarified that testing is welcome, but redundant test loops
+are not. Decision F retains all fourteen effects. Reuse recorded evidence,
+group related flows, and repeat checks only for a failure, a relevant code
+change or an unresolved concern. No verification waiver or release-scope
+reduction was requested. Phone stop-by-text remains undecided.
+
+Item 8h: an over-limit refund's escalation-only phone card accepted approval
+and replied "Approved." The handoff previously waited for approval. The fix
+runs escalation-only handoffs through the existing automatic execution claim,
+independently of store-write rollout, excludes them from durable approval waits
+and phone approval queues, and rejects approval of old parked handoff cards.
+Plans containing a customer reply keep their existing review behavior.
+Implemented on `fix/escalation-approval`, not deployed. Package builds, the
+static PR gate and the existing affected execution, operator-context and
+notification checks passed. One live over-limit request remains owed after
+deployment; no live verification is claimed.
+
 ## Next session
 
 Start with **8h: iMessage conversation scope and response quality**, using the
