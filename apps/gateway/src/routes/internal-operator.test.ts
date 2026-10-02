@@ -374,8 +374,12 @@ describe('POST /internal/operator/escalate', () => {
     expect(sendMessageSpy).toHaveBeenCalledTimes(2);
 
     const bodyArg = sendMessageSpy.mock.calls[0][1] as string;
-    expect(bodyArg).toContain('Escalated');
-    expect(bodyArg).toContain('Wholesale pricing question.');
+    const handoff = await db.message.findFirstOrThrow({
+      where: { organizationId: org.id, threadId: thread.id, senderType: SenderType.note,
+        externalMessageId: { startsWith: 'merchant-handoff:' } },
+    });
+    expect(bodyArg).toBe(handoff.contentText);
+    expect(sendMessageSpy.mock.calls[1][1]).toBe(handoff.contentText);
     expect(bodyArg).toContain(`/dashboard/tickets?thread=${thread.id}`);
   });
 

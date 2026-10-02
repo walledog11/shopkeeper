@@ -919,3 +919,7 @@ corrected preview passed. No customer message or Shopify action was sent in
 these checks. The real-customer preview was blocked by automatic approval review
 for disclosure to Anthropic; the substitute used entirely fictional data.
 Not deployed or live-verified.
+
+Deployment preparation found one obsolete internal-route assertion requiring
+the old "Escalated" heading. It now verifies both recipients receive the
+persisted handoff and the correct ticket link, without pinning wording.
