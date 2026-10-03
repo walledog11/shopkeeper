@@ -1,6 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { RecordReturnWatchParams } from "@shopkeeper/db";
-import type { BaseAgentContext } from "../../agent-context.js";
+import type { BaseAgentContext, TaskModelBudget } from "../../agent-context.js";
 import type { OrgSettings, ToolCategory } from "../../types.js";
 import type { ShopifyOAuthScope } from "../../shopify/integration-health.js";
 import type { ToolResult } from "../result.js";
@@ -351,6 +351,14 @@ export interface ToolExecutionDeps {
   attachReturnLabel(input: AttachReturnLabelInput, ctx: ShopifyToolContext): Promise<ToolResult>;
   fulfillOrder(input: FulfillOrderInput, ctx: ShopifyToolContext): Promise<ToolResult>;
   searchKnowledgeBaseArticles(orgId: string, words: readonly string[]): Promise<KnowledgeBaseToolArticle[]>;
+  /** The candidates that answer the query; `null` when that could not be decided. */
+  selectAnsweringKbArticles(request: {
+    orgId: string;
+    query: string;
+    articles: readonly KnowledgeBaseToolArticle[];
+    settings: OrgSettings;
+    taskBudget?: TaskModelBudget;
+  }): Promise<KnowledgeBaseToolArticle[] | null>;
   recordKnowledgeBaseCitations(orgId: string, threadId: string, articleIds: readonly string[]): Promise<unknown>;
   getSupportStats(orgId: string, days: number): Promise<SupportStatsSummary>;
   // Server-only DB write, injected like the operations above so the registry

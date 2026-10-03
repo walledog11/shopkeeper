@@ -71,6 +71,7 @@ function makeDeps(): ToolExecutionDeps {
     attachReturnLabel: vi.fn().mockResolvedValue(toolOk("attachReturnLabel")),
     fulfillOrder: vi.fn().mockResolvedValue(toolOk("fulfillOrder")),
     searchKnowledgeBaseArticles: vi.fn().mockResolvedValue([]),
+    selectAnsweringKbArticles: vi.fn().mockResolvedValue([]),
     recordKnowledgeBaseCitations: vi.fn().mockResolvedValue(undefined),
     getSupportStats: vi.fn().mockResolvedValue(null),
     recordReturnWatch: vi.fn().mockResolvedValue(undefined),
