@@ -797,129 +797,231 @@ definite delivery-failure recovery; honest display for an already-dispatched
 write. Telegram testing is excluded from the current work, not a release-session
 prerequisite. #1035 is already cancelled/refunded; do not repeat its mutation.
 
-## 2026-09-30 item 8h candidate: conversation scope and status evidence
+## 2026-09-30 item 8h candidate review and scope decision
 
-Candidate branch: `codex/imessage-conversation-scope`, isolated checkout based
-on deployed `6031e3b4`. The shared root's pre-existing edits were preserved.
+Fetched the deployed baseline and found the existing candidate in
+[PR #141](https://github.com/walledog11/shopkeeper/pull/141), head `f344252d`.
+Reviewed its context construction, operator-loop wiring and order evidence.
+Required CI, free deterministic preflight and the Vercel preview passed.
+The code retains historical task state and separates reference conversation
+from the current instruction. It requests cancellation and fulfillment facts;
+restocking alone does not establish shipment or return history.
 
-The production history before event `e40abca0` contains message `096d21f5`,
-the unanswered five-order comparison attributed to task `cca2c8aa`. Its recorded
-status is `cancelled`, with cancellation at 07:06:54 UTC. The fresh request's
-stored normalized instruction asks only for #1035. `buildContext` omitted the
-historical task state, and `buildMessageHistory` merged adjacent merchant
-messages into one instruction string. This establishes a context-construction
-defect; the earlier cancellation ledger did record Stop correctly.
-
-The candidate carries task identity/state from scoped database reads into
-operator history, renders earlier conversation as reference data, and separates
-the current instruction from that history. It retains conversation needed for
-references and does not edit the model's response or match special phrases.
-
-The order read also omitted `cancelled_at` and fulfillment records. The adapter
-now requests them, and the serializer exposes cancellation separately from
-supported shipment state. A restock flag alone yields unknown shipment history.
-[Shopify's Order documentation](https://shopify.dev/docs/api/admin-rest/2026-10/resources/order)
-describes restocking/cancellation, not proof that an order shipped and returned.
-
-| Candidate verification | Result |
-| --- | --- |
-| Read-only dev-store #1035 | `cancelled_at=2026-09-30T03:20:09-04:00`, financial status `refunded`, shipping `not_shipped_yet`. No repeated cancellation/refund. |
-| Read-only dev-store #1032 | Cancellation timestamp present, financial status `paid`, shipping `unknown`; no shipment or return history inferred from restocking. |
-| Real operator context | The stopped comparison retains its linked task's `cancelled` state. The current-instruction block contains only the recorded one-order request. |
-| Existing focused checks | Prompt/history boundary, operator-loop wiring, order evidence and database-backed context checks passed. |
-| Compilation/static checks | Agent package typecheck/build, gateway and dashboard typechecks, changed-file lint and documentation structure checks passed. |
-| Actual iMessage follow-up | Not yet verified. Candidate has not been deployed; concise natural wording and full conversational acceptance remain open. |
-
-No Shopify write, customer message, phone send or paid model campaign was used
-for these inspections. Recipient email receipt, phone approval/Stop/failure and
-the rest of the retained-effects work remain open. Telegram testing remains
-excluded.
-
-### Owner scope decision and candidate review, 2026-09-30
+Fresh read-only inspection on the existing dev store confirmed #1035 has its
+recorded cancellation timestamp, financial status `refunded` and shipping
+`not_shipped_yet`. #1032 remains `paid` with shipment `unknown`. The real
+operator context retains the earlier comparison's `cancelled` task state,
+and the current-instruction block contains only the one-order status question.
+No Shopify write, customer email or phone message was sent.
 
 The owner removed Telegram from product and release scope, describing it as a
-test surface. No further Telegram construction, binding or verification is
-required for this overhaul. Existing transport code is not removed by this
-decision.
+test surface. No further Telegram building, binding or verification is required.
+The local plan and candidate evidence record this decision; existing transport
+code remains. Documentation structure checks passed.
 
-The existing candidate is PR #141, head `f344252d`. Required CI, free
-deterministic preflight and Vercel preview checks passed. The implementation
-was reviewed against the recorded stopped-task/current-instruction defect;
-live iMessage acceptance remains open until the merged fix is deployed and a
-fresh read-only message is received.
+The candidate checkout is `/private/tmp/shopkeeper-imessage-scope`; its local
+scope-decision commit is `d0cabdaa`. Automatic approval review rejected pushing
+that commit to `https://github.com/walledog11/shopkeeper.git`, citing disclosure
+of repository contents and mutation of the remote PR without destination-specific
+authorization. No push occurred. Publishing that update, merging PR #141 and
+deploying require approval. Actual read-only iMessage acceptance remains open
+until deployment and a fresh owner message. Production remains `6031e3b4`.
 
-### Current CI blocker, 2026-09-30
+The owner subsequently approved the push, merge after passing required checks,
+and deployment of dashboard, gateway and worker. Scope update `d0cabdaa` was
+pushed to PR #141 and the PR marked ready. That run's production audit failed
+on newly indexed dependency advisories, skipping the downstream build,
+integration and E2E stages. A targeted patch in `8c643aad` updates Next.js to
+`16.3.8`, gRPC to `1.14.5` and Axios to `1.20.0`; the high/critical production
+audit now passes against the updated lockfile. The patch is pushed and existing
+PR checks are rerunning. No paid comparison or broader cleanup was performed.
 
-The scope update on `d0cabdaa` passed documentation checks, unit checks and free
-deterministic preflight, but CI run `36765813145` failed its production dependency
-audit on newly indexed advisories. Static verification consequently skipped the
-build, integration and E2E stages. This is a dependency blocker, not evidence of
-an iMessage regression.
+### PR #141 merged and deployed, 2026-09-30
 
-The targeted patch updates Next.js from `16.3.4` to `16.3.8`, gRPC from `1.14.4`
-to `1.14.5`, and Axios from `1.18.1` to `1.20.0`. Only those dependency families
-and Next's required platform binaries changed in the lockfile. The same
-production high/critical audit passes against the updated lockfile. The existing
-PR checks must pass on this final head before merge and deployment; no paid
-comparison or repository-wide test cleanup is added.
+Final head `8c643aad` passed all existing required CI stages (secret scan,
+static verification/audit, unit, integration, build and E2E), free deterministic
+preflight and the Vercel preview. CI run `36766914036` and preflight run
+`36766913974` completed successfully. No paid evaluation lane ran.
 
-## PR #141 deployment and actual phone follow-up, 2026-09-30
+PR #141 merged at 19:47:48 UTC as `34c98203`. Its automatic production
+deployments completed successfully on the same source commit:
 
-Final head `8c643aad` passed existing CI and free preflight. PR #141 merged as
-`34c98203` at 19:47:48 UTC. Gateway deployment `431d6a04`, worker `dbba1583`
-and dashboard `dpl_9GxwFkXGR2MqBxMoSLVAywa9Ldii` serve that commit; the public
-dashboard alias and all production verification checks passed.
+| Service | Deployment |
+| --- | --- |
+| Gateway | `431d6a04` |
+| Worker | `dbba1583` |
+| Dashboard | `dpl_9GxwFkXGR2MqBxMoSLVAywa9Ldii` |
 
-The owner sent "Check order 1035 and tell me its payment and shipment status."
-Event `aea088a3` arrived at 19:56:28 UTC, linked request `9d868b4f`, completed
-v2 task `9fce6474` and reply `923ac1fc`. The reply was delivered at 19:56:38 UTC
-and pasted by the owner. One model call and 69,670,000 nano-USD were charged.
-There were no actions under either the task or request turn: it answered from
-conversation history without a current provider observation. No mutation ran.
+The public dashboard alias resolves to this deployment. The existing production
+verification script passed dashboard and gateway deep health, worker heartbeat,
+queues, internal hop-back authentication, retired-route refusal and Photon route
+checks. No inbound email smoke or provider mutation was requested.
 
-Scope passed for this request: the answer mentioned only #1035. Wording failed:
-it included the zero current total, raw null fulfillment state, fulfillable
-quantities and a recap of the earlier cancellation/refund. Full acceptance
-remains open.
+At 19:53:49 UTC, the fresh iMessage verification window began. The owner was
+asked to send "Check order 1035 and tell me its payment and shipment status"
+and report the actual received reply. Until that input and reply are observed,
+natural wording, current-request scope and phone receipt remain unverified.
+The script `/private/tmp/shopkeeper-imessage-scope/verify-imessage-followup.mjs`
+only reads the controlled owner's new iMessage events, durable linkage and
+recorded actions, and saves evidence locally. #1035's mutation is not repeated.
 
-The response guidance's demand to include actual data and its examples of
-totals/items conflict with a narrow status answer. Its order-status guidance
-also ignores the new supported shipping field and does not distinguish old
-assistant replies from current observations. The follow-up corrects those
-instructions in the operator owner and identifies historical replies as
-conversation. Current-state questions use a fresh named-order/customer lookup;
-ordinary replies contain the requested business facts, with technical details
-only when requested. No phrase matching, output rewriting or new tests are added.
-The owner explicitly stopped unnecessary testing; verification is the cheap
-compiler check and the actual phone flow through the existing PR process.
+### Actual reply: scope passed, wording and freshness failed
+
+The owner's new iMessage reached production at 19:56:28 UTC as event `aea088a3`,
+request `9d868b4f`, completed v2 task `9fce6474` and reply `923ac1fc`. Delivery
+was recorded at 19:56:38 UTC and the owner pasted the received message. One
+model call and 69,670,000 nano-USD were charged. There were no recorded actions
+under either the task or the current request's turn; no mutation ran.
+
+The answer stayed on #1035, but included the zero current total, null fulfillment
+field, raw fulfillable quantities and a recap of earlier cancellation/refund.
+It answered from earlier conversation without a current provider observation.
+Scope/delivery passed for this request; wording/freshness and full acceptance
+remain open.
+
+PR #142, head `a1b121f4`, corrects the operator guidance that demanded actual
+totals/item details and ignored the new supported shipping field. Current-status
+questions use the named-order/customer provider read; ordinary replies contain
+the requested business facts. Historical replies are explicitly identified as
+conversation. This is a small follow-up based on the observed defect, with no
+phrase matching, output rewriting, new tests, broad local suite or paid eval.
+The cheap agent compiler check passed. The owner explicitly stopped unnecessary
+testing; no additional local tests or paid evaluations ran. Required PR CI
+passed (CI run `36770313890`, free preflight `36770314535`). PR #142 merged at
+20:16:50 UTC as `135626c3`. The automatic production deployments succeeded on
+that commit:
+
+| Service | Deployment |
+| --- | --- |
+| Gateway | `cbe370dd-50b5-47a8-ad55-4ee5a33a6f9e` |
+| Worker | `ff424033-4246-4bad-89c6-d63464271f6f` |
+| Dashboard | `dpl_7gWY4hScyhytaaqty2ybCzGdhKp3` |
+
+The public dashboard alias serves this commit. One gateway deep-health request
+returned HTTP 200 with healthy database, Redis, worker and queues, and configured
+iMessage. At 20:20:00 UTC the owner was asked to send the same read-only #1035
+iMessage again. Actual reply wording and a current provider read remain pending.
 
 
-## Conversational handoff follow-up, 2026-10-02
+## PR #149 deployment, 2026-10-02
 
-The owner reported a live cancellation/refund request for an already-fulfilled
-order producing both an "Escalated — Email" notice and "Handled this one myself:
-1. escalate to human". The sink owns the first; the generic automatic-execution
-reporter owns the second. The second falsely frames handing off as handling the
-customer's request, while neither message asks the merchant for direction.
+Escalation-only handoffs execute automatically through the existing execution
+claim, independently of store-write rollout. They no longer enter durable
+approval waits or phone approval queues; selection and the shared executor
+refuse old-card approval. Mixed customer-reply plans retain existing review.
 
-The fix keeps one handoff and composes its explanation/question using the
-existing capped non-agent text helper. The current request and blocker are
-untrusted context, not instructions. The ticket URL is appended by code, and
-the full message is persisted as an idempotent internal note before delivery
-so retries reuse identical text. Model failure retains a grounded fallback.
-Failed escalations, other committed effects and awaiting-approval follow-ups
-remain eligible for execution reporting.
+All required PR CI passed on `c6ca52a9`; #149 merged at 21:12:45 UTC as
+`1b362eefd4d7d2057f2a03a637a8cf82575b95dd`. Production deployment records:
 
-Gateway build/typecheck, changed-file lint, existing affected pipeline,
-escalation and notification checks passed. The retry check confirms one stored
-handoff survives a failed delivery and is reused. A synthetic model preview
-initially invented return remedies, so the composition instruction was
-corrected to ask for direction without suggesting unsupplied options; the
-corrected preview passed. No customer message or Shopify action was sent in
-these checks. The real-customer preview was blocked by automatic approval review
-for disclosure to Anthropic; the substitute used entirely fictional data.
-Not deployed or live-verified.
+- Railway gateway `0f6a0e0c-6d1c-4441-b8fa-50c4eaff7af2`: SUCCESS, same commit.
+- Railway worker `2b254fbd-1930-4e50-9c14-7d8d715bd5a4`: SUCCESS, same commit.
+- Vercel dashboard `dpl_5kfuYJADwUuztP5CGhXCxtdkGDni`: READY, same commit,
+  serving `app.useshopkeeper.com`.
 
-Deployment preparation found one obsolete internal-route assertion requiring
-the old "Escalated" heading. It now verifies both recipients receive the
-persisted handoff and the correct ticket link, without pinning wording.
+The existing production verification passed: dashboard and gateway deep health,
+worker and queues, internal authentication and Photon route availability. No
+inbound customer-message smoke, Shopify write or paid evaluation was performed.
+One live over-limit request remains owed; deployment health does not establish
+live conversational acceptance.
+
+The release owner clarified that all fourteen effects stay in scope and testing
+is welcome without redundant loops. Reuse evidence; repeat checks only for a
+failure, a relevant change or an unresolved concern.
+
+
+## PR #150 conversational handoff deployment, 2026-10-02
+
+Successful escalation-only outcomes now produce one merchant handoff, without
+the generic "Handled this one myself" execution report. The handoff explains
+the current request and blocker and asks what the merchant wants to tell the
+customer; it is persisted before fan-out and reused on delivery retry.
+
+An initial CI failure was an internal-route assertion requiring the retired
+"Escalated" heading. The check now verifies recipients receive the stored
+handoff and correct ticket link. The targeted route check passed, and all
+required PR CI passed on final head `76f6cd66`. PR #150 merged at 23:14:20 UTC
+as `034695288d51bbb11ea612b5d91587629f551151`.
+
+Production deployment records confirm that same merged commit:
+
+- Railway gateway `f8120d87-5770-4a17-b560-e8a300db412f`: SUCCESS.
+- Railway worker `263a70a8-d2f3-454c-b52c-83d9d6410316`: SUCCESS.
+- Vercel dashboard `dpl_4N1vQoLsfK3tT66fx7Nvmhr3Mg7p`: READY, serving
+  `app.useshopkeeper.com`. Automatic dashboard deployment did not start; the
+  deployment was requested through Vercel from the exact merged Git SHA using
+  the existing production project configuration.
+
+Production verification passed: dashboard/gateway deep health, worker and
+queues, internal authentication and Photon availability. No customer-message
+smoke or Shopify action was performed by those health checks. The subsequent
+owner-reported live wording observation is recorded below; infrastructure
+health alone is not conversational acceptance.
+
+
+## PR #150 live handoff observation and remaining defect, 2026-10-02
+
+Source: the release owner pasted the iMessage handoff following a customer
+cancellation/refund email for shipped order #1038. Production had been
+verified at `03469528`; this observation did not independently read the
+stored turn, receipt or Shopify state. The supplied message was:
+
+> Chain Market wants to cancel order 1038 and get a refund, but the order has already shipped. Should I let them know we can process a refund for a return, or would you prefer to handle this differently?
+
+Result: the single conversational handoff explains the customer request and
+blocker and asks the merchant for direction. The duplicate "Handled this one
+myself" report was treated as resolved in this observation. Natural tone and
+handoff structure passed. A ticket-link check was not reported in the pasted
+text.
+
+Remaining defect (8h): "we can process a refund for a return" suggests a
+return/refund policy or remedy without established evidence. The handoff must
+ask for direction without asserting an unverified policy, capability or
+exception. The desired example is:
+
+> Chain Market wants to cancel and refund #1038, but it's already shipped, so I can't cancel it. How would you like me to respond to them?
+
+That example illustrates the next fix; it is not a deployed or observed
+response. The next implementation work is to correct grounding in the owning
+communication contract, followed by one observation of the changed behavior.
+
+The owner asked whether to reply to the test. The observation is complete and
+requires no reply, approval or refund. Do not repeat this same observation
+before a relevant change. This was a shipped-order cancellation handoff, not
+a fresh over-limit refund/approval-refusal exercise. No merchant reply,
+approval attempt, provider write, receipt verification or Shopify state
+read-back was performed or reported here. Those outcomes are not proved by
+this message and remain separate from the completed wording observation.
+
+## Item 8h handoff grounding implementation, 2026-10-02
+
+Baseline: deployed main `03469528`; implementation branch
+`fix/grounded-merchant-handoff` in an isolated worktree. The shared root's
+uncommitted documentation was preserved, including the completed owner-reported
+#1038 observation above.
+
+A read-only transaction inspected only the controlled organization and ticket
+`e3759775`. Its request summary asked to cancel #1038 and issue a refund. The
+stored `escalate_to_human` input states that the order is shipped and cancellation
+is inapplicable, then asks whether to refund or handle a return. The handoff's
+"we can process a refund for a return" therefore promoted speculative choices
+in the reason into an unsupported promise. The recorded action is `escalated`;
+this inspection does not independently establish Shopify state or any refund.
+
+The owning communication contract now accepts only separately sourced request
+and blocker summaries. It appends a neutral direction question and ticket link
+in code, rejects invalid output wholesale, and falls back without repeating raw
+speculative choices. Accepted text remains persisted before fan-out and reused
+after delivery failure. Citation checks bind each statement to its own source;
+they do not prove every semantic claim in a paraphrase.
+
+Gateway typecheck/build, changed-file lint, and the focused existing iMessage
+persistence check plus the defect-specific rejection check passed. The latter
+uses a scripted invalid model response and proves rejection/persistence behavior,
+not conversational quality. The focused run excludes Telegram.
+
+Automatic approval review rejected the one real-model preview because it would
+send stored production-derived #1038 request, blocker and customer data to
+Anthropic without explicit authorization for that data. The preview did not run;
+no live delivery or Shopify effect was attempted. Deployment and one changed
+iMessage handoff observation remain pending. The prior #1038 observation stays
+complete and requires no merchant reply.
