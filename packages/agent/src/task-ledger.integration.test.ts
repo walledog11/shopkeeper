@@ -1103,6 +1103,7 @@ describe("support question continuation", () => {
       channel: "operator",
       state: "attached",
       normalizedInstruction: "Yes, refund this one.",
+      sourceMessageId: seeded.request.sourceMessageId,
     });
   });
 
