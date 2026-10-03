@@ -1,99 +1,72 @@
 # Conversational agent overhaul plan
 
-Status, 2026-09-30: typed phone outcomes (#137), durable phone instructions and
-dashboard Stop (#138), and durable ticket-composer planning (#140) are merged
-and deployed. Gateway, worker and dashboard serve `34c98203` (PR #141); required CI and
-production health checks passed. The composer instruction → regenerate → reload
-→ approval flow passed on the existing reopened #1035 ticket: one cancellation,
-a $34.90 refund confirmed by Shopify, and one sent exact-draft email. Recipient
-receipt confirmation remains pending. Dashboard Stop after reload passed.
-iMessage delivery is restored and manually verified: a fresh #1035 instruction
-reached production automatically, ran on one durable v2 task, and its reply
-arrived on the owner's phone. The stalled Photon webhook was replaced and the
-old production registration retired after that confirmation. The reply's scope
-and wording failed acceptance: it revived the earlier stopped five-order
-comparison and exposed provider fields. PR #141 preserves task state in history,
-separates the current instruction and supplies cancellation/shipping evidence.
-Its actual iMessage follow-up stayed on #1035 and arrived, but exposed provider
-fields and repeated earlier work. It made no current provider read. The next
-small change fixes the operator's conflicting response guidance and labels
-historical replies as conversation rather than current provider observations.
-The owner removed Telegram from product and release scope on 2026-09-30: it is
-a test surface, with no further implementation or verification required.
-iMessage is the primary phone channel. Cancellation quote display (8d) was
-manually verified on `6616da7f` (#139) on 2026-09-29. One of the fourteen retained
-Shopify effects has a clean recorded live run; the other thirteen remain.
-Runtime v1 remains the production default, with one controlled organization on v2.
+Status, 2026-10-02: everything through #150 is merged and deployed; gateway,
+worker and dashboard serve `03469528`, with required CI and production health
+checks passed on each merge. Live: typed phone outcomes (#137), durable phone
+instructions and dashboard Stop (#138), durable ticket-composer planning (#140),
+iMessage scope and wording (#141, #142), the lean order-status read (#144),
+refund limits in the shop's currency (#136), the email provider id (#146),
+unknown partial-refund reconciliation (#147) and the full-refund quote on both
+approval cards (#148). The composer instruction → regenerate → reload → approval
+flow, dashboard Stop after reload and a durable iMessage round-trip passed
+earlier. Observed by the owner on 2026-10-01, without receipt read-backs: a
+one-order status question answered briefly after #144, the #1035 refund email
+arriving, the customer-info ticket flow end to end on the phone (exact-draft
+card, iMessage approval and confirmation) and the iMessage fulfil instruction.
+Cancellation quote display (8d) was verified on `6616da7f` (#139). The first
+over-limit refund request (T1, #1039, $49.95 against the $40 limit) was turned
+into an escalation at planning with no refund proposed, as designed; the same run
+found a defect (8h): an escalation-only card accepted "approve" and the
+reply said "Approved." #149 fixes that and executes the handoff automatically;
+production health passed. After #150, the owner observed one conversational
+handoff for a cancellation/refund request on shipped order #1038. Its tone,
+explanation, question and duplicate-report suppression passed this observation,
+but it suggested a return/refund policy without established evidence. That
+grounding fix is implemented on `fix/grounded-merchant-handoff`, awaiting
+deployment and one changed-behavior observation (8h); the prior observation is complete and needs no
+merchant reply. It did not exercise approval refusal or verify provider state.
+The full-refund card from #148 has not yet been seen on a live card. Of the fourteen retained Shopify effects, `cancel_order` is the only
+clean recorded live run; `fulfill_order` and `update_shopify_customer_info` were
+observed working without a receipt; the other eleven have not run live. On
+2026-10-02 the owner clarified that testing is welcome but redundant test loops
+are not. All fourteen effects remain in scope; reuse recorded evidence and run
+only checks that add missing evidence or address a relevant change or failure.
+Telegram was removed from product and release scope on 2026-09-30. Runtime v1
+remains the production default, with one controlled organization on v2.
 
 Created 2026-09-11. Shipping priorities revised 2026-09-29 at the release
 owner's direction: this app is in development; finish working user flows,
 verify them manually, and ship. New tests and repository-wide test cleanup
 are exceptions, not work packages.
 
-## Session update, 2026-10-02
-
-Follow-up: the owner's live fulfilled-order cancellation request produced two
-robotic reports: the escalation notice and an automatic-execution "Handled this
-one myself" report. A successful escalation is a handoff, not completion of
-the customer's request. The communication fix suppresses that duplicate and
-composes one short merchant message from the current request and actual blocker,
-asking how the merchant wants to respond. It persists the text before fan-out
-and reuses it on retry. No approval, refund or cancellation authority changes.
-Gateway build/typecheck, lint, the affected existing checks and a synthetic
-model wording preview passed. Not deployed; live handoff wording remains owed.
-
-The release owner clarified that testing is welcome, but redundant test loops
-are not. Decision F retains all fourteen effects. Reuse recorded evidence,
-group related flows, and repeat checks only for a failure, a relevant code
-change or an unresolved concern. No verification waiver or release-scope
-reduction was requested. Phone stop-by-text remains undecided.
-
-Item 8h: an over-limit refund's escalation-only phone card accepted approval
-and replied "Approved." The handoff previously waited for approval. The fix
-runs escalation-only handoffs through the existing automatic execution claim,
-independently of store-write rollout, excludes them from durable approval waits
-and phone approval queues, and rejects approval of old parked handoff cards.
-Plans containing a customer reply keep their existing review behavior.
-Implemented on `fix/escalation-approval`, not deployed. Package builds, the
-static PR gate and the existing affected execution, operator-context and
-notification checks passed. One live over-limit request remains owed after
-deployment; no live verification is claimed.
-
 ## Next session
 
-Start with **8h: iMessage conversation scope and response quality**, using the
-delivered #1035 reply recorded in the release evidence. A one-order status
-question must answer that order briefly in ordinary language. It must not
-continue the stopped comparison, list unrelated orders, expose fulfillment
-fields/quantities, or infer shipment and return history from a restock flag.
-For this request, an appropriate answer is: "Order #1035 is cancelled and fully
-refunded. It wasn't shipped."
+The owner clarified that testing is welcome, without redundant test loops. All
+fourteen effects remain in scope. Reuse existing evidence; repeat checks only
+for a failure, a relevant code change or an unresolved concern. In order:
 
-The cause is established: context loading discarded each message's task state,
-and history construction merged the unanswered stopped comparison with the
-fresh merchant instruction. The candidate retains task state and renders prior
-conversation as reference data, with the current instruction in its own block.
-The order adapter now returns cancellation and independently supported shipping
-state; restocking alone leaves shipment unknown. PR #141 is deployed; its real
-follow-up passed scope/delivery but failed wording and freshness. Finish the
-operator response guidance change, then verify the same read-only question
-through iMessage. No new tests, broad local suite or paid eval campaign. Short
-natural wording remains unverified until that reply arrives.
-#1035 is already cancelled/refunded: do not repeat that mutation.
+1. **Finish and observe the handoff grounding fix (8h).** The live #1038
+   observation on `03469528` is complete: one natural handoff explains the
+   blocker and asks for direction. It still suggests that a return can receive
+   a refund without established policy. The owning communication fix is now
+   implemented on `fix/grounded-merchant-handoff`, awaiting deployment;
+   observe that changed behavior once afterward. No reply, approval or refund is
+   needed to finish the already-completed observation. Do not rerun unrelated
+   checks or confuse this wording check with over-limit approval refusal.
+2. **Fill missing live evidence:** group unverified effects and recovery paths
+   into realistic flows; do not rerun already verified flows without cause.
+3. **Items 9 and 11–13:** controlled observation and the routing rollback
+   rehearsal, staged v2 routing, safe deletion of the old active runtime, and the
+   final documentation.
 
 iMessage is the main channel. Telegram is excluded from product and release
-acceptance; do not build or test it. Customer-email receipt confirmation,
-phone approval, phone-started Stop and definite delivery-failure checks remain
-unverified; resume those after the conversation issue, not as prerequisites for
-fixing it. The follow-up is in the isolated `codex/operator-status-language`
-checkout based on deployed `34c98203`.
+acceptance; do not build or test it.
 
-**Workspace handoff:** production/main is `34c98203`. The shared root checkout
-still has HEAD `606da169` and pre-existing uncommitted phone, marketing and
-documentation edits; the deployed composer was implemented in an isolated
-worktree. Preserve those edits and use the deployed baseline when starting the
-next code change. Do not reset the root or mistake its older files for current
-production behavior.
+**Workspace handoff:** main and production are `03469528`. The shared root checkout
+still has HEAD `606da169` and uncommitted phone, marketing and documentation
+edits, this document included. Preserve them, start code changes from an isolated
+worktree on `origin/master`, and do not reset the root or mistake its older files
+for current production behavior.
 
 ## Shipping objective
 
@@ -168,12 +141,12 @@ These are the last recorded results, not a fresh production inspection.
 
 | Area | State |
 | --- | --- |
-| Core implementation | Receipts, task storage, claims, budgets, proposal binding, discovery and customer-task routing exist. Phone and composer integration are deployed through #140. Composer and dashboard Stop/reload passed. Actual iMessage inbound/task/reply delivery is verified; customer-email receipt confirmation remains pending. |
-| Manual provider runs (Gate C) | Cancellation is clean on #1036; the #1035 composer rerun also has a committed receipt and matching Shopify state, with recipient receipt confirmation pending. Customer note and address change previously reached Shopify, but their complete flows were not clean. The other thirteen effects in item 8 still need clean runs. |
-| Manually verified approval display | Cancellation quote display (8d) confirmed by the release owner on `6616da7f`, 2026-09-29. |
-| Built changes awaiting manual verification | Typed iMessage approval outcomes (8g), phone draft display (8c), phone receipt confirmation (8e), phone-started Stop and in-flight outcome display (10c), definite reply-failure recovery. Durable iMessage instruction/task/reply (10), dashboard Stop/reload and composer cancel/refund/recipient summary passed on #140. Telegram testing is out of current scope. |
-| Known implementation gaps | Email provider id (8f). Composer planning (10a) is deployed and exercised; recipient receipt confirmation is pending. Refund currency limits (10b) have an existing implementation in PR #136, awaiting review and live verification. |
-| Conversational acceptance | Next priority (8h): the delivered one-order iMessage answer revived stopped work, exposed provider fields and rambled. The candidate fixes history/current-instruction boundaries and supplies cancellation/shipping evidence. Deployment and live scope, wording and grounding verification remain open. |
+| Core implementation | Receipts, task storage, claims, budgets, proposal binding, discovery and customer-task routing exist. Phone and composer integration, the order-status read, the refund-limit currency fix and the full-refund card amount are deployed through #148. Composer, dashboard Stop/reload, iMessage inbound/task/reply delivery and the #1035 recipient email are verified. |
+| Manual provider runs (Gate C) | `cancel_order` is the only clean recorded run (#1036; the #1035 composer rerun also has a committed receipt and matching Shopify state). `fulfill_order` and `update_shopify_customer_info` were observed working by the owner on 2026-10-01 without a receipt read-back. T1, an over-limit full-refund request on #1039, escalated at planning with no refund proposed. The other eleven effects (item 8) have not run live. Customer note and address change previously reached Shopify, but their complete flows were not clean. |
+| Manually verified approval display | Cancellation quote display (8d) confirmed by the release owner on `6616da7f`, 2026-09-29. The exact-draft card with a labeled placeholder (8c) was seen on the customer-info ticket and on a full-refund card (`[refund amount]`), 2026-10-01 and 2026-10-02. |
+| Built changes awaiting manual verification | The full-refund quote on the phone and dashboard cards (#148, deployed 2026-10-02, not yet seen on a live card); phone-started Stop (10c) and definite reply-failure recovery; a committed refund in the shop's currency (10b), the dashboard email send with a provider id (8f) and the partial-refund cap refusal (#147). iMessage approval and confirmation (8g, 8e) were observed on the customer-info ticket. Telegram testing is out of scope. |
+| Known implementation gaps | The #150 handoff still suggests a return/refund policy without established evidence (8h). Single-message tone and direction are observed on #1038; approval refusal from #149 was not exercised by that observation. No phone "stop" handler exists in the operator message path, and the owner has not said whether stop-by-text is wanted (10c). |
+| Conversational acceptance | A one-order status question is answered briefly and in ordinary language after #144 (owner phone check and stored turns, one sample per question). A status question by customer name still uses the full read and can pad. The #1038 live handoff after #150 is brief, explains the shipped-order blocker and asks for direction without the duplicate report. Its unsupported return/refund suggestion remains open (8h). The other acceptance-matrix rows are unobserved. |
 | Rollout and runtime retirement | Observation/rollback (9), broader routing (11), persisted-state inventory and legacy deletion (12), final docs (13) remain. |
 | Optional paid comparison (Gate B) | Last comparison on `cf41c169` failed; it was incorrectly called passed before correction. #125 fixed the C08 runtime defect, so that input is no longer held out. Comparison tooling (Gate A) exists; neither a rerun nor new fixtures are required unless requested. |
 | Last recorded routing | `AGENT_RUNTIME_VERSION=1`; the controlled organization is selected through `AGENT_RUNTIME_V2_ORG_IDS`. |
@@ -187,12 +160,12 @@ runs also happen as soon as the affected flow is ready.
 
 | Order | Deliverable | Items | Completion |
 | --- | --- | --- | --- |
-| 1 | Fix iMessage response scope and wording | 8h | Candidate implemented: historical task state and the latest request stay distinct; order reads carry cancellation/shipping evidence. Finish the PR, deploy and verify the focused #1035 read-only reply. Natural wording and full conversational acceptance remain open. |
-| 2 | Finish phone approval outcomes | 8g | PR #137 merged and deployed; required CI and production health checks passed. Live iMessage approval and reply-failure verification remains open. |
-| 3 | Verify the remaining built approval fixes | 8c, 8e, start/resume 8 | Cancellation refund quote display (8d) and dashboard cancel/refund/recipient confirmation are verified. Verify the iMessage draft and full confirmation; then run the still-owed customer-info ticket. |
-| 4 | Finish the merchant entry points | 10, 10a, 10c | Composer instruction/regenerate/reload/approval, dashboard Stop/reload and durable iMessage round-trip passed. Phone-started Stop, definite reply-failure recovery and customer-email receipt confirmation remain open. Telegram testing is excluded. |
-| 5 | Finish provider and delivery correctness | 8f, 10b | Preserve the other email sink's provider id and finish refund currency correctness before broader routing. |
-| 6 | Finish retained behavior in the app | remaining 8, 8h | Verify remaining Shopify effects and conversational behavior in focused realistic app sessions. Reuse sessions and setup from earlier steps. |
+| 1 | Fix iMessage response scope and wording | 8h | One-order status verified on the phone after #144. Escalation-only approval fixed and deployed in #149. The #150 single conversational handoff passed the #1038 observation; unsupported return/refund policy wording remains open (8h). Approval refusal was not exercised; other acceptance rows are unobserved. |
+| 2 | Finish phone approval outcomes | 8g | PR #137 merged and deployed. Normal approval observed on the customer-info ticket (2026-10-01). Reply-failure recovery remains unverified. |
+| 3 | Verify the remaining built approval fixes | 8c, 8e, start/resume 8 | Draft display (8c), cancellation quote (8d), dashboard confirmation and the iMessage confirmation on the customer-info ticket (8e) are verified. The full-refund card (#148) awaits a live card. |
+| 4 | Finish the merchant entry points | 10, 10a, 10c | Composer, dashboard Stop/reload, durable iMessage and the #1035 recipient email passed. Phone-started Stop is open and unscoped (no phone stop handler exists); definite reply-failure recovery is unverified. Telegram testing is excluded. |
+| 5 | Finish provider and delivery correctness | 8f, 10b | Code-complete and deployed: #146 (8f), #136 and #147 (10b). Read-only live checks passed; a committed refund, the 8f send and the partial-refund cap refusal have not run. |
+| 6 | Finish retained behavior in the app | remaining 8, 8h | Eleven effects have no live run. Testing scope settled: retain all effects and fill missing evidence without redundant reruns. |
 | 7 | Ship v2 and retire the old active path | 9, 11–13 | Release-candidate checks, controlled observation, routing rollback, rollout and safe legacy deletion remain open. |
 
 ### Approval and communication
@@ -210,11 +183,13 @@ runs also happen as soon as the affected flow is ready.
   the already-formatted summary. The prefix matcher is deleted.
   Relevant builds, gateway typecheck, lint and existing targeted checks
   passed; a local diagnostic confirmed unknown advice appears once.
-  **Still owed:** normal approval and reply failure in the app, alongside
-  8c and 8e. Do not induce an uncertain Shopify write to verify this display path.
+  Normal approval and its confirmation were observed on the phone for the
+  customer-info ticket on 2026-10-01 (owner observation). **Still owed:** reply
+  failure. Do not induce an uncertain Shopify write to verify this display path.
 - **8c — Exact draft on the phone card.** Built in `9914f3d9`:
-  `toGatewayAgentPlan` now carries `communication`. Verify that the phone
-  card shows the whole approved draft with labeled placeholders.
+  `toGatewayAgentPlan` now carries `communication`. Verified: the customer-info
+  card (2026-10-01) and a full-refund card (2026-10-02, `[refund amount]`) show the
+  whole draft with a labeled placeholder.
 - **8d — Cancellation refund amount on the card. Completed and manually verified
   2026-09-29.** Built in #133:
   `quoteCancellationForApproval` binds runtime-only `approval_amount` /
@@ -230,17 +205,35 @@ runs also happen as soon as the affected flow is ready.
   draft's receipt-bound placeholder. The release owner confirmed the fresh
   cancellation phone card displays the refund amount correctly on `6616da7f`.
   Existing pre-write refusal checks remain sufficient.
+- **8d follow-up — full refund amount on the card (PR #148, `693461c9`, deployed
+  2026-10-02).** The full-refund step never printed its quote on the phone card:
+  `lineItemWriteSentence`, the helper both cards render through, had no
+  `create_refund` case, so the step read "Issue refund" (a 2026-09-09 phone card
+  in the evidence already does), and with the draft's `[refund amount]`
+  placeholder the figure appeared nowhere. The planner binds `amount`, `currency`
+  and, when the customer was charged in another currency, `approval_shop_amount`
+  (`quoteFullRefundForApproval`); the step now reads "Refund CAD 48.65 for the
+  whole order (costs you $34.90)" or "Refund $34.90 for the whole order". The
+  dashboard chip, which printed a hard-coded `$`, renders through the same helper.
+  Typecheck, builds, lint and the existing `plan-preview` checks passed, and the
+  real formatter reproduces the old card with no quote and shows the amount with
+  one. Display only: no schema, prompt or policy change. **Still owed:** one live
+  full-refund card after the deploy; if it still reads "Issue refund", the quote is
+  not bound on that path.
 - **8e — Complete approval confirmation.** Built in #135:
   `summarizeApprovedDashboardActions` composes committed effects from
   registered labels and receipts. The actual #1035 dashboard approval on
-  `6031e3b4` named cancellation, $34.90 refund and recipient; iMessage approval
-  confirmation remains unverified. If a committed
+  `6031e3b4` named cancellation, $34.90 refund and recipient; the owner observed
+  the iMessage approval and confirmation on the customer-info ticket on
+  2026-10-01. If a committed
   write's message cannot be sent, the merchant must be told the customer has
   not been told; retrying delivery must not repeat the write.
-- **8f — Provider id from the email sink.** The dashboard's `send_email`
-  path in `thread-io/send.ts` discards its sender's provider id. Preserve it
-  on the response and receipt and verify it against an actual dev-destination
-  email. `send_reply` was fixed by #132; this is the other path.
+- **8f — Provider id from the email sink.** Implemented in PR #146 (`1b3ede8b`,
+  deployed 2026-10-01): the dashboard's `send_email` path in `thread-io/send.ts`
+  keeps its sender's provider id on the response and receipt, as `send_reply` did
+  after #132. Production does not set `OUTBOUND_EMAIL_ASYNC`, so the synchronous
+  path is the live one. **Still owed:** an actual dev-destination email checked
+  against the stored id.
 
 ### Durable merchant entry points
 
@@ -264,8 +257,8 @@ runs also happen as soon as the affected flow is ready.
   receiver `7f8567b2` was retired after confirmation. A retained ping was
   separately recovered using its original provider id; that manual recovery
   is not evidence of automatic ingress. **Still owed:** phone-started Stop/reload
-  and definite reply-failure recovery without repeating the action. The received
-  answer failed conversation scope/wording acceptance (8h). Telegram's stale
+  and definite reply-failure recovery without repeating the action. The first
+  received answer failed scope and wording acceptance; 8h fixed that. Telegram's stale
   destination was corrected earlier, but the owner explicitly stopped Telegram
   testing; linking and round-trip are excluded from the current work.
 - **10a — Ticket composer and regenerate.** Merged in
@@ -286,8 +279,8 @@ runs also happen as soon as the affected flow is ready.
   revision 1 and superseded the first proposal. Reload restored the new draft;
   approving the old plan returned 409. Actual approval committed one cancellation
   and one reply. Shopify independently confirms cancelled/refunded $34.90 USD;
-  the email provider returned a message id and the task completed. **Still owed:**
-  recipient confirmation that the exact-draft email arrived.
+  the email provider returned a message id and the task completed. The owner
+  confirmed on 2026-10-01 that the exact-draft email arrived.
 - **10c — Dashboard stop control.** Implemented in PR #138 on 2026-09-29;
   deployed through `6031e3b4`; dashboard Stop/reload passed, phone-started Stop
   remains unverified. The chat tracks the server's request and
@@ -301,25 +294,34 @@ runs also happen as soon as the affected flow is ready.
   finish. Polling no longer treats an earlier attempt's response as completion
   of a currently running task.
   **Still owed:** Stop/reload on a phone-started task and honest display when a
-  write is already underway. Do not manufacture or replay an uncertain write.
+  write is already underway. A search of the operator message path found no phone
+  "stop" handler, so this can only mean stopping a phone-started task from the
+  dashboard; the owner has not said whether stop-by-text is wanted (*Open
+  decision*). Do not manufacture or replay an uncertain write.
 
 ### Refund correctness
 
-- **10b — Limits in the shop's currency.** Implemented separately in
-  [PR #136](https://github.com/walledog11/shopkeeper/pull/136). Its diagnostic
-  reproduced a refund passing a shop-money limit and reserving presentment
-  cents; the change compares and reserves Shopify's own shop-money figures,
-  refusing when they are unavailable or disagree with the quote. No invented
-  exchange rate. **Still owed:** review, a read-only check of order #1031 and
-  live `RefundShopMoney` query validation, then a permitted refund and an
-  over-limit refusal with dev-store data. This blocks wider routing, not
-  same-currency dev-store work.
-- **Partial-refund follow-up reported in PR #136.** The reconciliation registry
-  passes `amount: ""` to `probeRefund`, which calls `requireAmount` before
-  reading Shopify, so unknown partial refunds cannot be reconciled. This is
-  still open and separate from dashboard Stop (10c). The PR also reports a
-  partial-refund daily-cap refusal using `error` rather than `policy_block`.
-  Fix these in their owners; do not induce or replay an uncertain live write.
+- **10b — Limits in the shop's currency.** Merged as
+  [PR #136](https://github.com/walledog11/shopkeeper/pull/136) (`ef37b0d5`,
+  2026-10-01). Its diagnostic reproduced a refund passing a shop-money limit and
+  reserving presentment cents; the change compares and reserves Shopify's own
+  shop-money figures, refusing when they are unavailable or disagree with the
+  quote, and the planner's over-cap routing no longer compares the
+  customer-currency quote to the cap. No invented exchange rate. Read-only live
+  checks passed on the dev store: order #1031's REST quote equals the GraphQL
+  presentment figure (49.00 and 35.00 CAD) with shop-money cost 35.57 and 25.41
+  USD, the live schema accepts `RefundShopMoney`, and USD orders bind no
+  `approval_shop_amount`. **Still owed:** a committed refund in the shop's
+  currency (the reservation committing in shop cents) and an over-limit refusal at
+  execution. The T1 over-limit request escalated at planning
+  (`compensation_over_cap`) instead, so the executor's refusal has not run live.
+- **Partial-refund follow-up reported in PR #136. Fixed in PR #147 (`8f671851`,
+  2026-10-01).** The reconciliation registry passed `amount: ""` to
+  `probeRefund`, which called `requireAmount` before reading Shopify, so unknown
+  partial refunds could not be reconciled; that probe now reconciles. A partial
+  refund's daily-cap refusal, reported as `error`, is now a `policy_block` (set in
+  the executor's `reserve()`). Not verified live; no uncertain write is to be
+  induced or replayed.
 
 ### Manual retained-behavior verification
 
@@ -330,15 +332,23 @@ commit and redacted references.
 
 | Entry point | Effects still in this exercise |
 | --- | --- |
-| Customer ticket | `create_refund`, `create_partial_refund`, `cancel_order` (already clean; repeat to verify 8c and 8e), `create_return`, `create_exchange`, `attach_return_label`, `update_shopify_customer_info` |
-| Explicit merchant instruction | `create_shopify_order`, `edit_shopify_order`, `fulfill_order`, `create_gift_card` |
+| Customer ticket | `create_refund` (T1 over-limit escalated at planning; no refund run yet), `create_partial_refund`, `cancel_order` (clean), `create_return`, `create_exchange`, `attach_return_label`, `update_shopify_customer_info` (observed, no receipt read-back) |
+| Explicit merchant instruction | `create_shopify_order`, `edit_shopify_order`, `create_gift_card` |
 | Operator-only instruction | `create_flash_sale`, `end_flash_sale`, `set_variant_prices` |
 
-The next still-owed effect is `update_shopify_customer_info`; order-address
-updates are a different capability. Group realistic flows to reuse setup:
-fulfillment prepares a refundable/returnable order, a return prepares its
-label, and order creation prepares editing. Record each effect's result.
-#1036 has been cancelled and needs replacing for fulfillment/full refund.
+`update_shopify_customer_info` was run on the phone on 2026-10-01 and the owner
+observed it end to end (exact-draft card, approval, confirmation); its receipt has
+not been read back. Order-address updates are a different capability. Group
+realistic flows to reuse setup: fulfillment prepares a refundable/returnable
+order, a return prepares its label, and order creation prepares editing. Record
+each effect's result. Dev-store orders #1039 ($49.95), #1040 (CAD, 34.90 USD),
+#1041 (two lines) and #1042 ($24.95) exist for the customer
+`thechainmarket@gmail.com`; support mail arrives at the connected Gmail
+`rscoding11@gmail.com`.
+
+`fulfill_order` is complete (2026-10-01): the iMessage fulfil instruction ran
+and the release owner confirmed on the phone that it worked. Its references
+(receipt and Shopify fulfillment) go in the release evidence.
 
 Use the dashboard and iMessage for merchant instructions; item 10 is deployed
 and iMessage delivery is verified. Confirm each task's runtime before
@@ -363,33 +373,98 @@ eval or fixture campaign. A conversational row stays open until seen working.
 A runtime race that cannot be safely produced live may rely on existing
 failure coverage and inspection, with that evidence described accurately.
 
-**Next-session defect, 2026-09-30:** after a dashboard five-order comparison
-was stopped, the owner's iMessage asked only for #1035 payment/shipment status.
-The delivered answer added all five orders, technical fulfillment fields and
-repeated summaries. It also claimed that `restocked` proves shipment and return
-history, which this run did not verify. The phone instruction itself completed
-normally; task cancellation had already been verified separately. Inspect
-how stopped instructions/history affect the current turn and how facts are
-worded; do not assume a cancellation-ledger failure without establishing it.
-The owner rejected the response as verbose and artificial. Fix scoped,
-concise, natural answers first; the exact reproduction is in the release evidence.
+**One-order status defect, 2026-09-30 — resolved.** After a dashboard five-order
+comparison was stopped, an iMessage asking only for #1035 status was answered with
+all five orders, provider fields and repeated summaries. PR #141 fixed the
+context construction (task state was omitted and adjacent instructions merged),
+#142 the conflicting response guidance, and #144 (`0b1db710`) gave status
+questions a lean `get_order_status` read. Verified on the phone and from the
+stored turns on 2026-10-01: four status texts, each a fresh read and one short
+plain sentence, delivered about 12 seconds after the text; #1035 was answered
+"fully refunded and cancelled. Nothing shipped on it." One sample per question; a
+status question by customer name still uses the full read and can pad. The
+reproduction is in the release evidence.
 
-**Candidate implementation, 2026-09-30:** the stopped comparison's message
-remained unanswered on the shared operator thread. `buildContext` dropped its
-task identity/state, and `buildMessageHistory` merged it with the new instruction.
-Operator context now reads the linked tasks within the same organization/thread;
-operator history retains their state as reference data and gives the current
-instruction a separate block. Earlier conversation remains available for
-references without presenting it as current work. `getOrderByName` and
-`getShopifyOrders` now read cancellation and fulfillment records;
-`serializeOrder` exposes cancellation and supported shipping state, using
-`unknown` when restocking alone cannot establish shipment. The shared shipping
-description also serves the existing limited shipping read. Relevant existing
-checks, package build, both app typechecks and lint passed. A read-only dev-store
-inspection confirms the new fields on #1035 and #1032, and real context loading
-retains the cancelled comparison's state. No Shopify mutation, message delivery
-or paid model evaluation occurred. Deployment and the actual concise iMessage
-follow-up remain owed; this does not close 8h.
+**Defect fixed and deployed, 2026-10-02 — an escalation card could be "approved".** A refund
+request above the $40 limit (T1, #1039) was replaced at planning by an escalation
+(`compensation_over_cap`; the card reads "This one needs you"), as designed. The
+plan was still parked as a pending plan, so the owner's "approve that" ran its
+only step, `escalate_to_human`, which pushed an "Escalated — Email" notice, and the
+model replied "Approved." The card formatter states that escalation is never
+something the merchant approves; the parking and approval path contradicts it.
+Diagnosed from `sendOperatorPlanNotification` (parks every plan card),
+`selectPendingPlan` (refuses only briefing items that need an instruction) and
+`plan-execution` (allows merchant approval of an `escalate` verdict); not yet
+confirmed from the stored turn, and not fixed. The fix is to refuse approval of an
+escalation-only plan with a plain answer that nothing was refunded and the ticket
+is the merchant's. First check what escalates the ticket when no one says yes, so
+the fix does not leave escalations unexecuted.
+
+Implementation update: `fix/escalation-approval`, based on `693461c9`, runs
+escalation-only handoffs automatically through the existing execution claim,
+excludes them from approval waits and phone queues, and refuses old-card
+approval. Mixed customer-reply plans keep their existing review behavior.
+Package builds, the static PR gate and affected existing execution, context
+and notification checks passed. PR #149 merged as `1b362eef` at 21:12:45 UTC
+with all required CI passed. Gateway, worker and dashboard deployed at that
+commit; production health, queues, worker, internal-authentication and Photon
+availability passed. No live customer request or Shopify write was run; one
+live over-limit request remains owed.
+
+**Live handoff wording defect, 2026-10-02.** The owner's fulfilled-order
+cancellation email produced both the sink's robotic escalation notice and
+"Handled this one myself: escalate to human" from the generic automatic
+execution reporter. The automatic handoff occurred, but wording and direction
+failed acceptance. PR #150 (merged as `03469528`) suppresses that duplicate and
+composes one short explanation/question from the current request and blocker,
+persisted before delivery for reuse on retry. Gateway build, static PR gate,
+affected existing checks and a synthetic wording preview passed. Required CI
+passed on final head `76f6cd66`; gateway, worker and dashboard are deployed on
+`03469528`, with production health, worker, queue, internal-authentication and
+Photon checks passed. No live customer message or Shopify action was sent by
+the infrastructure verification. The owner subsequently supplied the live
+#1038 handoff (see the release evidence). The single-message handoff structure,
+natural tone and request for direction passed that observation.
+
+**Remaining handoff grounding defect (8h), 2026-10-02.** The live message asks
+whether to tell the customer "we can process a refund for a return". That
+introduces a policy/remedy without established evidence. The handoff should
+explain the actual blocker and ask how to respond without implying an
+unverified policy, capability or exception. Example intended behavior:
+"Chain Market wants to cancel and refund #1038, but it's already shipped, so I
+can't cancel it. How would you like me to respond to them?" This is an example,
+not text already observed from the deployed fix.
+
+The owner asked whether to respond to the test and was told the observation
+is complete; no reply is required. Do not hold this observation open awaiting
+a merchant answer or repeat it before a relevant fix. A new observation after
+that fix checks only the unsupported-policy behavior. No approval refusal,
+refund/return execution, stored receipt or Shopify state read-back was
+performed or reported in this wording check; do not count it toward those
+separate outcomes.
+
+**Grounding implementation, 2026-10-02 — awaiting deployment and observation.**
+A read-only inspection of the controlled #1038 ticket found that the stored
+escalation reason already included speculative refund/return choices. The
+handoff writer promoted a choice into a policy claim; its free-text response
+was accepted whenever nonempty. `composeOperatorHandoff` now asks for separate
+request and blocker statements with exact citations to their respective sources.
+The application appends the neutral direction question, so a generated question
+cannot introduce a remedy. It rejects extra fields, absent/cross-source evidence,
+questions/links in statements and truncated output as a whole before persistence.
+The fallback quotes the request and asks for ticket review when context is
+missing; it does not repeat speculative options from the raw escalation reason.
+The model still authors the explanation. Exact citations are a source binding,
+not a semantic proof of every paraphrase. Existing persistence-before-delivery
+and retry identity remain the owners of delivery recovery.
+
+Gateway typecheck/build, changed-file lint and the focused iMessage persistence
+and rejection checks passed. A normal real-model preview with the recorded
+#1038 inputs was rejected by automatic approval review because that specific
+production-derived context had not been explicitly authorized for Anthropic.
+No preview, customer message or Shopify effect ran. Item 8h remains open pending
+one observation after deployment; other conversation rows and over-limit
+approval refusal remain separate work.
 
 ### Release and runtime retirement
 
@@ -457,16 +532,23 @@ this work unless a current defect needs one.
 Cleanup is worth doing only when a specific test or check blocks the current
 change, falsely rejects working behavior, or measurably slows the required
 verification. Make the smallest correction, retain checks that catch actual
-failures, and continue the shipping queue. #137, #138 and #140 are deployed.
-Composer, dashboard Stop/reload and durable iMessage delivery passed; customer
-email receipt and the remaining iMessage approval/Stop/failure checks stay open.
-Fix the iMessage conversation scope and wording defect (8h) next. Telegram
-implementation and testing are excluded from product and release scope.
+failures, and continue the shipping queue. The status of the shipping items is
+in *Current state*. Telegram implementation and testing are excluded from product
+and release scope.
 
 ## Open decision
 
-None. Future questions should name the concrete affected work and available
-choice; do not reopen settled product decisions as a testing prerequisite.
+One, the release owner's: **Phone-started Stop (10c).** No phone "stop"
+handler exists. Say whether stop-by-text is wanted.
+
+**Gate C scope resolved, 2026-10-02:** the owner welcomes testing but rejects
+redundant test loops. Decision F retains all fourteen effects. Eleven still
+need live execution evidence. Reuse recorded results, group related flows,
+and repeat a check only after a failure, a relevant change or an unresolved
+concern. This does not waive verification or narrow release scope.
+
+Future questions should name the concrete affected work and available choice; do
+not reopen settled product decisions as a testing prerequisite.
 
 ## What has been done
 
@@ -480,8 +562,12 @@ choice; do not reopen settled product decisions as a testing prerequisite.
 | 5 — Customer tasks | Durable inbound customer requests, proposal/runtime pinning, wait continuation, revisions, task settlement and attributed delivery. Broad real-app verification remains open. |
 | 6 — Release fixes | Canonical approval hash, exact draft/receipt placeholders, committed-effect vs delivery outcome, close-thread cancellation, withheld-message follow-up, line-item display and C08 routing correction. |
 | Cancellation (#132) | Clean dev-store cancellation/refund on #1036, matching receipt and approved customer delivery with provider id. |
-| Approval presentation | 8d is manually verified on `6616da7f`; dashboard receipt summary (8e) passed on `6031e3b4`. iMessage draft and approval confirmation checks remain open. |
+| Approval presentation | 8d is manually verified on `6616da7f`; dashboard receipt summary (8e) passed on `6031e3b4`; the iMessage draft (8c), approval and confirmation were observed on the customer-info ticket on 2026-10-01. |
 | Crash-sweep isolation (#134) | Existing recovery tests no longer race across organizations. No further cleanup is scheduled. |
+| Operator status answers (#141, #142, #144) | Task state retained in history, the current instruction separated, response guidance corrected, and a lean `get_order_status` read. One-order status verified on the phone and from stored turns on 2026-10-01 (one sample per question). |
+| Refund correctness (#136, #147) | Limits and the daily budget compared and reserved in shop-currency figures; planner over-cap routing fixed; unknown partial refunds reconcile; a partial refund's cap refusal is a `policy_block`. Read-only live checks passed; a committed refund has not run. |
+| Email provider id (#146) | The dashboard `send_email` path keeps the provider id on the response and receipt. Live send not verified. |
+| Full-refund card amount (#148) | The phone and dashboard cards print a full refund's quote in the customer's currency and what it costs the shop. Deployed 2026-10-02; not yet seen on a live card. |
 
 These entries describe implementation, not universal live proof. Detailed
 history is in `git show fff54dc4:docs/conversational-agent-overhaul-plan.md`
