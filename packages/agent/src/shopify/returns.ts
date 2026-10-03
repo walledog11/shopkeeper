@@ -28,11 +28,13 @@ const RETURN_REASON_MAP: Record<string, string> = {
   too_small: "SIZE_TOO_SMALL",
   style: "STYLE",
   color: "COLOR",
-  other: "OTHER",
+  // Shopify rejects OTHER without a returnReasonNote, which these tools do not
+  // collect; UNKNOWN is its code for a return with no specific reason.
+  other: "UNKNOWN",
 };
 
 export function mapReturnReason(reason: string | undefined): string {
-  return reason ? RETURN_REASON_MAP[reason] ?? "OTHER" : "UNKNOWN";
+  return (reason && RETURN_REASON_MAP[reason]) || "UNKNOWN";
 }
 
 interface ReturnableFulfillmentsData {

@@ -1,8 +1,9 @@
 # Conversational agent overhaul plan
 
-Status, 2026-10-02: everything through #150 is merged and deployed; gateway,
-worker and dashboard serve `03469528`, with required CI and production health
-checks passed on each merge. Live: typed phone outcomes (#137), durable phone
+Status, 2026-10-02: #151 is merged; gateway and worker serve `6c6b9499`, with
+all required PR CI and production readiness passed. Dashboard code was unchanged
+and its last verified deployment is `03469528` (#150). Live: typed phone outcomes
+(#137), durable phone
 instructions and dashboard Stop (#138), durable ticket-composer planning (#140),
 iMessage scope and wording (#141, #142), the lean order-status read (#144),
 refund limits in the shop's currency (#136), the email provider id (#146),
@@ -22,12 +23,17 @@ production health passed. After #150, the owner observed one conversational
 handoff for a cancellation/refund request on shipped order #1038. Its tone,
 explanation, question and duplicate-report suppression passed this observation,
 but it suggested a return/refund policy without established evidence. That
-grounding fix is implemented on `fix/grounded-merchant-handoff`, awaiting
-deployment and one changed-behavior observation (8h); the prior observation is complete and needs no
-merchant reply. It did not exercise approval refusal or verify provider state.
+grounding fix is deployed in #151. One owner-approved replay through the deployed
+handoff route produced a sourced request/blocker explanation and neutral direction
+question, without a return/refund policy claim; the route reported one iMessage
+notification, and the owner confirmed it arrived with correct wording (8h). The prior
+observation is complete and needs no merchant reply. Neither observation exercised
+approval refusal or verified Shopify state.
 The full-refund card from #148 has not yet been seen on a live card. Of the fourteen retained Shopify effects, `cancel_order` is the only
 clean recorded live run; `fulfill_order` and `update_shopify_customer_info` were
-observed working without a receipt; the other eleven have not run live. On
+observed working without a receipt. A later direct return-adapter probe opened
+#1041-R1 with independent Shopify confirmation; its full task/approval/delivery
+flow is still unverified. The other ten effects have no live write evidence. On
 2026-10-02 the owner clarified that testing is welcome but redundant test loops
 are not. All fourteen effects remain in scope; reuse recorded evidence and run
 only checks that add missing evidence or address a relevant change or failure.
@@ -45,14 +51,17 @@ The owner clarified that testing is welcome, without redundant test loops. All
 fourteen effects remain in scope. Reuse existing evidence; repeat checks only
 for a failure, a relevant code change or an unresolved concern. In order:
 
-1. **Finish and observe the handoff grounding fix (8h).** The live #1038
-   observation on `03469528` is complete: one natural handoff explains the
-   blocker and asks for direction. It still suggests that a return can receive
-   a refund without established policy. The owning communication fix is now
-   implemented on `fix/grounded-merchant-handoff`, awaiting deployment;
-   observe that changed behavior once afterward. No reply, approval or refund is
-   needed to finish the already-completed observation. Do not rerun unrelated
-   checks or confuse this wording check with over-limit approval refusal.
+1. **Fill missing conversational evidence (8h).** #151's handoff grounding fix
+   is deployed on `6c6b9499`, and the owner confirmed the single approved #1038
+   replay arrived with correct wording. This defect is resolved; do not repeat
+   the handoff check or wait for a merchant reply. Exercise the remaining
+   acceptance-matrix rows during [normal support flows](#conversation-checks-in-normal-support-flows),
+   combining only checks that naturally arise. The recorded exchange financial
+   and capability explanations are corrected at their source on
+   `fix/exchange-claims-return-reason` (*Exchange explanation source* under 8h),
+   awaiting deployment; observe them in the ordinary return/exchange flow, not a
+   separate probe. Keep over-limit approval refusal separate from the completed
+   handoff wording check.
 2. **Fill missing live evidence:** group unverified effects and recovery paths
    into realistic flows; do not rerun already verified flows without cause.
 3. **Items 9 and 11–13:** controlled observation and the routing rollback
@@ -62,7 +71,8 @@ for a failure, a relevant code change or an unresolved concern. In order:
 iMessage is the main channel. Telegram is excluded from product and release
 acceptance; do not build or test it.
 
-**Workspace handoff:** main and production are `03469528`. The shared root checkout
+**Workspace handoff:** main, gateway and worker are `6c6b9499`; the unchanged
+dashboard's last verified deployment is `03469528`. The shared root checkout
 still has HEAD `606da169` and uncommitted phone, marketing and documentation
 edits, this document included. Preserve them, start code changes from an isolated
 worktree on `origin/master`, and do not reset the root or mistake its older files
@@ -142,11 +152,11 @@ These are the last recorded results, not a fresh production inspection.
 | Area | State |
 | --- | --- |
 | Core implementation | Receipts, task storage, claims, budgets, proposal binding, discovery and customer-task routing exist. Phone and composer integration, the order-status read, the refund-limit currency fix and the full-refund card amount are deployed through #148. Composer, dashboard Stop/reload, iMessage inbound/task/reply delivery and the #1035 recipient email are verified. |
-| Manual provider runs (Gate C) | `cancel_order` is the only clean recorded run (#1036; the #1035 composer rerun also has a committed receipt and matching Shopify state). `fulfill_order` and `update_shopify_customer_info` were observed working by the owner on 2026-10-01 without a receipt read-back. T1, an over-limit full-refund request on #1039, escalated at planning with no refund proposed. The other eleven effects (item 8) have not run live. Customer note and address change previously reached Shopify, but their complete flows were not clean. |
+| Manual provider runs (Gate C) | `cancel_order` is the only clean recorded run (#1036; the #1035 composer rerun also has a committed receipt and matching Shopify state). `fulfill_order` and `update_shopify_customer_info` were observed working by the owner on 2026-10-01 without a receipt read-back. T1, an over-limit full-refund request on #1039, escalated at planning with no refund proposed. An owner-requested direct `createReturn` adapter attempt opened #1041-R1 for the Sample item, independently confirmed OPEN with no refund; this is provider evidence, not a complete task/approval/customer-delivery run. The other ten effects have no live write evidence; the full `create_return` flow remains unverified. Customer note and address change previously reached Shopify, but their complete flows were not clean. |
 | Manually verified approval display | Cancellation quote display (8d) confirmed by the release owner on `6616da7f`, 2026-09-29. The exact-draft card with a labeled placeholder (8c) was seen on the customer-info ticket and on a full-refund card (`[refund amount]`), 2026-10-01 and 2026-10-02. |
 | Built changes awaiting manual verification | The full-refund quote on the phone and dashboard cards (#148, deployed 2026-10-02, not yet seen on a live card); phone-started Stop (10c) and definite reply-failure recovery; a committed refund in the shop's currency (10b), the dashboard email send with a provider id (8f) and the partial-refund cap refusal (#147). iMessage approval and confirmation (8g, 8e) were observed on the customer-info ticket. Telegram testing is out of scope. |
-| Known implementation gaps | The #150 handoff still suggests a return/refund policy without established evidence (8h). Single-message tone and direction are observed on #1038; approval refusal from #149 was not exercised by that observation. No phone "stop" handler exists in the operator message path, and the owner has not said whether stop-by-text is wanted (10c). |
-| Conversational acceptance | A one-order status question is answered briefly and in ordinary language after #144 (owner phone check and stored turns, one sample per question). A status question by customer name still uses the full read and can pad. The #1038 live handoff after #150 is brief, explains the shipped-order blocker and asks for direction without the duplicate report. Its unsupported return/refund suggestion remains open (8h). The other acceptance-matrix rows are unobserved. |
+| Known implementation gaps | The unsupported return/refund direction question is resolved by #151: the owner confirmed the deployed replay arrived with correct wording (8h). A later #1039 exchange investigation correctly retained the customer's no-return constraint, but claimed cheaper replacements meant no balance owed to the customer without a Shopify financial quote (8h, open); the app's own exchange text was the source, corrected on `fix/exchange-claims-return-reason`, awaiting deployment and one observation. The same branch stops sending Shopify's `OTHER` return reason, which Shopify rejects without a note (item 8). Approval refusal from #149 was not exercised by either observation. No phone "stop" handler exists in the operator message path, and the owner has not said whether stop-by-text is wanted (10c). |
+| Conversational acceptance | A one-order status question is answered briefly and in ordinary language after #144 (owner phone check and stored turns, one sample per question). A status question by customer name still uses the full read and can pad. #151's handoff removes the unsupported return/refund suggestion; the owner confirmed iMessage receipt and wording. The #1039 investigation read current data and preserved the no-return constraint; its explanation-only follow-up made no actions. Financial explanations remain incorrect/unverified (8h). References, topic return, conversational revision and language/voice remain unobserved. |
 | Rollout and runtime retirement | Observation/rollback (9), broader routing (11), persisted-state inventory and legacy deletion (12), final docs (13) remain. |
 | Optional paid comparison (Gate B) | Last comparison on `cf41c169` failed; it was incorrectly called passed before correction. #125 fixed the C08 runtime defect, so that input is no longer held out. Comparison tooling (Gate A) exists; neither a rerun nor new fixtures are required unless requested. |
 | Last recorded routing | `AGENT_RUNTIME_VERSION=1`; the controlled organization is selected through `AGENT_RUNTIME_V2_ORG_IDS`. |
@@ -160,12 +170,12 @@ runs also happen as soon as the affected flow is ready.
 
 | Order | Deliverable | Items | Completion |
 | --- | --- | --- | --- |
-| 1 | Fix iMessage response scope and wording | 8h | One-order status verified on the phone after #144. Escalation-only approval fixed and deployed in #149. The #150 single conversational handoff passed the #1038 observation; unsupported return/refund policy wording remains open (8h). Approval refusal was not exercised; other acceptance rows are unobserved. |
+| 1 | Fix iMessage response scope and wording | 8h | One-order status verified on the phone after #144. Escalation-only approval fixed and deployed in #149. #151's deployed replay removes #150's unsupported return/refund suggestion; the owner confirmed phone receipt and correct wording. Approval refusal was not exercised; other acceptance rows are unobserved. |
 | 2 | Finish phone approval outcomes | 8g | PR #137 merged and deployed. Normal approval observed on the customer-info ticket (2026-10-01). Reply-failure recovery remains unverified. |
 | 3 | Verify the remaining built approval fixes | 8c, 8e, start/resume 8 | Draft display (8c), cancellation quote (8d), dashboard confirmation and the iMessage confirmation on the customer-info ticket (8e) are verified. The full-refund card (#148) awaits a live card. |
 | 4 | Finish the merchant entry points | 10, 10a, 10c | Composer, dashboard Stop/reload, durable iMessage and the #1035 recipient email passed. Phone-started Stop is open and unscoped (no phone stop handler exists); definite reply-failure recovery is unverified. Telegram testing is excluded. |
 | 5 | Finish provider and delivery correctness | 8f, 10b | Code-complete and deployed: #146 (8f), #136 and #147 (10b). Read-only live checks passed; a committed refund, the 8f send and the partial-refund cap refusal have not run. |
-| 6 | Finish retained behavior in the app | remaining 8, 8h | Eleven effects have no live run. Testing scope settled: retain all effects and fill missing evidence without redundant reruns. |
+| 6 | Finish retained behavior in the app | remaining 8, 8h | Ten effects have no live write evidence; `create_return` has a successful provider probe but its complete flow remains unverified. Testing scope settled: retain all effects and fill missing evidence without redundant reruns. |
 | 7 | Ship v2 and retire the old active path | 9, 11–13 | Release-candidate checks, controlled observation, routing rollback, rollout and safe legacy deletion remain open. |
 
 ### Approval and communication
@@ -350,6 +360,16 @@ each effect's result. Dev-store orders #1039 ($49.95), #1040 (CAD, 34.90 USD),
 and the release owner confirmed on the phone that it worked. Its references
 (receipt and Shopify fulfillment) go in the release evidence.
 
+**Return reason `other`, 2026-10-03 — fixed on `fix/exchange-claims-return-reason`,
+awaiting deployment.** The `returnReasons` enum shared by `create_return` and
+`create_exchange` offered `other`, which `mapReturnReason` sent as Shopify's
+`OTHER`. Shopify definitely rejects `OTHER` without a `returnReasonNote`, which
+these tools do not collect (the direct #1041 adapter probe in the release
+evidence). `other` and any unmapped value now send `UNKNOWN`, which succeeded in
+the same probe. The tool schema is unchanged, so persisted proposals stay valid.
+The owner's own failed return attempt is still undiagnosed: its surface and error
+were not supplied.
+
 Use the dashboard and iMessage for merchant instructions; item 10 is deployed
 and iMessage delivery is verified. Confirm each task's runtime before
 execution. A successful customer flow has the intended provider state, a
@@ -426,7 +446,7 @@ the infrastructure verification. The owner subsequently supplied the live
 #1038 handoff (see the release evidence). The single-message handoff structure,
 natural tone and request for direction passed that observation.
 
-**Remaining handoff grounding defect (8h), 2026-10-02.** The live message asks
+**Handoff grounding defect (8h), 2026-10-02 — resolved by #151 below.** The #150 live message asks
 whether to tell the customer "we can process a refund for a return". That
 introduces a policy/remedy without established evidence. The handoff should
 explain the actual blocker and ask how to respond without implying an
@@ -443,7 +463,7 @@ refund/return execution, stored receipt or Shopify state read-back was
 performed or reported in this wording check; do not count it toward those
 separate outcomes.
 
-**Grounding implementation, 2026-10-02 — awaiting deployment and observation.**
+**Grounding implementation before deployment, 2026-10-02.**
 A read-only inspection of the controlled #1038 ticket found that the stored
 escalation reason already included speculative refund/return choices. The
 handoff writer promoted a choice into a policy claim; its free-text response
@@ -462,9 +482,51 @@ Gateway typecheck/build, changed-file lint and the focused iMessage persistence
 and rejection checks passed. A normal real-model preview with the recorded
 #1038 inputs was rejected by automatic approval review because that specific
 production-derived context had not been explicitly authorized for Anthropic.
-No preview, customer message or Shopify effect ran. Item 8h remains open pending
-one observation after deployment; other conversation rows and over-limit
-approval refusal remain separate work.
+The rejected preview did not run. Before deployment, one observation of this
+changed behavior remained owed; that observation is recorded below. Other
+conversation rows and over-limit approval refusal remain separate work.
+
+**Grounding deployment and approved replay, 2026-10-02 — verified on the phone.**
+The owner explicitly approved deployment, the single use of the recorded #1038
+context with Anthropic and the linked iMessage channel, and the squash merge.
+PR #151 passed all required CI and merged as `6c6b9499` at 00:43:00 UTC on
+2026-10-03. Gateway and worker deployed that exact commit successfully; database,
+Redis, worker and queue readiness passed. The dashboard code was unchanged.
+
+One request through the deployed escalation route used an isolated closed
+verification ticket (`ebc62419`), preserving the original ticket, action and
+handoff identity. The recorded request and blocker produced:
+
+> Chain Market asks to cancel order 1038 and issue a refund. Order #1038 is already fulfilled and shipped, so cancellation is not applicable. How would you like me to respond to them?
+
+The handoff was persisted with its verification-ticket link, and the route
+returned HTTP 200 with `notified: 1`. The owner then confirmed "Arrived and wording
+looks right." This completes the changed-behavior observation and resolves the
+unsupported-policy defect. No customer send, Shopify action, Telegram send,
+merchant reply or approval exercise ran. Other 8h acceptance rows stay open.
+
+**Exchange explanation source (8h), 2026-10-03 — implemented, awaiting
+deployment.** Both defective claims in the #1039 conversation (release evidence,
+*Conversation A*) repeated the app's own exchange text. The `create_exchange`
+description said "No money moves" and that the replacement ships once the
+return is processed; the `createExchange` result said "The replacement ships
+once the return is processed in Shopify"; the support and operator prompt lines
+said no refund is needed or issued. Shopify's exchange documentation says
+`returnCreate` records the intent but neither confirms the exchange nor creates
+fulfillment orders; `returnProcess` does both. The app never calls it and never
+reads a balance (the receipt's `financialConsequence` is `null`).
+`fix/exchange-claims-return-reason` makes all four state only what the write
+does: it does not ship, charge, refund or work out a price difference, and the
+replacement can be fulfilled and any difference settled only once the merchant
+processes the return in Shopify. This removes the source of the two recorded
+claims. It is not a structural guarantee: the model still has no balance figure.
+The structural option, not scheduled, is Shopify's `returnCalculate` (2026-04),
+which previews a return's financial outcome including exchange lines but has no
+single balance field. Separately, the `replacement_price_higher` guard compares
+current catalog prices, not what the customer paid for the returned line. Agent
+typecheck, changed-file lint and the existing exchange, return, registry and
+prompt unit checks passed; no eval ran. Owed: one exchange explanation observed
+after deployment, during the ordinary return/exchange flow.
 
 ### Release and runtime retirement
 
@@ -543,7 +605,8 @@ handler exists. Say whether stop-by-text is wanted.
 
 **Gate C scope resolved, 2026-10-02:** the owner welcomes testing but rejects
 redundant test loops. Decision F retains all fourteen effects. Eleven still
-need live execution evidence. Reuse recorded results, group related flows,
+need complete live-flow evidence; the return provider probe supplies partial
+evidence for one. Reuse recorded results, group related flows,
 and repeat a check only after a failure, a relevant change or an unresolved
 concern. This does not waive verification or narrow release scope.
 
@@ -973,6 +1036,53 @@ complete when observed working; “not verified” leaves it open. For dangerous
 or unreliable failure injections, inspect the implementation and reuse
 existing failure coverage. New automated cases follow the exception rule
 above. No fixture or test-file count is a completion target.
+
+### Conversation checks in normal support flows
+
+**Owner correction, 2026-10-03.** The earlier grouped conversation sequence
+became an artificial exercise: a conflicting refund request on #1039 was used
+for an exchange, followed by repeated financial challenges and instructions to
+change the customer's intent. That sequence is withdrawn. The customer should
+not have to participate in a test script or change their request to satisfy the
+acceptance matrix. Preserve the recorded findings and completed observations;
+do not repeat the financial explanation probes.
+
+Use the ordinary return/exchange workflow:
+
+1. The controlled customer emails support asking to return an item or exchange
+   it. They name the desired replacement, or ask what alternative is in stock.
+   An existing suitable request is enough; no return needs to be pre-created.
+2. The agent reads the current request, order, eligibility, applicable policy
+   and relevant stock. It proposes the supported action and a suitable reply,
+   or explains a real blocker without inventing a policy or financial outcome.
+3. If the customer has not chosen a replacement and a choice is necessary,
+   obtain that answer through the normal support reply. Ask only for information
+   genuinely needed to proceed. Do not manufacture follow-up requests, reversals
+   or agreement to return an item to make an unsuitable case fit.
+4. The merchant approves, revises or declines the actual proposal through the
+   existing dashboard/iMessage review. A customer's acceptance of an offered
+   replacement is separate from merchant authorization of the app's action.
+5. For an approved action, check the resulting Shopify state and actual customer
+   reply once. For a declined or blocked action, check the honest response and
+   that the app did not claim it executed. Record the result and move on.
+
+Investigating stock, resolving the chosen replacement, handling genuinely
+missing information and communicating naturally can be observed together in
+this flow. Topic changes, language changes, explanation-only requests and
+ambiguous references need a suitable merchant conversation when they arise;
+do not append them all to a customer return request. Recovery and concurrency
+retain their existing evidence paths; do not induce an uncertain provider write.
+Unobserved acceptance rows stay open without forcing the customer through them.
+
+The #1039 investigation and explanation-only turns are retained as partial
+evidence in the release log. Investigation preserved the customer's no-return
+constraint and used fresh reads; the explanation-only turn had no effects.
+Financial and capability claims remain defective. Those are implementation
+findings to fix from the existing evidence, not additional customer steps.
+The direct provider probe opened #1041-R1 for its Sample item; that line is
+already on an OPEN return and must not be used for a duplicate return. Its
+regular line remained returnable at inspection. Confirm present eligibility and
+actual customer intent before choosing a normal return/exchange case.
 
 ## Verification specification
 
