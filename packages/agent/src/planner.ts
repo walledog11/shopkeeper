@@ -18,7 +18,7 @@ import {
   appendPlanningReadSignals,
 } from "./planner-read-tools.js";
 import { applyEscalationRouting } from "./escalation-materialization.js";
-import { buildPlanRoutingEvidence, kbMissNeedsMerchant } from "./planner-evidence.js";
+import { buildPlanRoutingEvidence, completesAtMerchantFollowUp, kbMissNeedsMerchant } from "./planner-evidence.js";
 import { decideAutonomy } from "./autonomy.js";
 import { recordMerchantPreferenceUsage } from "./merchant-preferences.js";
 import { detectUngroundedReplyText } from "./plan-grounding.js";
@@ -324,6 +324,17 @@ export async function planAgent(
       ? KB_MISS_REPLY_REFUSAL
       : null
   );
+  // A return the merchant must finish, when the agent has nothing from the store
+  // on how items go back, is already the whole plan: the turn ends there instead
+  // of asking the merchant for a label Shopkeeper cannot use.
+  const completeAtMerchantFollowUp: RunAgentLoopParams["captureCompleteTurn"] = (proposal) => (
+    completesAtMerchantFollowUp({
+      instruction,
+      rawToolCalls: proposal.rawToolCalls,
+      readBlocks: proposal.readBlocks,
+      readStatusMap: proposal.readStatus,
+    })
+  );
   const runLoop = (model: string, tools = toolSelection.tools) => runAgentLoop({
     ctx,
     mode: "capture",
@@ -340,6 +351,7 @@ export async function planAgent(
     usageTotals,
     captureReprompt: !operatorMode,
     captureRefuseReply: operatorMode ? undefined : refuseUngroundedReply,
+    captureCompleteTurn: operatorMode ? undefined : completeAtMerchantFollowUp,
     captureStopToolNames: tools.some((tool) => tool.name === NAMESPACE_MISS_TOOL_NAME)
       ? [NAMESPACE_MISS_TOOL_NAME]
       : undefined,

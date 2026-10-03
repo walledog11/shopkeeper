@@ -1,5 +1,10 @@
 import { AlertTriangle, Check, Loader2 } from "lucide-react"
 import {
+  merchantFollowUpBeforeApproval,
+  outstandingMerchantFollowUps,
+} from "@shopkeeper/agent/merchant-follow-up"
+import { customerFirstName } from "@shopkeeper/agent/person-name"
+import {
   NeedsYouBubble,
   NeedsYouInfoCallout,
 } from "@/app/dashboard/_components/home/needs-you-card-ui"
@@ -57,6 +62,11 @@ export function ActionPlanBody({
   const draftTextClass = isMobileSticky
     ? "text-[15px] leading-relaxed text-strong whitespace-pre-wrap max-h-[32vh] overflow-y-auto custom-scrollbar"
     : "text-[15px] leading-relaxed text-strong whitespace-pre-wrap max-h-[34vh] overflow-y-auto custom-scrollbar"
+  // What approving the enabled steps still leaves to the merchant.
+  const followUps = outstandingMerchantFollowUps(
+    [...actionSteps, ...shopifyActionSteps].filter(step => step.enabled).map(step => step.tool),
+  )
+  const customer = customerFirstName(customerName) ?? "the customer"
 
   return (
     <>
@@ -171,6 +181,16 @@ export function ActionPlanBody({
               </button>
             ))}
           </div>
+        </div>
+      )}
+
+      {followUps.length > 0 && (
+        <div className="mt-3 space-y-2">
+          {followUps.map(followUp => (
+            <NeedsYouInfoCallout key={followUp}>
+              {merchantFollowUpBeforeApproval(followUp, customer)}
+            </NeedsYouInfoCallout>
+          ))}
         </div>
       )}
     </>

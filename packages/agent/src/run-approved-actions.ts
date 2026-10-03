@@ -4,6 +4,7 @@ import type { RawToolCall } from "./types.js";
 import { TOOL_LABELS } from "./tools/registry/index.js";
 import { actionCategory, isCommittedAction, outcomeCause } from "./execution-outcome.js";
 import { formatOperatorDispatchFailure } from "./message-dispatch.js";
+import { merchantFollowUpAfterExecution, outstandingMerchantFollowUps } from "./merchant-follow-up.js";
 import { classifyPerson, personObject } from "./person-name.js";
 import { receiptPlaceholderValues } from "./reply-placeholders.js";
 
@@ -53,7 +54,13 @@ export function summarizeApprovedDashboardActions(
   const who = customer
     ? personObject(classifyPerson({ customerName: customer.name, channelType: customer.channelType }))
     : "the customer";
-  const done = ran.filter(isCommittedAction).map((action) => doneClause(action, who));
+  const committed = ran.filter(isCommittedAction);
+  const done = committed.map((action) => doneClause(action, who));
+  // What the committed actions still leave for the merchant, such as the label
+  // for a return Shopkeeper opened but cannot ship back.
+  const followUps = outstandingMerchantFollowUps(committed.map((action) => action.tool))
+    .map((followUp) => ` ${merchantFollowUpAfterExecution(followUp, who)}`)
+    .join("");
 
   const cause = outcomeCause(actions);
   if (!cause) {
@@ -61,14 +68,14 @@ export function summarizeApprovedDashboardActions(
       .filter((action) => actionCategory(action) === "communication" && !isCommittedAction(action))
       .map((action) => `The message to ${recipientOf(action, who)} wasn't sent, so they haven't been told`);
     const summary = [...done, ...untold].join(". ");
-    return summary ? `${summary}.` : "Approved plan executed.";
+    return summary ? `${summary}.${followUps}` : "Approved plan executed.";
   }
 
   const prefix = cause.status === "unknown" ? "Unknown:" : "Error:";
   const lead = formatOperatorDispatchFailure(
     cause.result.startsWith(prefix) ? cause.result : `${prefix} ${cause.result}`,
   );
-  return done.length > 0 ? `${lead}\nAlready done: ${done.join(", ")}.` : lead;
+  return done.length > 0 ? `${lead}\nAlready done: ${done.join(", ")}.${followUps}` : lead;
 }
 
 export function selectExecutableApprovedToolCalls(approvedToolCalls: RawToolCall[]) {
