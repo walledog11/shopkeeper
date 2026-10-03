@@ -1022,6 +1022,186 @@ not conversational quality. The focused run excludes Telegram.
 Automatic approval review rejected the one real-model preview because it would
 send stored production-derived #1038 request, blocker and customer data to
 Anthropic without explicit authorization for that data. The preview did not run;
-no live delivery or Shopify effect was attempted. Deployment and one changed
-iMessage handoff observation remain pending. The prior #1038 observation stays
+no live delivery or Shopify effect was attempted by that preview. Deployment
+and one changed iMessage handoff observation were pending at this stage; their
+completion is recorded below. The prior #1038 observation stays
 complete and requires no merchant reply.
+
+## PR #151 deployment and single handoff replay, 2026-10-02
+
+The owner explicitly approved deployment and one check using the recorded #1038
+customer name, request and blocker with the app's existing Anthropic provider
+and linked iMessage channel. Automatic approval review subsequently required
+explicit squash-merge authorization; the owner gave that authorization too.
+The earlier rejected preview never ran.
+
+All required CI passed on PR head `1bf019e8` in
+[run 37081793848](https://github.com/walledog11/shopkeeper/actions/runs/37081793848).
+The first Build attempt failed in unchanged dashboard Google-font compilation;
+only that failed job and its dependent browser job were retried, and passed.
+No dashboard code was changed for that failure. PR #151 merged at 00:43:00 UTC
+on 2026-10-03 as `6c6b9499dff0a7242c30235e902b21d5ebb70a66`.
+
+Production deployments of that exact commit:
+
+- Railway gateway `bdd211d7-ca06-4b14-bacb-1a1fd7cc89f6`: SUCCESS.
+- Railway worker `3711b669-b1fb-436c-b399-93ebb6ecd90a`: SUCCESS.
+
+Production readiness returned `status: ok` for database, Redis, worker and
+queues, with iMessage configured. The dashboard code was unchanged; its last
+verified deployment remains #150's `03469528`.
+
+The single check ran through the deployed `/internal/operator/escalate` route
+at 00:46:34–00:46:46 UTC on 2026-10-03. Preflight confirmed exactly one iMessage
+binding and no Telegram bindings in the selected controlled organization, and
+that the recorded #1038 request, customer name and escalation reason were
+unchanged. A fresh closed verification ticket `ebc62419` reused those inputs;
+its note identifies it as a replay. This avoids replacing the original persisted
+handoff or disguising a retry as a new composition. No task or commercial action
+was created, and the original ticket was not changed.
+
+The actual persisted handoff was:
+
+> Chain Market asks to cancel order 1038 and issue a refund. Order #1038 is already fulfilled and shipped, so cancellation is not applicable. How would you like me to respond to them?
+
+It included the link to verification ticket
+`ebc62419-03fb-4cf4-8c6e-0552d735d80c`. The route returned HTTP 200 with
+`notified: 1`. The generated wording explains the request and blocker and asks
+for direction without suggesting the unsupported return/refund policy. The
+owner then confirmed "Arrived and wording looks right" in this session, before
+00:48:32 UTC on 2026-10-03. Actual phone receipt and wording are therefore
+observed; the handoff grounding defect is resolved. No handoff reply is needed.
+No notification retry, local model preview, customer send, Shopify action,
+Telegram send or approval exercise ran.
+This check covers the handoff wording defect only; other conversational rows,
+over-limit approval refusal and retained-effect evidence remain separate work.
+
+## Return creation diagnosis and provider probe, 2026-10-02
+
+The owner reported being unable to create a return and explicitly asked the
+agent to try. The failure surface, order and error from the owner's own attempt
+were requested but have not yet been supplied; its exact cause is not established.
+The following evidence concerns the agent's scoped dev-store attempts.
+
+A read-only preflight at 05:15:02 UTC on 2026-10-03 confirmed the selected
+controlled organization's existing Shopify connection, `partnerDevelopment:
+true`, and both `read_returns` and `write_returns`. There were no recorded
+`create_return` or `create_exchange` AgentActions in this organization. The
+recorded test customer's #1039–#1042 were fulfilled/paid, had no return, and
+returned eligible fulfillment lines from the application's own query. No
+credential or customer address was written into this evidence.
+
+The first attempt at 05:17:26 UTC used the existing `createReturn` adapter for
+one Sample Selling Plans Ski Wax item on the designated two-line return/exchange
+test order #1041. Reason `other` was definitely rejected by Shopify:
+
+> Return line items return reason note The note is required when the return reason is "Other"
+
+The adapter sends no `returnReasonNote`, and its input contract exposes no note.
+Independent reads confirmed no return and both lines still returnable. This is
+an observed gap for the `other` reason, not proof of the owner's reported failure.
+
+One bounded follow-up at 05:18:35–05:18:36 UTC used the same adapter and line,
+with the reason omitted. The adapter's default `UNKNOWN` reason succeeded:
+
+- Order #1041 (`6182356025578`), Sample variant `46079358173418`, quantity 1.
+- Return #1041-R1 (`gid://shopify/Return/13474660586`), status OPEN.
+- Independent order read confirmed that return and financial status PAID.
+- The regular variant `46079358107882` remains returnable; the Sample line no
+  longer appears in returnable fulfillment lines.
+
+No refund, customer notification, operator-channel notification, label, exchange
+or return processing was performed. This was a direct real-provider adapter
+probe and setup, with no fabricated task, approval, operation receipt or return
+watch. It does not close the full `create_return` task/approval/delivery flow.
+The successful return remains in the dev store. No further creation attempt ran.
+
+Conversation A needs an eligible order and an exchange intent, not an existing
+return. #1039 remains untouched by the probe, with its Special item and two
+in-stock lower-priced alternatives at preflight: regular ($24.95, stock 7) and
+Sample ($9.95, stock 8). The next conversation can investigate and revise that
+proposal without executing it. Genuine ambiguity and missing-context results
+count only if encountered; no pre-created return or simulated provider result
+is needed to evaluate explanation, references, topic changes and voice. The
+return/exchange commercial outcome remains a distinct live-flow requirement.
+
+## Conversation A first turn: valid conflict, unsupported balance claim, 2026-10-02
+
+The owner sent the proposed iMessage instruction to investigate exchange options
+for #1039, propose a customer reply and wait for approval before changes or
+delivery. They pasted the received response. The stored event `aeabc1d1`, request
+`1b70f3de`, was accepted at 05:41:33.898 UTC on 2026-10-03, committed at
+05:41:53.243 UTC and recorded delivery at 05:41:53.977 UTC. The owner's pasted
+response establishes actual receipt, beyond the provider timestamp.
+
+The agent made fresh `get_order_by_name` and `search_shopify_products` reads.
+They returned #1039 paid/fulfilled at $49.95 and the regular/Special/Sample
+variants at $24.95/$49.95/$9.95 with stock 7/10/8. Those were the only recorded
+actions in this new turn; no commercial write or customer send ran.
+
+The response correctly flagged that the customer had stated they would not
+send the item back, which conflicts with the standard exchange path. Inspection
+confirmed that text in closed ticket `328b0154`; the later closed ticket
+`a4de1f2e` requests cancellation/refund, not an exchange. The prior provider
+preflight established return eligibility, but did not check this customer-intent
+constraint. The recommended case therefore needs a genuine updated controlled
+customer request or explicit merchant instruction resolving the constraint
+before replacement proposal/revision can be assessed.
+
+The response also claimed:
+
+> Both are cheaper than what they paid, so even if an exchange were set up, there'd be no balance owed to them.
+
+No Shopify exchange financial calculation was read. The application's exchange
+receipt intentionally sets `financialConsequence: null` because return creation
+does not provide a money set or transaction. A lower catalog price and no
+immediate transaction do not prove no balance is owed to the customer. This is
+an observed 8h financial-grounding defect. Useful investigation, constraint
+recognition and waiting without effects have evidence; full conversation-A
+acceptance, explanation-only follow-up, revision, references, topic return and
+voice remain unverified. The appropriate next turn asks for explanation of the
+balance claim without authorizing any write or customer reply.
+
+## Conversation A explanation-only follow-up, 2026-10-02
+
+The owner pasted the answer to the explanation-only challenge. Event `ba8f6137`,
+request `b373582b`, arrived at 05:56:28.770 UTC on 2026-10-03, committed at
+05:56:39.796 UTC and recorded delivery at 05:56:40.354 UTC. The actual pasted
+answer confirms phone receipt. The associated request/task has no recorded
+AgentActions, so it did not infer action authority from the explanation request.
+This closes that authority check without repeating a commercial operation.
+
+The response acknowledged that a cheaper replacement does not automatically
+mean no balance is owed to the customer. It nevertheless said a balance is
+owed back only if the merchant actively chooses to refund the difference and
+claimed no scenario where the customer could owe more. No Shopify financial
+calculation or return-fee observation supports those statements. It also said
+`create_exchange` "only ships the replacement once the return comes back";
+the actual adapter sets up the return and replacement, and does not dispatch
+shipment. Payment execution, provider-calculated balance and later fulfillment
+are separate outcomes.
+
+Result: explanation without effects passed; financial/capability explanation
+remains defective. No further rephrasing probe is required. The rest of the
+conversation can continue after a real controlled customer follow-up establishes
+exchange intent and agreement to return the original item. Reference resolution,
+proposal revision, topic return and voice remain unobserved.
+
+## Owner correction: ordinary support flow, 2026-10-03
+
+The owner rejected the ongoing artificial conversation sequence and repeated
+customer involvement. Their intended flow is a customer email requesting a
+return or exchange, naming the replacement or asking whether an alternative is
+in stock, followed by the necessary acceptance/decline and normal action review.
+The plan's scripted Conversation A/B sequence is withdrawn. Do not ask the owner
+to change the customer's #1039 refund/no-return intent to make it fit an exchange
+case, or send more financial challenge questions. Existing observations and
+defects remain evidence; no new effect or message ran for this correction.
+
+Use one suitable normal request, let the agent investigate and draft, obtain a
+customer choice only when necessary, apply the existing merchant approval, and
+check the actual outcome and reply once. Conversation checks that naturally
+arise can share that flow. Other acceptance rows remain open for a suitable
+conversation; they are not extra required steps for the customer. The recorded
+financial/capability mistakes need implementation work using the existing
+evidence, followed by verification of the affected behavior.
