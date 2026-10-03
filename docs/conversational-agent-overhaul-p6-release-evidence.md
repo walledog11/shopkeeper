@@ -1205,3 +1205,27 @@ arise can share that flow. Other acceptance rows remain open for a suitable
 conversation; they are not extra required steps for the customer. The recorded
 financial/capability mistakes need implementation work using the existing
 evidence, followed by verification of the affected behavior.
+
+## Return email after #154: question path, 2026-10-03
+
+On `6dffcb3c`, the controlled customer sent "I would like to return my order 1042.
+How do I go about returning it?" as a fresh email at 21:34:30 UTC. It opened
+thread `d8c9730b` (classifier: `policy_question`, `mutative_request`, ask
+`return`). Request and task `44489685` (runtime 2) ran five model calls,
+including the knowledge-base relevance check.
+
+`search_kb("return process instructions")` returned "No knowledge base article
+answers that query.", the relevance check's decision rather than its failure
+message; no KB citation was recorded. The cached plan `35456cef` is
+`create_return` (#1042, one Selling Plans Ski Wax) and `ask_operator`, with
+communication mode `none`, valid, and no routing codes. No AgentAction ran and
+no customer message was sent. The task is `waiting_input` for a member; the
+member's pending question points at this plan. One card reached the phone at
+21:35:14 UTC: "Customer wants to return order #1042 (Selling Plans Ski Wax). Can
+you provide a return shipping label URL (and tracking number if available)? I'll
+draft the reply once I know." The owner forwarded it.
+
+Before #154 the same question (thread `b8d08c4a`, 20:28 UTC) produced a draft
+promising a label nothing would send, after `search_kb` returned two privacy
+pages. That plan is still parked for the member. Not yet observed: the answer
+drafting the reply and the return executing.
