@@ -1,8 +1,10 @@
 # Conversational agent overhaul plan
 
-Status, 2026-10-02: #151 is merged; gateway and worker serve `6c6b9499`, with
-all required PR CI and production readiness passed. Dashboard code was unchanged
-and its last verified deployment is `03469528` (#150). Live: typed phone outcomes
+Status, 2026-10-03: #152 is merged; dashboard, gateway and worker serve
+`a9884d8a`, with all required PR CI and production readiness passed. #152
+corrects the exchange text behind the #1039 financial/capability claims and
+stops sending Shopify's `OTHER` return reason; one live observation is owed
+(8h). Live: typed phone outcomes
 (#137), durable phone
 instructions and dashboard Stop (#138), durable ticket-composer planning (#140),
 iMessage scope and wording (#141, #142), the lean order-status read (#144),
@@ -57,11 +59,13 @@ for a failure, a relevant code change or an unresolved concern. In order:
    the handoff check or wait for a merchant reply. Exercise the remaining
    acceptance-matrix rows during [normal support flows](#conversation-checks-in-normal-support-flows),
    combining only checks that naturally arise. The recorded exchange financial
-   and capability explanations are corrected at their source on
-   `fix/exchange-claims-return-reason` (*Exchange explanation source* under 8h),
-   awaiting deployment; observe them in the ordinary return/exchange flow, not a
-   separate probe. Keep over-limit approval refusal separate from the completed
-   handoff wording check.
+   and capability explanations are corrected at their source in #152, deployed
+   on `a9884d8a` (*Exchange explanation source* under 8h); observe them in the
+   ordinary return/exchange flow, not a separate probe. The first such email
+   (#1042) exposed a request-scoping defect on escalated threads (*Return request
+   on an escalated thread* under 8h), fixed on `fix/burst-after-handled-request`;
+   repeat that one email after it deploys. Keep over-limit approval refusal
+   separate from the completed handoff wording check.
 2. **Fill missing live evidence:** group unverified effects and recovery paths
    into realistic flows; do not rerun already verified flows without cause.
 3. **Items 9 and 11–13:** controlled observation and the routing rollback
@@ -71,8 +75,8 @@ for a failure, a relevant code change or an unresolved concern. In order:
 iMessage is the main channel. Telegram is excluded from product and release
 acceptance; do not build or test it.
 
-**Workspace handoff:** main, gateway and worker are `6c6b9499`; the unchanged
-dashboard's last verified deployment is `03469528`. The shared root checkout
+**Workspace handoff:** main, dashboard, gateway and worker are `a9884d8a`
+(#152). The shared root checkout
 still has HEAD `606da169` and uncommitted phone, marketing and documentation
 edits, this document included. Preserve them, start code changes from an isolated
 worktree on `origin/master`, and do not reset the root or mistake its older files
@@ -155,7 +159,7 @@ These are the last recorded results, not a fresh production inspection.
 | Manual provider runs (Gate C) | `cancel_order` is the only clean recorded run (#1036; the #1035 composer rerun also has a committed receipt and matching Shopify state). `fulfill_order` and `update_shopify_customer_info` were observed working by the owner on 2026-10-01 without a receipt read-back. T1, an over-limit full-refund request on #1039, escalated at planning with no refund proposed. An owner-requested direct `createReturn` adapter attempt opened #1041-R1 for the Sample item, independently confirmed OPEN with no refund; this is provider evidence, not a complete task/approval/customer-delivery run. The other ten effects have no live write evidence; the full `create_return` flow remains unverified. Customer note and address change previously reached Shopify, but their complete flows were not clean. |
 | Manually verified approval display | Cancellation quote display (8d) confirmed by the release owner on `6616da7f`, 2026-09-29. The exact-draft card with a labeled placeholder (8c) was seen on the customer-info ticket and on a full-refund card (`[refund amount]`), 2026-10-01 and 2026-10-02. |
 | Built changes awaiting manual verification | The full-refund quote on the phone and dashboard cards (#148, deployed 2026-10-02, not yet seen on a live card); phone-started Stop (10c) and definite reply-failure recovery; a committed refund in the shop's currency (10b), the dashboard email send with a provider id (8f) and the partial-refund cap refusal (#147). iMessage approval and confirmation (8g, 8e) were observed on the customer-info ticket. Telegram testing is out of scope. |
-| Known implementation gaps | The unsupported return/refund direction question is resolved by #151: the owner confirmed the deployed replay arrived with correct wording (8h). A later #1039 exchange investigation correctly retained the customer's no-return constraint, but claimed cheaper replacements meant no balance owed to the customer without a Shopify financial quote (8h, open); the app's own exchange text was the source, corrected on `fix/exchange-claims-return-reason`, awaiting deployment and one observation. The same branch stops sending Shopify's `OTHER` return reason, which Shopify rejects without a note (item 8). Approval refusal from #149 was not exercised by either observation. No phone "stop" handler exists in the operator message path, and the owner has not said whether stop-by-text is wanted (10c). |
+| Known implementation gaps | The unsupported return/refund direction question is resolved by #151: the owner confirmed the deployed replay arrived with correct wording (8h). A later #1039 exchange investigation correctly retained the customer's no-return constraint, but claimed cheaper replacements meant no balance owed to the customer without a Shopify financial quote (8h, open); the app's own exchange text was the source, corrected in #152 (deployed on `a9884d8a`), awaiting one observation. #152 also stops sending Shopify's `OTHER` return reason, which Shopify rejects without a note (item 8). Approval refusal from #149 was not exercised by either observation. No phone "stop" handler exists in the operator message path, and the owner has not said whether stop-by-text is wanted (10c). |
 | Conversational acceptance | A one-order status question is answered briefly and in ordinary language after #144 (owner phone check and stored turns, one sample per question). A status question by customer name still uses the full read and can pad. #151's handoff removes the unsupported return/refund suggestion; the owner confirmed iMessage receipt and wording. The #1039 investigation read current data and preserved the no-return constraint; its explanation-only follow-up made no actions. Financial explanations remain incorrect/unverified (8h). References, topic return, conversational revision and language/voice remain unobserved. |
 | Rollout and runtime retirement | Observation/rollback (9), broader routing (11), persisted-state inventory and legacy deletion (12), final docs (13) remain. |
 | Optional paid comparison (Gate B) | Last comparison on `cf41c169` failed; it was incorrectly called passed before correction. #125 fixed the C08 runtime defect, so that input is no longer held out. Comparison tooling (Gate A) exists; neither a rerun nor new fixtures are required unless requested. |
@@ -360,8 +364,8 @@ each effect's result. Dev-store orders #1039 ($49.95), #1040 (CAD, 34.90 USD),
 and the release owner confirmed on the phone that it worked. Its references
 (receipt and Shopify fulfillment) go in the release evidence.
 
-**Return reason `other`, 2026-10-03 — fixed on `fix/exchange-claims-return-reason`,
-awaiting deployment.** The `returnReasons` enum shared by `create_return` and
+**Return reason `other`, 2026-10-03 — fixed in #152, deployed on `a9884d8a`.**
+The `returnReasons` enum shared by `create_return` and
 `create_exchange` offered `other`, which `mapReturnReason` sent as Shopify's
 `OTHER`. Shopify definitely rejects `OTHER` without a `returnReasonNote`, which
 these tools do not collect (the direct #1041 adapter probe in the release
@@ -505,8 +509,8 @@ looks right." This completes the changed-behavior observation and resolves the
 unsupported-policy defect. No customer send, Shopify action, Telegram send,
 merchant reply or approval exercise ran. Other 8h acceptance rows stay open.
 
-**Exchange explanation source (8h), 2026-10-03 — implemented, awaiting
-deployment.** Both defective claims in the #1039 conversation (release evidence,
+**Exchange explanation source (8h), 2026-10-03 — deployed in #152, observation
+owed.** Both defective claims in the #1039 conversation (release evidence,
 *Conversation A*) repeated the app's own exchange text. The `create_exchange`
 description said "No money moves" and that the replacement ships once the
 return is processed; the `createExchange` result said "The replacement ships
@@ -515,7 +519,7 @@ said no refund is needed or issued. Shopify's exchange documentation says
 `returnCreate` records the intent but neither confirms the exchange nor creates
 fulfillment orders; `returnProcess` does both. The app never calls it and never
 reads a balance (the receipt's `financialConsequence` is `null`).
-`fix/exchange-claims-return-reason` makes all four state only what the write
+#152 makes all four state only what the write
 does: it does not ship, charge, refund or work out a price difference, and the
 replacement can be fulfilled and any difference settled only once the merchant
 processes the return in Shopify. This removes the source of the two recorded
@@ -525,8 +529,36 @@ which previews a return's financial outcome including exchange lines but has no
 single balance field. Separately, the `replacement_price_higher` guard compares
 current catalog prices, not what the customer paid for the returned line. Agent
 typecheck, changed-file lint and the existing exchange, return, registry and
-prompt unit checks passed; no eval ran. Owed: one exchange explanation observed
-after deployment, during the ordinary return/exchange flow.
+prompt unit checks passed, and all required PR CI including the free eval
+preflight passed; no paid eval ran. PR #152 merged as `a9884d8a` at 19:27:26 UTC
+on 2026-10-03; dashboard, gateway and worker deployed it, and `/health/deep`
+reported database, Redis, worker and queues ok. Owed: one exchange explanation
+observed during the ordinary return/exchange flow.
+
+**Return request on an escalated thread (8h), 2026-10-03 — fix on
+`fix/burst-after-handled-request`.** The owner's ordinary return email for #1042
+(19:37 UTC) landed on open thread `e3759775`, escalated on 2026-10-02 for the
+#1038 cancellation and never answered. The phone card escalated #1038 again with
+the model's raw reason ("cancel_order is not appropriate … full refund vs
+return") and proposed nothing for #1042. From the stored rows: the 2026-10-02
+handoff wrote only notes, so `getConversationBurst` still counted the #1038
+message as unanswered, and the request summary and task `f6233cac`'s objective
+merged both requests. Planning ended at the first terminal tool,
+`escalate_to_human` for #1038 on the second model call, before #1042 was read.
+Because the thread was escalated, the P5-04 gate in `generate-thread-plan.ts`
+skipped the automatic handoff (#149–#151), so the plan card printed the raw
+reason. The task completed with nothing parked; the customer has no answer.
+
+The fix makes a committed plan execution close the burst at its source message,
+as a reply does. `claimCurrentPlanExecution` requires that source to be the
+latest customer message, so a handed-off request is no longer re-raised and the
+next message is planned on its own; on an escalated thread that plan still waits
+for approval. Unchanged: the terminal-tool rule, and the escalate-only card's raw
+reason, which should reuse #151's grounded handoff writer (next). The #1040 refund
+task was cancelled on 2026-10-02 and nothing is parked on the phone. Gateway
+typecheck, lint and the existing burst checks passed. Owed: one more customer
+email on that thread after deployment, expecting a #1042 return proposal and
+nothing about #1038.
 
 ### Release and runtime retirement
 
