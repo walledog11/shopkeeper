@@ -16,12 +16,26 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
     capabilities: ["kb"],
     label: "Searched knowledge base",
     planStepLabel: "Search knowledge base",
-    execute: async (input: SearchKbInput, ctx, _settings, deps) => {
+    execute: async (input: SearchKbInput, ctx, settings, deps) => {
       const words = input.query.trim().split(/\s+/).filter((word) => word.length >= 2);
       if (words.length === 0) return toolNotFound("No knowledge base articles found for that query.");
 
-      const articles = await deps.searchKnowledgeBaseArticles(ctx.orgId, words);
-      if (articles.length === 0) return toolNotFound("No knowledge base articles found for that query.");
+      const candidates = await deps.searchKnowledgeBaseArticles(ctx.orgId, words);
+      if (candidates.length === 0) return toolNotFound("No knowledge base articles found for that query.");
+
+      // A word match is only a candidate. What comes back, and what is cited, is
+      // what answers the query, so an empty answer stays observable as not_found.
+      const articles = await deps.selectAnsweringKbArticles({
+        orgId: ctx.orgId,
+        query: input.query,
+        articles: candidates,
+        settings,
+        ...(ctx.taskBudget ? { taskBudget: ctx.taskBudget } : {}),
+      });
+      if (articles === null) {
+        return toolNotFound("Could not confirm that any knowledge base article answers that query, so treat it as unanswered.");
+      }
+      if (articles.length === 0) return toolNotFound("No knowledge base article answers that query.");
 
       const kbThreadCtx = threadContextOf(ctx);
       if (kbThreadCtx) {

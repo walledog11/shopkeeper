@@ -31,6 +31,11 @@ vi.mock("@shopkeeper/db", () => ({
   recordReturnWatch: vi.fn(),
 }));
 
+// The model's relevance judgment is not under test here; every candidate answers.
+vi.mock("../kb-relevance.js", () => ({
+  selectAnsweringKbArticles: vi.fn(async ({ articles }: { articles: unknown[] }) => [...articles]),
+}));
+
 function threadlessCtx(escalate: (reason: string) => Promise<void>): BaseAgentContext {
   return {
     orgId: "org_1",

@@ -53,6 +53,7 @@ import type {
 } from "./registry/index.js";
 import { formatToolInputValidationError, getToolDefinition, unmetToolCapability } from "./registry/index.js";
 import { MEMORY_OVERRIDE_TAG, memoryOverrideTargetId, resolveEffectiveMemoryArticles } from "../kb-memory.js";
+import { selectAnsweringKbArticles } from "../kb-relevance.js";
 import logger from "../logger.js";
 import {
   CONTEXT_BUDGETS,
@@ -227,6 +228,7 @@ const TOOL_EXECUTION_DEPS: ToolExecutionDeps = {
     }, "[agent:context] budget");
     return budgetedArticles.articles;
   },
+  selectAnsweringKbArticles,
   recordKnowledgeBaseCitations(orgId: string, threadId: string, articleIds: readonly string[]): Promise<unknown> {
     return db.kbCitation.createMany({
       data: articleIds.map((articleId) => ({

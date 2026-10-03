@@ -1,10 +1,11 @@
 # Conversational agent overhaul plan
 
-Status, 2026-10-03: #152 is merged; dashboard, gateway and worker serve
-`a9884d8a`, with all required PR CI and production readiness passed. #152
+Status, 2026-10-03: #153 is merged; dashboard, gateway and worker serve
+`3e0f8cf1`, with all required PR CI and production readiness passed. #152
 corrects the exchange text behind the #1039 financial/capability claims and
-stops sending Shopify's `OTHER` return reason; one live observation is owed
-(8h). Live: typed phone outcomes
+stops sending Shopify's `OTHER` return reason; #153 stops a request already
+handed to the merchant from being merged into later messages on the thread. One
+live return/exchange email is owed for both (8h). Live: typed phone outcomes
 (#137), durable phone
 instructions and dashboard Stop (#138), durable ticket-composer planning (#140),
 iMessage scope and wording (#141, #142), the lean order-status read (#144),
@@ -63,9 +64,12 @@ for a failure, a relevant code change or an unresolved concern. In order:
    on `a9884d8a` (*Exchange explanation source* under 8h); observe them in the
    ordinary return/exchange flow, not a separate probe. The first such email
    (#1042) exposed a request-scoping defect on escalated threads (*Return request
-   on an escalated thread* under 8h), fixed on `fix/burst-after-handled-request`;
-   repeat that one email after it deploys. Keep over-limit approval refusal
-   separate from the completed handoff wording check.
+   on an escalated thread* under 8h), fixed in #153 and deployed on `3e0f8cf1`,
+   but not yet exercised. The repeat email landed on a new thread and was answered
+   from nothing because the knowledge-base guard could not fire (*Return email
+   answered from nothing* under 8h), fixed on `fix/kb-relevance-grounding`; after
+   it deploys, ask the same question on a fresh thread. Keep over-limit approval
+   refusal separate from the completed handoff wording check.
 2. **Fill missing live evidence:** group unverified effects and recovery paths
    into realistic flows; do not rerun already verified flows without cause.
 3. **Items 9 and 11–13:** controlled observation and the routing rollback
@@ -75,8 +79,8 @@ for a failure, a relevant code change or an unresolved concern. In order:
 iMessage is the main channel. Telegram is excluded from product and release
 acceptance; do not build or test it.
 
-**Workspace handoff:** main, dashboard, gateway and worker are `a9884d8a`
-(#152). The shared root checkout
+**Workspace handoff:** main, dashboard, gateway and worker are `3e0f8cf1`
+(#153). The shared root checkout
 still has HEAD `606da169` and uncommitted phone, marketing and documentation
 edits, this document included. Preserve them, start code changes from an isolated
 worktree on `origin/master`, and do not reset the root or mistake its older files
@@ -535,8 +539,8 @@ on 2026-10-03; dashboard, gateway and worker deployed it, and `/health/deep`
 reported database, Redis, worker and queues ok. Owed: one exchange explanation
 observed during the ordinary return/exchange flow.
 
-**Return request on an escalated thread (8h), 2026-10-03 — fix on
-`fix/burst-after-handled-request`.** The owner's ordinary return email for #1042
+**Return request on an escalated thread (8h), 2026-10-03 — deployed in #153,
+observation owed.** The owner's ordinary return email for #1042
 (19:37 UTC) landed on open thread `e3759775`, escalated on 2026-10-02 for the
 #1038 cancellation and never answered. The phone card escalated #1038 again with
 the model's raw reason ("cancel_order is not appropriate … full refund vs
@@ -556,9 +560,38 @@ next message is planned on its own; on an escalated thread that plan still waits
 for approval. Unchanged: the terminal-tool rule, and the escalate-only card's raw
 reason, which should reuse #151's grounded handoff writer (next). The #1040 refund
 task was cancelled on 2026-10-02 and nothing is parked on the phone. Gateway
-typecheck, lint and the existing burst checks passed. Owed: one more customer
-email on that thread after deployment, expecting a #1042 return proposal and
-nothing about #1038.
+typecheck, lint, the existing burst checks and all required PR CI passed. PR #153
+merged as `3e0f8cf1` at 20:04:53 UTC on 2026-10-03; dashboard, gateway and worker
+deployed it, and `/health/deep` reported database, Redis, worker and queues ok.
+Owed: one more customer email on that thread, expecting a #1042 return proposal
+and nothing about #1038.
+
+**Return email answered from nothing (8h), 2026-10-03 — fix on
+`fix/kb-relevance-grounding`.** After #153 deployed, `e3759775` was closed from
+the dashboard (20:28:16 UTC) and the same #1042 question opened thread
+`b8d08c4a`, so #153 was not exercised. That card proposed `create_return` with a
+customer email promising "Once the merchant confirms, I'll follow up with a return
+shipping label" (nothing would send one) and never said how to return. This
+store's knowledge base has no returns or label article, but
+`search_kb("return policy process")` matched both synced privacy pages on single
+words, so the #105 refusal in `kbMissNeedsMerchant`, which makes the planner ask
+the merchant when the knowledge base has nothing, could not fire. It also
+exempted every plan with an action, a scope inherited from the 2026-08-22 gap
+definition, although the classifier had tagged the email `policy_question` and
+`mutative_request`. Every hit was recorded as a citation.
+
+The fix keeps the word match as a candidate search and adds
+`selectAnsweringKbArticles`, a Haiku check with structured output of which
+candidates answer the query, counted against the task budget and spend cap.
+`search_kb` returns and cites only those, and returns not_found when none do or
+the check cannot decide. `kbMissNeedsMerchant` also holds a reply beside an
+action when the aligned classifier says the customer asked a policy question. No
+prompt text changed. A real-API probe on synthetic articles kept only the returns
+page and found nothing in a privacy page alone. Agent typecheck, lint and the
+full agent unit suite passed; one boundary test covers the changed predicate and
+fails with the old scope. Owed after deployment: the same question on a fresh
+thread produces the return and a question to the merchant, not a draft, and the
+answer drafts the reply. The pending `b8d08c4a` card must not be approved.
 
 ### Release and runtime retirement
 

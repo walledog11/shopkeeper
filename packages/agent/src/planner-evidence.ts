@@ -161,6 +161,9 @@ function missedKbQueries(input: Pick<KbMissInput, "readBlocks" | "readStatusMap"
 // A customer reply drafted after the knowledge base came up empty. The planning
 // loop refuses the reply while the turn is still open so the model asks the
 // merchant instead, and routing treats a reply that got through anyway as a gap.
+// A reply beside an action usually just reports that action, so it is held only
+// when the customer also asked about store policy: opening a return does not
+// tell anyone how this store takes items back.
 export function kbMissNeedsMerchant(input: KbMissInput): boolean {
   if (isMerchantAnswerPlanningInstruction(input.instruction)) return false;
   const searchedAndMissed = input.readBlocks.some(
@@ -176,9 +179,11 @@ export function kbMissNeedsMerchant(input: KbMissInput): boolean {
     && !shape.hasAskOperator
     && !shape.hasEscalation,
   );
+  const askedPolicy = classifierState(input.ctx) === "aligned"
+    && Boolean(input.ctx.classifierSignals?.intents.policy_question);
   return !routineOrderStatus
     && shape.hasSendReply
-    && !shape.hasAction
+    && (!shape.hasAction || askedPolicy)
     && !shape.hasAskOperator
     && !shape.hasEscalation;
 }

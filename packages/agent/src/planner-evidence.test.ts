@@ -209,4 +209,21 @@ describe("kbMissNeedsMerchant", () => {
       ...missed,
     })).toBe(false);
   });
+
+  it("holds a reply beside an action only when the customer asked about policy", () => {
+    const withReturn = [{ id: "return", name: "create_return", input: { order_id: "1042" } }, reply];
+    const askedHowToReturn = context({
+      classifierSignals: {
+        version: 2,
+        language: "en",
+        intents: { ...emptyIntents(), policy_question: true, mutative_request: true },
+        requestFacts: emptyRequestFacts(),
+      },
+    });
+
+    expect(kbMissNeedsMerchant({ ctx: askedHowToReturn, instruction: "Handle it", rawToolCalls: withReturn, ...missed }))
+      .toBe(true);
+    expect(kbMissNeedsMerchant({ ctx: context(), instruction: "Handle it", rawToolCalls: withReturn, ...missed }))
+      .toBe(false);
+  });
 });
