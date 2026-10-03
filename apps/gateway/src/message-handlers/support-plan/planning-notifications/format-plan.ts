@@ -26,6 +26,11 @@ function isSendStep(step: PlanStep): boolean {
 // cannot be shown is not one to approve from here.
 const EXACT_DRAFT_DISPLAY_LIMIT = 3000;
 
+export function requiresDashboardDraftReview(communication?: ProposalCommunication): boolean {
+  return communication?.mode === 'exact_draft'
+    && displayApprovedDraft(communication.draft).length > EXACT_DRAFT_DISPLAY_LIMIT;
+}
+
 type ExactDraft = Extract<ProposalCommunication, { mode: 'exact_draft' }>;
 
 function emailSubject(rawToolCalls: readonly { name: string; input?: unknown }[]): string | null {
@@ -153,7 +158,7 @@ export function formatOperatorPlanMessage(
   // Its receipt placeholders are shown by what they will hold.
   const exactDraft = options?.communication?.mode === 'exact_draft' ? options.communication : null;
   const exactDraftText = exactDraft ? displayApprovedDraft(exactDraft.draft) : null;
-  const exactDraftHidden = exactDraftText !== null && exactDraftText.length > EXACT_DRAFT_DISPLAY_LIMIT;
+  const exactDraftHidden = requiresDashboardDraftReview(options?.communication);
   const draftBody = exactDraftText !== null
     ? (exactDraftHidden ? null : exactDraftText)
     : options?.rawToolCalls ? firstDraftExcerpt(options.rawToolCalls) : null;

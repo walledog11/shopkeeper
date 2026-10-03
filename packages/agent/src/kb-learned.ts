@@ -27,18 +27,13 @@ export function buildMerchantAnswerPlanningInstruction(input: {
   answer: string;
   saveToKb: boolean;
 }): string {
-  if (!input.question) return input.baseInstruction;
+  if (!input.question) {
+    return `${input.baseInstruction}\n\nThe store owner revised the proposal with: "${input.answer}". Use their guidance to draft the replacement proposal.`;
+  }
 
   const kbNote = input.saveToKb
     ? " The answer is already saved in the knowledge base — do not ask again and do not call add_internal_note to record the Q&A."
     : "";
 
-  // A label question answered with a URL is an actionable artifact, not just reply
-  // material: the return is already open from the turn that asked, so the label must
-  // be attached — without this the model drafts the reply and skips the attach step.
-  const labelNote = /label/i.test(input.question) && /https?:\/\//i.test(input.answer)
-    ? " The answer is a return label URL: call attach_return_label with the order_id and this URL, then include the link in your reply to the customer. The return itself is already open - do NOT call create_return or create_exchange again."
-    : "";
-
-  return `${input.baseInstruction}\n\nThe store owner answered your question "${input.question}" with: "${input.answer}". Use this to draft send_reply to the customer — do not ask again.${kbNote}${labelNote}`;
+  return `${input.baseInstruction}\n\nThe store owner answered your question "${input.question}" with: "${input.answer}". Use this to draft send_reply to the customer — do not ask again.${kbNote}`;
 }

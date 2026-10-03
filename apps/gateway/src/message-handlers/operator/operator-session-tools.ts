@@ -5,7 +5,7 @@ import logger from '../../logger.js';
 import {
   expectedPlanIdentity,
   isPendingPlanInvalid,
-  updateContext,
+  resolvePendingQuestionContext,
   normalizeApprovedToolCalls,
   selectPendingPlan,
   type OperatorContext,
@@ -184,7 +184,7 @@ export function buildOperatorSessionTools(
       const selected = selectPendingPlan(context.pendingPlans, input.plan_ref, context.pendingDigest);
       if ('error' in selected) return toolError(selected.error);
       const pendingPlan = selected.plan;
-      const message = await applyOperatorAnswerReplan({
+      const result = await applyOperatorAnswerReplan({
         organizationId,
         memberKey,
         clerkUserId,
@@ -196,7 +196,7 @@ export function buildOperatorSessionTools(
         endsWait: 'proposal',
         ...(deliveryRef ? { deliveryRef } : {}),
       });
-      return toolOk(message);
+      return result.status === 'failed' ? toolError(result.message) : toolOk(result.message);
     },
   });
 
@@ -216,8 +216,7 @@ export function buildOperatorSessionTools(
     execute: async (input: AnswerQuestionInput) => {
       const pendingQuestion = context.pendingQuestion;
       if (!pendingQuestion) return toolError('Error: no question is awaiting the merchant\'s answer.');
-      await updateContext(organizationId, memberKey, { pendingQuestion: null });
-      const message = await applyOperatorAnswerReplan({
+      const result = await applyOperatorAnswerReplan({
         organizationId,
         memberKey,
         clerkUserId,
@@ -227,7 +226,9 @@ export function buildOperatorSessionTools(
         askingPlanId: pendingQuestion.planId ?? null,
         ...(deliveryRef ? { deliveryRef } : {}),
       });
-      return toolOk(message);
+      if (result.status === 'failed') return toolError(result.message);
+      await resolvePendingQuestionContext(organizationId, memberKey, pendingQuestion);
+      return toolOk(result.message);
     },
   });
 
