@@ -236,8 +236,8 @@ describe("completesAtMerchantFollowUp", () => {
   const askMerchant = { id: "ask", name: "ask_operator", input: { question: "Label URL?" } };
   const reply = { id: "reply", name: "send_reply", input: { text: "Hi." } };
   const attachLabel = { id: "label", name: "attach_return_label", input: { order_id: "1042" } };
-  const completes = (rawToolCalls: { id: string; name: string; input: unknown }[], kb = found) =>
-    completesAtMerchantFollowUp({ instruction: "Handle it", rawToolCalls, ...kb });
+  const completes = (rawToolCalls: { id: string; name: string; input: unknown }[], kb = found, merchantDirected = false) =>
+    completesAtMerchantFollowUp({ merchantDirected, rawToolCalls, ...kb });
 
   it("ends a return plan once the agent has nothing from the store on how items go back", () => {
     expect(completes([openReturn], missed)).toBe(true);
@@ -245,5 +245,7 @@ describe("completesAtMerchantFollowUp", () => {
     expect(completes([openReturn, reply])).toBe(false);
     expect(completes([openReturn, attachLabel, askMerchant])).toBe(false);
     expect(completes([askMerchant], missed)).toBe(false);
+    // A merchant's instruction, answer or revision may be the very reply they want.
+    expect(completes([openReturn, reply], missed, true)).toBe(false);
   });
 });

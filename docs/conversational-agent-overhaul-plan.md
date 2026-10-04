@@ -649,7 +649,13 @@ capability, so none was added.
 merchant. The planning loop takes a `captureCompleteTurn` hook:
 `completesAtMerchantFollowUp` ends the turn at such a return once the knowledge
 base came up empty or the model proposes a merchant question, and drops a reply
-or question proposed beside it. Routing no longer counts the unanswered policy
+or question proposed beside it. A plan the merchant directed is exempt, keyed on
+the existing typed `merchantInstruction` planner option, which the composer
+already set and the merchant answer and revision paths (dashboard answer route,
+`operator-answer-replan`) now set too; otherwise a revision asking for a reply
+would lose it. #155 removed the label-URL hint for merchant answers, so a label
+the merchant supplies is attached through `attach_return_label`'s own
+description. Routing no longer counts the unanswered policy
 question as a gap when the plan leaves the follow-up to the merchant. Both
 approval cards say "I can't create return labels, so you'll need to send Chain
 one yourself.", and the confirmation adds "Send Chain a return label yourself;

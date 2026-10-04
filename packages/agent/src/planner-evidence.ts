@@ -169,11 +169,12 @@ function searchedAndMissed(input: Pick<KbMissInput, "readBlocks" | "readStatusMa
 // the agent has nothing from the store on how items go back: the knowledge base
 // came up empty, or it is about to ask the merchant. The merchant is told to
 // send the label instead, so the planning loop ends the turn at the return. A
-// merchant's own answer being planned is exempt; it may be what the reply needs.
+// plan the merchant directed (their instruction, answer or revision) is exempt:
+// what they typed may be exactly the reply they want sent.
 export function completesAtMerchantFollowUp(
-  input: Pick<KbMissInput, "instruction" | "rawToolCalls" | "readBlocks" | "readStatusMap">,
+  input: Pick<KbMissInput, "rawToolCalls" | "readBlocks" | "readStatusMap"> & { merchantDirected: boolean },
 ): boolean {
-  if (isMerchantAnswerPlanningInstruction(input.instruction)) return false;
+  if (input.merchantDirected) return false;
   const names = input.rawToolCalls.map((call) => call.name);
   if (outstandingMerchantFollowUps(names).length === 0) return false;
   return searchedAndMissed(input) || names.includes("ask_operator");

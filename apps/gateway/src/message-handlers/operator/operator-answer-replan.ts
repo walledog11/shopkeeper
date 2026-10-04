@@ -258,6 +258,8 @@ async function runAnswerReplan(
       planningInstruction,
       settings,
       {
+        // The merchant typed this answer or revision; it directs the plan.
+        merchantInstruction: true,
         ...(usesExactDraftProposals(runtimeVersion) ? { exactDraftProposal: true } : {}),
         ...(runtimeVersion !== undefined ? { runtimeVersion } : {}),
       },

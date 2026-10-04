@@ -329,7 +329,7 @@ export async function planAgent(
   // of asking the merchant for a label Shopkeeper cannot use.
   const completeAtMerchantFollowUp: RunAgentLoopParams["captureCompleteTurn"] = (proposal) => (
     completesAtMerchantFollowUp({
-      instruction,
+      merchantDirected: options?.merchantInstruction === true,
       rawToolCalls: proposal.rawToolCalls,
       readBlocks: proposal.readBlocks,
       readStatusMap: proposal.readStatus,
