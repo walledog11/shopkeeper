@@ -26,7 +26,8 @@ what each audit still blocks.
 | Command | Run when |
 | --- | --- |
 | `npm run audit:plan-executions` | During agent execution or ledger rollouts. |
-| `npm run audit:conversational-overhaul-p0` | During agent runtime v1 retirement and Package 6 rollout (cached-plan / pending-plan inventory). |
+| `npm run audit:conversational-overhaul-p0` | Historical cached-plan / pending-card compatibility and execution/delivery inventory. |
+| `npm run audit:agent-runtime-retirement -- --strict` | Before deploying runtime retirement. Read-only aggregate inventory of task versions, proposals, unknown operations, and current taskless caches; refuses actionable non-v2 state. |
 | `npm run audit:classification-alignment` | After classifier contract or routing changes. |
 
 ## Repo hygiene

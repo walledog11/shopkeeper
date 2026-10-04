@@ -27,16 +27,8 @@ import { buildPlanSignals } from "./plan-signals.js";
 import { buildPlanSteps } from "./planner-steps.js";
 import { deriveProposalCommunication } from "./proposal-communication.js";
 import { buildSystemPromptParts } from "./prompt.js";
-export {
-  resolveCapabilityDiscoveryMode,
-  resolveProposalSuspensionMode,
-  usesCapabilityDiscovery,
-  usesExactDraftProposals,
-  type CapabilityDiscoveryMode,
-  type ProposalSuspensionMode,
-} from "./runtime-modes.js";
 export { DISCOVERY_TOOL_NAME } from "./planner-tool-selection.js";
-import { usesCapabilityDiscovery } from "./runtime-modes.js";
+import { requireDurableAgentRuntime } from "./runtime-modes.js";
 import { TOKEN_BUDGET, DEFAULT_MAX_ITERATIONS } from "./run-policy.js";
 import { resolveAgentSettings } from "./settings.js";
 import {
@@ -61,8 +53,6 @@ import {
 } from "./tools/registry/index.js";
 import {
   DISCOVERY_TOOL_NAME,
-  NAMESPACE_MISS_TOOL_NAME,
-  namespaceMissReason as resolveNamespaceMissReason,
   runCapabilityDiscovery,
   selectPlanningTools,
 } from "./planner-tool-selection.js";
@@ -82,12 +72,7 @@ export interface PlanAgentOptions {
   // derived from the customer's own message. Intent narrowing is inferred from
   // what the customer said, so it must not gate a tool the merchant named.
   merchantInstruction?: boolean;
-  // Set by a caller whose proposals carry the exact-draft communication
-  // snapshot: the customer message is drafted before approval like any other
-  // plan, then bound into the proposal as `communication`, so the approval
-  // covers those exact bytes and nothing else may be sent on it.
-  exactDraftProposal?: boolean;
-  /** Persisted task runtime selects bounded discovery for durable attempts. */
+  /** Refuses a persisted task on a retired runtime before model work. */
   runtimeVersion?: number;
   /**
    * Set by the attempt that follows an approved message the executor withheld.
@@ -150,7 +135,6 @@ function withoutAuthoredLineItems(call: AgentPlan["rawToolCalls"][number]): Agen
 async function bindProviderApprovalFacts(
   ctx: AgentContext,
   rawToolCalls: AgentPlan["rawToolCalls"],
-  exactDraftProposal: boolean,
 ): Promise<BoundApprovalFacts> {
   const shopify = ctx.shopify;
   const unnamedTargetIds = new Set<string>();
@@ -160,7 +144,7 @@ async function bindProviderApprovalFacts(
     if (
       call.name !== "create_refund"
       && call.name !== "cancel_order"
-      && !(exactDraftProposal && LINE_ITEM_WRITES.has(call.name))
+      && !LINE_ITEM_WRITES.has(call.name)
     ) return call;
     if (
       call.name === "create_refund"
@@ -215,7 +199,6 @@ export async function planAgent(
   const instructionHash = hashInstructionForLog(instruction);
   const modelInstruction = truncateContextText(instruction, CONTEXT_BUDGETS.instructionChars);
   const operatorMode = isOperatorChannel(ctx.thread.channelType);
-  const exactDraftProposal = options?.exactDraftProposal === true;
   const historyWindow = operatorMode ? ctx.recentMessages.slice(-4) : ctx.recentMessages;
   const baseMessages = buildMessageHistory(historyWindow, modelInstruction, {
     segregateUntrusted: !operatorMode,
@@ -223,8 +206,8 @@ export async function planAgent(
       ? { currentCustomerMessageIds: ctx.currentCustomerMessageIds } : {}),
   });
   // Decided once so the prompt describes the tool set the model is offered.
-  const capabilityDiscovery = usesCapabilityDiscovery(options?.runtimeVersion);
-  const { stable, volatile } = buildSystemPromptParts(ctx, settings, { exactDraftProposal, capabilityDiscovery });
+  requireDurableAgentRuntime(options?.runtimeVersion);
+  const { stable, volatile } = buildSystemPromptParts(ctx, settings, { exactDraftProposal: true });
   const systemPromptBlocks = buildSplitCachedSystemPrompt(stable, volatile);
   const resolvedSettings = resolveAgentSettings(settings);
 
@@ -261,16 +244,11 @@ export async function planAgent(
     storefrontMode: Boolean(storefrontTools),
     merchantAnswerReplan,
     merchantInstruction: options?.merchantInstruction === true,
-    capabilityDiscovery,
     ambiguousCustomerFollowUp: isAmbiguousCustomerFollowUp(ctx),
     withheldMessageFollowUp: options?.withheldMessageFollowUp === true,
   });
-  // Read off the selection rather than the flag: these two are what the model
-  // was actually offered, and only one of them can be present.
+  // Discovery applies only when this selection actually offers it.
   const offersDiscovery = toolSelection.tools.some((tool) => tool.name === DISCOVERY_TOOL_NAME);
-  const offersNamespaceMiss = toolSelection.tools.some(
-    (tool) => tool.name === NAMESPACE_MISS_TOOL_NAME,
-  );
 
   await enforceSpendCap(ctx.orgId, resolvedSettings);
 
@@ -355,9 +333,6 @@ export async function planAgent(
     captureReprompt: !operatorMode,
     captureRefuseReply: operatorMode ? undefined : refuseUngroundedReply,
     captureCompleteTurn: operatorMode ? undefined : completeAtMerchantFollowUp,
-    captureStopToolNames: tools.some((tool) => tool.name === NAMESPACE_MISS_TOOL_NAME)
-      ? [NAMESPACE_MISS_TOOL_NAME]
-      : undefined,
     captureDiscovery: offersDiscovery
       ? {
         toolName: DISCOVERY_TOOL_NAME,
@@ -375,41 +350,13 @@ export async function planAgent(
 
   const tier = decidePlannerTier(ctx, { operatorMode });
   let loop = await runLoop(tier.useLowTier ? pickModel("agent_plan_low_risk") : pickModel("agent_run"));
-  let namespaceMiss = false;
-  let namespaceMissReason: ReturnType<typeof resolveNamespaceMissReason> = null;
-
-  const widenNamespace = async (reason: NonNullable<typeof namespaceMissReason>) => {
-    namespaceMiss = true;
-    namespaceMissReason = reason;
-    logger.info({
-      orgId: ctx.orgId,
-      threadId: ctx.thread.id,
-      purpose: "agent_plan",
-      toolSelectionBucket: toolSelection.bucket,
-      namespaceMiss: true,
-      namespaceMissReason,
-      instructionHash,
-    }, "[agent:plan] namespace miss — re-planning with full tool registry");
-    return runLoop(pickModel("agent_run"), availableTools);
-  };
-
-  // Only a selection that offered the namespace-miss tool can widen. A discovery
-  // selection has already answered the same need inside the turn, so there is no
-  // second full-registry attempt behind it.
-  const initialNamespaceMiss = offersNamespaceMiss
-    ? resolveNamespaceMissReason(loop.rawToolCalls)
-    : null;
-  if (initialNamespaceMiss) {
-    loop = await widenNamespace(initialNamespaceMiss);
-  }
-
   // The cheap tier is trusted to reply, ask, or escalate — nothing else. If it
   // proposed real work, throw the plan away and re-plan on the judgment tier
   // rather than let a mutative action be decided down-tier. Capture mode means
   // nothing was executed, so the discarded plan has no side effects; the cost of
   // being wrong is one wasted Haiku call.
   let tierDowngraded = tier.useLowTier;
-  if (!namespaceMiss && tier.useLowTier && !isLowRiskPlanOutcome(loop.rawToolCalls)) {
+  if (tier.useLowTier && !isLowRiskPlanOutcome(loop.rawToolCalls)) {
     logger.info({
       orgId: ctx.orgId,
       threadId: ctx.thread.id,
@@ -419,14 +366,7 @@ export async function planAgent(
     }, "[agent:plan] low-tier plan proposed non-trivial work — re-planning on judgment tier");
     tierDowngraded = false;
     loop = await runLoop(pickModel("agent_run"));
-    const judgmentNamespaceMiss = offersNamespaceMiss
-      ? resolveNamespaceMissReason(loop.rawToolCalls)
-      : null;
-    if (judgmentNamespaceMiss) {
-      loop = await widenNamespace(judgmentNamespaceMiss);
-    }
   }
-  if (namespaceMiss) tierDowngraded = false;
 
   // Validate the model's captured proposal exactly as authored. An invalid plan
   // stays intact so the merchant can see what failed and routing cannot hide the
@@ -438,14 +378,14 @@ export async function planAgent(
   // proposals also bind item-refund pricing and the names of the line items a
   // write targets. Execution quotes again and refuses a changed amount before
   // dispatch.
-  const bound = await bindProviderApprovalFacts(ctx, loop.rawToolCalls, exactDraftProposal);
+  const bound = await bindProviderApprovalFacts(ctx, loop.rawToolCalls);
   const { unnamedTargetIds } = bound;
   const authoredValidation = validatePlan({
     ctx,
     instruction,
     rawToolCalls: loop.rawToolCalls,
     readResults: Object.fromEntries(loop.readResults),
-    singleCustomerMessage: exactDraftProposal,
+    singleCustomerMessage: true,
     unnamedTargetIds,
   });
   let validation = authoredValidation;
@@ -513,7 +453,7 @@ export async function planAgent(
         instruction,
         rawToolCalls,
         readResults: Object.fromEntries(loop.readResults),
-        singleCustomerMessage: exactDraftProposal,
+        singleCustomerMessage: true,
         unnamedTargetIds,
       });
     }
@@ -556,9 +496,6 @@ export async function planAgent(
     toolSelectionReason: toolSelection.reason,
     toolSelectionNarrowed: toolSelection.narrowed,
     toolSelectionInitialCount: toolSelection.tools.length,
-    toolSelectionExpandedCount: namespaceMiss ? availableTools.length : null,
-    namespaceMiss,
-    namespaceMissReason,
     readToolCalls: loop.readBlocks.map(block => block.name),
     rawToolCallCount: rawToolCalls.length,
     rawToolCalls: rawToolCalls.map(toolCall => toolCall.name),
@@ -582,7 +519,7 @@ export async function planAgent(
     : undefined;
   // Derived from the finished calls, after routing, because those are what the
   // merchant approves. Null only for a plan validation has already refused.
-  const communication = exactDraftProposal && !operatorMode
+  const communication = !operatorMode
     ? deriveProposalCommunication(rawToolCalls, ctx.thread)
     : null;
   return {
@@ -596,7 +533,6 @@ export async function planAgent(
     // readable. Drops out with the last consumer of `AgentPlan.warnings`.
     warnings: signals.length > 0 ? signals.map(signal => signal.message) : undefined,
     routingEvidence,
-    namespaceMiss: namespaceMiss || undefined,
     ...(communication ? { communication } : {}),
   };
 }

@@ -28,9 +28,9 @@ on:
         options: [release, targeted, drift, baseline]
         default: release
       runtime_version:
-        description: 'Agent runtime for Package 6 comparison; current preserves historical eval behavior'
+        description: 'Current durable agent runtime (v2)'
         type: choice
-        options: [current, '1', '2']
+        options: [current, '2']
         default: current
       fixtures:
         description: 'Comma-separated fixture IDs (required for targeted mode)'
@@ -180,8 +180,6 @@ jobs:
       RUN_JUDGE_EVALS: ${{ inputs.judges == 'on' && '1' || '0' }}
       EVAL_CONFIRM_HARD_FAILURES: '0'
       EVAL_AGENT_RUNTIME_VERSION: ${{ inputs.runtime_version }}
-      AGENT_CAPABILITY_DISCOVERY_MODE: 'off'
-      AGENT_PROPOSAL_SUSPENSION_MODE: 'off'
       EVAL_MAX_USD: ${{ needs.budget-preflight.outputs.dashboard_max_usd }}
       EVAL_MAX_MODEL_CALLS: ${{ needs.budget-preflight.outputs.dashboard_max_calls }}
       EVAL_RESULT_CACHE_DIR: test-results/eval-cache
@@ -236,8 +234,6 @@ jobs:
       RUN_JUDGE_EVALS: '0'
       EVAL_CONFIRM_HARD_FAILURES: '2'
       EVAL_AGENT_RUNTIME_VERSION: ${{ inputs.runtime_version }}
-      AGENT_CAPABILITY_DISCOVERY_MODE: 'off'
-      AGENT_PROPOSAL_SUSPENSION_MODE: 'off'
       EVAL_MAX_USD: ${{ needs.budget-preflight.outputs.dashboard_max_usd }}
       EVAL_MAX_MODEL_CALLS: ${{ needs.budget-preflight.outputs.dashboard_max_calls }}
       EVAL_RESULT_CACHE_DIR: test-results/eval-cache
@@ -366,8 +362,6 @@ jobs:
       RUN_JUDGE_EVALS: '1'
       EVAL_CONFIRM_HARD_FAILURES: '0'
       EVAL_AGENT_RUNTIME_VERSION: ${{ inputs.runtime_version }}
-      AGENT_CAPABILITY_DISCOVERY_MODE: 'off'
-      AGENT_PROPOSAL_SUSPENSION_MODE: 'off'
       EVAL_MAX_USD: ${{ needs.budget-preflight.outputs.dashboard_max_usd }}
       EVAL_MAX_MODEL_CALLS: ${{ needs.budget-preflight.outputs.dashboard_max_calls }}
       EVAL_RESULT_CACHE_DIR: test-results/eval-cache
@@ -472,8 +466,6 @@ jobs:
       UPDATE_EVAL_BASELINE: '1'
       EVAL_CONFIRM_HARD_FAILURES: '0'
       EVAL_AGENT_RUNTIME_VERSION: ${{ inputs.runtime_version }}
-      AGENT_CAPABILITY_DISCOVERY_MODE: 'off'
-      AGENT_PROPOSAL_SUSPENSION_MODE: 'off'
       EVAL_MAX_USD: ${{ needs.budget-preflight.outputs.dashboard_max_usd }}
       EVAL_MAX_MODEL_CALLS: ${{ needs.budget-preflight.outputs.dashboard_max_calls }}
       REQUIRE_MODEL_EVALS: '1'

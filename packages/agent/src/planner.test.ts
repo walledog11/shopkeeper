@@ -2,8 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { installAgentLogger, resetAgentLoggerForTests, type AgentLogger } from "./logger.js";
 import {
   planAgent,
-  resolveCapabilityDiscoveryMode,
-  resolveProposalSuspensionMode,
 } from "./planner.js";
 import type { AgentContext } from "./agent-context.js";
 import { AGENT_SETTINGS_DEFAULTS, resolveAgentSettings } from "./settings.js";
@@ -183,70 +181,7 @@ afterEach(() => {
 });
 
 describe("planAgent capture loop", () => {
-  it("widens once from a clean transcript when the model signals a namespace miss", async () => {
-    const injectedLogger = makeLogger();
-    installAgentLogger(injectedLogger);
-    const snapshots: unknown[] = [];
-    const responses = [
-      singleToolUse(
-        "request_wider_tool_set",
-        { capability: "update customer email" },
-        "tu_widen",
-      ),
-      singleToolUse("send_reply", { text: "I can help with that." }, "tu_reply"),
-    ];
-    let callIndex = 0;
-    mockCreate.mockImplementation(async (params: { messages: unknown }) => {
-      snapshots.push(structuredClone(params.messages));
-      return responses[Math.min(callIndex++, responses.length - 1)];
-    });
 
-    const plan = await planAgent(makeCtx({
-      classifierSignals: {
-        ...classifierSignalsFor({ order_status: true }),
-        requestFacts: { ...emptyRequestFacts(), ask: "order_status" },
-      },
-    }), "Help with the latest request");
-
-    expect(mockCreate).toHaveBeenCalledTimes(2);
-    expect(toolNamesForCall(0)).toContain("request_wider_tool_set");
-    expect(toolNamesForCall(0)).not.toContain("update_shopify_customer_info");
-    expect(toolNamesForCall(1)).not.toContain("request_wider_tool_set");
-    expect(toolNamesForCall(1)).toContain("update_shopify_customer_info");
-    expect(snapshots[1]).toEqual(snapshots[0]);
-    expect(plan.rawToolCalls.map((call) => call.name)).toEqual(["send_reply"]);
-    expect(plan.namespaceMiss).toBe(true);
-    expect(completeLogPayload(injectedLogger)).toMatchObject({
-      toolSelectionBucket: "order_status",
-      namespaceMiss: true,
-      namespaceMissReason: "model_signal",
-    });
-  });
-
-  it("widens once after an empty narrowed plan", async () => {
-    const injectedLogger = makeLogger();
-    installAgentLogger(injectedLogger);
-    mockCreate
-      .mockResolvedValueOnce(endTurn("I need another capability."))
-      .mockResolvedValueOnce(endTurn("I still need another capability."))
-      .mockResolvedValueOnce(singleToolUse("send_reply", { text: "I can help with that." }, "tu_reply"));
-
-    const plan = await planAgent(makeCtx({
-      classifierSignals: {
-        ...classifierSignalsFor({ policy_question: true }),
-        requestFacts: { ...emptyRequestFacts(), ask: "policy_question" },
-      },
-    }), "Help with the latest request");
-
-    expect(plan.namespaceMiss).toBe(true);
-    expect(mockCreate).toHaveBeenCalledTimes(3);
-    expect(toolNamesForCall(2)).not.toContain("request_wider_tool_set");
-    expect(toolNamesForCall(2)).toContain("create_refund");
-    expect(completeLogPayload(injectedLogger)).toMatchObject({
-      namespaceMiss: true,
-      namespaceMissReason: "empty_plan",
-    });
-  });
 
   it("binds Shopify's full-refund quote when the model supplies only the order", async () => {
     installAgentLogger(makeLogger());
@@ -329,7 +264,7 @@ describe("planAgent capture loop", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const plan = await planAgent(makeCtx({ recentOrders: [FULFILLED_ORDER_4003] }), "Handle this return", AGENT_SETTINGS_DEFAULTS, {
-      exactDraftProposal: true,
+
     });
     vi.unstubAllGlobals();
 
@@ -354,7 +289,7 @@ describe("planAgent capture loop", () => {
     }), { status: 200, headers: { "content-type": "application/json" } })));
 
     const plan = await planAgent(makeCtx({ recentOrders: [FULFILLED_ORDER_4003] }), "Handle this edit", AGENT_SETTINGS_DEFAULTS, {
-      exactDraftProposal: true,
+
     });
     vi.unstubAllGlobals();
 
@@ -368,7 +303,7 @@ describe("planAgent capture loop", () => {
       .toEqual({ order_id: "9000004003", remove_variant_id: "999" });
   });
 
-  it("drops a model-written item name on a runtime that does not bind one", async () => {
+  it("drops a model-written item name when no provider can establish it", async () => {
     installAgentLogger(makeLogger());
     mockCreate.mockResolvedValueOnce(toolUses([
       {
@@ -381,19 +316,17 @@ describe("planAgent capture loop", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    const plan = await planAgent(makeCtx(), "Handle this return", AGENT_SETTINGS_DEFAULTS);
+    const plan = await planAgent(makeCtx({ shopify: undefined }), "Handle this return", AGENT_SETTINGS_DEFAULTS);
     vi.unstubAllGlobals();
 
     expect(plan.rawToolCalls.find((call) => call.id === "tu_return")?.input).toEqual({ order_id: "9000004003" });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("reads the suspension mode from the environment, off unless asked for", () => {
-    expect(resolveProposalSuspensionMode(undefined)).toBe("off");
-    expect(resolveProposalSuspensionMode("")).toBe("off");
-    expect(resolveProposalSuspensionMode("off")).toBe("off");
-    expect(resolveProposalSuspensionMode("compose_from_receipt")).toBe("compose_from_receipt");
-    expect(() => resolveProposalSuspensionMode("true")).toThrow(/AGENT_PROPOSAL_SUSPENSION_MODE/);
+  it("refuses a retired task before contacting the model", async () => {
+    await expect(planAgent(makeCtx(), "Handle this ticket", undefined, { runtimeVersion: 1 }))
+      .rejects.toThrow(/retired agent runtime/);
+    expect(mockCreate).not.toHaveBeenCalled();
   });
 
   it("drafts the reply with the write and binds it as the exact draft", async () => {
@@ -404,7 +337,7 @@ describe("planAgent capture loop", () => {
       .mockResolvedValueOnce(singleToolUse("send_reply", { text: "Your refund is on its way." }, "tu_reply"));
 
     const plan = await planAgent(makeCtx(), "Please refund my order", AGENT_SETTINGS_DEFAULTS, {
-      exactDraftProposal: true,
+
     });
 
     // The write does not end the turn: the message the merchant approves is
@@ -428,7 +361,7 @@ describe("planAgent capture loop", () => {
       .mockResolvedValueOnce(endTurn("Refund proposed."));
 
     const plan = await planAgent(makeCtx(), "Please refund my order", AGENT_SETTINGS_DEFAULTS, {
-      exactDraftProposal: true,
+
     });
 
     expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual(["create_refund"]);
@@ -443,7 +376,7 @@ describe("planAgent capture loop", () => {
     ]));
 
     const plan = await planAgent(makeCtx(), "Where is my order?", AGENT_SETTINGS_DEFAULTS, {
-      exactDraftProposal: true,
+
     });
 
     expect(plan.validation).toMatchObject({
@@ -462,7 +395,7 @@ describe("planAgent capture loop", () => {
       .mockResolvedValueOnce(singleToolUse("send_reply", { text: "The medium is available." }, "tu_reply"));
 
     const plan = await planAgent(makeCtx(), "Is the navy Pencil Half Zip available in medium?", AGENT_SETTINGS_DEFAULTS, {
-      exactDraftProposal: true,
+
     });
 
     expect(mockCreate).toHaveBeenCalledTimes(3);
@@ -522,7 +455,7 @@ describe("planAgent routing", () => {
       makeCtx({ classifierSignals: classifierSignalsFor({ mutative_request: true }) }),
       "Refund the order. The message was not sent.",
       resolveAgentSettings({ autonomyTier: "trusted", autoExecuteMode: "live" }),
-      { exactDraftProposal: true, withheldMessageFollowUp: true },
+      { withheldMessageFollowUp: true },
     );
 
     const offered = toolNamesForCall(0);
@@ -553,7 +486,7 @@ describe("planAgent routing", () => {
       }),
       "Customer wants order #4003 cancelled. The message was not sent: cancel_order (error): the order has already been fulfilled.",
       AGENT_SETTINGS_DEFAULTS,
-      { exactDraftProposal: true, withheldMessageFollowUp: true },
+      { withheldMessageFollowUp: true },
     );
 
     expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual(["send_reply"]);
@@ -774,13 +707,6 @@ describe("planAgent capability discovery", () => {
     vi.stubEnv("AGENT_CAPABILITY_DISCOVERY_MODE", "discover");
   }
 
-  it("reads the discovery mode from the environment, off unless asked for", () => {
-    expect(resolveCapabilityDiscoveryMode(undefined)).toBe("off");
-    expect(resolveCapabilityDiscoveryMode("")).toBe("off");
-    expect(resolveCapabilityDiscoveryMode("off")).toBe("off");
-    expect(resolveCapabilityDiscoveryMode("discover")).toBe("discover");
-    expect(() => resolveCapabilityDiscoveryMode("true")).toThrow(/AGENT_CAPABILITY_DISCOVERY_MODE/);
-  });
 
   it("adds a discovered capability to the same turn instead of re-planning", async () => {
     enableDiscovery();
@@ -809,7 +735,7 @@ describe("planAgent capability discovery", () => {
     // Discovery is a loop control, not something the merchant approves.
     expect(plan.rawToolCalls.map((call) => call.name)).toEqual(["create_refund", "send_reply"]);
     expect(plan.namespaceMiss).toBeUndefined();
-    expect(completeLogPayload(injectedLogger)).toMatchObject({ namespaceMiss: false });
+    expect(toolNamesForCall(0)).not.toContain("request_wider_tool_set");
   });
 
   it("tells the model a capability is out of reach rather than widening", async () => {
@@ -849,9 +775,6 @@ describe("planAgent capability discovery", () => {
     expect(mockCreate).toHaveBeenCalledTimes(2);
     expect(toolNamesForCall(1)).not.toContain("create_refund");
     expect(plan.namespaceMiss).toBeUndefined();
-    expect(completeLogPayload(injectedLogger)).toMatchObject({
-      namespaceMiss: false,
-      namespaceMissReason: null,
-    });
+    expect(toolNamesForCall(0)).not.toContain("request_wider_tool_set");
   });
 });

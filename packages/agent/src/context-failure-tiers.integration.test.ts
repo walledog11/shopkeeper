@@ -229,10 +229,10 @@ describe("context dependency tiers", () => {
     });
 
     vi.stubEnv("AGENT_CAPABILITY_DISCOVERY_MODE", "off");
-    expect((await buildContext(thread.id, org.id, sink)).kbArticles.length).toBeGreaterThan(0);
+    expect((await buildContext(thread.id, org.id, sink)).kbArticles).toEqual([]);
 
-    // On the discovery runtime the largest variable input in the prompt is left
-    // to search_kb, which is in the set this turn holds.
+    // Status turns always defer KB retrieval to search_kb, including when a
+    // retired compatibility setting is present.
     vi.stubEnv("AGENT_CAPABILITY_DISCOVERY_MODE", "discover");
     const deferred = await buildContext(thread.id, org.id, sink);
     expect(deferred.kbArticles).toEqual([]);

@@ -95,12 +95,18 @@ The standalone Concierge agent chat lives at `/dashboard/agent` on `operator` th
 ## AI Agent System
 The agent is the core of the product. It operates in two modes:
 
+The single active conversational runtime is v2. Its request, approval, receipt,
+recovery and rollback contracts are in [the runtime runbook](docs/agent-runtime.md).
+
 ### Support Mode (ticket threads: ig_dm, email, shopify)
-Triggered from the tickets page. When a ticket is opened:
-1. **Auto-plan** fires automatically if the last message is from the customer. Calls `/api/agent/plan`, which runs a 2–3 phase Claude tool-use call to generate a `PlanStep[]` without side effects. Plan is cached in `Thread.cachedPlan`.
-2. **ActionPlanCard** is shown floating above the composer. Agent reviews proposed steps, can toggle individual steps, approve, dismiss, or regenerate.
-3. **Approve** → `POST /api/agent` executes the approved tool calls, then runs the standard tool-use loop for follow-up steps.
-4. Agent can also be invoked manually: type `@{agentName}` in the ticket composer.
+
+Customer requests and ticket-composer instructions are accepted as durable tasks.
+The worker drafts a plan without executing proposed mutations and projects the
+current proposal to `Thread.cachedPlan`. The review card shows its actions and
+exact customer message, including labeled receipt placeholders. Approval runs
+the immutable durable proposal once; only successful receipts can fill those
+placeholders. Revised actions or messages require fresh review. Historical
+cached plans require regeneration before execution.
 
 ### Operator Mode (`operator`)
 Direct interface for the merchant/team. No customer in context — the agent takes instructions and acts on Shopify directly.

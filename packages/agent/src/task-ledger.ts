@@ -1,3 +1,4 @@
+import { requireDurableAgentRuntime } from "./runtime-modes.js";
 import { randomUUID } from "node:crypto";
 import type {
   AgentActionDispatchState, AgentActorKind, ChannelType, Prisma as PrismaTypes,
@@ -37,6 +38,7 @@ export interface TaskBudget {
 }
 
 function validateTaskBudget(budget: TaskBudget): void {
+  requireDurableAgentRuntime(budget.runtimeVersion);
   for (const value of [budget.runtimeVersion, budget.modelCallLimit, budget.activeTimeMsLimit]) {
     if (!Number.isSafeInteger(value) || value <= 0 || value > 2147483647) {
       throw new BadRequestError("Runtime version and task limits must be positive integers.");
@@ -772,6 +774,7 @@ export async function claimAgentTask(input: TaskClaimIdentity & { now?: Date; le
     const task = await tx.agentTask.findFirstOrThrow({
       where: { id: input.taskId, organizationId: input.organizationId, claimToken },
     });
+    requireDurableAgentRuntime(task.runtimeVersion);
     return { task, claimToken };
   });
 }
@@ -1083,8 +1086,8 @@ function continuableTaskWhere(
  * this thread, the member is outside the recorded scope, two parked waits make
  * the input ambiguous, another attempt already owns the task, or it reached a
  * provider and so cannot be replayed from the top. Callers must distinguish the
- * legacy "nothing waiting" case from lost authority and fail closed for the
- * latter.
+ * missing wait from authority to start new work; historical questions require
+ * regeneration through the normal durable entry point.
  */
 export async function claimContinuedAgentTask(input: {
   organizationId: string;
@@ -1124,11 +1127,12 @@ export async function claimContinuedAgentTask(input: {
     const target = await tx.agentTask.findFirst({
       where: { ...continuable, id: candidateId },
       select: {
-        id: true, threadId: true, revision: true, status: true,
+        id: true, threadId: true, revision: true, status: true, runtimeVersion: true,
         activeProposalId: true, pendingQuestionId: true,
       },
     });
     if (!target) return null;
+    requireDurableAgentRuntime(target.runtimeVersion);
     let request: { id: string } | null;
     const instruction = input.continuationInstruction?.trim() ?? "";
     if (instruction) {
@@ -1251,8 +1255,8 @@ async function persistProposal(
   };
   // A replayed attempt at the same revision re-proposes the same bundle. It is
   // the same thing to approve, so it reuses the row rather than conflicting on
-  // the snapshot key. The replayed card then carries a fresh plan ID that names
-  // no proposal, and approving it falls back to the legacy taskless path.
+  // the snapshot key. Callers must project this returned identity onto the card;
+  // an unmatched cache identity cannot authorize execution.
   const existing = await tx.agentProposal.findUnique({
     where: { organizationId_taskId_taskRevision_proposalHash: identity },
     select: { id: true },

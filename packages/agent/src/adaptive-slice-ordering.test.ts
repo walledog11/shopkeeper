@@ -488,12 +488,12 @@ describe("a compound task: read the order and the policy, refund one line, repor
 
     const ctx = supportCtx();
     const first = await planAgent(ctx, "One of the napkins arrived torn - sort it out.", LIVE_SETTINGS, {
-      exactDraftProposal: true,
+
     });
     // The merchant changes the instruction instead of approving what they were
     // shown, so the proposal they approve is the one planned from the new one.
     const revisedInstruction = "Both napkins were torn - refund both of them.";
-    const revised = await planAgent(ctx, revisedInstruction, LIVE_SETTINGS, { exactDraftProposal: true });
+    const revised = await planAgent(ctx, revisedInstruction, LIVE_SETTINGS, {});
 
     const result = await runAgent(ctx, revisedInstruction, approvedCalls(revised), LIVE_SETTINGS);
 

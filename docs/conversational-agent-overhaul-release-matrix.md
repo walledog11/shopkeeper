@@ -1,17 +1,19 @@
 # Conversational agent release matrix
 
-This is the short working gate for [the overhaul plan](conversational-agent-overhaul-plan.md).
-An entry is complete only when its evidence is recorded against a commit. A
-database-backed fake-provider host test proves the selected path, not a real
-provider or customer delivery. Retained capability scope comes from the
-[Package 0 inventory](conversational-agent-overhaul-p0-baseline.md).
+This records implementation evidence for [the overhaul plan](conversational-agent-overhaul-plan.md).
+The plan's shipping queue and manual completion criteria are authoritative.
+Use these rows to find existing checks and earlier evidence, not to create new
+tests or another cleanup campaign. Fake-provider results do not close real
+user flows; unverified behavior stays open. Retained capability scope comes
+from the [Package 0 inventory](conversational-agent-overhaul-p0-baseline.md).
 
 ## Package 5: capability migration
 
 Each row checks availability, validated inputs and fresh evidence, authority,
 effect receipt, recovery, conversational variants, delivery, and v1 compatibility
-as defined in the plan. Do not add a test to fill a row; a new test is warranted
-only for a refusal or recovery a live run cannot safely show
+as defined in the plan. Do not add a test to fill a row; new tests require a
+concrete change-specific problem that manual verification cannot safely or
+reliably reproduce and existing checks do not cover
 ([TESTING.md](../TESTING.md), *When a test is worth writing*).
 
 | Row | Evidence recorded | Next release evidence |
@@ -37,34 +39,24 @@ only for a refusal or recovery a live run cannot safely show
 | Wait continuation | Merchant answer, revision, decline are accepted requests on the exact task; a delivered customer question records that customer as the durable answerer and their next message resumes the exact task even when classification is absent; active merchant preferences load with source/scope policy tests; any authorized member can answer the org-scoped merchant wait from the dashboard or an operator channel | Keep broader channel switching in Package 6 holdout evaluation |
 | Stop and supersession | Old approval invalidated; cancellation before dispatch is ordered at the task row; cancellation after dispatch preserves a committed outcome or leaves submitted work reconciling, and prevents later work | No remaining deterministic runtime case; retain in held-out conversation/release evaluation |
 | Stale approval | Shipped/partially shipped cancellation, revoked Shopify write grant, changed cancellation policy, lost member authority, full-refund balance shrink, changed address ownership/fulfillment, depleted return quantity, invalidated exchange replacement, and changed partial-refund quote all refuse the effect | Keep in controlled real-provider and holdout evaluation |
-| Bookkeeping | Idempotent runtime turn journal; no routine action-note prompt; retained note/status/tag tools are explicit operations; runtime-v2 receipt composition replaces speculative completion drafting | Keep the v1-only draft path until Package 6 persisted-state inventory permits deletion |
+| Bookkeeping | Idempotent runtime turn journal; no routine action-note prompt; retained note/status/tag tools are explicit operations; runtime-v2 receipt composition replaces speculative completion drafting | Retirement inventory permits deletion; exact drafts and receipt placeholders remain |
 | Completion wording | Receipt-based composition and negated-refund grounding case | Holdout paraphrases and unsupported-claim checks across effect rows |
 
 ## Package 6: release gate
 
-Execution evidence is recorded in the
-[Package 6 release evidence](conversational-agent-overhaul-p6-release-evidence.md).
+V2 became the default for new tasks on 2026-10-04. Retained dev-store rechecks
+through #164 are complete within decisions L and M. Runtime retirement is
+implemented on `codex/retire-agent-v1`; release verification/deployment are
+recorded in [the release evidence](conversational-agent-overhaul-p6-release-evidence.md).
+The production inventory found no v1 tasks/proposals or legacy unknown actions.
+Five current taskless caches require regeneration and review. Historical readers,
+two v2 unknown actions, and attributed delivery recovery remain.
 
-1. Select one controlled workspace with `AGENT_RUNTIME_V2_ORG_IDS` while the
-   default remains v1. Both support and dashboard requests now use this
-   selector at task creation; existing tasks keep their persisted version.
-   Clear the list only when promoting the global `AGENT_RUNTIME_VERSION`.
-2. Run deterministic gates. The budgeted live-model release set (v1 and v2 on
-   the same baseline and held-out inputs, recording effect correctness, task
-   completion, clarification, delivery, model calls, latency, and cost
-   separately) is advisory since 2026-09-28: it runs when the release owner asks
-   and does not block steps 3 and 4.
-3. In an authorized controlled store, run approval → real provider → typed
-   receipt → actual customer delivery with a bounded effect budget and test
-   destination. Record redacted provider and message references.
-4. Stage routing, watch duplicate/unauthorized effects, unknown aging, stuck
-   tasks, and failed delivery, and rehearse rollback of **new** tasks to v1.
-5. Re-inventory actionable persisted v1 records. Remove each superseded active
-   parser, fallback, policy branch, or adapter only with a named replacement and
-   proof that no active caller or actionable record needs it. Update architecture
-   and product docs after removal.
-
-No live-model or real-provider gate is claimed by the local fake-provider tests.
+The [runtime runbook](agent-runtime.md) replaces the retired rollout flags and
+same-image v1 rollback instructions. Rollback redeploys #164; the owner waived a
+staged rehearsal. Paid comparisons remain advisory and require an explicit
+request. Unobserved normal-use conversational checks remain open under decision
+L; automated checks do not prove live conversation or delivery.
 
 ## 2026-09-21 local evidence
 
@@ -252,3 +244,33 @@ No live-model or real-provider gate is claimed by the local fake-provider tests.
   structure and lint, all workspace typechecks and unit suites, 73 Node contract
   tests, 12 browser smoke tests, every coverage gate, and all production builds
   completed successfully.
+
+## 2026-09-30 deployed entry-point evidence
+
+- #137, #138 and #140 are merged and deployed through `6031e3b4`, with required
+  CI and production readiness checks passed.
+- Actual composer instruction, Rewrite, reload and approval preserved one v2
+  task and its accumulated budget. The replacement superseded the old proposal;
+  stale approval returned 409. One cancellation and one exact-draft email
+  committed; Shopify independently confirms #1035 cancelled/refunded $34.90 USD.
+  Actual recipient receipt confirmation remains pending.
+- Dashboard Stop returned after reload following #140's shared-panel history
+  fix. Recording Stop and reloading retained honest in-progress state, and the
+  read-only task settled cancelled without a Shopify write or customer send.
+- Actual iMessage delivery passed after the owner-approved Photon webhook
+  replacement: a fresh #1035 question reached production automatically, linked
+  one request/task/reply, charged the v2 budget, ran only reads, and produced a
+  reply the owner confirmed receiving. The old production receiver was retired.
+  A separate retained ping was manually recovered; it is not automatic-ingress
+  evidence.
+- Conversation acceptance failed: the one-order answer revived an earlier
+  stopped five-order comparison, exposed provider fields and repeated itself.
+  It also made an unverified shipment/return inference from `restocked`.
+  Scope and brief, natural, grounded wording are the next-session priority (8h);
+  the cause is not established and no response-quality fix has been made.
+- iMessage is the primary phone channel. The owner explicitly stopped Telegram
+  testing; do not test it or request linking unless they reopen the work.
+  iMessage approval, phone-started Stop/reload, definite delivery-failure
+  recovery and customer-email receipt confirmation remain unverified.
+- Detailed redacted references and remaining live checks are in the
+  [Package 6 release evidence](conversational-agent-overhaul-p6-release-evidence.md#2026-09-30-durable-composer-and-phone-verification).

@@ -13,7 +13,7 @@ import { POST } from './route';
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
 
 const agentBudget = {
-  runtimeVersion: 1,
+  runtimeVersion: 2,
   modelCallLimit: 20,
   activeTimeMsLimit: 300_000,
   spendNanoUsdLimit: BigInt(1_000_000_000),

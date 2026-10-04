@@ -10,6 +10,8 @@ import {
 import { buildAgentPlanCacheRecord } from "@shopkeeper/agent/plan-cache";
 import { AGENT_PLAN_CACHE_VERSION } from "@shopkeeper/agent/plan-cache-shape";
 import { resolveAgentSettings } from "@shopkeeper/agent/settings";
+import { ANY_MEMBER_ACTOR_KEY, acceptCustomerAgentRequest, claimAgentTask, settleAgentTaskClaim } from "@shopkeeper/agent/task-ledger";
+import { getExecutablePlanToolCalls } from "@shopkeeper/agent/plan-execution";
 import type { AgentPlan, OrgSettings } from "@/types";
 
 vi.mock("@clerk/nextjs/server", () => ({
@@ -59,6 +61,7 @@ const quickReplyPlan: AgentPlan = {
 
 beforeEach(async () => {
   org = await createTestOrg();
+  await db.orgMember.create({ data: { organizationId: org.id, clerkUserId: "usr_test" } });
   vi.mocked(auth).mockResolvedValue({ userId: "usr_test", orgId: org.clerkOrgId } as ReturnType<typeof auth> extends Promise<infer T> ? T : never);
   mockExecuteAgentTurn.mockResolvedValue({
     summary: "Reply sent.",
@@ -87,17 +90,38 @@ async function createThreadWithCachedPlan(
   const thread = await createTestThread(org.id, customer.id, ChannelType.email);
   const message = await createTestMessage(thread.id, "Do you ship to the UK?");
   const settings = resolveAgentSettings(orgSettings ?? null);
+  const calls = getExecutablePlanToolCalls(plan);
+  const reply = calls.find((call) => call.name === "send_reply");
+  const replyInput = reply?.input as { text?: unknown } | undefined;
+  plan = {
+    ...plan,
+    communication: reply ? {
+      mode: "exact_draft", destination: { kind: "thread", id: thread.id, channel: thread.channelType },
+      draft: typeof replyInput?.text === "string" ? replyInput.text : "", allowedResultBindings: [],
+    } : { mode: "none" },
+  };
+  const cachedPlan = buildAgentPlanCacheRecord({ instruction, lastCustomerMessageId: message.id, settings, plan });
 
   await db.thread.update({
     where: { id: thread.id },
     data: {
       cachedPlanMessageId: message.id,
-      cachedPlan: buildAgentPlanCacheRecord({
-        instruction,
-        lastCustomerMessageId: message.id,
-        settings,
-        plan,
-      }) as unknown as Parameters<typeof db.thread.update>[0]["data"]["cachedPlan"],
+      cachedPlan: cachedPlan as unknown as Parameters<typeof db.thread.update>[0]["data"]["cachedPlan"],
+    },
+  });
+
+  const { request, task } = await acceptCustomerAgentRequest({
+    organizationId: org.id, threadId: thread.id, sourceMessageId: message.id, objective: instruction,
+    budget: { runtimeVersion: 2, modelCallLimit: 20, activeTimeMsLimit: 120000, spendNanoUsdLimit: BigInt(1000000000) },
+  });
+  const claim = await claimAgentTask({ organizationId: org.id, taskId: task.id, expectedRevision: task.revision });
+  if (!claim) throw new Error("Could not claim the approval fixture");
+  await settleAgentTaskClaim({
+    organizationId: org.id, taskId: task.id, expectedRevision: task.revision, claimToken: claim.claimToken, requestId: request.id,
+    settlement: {
+      status: "waiting_approval",
+      proposal: { proposalId: cachedPlan.planId ?? undefined, instruction, rawToolCalls: calls, communication: plan.communication, sourceRequestIds: [request.id] },
+      approver: { kind: "member", key: ANY_MEMBER_ACTOR_KEY },
     },
   });
 

@@ -36,6 +36,7 @@ export interface GatewayAgentRequestPayload {
   statusUrl?: string;
   deduplicated?: boolean;
   response: {
+    requestId?: string | null;
     summary: string;
     actionsPerformed: ActionEntry[];
     awaitingApproval: boolean;

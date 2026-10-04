@@ -1,6 +1,6 @@
 import { db, Prisma } from "@shopkeeper/db";
 import { parseClassifierSignals } from "./classifier-signals.js";
-import { usesCapabilityDiscovery } from "./runtime-modes.js";
+import { requireDurableAgentRuntime } from "./runtime-modes.js";
 import { selectCustomerBurst } from "./message-history.js";
 import { shopifyRestJson, type ShopifyContext } from "./shopify/client.js";
 import { recordedShopifyScopes } from "./shopify/integration-health.js";
@@ -152,9 +152,7 @@ function prefetchesKnowledgeBase(
   signals: ReturnType<typeof parseClassifierSignals>,
   requestSourceMessageId: string | null,
   latestCustomerMessageId: string | null,
-  runtimeVersion: number | undefined,
 ): boolean {
-  if (!usesCapabilityDiscovery(runtimeVersion)) return true;
   if (!signals) return true;
   // Same alignment rule tool selection narrows on: a classification taken from
   // an older message is not evidence about this one.
@@ -263,12 +261,12 @@ export async function buildContext(
     throw new Error("Thread not found");
   }
 
+  requireDurableAgentRuntime(options?.runtimeVersion);
   const classifierSignals = parseClassifierSignals(thread.classifierSignals);
   const prefetchKb = prefetchesKnowledgeBase(
     classifierSignals,
     thread.requestSourceMessageId,
     thread.messages.find((message) => message.senderType === "customer")?.id ?? null,
-    options?.runtimeVersion,
   );
 
   // Operation evidence. Rank matching tags before the limit, so newer unrelated
@@ -350,7 +348,7 @@ export async function buildContext(
   // The summarizer, notification and planner must agree on which customer
   // messages remain outstanding. A completed handoff closes its source even
   // when no customer reply exists. Keep the rest as historical reference data.
-  const scopesCustomerRequest = !isOperator && usesCapabilityDiscovery(options?.runtimeVersion);
+  const scopesCustomerRequest = !isOperator;
   const handledExecutions = scopesCustomerRequest
     ? await db.planExecution.findMany({
         where: {

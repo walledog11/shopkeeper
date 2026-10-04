@@ -139,21 +139,8 @@ ${parts.context}${instructionsSection}${parts.trailer}`;
 }
 
 // ── Support module ──
-const SUPPORT_GIFT_CARD_BRANCH = '  - Gift cards are a merchant-directed goodwill action, not a substitute for a customer refund. Call create_gift_card only when the merchant instruction explicitly directs a fixed amount and a Shopify customer_id is resolved for delivery. Never infer a gift card or account credit from a customer complaint.';
+const SUPPORT_GIFT_CARD_BRANCH = '  - Gift cards are a merchant-directed goodwill action, not a substitute for a customer refund. Only when the merchant instruction explicitly directs a fixed amount and a Shopify customer_id is resolved for delivery, use the gift-card tool if offered or discover that capability. Never infer a gift card or account credit from a customer complaint. If it is unavailable, escalate rather than substituting a refund.';
 
-const SUPPORT_GIFT_CARD_BRANCH_DISCOVERY = '  - Gift cards are a merchant-directed goodwill action, not a substitute for a customer refund. Only when the merchant instruction explicitly directs a fixed amount and a Shopify customer_id is resolved for delivery, discover the gift-card capability and call the tool it gives you. Never infer a gift card or account credit from a customer complaint. If discovery does not offer it, escalate rather than substituting a refund.';
-
-// The compensation decision tree names a tool per allowed case, so it has to
-// agree with what the turn was actually offered. Gift-card issuance left the
-// default support selection on the discovery runtime (the package-0 inventory's
-// disposition: remove from support default, retain as an isolated merchant
-// capability), so on that runtime the branch names the capability to discover
-// rather than a tool the model does not hold — a tree that names an absent tool
-// is how a fabricated tool call gets invited, and execution now refuses those.
-//
-// The legacy runtime keeps the branch verbatim. Gift cards are still in its
-// mutation bucket, and changing what production plans before the cutover is not
-// this package's decision to make.
 const SUPPORT_INSTRUCTIONS = `- When you are uncertain about the right action, whether a request is in scope, or the customer's identity for an action that changes their order or moves money, call escalate_to_human instead of guessing. Confident wrong actions are far worse than honest escalations. If a tool fails and you cannot recover, escalate.
 - A customer's later, clear instruction supersedes an earlier pending request in the conversation. If their latest message genuinely leaves two mutually exclusive options open, ask one focused customer-facing clarification instead of guessing or escalating.
 - Compensation follows one strict decision tree:
@@ -175,7 +162,7 @@ ${SUPPORT_GIFT_CARD_BRANCH}
 - Use the available tools to complete the requested task.
 - ${MERCHANT_FOLLOW_UP_GUIDANCE}
 - After taking an action (Shopify update, refund, cancellation, etc.) with no unfinished merchant follow-up, call send_reply to notify the customer what was done. Set send_reply.await_response=true only when your reply asks the customer for information required to continue this same task; omit it for final answers, acknowledgements, and completion messages.
-- Put that notification after every action it describes. Draft completion wording as conditional on those action results: use the exact order/customer, amount, and currency from the action inputs, and never turn a failed, blocked, or unknown result into a success statement. A prior plan or customer claim is not proof that work completed; historical completion language requires a live store read that shows the completed state.
+- Put that notification after every action it describes. Draft it for approval with labeled receipt-bound placeholders for amounts and provider references. Action inputs describe what is proposed; only validated successful receipts establish what happened. Never turn a failed, blocked, or unknown result into a success statement. A prior plan or customer claim is not proof that work completed; historical completion language requires a live store read that shows the completed state.
 - When greeting the customer in a reply, use their first name if "Customer name" is available (e.g. "Hi John,"). If the customer name is not available, open with "Thanks for reaching out to us," - never use the email address as a greeting.
 - Action outcomes are journaled automatically. Do not call add_internal_note just to document an action; use it only when the merchant explicitly asks for a separate note.
 - When the support agent refers to "this order" or "the order", infer they mean the most recent order in the customer's recent-orders context unless context makes another order clear.
@@ -254,13 +241,6 @@ const SUPPORT_STABLE_PREFIX = `You are an AI support agent for an e-commerce sto
 ## Instructions
 ${SUPPORT_INSTRUCTIONS}${UNTRUSTED_CONTENT_GUIDANCE}`;
 
-// Built once per flag value rather than per request: the prefix is the cached
-// half of the prompt, and only one of these is live at a time.
-const SUPPORT_STABLE_PREFIX_DISCOVERY = SUPPORT_STABLE_PREFIX.replace(
-  SUPPORT_GIFT_CARD_BRANCH,
-  SUPPORT_GIFT_CARD_BRANCH_DISCOVERY,
-);
-
 // The operator equivalent, and it holds only what is on EVERY operator turn.
 // The control-tool, inbox-tool and dashboard-nav blocks are deliberately absent:
 // each is conditional, and a prefix that varies splits the cache into variants
@@ -285,7 +265,7 @@ ${OPERATOR_PRODUCT_HELP_INSTRUCTIONS}`;
 export function buildSystemPromptParts(
   ctx: AgentContext,
   settings?: Partial<OrgSettings>,
-  options?: { exactDraftProposal?: boolean; capabilityDiscovery?: boolean },
+  options?: { exactDraftProposal?: boolean },
 ): { stable: string; volatile: string } {
   const s = resolveAgentSettings(settings);
   const isOperatorMode = isOperatorChannel(ctx.thread.channelType);
@@ -402,8 +382,8 @@ You are on the shop's website, talking to someone who has not signed in. You are
       }`
     : "\n## Knowledge base\nNo articles are pre-loaded. Use the search_kb tool to search for relevant policy or FAQ information before replying.";
 
-  // Runtime v2 only: its customer message is approved as an exact draft, which
-  // is what gives a placeholder something to be filled from.
+  // Planning binds the exact customer draft and its receipt placeholders.
+  // Execute/read-only turns do not propose a customer communication snapshot.
   const exactDraftSection = options?.exactDraftProposal
     ? `\n\n${replyPlaceholderInstructions()}`
     : "";
@@ -422,12 +402,8 @@ ${identitySection}${ordersSection}${guestSection}
 ${shopifyNote}
 ${shopifyCustomerNote}${buildGuardrailSection(s)}${buildAutonomySection(s)}${buildStoreProfileSection(ctx.orgName, s.aiContext)}${kbSection}${buildVoiceSection(s)}${buildMerchantPreferencesSection(ctx)}${exactDraftSection}`;
 
-  // Storefront turns never held create_gift_card, so their prefix does not
-  // depend on the gate; the branch only has to match what a support turn was
-  // offered. The caller that chose the tools says whether discovery was among
-  // them — reading the environment here would miss a v2 task's own version.
   return {
-    stable: options?.capabilityDiscovery ? SUPPORT_STABLE_PREFIX_DISCOVERY : SUPPORT_STABLE_PREFIX,
+    stable: SUPPORT_STABLE_PREFIX,
     volatile,
   };
 }

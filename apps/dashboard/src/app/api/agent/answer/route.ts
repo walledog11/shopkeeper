@@ -3,7 +3,7 @@ import { db, createMessage } from "@shopkeeper/db";
 import { readRequiredJsonObject } from "@/lib/api/body";
 import { withOrgRoute } from "@/lib/api/route";
 import { getLatestConversationMessage, requireOrgThread } from "@shopkeeper/agent/thread-auth";
-import { buildAgentPlanCacheRecord, commitThreadPlanCacheIfCurrent } from "@shopkeeper/agent/plan-cache";
+import { buildAgentPlanCacheRecord } from "@shopkeeper/agent/plan-cache";
 import { extractCachedQuestion, getPendingCustomerMessageId } from "@shopkeeper/agent/plan-cache-shape";
 import { clearThreadPlanCache, supportAttemptSettlement } from "@shopkeeper/agent/plan-execution";
 import {
@@ -17,7 +17,6 @@ import { saveMerchantAnswerToKb } from "@shopkeeper/agent/merchant-answer-kb";
 import { decideAutonomy } from "@shopkeeper/agent/autonomy";
 import { parseAgentAnswerBody } from "@/lib/agent/api/validation";
 import { buildContext, hashInstructionForLog, planAgent } from "@/lib/agent/runner";
-import { usesExactDraftProposals } from "@shopkeeper/agent/planner";
 import { ConflictError } from "@shopkeeper/shared/errors";
 import { resolveAgentSettings } from "@shopkeeper/agent/settings";
 import type { OrgSettings } from "@/types";
@@ -27,26 +26,16 @@ export const maxDuration = 60;
 
 /**
  * Ends the durable wait this answer was asked under, and claims the task for the
- * re-plan below. Null is allowed only when no durable wait exists (for a legacy
- * cached question); a durable wait that cannot be claimed fails closed.
+ * re-plan below. Historical taskless questions require regeneration; an answer
+ * can never fall through to an untracked re-plan.
  */
 async function claimAnsweredTaskForThread(
   organizationId: string,
   threadId: string,
   answer: string,
-): Promise<ContinuedTaskClaim | null> {
+): Promise<ContinuedTaskClaim> {
   const { userId } = await auth();
   if (!userId) throw new ConflictError("The answering member session is no longer available.");
-  const durableWait = await db.agentTask.count({
-    where: {
-      organizationId, threadId,
-      OR: [
-        { status: "waiting_input", cancelledAt: null },
-        { runtimeVersion: { gte: 2 } },
-      ],
-    },
-  });
-  if (durableWait === 0) return null;
   const continuation = await claimContinuedAgentTask({
     organizationId, clerkUserId: userId, threadId, endsWait: "question",
     continuationInstruction: answer,
@@ -54,7 +43,7 @@ async function claimAnsweredTaskForThread(
     leaseMs: 300_000,
   });
   if (!continuation) {
-    throw new ConflictError("This question is already being continued or is no longer available to answer.");
+    throw new ConflictError("This question is no longer available to answer. Regenerate historical plans before continuing.");
   }
   return continuation;
 }
@@ -95,7 +84,7 @@ export const POST = withOrgRoute(
     const question = extractCachedQuestion(thread.cachedPlan);
     const continuation = await claimAnsweredTaskForThread(org.id, threadId, answer);
 
-    const replan = async (control?: TaskRunControl) => {
+    const replan = async (control: TaskRunControl) => {
       let savedArticle: { title: string; body: string } | null = null;
       await createMessage({
         threadId,
@@ -115,7 +104,7 @@ export const POST = withOrgRoute(
       }
 
       if (!pendingCustomerMessageId) {
-        if (continuation && !(await settleAgentTaskClaim({ ...continuation, settlement: { status: "completed" } }))) {
+        if (!(await settleAgentTaskClaim({ ...continuation, settlement: { status: "completed" } }))) {
           throw new ConflictError("Task claim was lost before the answer was recorded.");
         }
         if (thread.cachedPlan || thread.cachedPlanMessageId) {
@@ -129,41 +118,34 @@ export const POST = withOrgRoute(
       const planningInstruction = buildMerchantAnswerPlanningInstruction({ baseInstruction, question, answer, saveToKb });
       const ctx = await buildContext(threadId, org.id, {
         ...(savedArticle ? { pinKbArticles: [savedArticle] } : {}),
-        ...(continuation ? { runtimeVersion: continuation.runtimeVersion } : {}),
+        runtimeVersion: continuation.runtimeVersion,
       });
-      if (continuation && control) {
-        ctx.taskBudget = control.taskBudget;
-        ctx.assertExecutionAllowed = control.assertExecutionAllowed;
-        ctx.agentRequestId = continuation.requestId;
-        ctx.agentTaskId = continuation.taskId;
-      }
+      ctx.taskBudget = control.taskBudget;
+      ctx.assertExecutionAllowed = control.assertExecutionAllowed;
+      ctx.agentRequestId = continuation.requestId;
+      ctx.agentTaskId = continuation.taskId;
       const drafted = await planAgent(ctx, planningInstruction, settings, {
         // The merchant typed this answer; it directs the plan.
         merchantInstruction: true,
-        ...(usesExactDraftProposals(continuation?.runtimeVersion) ? { exactDraftProposal: true } : {}),
-        ...(continuation ? { runtimeVersion: continuation.runtimeVersion } : {}),
+        runtimeVersion: continuation.runtimeVersion,
       });
       const plan = { ...drafted, instruction: baseInstruction };
       const cacheRecord = buildAgentPlanCacheRecord({
         instruction: baseInstruction, lastCustomerMessageId: pendingCustomerMessageId, settings, plan,
       });
       const verdict = decideAutonomy(plan, settings);
-      control?.assertExecutionAllowed();
+      control.assertExecutionAllowed();
       // The proposal and its cache become visible in the same transaction, only
       // while this task owns its lease and this customer message is current.
-      const committed = continuation
-        ? await settleAgentTaskClaim({
-            ...continuation,
-            settlement: await supportAttemptSettlement({
-              orgId: org.id, threadId, settings, allowMutativeAutoExecute: false, manualReview: true,
-              merchantQuestion: verdict.kind === "needs_merchant_input" ? verdict.question : null,
-              sourceRequestIds: [continuation.requestId], proposedCache: cacheRecord,
-            }),
-            planCache: { threadId, sourceMessageId: pendingCustomerMessageId, cache: cacheRecord },
-          })
-        : await commitThreadPlanCacheIfCurrent({
-            orgId: org.id, threadId, sourceMessageId: pendingCustomerMessageId, cache: cacheRecord,
-          });
+      const committed = await settleAgentTaskClaim({
+        ...continuation,
+        settlement: await supportAttemptSettlement({
+          orgId: org.id, threadId, settings, allowMutativeAutoExecute: false, manualReview: true,
+          merchantQuestion: verdict.kind === "needs_merchant_input" ? verdict.question : null,
+          sourceRequestIds: [continuation.requestId], proposedCache: cacheRecord,
+        }),
+        planCache: { threadId, sourceMessageId: pendingCustomerMessageId, cache: cacheRecord },
+      });
       if (!committed) throw new ConflictError("The task stopped or the customer message changed before the draft was published.");
 
       logger.info({
@@ -178,9 +160,9 @@ export const POST = withOrgRoute(
     };
 
     try {
-      return continuation ? await withAgentTaskClaim(continuation, replan) : await replan();
+      return await withAgentTaskClaim(continuation, replan);
     } catch (err) {
-      if (continuation) await failAnsweredTask(continuation, org.id);
+      await failAnsweredTask(continuation, org.id);
       throw err;
     }
   },

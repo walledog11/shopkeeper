@@ -1,9 +1,13 @@
 import type { ActionEntry } from "@shopkeeper/agent/context";
-import { TOOL_CATEGORIES, TOOL_LABELS } from "@shopkeeper/agent/tools";
+import { TOOL_CATEGORIES, TOOL_LABELS, PLAN_STEP_LABELS } from "@shopkeeper/agent/tools";
 
 export type ToolChipVariant = "read" | "executed" | "pending" | "error";
 
 export function getToolChipLabel(action: ActionEntry): string {
+  const actionLabel = PLAN_STEP_LABELS[action.tool] ?? action.tool;
+  if (action.status === "policy_block") return `Blocked: ${actionLabel}`;
+  if (action.status === "unknown") return `Needs review: ${actionLabel}`;
+  if (action.status === "error") return `Failed: ${actionLabel}`;
   return TOOL_LABELS[action.tool] ?? action.tool;
 }
 
@@ -13,8 +17,8 @@ export function getToolChipVariant(action: ActionEntry): ToolChipVariant {
   const category = action.category ?? TOOL_CATEGORIES[action.tool];
   if (category === "read" || category === "internal" || action.mode === "read_only") return "read";
 
-  if (action.mode === "auto_executed" || action.mode === "human_approved") return "executed";
   if (action.status === "policy_block") return "pending";
+  if (action.mode === "auto_executed" || action.mode === "human_approved") return "executed";
 
   if (category === "action" || category === "communication") return "pending";
 

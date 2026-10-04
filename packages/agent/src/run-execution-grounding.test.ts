@@ -70,6 +70,16 @@ async function sendWithEvidence(
   return { actionsPerformed, sendReply };
 }
 
+const confirmedRefundReceipt = {
+  version: 1 as const, operationId: "operation-1", executionId: "execution-1",
+  tool: "create_refund" as const, target: { kind: "order", id: "123" },
+  observedAt: "2026-10-04T00:00:00.000Z", outcome: "succeeded" as const, providerReference: "refund-1",
+  facts: {
+    orderId: "123", refundId: "refund-1", amount: "20.00", currency: "USD",
+    transactionStatus: "SUCCESS", transactionReference: "transaction-1", classification: "full" as const,
+  },
+};
+
 describe("completion grounding at execution", () => {
   it("sends exact completion copy after the matching action succeeded", async () => {
     const result = await sendWithEvidence("We refunded USD 20.00 for order #1001.", [{
@@ -78,6 +88,7 @@ describe("completion grounding at execution", () => {
       input: { order_id: "123", amount: "20.00", currency: "USD" },
       result: "Refund of $20.00 issued successfully for order 123.",
       status: "success",
+      receipt: confirmedRefundReceipt,
     }]);
 
     expect(result.sendReply).toHaveBeenCalledOnce();
@@ -96,6 +107,7 @@ describe("completion grounding at execution", () => {
         input: { order_id: "123", amount: "20.00", currency: "USD" },
         result: "Refund of $20.00 issued successfully for order 123.",
         status: "success",
+      receipt: confirmedRefundReceipt,
       }],
     );
 
@@ -114,6 +126,7 @@ describe("completion grounding at execution", () => {
       input: { order_id: "123", amount: "20.00", currency: "USD" },
       result: "Refund of $20.00 issued successfully for order 123.",
       status: "success",
+      receipt: confirmedRefundReceipt,
     }]);
 
     expect(result.sendReply).not.toHaveBeenCalled();
@@ -132,6 +145,7 @@ describe("completion grounding at execution", () => {
         input: { order_id: "123", amount: "20.00", currency: "USD" },
         result: "Refund of $20.00 issued successfully for order 123.",
         status: "success",
+      receipt: confirmedRefundReceipt,
       },
       {
         tool: "create_return",

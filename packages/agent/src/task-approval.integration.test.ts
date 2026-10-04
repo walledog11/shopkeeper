@@ -15,7 +15,7 @@ import {
 import { authorizeAgentActionDispatch, beginAgentActionAttempt, hashInstruction, hashPlan } from "./agent-actions.js";
 
 const orgIds: string[] = [];
-const budget = { runtimeVersion: 1, modelCallLimit: 20, activeTimeMsLimit: 120000, spendNanoUsdLimit: 1000000000n };
+const budget = { runtimeVersion: 2, modelCallLimit: 20, activeTimeMsLimit: 120000, spendNanoUsdLimit: 1000000000n };
 const instruction = "refund the order";
 const approvedToolCalls = [{ id: "call-1", name: "create_refund", input: { orderId: "55", amount: "12.00" } }];
 

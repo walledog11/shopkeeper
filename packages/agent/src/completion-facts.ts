@@ -102,7 +102,6 @@ function mutationFacts(input: {
   rawInput: unknown;
   outcome: CompletionFactOutcome;
   executionReference: string;
-  result?: string;
   ctx?: FactContext;
   orderNames?: ReadonlyMap<string, string>;
 }): CompletionFact[] {
@@ -134,15 +133,12 @@ function mutationFacts(input: {
       return orderId ? [{ ...base, action: "refund", ...orderOptions, ...(amountFromInput ? { amount: amountFromInput } : {}) }] : [];
     case "create_partial_refund": {
       if (!orderId) return [];
-      const resultAmount = input.result?.match(/\bRefunded\s+\$(\d+(?:\.\d{1,2})?)/i)?.[1];
-      const amount = input.outcome === "success" ? canonicalAmount(resultAmount) : undefined;
-      return [{ ...base, action: "refund", ...orderOptions, ...(amount ? { amount } : {}) }];
+      return [{ ...base, action: "refund", ...orderOptions }];
     }
     case "cancel_order": {
       if (!orderId) return [];
       const facts = [fact("cancellation", input.tool, input.outcome, input.executionReference, orderOptions)];
-      const mayRefund = input.outcome === "proposed"
-        || (input.outcome === "success" && /financial_status\s+"(?:partially_)?refunded"/i.test(input.result ?? ""));
+      const mayRefund = input.outcome === "proposed";
       if (mayRefund) facts.push(fact("refund", input.tool, input.outcome, input.executionReference, orderOptions));
       return facts;
     }
@@ -407,42 +403,20 @@ export function proposedCompletionFacts(
 export function executedCompletionFacts(
   actions: readonly ActionEntry[],
   ctx?: FactContext,
-  options: { allowHistoricalResultInference?: boolean } = {},
 ): CompletionFact[] {
-  const orderNames = collectOrderNames(actions.map((action) => ({
-    tool: action.tool,
-    raw: options.allowHistoricalResultInference && (action.status ?? "success") === "success"
-      ? action.result
-      : undefined,
-  })));
-  return actions.flatMap((action, index) => {
-    if (action.receipt !== undefined) {
-      return receiptCompletionFacts(action, ctx, orderNames);
-    }
-    if (!options.allowHistoricalResultInference) return [];
-
-    // Compatibility reader for taskless legacy actions. It may infer facts from
-    // inputs and display strings, so new-runtime callers must leave it disabled.
-    const executionReference = action.providerOperationKey ?? action.toolCallId ?? `action:${index}`;
-    if (
-      (action.tool === "get_order_by_name" || action.tool === "get_shopify_orders")
-      && (action.status ?? "success") === "success"
-    ) {
+  const orderNames = collectOrderNames(actions
+    .filter(action => action.status === "success" && ["get_order_by_name", "get_shopify_orders"].includes(action.tool))
+    .map(action => ({ tool: action.tool, raw: action.result })));
+  return actions.flatMap(action => {
+    if (action.receipt !== undefined) return receiptCompletionFacts(action, ctx, orderNames);
+    if (action.status === "success" && ["get_order_by_name", "get_shopify_orders"].includes(action.tool)) {
       try {
-        return historicalOrderFacts(JSON.parse(action.result), action.tool, executionReference);
+        return historicalOrderFacts(JSON.parse(action.result), action.tool, `read:${action.toolCallId}`);
       } catch {
         return [];
       }
     }
-    return mutationFacts({
-      tool: action.tool,
-      rawInput: action.input,
-      outcome: action.status ?? "success",
-      executionReference,
-      result: action.result,
-      ctx,
-      orderNames,
-    });
+    return [];
   });
 }
 

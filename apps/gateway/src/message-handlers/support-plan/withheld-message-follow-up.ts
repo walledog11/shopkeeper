@@ -114,7 +114,7 @@ export async function runWithheldMessageFollowUp(
     });
     ctx.taskBudget = taskBudget;
     const plan = await planAgent(ctx, instruction, settings, {
-      exactDraftProposal: true,
+
       runtimeVersion: claim.runtimeVersion,
       withheldMessageFollowUp: true,
     });

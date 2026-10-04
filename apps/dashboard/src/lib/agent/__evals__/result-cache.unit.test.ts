@@ -68,13 +68,14 @@ describe("exact-SHA eval result cache", () => {
     expect(readCachedPassingSummary(fixture, 1)).toBeNull()
   })
 
-  it("does not reuse passing evidence across runtime versions", () => {
+  it("uses one current-runtime cache and refuses the retired runtime", () => {
     directory = mkdtempSync(join(tmpdir(), "shopkeeper-eval-cache-"))
     process.env.EVAL_RESULT_CACHE_DIR = directory
-    process.env.EVAL_AGENT_RUNTIME_VERSION = "1"
-    writePassingSummary(fixture, 1, passing)
-    expect(readCachedPassingSummary(fixture, 1)).toEqual(passing)
     process.env.EVAL_AGENT_RUNTIME_VERSION = "2"
-    expect(readCachedPassingSummary(fixture, 1)).toBeNull()
+    writePassingSummary(fixture, 1, passing)
+    process.env.EVAL_AGENT_RUNTIME_VERSION = "current"
+    expect(readCachedPassingSummary(fixture, 1)).toEqual(passing)
+    process.env.EVAL_AGENT_RUNTIME_VERSION = "1"
+    expect(() => readCachedPassingSummary(fixture, 1)).toThrow(/EVAL_AGENT_RUNTIME_VERSION/)
   })
 })

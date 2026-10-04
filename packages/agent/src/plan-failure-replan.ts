@@ -18,7 +18,6 @@ import {
   planExecutionOutcomeForResult,
 } from "./execution-outcome.js";
 import type { planAgent } from "./planner.js";
-import { usesExactDraftProposals } from "./runtime-modes.js";
 
 export type PlanAgentFn = typeof planAgent;
 
@@ -256,7 +255,7 @@ export async function attemptFailureReplanAfterExecution(params: {
   const ctx = await params.buildContext(params.threadId, params.orgId);
   const thread = await requireOrgThread(params.threadId, params.orgId);
   const childPlan = await params.planAgent(ctx, replanInstruction, params.settings, {
-    ...(usesExactDraftProposals(params.runtimeVersion) ? { exactDraftProposal: true } : {}),
+
     ...(params.runtimeVersion !== undefined ? { runtimeVersion: params.runtimeVersion } : {}),
   });
   if (childPlanRepeatsCommittedSteps(childPlan, failureReplan.committedToolCallIds)) {

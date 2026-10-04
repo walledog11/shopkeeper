@@ -1,7 +1,9 @@
 # Typed reply claims — design for review
 
-Status: proposal, 2026-09-25. Nothing here is built. Scope is the runtime-v2
-receipt-composition path; runtime v1 is untouched and retires with Package 6.
+Status: historical proposal, 2026-09-25. The active exact-draft and receipt
+contract is documented in [agent-runtime.md](agent-runtime.md). Runtime v1 is
+retired by Package 6; references below describe the original design, not active
+rollout or implementation instructions.
 
 **Superseded in part by the overhaul plan.** Section 1 below proposes a new
 `reports` field on `send_reply`. The plan already specifies the mechanism: the

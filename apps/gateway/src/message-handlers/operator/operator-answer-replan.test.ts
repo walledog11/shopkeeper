@@ -69,12 +69,12 @@ let org!: Awaited<ReturnType<typeof createTestOrg>>;
 // Operator state is keyed to the person, so every transport in these cases writes
 // and reads this one queue.
 const MEMBER_KEY = 'member:00000000-0000-4000-8000-0000000000aa';
-// No OrgMember row backs it in these cases, so the durable continuation finds
-// no actor and the re-plan runs untracked — which is what they already asserted.
+// The authenticated member is backed by a current organization membership.
 const CLERK_USER_ID = 'user_operator_answer_replan';
 
 beforeEach(async () => {
   org = await createTestOrg();
+  await db.orgMember.create({ data: { id: MEMBER_KEY.slice("member:".length), organizationId: org.id, clerkUserId: CLERK_USER_ID } });
   planAgentSpy.mockReset();
   listBindings.mockReset();
   listBindings.mockResolvedValue([]);
@@ -90,6 +90,23 @@ afterEach(async () => {
   await db.operatorContext.deleteMany({ where: { organizationId: org.id } }).catch(() => undefined);
   await cleanupTestData(org?.id);
 });
+
+async function parkQuestion(threadId: string) {
+  const message = await db.message.findFirstOrThrow({
+    where: { threadId, senderType: 'customer' }, orderBy: [{ sentAt: 'desc' }, { id: 'desc' }],
+  });
+  const { request, task } = await acceptCustomerAgentRequest({
+    organizationId: org.id, threadId, sourceMessageId: message.id,
+    objective: 'Answer the customer question',
+    budget: { runtimeVersion: 2, modelCallLimit: 20, activeTimeMsLimit: 300000, spendNanoUsdLimit: 1000000000n },
+  });
+  const claim = await claimAgentTask({ organizationId: org.id, taskId: task.id, expectedRevision: task.revision });
+  await settleAgentTaskClaim({
+    organizationId: org.id, taskId: task.id, expectedRevision: task.revision,
+    claimToken: claim!.claimToken, requestId: request.id,
+    settlement: { status: 'waiting_input', question: 'How should I reply?', answerer: { kind: 'member', key: ANY_MEMBER_ACTOR_KEY } },
+  });
+}
 
 describe('applyOperatorAnswerReplan', () => {
   it('records the answer + KB article and clears state when the ticket was already handled', async () => {
@@ -123,6 +140,7 @@ describe('applyOperatorAnswerReplan', () => {
       data: { cachedPlan: cacheRecord as object, cachedPlanMessageId: custMsg.id },
     });
 
+    await parkQuestion(thread.id);
     const message = await applyOperatorAnswerReplan({
       organizationId: org.id,
       memberKey: MEMBER_KEY,
@@ -201,6 +219,7 @@ describe('applyOperatorAnswerReplan', () => {
     };
     planAgentSpy.mockResolvedValue(replannedPlan);
 
+    await parkQuestion(thread.id);
     const message = await applyOperatorAnswerReplan({
       organizationId: org.id,
       memberKey: MEMBER_KEY,
@@ -259,6 +278,7 @@ describe('applyOperatorAnswerReplan', () => {
       rawToolCalls: [{ id: 'reply', name: 'send_reply', input: { text: draft } }],
       communication: { mode: 'exact_draft', destination: { kind: 'thread', id: thread.id, channel: 'email' }, draft, allowedResultBindings: [] },
     });
+    await parkQuestion(thread.id);
     const result = await applyOperatorAnswerReplan({
       organizationId: org.id, memberKey: MEMBER_KEY, clerkUserId: CLERK_USER_ID,
       threadId: thread.id, answer: 'Explain the policy in full.', endsWait: 'question', deliveryRef: 'imessage:answering-phone',
@@ -876,7 +896,7 @@ describe('applyOperatorAnswerReplan', () => {
         expect.anything(),
         expect.any(String),
         expect.anything(),
-        { runtimeVersion: 2, exactDraftProposal: true, merchantInstruction: true },
+        { runtimeVersion: 2, merchantInstruction: true },
       );
 
       const settled = await db.agentTask.findUniqueOrThrow({ where: { id: taskId } });
@@ -1157,6 +1177,7 @@ describe('applyOperatorAnswerReplan', () => {
 
     planAgentSpy.mockRejectedValue(new Error('boom'));
 
+    await parkQuestion(thread.id);
     const message = await applyOperatorAnswerReplan({
       organizationId: org.id,
       memberKey: MEMBER_KEY,

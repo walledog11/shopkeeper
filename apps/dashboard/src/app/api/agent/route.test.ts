@@ -9,6 +9,7 @@ import {
 } from '@shopkeeper/db/test-helpers';
 import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
+import { ANY_MEMBER_ACTOR_KEY, acceptCustomerAgentRequest, claimAgentTask, settleAgentTaskClaim } from '@shopkeeper/agent/task-ledger';
 import type { AgentPlan } from '@/types';
 
 vi.mock('@clerk/nextjs/server', () => ({
@@ -37,6 +38,7 @@ let org!: Awaited<ReturnType<typeof createTestOrg>>;
 
 beforeEach(async () => {
   org = await createTestOrg();
+  await db.orgMember.create({ data: { organizationId: org.id, clerkUserId: 'usr_test' } });
   vi.mocked(auth).mockResolvedValue({ userId: 'usr_test', orgId: org.clerkOrgId } as ReturnType<typeof auth> extends Promise<infer T> ? T : never);
   mockExecuteAgentTurn.mockResolvedValue({ summary: 'Plan executed.', actionsPerformed: [] });
 });
@@ -46,24 +48,45 @@ afterEach(async () => {
   vi.clearAllMocks();
 });
 
-async function createThreadWithCachedPlan(plan: AgentPlan, instruction = 'Handle this') {
+async function createThreadWithCachedPlan(plan: AgentPlan, instruction = 'Handle this', durable = true) {
   const customer = await createTestCustomer(org.id, `customer-${crypto.randomUUID()}@test.com`);
   const thread = await createTestThread(org.id, customer.id, ChannelType.email);
   const message = await createTestMessage(thread.id, 'Please help with my order');
   const settings = resolveAgentSettings(null);
+  if (durable) {
+    const reply = plan.rawToolCalls.find((call) => call.name === 'send_reply');
+    const replyInput = reply?.input as { text?: unknown } | undefined;
+    plan.communication = {
+      mode: 'exact_draft', destination: { kind: 'thread', id: thread.id, channel: thread.channelType },
+      draft: typeof replyInput?.text === 'string' ? replyInput.text : '', allowedResultBindings: [],
+    };
+  }
+  const cachedPlan = buildAgentPlanCacheRecord({ instruction, lastCustomerMessageId: message.id, settings, plan });
 
   await db.thread.update({
     where: { id: thread.id },
     data: {
       cachedPlanMessageId: message.id,
-      cachedPlan: buildAgentPlanCacheRecord({
-        instruction,
-        lastCustomerMessageId: message.id,
-        settings,
-        plan,
-      }) as unknown as Parameters<typeof db.thread.update>[0]['data']['cachedPlan'],
+      cachedPlan: cachedPlan as unknown as Parameters<typeof db.thread.update>[0]['data']['cachedPlan'],
     },
   });
+
+  if (durable) {
+    const { request, task } = await acceptCustomerAgentRequest({
+      organizationId: org.id, threadId: thread.id, sourceMessageId: message.id, objective: instruction,
+      budget: { runtimeVersion: 2, modelCallLimit: 20, activeTimeMsLimit: 120000, spendNanoUsdLimit: BigInt(1000000000) },
+    });
+    const claim = await claimAgentTask({ organizationId: org.id, taskId: task.id, expectedRevision: task.revision });
+    if (!claim) throw new Error('Could not claim the approval fixture');
+    await settleAgentTaskClaim({
+      organizationId: org.id, taskId: task.id, expectedRevision: task.revision, claimToken: claim.claimToken, requestId: request.id,
+      settlement: {
+        status: 'waiting_approval',
+        proposal: { proposalId: cachedPlan.planId ?? undefined, instruction, rawToolCalls: plan.rawToolCalls, communication: plan.communication, sourceRequestIds: [request.id] },
+        approver: { kind: 'member', key: ANY_MEMBER_ACTOR_KEY },
+      },
+    });
+  }
 
   return thread;
 }
@@ -92,10 +115,7 @@ describe('POST /api/agent', () => {
     expect(mockExecuteAgentTurn).not.toHaveBeenCalled();
   });
 
-  // A plan cached before the exact-draft snapshot existed stopped at its write
-  // with no draft. It authorizes no message, so approving it runs the write and
-  // composes nothing afterwards.
-  it('runs a plan cached before the exact-draft snapshot as authorizing no message', async () => {
+  it('refuses a taskless historical plan until it is regenerated and reviewed', async () => {
     const approvedToolCalls = [{ id: 'refund_1', name: 'create_refund', input: { order_id: '456', amount: '20.00' } }];
     const plan: AgentPlan = {
       instruction: 'Handle this',
@@ -103,7 +123,7 @@ describe('POST /api/agent', () => {
       rawToolCalls: approvedToolCalls,
       suspendedAtProposal: true,
     };
-    const thread = await createThreadWithCachedPlan(plan);
+    const thread = await createThreadWithCachedPlan(plan, 'Handle this', false);
 
     const res = await POST(new Request('http://localhost:3000/api/agent', {
       method: 'POST',
@@ -111,11 +131,8 @@ describe('POST /api/agent', () => {
       body: JSON.stringify({ threadId: thread.id, instruction: 'Handle this', approvedToolCalls }),
     }));
 
-    expect(res.status).toBe(200);
-    expect(mockExecuteAgentTurn).toHaveBeenCalledWith(
-      expect.objectContaining({ approvedToolCalls }),
-      expect.anything(),
-    );
+    expect(res.status).toBe(409);
+    expect(mockExecuteAgentTurn).not.toHaveBeenCalled();
   });
 
   it('rejects execution without approved tool calls', async () => {

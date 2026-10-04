@@ -118,6 +118,18 @@ describe("sendAgentChatInstruction", () => {
     ])
   })
 
+  it("shows the current request's recorded unknown outcome without approving further work", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse({
+      requestId: "request-1", status: "reconciling",
+      response: { requestId: "request-1", summary: "Shopify may have accepted the sale; review it before retrying.",
+        actionsPerformed: [], awaitingApproval: true },
+    }, { status: 202 }))
+    await expect(sendAgentChatInstruction({ fetchImpl, instruction: "start the sale",
+      clientRequestId: "11111111-1111-4111-8111-111111111111", pollIntervalMs: 0,
+    })).resolves.toEqual({ ok: true,
+      summary: "Shopify may have accepted the sale; review it before retrying.", actionsPerformed: [] })
+  })
+
   it("does not present a stale persisted response as success when the task needs reconciliation", async () => {
     const fetchImpl = vi.fn(async () => jsonResponse({
       requestId: "request-1",

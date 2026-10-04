@@ -190,7 +190,7 @@ describe('durable dashboard agent requests', () => {
     expect(duplicate.status).toBe(202);
     expect(duplicate.body.taskId).toBe(first.body.taskId);
     expect(await db.agentTask.findUniqueOrThrow({ where: { id: first.body.taskId } }))
-      .toMatchObject({ runtimeVersion: 1 });
+      .toMatchObject({ runtimeVersion: 2 });
   });
 
   it('routes only a selected workspace to v2 and leaves duplicate tasks pinned', async () => {
@@ -220,7 +220,7 @@ describe('durable dashboard agent requests', () => {
       .send({ ...body, clientRequestId: randomUUID(), instruction: 'check order 1004' });
     expect(afterRollback.status).toBe(202);
     expect(await db.agentTask.findUniqueOrThrow({ where: { id: afterRollback.body.taskId } }))
-      .toMatchObject({ runtimeVersion: 1 });
+      .toMatchObject({ runtimeVersion: 2 });
   });
 
   it('returns 409 when one client identity is reused for changed work', async () => {

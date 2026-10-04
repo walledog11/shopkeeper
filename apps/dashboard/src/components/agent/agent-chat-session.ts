@@ -42,6 +42,7 @@ interface AgentChatPayload {
   taskRevision?: number | null
   cancelledAt?: string | null
   response?: {
+    requestId?: string | null
     summary: string
     actionsPerformed: ActionEntry[]
     awaitingApproval?: boolean
@@ -109,6 +110,18 @@ async function pollAgentRequest(
       }
     }
     if (data?.status === "failed" || data?.status === "reconciling") {
+      // Only the response attributed to this request can explain its outcome.
+      // A resumed task may still carry a previous attempt's message.
+      const response = data.response
+      if (response && response.requestId === data.requestId && data.requestId && response.summary) {
+        return {
+          ok: true,
+          summary: data.cancelledAt
+            ? `${response.summary}\n\nStopped further work. Check the action's outcome before continuing.`
+            : response.summary,
+          actionsPerformed: response.actionsPerformed,
+        }
+      }
       return { ok: false, error: data.status === "reconciling"
         ? data.cancelledAt
           ? "Stopped further work. An action had already started; check its outcome before continuing."

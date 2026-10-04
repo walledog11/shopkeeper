@@ -119,7 +119,7 @@ describe('withheld-message follow-up', () => {
     await processAgentTaskJob({ organizationId: seed.organizationId, taskId: task.id, revision: task.revision });
 
     const [, instruction, , options] = mockPlanAgent.mock.calls.at(-1)!;
-    expect(options).toMatchObject({ withheldMessageFollowUp: true, exactDraftProposal: true, runtimeVersion: 2 });
+    expect(options).toMatchObject({ withheldMessageFollowUp: true, runtimeVersion: 2 });
     expect(instruction).toContain('The message was not sent');
 
     const parked = await db.agentTask.findUniqueOrThrow({ where: { id: task.id } });

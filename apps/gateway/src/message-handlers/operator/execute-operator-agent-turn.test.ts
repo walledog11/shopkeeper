@@ -9,6 +9,7 @@ import {
 } from '@shopkeeper/db/test-helpers';
 import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
+import { ANY_MEMBER_ACTOR_KEY, acceptCustomerAgentRequest, claimAgentTask, settleAgentTaskClaim } from '@shopkeeper/agent/task-ledger';
 import type { AgentPlan } from '@shopkeeper/agent/types';
 
 const {
@@ -91,8 +92,9 @@ describe('executeOperatorAgentTurn', () => {
   // or iMessage — enters the shared boundary, so an exact-draft proposal runs its
   // write and then the exact reply the card showed, and nothing is composed.
   it('runs an exact-draft proposal approved from the operator card with the reply it showed', async () => {
+    await db.orgMember.create({ data: { organizationId: org.id, clerkUserId: 'usr_42' } });
     const customer = await createTestCustomer(org.id, 'op-approve@test.com', { name: 'Owner' });
-    const thread = await createTestThread(org.id, customer.id, ChannelType.operator);
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
     const message = await createTestMessage(thread.id, 'Refund the torn napkin');
     const approvedToolCalls = [
       { id: 'refund_1', name: 'create_refund', input: { order_id: '456', amount: '20.00' } },
@@ -111,21 +113,33 @@ describe('executeOperatorAgentTurn', () => {
       rawToolCalls: approvedToolCalls,
       communication: {
         mode: 'exact_draft',
-        destination: { kind: 'thread', id: thread.id, channel: ChannelType.operator },
+        destination: { kind: 'thread', id: thread.id, channel: ChannelType.email },
         draft: 'Your refund for the torn napkin is on its way.',
         allowedResultBindings: [],
       },
     };
+    const cache = buildAgentPlanCacheRecord({
+      instruction: plan.instruction, lastCustomerMessageId: message.id, settings: resolveAgentSettings(null), plan,
+    });
     await db.thread.update({
       where: { id: thread.id },
       data: {
         cachedPlanMessageId: message.id,
-        cachedPlan: buildAgentPlanCacheRecord({
-          instruction: plan.instruction,
-          lastCustomerMessageId: message.id,
-          settings: resolveAgentSettings(null),
-          plan,
-        }) as object,
+        cachedPlan: cache as object,
+      },
+    });
+    const { request, task } = await acceptCustomerAgentRequest({
+      organizationId: org.id, threadId: thread.id, sourceMessageId: message.id, objective: plan.instruction,
+      budget: { runtimeVersion: 2, modelCallLimit: 20, activeTimeMsLimit: 120000, spendNanoUsdLimit: 1000000000n },
+    });
+    const claim = await claimAgentTask({ organizationId: org.id, taskId: task.id, expectedRevision: task.revision });
+    if (!claim) throw new Error('Could not claim the operator approval fixture');
+    await settleAgentTaskClaim({
+      organizationId: org.id, taskId: task.id, expectedRevision: task.revision, claimToken: claim.claimToken, requestId: request.id,
+      settlement: {
+        status: 'waiting_approval',
+        proposal: { proposalId: cache.planId ?? undefined, instruction: plan.instruction, rawToolCalls: approvedToolCalls, communication: plan.communication, sourceRequestIds: [request.id] },
+        approver: { kind: 'member', key: ANY_MEMBER_ACTOR_KEY },
       },
     });
 
@@ -133,6 +147,7 @@ describe('executeOperatorAgentTurn', () => {
       orgId: org.id,
       threadId: thread.id,
       instruction: plan.instruction,
+      clerkUserId: 'usr_42',
       approvedToolCalls,
     });
 

@@ -41,13 +41,11 @@ describe("eval selection", () => {
     expect(() => selectFixtures(fixtures, "core", new Set(["extended-a"]))).toThrow(/extended-a/)
   })
 
-  it("runs a runtime-v2 fixture only when runtime v2 is pinned", () => {
+  it("includes runtime-v2 fixtures in the current runtime", () => {
     const v2Only = { ...fixture("placeholder-a", "core"), runtimeVersion: 2 as const }
     const all = [...fixtures, v2Only]
-    expect(selectFixtures(all, "full", null, undefined).map(row => row.id)).toEqual(["core-a", "extended-a"])
-    expect(selectFixtures(all, "full", null, 1).map(row => row.id)).toEqual(["core-a", "extended-a"])
+    expect(selectFixtures(all, "full", null).map(row => row.id)).toEqual(["core-a", "extended-a", "placeholder-a"])
     expect(selectFixtures(all, "core", null, 2).map(row => row.id)).toEqual(["core-a", "placeholder-a"])
-    expect(() => selectFixtures(all, "full", new Set(["placeholder-a"]), 1)).toThrow(/placeholder-a/)
   })
 
   it("runs a held-out fixture with its suite and never by name", () => {
@@ -58,10 +56,10 @@ describe("eval selection", () => {
     expect(selectFixtures(all, "full", new Set(["core-a"])).map(row => row.id)).toEqual(["core-a"])
   })
 
-  it("parses an explicit comparison runtime without changing the default", () => {
-    expect(requestedEvalAgentRuntimeVersion(undefined)).toBeUndefined()
-    expect(requestedEvalAgentRuntimeVersion("current")).toBeUndefined()
-    expect(requestedEvalAgentRuntimeVersion(" 1 ")).toBe(1)
+  it("pins current evals to v2 and refuses a retired runtime", () => {
+    expect(requestedEvalAgentRuntimeVersion(undefined)).toBe(2)
+    expect(requestedEvalAgentRuntimeVersion("current")).toBe(2)
+    expect(() => requestedEvalAgentRuntimeVersion(" 1 ")).toThrow(/EVAL_AGENT_RUNTIME_VERSION/)
     expect(requestedEvalAgentRuntimeVersion("2")).toBe(2)
     expect(() => requestedEvalAgentRuntimeVersion("3")).toThrow(/EVAL_AGENT_RUNTIME_VERSION/)
   })

@@ -28,11 +28,7 @@ describe("completion facts", () => {
       input: { order_id: "123", amount: "20", currency: "usd" },
       result: "Unknown: provider response was interrupted.",
       status: "unknown",
-    }], undefined, { allowHistoricalResultInference: true })).toEqual([expect.objectContaining({
-      action: "refund",
-      outcome: "unknown",
-      executionReference: "execution_1:refund_1",
-    })]);
+    }])).toEqual([]);
   });
 
   it("takes an order alias from this turn's read when context has no such order", () => {
@@ -71,12 +67,19 @@ describe("completion facts", () => {
       input: { order_id: "6163445514474", amount: "43.48", currency: "USD" },
       result: "Refunded $43.48",
       status: "success" as const,
+      receipt: {
+        version: 1 as const, operationId: "op-refund", executionId: "execution-refund",
+        tool: "create_refund" as const, target: { kind: "order", id: "6163445514474" },
+        observedAt: "2026-10-04T21:00:00.000Z", outcome: "succeeded" as const,
+        providerReference: "refund-1",
+        facts: { orderId: "6163445514474", refundId: "refund-1", amount: "43.48", currency: "USD",
+          transactionStatus: "SUCCESS", transactionReference: "transaction-1", classification: "partial" as const },
+      },
     };
 
     expect(executedCompletionFacts(
       [read, refund],
       undefined,
-      { allowHistoricalResultInference: true },
     )).toContainEqual(
       expect.objectContaining({
         action: "refund",
@@ -86,21 +89,13 @@ describe("completion facts", () => {
     );
   });
 
-  it("derives cancellation's refund side effect only from a confirmed result", () => {
-    const action = {
-      tool: "cancel_order",
-      toolCallId: "cancel_1",
-      input: { order_id: "123" },
-      status: "success" as const,
-    };
-    expect(executedCompletionFacts([{
-      ...action,
-      result: 'Order #1001 cancelled successfully. Refund status: Shopify returned financial_status "paid".',
-    }], undefined, { allowHistoricalResultInference: true }).map((fact) => fact.action)).toEqual(["cancellation"]);
-    expect(executedCompletionFacts([{
-      ...action,
-      result: 'Order #1001 cancelled successfully. Refund status: Shopify returned financial_status "refunded".',
-    }], undefined, { allowHistoricalResultInference: true }).map((fact) => fact.action)).toEqual(["cancellation", "refund"]);
+  it("does not infer a cancellation or refund from historical result text", () => {
+    for (const financialStatus of ["paid", "refunded"]) {
+      expect(executedCompletionFacts([{
+        tool: "cancel_order", input: { order_id: "123" }, status: "success",
+        result: `Order cancelled successfully. Refund status: financial_status "${financialStatus}".`,
+      }])).toEqual([]);
+    }
   });
 
   it("uses observed receipt money rather than requested money or result wording", () => {

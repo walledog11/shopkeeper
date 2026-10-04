@@ -30,7 +30,6 @@ vi.mock('./execute-operator-agent-turn.js', () => ({
 
 vi.mock('@shopkeeper/agent/planner', () => ({
   planAgent: planAgentSpy,
-  usesExactDraftProposals: vi.fn(() => false),
 }));
 
 vi.mock('../support-plan/planning-notifications.js', async (importOriginal) => {
@@ -82,11 +81,11 @@ afterEach(async () => {
 // A support conversation parked on a card that is also a durable proposal, plus
 // the merchant's queued copy of it. Shared by the revise and dismiss cases
 // below, which are the two ways an approval wait ends without being approved.
-async function seedCardedSupportTask(memberKey: string) {
+async function seedCardedSupportTask(memberKey: string, customerName = 'Ray Doe') {
   const member = await db.orgMember.create({
     data: { organizationId: org.id, clerkUserId: randomUUID() },
   });
-  const customer = await createTestCustomer(org.id, `${randomUUID()}@example.com`, { name: 'Ray Doe' });
+  const customer = await createTestCustomer(org.id, `${randomUUID()}@example.com`, { name: customerName });
   const thread = await createTestThread(org.id, customer.id, 'email', { tag: 'Support' });
   const custMsg = await createTestMessage(thread.id, 'Can I get a discount?', SenderType.customer);
   const rawToolCalls = [{ id: 's1', name: 'send_reply', input: { text: 'No discounts, sorry.' } }];
@@ -112,7 +111,7 @@ async function seedCardedSupportTask(memberKey: string) {
     organizationId: org.id, threadId: thread.id, sourceMessageId: custMsg.id,
     objective: 'Discount request',
     budget: {
-      runtimeVersion: 1, modelCallLimit: 20,
+      runtimeVersion: 2, modelCallLimit: 20,
       activeTimeMsLimit: 300000, spendNanoUsdLimit: 1000000000n,
     },
   });
@@ -138,6 +137,23 @@ async function seedCardedSupportTask(memberKey: string) {
     },
   });
   return { member, thread, taskId: task.id, proposalId: cacheRecord.planId! };
+}
+
+async function seedQuestionTask(threadId: string, sourceMessageId: string, objective: string, question: string) {
+  await db.orgMember.upsert({
+    where: { organizationId_clerkUserId: { organizationId: org.id, clerkUserId: 'usr_1' } },
+    create: { organizationId: org.id, clerkUserId: 'usr_1' }, update: {},
+  });
+  const { request, task } = await acceptCustomerAgentRequest({
+    organizationId: org.id, threadId, sourceMessageId, objective,
+    budget: { runtimeVersion: 2, modelCallLimit: 20, activeTimeMsLimit: 300000, spendNanoUsdLimit: 1000000000n },
+  });
+  const claim = await claimAgentTask({ organizationId: org.id, taskId: task.id, expectedRevision: task.revision });
+  if (!claim) throw new Error('Could not claim the question fixture');
+  await settleAgentTaskClaim({
+    organizationId: org.id, taskId: task.id, expectedRevision: task.revision, claimToken: claim.claimToken, requestId: request.id,
+    settlement: { status: 'waiting_input', question, answerer: { kind: 'member', key: ANY_MEMBER_ACTOR_KEY } },
+  });
 }
 
 describe('approve_pending_plan', () => {
@@ -510,32 +526,8 @@ describe('reject_pending_plan', () => {
 describe('revise_pending_plan', () => {
   it('records the guidance as a note, re-plans, and re-parks a fresh plan', async () => {
     const memberKey = 'member:revise';
-    const customer = await createTestCustomer(org.id, 'cust@example.com', { name: 'Jane Doe' });
-    const thread = await createTestThread(org.id, customer.id, 'email', { tag: 'Support' });
-    const custMsg = await createTestMessage(thread.id, 'Can I get a discount?', SenderType.customer);
-
-    // A send_reply cached plan has no ask_operator question — revise guidance is
-    // recorded as a plain merchant note, not a Q/A pair.
-    const cacheRecord = buildAgentPlanCacheRecord({
-      instruction: 'Discount request',
-      lastCustomerMessageId: custMsg.id,
-      settings,
-      plan: {
-        instruction: 'Discount request',
-        steps: [{ id: 's1', category: 'communication', tool: 'send_reply', label: 'Reply', description: 'x', enabled: true }],
-        rawToolCalls: [{ id: 's1', name: 'send_reply', input: { text: 'No discounts, sorry.' } }],
-        warnings: [],
-      },
-    });
-    await db.thread.update({
-      where: { id: thread.id },
-      data: { cachedPlan: cacheRecord as object, cachedPlanMessageId: custMsg.id, aiSummary: 'Discount request', requestSummary: 'Discount request' },
-    });
-
-    await updateContext(org.id, memberKey, {
-      pendingPlan: { threadId: thread.id, instruction: 'Discount request', rawToolCalls: [] },
-    });
-    const tools = await buildTools(memberKey);
+    const { member, thread } = await seedCardedSupportTask(memberKey, 'Jane Doe');
+    const tools = await buildTools(memberKey, member.clerkUserId);
 
     planAgentSpy.mockResolvedValue({
       instruction: 'Discount request',
@@ -632,6 +624,7 @@ describe('answer_operator_question', () => {
     await updateContext(org.id, memberKey, {
       pendingQuestion: { threadId: thread.id, question: 'Do we ship to Canada?' },
     });
+    await seedQuestionTask(thread.id, custMsg.id, 'Shipping question', 'Do we ship to Canada?');
     const tools = await buildTools(memberKey);
 
     planAgentSpy.mockResolvedValue({
@@ -681,7 +674,7 @@ describe('answer_operator_question', () => {
       organizationId: org.id, threadId: thread.id, sourceMessageId: custMsg.id,
       objective: 'Shipping question',
       budget: {
-        runtimeVersion: 1, modelCallLimit: 20,
+        runtimeVersion: 2, modelCallLimit: 20,
         activeTimeMsLimit: 300000, spendNanoUsdLimit: 1000000000n,
       },
     });
@@ -720,10 +713,13 @@ describe('answer_operator_question', () => {
       const memberKey = 'member:answer-retained';
       const customer = await createTestCustomer(org.id, 'retained@example.com');
       const thread = await createTestThread(org.id, customer.id, 'email');
-      await createTestMessage(thread.id, 'Can I return this?', SenderType.customer);
+      const customerMessage = await createTestMessage(thread.id, 'Can I return this?', SenderType.customer);
       const question = { threadId: thread.id, question: 'Should I open the return?', planId: randomUUID() };
       await updateContext(org.id, memberKey, { pendingQuestion: question });
       const replacement = { ...question, planId: randomUUID(), question: 'Which label should I send?' };
+      if (reason !== 'claim_unavailable') {
+        await seedQuestionTask(thread.id, customerMessage.id, 'Open a return', question.question);
+      }
       if (reason === 'claim_unavailable') {
         await acceptCustomerAgentRequest({
           organizationId: org.id, threadId: thread.id,

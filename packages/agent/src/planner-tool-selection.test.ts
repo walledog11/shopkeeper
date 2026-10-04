@@ -3,13 +3,9 @@ import { describe, expect, it } from "vitest";
 import { emptyIntents, emptyRequestFacts, type ClassifierSignals } from "./classifier-signals.js";
 import { GUEST_TOOL_NAMES, VERIFIED_TOOL_NAMES, isGuestOnlyTool } from "./guest-policy.js";
 import {
-  BROAD_ORDER_MUTATION_TOOL_NAMES,
   DISCOVERY_RESULT_LIMIT,
   DISCOVERY_TOOL_NAME,
-  NAMESPACE_MISS_TOOL_NAME,
-  NARROWING_EXEMPT_TOOL_NAMES,
   discoverCapabilityTools,
-  namespaceMissReason,
   runCapabilityDiscovery,
   selectPlanningTools,
 } from "./planner-tool-selection.js";
@@ -47,7 +43,7 @@ describe("selectPlanningTools", () => {
   it("offers only a customer clarification for a classified ambiguous terse follow-up", () => {
     const selection = select({
       classifierSignals: signals(),
-      capabilityDiscovery: true,
+
       ambiguousCustomerFollowUp: true,
     });
 
@@ -66,7 +62,7 @@ describe("selectPlanningTools", () => {
     const selection = select({
       classifierSignals: signals({ mutative_request: true }),
       merchantInstruction: true,
-      capabilityDiscovery: true,
+
       withheldMessageFollowUp: true,
     });
 
@@ -78,148 +74,8 @@ describe("selectPlanningTools", () => {
     expect(selection.tools.every((tool) => TOOL_DEFINITIONS[tool.name]?.category !== "action")).toBe(true);
   });
 
-  it.each([
-    ["operator", { operatorMode: true }],
-    ["storefront_policy", { storefrontMode: true }],
-    ["merchant_answer_replan", { merchantAnswerReplan: true }],
-    ["no_classifier_signals", { classifierSignals: null }],
-    ["classifier_unaligned", { latestCustomerMessageId: "message_2" }],
-    ["unclassified_request", { classifierSignals: signals() }],
-  ])("keeps the full available registry for %s", (reason, overrides) => {
-    const selection = select(overrides);
-
-    expect(selection).toMatchObject({ bucket: "full", reason, narrowed: false });
-    expect(names(selection)).toEqual(AGENT_TOOLS.map((tool) => tool.name));
-    expect(names(selection)).not.toContain(NAMESPACE_MISS_TOOL_NAME);
-  });
-
-  it("narrows order-status plans to order reads plus customer control tools", () => {
-    const selection = select();
-    const selectedNames = names(selection);
-
-    expect(selection).toMatchObject({ bucket: "order_status", reason: "intent_bucket", narrowed: true });
-    expect(selectedNames).toEqual(expect.arrayContaining([
-      "find_customer",
-      "get_shopify_orders",
-      "get_order_by_name",
-      "get_order_tracking",
-      "send_reply",
-      "escalate_to_human",
-      "ask_operator",
-      NAMESPACE_MISS_TOOL_NAME,
-    ]));
-    expect(selectedNames).not.toContain("create_refund");
-    expect(selectedNames).not.toContain("search_shopify_products");
-  });
-
-  it("lets risk classifications fail safely without exposing store mutations", () => {
-    const selection = select({
-      classifierSignals: signals({ fraud_signals: true, mutative_request: true }),
-    });
-    const selectedNames = names(selection);
-
-    expect(selection.bucket).toBe("risk");
-    expect(selectedNames).toEqual(expect.arrayContaining([
-      "send_reply",
-      "escalate_to_human",
-      "ask_operator",
-      NAMESPACE_MISS_TOOL_NAME,
-    ]));
-    expect(selectedNames).not.toContain("create_refund");
-    expect(selectedNames).not.toContain("get_shopify_orders");
-  });
-
-  it("keeps every adjacent order action in the coarse mutation bucket", () => {
-    const selection = select({
-      classifierSignals: signals({ mutative_request: true }),
-    });
-    const selectedNames = names(selection);
-
-    expect(selection.bucket).toBe("order_mutation");
-    expect(selectedNames).toEqual(expect.arrayContaining([
-      "update_shopify_order_address",
-      "create_refund",
-      "create_return",
-      "cancel_order",
-      "edit_shopify_order",
-      "create_exchange",
-      "create_gift_card",
-      "attach_return_label",
-      "get_shopify_orders",
-      "send_reply",
-    ]));
-    expect(selectedNames).not.toContain("create_shopify_order");
-    expect(selectedNames).not.toContain("fulfill_order");
-  });
-
-  it("unions simultaneous coarse intents", () => {
-    const selection = select({
-      classifierSignals: signals({ mutative_request: true, policy_question: true }),
-    });
-
-    expect(selection.bucket).toBe("order_mutation+policy");
-    expect(names(selection)).toEqual(expect.arrayContaining([
-      "search_kb",
-      "create_return",
-      "create_exchange",
-      "edit_shopify_order",
-      "attach_return_label",
-    ]));
-  });
-
-  it("does not route on renderer-only request facts", () => {
-    const selection = select({
-      classifierSignals: {
-        ...signals(),
-        requestFacts: { ...emptyRequestFacts(), ask: "product_question" },
-      },
-    });
-
-    expect(selection).toMatchObject({ bucket: "full", reason: "unclassified_request", narrowed: false });
-  });
-
-  it("keeps required control tools in every narrowed bucket and reduces serialized schemas", () => {
-    const narrowedSignals = [
-      signals({ fraud_signals: true }),
-      signals({ no_request: true }),
-      signals({ policy_question: true }),
-      signals({ order_status: true }),
-      signals({ mutative_request: true }),
-    ];
-    const fullChars = JSON.stringify(AGENT_TOOLS).length;
-
-    for (const classifierSignals of narrowedSignals) {
-      const selection = select({ classifierSignals });
-      const selectedNames = names(selection);
-      expect(selection.narrowed).toBe(true);
-      expect(selectedNames).toEqual(expect.arrayContaining([
-        "send_reply",
-        "escalate_to_human",
-        "ask_operator",
-      ]));
-      expect(JSON.stringify(selection.tools).length).toBeLessThan(fullChars);
-    }
-  });
 });
 
-describe("namespaceMissReason", () => {
-  it("recognizes empty, incomplete, and explicitly widened plans", () => {
-    expect(namespaceMissReason([])).toBe("empty_plan");
-    expect(namespaceMissReason([{ name: "get_shopify_orders" }])).toBe("incomplete_plan");
-    expect(namespaceMissReason([{ name: NAMESPACE_MISS_TOOL_NAME }])).toBe("model_signal");
-    expect(namespaceMissReason([
-      { name: "get_shopify_orders" },
-      { name: "send_reply" },
-    ])).toBeNull();
-    expect(namespaceMissReason([{ name: "escalate_to_human" }])).toBeNull();
-  });
-});
-
-// A tool the buckets never name is unreachable whenever narrowing applies, and
-// nothing else notices: the plan is merely worse, never an error. fulfill_order
-// was orphaned this way and a merchant instruction to fulfill an order silently
-// became a "hasn't shipped yet" reply. Every active tool must be reachable from
-// some intent, or be named as deliberately exempt.
 describe("merchant-authored instructions are not narrowed by customer intent", () => {
   // The regression this closes: a customer asked "any update on order #3031?"
   // (order_status) while the merchant instructed "I dropped this at UPS, mark it
@@ -248,36 +104,6 @@ describe("merchant-authored instructions are not narrowed by customer intent", (
   });
 });
 
-describe("intent narrowing reaches every active tool", () => {
-  it("leaves no active tool unreachable by omission", () => {
-    const exempt = new Set<string>(NARROWING_EXEMPT_TOOL_NAMES);
-    const reachable = new Set<string>();
-    const intentKeys = Object.keys(emptyIntents()) as (keyof ClassifierSignals["intents"])[];
-    for (const intent of intentKeys) {
-      for (const tool of selectPlanningTools({
-        availableTools: AGENT_TOOLS,
-        classifierSignals: signals({ [intent]: true }),
-        requestSourceMessageId: "message_1",
-        latestCustomerMessageId: "message_1",
-        operatorMode: false,
-        storefrontMode: false,
-        merchantAnswerReplan: false,
-      }).tools) {
-        reachable.add(tool.name);
-      }
-    }
-    const orphaned = AGENT_TOOLS
-      .map(tool => tool.name)
-      .filter(name => !reachable.has(name) && !exempt.has(name))
-      .sort();
-    expect(orphaned).toEqual([]);
-  });
-});
-
-// The four authority modes as the planner computes them, so a test cannot
-// authorize something the product does not. Support and merchant differ in what
-// the host adds, not in how discovery reads the set — the merchant case below
-// adds the gateway module tool the way an operator turn does.
 const SUPPORT_TOOLS = selectAgentTools(undefined, null, null)
   .filter((tool) => !isGuestOnlyTool(tool.name));
 const GUEST_TOOLS = selectAgentTools(undefined, GUEST_TOOL_NAMES, null);
@@ -388,7 +214,7 @@ describe("discoverCapabilityTools", () => {
 
 describe("selectPlanningTools on the discovery runtime", () => {
   const discover = (overrides: Partial<Parameters<typeof selectPlanningTools>[0]> = {}) =>
-    select({ capabilityDiscovery: true, ...overrides });
+    select(overrides);
 
   it.each([
     ["no_classifier_signals", { classifierSignals: null }],
@@ -420,7 +246,7 @@ describe("selectPlanningTools on the discovery runtime", () => {
     ]) {
       expect(selected).not.toContain(withheld);
     }
-    expect(selected).not.toContain(NAMESPACE_MISS_TOOL_NAME);
+    expect(selected).not.toContain("request_wider_tool_set");
     expect(selected.length).toBeLessThan(AGENT_TOOLS.length);
   });
 
@@ -429,7 +255,7 @@ describe("selectPlanningTools on the discovery runtime", () => {
 
     expect(selection).toMatchObject({ bucket: "order_status", narrowed: true });
     expect(names(selection)).toContain(DISCOVERY_TOOL_NAME);
-    expect(names(selection)).not.toContain(NAMESPACE_MISS_TOOL_NAME);
+    expect(names(selection)).not.toContain("request_wider_tool_set");
   });
 
   it.each([
@@ -448,10 +274,6 @@ describe("selectPlanningTools on the discovery runtime", () => {
   // load compensation schemas by default. On the legacy runtime it does, because
   // address changes and refunds share one coarse mutative bucket.
   it("narrows a mutative request to the reads a write is proposed from", () => {
-    const legacy = select({ classifierSignals: signals({ mutative_request: true }) });
-    expect(names(legacy)).toContain("create_refund");
-    expect(names(legacy)).toContain("update_shopify_order_address");
-
     const selection = discover({ classifierSignals: signals({ mutative_request: true }) });
     const selected = names(selection);
 
@@ -466,7 +288,7 @@ describe("selectPlanningTools on the discovery runtime", () => {
       "ask_operator",
       DISCOVERY_TOOL_NAME,
     ]));
-    for (const withheld of BROAD_ORDER_MUTATION_TOOL_NAMES) {
+    for (const withheld of ["create_refund", "create_partial_refund", "cancel_order", "create_return", "create_exchange", "update_shopify_order_address"]) {
       expect(selected).not.toContain(withheld);
     }
   });
@@ -491,38 +313,12 @@ describe("selectPlanningTools on the discovery runtime", () => {
 
     expect(selection.bucket).toBe("order_mutation+order_status+policy");
     expect(selected).toContain("search_kb");
-    for (const withheld of BROAD_ORDER_MUTATION_TOOL_NAMES) {
+    for (const withheld of ["create_refund", "create_partial_refund", "cancel_order", "create_return", "create_exchange", "update_shopify_order_address"]) {
       expect(selected).not.toContain(withheld);
     }
   });
 
-  it("leaves no active tool unreachable once the mutation bucket stops loading them", () => {
-    const exempt = new Set<string>(NARROWING_EXEMPT_TOOL_NAMES);
-    const bucketed = new Set<string>();
-    const intentKeys = Object.keys(emptyIntents()) as (keyof ClassifierSignals["intents"])[];
-    for (const intent of intentKeys) {
-      for (const tool of discover({ classifierSignals: signals({ [intent]: true }) }).tools) {
-        bucketed.add(tool.name);
-      }
-    }
 
-    // Every mutation the bucket used to load now has to be discoverable, or
-    // narrowing has orphaned it the way it once orphaned fulfill_order — the
-    // plan is merely worse, never an error.
-    const unreachable = AGENT_TOOLS
-      .map((tool) => tool.name)
-      .filter((name) => !bucketed.has(name) && !exempt.has(name))
-      .filter((name) => {
-        const definition = TOOL_DEFINITIONS.find((candidate) => candidate.name === name);
-        if (!definition) return true;
-        return !discovered(AGENT_TOOLS, definition.labels.planStep).includes(name);
-      })
-      .sort();
-
-    expect(unreachable).toEqual([]);
-    // Not vacuous: the mutations really did leave the buckets.
-    expect(BROAD_ORDER_MUTATION_TOOL_NAMES.some((name) => !bucketed.has(name))).toBe(true);
-  });
 });
 
 describe("runCapabilityDiscovery", () => {
@@ -533,7 +329,7 @@ describe("runCapabilityDiscovery", () => {
       operatorMode: false,
       storefrontMode: false,
       merchantAnswerReplan: false,
-      capabilityDiscovery: true,
+
     }).tools.map((tool) => tool.name),
   );
 

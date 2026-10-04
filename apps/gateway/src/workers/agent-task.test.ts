@@ -89,7 +89,7 @@ async function seedQueuedTask() {
   const task = await attachMemberAgentTask({
     ...input,
     requestId: request.id,
-    budget: { runtimeVersion: 1, modelCallLimit: 10, activeTimeMsLimit: 120_000, spendNanoUsdLimit: 1_000_000_000n },
+    budget: { runtimeVersion: 2, modelCallLimit: 10, activeTimeMsLimit: 120_000, spendNanoUsdLimit: 1_000_000_000n },
   });
   return { input, task, event };
 }

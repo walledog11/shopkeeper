@@ -39,10 +39,10 @@ if (!['on', 'off'].includes(judges)) throw new Error('--judges must be on or off
 // one runtime's behavior only runs on that runtime (selectFixtures in the eval
 // harness), so it only counts toward that runtime's budget.
 const runtimeArg = args.get('runtime-version')?.trim() || 'current';
-if (!['current', '1', '2'].includes(runtimeArg)) {
-  throw new Error('--runtime-version must be current, 1 or 2');
+if (!['current', '2'].includes(runtimeArg)) {
+  throw new Error('--runtime-version must be current or 2; runtime 1 is retired');
 }
-const runtimeVersion = runtimeArg === 'current' ? undefined : Number(runtimeArg);
+const runtimeVersion = 2;
 
 const fixtureDirectory = resolve('apps/dashboard/src/lib/agent/__evals__/fixtures');
 const allFixtures = readdirSync(fixtureDirectory)
