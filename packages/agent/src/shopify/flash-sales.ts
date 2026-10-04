@@ -599,10 +599,13 @@ export async function createFlashSale(
       }
     }
 
-    const endsAt = new Date(now.getTime() + hours * 3_600_000);
+    // Shopify keeps discount times to the second and reports them that way, so a
+    // millisecond here could never match what it returns.
+    const startsAt = new Date(Math.floor(now.getTime() / 1000) * 1000);
+    const endsAt = new Date(startsAt.getTime() + hours * 3_600_000);
     const marker = operationMarker(ctx.operationId);
     const title = `${TITLE_PREFIX}: ${name || `${percentage}% off`}${marker ? ` [op:${marker}]` : ""}`;
-    expected = { title, scope, variants, percentage, startsAt: now, endsAt };
+    expected = { title, scope, variants, percentage, startsAt, endsAt };
     mutationStarted = true;
     const data = await shopifyGraphql<AutomaticDiscountCreateData>(
       ctx,
@@ -610,7 +613,7 @@ export async function createFlashSale(
       {
         automaticBasicDiscount: {
           title,
-          startsAt: now.toISOString(),
+          startsAt: startsAt.toISOString(),
           // Never optional. Shopify enforces the expiry, so the sale ends even
           // if nothing of ours ever runs again.
           endsAt: endsAt.toISOString(),
@@ -652,7 +655,7 @@ export async function createFlashSale(
       variants,
       requestedPercentage: percentage,
       expectedTitle: title,
-      expectedStartsAt: now,
+      expectedStartsAt: startsAt,
       expectedEndsAt: endsAt,
     });
   } catch (err) {

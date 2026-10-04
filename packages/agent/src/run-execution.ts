@@ -1,8 +1,17 @@
 import { randomUUID } from "node:crypto";
 import logger from "./logger.js";
 import type { OrgSettings } from "./types.js";
-import { TOOL_CATEGORIES, type AgentToolDefinition } from "./tools/registry/index.js";
+import {
+  parseToolInput,
+  TOOL_CATEGORIES,
+  type AgentToolDefinition,
+  type CreateRefundInput,
+} from "./tools/registry/index.js";
 import { executeToolWithStatus } from "./tools/executor.js";
+import { formatShopifyToolError } from "./shopify/client.js";
+import { quoteFullRefundForApproval } from "./shopify/refunds.js";
+import { ShopifyInputError } from "./shopify/validation.js";
+import { toolError, toolPolicyBlock, type ReceiptV1, type ToolResult } from "./tools/result.js";
 import type {
   ActionEntry,
   ApprovedMessageWithheld,
@@ -28,7 +37,6 @@ import {
   renderReplyCompletionClaims,
   unsupportedReplyCompletionClaims,
 } from "./plan-grounding.js";
-import type { ReceiptV1 } from "./tools/result.js";
 import type { ProposalCommunication } from "./types.js";
 import { fillApprovedDraft } from "./reply-placeholders.js";
 
@@ -132,6 +140,41 @@ function prepareApprovedMessage(
 
 function hasUnknownProviderOutcome(actionsPerformed: ActionEntry[]): boolean {
   return actionsPerformed.some((action) => action.status === "unknown");
+}
+
+/**
+ * A full refund's amount is Shopify's refundable balance, never the model's: the
+ * tool tells the model to omit it, the planner binds the quote into a proposal
+ * for approval, and `createRefund` will not run without one. When the model
+ * calls the tool itself, as it does for a merchant's own instruction, there is
+ * no proposal, so the same quote is bound before the call is recorded and its
+ * limits are checked. Approved calls never come through here: an approved plan
+ * runs exactly the input the merchant approved.
+ */
+async function quoteModelFullRefund(
+  toolCall: AgentToolCall,
+  ctx: BaseAgentContext,
+): Promise<{ call: AgentToolCall } | { refusal: ToolResult }> {
+  // A turn without standing authorization is refused by the executor's policy
+  // check, and has nothing to quote.
+  if (toolCall.name !== "create_refund" || !ctx.shopify || ctx.actionAuthorityBlock) return { call: toolCall };
+  let parsed: CreateRefundInput;
+  try {
+    parsed = parseToolInput("create_refund", toolCall.input) as CreateRefundInput;
+  } catch {
+    // The executor reports malformed input in its own words.
+    return { call: toolCall };
+  }
+  if (parsed.amount?.trim()) return { call: toolCall };
+  try {
+    return { call: { ...toolCall, input: await quoteFullRefundForApproval(parsed, ctx.shopify) } };
+  } catch (error) {
+    return {
+      refusal: error instanceof ShopifyInputError
+        ? toolPolicyBlock(error.message)
+        : toolError(formatShopifyToolError("could not quote the refund", error)),
+    };
+  }
 }
 
 // A context carries a support thread iff it has a `thread`. Thread-less modules
@@ -318,6 +361,8 @@ export async function executeAgentToolCall(
     operationScopeId?: string;
     completionEvidence?: readonly CompletionFact[];
     approvedMessage?: ApprovedMessage;
+    /** The calls are the model's own, not an approved plan's (see quoteModelFullRefund). */
+    quoteModelRefunds?: boolean;
     beginAction?: (
       call: AgentToolCall,
       operationId: string,
@@ -351,11 +396,15 @@ export async function executeAgentToolCall(
       ...executedCompletionFacts(actionsPerformed, ctx, { allowHistoricalResultInference: true }),
     ]
     : null;
-  const executableToolCall = approvedMessage && "call" in approvedMessage
+  const authoredToolCall = approvedMessage && "call" in approvedMessage
     ? approvedMessage.call
     : legacyReplyFacts
       ? renderReplyCompletionClaims(toolCall, legacyReplyFacts, ctx)
       : toolCall;
+  const quoted = input.quoteModelRefunds && !readOnly && !hasUnknownProviderOutcome(actionsPerformed)
+    ? await quoteModelFullRefund(authoredToolCall, ctx)
+    : { call: authoredToolCall };
+  const executableToolCall = "call" in quoted ? quoted.call : authoredToolCall;
 
   logger.info({
     orgId: ctx.orgId,
@@ -399,6 +448,10 @@ export async function executeAgentToolCall(
     status = "error";
     errorDetail = result;
     withheld = approvedMessage.withheld;
+  } else if ("refusal" in quoted) {
+    result = quoted.refusal.message;
+    status = quoted.refusal.status === "policy_block" ? "policy_block" : "error";
+    errorDetail = result;
   } else if (
     legacyReplyFacts
     // Validate the exact receipt-bound text that will be dispatched. The model

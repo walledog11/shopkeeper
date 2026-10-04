@@ -230,7 +230,7 @@ export const ORDER_TOOL_DEFINITIONS = [
   defineTool({
     name: "create_shopify_order",
     description:
-      "Create a new Shopify order on behalf of a customer. Each line item must include either a variant_id (for a real catalog product) or a title + price (for a custom item, if allowed). Set financial_status to pending — do not charge the customer.",
+      "Create a new Shopify order on behalf of a customer. Each line item must include either a variant_id (for a real catalog product) or a title + price (for a custom item, if allowed). The order is created unpaid, with its full total pending: nothing is collected and the customer gets no receipt. This tool cannot discount an order or make it free.",
     fields: {
       email: stringArg("Customer email address.", { required: true }),
       first_name: stringArg("Customer first name.", { required: true }),

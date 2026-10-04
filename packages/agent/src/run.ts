@@ -151,7 +151,7 @@ export async function runAgent(
   let actionIndex = 0;
   const executeToolCalls = (
     toolCalls: { id: string; name: string; input: unknown }[],
-    executionOptions?: { stopOnDefiniteFailure?: boolean; approvedMessage?: ApprovedMessage },
+    executionOptions?: { stopOnDefiniteFailure?: boolean; approvedMessage?: ApprovedMessage; quoteModelRefunds?: boolean },
   ) =>
     executeAgentToolCalls(toolCalls, {
       ctx,
@@ -216,6 +216,7 @@ export async function runAgent(
       ...(executionOptions?.approvedMessage
         ? { approvedMessage: executionOptions.approvedMessage }
         : {}),
+      ...(executionOptions?.quoteModelRefunds ? { quoteModelRefunds: true } : {}),
     });
 
   try {
@@ -333,7 +334,7 @@ export async function runAgent(
       maxTokensPerCall: readOnly ? 2048 : 4096,
       settings,
       usageTotals,
-      runTools: executeToolCalls,
+      runTools: (toolCalls) => executeToolCalls(toolCalls, { quoteModelRefunds: true }),
       getEscalationReason: () => escalationReason,
       ...(readOnly ? {} : { tokenBudget: TOKEN_BUDGET }),
     });

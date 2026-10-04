@@ -148,6 +148,29 @@ export function offsetToIanaFallback(offset: number): string {
   return `Etc/GMT${rounded > 0 ? "-" : "+"}${Math.abs(rounded)}`;
 }
 
+/** The merchant's date and time, in the timezone their briefing is scheduled in. */
+export function merchantLocalTime(
+  settings: Pick<OrgSettings, "digestTimezone" | "digestTimezoneOffset">,
+  now: Date,
+): string {
+  const zone = settings.digestTimezone?.trim() || offsetToIanaFallback(settings.digestTimezoneOffset);
+  const format = (timeZone: string) => new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(now);
+  try {
+    return `${format(zone)} (${zone})`;
+  } catch {
+    // Invalid timeZone — fall back to UTC, as localHourAndDay does.
+    return `${format("UTC")} (UTC)`;
+  }
+}
+
 export function localHourAndDay(timeZone: string, now: Date): { hour: number; day: BusinessHoursDay } {
   try {
     const parts = new Intl.DateTimeFormat("en-US", {
