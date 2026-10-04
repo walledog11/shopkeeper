@@ -19,7 +19,8 @@ import { registerJobFailureLogging } from './failure.js';
 import type { SharedGatewayWorkerOptions } from './resources.js';
 import { operatorBindingStillValid, operatorTaskMessage } from './operator-event.js';
 import { completeOperatorTaskReply } from '../operator-event-reply.js';
-import { runComposerTask } from '../message-handlers/support-plan/composer-task.js';
+import { notifyCommittedComposerTask, runComposerTask } from '../message-handlers/support-plan/composer-task.js';
+import { OperatorNotifyError } from '../operator-notify.js';
 
 const LEASE_MS = 300_000;
 const RENEW_MS = 60_000;
@@ -65,7 +66,12 @@ export async function processAgentTaskJob(data: AgentTaskJobData): Promise<void>
     expectedRevision: data.revision,
     leaseMs: LEASE_MS,
   });
-  if (!claimed) return;
+  if (!claimed) {
+    await notifyCommittedComposerTask({
+      organizationId: data.organizationId, taskId: data.taskId, expectedRevision: data.revision,
+    });
+    return;
+  }
 
   // Newest first: a resumed task carries both the original instruction and the
   // answer that woke it, and the answer is what this attempt is running.
@@ -227,6 +233,9 @@ export async function processAgentTaskJob(data: AgentTaskJobData): Promise<void>
     if (!settled) throw new Error('Task claim was lost before its result could be recorded.');
     summary = result.summary;
   } catch (error) {
+    // The composer already committed its card. BullMQ retries delivery against
+    // that identity without another claim, model call or provider action.
+    if (isComposer && error instanceof OperatorNotifyError) throw error;
     logger.error({ err: error, taskId: data.taskId, requestId: request.id }, '[AgentTask] Turn failed');
     await failAgentTaskClaim({
       ...claim,

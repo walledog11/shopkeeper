@@ -1,7 +1,10 @@
 # Conversational agent overhaul plan
 
-Status, 2026-10-04: #156 is merged; dashboard, gateway and worker serve
-`7ef89abb`, with all required PR CI and production readiness passed. #152
+Status, 2026-10-04: #157 is merged; dashboard, gateway and worker serve
+`e3e9f83a`, with all required PR CI and production readiness passed. Its live
+regeneration scopes the #1041 exchange correctly and reloads the same proposal.
+Phone continuation remains blocked by the missing composer-card notification;
+the candidate on `fix/composer-phone-handoff` addresses that handoff. #152
 corrects the exchange text behind the #1039 financial/capability claims and
 stops sending Shopify's `OTHER` return reason; #153 stops a request already
 handed to the merchant from being merged into later messages on the thread; #154
@@ -73,10 +76,11 @@ Targeted checks used real isolated local Postgres with controlled model/provider
 responses. They verify persistence, approval identity and refusal behavior;
 manual dashboard/iMessage delivery and Shopify continuation evidence remain
 open. #155 merged as `1d88d6d6` and is included in deployed `7ef89abb`.
-The ordinary #1041 exchange email on 2026-10-04 produced an invalid draft before
-any continuation, so it supplies no answer/revision/approval evidence. Fix its
-request-history defect below, then regenerate against the same customer message
-and observe the normal review in the app and on the phone.
+The ordinary #1041 exchange email initially produced an invalid draft. #157's
+deployed regeneration now produces a valid exchange-only proposal and survives
+reload. It supplies no phone answer/revision/approval evidence: composer planning
+does not notify the phone queue. Finish that handoff, then continue this same
+request; the generated shipping claims still need merchant confirmation or revision.
 
 ## Next session
 
@@ -84,16 +88,18 @@ The owner clarified that testing is welcome, without redundant test loops. All
 fourteen effects remain in scope. Reuse existing evidence; repeat checks only
 for a failure, a relevant code change or an unresolved concern. In order:
 
-1. **Fix the live exchange request-history defect, then continue that flow (8h).**
+1. **Finish the regenerated exchange's phone handoff, then continue that flow (8h).**
    The #1041 email on `7ef89abb` was correctly summarized, but the planner
    re-proposed the already completed #1042 return beside the exchange. Invalid
    return input and an ambiguous return-number placeholder blocked the entire
-   draft; no action or customer reply ran. The candidate on
-   `fix/support-request-history` gives the planner the same runtime-selected
-   unanswered burst as the summarizer, with earlier messages kept as reference
-   data. It also corrects the customer-ticket history authorization that caused
-   a live dashboard 403 on reload. Review, PR CI and deployment precede regenerating the original request;
-   no repeat customer email is needed. #155's live continuation remains open.
+   draft; no action or customer reply ran. #157 gives the planner the same
+   unanswered burst as the summarizer and fixes the ticket-history 403. Live
+   regeneration and reload passed on `e3e9f83a`. The valid proposal is waiting
+   for approval but absent from the phone queue. `fix/composer-phone-handoff`
+   publishes the committed card through existing notification contracts and
+   retries delivery without re-planning. Review, CI and deployment precede one
+   regeneration to deliver its phone card. No repeat customer email is needed.
+   #155's live continuation remains open.
    #151's handoff grounding fix
    is deployed on `6c6b9499`, and the owner confirmed the single approved #1038
    replay arrived with correct wording. This defect is resolved; do not repeat
@@ -122,8 +128,8 @@ for a failure, a relevant code change or an unresolved concern. In order:
 iMessage is the main channel. Telegram is excluded from product and release
 acceptance; do not build or test it.
 
-**Workspace handoff:** main, dashboard, gateway and worker are `7ef89abb`
-(#156). The shared root checkout
+**Workspace handoff:** main, dashboard, gateway and worker are `e3e9f83a`
+(#157). The shared root checkout
 still has HEAD `606da169` and uncommitted phone, marketing and documentation
 edits, this document included. Preserve them, start code changes from an isolated
 worktree on `origin/master`, and do not reset the root or mistake its older files
@@ -698,7 +704,7 @@ handled, because they approved that exact message while told to send the label.
 A runtime knowledge-base lookup for policy replies drafted without a search was
 proposed and declined; do not raise it again without a new failure.
 
-**Exchange after a completed return (8h), 2026-10-04 — candidate, not deployed.**
+**Exchange after a completed return (8h), 2026-10-04 — scoping verified, phone handoff open.**
 The owner sent an ordinary exchange email for the regular line of #1041 to the
 Sample variant, asking how to send the regular one back. Fresh Shopify reads
 confirmed that line remained returnable, with eight Sample units in stock. It
@@ -729,6 +735,23 @@ membership check. The candidate checks membership and the active organization-ow
 customer thread separately, retaining member-specific request history and private
 operator isolation. The existing composer regeneration check reproduced the failure
 before the fix and passed afterward, including foreign-thread and revoked-member refusal.
+
+#157 merged as `e3e9f83a`; all required CI and production readiness passed on
+the dashboard, gateway and worker. One dashboard Rewrite against the original
+email created request `5ca38223`, task `95c15cdb`, proposal `7d72173d`. The draft
+contains only `create_exchange` for #1041 and one receipt-bound `send_reply`,
+with valid inputs and one return-number binding. Reload retrieves that same
+proposal with HTTP 200. No action or customer reply ran. The reply still promises
+shipping instructions and shipment after receipt without new merchant evidence.
+
+The phone queue remains empty: composer planning commits the card but does not
+publish it to operator bindings. `fix/composer-phone-handoff` uses the existing
+plan/question notifications after commit. A worker retry reads the same live
+card, checks its source, instruction, revision and member, and resends without
+re-planning. The real-Postgres worker regression reproduced no card before the
+fix and now covers failed-send retry, duplicate delivery, a superseded revision
+and zero action/customer-message execution. Live phone receipt and continuation
+remain owed after deployment; this exchange is still unapproved.
 
 ### Release and runtime retirement
 
