@@ -1309,3 +1309,35 @@ existing real-Postgres composer regression failed with the live error before
 the fix and passed afterward, including another member's empty history,
 foreign-thread refusal and revoked-membership refusal. All 63 ledger checks
 passed. Live ticket reload verification remains owed after deployment.
+
+## PR #157 deployment and exchange regeneration, 2026-10-04
+
+All required CI passed on `0f6f3057`; #157 merged at 04:24:15 UTC as
+`e3e9f83aae5184c22982c19543be73342bd26653`. That source is serving on Railway
+gateway `c9bf01b0` and worker `000065c0` (SUCCESS), and Vercel production
+`dpl_7iPivbexgVjyYhmbGULBXwWNF7dZ` (READY, alias `app.useshopkeeper.com`).
+Production readiness passed, including deep health, worker/queues, internal
+authentication and Photon route configuration. Both services retain runtime v1
+as the default and the same single controlled v2 organization. No inbound smoke
+email or Shopify operation was part of these health checks.
+
+One ordinary dashboard Rewrite against the original #1041 email was accepted
+at 04:28:25 UTC as request `5ca38223`, task `95c15cdb`, runtime v2. Two model calls
+cost $0.0674514 and committed proposal `7d72173d` in `waiting_approval`. It has
+only `create_exchange` for the regular #1041 variant to Sample, reason `style`,
+and `send_reply`. Validation is valid and `{{return_name}}` binds to that one
+exchange receipt. The extra #1042 return is gone. Ticket history returned HTTP
+200 before regeneration and after reload, which recovered the same proposal.
+The action ledger is empty and there is no new customer reply.
+
+The generated reply still promises shipping instructions and shipment of the
+Sample after receipt, without new merchant evidence. It remains unapproved.
+The phone operator queue is also empty, unchanged since the earlier invalid
+notice: composer planning does not publish its committed card. This blocks the
+planned phone revision. The candidate on `fix/composer-phone-handoff` publishes
+the committed proposal or merchant question through existing notification
+helpers. Delivery retry checks the persisted member, source, instruction and
+revision; it does not claim work or buy another model call. The existing worker
+regression failed before the correction (no card), then passed with failed-send
+retry, delivery idempotency, stale-revision refusal and zero provider/customer
+execution. Live phone receipt and #155 continuation remain owed after deployment.

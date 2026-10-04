@@ -5,11 +5,13 @@ import {
   cleanupTestData,
   createTestCustomer,
   createTestIntegration,
+  createTestMessage,
   createTestOrg,
   createTestThread,
 } from '@shopkeeper/db/test-helpers';
 import {
   acceptMemberAgentRequest,
+  acceptTicketAgentRequest,
   attachMemberAgentTask,
   cancelMemberAgentTask,
 } from '@shopkeeper/agent/task-ledger';
@@ -18,6 +20,7 @@ const { anthropicCreate, sendPhone } = vi.hoisted(() => ({
   anthropicCreate: vi.fn(), sendPhone: vi.fn().mockResolvedValue(true),
 }));
 vi.mock('../clients/telegram-client.js', () => ({
+  isTelegramConfigured: () => true,
   sendMessage: sendPhone,
   sendChatAction: vi.fn().mockResolvedValue(true),
   setMessageReaction: vi.fn().mockResolvedValue(true),
@@ -40,6 +43,8 @@ vi.mock('../clients/agent-runtime.js', () => ({
 
 import { processAgentTaskJob } from './agent-task.js';
 import { getContext, updateContext } from '../operator-context.js';
+import { hashInstruction, hashPlan } from '@shopkeeper/agent/agent-actions';
+import { readAgentPlanCacheRecordShape } from '@shopkeeper/agent/plan-cache-shape';
 
 const fetchMock = vi.fn();
 let orgId: string | undefined;
@@ -128,6 +133,50 @@ afterEach(async () => {
 });
 
 describe('processAgentTaskJob', () => {
+  it('publishes the committed composer proposal to the phone queue without executing it', async () => {
+    const org = await createTestOrg();
+    orgId = org.id;
+    const member = await db.orgMember.create({ data: { organizationId: org.id, clerkUserId: randomUUID() } });
+    await db.orgMemberTelegramChat.create({ data: { orgMemberId: member.id, chatId: `composer-${randomUUID()}` } });
+    const customer = await createTestCustomer(org.id, `${randomUUID()}@test.com`, { name: 'Chain Market' });
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+    const source = await createTestMessage(thread.id, 'Can you help with my order?');
+    const input = {
+      organizationId: org.id, clerkUserId: member.clerkUserId, threadId: thread.id,
+      dedupeKey: randomUUID(), instruction: 'Draft a brief acknowledgement for the customer', force: true,
+      budget: { runtimeVersion: 2, modelCallLimit: 10, activeTimeMsLimit: 120_000, spendNanoUsdLimit: 1_000_000_000n },
+    };
+    const { task } = await acceptTicketAgentRequest(input);
+    anthropicCreate.mockResolvedValueOnce({
+      ...storewideSale,
+      content: [{ type: 'tool_use', id: 'tu_reply', name: 'send_reply', input: { text: 'Thanks for contacting us. We are reviewing your request.' } }],
+    }).mockResolvedValue(finished);
+
+    const job = { organizationId: org.id, taskId: task.id, revision: task.revision };
+    sendPhone.mockResolvedValueOnce(false);
+    await expect(processAgentTaskJob(job)).rejects.toThrow('Telegram send failed');
+
+    const stored = await db.agentTask.findUniqueOrThrow({ where: { id: task.id } });
+    expect(stored.status).toBe('waiting_approval');
+    const cached = readAgentPlanCacheRecordShape((await db.thread.findUniqueOrThrow({ where: { id: thread.id } })).cachedPlan)!;
+    expect(cached.planId).toBe(stored.activeProposalId);
+    const modelCalls = anthropicCreate.mock.calls.length;
+    await processAgentTaskJob(job);
+    await processAgentTaskJob(job);
+    expect(anthropicCreate).toHaveBeenCalledTimes(modelCalls);
+    expect(sendPhone).toHaveBeenCalledTimes(2);
+    expect((await getContext(org.id, `member:${member.id}`)).pendingPlan).toMatchObject({
+      planId: cached.planId, sourceMessageId: source.id,
+      planHash: hashPlan(cached.plan), instructionHash: hashInstruction(input.instruction),
+    });
+    expect(await db.agentAction.count({ where: { organizationId: org.id, threadId: thread.id } })).toBe(0);
+    expect(await db.message.count({ where: { threadId: thread.id, senderType: 'agent' } })).toBe(0);
+    await acceptTicketAgentRequest({ ...input, dedupeKey: randomUUID(), instruction: 'Use different wording' });
+    await processAgentTaskJob(job);
+    expect(sendPhone).toHaveBeenCalledTimes(2);
+    expect(anthropicCreate).toHaveBeenCalledTimes(modelCalls);
+  });
+
   // The merchant presses stop while the model is still thinking. Whatever the model
   // asks for next, the stop owns the task: its write must not reach Shopify and no
   // further model call is bought on the task's budget.
