@@ -1384,8 +1384,9 @@ collected; no customer resend or restart is needed.
 
 ## Exchange shipping-claim source correction, 2026-10-04
 
-Candidate `fix/exchange-draft-grounding` starts from deployed `9f62ce86` in an
-isolated worktree. Code inspection found that `exchange_variant_id` described an
+[Draft PR #159](https://github.com/walledog11/shopkeeper/pull/159), commit
+`221e6399`, starts from deployed `9f62ce86` in an isolated worktree. The required
+workspace typechecks passed before push; CI is pending. Code inspection found that `exchange_variant_id` described an
 item "to ship instead" and the fallback plan summary said "ship variant". The
 capability and duplicated support/operator guidance described later fulfillment
 after merchant processing; the provider success text additionally told the model
@@ -1410,3 +1411,39 @@ reply ran. Review, CI and deployment precede one Rewrite against the retained
 Shopify receipt and actual customer delivery. The original phone-delivery and
 reload evidence stays passed; no customer resend or scripted merchant repair is
 required.
+
+## PR #159 deployment and retained exchange rewrite, 2026-10-04
+
+#159 merged at 06:20:59 UTC as `ab75c0631246fb26d6f65a4f19fa3ece0fb6bb4b`;
+all required PR CI and the free preflight passed. At 06:47:39 UTC gateway
+`807f3220`, worker `d98f525b` and the production dashboard
+`dpl_4UnZ7h9eEcG2qfJshPoEhHeAKAq1` served that revision (SUCCESS/SUCCESS/READY).
+This is deployment evidence; no new production-readiness suite was run.
+
+Read-only preflight found the original task `95c15cdb` waiting for approval at
+revision 1, proposal `5689558d`, with four charged model calls and no action or
+customer reply. One ordinary dashboard Rewrite at 06:48:33 UTC created request
+`a7137ba8` on that same task at revision 2. Valid proposal `65892637` committed at
+06:48:41 UTC, superseding the earlier card. It contains only the #1041 regular
+item exchange to Sample and its exact-draft reply; one `return_name` placeholder
+binds to that exchange receipt. Reload recovered the same proposal with HTTP 200.
+The task has six cumulative calls and $0.1534646 cumulative spend; this rewrite
+used two calls and $0.0686137.
+
+The live reply removed the promise of replacement shipment after receipt, but
+still says “We'll follow up with instructions on sending the original item
+back.” No merchant instruction established that commitment. This is partial
+improvement, not passed draft-quality acceptance. The phone send was mirrored
+as `0abfc372` at 06:48:49 UTC, with the existing reminder that the merchant must
+send the label. At 06:51:59 UTC the task remained unapproved, its action ledger
+was empty and there was no customer reply. Handset receipt is unobserved.
+
+Code inspection found that `merchantFollowUp` is rendered by the card and
+confirmation but absent from the model's offered tool descriptions; captured
+mutations report only that they were not executed. The candidate on
+`fix/merchant-follow-up-facts` exposes that obligation as unscheduled merchant
+work rather than an established customer commitment. Capture feedback omits the
+outstanding obligation when the plan includes its completing label attachment.
+Focused local regressions verify this structural information reaches the model
+without provider execution. This does not yet prove improved live wording.
+No second rewrite, merchant script, customer resend or provider effect ran.

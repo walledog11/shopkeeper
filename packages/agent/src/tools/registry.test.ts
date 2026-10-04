@@ -3,6 +3,7 @@ import { AGENT_SETTINGS_DEFAULTS } from "../settings.js";
 import type { BaseAgentContext } from "../agent-context.js";
 import { toolOk } from "./result.js";
 import {
+  AGENT_TOOLS,
   TOOL_DEFINITIONS,
   TOOL_REQUIRED_SCOPES,
   getToolDefinition,
@@ -79,6 +80,22 @@ function makeDeps(): ToolExecutionDeps {
 }
 
 describe("agent tool registry", () => {
+  it("exposes required merchant work as unscheduled in the offered return and exchange schemas", () => {
+    for (const name of ["create_return", "create_exchange"] as const) {
+      const description = AGENT_TOOLS.find(tool => tool.name === name)!.description!;
+      expect(JSON.parse(description.split("\n").at(-1)!)).toEqual({
+        merchant_follow_up: {
+          kind: "send_return_label",
+          status: "requires_merchant",
+          scheduledByTool: false,
+          customerCommitmentEstablishedByTool: false,
+        },
+      });
+    }
+    const label = definitionFor("attach_return_label");
+    expect(AGENT_TOOLS.find(tool => tool.name === label.name)?.description).toBe(label.description);
+  });
+
   it("leaves create_refund pricing for the runtime to bind", () => {
     const definition = definitionFor("create_refund");
 

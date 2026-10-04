@@ -10,6 +10,7 @@ import { ORDER_TOOL_DEFINITIONS } from "./order.js";
 import { PRODUCT_TOOL_DEFINITIONS } from "./product.js";
 import { grantCoversScopes } from "../../shopify/integration-health.js";
 import { ToolInputValidationError } from "./schema.js";
+import { modelToolDescription } from "./model-contract.js";
 import { STATS_TOOL_DEFINITIONS } from "./stats.js";
 import { THREAD_TOOL_DEFINITIONS } from "./thread.js";
 import type { AgentToolDefinition, ToolCapability, ToolGroup } from "./types.js";
@@ -131,7 +132,7 @@ export const AGENT_TOOLS: Anthropic.Tool[] = TOOL_DEFINITIONS
   .filter((definition) => definition.availability === "active")
   .map((definition) => ({
   name: definition.name,
-  description: definition.description,
+  description: modelToolDescription(definition),
   input_schema: definition.inputSchema,
 }));
 

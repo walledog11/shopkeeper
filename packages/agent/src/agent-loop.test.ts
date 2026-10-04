@@ -306,6 +306,47 @@ describe("runAgentLoop capture reply refusal", () => {
   });
 });
 
+describe("runAgentLoop capture merchant follow-ups", () => {
+  it.each([false, true])("reports only outstanding label work while recording proposals without execution (label supplied: %s)", async (labelSupplied) => {
+    const proposed = [
+      { type: "tool_use", id: "tu_exchange", name: "create_exchange", input: { order_id: "1041", variant_id: "501", exchange_variant_id: "502" } },
+      ...(labelSupplied ? [{ type: "tool_use", id: "tu_label", name: "attach_return_label", input: { order_id: "1041", label_url: "https://example.test/label.pdf" } }] : []),
+    ];
+    mockCreate
+      .mockResolvedValueOnce({ stop_reason: "tool_use", content: proposed, usage: { input_tokens: 1, output_tokens: 1 } })
+      .mockResolvedValueOnce({
+        stop_reason: "tool_use",
+        content: [{ type: "tool_use", id: "tu_reply", name: "send_reply", input: { text: "The exchange is open." } }],
+        usage: { input_tokens: 1, output_tokens: 1 },
+      });
+    const runTools = vi.fn(toolResult);
+    const result = await runAgentLoop({
+      ctx, mode: "capture", messages: [{ role: "user", content: "go" }], systemPromptBlocks: [],
+      tools: [], model: "test-model", maxIterations: 10, maxTokensPerCall: 4096,
+      usageTotals: createModelUsageMetrics(), runTools,
+    });
+
+    const request = mockCreate.mock.calls[1][0] as {
+      messages: { role: string; content: { type: string; tool_use_id?: string; content?: string }[] | string }[];
+    };
+    const feedback = request.messages.flatMap(message => Array.isArray(message.content) ? message.content : [])
+      .find(block => block.type === "tool_result" && block.tool_use_id === "tu_exchange")!.content!;
+    expect(feedback).toContain("Not executed during planning.");
+    if (labelSupplied) {
+      expect(feedback).not.toContain("merchant_follow_up");
+    } else {
+      expect(JSON.parse(feedback.split("\n").at(-1)!)).toEqual({
+        merchant_follow_up: {
+          kind: "send_return_label", status: "requires_merchant",
+          scheduledByTool: false, customerCommitmentEstablishedByTool: false,
+        },
+      });
+    }
+    expect(runTools).not.toHaveBeenCalled();
+    expect(result.rawToolCalls.map(call => call.id)).toEqual([...proposed.map(block => block.id), "tu_reply"]);
+  });
+});
+
 describe("runAgentLoop capture turn completion", () => {
   it("ends the turn at a complete plan and leaves out the question proposed beside it", async () => {
     mockCreate.mockResolvedValueOnce({
