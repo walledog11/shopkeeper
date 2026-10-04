@@ -230,7 +230,7 @@ export const ORDER_TOOL_DEFINITIONS = [
   defineTool({
     name: "create_shopify_order",
     description:
-      "Create a new Shopify order on behalf of a customer. Each line item must include either a variant_id (for a real catalog product) or a title + price (for a custom item, if allowed). The order is created unpaid, with its full total pending: nothing is collected and the customer gets no receipt. This tool cannot discount an order or make it free, so whenever an order is meant as a free replacement, ask the merchant how they want it handled before creating anything.",
+      "Create a new Shopify order on behalf of a customer. Each line item must include either a variant_id (for a real catalog product) or a title + price (for a custom item, if allowed). The order is created unpaid, with its full total pending: nothing is collected and the customer gets no receipt. This tool cannot discount an order or make it free.",
     fields: {
       email: stringArg("Customer email address.", { required: true }),
       first_name: stringArg("Customer first name.", { required: true }),
@@ -252,6 +252,7 @@ export const ORDER_TOOL_DEFINITIONS = [
         { required: true, minItems: 1 },
       ),
       note: stringArg("Optional note to attach to the order."),
+      free_of_charge: booleanArg("Set true when the order is meant to cost the customer nothing, such as a free replacement. Such an order is refused, so the merchant is asked how to handle it; if they then choose an unpaid order instead, leave this unset."),
     },
     category: "action",
     group: "order",
@@ -262,6 +263,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     planStepLabel: "Create Shopify order",
     policy: {
       customLineItemsDisabled: true,
+      freeOfChargeRefused: true,
     },
     execute: async (input: CreateShopifyOrderInput, ctx, settings, deps) => {
       const shopify = requireShopify(ctx);

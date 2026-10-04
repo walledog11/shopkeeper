@@ -1554,3 +1554,31 @@ instructions on the dev store; outcomes are from `/api/agent/actions`.
 Also observed: Reopen on closed thread `e5d8b070` (#1040) returned HTTP 500
 "Failed to update thread" with nothing shown in the dashboard, consistent with
 `threads_one_open_per_customer` while `1254749e` is open.
+
+## Re-checks after #162, 2026-10-04
+
+#162 merged as `1c5125a2` at 19:23:11 UTC; the Vercel and Railway production
+deployment records report success at 19:25:59 UTC. Claude ran the checks from
+the dashboard agent chat in plain merchant wording; outcomes are from
+`/api/agent/actions`.
+
+- "try the refund on 1040 again": `create_refund` ran with the runtime-bound
+  quote (`amount` 48.65, `currency` CAD, `approval_shop_amount` 34.90) and
+  succeeded; the $40 limit was checked against the shop-money 34.90. The agent
+  replied "Done, the full refund of $48.65 CAD on order #1040 went through this
+  time." This is the first committed `create_refund` and the 10b shop-currency
+  commit.
+- "run 20% off everything til tuesday night": no question about the date; the
+  agent asked "Want this sale to have a name shown at checkout (e.g. "Fall
+  Sale"), or just leave it unnamed?" (still prefixed "Escalated to merchant:").
+  After "nah leave it", `create_flash_sale` succeeded for 60 hours, Shopify title
+  "20% off everything", ending `2026-10-07T07:28:51Z`, which the agent reported
+  as about 12:28 AM PT Wednesday. "actually end it, changed my mind":
+  `end_flash_sale` succeeded.
+- "send chain a free replacement for the regular ski wax, theirs broke": failed
+  decision M. `create_shopify_order` created #1044 without asking, and the agent
+  said it was a free replacement that was "unpaid so nothing gets charged to
+  them". The tool-description sentence did not hold against a direct merchant
+  instruction; #163 replaces it with a typed field that static policy refuses.
+
+#1043 and #1044 remain on the dev store as unpaid test orders.
