@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import {
   formatShopifyToolError,
   isAmbiguousShopifyMutationError,
@@ -69,7 +68,14 @@ function describeSale(
  * the merchant's way out is a single call.
  */
 
-const TITLE_PREFIX = "Shopkeeper flash sale";
+/**
+ * Shoppers see a sale's title at checkout, so it is the merchant's name for the
+ * sale or a plain description of it — nothing of ours.
+ */
+function saleTitle(name: string, scope: FlashSaleScope, percentage: number): string {
+  if (name) return name;
+  return scope === "entire_catalog" ? `${percentage}% off everything` : `${percentage}% off`;
+}
 
 export const AUTOMATIC_DISCOUNT_CREATE_MUTATION = `mutation flashSaleCreate($automaticBasicDiscount: DiscountAutomaticBasicInput!) {
   discountAutomaticBasicCreate(automaticBasicDiscount: $automaticBasicDiscount) {
@@ -274,11 +280,6 @@ function requireScope(value: unknown): FlashSaleScope {
   throw new ShopifyInputError('applies_to must be "entire_catalog" or "variants".');
 }
 
-function operationMarker(operationId?: string): string | null {
-  return operationId
-    ? createHash("sha256").update(operationId).digest("hex").slice(0, 24)
-    : null;
-}
 
 function requireAutomaticDiscountGid(value: unknown): string {
   if (typeof value !== "string" || value.trim().length === 0) {
@@ -466,7 +467,7 @@ function confirmedFlashSaleResult(params: {
 
   const result = toolOk(
     [
-      `Started "${observed.title ?? "Shopkeeper flash sale"}".`,
+      `Started "${observed.title ?? expectedTitle}".`,
       ...describeSale(scope, variants, requestedPercentage, expectedEndsAt),
       `End it early with end_flash_sale and this ID: ${discountId}`,
     ].join("\n"),
@@ -519,9 +520,17 @@ async function reconcileCreatedFlashSale(
       { first: 100 },
       { maxRetries: 1 },
     );
-    const matches = (data.automaticDiscountNodes?.nodes ?? []).filter((node) => (
-      node?.id && node.automaticDiscount?.title === expected.title
-    ));
+    // The title is the merchant's, so it need not be unique. The start time this
+    // attempt chose, to the second, is what makes the match this attempt's own.
+    const matches = (data.automaticDiscountNodes?.nodes ?? []).filter((node) => {
+      const discount = node?.automaticDiscount;
+      return Boolean(node?.id)
+        && discount?.title === expected.title
+        && typeof discount.startsAt === "string"
+        && sameInstant(discount.startsAt, expected.startsAt)
+        && typeof discount.endsAt === "string"
+        && sameInstant(discount.endsAt, expected.endsAt);
+    });
     if (matches.length === 1) {
       const match = matches[0]!;
       return confirmedFlashSaleResult({
@@ -539,7 +548,7 @@ async function reconcileCreatedFlashSale(
     return flashSaleFailure(
       ctx,
       toolUnknown(
-        `Unknown: the sale request may have committed at Shopify, but an operation-tag lookup did not find exactly one complete matching discount. Check automatic discounts before starting another. ${formatShopifyToolError("flash sale reconciliation failed", mutationError)}`,
+        `Unknown: the sale request may have committed at Shopify, but a lookup by its name and times did not find exactly one complete matching discount. Check automatic discounts before starting another. ${formatShopifyToolError("flash sale reconciliation failed", mutationError)}`,
       ),
       "unknown",
       matches.length > 1 ? "multiple_flash_sale_matches" : "flash_sale_not_confirmed",
@@ -548,7 +557,7 @@ async function reconcileCreatedFlashSale(
     return flashSaleFailure(
       ctx,
       toolUnknown(
-        `Unknown: the sale may have started at Shopify and its operation-tag lookup failed. Check automatic discounts before starting another. ${formatShopifyToolError("flash sale reconciliation failed", error)}`,
+        `Unknown: the sale may have started at Shopify and the lookup to confirm it failed. Check automatic discounts before starting another. ${formatShopifyToolError("flash sale reconciliation failed", error)}`,
       ),
       "unknown",
       "flash_sale_reconciliation_failed",
@@ -603,8 +612,7 @@ export async function createFlashSale(
     // millisecond here could never match what it returns.
     const startsAt = new Date(Math.floor(now.getTime() / 1000) * 1000);
     const endsAt = new Date(startsAt.getTime() + hours * 3_600_000);
-    const marker = operationMarker(ctx.operationId);
-    const title = `${TITLE_PREFIX}: ${name || `${percentage}% off`}${marker ? ` [op:${marker}]` : ""}`;
+    const title = saleTitle(name, scope, percentage);
     expected = { title, scope, variants, percentage, startsAt, endsAt };
     mutationStarted = true;
     const data = await shopifyGraphql<AutomaticDiscountCreateData>(
@@ -668,7 +676,7 @@ export async function createFlashSale(
       );
     }
     if (mutationStarted && isAmbiguousShopifyMutationError(err)) {
-      if (expected && operationMarker(ctx.operationId)) {
+      if (expected && ctx.operationId) {
         return reconcileCreatedFlashSale(ctx, expected, err);
       }
       return flashSaleFailure(

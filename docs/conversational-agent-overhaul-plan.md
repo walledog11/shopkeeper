@@ -59,12 +59,13 @@ exchange committed as #1041-R2. Phone revision remains unobserved.
 
 Decision L governs what still needs a live run. In order:
 
-1. **Deploy #162 and re-run its four flows once** from the dashboard agent chat,
-   in plain merchant wording: a full refund by order number (expect a committed
-   refund within the limit in shop money), a storewide sale started and ended
-   (expect `create_flash_sale` to commit), a free replacement order (expect the
-   agent to say it is unpaid rather than free) and a sale "until" a named day
-   (expect no question about the date).
+1. **Deploy #162 and re-run its flows once** from the dashboard agent chat, in
+   plain merchant wording: a full refund by order number (expect a committed
+   refund within the limit in shop money); a storewide sale "until" a named day
+   (expect no question about the date, a question about the sale's name, and a
+   committed `create_flash_sale` titled with that name or a generic one), then
+   ended; and a free replacement (expect the agent to ask the merchant how to
+   handle it before creating anything, decision M).
 2. **Items 11–13:** make v2 the default for new tasks (one Railway variable,
    run by the owner), delete the old active runtime by responsibility (Gate E
    list), and write the final documentation. Item 9's rollback rehearsal is
@@ -78,10 +79,7 @@ Decision L governs what still needs a live run. In order:
    agent's summary; `answer_operator_question` reported no pending question
    after the agent's own question in the dashboard chat; tool-activity chips
    print an ID as a count ("8685995655402 products"); `edit_shopify_order`
-   cannot change a line's quantity; a flash sale's Shopify title carries the
-   `[op:…]` marker, which checkout may show shoppers; and a free replacement
-   order is not possible (no discount or $0 option). The last two are product
-   decisions for the owner.
+   cannot change a line's quantity.
 
 iMessage is the main channel. Telegram is excluded from product and release
 acceptance; do not build or test it.
@@ -841,11 +839,9 @@ and release scope.
 
 ## Open decision
 
-None blocks the release. Two product questions came out of the 2026-10-04 runs:
-whether a free replacement order should be possible (today `create_shopify_order`
-can only leave the full total pending), and whether a flash sale's Shopify title
-should drop the `[op:…]` marker that checkout may show shoppers. Stop-by-text
-(10c) is out of this release unless the owner asks (decision L).
+None. The two product questions from the 2026-10-04 runs are settled as
+decision M. Stop-by-text (10c) is out of this release unless the owner asks
+(decision L).
 
 **Gate C scope, 2026-10-04:** decision L supersedes the 2026-10-02 scope.
 
@@ -965,6 +961,14 @@ and commits cite it.
   of this release unless the owner asks. Item 9's rollback rehearsal is waived:
   with no users nothing is in flight, and rolling back is the same single
   variable. This supersedes decision F's fourteen-effect list.
+- **M. Sale names and free replacements go to the merchant** (2026-10-04). Before
+  starting a sale the agent asks whether the merchant wants to name it, unless
+  they already have; the Shopify title, which shoppers see at checkout, is that
+  name or a generic one ("20% off everything"), with nothing of Shopkeeper's
+  in it. Whenever an order is meant as a free replacement, the agent asks the
+  merchant how to handle it before creating anything, because
+  `create_shopify_order` leaves the full total pending and cannot make an order
+  free. Both are in #162.
 
 ## Outside this plan: recorded, not scheduled
 

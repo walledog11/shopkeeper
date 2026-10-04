@@ -108,13 +108,13 @@ export function buildOperatorShopTools(
   const createFlashSaleTool = defineTool({
     name: 'create_flash_sale',
     description:
-      'Start a time-limited sale. Set applies_to to "entire_catalog" for a storewide sale — one discount covering every product, so it needs no variant list — or to "variants" to name individual variants. Every sale expires: give the duration in hours. Prices are never edited, so ending the sale restores them exactly, whatever it covered. For the variants form, use get_inventory_status or search_shopify_products first to resolve variant IDs.',
+      'Start a time-limited sale. Set applies_to to "entire_catalog" for a storewide sale — one discount covering every product, so it needs no variant list — or to "variants" to name individual variants. Every sale expires: give the duration in hours. Prices are never edited, so ending the sale restores them exactly, whatever it covered. For the variants form, use get_inventory_status or search_shopify_products first to resolve variant IDs. Unless the merchant has already named the sale, ask whether they want to name it before starting it; if they do not, omit name.',
     fields: {
       applies_to: stringArg('What the sale covers: "entire_catalog" for every product in the store, or "variants" for a named list.', { required: true, enum: ['entire_catalog', 'variants'] }),
       variant_ids: stringArg('Comma-separated Shopify variant IDs, each either the bare number or the full gid. Required when applies_to is "variants"; omit it for a storewide sale.'),
       discount_percentage: numberArg('Percent off, 1-100.', { required: true }),
       duration_hours: numberArg('How many hours the sale runs before Shopify ends it.', { required: true }),
-      name: stringArg('Short name for the sale, shown in Shopify.'),
+      name: stringArg('The merchant\'s name for the sale, which shoppers see at checkout. Omitted, the sale gets a generic name such as "20% off everything".'),
     },
     category: 'action',
     group: 'product',
