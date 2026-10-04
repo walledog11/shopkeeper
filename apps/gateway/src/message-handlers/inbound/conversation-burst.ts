@@ -1,4 +1,5 @@
 import { db } from '@shopkeeper/db';
+import { selectCustomerBurst } from '@shopkeeper/agent/message-history';
 
 export interface BurstMessage {
   id: string;
@@ -42,18 +43,12 @@ export async function getConversationBurst(threadId: string): Promise<Conversati
       select: { sourceMessageId: true },
     }),
   ]);
-  const handledMessageIds = new Set(handled.map((execution) => execution.sourceMessageId));
-
-  let trailing = 0;
-  for (const message of messages) {
-    if (message.senderType === 'customer' && !handledMessageIds.has(message.id)) trailing += 1;
-    else trailing = 0;
-  }
+  const current = selectCustomerBurst(messages, new Set(handled.flatMap(execution => (
+    execution.sourceMessageId ? [execution.sourceMessageId] : []
+  ))));
 
   return {
-    isFollowUp: messages.length > trailing,
-    messages: messages
-      .slice(messages.length - trailing)
-      .map(({ id, contentText }) => ({ id, contentText })),
+    isFollowUp: messages.length > current.length,
+    messages: current.map(({ id, contentText }) => ({ id, contentText })),
   };
 }

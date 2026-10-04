@@ -69,6 +69,37 @@ async function supportThread(options: { withIntegration?: boolean } = {}) {
 }
 
 describe("context dependency tiers", () => {
+  it("separates a completed support return from a later exchange using persisted message identities", async () => {
+    const { org, thread } = await supportThread({ withIntegration: false });
+    const original = await createTestMessage(thread.id, "Return order #1042.");
+    const task = await db.agentTask.create({ data: {
+      organizationId: org.id, threadId: thread.id,
+      initiatingActorKind: "customer", initiatingActorKey: "customer:test",
+      objective: "Return order #1042", runtimeVersion: 2, status: "completed",
+      completedAt: new Date(), checkpointVersion: 1, checkpoint: {},
+      modelCallLimit: 20, activeTimeMsLimit: 120_000, spendNanoUsdLimit: 1_000_000_000n,
+    } });
+    await db.planExecution.create({ data: {
+      organizationId: org.id, threadId: thread.id, taskId: task.id,
+      sourceMessageId: original.id, planId: randomUUID(),
+      planHash: "a".repeat(64), instructionHash: "b".repeat(64), status: "committed",
+      claimToken: randomUUID(), claimedAt: new Date(), completedAt: new Date(),
+    } });
+    const reply = await createTestMessage(thread.id, "Opened return #1042-R1.", "agent");
+    await db.message.update({ where: { id: reply.id }, data: { agentTaskId: task.id } });
+    const current = await createTestMessage(thread.id, "Exchange the regular wax on #1041 for the Sample.");
+
+    const context = await buildContext(thread.id, org.id, sink, { runtimeVersion: 2 });
+    expect(context.currentCustomerMessageIds).toEqual([current.id]);
+    expect(context.recentMessages.find(message => message.id === reply.id))
+      .toMatchObject({ task: { id: task.id, status: "completed" } });
+
+    // A committed handoff without a customer reply is the same request boundary.
+    await db.message.delete({ where: { id: reply.id } });
+    const afterHandoff = await buildContext(thread.id, org.id, sink, { runtimeVersion: 2 });
+    expect(afterHandoff.currentCustomerMessageIds).toEqual([current.id]);
+  });
+
   it("retains the recorded state of earlier operator tasks in conversation history", async () => {
     const org = await createTestOrg();
     orgIds.push(org.id);

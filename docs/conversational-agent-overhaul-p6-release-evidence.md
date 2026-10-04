@@ -1229,3 +1229,71 @@ Before #154 the same question (thread `b8d08c4a`, 20:28 UTC) produced a draft
 promising a label nothing would send, after `search_kb` returned two privacy
 pages. That plan is still parked for the member. Not yet observed: the answer
 drafting the reply and the return executing.
+
+## Return email after #156: label line works, reply answered from nothing, 2026-10-04
+
+On `7ef89abb`, after the owner closed `b8d08c4a` and `d8c9730b`, the controlled
+customer sent the same return question at 02:37:03 UTC. It opened thread
+`1254749e` (`policy_question`, `mutative_request`, ask `return`). Task
+`abf255d1` (runtime 2) used two model calls. Proposal `793379bd` was
+`create_return` plus an exact-draft `send_reply`; no `search_kb` ran, and no KB
+article covers returns or refunds. The card read "I'd" open the return, quoted
+the draft and said "I can't create return labels, so you'll need to send Chain one
+yourself." The owner replied "Yes" at 02:38:33 UTC. Execution `75f462cb`
+committed: `create_return` opened #1042-R1
+(`gid://shopify/Return/13481345258`, OPEN, no refund), and the reply was sent with
+a Gmail provider id. The customer received: "You'll get an email shortly with the
+return confirmation #1042-R1 and instructions on how to ship the item back to us.
+Once we receive it, we'll process your refund." The phone confirmation read
+"Opened return (return number #1042-R1). Sent reply to Chain. Send Chain a return
+label yourself; I can't create one."
+
+Decision K's merchant-facing lines worked, and this is the first complete
+`create_return` flow: customer email, durable task, exact-draft card, iMessage
+approval, Shopify return with a committed receipt, a sent reply with a provider
+id, and the merchant confirmation. No knowledge-base search ran, so the reply's
+process and refund wording came from the model, not a store source; the owner
+reviewed it and judged the reply correctly handled, since the merchant approved
+the exact message while told to send the label. A runtime knowledge-base lookup
+for such replies was proposed and declined (owner, 2026-10-04).
+
+## Exchange email after #156: completed return re-proposed, 2026-10-04
+
+Read-only preflight at 03:24:44 UTC on `7ef89abb` confirmed the selected v2
+organization's development store, regular #1041 line with one returnable unit,
+eight available Sample units, no pending phone cards/questions, and the
+completed #1042-R1 receipt matching Shopify. #1041-R1 already covers its Sample
+line; the regular line is a separate eligible target. The saved dashboard
+session was confirmed against the same organization. No mutation ran in preflight.
+
+The owner sent the ordinary exchange email at 03:35:15 UTC: exchange the regular
+Selling Plans Ski Wax on #1041 for the Sample variant and ask how to send the
+regular one back. It landed on existing thread `1254749e`, source `473a78ed`.
+Request `f6604891` and runtime-v2 task `280d1462` correctly scoped that request.
+Three model calls produced cached plan `891d0215`:
+
+- An unrelated `create_return` on #1042, with reason `Customer requested return`
+  outside the registered enum.
+- `create_exchange` on #1041, returning the regular variant for one Sample;
+  Shopify-bound approval line names correctly identified both items.
+- One reply combining both orders and using `{{return_name}}` for both actions,
+  also promising a refund on #1042 and replacement shipment after receipt on
+  #1041 without new store evidence.
+
+Validation recorded `invalid_tool_input` for the extra return and
+`unbound_reply_placeholder` for the reply: two steps could supply that token.
+There is no durable proposal or AgentAction, and no customer reply was sent.
+The task settled completed with the invalid draft parked; the owner confirmed
+receipt of the phone notice explaining that nothing could run. This is a
+blocked flow, not an exchange or #155 continuation pass.
+
+Read-only diagnosis confirmed both summaries named only #1041 and the #1042
+source was already covered by committed execution `75f462cb`. The planner's
+history path did not use that request boundary, and support context omitted
+the earlier task's completed state. The candidate on
+`fix/support-request-history` shares burst selection between context and gateway
+and separates the active customer message identities from reference history,
+retaining task state and images. Existing input and placeholder rejection remain
+intact. Targeted local checks use real isolated Postgres and controlled inputs;
+live regeneration, revised-card delivery, approval and Shopify exchange outcome
+remain owed. No customer resend is required.

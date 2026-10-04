@@ -77,6 +77,8 @@ export type AgentMessageAttachment =
     };
 
 export interface AgentRecentMessage {
+  /** Stored message identity, used to separate the current request from history. */
+  id?: string;
   senderType: string;
   contentText: string | null;
   attachments?: AgentMessageAttachment[];
@@ -182,6 +184,8 @@ export interface BaseAgentContext {
 // Support module context: the base plus the ticket, customer, Shopify linkage,
 // recent orders, and KB articles the support agent needs.
 export interface SupportContext extends BaseAgentContext {
+  /** Runtime-selected unanswered customer messages; earlier turns are context only. */
+  currentCustomerMessageIds?: readonly string[];
   thread: {
     id: string;
     status: string;

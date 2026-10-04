@@ -1,6 +1,7 @@
 import { db, Prisma } from "@shopkeeper/db";
 import { parseClassifierSignals } from "./classifier-signals.js";
 import { usesCapabilityDiscovery } from "./runtime-modes.js";
+import { selectCustomerBurst } from "./message-history.js";
 import { shopifyRestJson, type ShopifyContext } from "./shopify/client.js";
 import { recordedShopifyScopes } from "./shopify/integration-health.js";
 import { serializeOrderLineItem } from "./shopify/serializers.js";
@@ -246,7 +247,11 @@ export async function buildContext(
             platformId: true,
           },
         },
-        messages: { orderBy: { sentAt: "desc" }, take: fetchedMessageWindow },
+        messages: {
+          where: { deletedAt: null },
+          orderBy: [{ sentAt: "desc" }, { id: "desc" }],
+          take: fetchedMessageWindow,
+        },
       },
     }),
     db.organization.findUnique({ where: { id: orgId } }),
@@ -334,9 +339,7 @@ export async function buildContext(
 
   const isOperator = isOperatorChannel(thread.channelType);
   const isGatewayOperator = thread.channelType === "operator";
-  const historyTaskIds = isOperator
-    ? [...new Set(thread.messages.flatMap((message) => message.agentTaskId ? [message.agentTaskId] : []))]
-    : [];
+  const historyTaskIds = [...new Set(thread.messages.flatMap((message) => message.agentTaskId ? [message.agentTaskId] : []))];
   const historyTasks = historyTaskIds.length > 0
     ? await db.agentTask.findMany({
         where: { organizationId: orgId, threadId, id: { in: historyTaskIds } },
@@ -344,6 +347,25 @@ export async function buildContext(
       })
     : [];
   const historyTaskById = new Map(historyTasks.map((task) => [task.id, task]));
+  // The summarizer, notification and planner must agree on which customer
+  // messages remain outstanding. A completed handoff closes its source even
+  // when no customer reply exists. Keep the rest as historical reference data.
+  const scopesCustomerRequest = !isOperator && usesCapabilityDiscovery(options?.runtimeVersion);
+  const handledExecutions = scopesCustomerRequest
+    ? await db.planExecution.findMany({
+        where: {
+          organizationId: orgId,
+          threadId,
+          status: "committed",
+          sourceMessageId: { in: thread.messages.map(message => message.id) },
+        },
+        select: { sourceMessageId: true },
+      })
+    : [];
+  const currentCustomerMessageIds = selectCustomerBurst(
+    [...thread.messages].reverse(),
+    new Set(handledExecutions.flatMap(execution => execution.sourceMessageId ? [execution.sourceMessageId] : [])),
+  ).map(message => message.id);
   // The single place a conversation becomes a guest. Storefront chat is the only
   // channel whose sender is anonymous by construction: every other channel
   // carries an identity the merchant's provider already established.
@@ -468,6 +490,7 @@ export async function buildContext(
   };
 
   const rawRecentMessages = [...thread.messages].reverse().map((message) => ({
+    id: message.id,
     senderType: message.senderType,
     contentText: message.contentText,
     attachmentRefs: message.attachments,
@@ -479,7 +502,7 @@ export async function buildContext(
   });
   const contextMessages = budgetedMessages.messages;
   const strippedMessages = (): AgentRecentMessage[] => contextMessages.map(
-    ({ senderType, contentText, task }) => ({ senderType, contentText, ...(task ? { task } : {}) }),
+    ({ id, senderType, contentText, task }) => ({ id, senderType, contentText, ...(task ? { task } : {}) }),
   );
   // Conversational context: an unreachable attachment costs the model the
   // picture, never the conversation, so the text of the same messages stands.
@@ -557,6 +580,7 @@ export async function buildContext(
     linkedShopifyCustomerName: isOperator ? shopifyCustomerName : null,
     kbArticles: kbArticles.map(a => ({ title: a.title, body: a.body })),
     merchantPreferences,
+    ...(scopesCustomerRequest ? { currentCustomerMessageIds } : {}),
     classifierSignals,
     ...(options?.operatorLedger
       ? {
