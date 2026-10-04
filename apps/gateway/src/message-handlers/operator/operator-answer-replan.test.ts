@@ -17,11 +17,13 @@ import {
 } from '@shopkeeper/agent/task-ledger';
 import { randomUUID } from 'node:crypto';
 
-const { planAgentSpy, sendOperatorPlanNotificationSpy, anthropicCreate, postDashboardInternal } = vi.hoisted(() => ({
+const { planAgentSpy, sendOperatorPlanNotificationSpy, anthropicCreate, postDashboardInternal, listBindings, notifyOperator } = vi.hoisted(() => ({
   planAgentSpy: vi.fn(),
   sendOperatorPlanNotificationSpy: vi.fn(),
   anthropicCreate: vi.fn(),
   postDashboardInternal: vi.fn(),
+  listBindings: vi.fn(),
+  notifyOperator: vi.fn(),
 }));
 
 vi.mock('@anthropic-ai/sdk', () => ({
@@ -51,8 +53,14 @@ vi.mock('../support-plan/planning-notifications.js', async (importOriginal) => {
   };
 });
 
+vi.mock('../../operator-notify.js', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../../operator-notify.js')>(),
+  listOperatorBindings: listBindings,
+  notifyOperator,
+}));
+
 import { applyOperatorAnswerReplan } from './operator-answer-replan.js';
-import { getContext, updateContext } from '../../operator-context.js';
+import { appendPendingPlan, expectedPlanIdentity, getContext, selectPendingPlan, updateContext } from '../../operator-context.js';
 import { executeCurrentCachedHomePlan } from '@shopkeeper/agent/plan-execution';
 import { buildGatewayPlanExecutionDeps } from './agent-turn-deps.js';
 import { reconcileUnknownAgentAction } from '@shopkeeper/agent/unknown-outcome-reconciliation';
@@ -68,6 +76,9 @@ const CLERK_USER_ID = 'user_operator_answer_replan';
 beforeEach(async () => {
   org = await createTestOrg();
   planAgentSpy.mockReset();
+  listBindings.mockReset();
+  listBindings.mockResolvedValue([]);
+  notifyOperator.mockReset();
   anthropicCreate.mockReset();
   postDashboardInternal.mockReset();
   sendOperatorPlanNotificationSpy.mockReset();
@@ -122,7 +133,7 @@ describe('applyOperatorAnswerReplan', () => {
       deliveryRef: 'telegram:chat_1',
     });
 
-    expect(message).toContain('already handled');
+    expect(message.message).toContain('already handled');
     expect(planAgentSpy).not.toHaveBeenCalled();
 
     // The stale plan cache is cleared.
@@ -147,7 +158,7 @@ describe('applyOperatorAnswerReplan', () => {
     expect(article?.tags).toEqual(['agent-learned', 'shipping']);
   });
 
-  it('re-plans, parks the draft, and fans the card out to the other operator channels', async () => {
+  it('re-plans, parks the draft, and delivers its card to every operator channel', async () => {
     const customer = await createTestCustomer(org.id, 'cust@example.com', { name: 'Jane Doe' });
     const thread = await createTestThread(org.id, customer.id, 'email', { tag: 'Support' });
     const custMsg = await createTestMessage(thread.id, 'Do you ship to Canada?', SenderType.customer);
@@ -200,15 +211,10 @@ describe('applyOperatorAnswerReplan', () => {
       deliveryRef: 'imessage:chat_2',
     });
 
-    // The return is a model-facing draft summary carrying the concrete draft, not
-    // the operator yes/no card.
-    expect(message).toContain('Re-drafted');
-    expect(message).toContain('Yes, we ship to Canada for $15 flat.');
-    expect(message).not.toContain('Reply "yes" to send');
+    expect(message.status).toBe('replanned');
     expect(planAgentSpy).toHaveBeenCalledTimes(1);
 
-    // The answering device is excluded from the fan-out, so the turn must park the
-    // display fields itself or a later "no" here loses the named dismissal.
+    // The answering member keeps a queue entry even without a phone binding.
     const updatedCtx = await getContext(org.id, MEMBER_KEY);
     expect(updatedCtx.pendingPlan).toMatchObject({
       threadId: thread.id,
@@ -228,8 +234,44 @@ describe('applyOperatorAnswerReplan', () => {
         rawToolCalls: [{ id: 'tc_reply', name: 'send_reply', input: { text: 'Yes, we ship to Canada for $15 flat.' } }],
       }),
       'Shipping to Canada',
-      expect.objectContaining({ exclude: { channel: 'imessage', deliveryKey: 'chat_2' } }),
+      expect.objectContaining({ requestDisplay: expect.anything() }),
     );
+  });
+
+  it.each([900, 3100])('publishes the complete revised card or refuses phone approval for a %s-character draft', async length => {
+    const customer = await createTestCustomer(org.id, 'draft@example.com');
+    const thread = await createTestThread(org.id, customer.id, 'email');
+    await createTestMessage(thread.id, 'Can you explain the return process?', SenderType.customer);
+    const draft = 'x'.repeat(length);
+    const memberId = MEMBER_KEY.slice('member:'.length);
+    listBindings.mockResolvedValue([{ channel: 'imessage', orgMemberId: memberId, senderId: 'answering-phone', spaceId: 'space' }]);
+    let deliveredCard = '';
+    notifyOperator.mockImplementation(async (_orgId, _binding, body, _patch, options) => {
+      deliveredCard = body;
+      await appendPendingPlan(org.id, MEMBER_KEY, options.appendPlan.plan, options.appendPlan.maxDepth);
+      return { channel: 'imessage', chatId: 'answering-phone' };
+    });
+    const nativeNotifications = await vi.importActual<typeof import('../support-plan/planning-notifications.js')>('../support-plan/planning-notifications.js');
+    sendOperatorPlanNotificationSpy.mockImplementation(nativeNotifications.sendOperatorPlanNotification);
+    planAgentSpy.mockResolvedValue({
+      instruction: 'Return process with merchant guidance', warnings: [],
+      steps: [{ id: 'reply', tool: 'send_reply', category: 'communication', label: 'Reply', description: 'Reply', enabled: true }],
+      rawToolCalls: [{ id: 'reply', name: 'send_reply', input: { text: draft } }],
+      communication: { mode: 'exact_draft', destination: { kind: 'thread', id: thread.id, channel: 'email' }, draft, allowedResultBindings: [] },
+    });
+    const result = await applyOperatorAnswerReplan({
+      organizationId: org.id, memberKey: MEMBER_KEY, clerkUserId: CLERK_USER_ID,
+      threadId: thread.id, answer: 'Explain the policy in full.', endsWait: 'question', deliveryRef: 'imessage:answering-phone',
+    });
+    expect(result.status).toBe('replanned');
+    const pending = (await getContext(org.id, MEMBER_KEY)).pendingPlans;
+    if (length < 3000) {
+      expect(deliveredCard).toContain(draft);
+      expect(selectPendingPlan(pending)).toHaveProperty('plan');
+    } else {
+      expect(deliveredCard).not.toContain(draft);
+      expect(selectPendingPlan(pending)).toMatchObject({ code: 'needs_thread_review' });
+    }
   });
 
   describe('durable continuation', () => {
@@ -581,6 +623,7 @@ describe('applyOperatorAnswerReplan', () => {
         threadId: thread.id,
         settings: resolveAgentSettings(null),
         executionIntent: 'merchant_approved',
+        expectedIdentity: expectedPlanIdentity((await getContext(org.id, `member:${member.id}`)).pendingPlan!),
         failureRoute: `test:revised-${capability}-host`,
         approver: { clerkUserId: member.clerkUserId, displayName: 'Test Merchant' },
       }, buildGatewayPlanExecutionDeps());
@@ -737,6 +780,7 @@ describe('applyOperatorAnswerReplan', () => {
         threadId: thread.id,
         settings: resolveAgentSettings(null),
         executionIntent: 'merchant_approved',
+        expectedIdentity: expectedPlanIdentity((await getContext(org.id, `member:${member.id}`)).pendingPlan!),
         failureRoute: `test:customer-${capability}-${scenario}`,
         approver: { clerkUserId: member.clerkUserId, displayName: 'Test Merchant' },
       }, executionDeps);
@@ -952,6 +996,7 @@ describe('applyOperatorAnswerReplan', () => {
         threadId: thread.id,
         settings: resolveAgentSettings(null),
         executionIntent: 'merchant_approved',
+        expectedIdentity: expectedPlanIdentity((await getContext(org.id, `member:${member.id}`)).pendingPlan!),
         failureRoute: 'test:return-label-continuation-host',
         approver: { clerkUserId: member.clerkUserId, displayName: 'Test Merchant' },
       }, buildGatewayPlanExecutionDeps());
@@ -1003,6 +1048,41 @@ describe('applyOperatorAnswerReplan', () => {
         .toMatchObject({ status: providerOutcome === 'confirmed' ? 'completed' : 'reconciling' });
     });
 
+    it.each(['budget', 'cancelled', 'claim_lost', 'expired', 'new_customer_message'] as const)(
+      'does not publish a continuation after %s prevents settlement', async (reason) => {
+        const { member, thread, taskId } = await seedWaitingSupportTask({ pending: true });
+        const memberKey = `member:${member.id}`;
+        if (reason === 'budget') {
+          await db.agentTask.update({ where: { id: taskId }, data: { modelCallsUsed: budget.modelCallLimit } });
+        }
+        planAgentSpy.mockImplementation(async (ctx) => {
+          await ctx.taskBudget.reserveModelCall();
+          if (reason === 'cancelled') {
+            await db.agentTask.update({ where: { id: taskId }, data: { cancelledAt: new Date() } });
+          } else if (reason === 'claim_lost') {
+            await db.agentTask.update({ where: { id: taskId }, data: { claimToken: randomUUID() } });
+          } else if (reason === 'expired') {
+            await db.agentTask.update({ where: { id: taskId }, data: { leaseExpiresAt: new Date(0) } });
+          } else if (reason === 'new_customer_message') {
+            await createTestMessage(thread.id, 'Please cancel that request instead.', SenderType.customer);
+          }
+          return refundPlan();
+        });
+        const result = await applyOperatorAnswerReplan({
+          organizationId: org.id, memberKey, clerkUserId: member.clerkUserId,
+          threadId: thread.id, answer: 'Yes, refund it.', endsWait: 'question',
+        });
+        expect(result.status).toBe('failed');
+        expect((await db.thread.findUniqueOrThrow({ where: { id: thread.id } })).cachedPlan).toBeNull();
+        expect((await getContext(org.id, memberKey)).pendingPlans).toHaveLength(0);
+        expect(await db.agentProposal.count({ where: { taskId } })).toBe(0);
+        expect(await db.agentAction.count({ where: { taskId } })).toBe(0);
+        if (reason === 'budget') {
+          expect((await db.agentTask.findUniqueOrThrow({ where: { id: taskId } })).modelCallsUsed).toBe(budget.modelCallLimit);
+        }
+      },
+    );
+
     it('closes the task when the ticket was already handled', async () => {
       const { member, thread, taskId } = await seedWaitingSupportTask({ pending: false });
 
@@ -1034,7 +1114,7 @@ describe('applyOperatorAnswerReplan', () => {
         endsWait: 'question',
       });
 
-      expect(message).toContain("couldn't draft the reply");
+      expect(message.message).toContain("couldn't draft the reply");
       expect(await db.agentTask.findUniqueOrThrow({ where: { id: taskId } })).toMatchObject({
         status: 'failed', failureCode: 'answer_replan_failed', claimToken: null,
       });
@@ -1065,7 +1145,7 @@ describe('applyOperatorAnswerReplan', () => {
     });
   });
 
-  it('does nothing destructive and returns an apologetic string when re-plan throws', async () => {
+  it('leaves the question in place when re-plan throws', async () => {
     const customer = await createTestCustomer(org.id, 'cust@example.com', { name: 'Jane Doe' });
     const thread = await createTestThread(org.id, customer.id, 'email', { tag: 'Support' });
     const custMsg = await createTestMessage(thread.id, 'Do you ship to Canada?', SenderType.customer);
@@ -1087,7 +1167,7 @@ describe('applyOperatorAnswerReplan', () => {
       deliveryRef: 'telegram:chat_3',
     });
 
-    expect(message).toContain("couldn't draft the reply");
+    expect(message.message).toContain("couldn't draft the reply");
     expect(sendOperatorPlanNotificationSpy).not.toHaveBeenCalled();
   });
 });

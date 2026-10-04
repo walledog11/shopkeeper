@@ -3,13 +3,14 @@ import { db, createMessage } from "@shopkeeper/db";
 import { readRequiredJsonObject } from "@/lib/api/body";
 import { withOrgRoute } from "@/lib/api/route";
 import { getLatestConversationMessage, requireOrgThread } from "@shopkeeper/agent/thread-auth";
-import { buildAgentPlanCacheRecord } from "@shopkeeper/agent/plan-cache";
+import { buildAgentPlanCacheRecord, commitThreadPlanCacheIfCurrent } from "@shopkeeper/agent/plan-cache";
 import { extractCachedQuestion, getPendingCustomerMessageId } from "@shopkeeper/agent/plan-cache-shape";
 import { clearThreadPlanCache, supportAttemptSettlement } from "@shopkeeper/agent/plan-execution";
 import {
   claimContinuedAgentTask, failAgentTaskClaim, settleAgentTaskClaim,
 } from "@shopkeeper/agent/task-ledger";
-import type { ContinuedTaskClaim, TaskSettlement } from "@shopkeeper/agent/task-ledger";
+import type { ContinuedTaskClaim } from "@shopkeeper/agent/task-ledger";
+import { withAgentTaskClaim, type TaskRunControl } from "@shopkeeper/agent/task-run";
 import { auth } from "@clerk/nextjs/server";
 import { buildMerchantAnswerPlanningInstruction } from "@shopkeeper/agent/kb-learned";
 import { saveMerchantAnswerToKb } from "@shopkeeper/agent/merchant-answer-kb";
@@ -37,13 +38,20 @@ async function claimAnsweredTaskForThread(
   const { userId } = await auth();
   if (!userId) throw new ConflictError("The answering member session is no longer available.");
   const durableWait = await db.agentTask.count({
-    where: { organizationId, threadId, status: "waiting_input", cancelledAt: null },
+    where: {
+      organizationId, threadId,
+      OR: [
+        { status: "waiting_input", cancelledAt: null },
+        { runtimeVersion: { gte: 2 } },
+      ],
+    },
   });
   if (durableWait === 0) return null;
   const continuation = await claimContinuedAgentTask({
     organizationId, clerkUserId: userId, threadId, endsWait: "question",
     continuationInstruction: answer,
     continuationChannel: "operator",
+    leaseMs: 300_000,
   });
   if (!continuation) {
     throw new ConflictError("This question is already being continued or is no longer available to answer.");
@@ -51,25 +59,11 @@ async function claimAnsweredTaskForThread(
   return continuation;
 }
 
-async function settleAnsweredTask(
-  continuation: ContinuedTaskClaim,
-  settlement: TaskSettlement | "failed",
-  orgId: string,
-): Promise<void> {
+async function failAnsweredTask(continuation: ContinuedTaskClaim, orgId: string): Promise<void> {
   try {
-    if (settlement === "failed") {
-      await failAgentTaskClaim({ ...continuation, failureCode: "answer_replan_failed" });
-      return;
-    }
-    const settled = await settleAgentTaskClaim({ ...continuation, settlement });
-    if (!settled) {
-      logger.warn({ orgId, taskId: continuation.taskId }, "[agent:answer] task claim lost before settlement");
-    }
+    await failAgentTaskClaim({ ...continuation, failureCode: "answer_replan_failed" });
   } catch (err) {
-    // The answer is recorded and the re-drafted plan is cached. Losing the
-    // settlement leaves the task claimed for the lease sweep to reconcile; it
-    // must not turn a delivered re-plan into a failed request.
-    logger.error({ err, orgId, taskId: continuation.taskId }, "[agent:answer] could not settle answered task");
+    logger.error({ err, orgId, taskId: continuation.taskId }, "[agent:answer] could not record task failure");
   }
 }
 
@@ -101,8 +95,8 @@ export const POST = withOrgRoute(
     const question = extractCachedQuestion(thread.cachedPlan);
     const continuation = await claimAnsweredTaskForThread(org.id, threadId, answer);
 
-    let savedArticle: { title: string; body: string } | null = null;
-    try {
+    const replan = async (control?: TaskRunControl) => {
+      let savedArticle: { title: string; body: string } | null = null;
       await createMessage({
         threadId,
         senderType: "note",
@@ -112,115 +106,80 @@ export const POST = withOrgRoute(
       });
       if (saveToKb) {
         const saved = await saveMerchantAnswerToKb({
-          organizationId: org.id,
-          threadId,
-          question,
-          answer,
+          organizationId: org.id, threadId, question, answer,
           threadTag: threadMeta?.tag,
           channelType: thread.channelType,
           threadSummary: thread.aiSummary,
         });
         savedArticle = { title: saved.title, body: saved.body };
       }
-    } catch (err) {
-      if (continuation) await settleAnsweredTask(continuation, "failed", org.id);
-      throw err;
-    }
 
-    // The customer message is gone (already handled elsewhere) — nothing to re-plan against.
-    if (!pendingCustomerMessageId) {
-      if (thread.cachedPlan || thread.cachedPlanMessageId) {
-        await clearThreadPlanCache({ orgId: org.id, threadId });
+      if (!pendingCustomerMessageId) {
+        if (continuation && !(await settleAgentTaskClaim({ ...continuation, settlement: { status: "completed" } }))) {
+          throw new ConflictError("Task claim was lost before the answer was recorded.");
+        }
+        if (thread.cachedPlan || thread.cachedPlanMessageId) {
+          await clearThreadPlanCache({ orgId: org.id, threadId });
+        }
+        logger.info({ orgId: org.id, threadId, saveToKb, reason: "thread_already_answered" }, "[agent:answer] skipped re-plan");
+        return NextResponse.json({ kind: "needs_review", question: null, replyText: null });
       }
-      // The wait is over and there is nothing for the merchant to come back to.
-      if (continuation) await settleAnsweredTask(continuation, { status: "completed" }, org.id);
-      logger.info({ orgId: org.id, threadId, saveToKb, reason: "thread_already_answered" }, "[agent:answer] skipped re-plan");
-      return NextResponse.json({ kind: "needs_review", question: null, replyText: null });
-    }
 
-    // Current request, not the episode summary — same reason as the gateway's
-    // replan path: the merchant answered a question about what is being asked
-    // now.
-    const baseInstruction = thread.requestSummary || "Handle this customer's latest request";
-    const planningInstruction = buildMerchantAnswerPlanningInstruction({
-      baseInstruction,
-      question,
-      answer,
-      saveToKb,
-    });
-
-    let plan;
-    try {
+      const baseInstruction = thread.requestSummary || "Handle this customer's latest request";
+      const planningInstruction = buildMerchantAnswerPlanningInstruction({ baseInstruction, question, answer, saveToKb });
       const ctx = await buildContext(threadId, org.id, {
         ...(savedArticle ? { pinKbArticles: [savedArticle] } : {}),
-        ...(continuation?.runtimeVersion !== undefined
-          ? { runtimeVersion: continuation.runtimeVersion }
-          : {}),
+        ...(continuation ? { runtimeVersion: continuation.runtimeVersion } : {}),
       });
-      plan = await planAgent(
-        ctx,
-        planningInstruction,
-        settings,
-        {
-          ...(usesExactDraftProposals(continuation?.runtimeVersion)
-            ? { exactDraftProposal: true }
-            : {}),
-          ...(continuation?.runtimeVersion !== undefined
-            ? { runtimeVersion: continuation.runtimeVersion }
-            : {}),
-        },
-      );
+      if (continuation && control) {
+        ctx.taskBudget = control.taskBudget;
+        ctx.assertExecutionAllowed = control.assertExecutionAllowed;
+        ctx.agentRequestId = continuation.requestId;
+        ctx.agentTaskId = continuation.taskId;
+      }
+      const drafted = await planAgent(ctx, planningInstruction, settings, {
+        ...(usesExactDraftProposals(continuation?.runtimeVersion) ? { exactDraftProposal: true } : {}),
+        ...(continuation ? { runtimeVersion: continuation.runtimeVersion } : {}),
+      });
+      const plan = { ...drafted, instruction: baseInstruction };
+      const cacheRecord = buildAgentPlanCacheRecord({
+        instruction: baseInstruction, lastCustomerMessageId: pendingCustomerMessageId, settings, plan,
+      });
+      const verdict = decideAutonomy(plan, settings);
+      control?.assertExecutionAllowed();
+      // The proposal and its cache become visible in the same transaction, only
+      // while this task owns its lease and this customer message is current.
+      const committed = continuation
+        ? await settleAgentTaskClaim({
+            ...continuation,
+            settlement: await supportAttemptSettlement({
+              orgId: org.id, threadId, settings, allowMutativeAutoExecute: false, manualReview: true,
+              merchantQuestion: verdict.kind === "needs_merchant_input" ? verdict.question : null,
+              sourceRequestIds: [continuation.requestId], proposedCache: cacheRecord,
+            }),
+            planCache: { threadId, sourceMessageId: pendingCustomerMessageId, cache: cacheRecord },
+          })
+        : await commitThreadPlanCacheIfCurrent({
+            orgId: org.id, threadId, sourceMessageId: pendingCustomerMessageId, cache: cacheRecord,
+          });
+      if (!committed) throw new ConflictError("The task stopped or the customer message changed before the draft was published.");
 
-      // Cache under the base instruction so the normal /plan path serves this
-      // answer-informed plan on a cache hit rather than re-asking.
-      await db.thread.update({
-        where: { id: threadId },
-        data: {
-          cachedPlanMessageId: pendingCustomerMessageId,
-          cachedPlan: buildAgentPlanCacheRecord({
-            instruction: baseInstruction,
-            lastCustomerMessageId: pendingCustomerMessageId,
-            settings,
-            plan,
-          }) as object,
-        },
+      logger.info({
+        orgId: org.id, threadId, durationMs: Date.now() - startedAt, saveToKb,
+        kind: verdict.kind, instructionHash: hashInstructionForLog(planningInstruction),
+      }, "[agent:answer] re-planned");
+      return NextResponse.json({
+        kind: verdict.kind,
+        question: verdict.kind === "needs_merchant_input" ? verdict.question : null,
+        replyText: verdict.kind === "quick_reply" || verdict.kind === "auto_execute" ? verdict.replyText : null,
       });
+    };
+
+    try {
+      return continuation ? await withAgentTaskClaim(continuation, replan) : await replan();
     } catch (err) {
-      if (continuation) await settleAnsweredTask(continuation, "failed", org.id);
+      if (continuation) await failAnsweredTask(continuation, org.id);
       throw err;
     }
-
-    const verdict = decideAutonomy(plan, settings);
-    if (continuation) {
-      await settleAnsweredTask(continuation, await supportAttemptSettlement({
-        orgId: org.id,
-        threadId,
-        settings,
-        // This route shows the merchant the re-drafted plan and executes
-        // nothing, so whatever it drafted is theirs to approve.
-        allowMutativeAutoExecute: false,
-        // A re-drafted plan that asks again is still waiting on the merchant,
-        // and recording that is what lets the next answer continue this task.
-        merchantQuestion: verdict.kind === "needs_merchant_input" ? verdict.question : null,
-        sourceRequestIds: [continuation.requestId],
-      }), org.id);
-    }
-
-    logger.info({
-      orgId: org.id,
-      threadId,
-      durationMs: Date.now() - startedAt,
-      saveToKb,
-      kind: verdict.kind,
-      instructionHash: hashInstructionForLog(planningInstruction),
-    }, "[agent:answer] re-planned");
-
-    return NextResponse.json({
-      kind: verdict.kind,
-      question: verdict.kind === "needs_merchant_input" ? verdict.question : null,
-      replyText: verdict.kind === "quick_reply" || verdict.kind === "auto_execute"
-        ? verdict.replyText
-        : null,
-    });
   },
 );

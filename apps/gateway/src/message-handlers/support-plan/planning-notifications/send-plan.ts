@@ -22,7 +22,7 @@ import {
 } from '../../shared/request-display.js';
 import { getConversationStage } from './conversation-stage.js';
 import { notifyCriticalToAllOperators } from './delivery.js';
-import { formatOperatorPlanMessage, parkedActionLabel } from './format-plan.js';
+import { formatOperatorPlanMessage, parkedActionLabel, requiresDashboardDraftReview } from './format-plan.js';
 import type { OperatorNotificationExclude, QueueNotice } from './types.js';
 
 /**
@@ -129,6 +129,7 @@ export async function sendOperatorPlanNotification(
     ...(customerName ? { customerName } : {}),
     ...(actionLabel ? { actionLabel } : {}),
     ...(plan.validation ? { validation: plan.validation } : {}),
+    ...(requiresDashboardDraftReview(plan.communication) ? { needsThreadReview: true } : {}),
     requestDisplay,
   };
 

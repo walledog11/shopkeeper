@@ -23,11 +23,9 @@ import {
   acceptCustomerAgentRequest,
   claimAgentTask,
   failAgentTaskClaim,
-  recordAgentTaskModelUsage,
-  reserveAgentTaskModelCall,
   settleAgentTaskClaim,
 } from '@shopkeeper/agent/task-ledger';
-import { estimateModelUsageCostUsd, UnknownModelPriceError } from '@shopkeeper/agent/model-cost';
+import { taskModelBudget } from '@shopkeeper/agent/task-run';
 import type { TaskModelBudget } from '@shopkeeper/agent/context';
 import { shouldSkipAutoPlan } from '@shopkeeper/agent/sender-trust';
 import { hashInstruction, hashPlan } from '@shopkeeper/agent/agent-actions';
@@ -312,29 +310,7 @@ function supportTaskModelBudget(
     expectedRevision: durableTurn.expectedRevision,
     claimToken: durableTurn.claimToken,
   };
-  return {
-    reserveModelCall: async () => {
-      const state = await reserveAgentTaskModelCall(claim);
-      if (state !== 'active') throw new Error(`Task stopped: ${state}.`);
-    },
-    recordModelUsage: async (usage, model) => {
-      let spentNanoUsd = 0n;
-      try {
-        spentNanoUsd = BigInt(Math.ceil(estimateModelUsageCostUsd(model, usage) * 1_000_000_000));
-      } catch (error) {
-        if (!(error instanceof UnknownModelPriceError)) throw error;
-        logger.warn(
-          { model, taskId: durableTurn.taskId },
-          '[gateway:auto-plan] Unpriced model; call counted without spend',
-        );
-      }
-      const recorded = await recordAgentTaskModelUsage({
-        ...claim,
-        usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, spentNanoUsd },
-      });
-      if (!recorded) throw new Error('Task claim was lost while recording model usage.');
-    },
-  };
+  return taskModelBudget(claim);
 }
 
 // The plan attempt itself: serve a warm cache or plan and cache a fresh one,

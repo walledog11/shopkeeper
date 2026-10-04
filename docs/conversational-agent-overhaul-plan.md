@@ -51,6 +51,29 @@ owner's direction: this app is in development; finish working user flows,
 verify them manually, and ship. New tests and repository-wide test cleanup
 are exceptions, not work packages.
 
+## Continuation and approval repair — 2026-10-03 candidate
+
+The answer/revision path retains the customer-message source on its durable
+request and uses the same base instruction in the cache, card and proposal hash.
+Gateway and dashboard continuations retain cumulative budgets, renew their
+leases, and publish the proposal and cache together. Cancellation, lost or
+expired claims, and a newer customer message prevent publication. Reply-only
+continuations remain awaiting approval until the reviewed reply executes.
+
+Revised proposals send the canonical full card to the answering iMessage device
+as well as other bindings. Drafts too long to display require dashboard review
+and cannot be approved from the phone. The operator tool retains its pending
+question until the answer succeeds, without clearing a replacement question.
+Revision guidance reaches the planner even without a question; a label URL no
+longer asserts that a return has already been opened.
+
+Targeted checks used real isolated local Postgres with controlled model/provider
+responses. They verify persistence, approval identity and refusal behavior;
+manual dashboard/iMessage delivery and Shopify continuation evidence remain
+open. The candidate has not been merged or deployed. Review and existing PR CI
+come next, followed by an authorized ordinary support continuation observed in
+the app and on the phone. Existing live evidence is retained.
+
 ## Next session
 
 The owner clarified that testing is welcome, without redundant test loops. All

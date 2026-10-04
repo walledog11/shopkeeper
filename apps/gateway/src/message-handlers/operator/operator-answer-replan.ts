@@ -13,6 +13,7 @@ import { clearThreadPlanCache, supportAttemptSettlement } from '@shopkeeper/agen
 import { decideAutonomy } from '@shopkeeper/agent/autonomy';
 import { claimContinuedAgentTask, failAgentTaskClaim, settleAgentTaskClaim } from '@shopkeeper/agent/task-ledger';
 import type { ContinuedTaskClaim, EndedWait } from '@shopkeeper/agent/task-ledger';
+import { withAgentTaskClaim, type TaskRunControl } from '@shopkeeper/agent/task-run';
 import {
   captureCommittedPlanOutcome,
   recordRequestEpisodeMerchantInputAnswered,
@@ -23,28 +24,15 @@ import logger from '../../logger.js';
 import { gatewayThreadSink } from '../support-plan/agent-thread-sink.js';
 import { toGatewayAgentPlan } from '../support-plan/agent-plan-adapter.js';
 import {
-  formatOperatorDraftSummary,
+  requiresDashboardDraftReview,
   parkedActionLabel,
   sendOperatorPlanNotification,
-  type OperatorNotificationExclude,
+  sendOperatorQuestionNotification,
 } from '../support-plan/planning-notifications.js';
 import { appendPendingPlan, type PendingPlan, type ToolCall } from '../../operator-context.js';
 import { getOperatorPlanQueueMax } from '../../config/runtime-config.js';
 import { captureObservedMerchantPreferenceProposal } from '@shopkeeper/agent/merchant-preference-capture';
 import { buildRequestDisplaySnapshot } from '../shared/request-display.js';
-
-// The transport the merchant is answering on already sees this exchange, so it is
-// dropped from the plan fan-out. The dashboard passes no delivery ref (it gets no
-// push), which reads here as "exclude nothing".
-function answeringChannelFromDeliveryRef(deliveryRef?: string): OperatorNotificationExclude | null {
-  if (deliveryRef?.startsWith('imessage:')) {
-    return { channel: 'imessage', deliveryKey: deliveryRef.slice('imessage:'.length) };
-  }
-  if (deliveryRef?.startsWith('telegram:')) {
-    return { channel: 'telegram', deliveryKey: deliveryRef.slice('telegram:'.length) };
-  }
-  return null;
-}
 
 function toPendingPlanToolCalls(
   rawToolCalls: Array<{ id: string; name: string; input?: unknown }>,
@@ -79,26 +67,20 @@ export interface OperatorAnswerReplanParams {
 const ANSWER_REPLAN_LEASE_MS = 300_000;
 
 // What the attempt left behind, for the task that was waiting on this answer.
-// `nothing_parked` is the already-handled ticket: the wait is over and there is
+// `already_handled` is the closed ticket: the wait is over and there is
 // nothing for the merchant to come back to. `failed` is a re-plan that produced
 // nothing, which is an attempt that failed rather than an attempt that finished.
-type AnswerReplanOutcome =
-  | { message: string; settlement: 'nothing_parked' }
-  | { message: string; settlement: 'failed' }
-  | {
-      message: string;
-      settlement: 'replanned';
-      settings: OrgSettings;
-      merchantQuestion: string | null;
-    };
+export interface OperatorAnswerReplanResult {
+  status: 'already_handled' | 'failed' | 'replanned';
+  message: string;
+}
 
 /**
  * Ingests a merchant's answer/guidance for a thread and re-drafts its plan:
  * record a note, persist the fact to the knowledge base, re-plan with the fact
- * pinned, update the pending plan, and notify the *other* operator channels.
- * Returns a model-facing draft summary; the answer/revise control tools return
- * it as their tool result and the model relays it. A re-plan failure resolves to
- * an apologetic status string.
+ * pinned, commit the task and cache together, then notify every operator channel.
+ * The approval card goes directly to the phone, including the answering device;
+ * the control tool returns only the typed outcome and a short status.
  *
  * The merchant's text also ends the durable wait it was given under — the
  * question for an answer, the parked card for revision guidance. Without that
@@ -108,13 +90,17 @@ type AnswerReplanOutcome =
  */
 export async function applyOperatorAnswerReplan(
   params: OperatorAnswerReplanParams,
-): Promise<string> {
+): Promise<OperatorAnswerReplanResult> {
   const durableWait = await db.agentTask.count({
     where: {
       organizationId: params.organizationId,
       threadId: params.threadId,
-      status: params.endsWait === 'question' ? 'waiting_input' : 'waiting_approval',
-      cancelledAt: null,
+      OR: [
+        { status: params.endsWait === 'question' ? 'waiting_input' : 'waiting_approval', cancelledAt: null },
+        // A finished or currently claimed v2 task must never fall through to an
+        // untracked legacy re-plan when its old phone question is answered.
+        { runtimeVersion: { gte: 2 } },
+      ],
     },
   });
   const continuation = durableWait > 0
@@ -132,55 +118,15 @@ export async function applyOperatorAnswerReplan(
     throw new ConflictError('This task is already being continued or is no longer available to revise.');
   }
 
-  let outcome: AnswerReplanOutcome;
   try {
-    outcome = await runAnswerReplan(params, continuation?.runtimeVersion);
+    const outcome = continuation
+      ? await withAgentTaskClaim(continuation, control => runAnswerReplan(params, continuation, control))
+      : await runAnswerReplan(params);
+    if (continuation && outcome.status === 'failed') await failAnswerContinuation(continuation, params);
+    return outcome;
   } catch (err) {
     if (continuation) await failAnswerContinuation(continuation, params);
     throw err;
-  }
-  if (continuation) {
-    if (outcome.settlement === 'failed') await failAnswerContinuation(continuation, params);
-    else await settleAnswerContinuation(continuation, params, outcome);
-  }
-  return outcome.message;
-}
-
-async function settleAnswerContinuation(
-  continuation: ContinuedTaskClaim,
-  params: OperatorAnswerReplanParams,
-  outcome: Exclude<AnswerReplanOutcome, { settlement: 'failed' }>,
-): Promise<void> {
-  try {
-    const settled = await settleAgentTaskClaim({
-      ...continuation,
-      settlement: outcome.settlement === 'replanned'
-        ? await supportAttemptSettlement({
-            orgId: params.organizationId,
-            threadId: params.threadId,
-            settings: outcome.settings,
-            // This path parks a card and never auto-executes, so whatever it
-            // drafted is the merchant's to approve.
-            allowMutativeAutoExecute: false,
-            merchantQuestion: outcome.merchantQuestion,
-            sourceRequestIds: [continuation.requestId],
-          })
-        : { status: 'completed' },
-    });
-    if (!settled) {
-      logger.warn(
-        { taskId: continuation.taskId, organizationId: params.organizationId },
-        '[Operator] Answered support task claim was lost before settlement',
-      );
-    }
-  } catch (err) {
-    // The answer is recorded and the re-drafted plan is cached and pushed.
-    // Losing the settlement leaves the task claimed, which the lease sweep
-    // reconciles; it must not turn a delivered draft into a failed tool call.
-    logger.error(
-      { err, taskId: continuation.taskId, organizationId: params.organizationId },
-      '[Operator] Could not settle answered support task',
-    );
   }
 }
 
@@ -200,9 +146,11 @@ async function failAnswerContinuation(
 
 async function runAnswerReplan(
   params: OperatorAnswerReplanParams,
-  runtimeVersion?: number,
-): Promise<AnswerReplanOutcome> {
+  continuation?: ContinuedTaskClaim | null,
+  control?: TaskRunControl,
+): Promise<OperatorAnswerReplanResult> {
   const { organizationId, memberKey, threadId, deliveryRef } = params;
+  const runtimeVersion = continuation?.runtimeVersion;
   const answer = params.answer.trim();
 
   const [thread, latestConversation, meta] = await Promise.all([
@@ -265,13 +213,16 @@ async function runAnswerReplan(
 
   // The customer message was already handled elsewhere — nothing to re-plan against.
   if (!pendingCustomerMessageId) {
+    if (continuation && !(await settleAgentTaskClaim({ ...continuation, settlement: { status: 'completed' } }))) {
+      throw new ConflictError('Task claim was lost before the answer was recorded.');
+    }
     if (thread.cachedPlan || thread.cachedPlanMessageId) {
       await clearThreadPlanCache({ orgId: organizationId, threadId });
     }
     logger.info({ organizationId, threadId, reason: 'thread_already_answered' }, '[Operator] Answer recorded, skipped re-plan');
     return {
       message: 'Got it — saved that for next time. This ticket was already handled.',
-      settlement: 'nothing_parked',
+      status: 'already_handled',
     };
   }
 
@@ -296,7 +247,13 @@ async function runAnswerReplan(
       pinKbArticles: [{ title: saved.title, body: saved.body }],
       ...(runtimeVersion !== undefined ? { runtimeVersion } : {}),
     });
-    const replanned = await planAgent(
+    if (continuation && control) {
+      ctx.taskBudget = control.taskBudget;
+      ctx.assertExecutionAllowed = control.assertExecutionAllowed;
+      ctx.agentRequestId = continuation.requestId;
+      ctx.agentTaskId = continuation.taskId;
+    }
+    const drafted = await planAgent(
       ctx,
       planningInstruction,
       settings,
@@ -305,19 +262,31 @@ async function runAnswerReplan(
         ...(runtimeVersion !== undefined ? { runtimeVersion } : {}),
       },
     );
+    // The answer is planning context; the proposal retains the request's
+    // instruction so its cache, card and durable hash name the same bundle.
+    const replanned = { ...drafted, instruction: baseInstruction };
     const cacheRecord = buildAgentPlanCacheRecord({
       instruction: baseInstruction,
       lastCustomerMessageId: pendingCustomerMessageId,
       settings,
       plan: replanned,
     });
-    const committed = await commitThreadPlanCacheIfCurrent({
-      orgId: organizationId,
-      threadId,
-      sourceMessageId: pendingCustomerMessageId,
-      cache: cacheRecord,
-    });
-    if (!committed) throw new Error('Customer message changed while re-planning');
+    control?.assertExecutionAllowed();
+    const verdict = decideAutonomy(replanned, settings);
+    const committed = continuation
+      ? await settleAgentTaskClaim({
+          ...continuation,
+          settlement: await supportAttemptSettlement({
+            orgId: organizationId, threadId, settings, allowMutativeAutoExecute: false, manualReview: true,
+            merchantQuestion: verdict.kind === 'needs_merchant_input' ? verdict.question : null,
+            sourceRequestIds: [continuation.requestId], proposedCache: cacheRecord,
+          }),
+          planCache: { threadId, sourceMessageId: pendingCustomerMessageId, cache: cacheRecord },
+        })
+      : await commitThreadPlanCacheIfCurrent({
+          orgId: organizationId, threadId, sourceMessageId: pendingCustomerMessageId, cache: cacheRecord,
+        });
+    if (!committed) throw new ConflictError('The task stopped or the customer message changed before the draft was published.');
     if (cacheRecord.planId) {
       await captureCommittedPlanOutcome({
         orgId: organizationId,
@@ -336,7 +305,7 @@ async function runAnswerReplan(
         instruction: baseInstruction,
         plan: replanned,
         settings,
-      });
+      }).catch(err => logger.error({ err, organizationId, threadId }, '[Operator] Could not capture committed answer proposal outcome'));
     }
     return { plan: replanned, cacheRecord };
   };
@@ -348,8 +317,8 @@ async function runAnswerReplan(
   } catch (err) {
     logger.error({ err: (err as Error).message, organizationId, threadId }, '[Operator] Answer re-plan failed');
     return {
-      message: "Saved your answer, but I couldn't draft the reply just now — please try again in a moment.",
-      settlement: 'failed',
+      message: "Saved your answer, but I couldn't draft the reply. Open the ticket to regenerate the proposal.",
+      status: 'failed',
     };
   }
 
@@ -357,12 +326,11 @@ async function runAnswerReplan(
   if (!notifyPlan) {
     logger.error({ organizationId, threadId }, '[Operator] Answer re-plan produced no notify plan');
     return {
-      message: "Saved your answer, but I couldn't draft the reply just now — please try again in a moment.",
-      settlement: 'failed',
+      message: "Saved your answer, but I couldn't draft the reply. Open the ticket to regenerate the proposal.",
+      status: 'failed',
     };
   }
 
-  const exclude = answeringChannelFromDeliveryRef(deliveryRef);
   const customerName = meta?.customer?.name ?? null;
   const requestDisplay = await buildRequestDisplaySnapshot({
     organizationId,
@@ -370,15 +338,18 @@ async function runAnswerReplan(
     sourceMessageId: cacheRecord.lastCustomerMessageId,
     rawToolCalls: notifyPlan.rawToolCalls,
   });
-  const draftSummary = formatOperatorDraftSummary(
-    customerName,
-    notifyPlan,
-    deliveryRef ? 'messaging' : 'desk',
-    requestDisplay,
-  );
-  // The answering device is excluded from the fan-out below, so this parks the
-  // merchant's own copy —
-  // including the display fields the fan-out would otherwise have supplied.
+  const verdict = decideAutonomy(plan, settings);
+  if (verdict.kind === 'needs_merchant_input') {
+    await sendOperatorQuestionNotification(
+      organizationId, threadId, customerName, meta?.channelType ?? thread.channelType,
+      thread.requestSummary, verdict.question, baseInstruction,
+      { planId: cacheRecord.planId, sourceMessageId: pendingCustomerMessageId },
+    );
+    return { status: 'replanned', message: 'The revised proposal needs more information; I sent the new question.' };
+  }
+
+  // The desk's answering member may have no phone binding, so park their copy
+  // as well as the copies the shared notification path publishes below.
   const actionLabel = parkedActionLabel(
     notifyPlan.steps,
     classifyPerson({ customerName, channelType: meta?.channelType ?? thread.channelType }),
@@ -395,6 +366,8 @@ async function runAnswerReplan(
     } : {}),
     ...(customerName ? { customerName } : {}),
     ...(actionLabel ? { actionLabel } : {}),
+    ...(notifyPlan.validation ? { validation: notifyPlan.validation } : {}),
+    ...(requiresDashboardDraftReview(notifyPlan.communication) ? { needsThreadReview: true } : {}),
     requestDisplay,
   };
 
@@ -402,9 +375,8 @@ async function runAnswerReplan(
   // and leaves other threads' pending plans intact.
   await appendPendingPlan(organizationId, memberKey, pendingPlan, getOperatorPlanQueueMax());
 
-  // The answering operator gets the draft summary as this call's return value (the
-  // control tool relays it through the model); here we only fan the operator card
-  // out to the *other* bound operator channels.
+  // The full, receipt-bound card is delivered without model rewriting. A short
+  // tool result cannot substitute for the message the merchant is approving.
   try {
     await sendOperatorPlanNotification(
       organizationId,
@@ -415,7 +387,6 @@ async function runAnswerReplan(
       notifyPlan,
       baseInstruction,
       {
-        ...(exclude ? { exclude } : {}),
         requestDisplay,
         ...(cacheRecord.planId && cacheRecord.lastCustomerMessageId ? {
           identity: {
@@ -430,18 +401,20 @@ async function runAnswerReplan(
   } catch (err) {
     logger.warn(
       { err: (err as Error).message, organizationId, threadId },
-      '[Operator] Answer plan delivered to answerer; other operator channels failed',
+      '[Operator] Revised proposal committed; phone notification failed',
     );
+    await appendPendingPlan(organizationId, memberKey, { ...pendingPlan, needsThreadReview: true }, getOperatorPlanQueueMax());
+    return {
+      status: 'replanned',
+      message: 'The revised proposal is saved in the ticket, but its phone card could not be delivered. Review it in the dashboard.',
+    };
   }
 
   logger.info({ organizationId, threadId }, '[Operator] Answer ingested and re-planned');
-  const verdict = decideAutonomy(plan, settings);
   return {
-    message: draftSummary,
-    settlement: 'replanned',
-    settings,
-    // A re-drafted plan that asks again is still waiting on the merchant, and
-    // recording that is what lets the next answer continue the same task.
-    merchantQuestion: verdict.kind === 'needs_merchant_input' ? verdict.question : null,
+    message: deliveryRef
+      ? 'The revised proposal is ready. Review the full plan card before approving.'
+      : 'The revised proposal is ready for review in the ticket.',
+    status: 'replanned',
   };
 }

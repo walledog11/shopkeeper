@@ -29,6 +29,8 @@ export interface PendingPlan {
   validation?: PlanValidation;
   /** Immutable request copy used by every operator rendering surface. */
   requestDisplay?: RequestDisplay;
+  /** The complete draft could not be shown on the phone. */
+  needsThreadReview?: boolean;
 }
 
 export function isPendingPlanInvalid(plan: Pick<PendingPlan, 'validation'>): boolean {
@@ -95,7 +97,7 @@ export function pendingPlanNeedsThreadReview(
   plan: PendingPlan,
   digest: PendingDigest | null | undefined,
 ): boolean {
-  return digest?.items.some((item) => (
+  return plan.needsThreadReview === true || digest?.items.some((item) => (
     item.needsThreadReview === true
     && ((plan.planId && item.planId === plan.planId) || item.threadId === plan.threadId)
   )) === true;
@@ -259,6 +261,7 @@ function readPendingPlan(value: unknown): PendingPlan | null {
     ...(typeof value.actionLabel === 'string' ? { actionLabel: value.actionLabel } : {}),
     ...(validation ? { validation } : {}),
     ...(requestDisplay ? { requestDisplay } : {}),
+    ...(value.needsThreadReview === true ? { needsThreadReview: true } : {}),
     rawToolCalls: value.rawToolCalls
       .map(readToolCall)
       .filter((toolCall): toolCall is ToolCall => toolCall !== null),

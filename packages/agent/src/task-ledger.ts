@@ -1134,6 +1134,16 @@ export async function claimContinuedAgentTask(input: {
       const payloadHash = hashInstruction(JSON.stringify(payload));
       const dedupeKey = `continuation:${input.endsWait}:${waitIdentity}:${hashInstruction(instruction)}`;
       const requestId = randomUUID();
+      // The answer belongs to the same customer message as the work it resumes.
+      // Approval reads this reference from the proposal's source requests.
+      const source = await tx.agentRequest.findFirst({
+        where: {
+          organizationId: input.organizationId, taskId: target.id,
+          sourceMessageId: { not: null },
+        },
+        orderBy: [{ acceptedAt: "desc" }, { id: "desc" }],
+        select: { sourceMessageId: true },
+      });
       await tx.agentRequest.createMany({
         data: {
           id: requestId,
@@ -1142,6 +1152,7 @@ export async function claimContinuedAgentTask(input: {
           actorKey,
           channel,
           threadId: target.threadId,
+          sourceMessageId: source?.sourceMessageId ?? null,
           dedupeKey,
           payloadVersion: 1,
           payloadHash,
@@ -1296,7 +1307,6 @@ export async function settleAgentTaskClaim(input: TaskClaimIdentity & {
   planCache?: { threadId: string; sourceMessageId: string; cache: AgentPlanCacheRecord };
 }) {
   return db.$transaction(async (tx) => {
-    const now = new Date();
     if (input.planCache) {
       // Composer acceptance takes these locks in the same order.
       await tx.$queryRaw(Prisma.sql`
@@ -1308,14 +1318,17 @@ export async function settleAgentTaskClaim(input: TaskClaimIdentity & {
       SELECT id FROM agent_tasks WHERE id = ${input.taskId}::uuid
       AND organization_id = ${input.organizationId}::uuid FOR UPDATE
     `);
+    const now = new Date();
     const ownedTask = await tx.agentTask.findFirst({
       where: {
         id: input.taskId, organizationId: input.organizationId,
         revision: input.expectedRevision, status: "running", claimToken: input.claimToken,
       },
     });
-    if (!ownedTask) return false;
-    if (input.planCache && !ownedTask.cancelledAt) {
+    if (!ownedTask || (input.planCache && (
+      ownedTask.cancelledAt || !ownedTask.leaseExpiresAt || ownedTask.leaseExpiresAt <= now
+    ))) return false;
+    if (input.planCache) {
       const committed = await commitThreadPlanCacheIfCurrent({
         orgId: input.organizationId, ...input.planCache, taskClaim: input,
       }, tx);

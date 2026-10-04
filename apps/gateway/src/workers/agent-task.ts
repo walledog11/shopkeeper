@@ -4,14 +4,11 @@ import {
   claimAgentTask,
   claimWithheldMessageFollowUp,
   failAgentTaskClaim,
-  recordAgentTaskModelUsage,
   renewAgentTaskLease,
-  reserveAgentTaskModelCall,
   settleAgentTaskClaim,
 } from '@shopkeeper/agent/task-ledger';
-import { estimateModelUsageCostUsd, UnknownModelPriceError } from '@shopkeeper/agent/model-cost';
-import type { TaskClaimIdentity, TaskSettlement } from '@shopkeeper/agent/task-ledger';
-import type { TaskModelBudget } from '@shopkeeper/agent/context';
+import { taskModelBudget } from '@shopkeeper/agent/task-run';
+import type { TaskSettlement } from '@shopkeeper/agent/task-ledger';
 import { QUEUE } from '../constants.js';
 import logger from '../logger.js';
 import { getContext, loadLiveOperatorContext, normalizeApprovedToolCalls } from '../operator-context.js';
@@ -26,31 +23,6 @@ import { runComposerTask } from '../message-handlers/support-plan/composer-task.
 
 const LEASE_MS = 300_000;
 const RENEW_MS = 60_000;
-
-// Reserved before the provider is contacted and charged as soon as the
-// response is measured, so a crash costs at most one call's accounting and
-// never returns the task to a fresh allowance.
-function taskModelBudget(claim: TaskClaimIdentity & { claimToken: string }): TaskModelBudget {
-  return {
-    reserveModelCall: async () => {
-      const state = await reserveAgentTaskModelCall(claim);
-      if (state !== 'active') throw new Error(`Task stopped: ${state}.`);
-    },
-    recordModelUsage: async (usage, model) => {
-      let spentNanoUsd = 0n;
-      try {
-        spentNanoUsd = BigInt(Math.ceil(estimateModelUsageCostUsd(model, usage) * 1_000_000_000));
-      } catch (error) {
-        if (!(error instanceof UnknownModelPriceError)) throw error;
-        logger.warn({ model, taskId: claim.taskId }, '[AgentTask] Unpriced model; call counted without spend');
-      }
-      await recordAgentTaskModelUsage({
-        ...claim,
-        usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, spentNanoUsd },
-      });
-    },
-  };
-}
 
 // A support task whose approved message was withheld. Its approved writes ran,
 // so `claimAgentTask` rightly refuses it; this claim admits it only when every

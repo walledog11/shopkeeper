@@ -7,6 +7,7 @@ export {
   normalizeApprovedToolCalls,
   removePendingPlanForThread,
   resolvePendingPlanContexts,
+  resolvePendingQuestionContext,
   selectPendingPlan,
   updateContext,
   type SelectPendingPlanResult,

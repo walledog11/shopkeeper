@@ -547,9 +547,7 @@ describe('revise_pending_plan', () => {
     const result = await tools.revise_pending_plan.execute({ guidance: 'Give them 10% off' }, baseCtx, settings, emptyDeps);
 
     expect(result.status).toBe('ok');
-    // The tool result is the model-facing draft summary carrying the concrete draft.
-    expect(result.message).toContain('Re-drafted');
-    expect(result.message).toContain('Here is 10% off.');
+    expect(result.status).toBe('ok');
     expect(planAgentSpy).toHaveBeenCalledTimes(1);
 
     const note = await db.message.findFirst({
@@ -571,7 +569,7 @@ describe('revise_pending_plan', () => {
       'Discount request',
       expect.anything(),
       'Discount request',
-      expect.objectContaining({ exclude: { channel: 'telegram', deliveryKey: 'chat_1' } }),
+      expect.objectContaining({ requestDisplay: expect.anything() }),
     );
   });
 
@@ -646,9 +644,7 @@ describe('answer_operator_question', () => {
     const result = await tools.answer_operator_question.execute({ answer: 'Yes, $15 flat to Canada.' }, baseCtx, settings, emptyDeps);
 
     expect(result.status).toBe('ok');
-    // The tool result is the model-facing draft summary carrying the concrete draft.
-    expect(result.message).toContain('Re-drafted');
-    expect(result.message).toContain('Yes, $15 flat.');
+    expect(result.status).toBe('ok');
     expect(planAgentSpy).toHaveBeenCalledTimes(1);
 
     const note = await db.message.findFirst({
@@ -718,6 +714,43 @@ describe('answer_operator_question', () => {
     expect(settled).toMatchObject({ pendingQuestion: null, claimToken: null });
     expect(settled.status).not.toBe('waiting_input');
   });
+
+  it.each(['planning_failed', 'claim_unavailable', 'replacement_question'] as const)(
+    'preserves the pending question when %s', async (reason) => {
+      const memberKey = 'member:answer-retained';
+      const customer = await createTestCustomer(org.id, 'retained@example.com');
+      const thread = await createTestThread(org.id, customer.id, 'email');
+      await createTestMessage(thread.id, 'Can I return this?', SenderType.customer);
+      const question = { threadId: thread.id, question: 'Should I open the return?', planId: randomUUID() };
+      await updateContext(org.id, memberKey, { pendingQuestion: question });
+      const replacement = { ...question, planId: randomUUID(), question: 'Which label should I send?' };
+      if (reason === 'claim_unavailable') {
+        await acceptCustomerAgentRequest({
+          organizationId: org.id, threadId: thread.id,
+          sourceMessageId: (await db.message.findFirstOrThrow({ where: { threadId: thread.id, senderType: 'customer' } })).id,
+          objective: 'Open a return',
+          budget: { runtimeVersion: 2, modelCallLimit: 20, activeTimeMsLimit: 300000, spendNanoUsdLimit: 1000000000n },
+        });
+      } else if (reason === 'planning_failed') {
+        planAgentSpy.mockRejectedValue(new Error('provider unavailable'));
+      } else {
+        planAgentSpy.mockImplementation(async () => {
+          await updateContext(org.id, memberKey, { pendingQuestion: replacement });
+          return {
+            instruction: 'Return request', steps: [], rawToolCalls: [], warnings: [],
+          };
+        });
+      }
+      const tools = await buildTools(memberKey);
+      if (reason === 'claim_unavailable') {
+        await expect(tools.answer_operator_question.execute({ answer: 'Yes' }, baseCtx, settings, emptyDeps)).rejects.toThrow();
+      } else {
+        const result = await tools.answer_operator_question.execute({ answer: 'Yes' }, baseCtx, settings, emptyDeps);
+        expect(result.status).toBe(reason === 'planning_failed' ? 'error' : 'ok');
+      }
+      expect((await getContext(org.id, memberKey)).pendingQuestion).toEqual(reason === 'replacement_question' ? replacement : question);
+    },
+  );
 
   it('errors when no question is pending', async () => {
     const tools = await buildTools('chat_answer_empty');

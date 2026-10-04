@@ -1,5 +1,5 @@
 export {
-  formatOperatorDraftSummary,
+  requiresDashboardDraftReview,
   formatOperatorPlanMessage,
   getConversationStage,
   parkedActionLabel,

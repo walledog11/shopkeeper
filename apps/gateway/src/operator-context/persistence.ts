@@ -231,7 +231,7 @@ export function selectPendingPlan(
     }
     if (pendingPlanNeedsThreadReview(plan, digest)) {
       return {
-        error: 'The request details were unavailable in the briefing. Open the thread before approving this plan.',
+        error: 'Open the thread to review the complete request and draft before approving this plan.',
         code: 'needs_thread_review',
       };
     }
@@ -408,7 +408,7 @@ async function pendingQuestionStaleReason(
 // Clear only this exact question, so one parked while the turn was loading
 // survives. Containment rather than equality: the stored object can carry fields
 // this parser drops.
-async function resolveStalePendingQuestion(
+export async function resolvePendingQuestionContext(
   organizationId: string,
   memberKey: string,
   question: PendingQuestion,
@@ -476,7 +476,7 @@ export async function loadLiveOperatorContext(
         planId: pendingQuestion.planId ?? null,
         reason,
       }, '[Operator] Parked question dropped before the merchant answered it');
-      await resolveStalePendingQuestion(organizationId, memberKey, pendingQuestion).catch(() => undefined);
+      await resolvePendingQuestionContext(organizationId, memberKey, pendingQuestion).catch(() => undefined);
       pendingQuestion = null;
     }
   }
