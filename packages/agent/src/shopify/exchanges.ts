@@ -15,6 +15,7 @@ import {
   type ToolResult,
 } from "../tools/result.js";
 import { shopifyFailureReceipt, shopifyReceiptEnvelope } from "./receipts.js";
+import { EXCHANGE_EFFECT_DESCRIPTION, EXCHANGE_REPLY_GUIDANCE } from "./exchange-contract.js";
 import { moneyToCents, optionalPositiveInteger, requireNumericId } from "./validation.js";
 import {
   allocateReturnQuantity,
@@ -250,7 +251,7 @@ export async function createExchange(
       },
     } : undefined;
     const result = toolOk(
-      `Opened exchange ${returnName} (status ${returnStatus}) on order ${orderId}: returning ${quantity}x ${returnedName} in exchange for ${quantity}x ${replacementName}. No refund was issued, nothing was charged or shipped, and no price difference was worked out: the replacement can be fulfilled, and any difference settled, once the merchant processes the return in Shopify. Tell the customer the exchange is set up and how to send the item back.`,
+      `Opened exchange ${returnName} (status ${returnStatus}) on order ${orderId}: returning ${quantity}x ${returnedName} in exchange for ${quantity}x ${replacementName}. No refund was issued, nothing was charged or shipped, and no price difference was worked out. ${EXCHANGE_EFFECT_DESCRIPTION} ${EXCHANGE_REPLY_GUIDANCE}`,
       {
         returnWatch: {
           shopifyReturnId: returnId,

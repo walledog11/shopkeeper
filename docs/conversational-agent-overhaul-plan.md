@@ -1,10 +1,13 @@
 # Conversational agent overhaul plan
 
-Status, 2026-10-04: #157 is merged; dashboard, gateway and worker serve
-`e3e9f83a`, with all required PR CI and production readiness passed. Its live
-regeneration scopes the #1041 exchange correctly and reloads the same proposal.
-Phone continuation remains blocked by the missing composer-card notification;
-the candidate on `fix/composer-phone-handoff` addresses that handoff. #152
+Status, 2026-10-04: #157 and #158 are merged; dashboard, gateway and worker
+serve `9f62ce86`, with all required PR CI and production readiness passed.
+The #1041 exchange now scopes correctly, survives reload and has a successfully
+sent phone card, received by the owner. The exchange observation is incomplete:
+its draft contains unestablished shipping promises, and phone continuation,
+approval, Shopify execution and customer delivery remain unobserved. Correct
+the draft at its source before ordinary merchant approval; do not script the
+merchant into fixing it. No exchange action or customer reply has run. #152
 corrects the exchange text behind the #1039 financial/capability claims and
 stops sending Shopify's `OTHER` return reason; #153 stops a request already
 handed to the merchant from being merged into later messages on the thread; #154
@@ -78,9 +81,10 @@ manual dashboard/iMessage delivery and Shopify continuation evidence remain
 open. #155 merged as `1d88d6d6` and is included in deployed `7ef89abb`.
 The ordinary #1041 exchange email initially produced an invalid draft. #157's
 deployed regeneration now produces a valid exchange-only proposal and survives
-reload. It supplies no phone answer/revision/approval evidence: composer planning
-does not notify the phone queue. Finish that handoff, then continue this same
-request; the generated shipping claims still need merchant confirmation or revision.
+reload. #158 delivered its replacement card to the phone at 04:59:29 UTC.
+The owner confirmed receipt by quoting the delivered card. Phone revision and
+approval remain unverified. Its unestablished shipping claims are a draft-quality
+issue to correct in the product, not through a scripted merchant instruction.
 
 ## Next session
 
@@ -88,18 +92,22 @@ The owner clarified that testing is welcome, without redundant test loops. All
 fourteen effects remain in scope. Reuse existing evidence; repeat checks only
 for a failure, a relevant code change or an unresolved concern. In order:
 
-1. **Finish the regenerated exchange's phone handoff, then continue that flow (8h).**
+1. **Continue the #1041 exchange from its delivered phone card (8h).**
    The #1041 email on `7ef89abb` was correctly summarized, but the planner
    re-proposed the already completed #1042 return beside the exchange. Invalid
    return input and an ambiguous return-number placeholder blocked the entire
    draft; no action or customer reply ran. #157 gives the planner the same
    unanswered burst as the summarizer and fixes the ticket-history 403. Live
-   regeneration and reload passed on `e3e9f83a`. The valid proposal is waiting
-   for approval but absent from the phone queue. `fix/composer-phone-handoff`
-   publishes the committed card through existing notification contracts and
-   retries delivery without re-planning. Review, CI and deployment precede one
-   regeneration to deliver its phone card. No repeat customer email is needed.
-   #155's live continuation remains open.
+   regeneration and reload passed on `e3e9f83a`. #158 is deployed on
+   `9f62ce86`; one Rewrite delivered proposal `5689558d` at task revision 1,
+   superseding `7d72173d`. It remains unapproved with no action or customer reply.
+   The owner confirmed receiving the card and rejected the proposed scripted
+   revision test. Correct the draft's unestablished shipping promises at their
+   source, then observe ordinary merchant approval and verify Shopify's receipt
+   and customer delivery. Use a simple, natural edit if a revision is exercised;
+   do not require the merchant to provide internal constraints to repair the draft.
+   No repeat customer email or restart is needed. #155's live continuation remains
+   open; phone delivery and reload evidence already passed and must be retained.
    #151's handoff grounding fix
    is deployed on `6c6b9499`, and the owner confirmed the single approved #1038
    replay arrived with correct wording. This defect is resolved; do not repeat
@@ -128,8 +136,8 @@ for a failure, a relevant code change or an unresolved concern. In order:
 iMessage is the main channel. Telegram is excluded from product and release
 acceptance; do not build or test it.
 
-**Workspace handoff:** main, dashboard, gateway and worker are `e3e9f83a`
-(#157). The shared root checkout
+**Workspace handoff:** main, dashboard, gateway and worker are `9f62ce86`
+(#158). The shared root checkout
 still has HEAD `606da169` and uncommitted phone, marketing and documentation
 edits, this document included. Preserve them, start code changes from an isolated
 worktree on `origin/master`, and do not reset the root or mistake its older files
@@ -750,8 +758,31 @@ plan/question notifications after commit. A worker retry reads the same live
 card, checks its source, instruction, revision and member, and resends without
 re-planning. The real-Postgres worker regression reproduced no card before the
 fix and now covers failed-send retry, duplicate delivery, a superseded revision
-and zero action/customer-message execution. Live phone receipt and continuation
-remain owed after deployment; this exchange is still unapproved.
+and zero action/customer-message execution. #158 merged as `9f62ce86` and
+passed CI and production readiness. One Rewrite at 04:59:12 UTC continued task
+`95c15cdb` at revision 1, creating proposal `5689558d` and superseding
+`7d72173d`. The phone queue and reloaded dashboard agree on its identity;
+the successful phone send was mirrored at 04:59:29 UTC. The owner was asked for
+the planned iMessage revision. The owner confirmed handset receipt and declined
+the scripted revision; it is withdrawn. Ordinary continuation, approval and
+provider execution remain unverified; this exchange is still unapproved.
+
+**Exchange shipping claims — source correction prepared on
+`fix/exchange-draft-grounding`, based on `9f62ce86`.** The exchange argument and
+fallback plan summary described shipping the replacement, while the capability,
+support/operator instructions and success text described later fulfillment and
+asked for return instructions that this tool does not supply. The candidate
+shares the actual effect and evidence requirements across those owners: opening
+the exchange records a return and replacement; return instructions and future
+shipment commitments need store policy or a merchant instruction. The existing
+card's label follow-up remains the merchant's work. No prose matcher or new
+knowledge-base lookup is added. Agent typecheck, build, changed-file lint and
+existing registry, prompt, planner and exchange checks passed. This is a source
+correction, not a live-model observation. Review, CI and deployment are still
+owed, followed by one Rewrite of the retained #1041 request to replace the old
+draft, ordinary approval, and provider/customer-delivery verification. Preserve
+the already-passed request, reload and phone-delivery evidence; no customer
+resend or scripted merchant repair is needed.
 
 ### Release and runtime retirement
 

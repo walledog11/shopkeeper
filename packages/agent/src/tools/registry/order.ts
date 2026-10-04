@@ -1,6 +1,7 @@
 import { noShopify, cancelReasons, requireShopify, returnReasons, maybeRecordReturnWatch } from "./helpers.js";
 import { arrayArg, booleanArg, defineTool, numberArg, stringArg } from "./schema.js";
 import { toolPolicyBlock } from "../result.js";
+import { EXCHANGE_EFFECT_DESCRIPTION, EXCHANGE_REPLY_GUIDANCE } from "../../shopify/exchange-contract.js";
 import type {
   AttachReturnLabelInput,
   CancelOrderInput,
@@ -342,11 +343,11 @@ export const ORDER_TOOL_DEFINITIONS = [
   defineTool({
     name: "create_exchange",
     description:
-      "Set up an exchange on a fulfilled Shopify order: opens a return for the item the customer is sending back and records the replacement variant on it. Use this instead of create_refund when the customer wants a different size, color, or variant rather than their money back. It only records the exchange: it does not ship the replacement, charge or refund the customer, or work out any price difference - the replacement can only be fulfilled, and any difference settled, once the merchant processes the return in Shopify. Only works for items that have shipped; for unshipped orders use edit_shopify_order to swap items directly. If they are sending the item back and not taking a replacement, use create_return. The replacement must cost the same or less than the returned item - if it costs more, the customer would owe a balance this tool cannot collect, so escalate to the merchant instead of calling this.",
+      `Set up an exchange on a fulfilled Shopify order for the item the customer is sending back. Use this instead of create_refund when the customer wants a different size, color, or variant rather than their money back. ${EXCHANGE_EFFECT_DESCRIPTION} ${EXCHANGE_REPLY_GUIDANCE} Only works for items that have shipped; for unshipped orders use edit_shopify_order to swap items directly. If they are sending the item back and not taking a replacement, use create_return. The replacement must cost the same or less than the returned item - if it costs more, the customer would owe a balance this tool cannot collect, so escalate to the merchant instead of calling this.`,
     fields: {
       order_id: stringArg("Shopify order ID (numeric). Use the id field from the orders context.", { required: true }),
       variant_id: stringArg("Variant ID of the item the customer is sending back, from the orders context.", { required: true }),
-      exchange_variant_id: stringArg("Variant ID of the replacement item to ship instead. Use search_shopify_products to find it if it is not in context.", { required: true }),
+      exchange_variant_id: stringArg("Variant ID of the replacement item to record on the exchange. Use search_shopify_products to find it if it is not in context.", { required: true }),
       quantity: numberArg("How many units to exchange. Defaults to 1."),
       reason: stringArg("Why the item is coming back.", { enum: returnReasons }),
       approval_line_items: approvalLineItemsArg,

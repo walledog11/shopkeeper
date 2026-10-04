@@ -1341,3 +1341,72 @@ revision; it does not claim work or buy another model call. The existing worker
 regression failed before the correction (no card), then passed with failed-send
 retry, delivery idempotency, stale-revision refusal and zero provider/customer
 execution. Live phone receipt and #155 continuation remain owed after deployment.
+
+## PR #158 deployment and live phone handoff, 2026-10-04
+
+All required CI passed on `1323be80`; #158 merged at 04:54:05 UTC as
+`9f62ce86e28790d59895517dc26de9cdc256df32`. Gateway `19c258e5` and worker
+`2222b771` are SUCCESS on that source; Vercel `dpl_AeHQfjbVCLnYL8ML19GUV2FkLhTc`
+is READY and serves the production dashboard alias. Production readiness passed;
+the default remains v1 with the same controlled organization on v2.
+
+One dashboard Rewrite at 04:59:12.474 UTC created request `19f0ff36` on the
+same task `95c15cdb`, now revision 1. Proposal `5689558d` is valid and ready;
+`7d72173d` is superseded. The reloaded dashboard and phone queue contain the
+same proposal, source, instruction hash and action hash. The card's successful
+phone send was mirrored as message `c5c961e4` at 04:59:29.866 UTC. No agent
+action or new customer reply exists.
+
+The draft still promises shipping instructions and shipment after receipt.
+The owner was asked to reply on iMessage: "For Chain's #1041 exchange, keep the
+reply to two sentences. Say I will send the return label separately. Don't
+promise shipment timing or a price adjustment." Check the revised card before
+phone approval. Handset receipt, revision, approval, Shopify receipt and actual
+customer delivery remain pending; do not regenerate or resend the customer email.
+
+## Observation status and realistic merchant replies, 2026-10-04
+
+The owner quoted the delivered #1041 card, confirming actual handset receipt.
+They rejected the proposed multi-clause merchant revision as an unrealistic QA
+script; that instruction was withdrawn and is not a requirement or passing
+observation. A natural merchant revision may exercise the continuation path,
+but the merchant should not have to supply internal constraints to repair an
+incorrect draft.
+
+Read-only observation at 05:29:10 UTC still shows task `95c15cdb` waiting for
+approval at revision 1, active proposal `5689558d`, no iMessage operator event,
+no agent action and only the original customer email. The overall exchange
+observation remains incomplete. Request scoping, ticket reload and phone delivery
+passed; unestablished shipping promises remain a draft-quality issue. Correct
+that issue at its source before ordinary approval, then verify the actual Shopify
+exchange receipt and customer email. Retain this request and the evidence already
+collected; no customer resend or restart is needed.
+
+## Exchange shipping-claim source correction, 2026-10-04
+
+Candidate `fix/exchange-draft-grounding` starts from deployed `9f62ce86` in an
+isolated worktree. Code inspection found that `exchange_variant_id` described an
+item "to ship instead" and the fallback plan summary said "ship variant". The
+capability and duplicated support/operator guidance described later fulfillment
+after merchant processing; the provider success text additionally told the model
+to explain how the item should be returned despite supplying no such instructions.
+These are misleading sources for the recorded draft. Inspection does not prove
+which individual phrase produced the model's shipping promises.
+
+The candidate shares the exchange effect and reply-evidence requirements between
+the registry, both prompt surfaces and the provider result. It describes recording
+the replacement, keeps later fulfillment and financial processing with the
+merchant, and requires store policy or an explicit merchant instruction for
+return instructions or a shipment promise. With neither, the reply confirms the
+exchange; the existing merchant follow-up asks for the label. The argument and
+fallback summary now describe recording the replacement as well.
+
+Agent typecheck and build, changed-file lint and the existing registry, prompting,
+planner and exchange suites passed. These used controlled local responses, not
+a live model or provider, and do not close draft-quality acceptance. No new paid
+evaluation, production rewrite, phone notification, Shopify action or customer
+reply ran. Review, CI and deployment precede one Rewrite against the retained
+#1041 request; inspect the new draft before ordinary approval and verify the
+Shopify receipt and actual customer delivery. The original phone-delivery and
+reload evidence stays passed; no customer resend or scripted merchant repair is
+required.
