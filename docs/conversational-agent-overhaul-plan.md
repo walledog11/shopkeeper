@@ -1,9 +1,10 @@
 # Conversational agent overhaul plan
 
-Status, 2026-10-04: the core migration and v2 rollout are deployed through
-`ecb514bb` (#164). Runtime v2 became the default for every organization's new
-tasks at 21:08 UTC. Retirement and final documentation are implemented on
-`codex/retire-agent-v1`; release verification and deployment are being completed.
+Status, 2026-10-04: the migration is complete within the accepted release scope.
+Runtime retirement merged in [#165](https://github.com/walledog11/shopkeeper/pull/165)
+as `17afc644` and is deployed on dashboard, gateway and worker. Required PR checks
+and production verification passed. Items 12 and 13 are closed. Runtime v2 became
+the default for new tasks at 21:08 UTC; v1 execution is now removed.
 The [runtime runbook](agent-runtime.md) describes the single active contract,
 historical-data handling, and deployment rollback.
 
@@ -52,24 +53,23 @@ The owner confirmed receipt by quoting the delivered card. After three rewrites
 the owner approved the revision-3 draft from the phone on 2026-10-04, and the
 exchange committed as #1041-R2. Phone revision remains unobserved.
 
-## Next session
+## Normal-use follow-up
 
-Finish release verification and deploy the reviewed retirement change. Items
-12 and 13 are implemented; they close only when the required release checks pass
-and the retirement revision is deployed. Runtime selection can no longer be
-rolled back with an environment flag; redeploy #164 as described in the runbook.
+No runtime migration work remains. Runtime selection can no longer be rolled
+back with an environment flag; redeploy #164 as described in the runbook.
 
 Observe remaining conversational checks in normal use under decision L. Do not
 create staged tickets or a paid eval campaign to close this migration. The
 unknown-summary and refused-action-label defects from Oct 4 are fixed in the
-retirement change. Remaining small defects are recorded under *Outside this
-plan*; they are not migration gates.
+deployed retirement change. Remaining small defects are recorded under *Outside
+this plan*; they are not migration gates.
 
 iMessage is the main phone channel. Telegram and stop-by-text are excluded.
 
-**Workspace handoff:** production's recorded revision is `ecb514bb`. Retirement
-work is isolated in `/private/tmp/shopkeeper-retire-agent-v1`, branch
-`codex/retire-agent-v1`. The shared root checkout still has HEAD `606da169` and
+**Workspace handoff:** production's verified retirement revision is `17afc644`.
+Retirement work is isolated in `/private/tmp/shopkeeper-retire-agent-v1`, branch
+`codex/close-agent-overhaul-plan` (documentation closeout after #165). The shared
+root checkout still has HEAD `606da169` and
 uncommitted phone, marketing and documentation work. Preserve those edits and
 use the isolated branch for this release.
 
@@ -94,7 +94,7 @@ authorizations continue to apply. It supersedes the
 [maintainability audit](agent-maintainability-audit-2026-09-11.md) where they
 differ: conversation remains model-authored and tool discovery adaptive.
 
-Read *Current state*, *Open work*, and *How to finish a change* before working.
+Read *Current state*, *Remaining observations*, and *How to finish a change* before working.
 Use the contract sections when changing their owners. The
 [release evidence](conversational-agent-overhaul-p6-release-evidence.md)
 holds manual run results; the
@@ -151,14 +151,16 @@ retirement inventory is a fresh read-only production inspection on 2026-10-04.
 | Manual provider runs (Gate C) | Cancellation #1036/#1035, return #1042-R1, exchange #1041-R2, full refund #1040 (CAD), partial refund #1033, named sale creation/end, variant prices both ways, and order creation/editing passed the recorded retained runs. #162–#164 rechecks are complete, including free-replacement refusal. Fulfillment and customer-info updates were owner-observed without receipt read-back. Gift-card/label runs are excluded by decision L. |
 | Manually verified approval display | Cancellation quote display (8d) confirmed by the release owner on `6616da7f`, 2026-09-29. The exact-draft card with a labeled placeholder (8c) was seen on the customer-info ticket and on a full-refund card (`[refund amount]`), 2026-10-01 and 2026-10-02. |
 | Built changes awaiting observation | Full-refund amount on both card surfaces; definite reply-failure recovery; dashboard email provider id (8f); partial-refund cap refusal at execution. Full refund #1040 in CAD and partial refund #1033 committed on Oct 4. Phone approval/confirmation were observed. Stop-by-text and Telegram are excluded; unsafe failure cases remain recorded as not seen live (decision L). |
-| Known implementation gaps | No remaining core runtime migration behavior is identified. Unknown-summary/refused-label fixes accompany retirement. Other small product defects are deferred below. Stale/over-limit approval refusal remains unobserved; stop-by-text is excluded (decision L). |
+| Known implementation gaps | No remaining core runtime migration behavior is identified. Unknown-summary/refused-label fixes are deployed in #165. Other small product defects are deferred below. Stale/over-limit approval refusal remains unobserved; stop-by-text is excluded (decision L). |
 | Conversational acceptance | A one-order status question is answered briefly and in ordinary language after #144 (owner phone check and stored turns, one sample per question). A status question by customer name still uses the full read and can pad. #151's handoff removes the unsupported return/refund suggestion; the owner confirmed iMessage receipt and wording. The #1039 investigation read current data and preserved the no-return constraint; its explanation-only follow-up made no actions. Financial explanations remain incorrect/unverified (8h). References, topic return, conversational revision and language/voice remain unobserved. |
-| Rollout and runtime retirement | Item 11 deployed Oct 4. Item 12 deletion and item 13 docs implemented on the retirement branch; aggregate verification and deployment pending. Historical readers and v2 reconciliation/delivery remain. Rehearsal waived (decision L). |
+| Rollout and runtime retirement | Items 11–13 done. Runtime retirement deployed as `17afc644` (#165); required PR checks and production verification passed. Historical readers and v2 reconciliation/delivery remain. Rehearsal waived (decision L). |
 | Optional paid comparison (Gate B) | Last comparison on `cf41c169` failed; it was incorrectly called passed before correction. #125 fixed the C08 runtime defect, so that input is no longer held out. Comparison tooling (Gate A) exists; neither a rerun nor new fixtures are required unless requested. |
 | Active runtime and rollback | Retirement creates only runtime-2 tasks and refuses other versions. Historical rollout variables become inert. Rollback redeploys #164 across all hosts; retain the additive schema and v2 operation identities. See [agent-runtime.md](agent-runtime.md). |
 
-## Open work, in order
+## Remaining observations
 
+The migration is closed. This table retains completed work and the observations
+left to normal use under decision L; it does not add migration release gates.
 Item numbers are stable references for existing evidence, not a rule to finish
 every historical sub-item before writing more code. Historical evidence may
 cite the earlier rule/package numbering. Work follows this sequence; manual
@@ -172,7 +174,7 @@ runs also happen as soon as the affected flow is ready.
 | 4 | Merchant entry points | 10, 10a, 10c | Composer, dashboard Stop/reload, durable iMessage and recipient email passed. Stop-by-text is excluded. Definite reply-failure recovery is built but not observed live. |
 | 5 | Finish provider and delivery correctness | 8f, 10b | Code-complete and deployed: #146 (8f), #136 and #147 (10b). Read-only live checks passed; a full refund (#1040, CAD) and a partial refund (#1033) committed on 2026-10-04; the 8f send and the partial-refund cap refusal have not run. |
 | 6 | Retained behavior | remaining 8, 8h | Return/exchange and the retained Oct 4 merchant flows passed. #162–#164 rechecks are complete. Other conversational matrix observations remain open in normal use. |
-| 7 | Runtime retirement and final docs | 11–13 | Item 11 deployed. Item 12 code and inventory plus item 13 docs implemented; release checks/deployment pending. Rollback rehearsal waived. |
+| 7 | Runtime retirement and final docs | 11–13 | Complete: #165 merged and deployed across all hosts; required PR checks and production verification passed. Rollback rehearsal waived. |
 
 ### Retained-flow status
 
@@ -198,15 +200,15 @@ merchant-supplied return labels remain available without a dedicated live run.
   production-scale traffic or a rehearsal that did not occur.
 - **11 — Stage v2 routing.** Done 2026-10-04 21:08 UTC on `ecb514bb`; the owner
   removed the allowlist and selected runtime 2 on both Railway services.
-- **12 — Retire the old active runtime (Gate E).** Implemented on the retirement
-  branch. The read-only production inventory is clear of actionable v1 state.
+- **12 — Retire the old active runtime (Gate E).** Done in #165, deployed as
+  `17afc644`. The read-only production inventory is clear of actionable v1 state.
   All new tasks use v2; persisted old versions and taskless historical plans are
   refused before execution. Historical decoders and recovery identities remain.
   Required checks and deployment are recorded in the release evidence.
-- **13 — Final documentation.** The runtime runbook, operating instructions,
+- **13 — Final documentation.** Done. The runtime runbook, operating instructions,
   matrix, and this plan describe the single active runtime. Current status is
   separated from historical evidence, exclusions, and unobserved normal-use
-  acceptance. Close with item 12 after release verification and deployment.
+  acceptance. Release verification and deployment are recorded in the evidence.
 
 ### Gate E deletion targets
 
@@ -401,7 +403,7 @@ Oct 4 follow-ups: raw escalation reason on an already-escalated ticket; silent
 Reopen HTTP 500 when another open thread exists; answering the agent's own
 operator-chat question reports no pending question; product-search chips print
 an ID as a count; and changing an order line's quantity is unsupported. Unknown
-summaries and refused-action success labels are fixed by runtime retirement.
+  summaries and refused-action success labels are fixed in deployed #165.
 
 
 The 2026-09-25 audit also found decisions made by matching English outside the
@@ -690,7 +692,7 @@ Persist the composed response and its destination before attempting delivery. As
 Packages 0–5 provide the implementation summarized above. Package 6 closes the
 remaining user flows, verifies them in the real app, stages routing, and
 retires the old active runtime. Its work queue is
-[Open work](#open-work-in-order); its completion procedure is
+[Remaining observations](#remaining-observations); its completion procedure is
 [How to finish a change](#how-to-finish-a-change). Do not create a second
 verification backlog from the earlier package checklists.
 

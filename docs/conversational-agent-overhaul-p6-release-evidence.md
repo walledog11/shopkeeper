@@ -1,8 +1,9 @@
 # Conversational agent Package 6 release evidence
 
-Status, 2026-10-04: v2 rollout and retained-flow rechecks through #164 are
-deployed. Runtime retirement and final docs are implemented on the retirement
-branch; release verification/deployment are being completed. This file is the execution record for Package
+Status, 2026-10-04: runtime retirement merged in #165 as `17afc644` and is deployed
+on dashboard, gateway and worker. Required PR checks and production verification
+passed; plan items 12 and 13 are closed. Retained-flow observations, exclusions
+and unobserved normal-use checks remain recorded below. This file is the execution record for Package
 6 of the [overhaul plan](conversational-agent-overhaul-plan.md). It records
 release inputs and evidence; it does not authorize a production effect by
 itself.
@@ -642,9 +643,9 @@ uncertain provider operation.
 
 ## Gate E — persisted-state inventory and deletion
 
-The candidate is implemented and its production inventory is recorded under
+Retirement is complete and its production inventory is recorded under
 [Runtime retirement inventory](#runtime-retirement-inventory-2026-10-04). Final
-release checks and deployment are recorded there when completed.
+release checks and deployment are recorded there.
 
 Before deleting each v1 responsibility, rerun the read-only conversational
 overhaul inventory and name the active caller/record count, replacement, and
@@ -1676,7 +1677,7 @@ cache versions and pending ledger/delivery records. It reported no duplicate
 provider-operation-key groups, stale claimed executions, or unresolved spend
 reservations. Historical failed/unknown customer delivery is not discarded.
 
-The candidate removes runtime/allowlist/compatibility flag selectors, optional
+Retirement removed runtime/allowlist/compatibility flag selectors, optional
 speculative drafting, `request_wider_tool_set`, broad mutation widening and
 mutation-result-text completion inference. All new tasks select v2. Old versions
 and taskless approval/answer/revision paths refuse before dispatch; claimed
@@ -1690,7 +1691,27 @@ Release verification passed locally: canonical static checks, workspace unit
 and script checks, browser smoke, all workspace integration/coverage checks,
 and production builds. The affected historical test fixtures now use durable
 claims/proposals; the taskless-card case verifies refusal and regeneration.
-No required check was bypassed. PR CI and production deployment are pending.
+No required check was bypassed. Required PR CI passed on `7a118703`:
+[CI](https://github.com/walledog11/shopkeeper/actions/runs/37240591857) and
+[free eval preflight](https://github.com/walledog11/shopkeeper/actions/runs/37240591861).
+[PR #165](https://github.com/walledog11/shopkeeper/pull/165) merged at
+`2026-10-04T22:43:22Z` as `17afc6440ee76889d6151bba06d0d6284d422983`.
+
+All three production hosts reached success on that same revision:
+
+| Host | Deployment | State |
+| --- | --- | --- |
+| Vercel dashboard (`app.useshopkeeper.com`) | `dpl_fHZSnkUGgMBYbjNQZncJ9BNxgJNB`; GitHub production deployment `6847821777` at 22:45:24 UTC | READY; production alias confirmed |
+| Railway gateway (`shopkeeper`) | `366c5fc1-a24e-425f-812f-94bbb6f4f098` | SUCCESS |
+| Railway `Gateway Worker` | `3ef4a94e-bcd5-4dec-a93e-ace9ae0d7025` | SUCCESS |
+
+Production verification completed by `2026-10-04T22:47:16Z`: dashboard and
+gateway deep health, database, Redis, worker, queues and authenticated internal
+validation passed. Retired orchestration routes remained unreachable. The
+Photon webhook accepted the invalid-body availability probe with HTTP 400.
+The inbound-ticket smoke check was disabled; no ticket, customer message or
+provider mutation was created by verification. Items 12 and 13 are closed.
+
 No fresh live conversational/effect observation or paid eval is claimed.
 The previous deployment `ecb514bb` is the rollback image; decision L's rehearsal
 waiver stands.

@@ -46,7 +46,9 @@ reliably reproduce and existing checks do not cover
 
 V2 became the default for new tasks on 2026-10-04. Retained dev-store rechecks
 through #164 are complete within decisions L and M. Runtime retirement is
-implemented on `codex/retire-agent-v1`; release verification/deployment are
+complete in #165, deployed as `17afc644` on dashboard, gateway and worker.
+Required PR checks and production verification passed; plan items 12 and 13 are
+closed. Release verification/deployment are
 recorded in [the release evidence](conversational-agent-overhaul-p6-release-evidence.md).
 The production inventory found no v1 tasks/proposals or legacy unknown actions.
 Five current taskless caches require regeneration and review. Historical readers,

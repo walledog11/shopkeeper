@@ -2,6 +2,10 @@
 
 Last reviewed: 2026-10-04.
 
+Retirement shipped in [PR #165](https://github.com/walledog11/shopkeeper/pull/165)
+as `17afc644` on dashboard, gateway and worker. Required PR checks and production
+verification passed; deployment identities are in the release evidence.
+
 Runtime 2 is the sole executable agent runtime. New dashboard, composer,
 iMessage, and customer requests persist `runtimeVersion=2`; organization
 allowlists and the proposal/discovery rollout flags no longer select behavior.
