@@ -1,5 +1,5 @@
 import type { OrgSettings } from "./types.js";
-import { resolveAgentSettings } from "./settings.js";
+import { merchantLocalTime, resolveAgentSettings } from "./settings.js";
 import { isOperatorChannel } from "./thread-constants.js";
 import {
   hasUnresolvedShopifyCustomer,
@@ -346,7 +346,8 @@ export function buildSystemPromptParts(
       stable: OPERATOR_STABLE_PREFIX,
       volatile: composeSystemPrompt({
         identity: `You are ${s.agentName}, an AI action assistant for ${ctx.orgName}. You are receiving instructions from a team member. They reach you from wherever they are — Telegram, iMessage, or the dashboard — and it is the same conversation either way.`,
-        context: `## Integrations\n${shopifyNote}\n${shopifyCustomerNote}${linkedCustomerSection}${ordersSection}${buildStoreProfileSection(ctx.orgName, s.aiContext)}${pendingStateSection}`,
+        // Built once per run, so the time is stable across that run's model calls.
+        context: `## Current time\n${merchantLocalTime(s, new Date())}\n\n## Integrations\n${shopifyNote}\n${shopifyCustomerNote}${linkedCustomerSection}${ordersSection}${buildStoreProfileSection(ctx.orgName, s.aiContext)}${pendingStateSection}`,
         instructions,
         trailer: `${OPERATOR_UNTRUSTED_CONTENT_GUIDANCE}${buildGuardrailSection(s, "operator")}${buildMerchantPreferencesSection(ctx)}`,
       }),

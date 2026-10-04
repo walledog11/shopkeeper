@@ -119,14 +119,15 @@ function createdOrderResult(
   const total = order.total ? `$${order.total}` : "unknown total";
   const adminUrl = `https://${ctx.shop}/admin/orders/${orderId}`;
   const confirmation = reconciled ? " (confirmed after an interrupted provider response)" : "";
+  const financialStatus = order.financialStatus?.trim().toLowerCase();
+  const payment = financialStatus ? `, payment ${financialStatus.replace(/_/g, " ")}` : "";
   const result = toolOk(
-    `Done — order ${orderName} is in for ${order.email ?? fallbackEmail}, total ${total}${confirmation}.\n\n`
+    `Done — order ${orderName} is in for ${order.email ?? fallbackEmail}, total ${total}${payment}${confirmation}.\n\n`
     + `[View in Shopify](${adminUrl})`,
   );
   const envelope = shopifyReceiptEnvelope(ctx, { kind: "order", id: orderId });
   if (!envelope) return result;
 
-  const financialStatus = order.financialStatus?.trim().toLowerCase();
   const totalAmount = order.total?.trim();
   const currency = order.currency?.trim().toUpperCase();
   if (

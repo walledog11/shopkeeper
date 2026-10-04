@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsonResponse } from "../testing/json-response.js";
 import { createFlashSale, endFlashSale, readFlashSales } from "./flash-sales.js";
@@ -6,10 +5,6 @@ import { createFlashSale, endFlashSale, readFlashSales } from "./flash-sales.js"
 const ctx = { shop: "test-store.myshopify.com", accessToken: "shpat_test" };
 const NOW = new Date("2026-04-29T12:00:00Z");
 const receiptCtx = { ...ctx, operationId: "operation-sale-1", executionId: "execution-sale-1" };
-const receiptOperationMarker = createHash("sha256")
-  .update(receiptCtx.operationId)
-  .digest("hex")
-  .slice(0, 24);
 
 function variantNode(id: string, price = "48.00", inventoryQuantity = 4) {
   return {
@@ -27,7 +22,7 @@ function variantIds(count: number): string[] {
 
 function observedDiscount(overrides: Record<string, unknown> = {}) {
   return {
-    title: `Shopkeeper flash sale: Weekend [op:${receiptOperationMarker}]`,
+    title: "Weekend",
     startsAt: NOW.toISOString(),
     endsAt: "2026-04-30T12:00:00.000Z",
     status: "ACTIVE",
@@ -152,7 +147,7 @@ describe("createFlashSale", () => {
     }));
   });
 
-  it("reconciles an interrupted create only from one complete operation-tag match", async () => {
+  it("reconciles an interrupted create only from one complete match on its name and times", async () => {
     let operationTitle = "";
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse({
@@ -182,7 +177,7 @@ describe("createFlashSale", () => {
       name: "Weekend",
     }, receiptCtx, NOW);
 
-    expect(operationTitle).toMatch(/\[op:[a-f0-9]{24}\]$/);
+    expect(operationTitle).toBe("Weekend");
     expect(result.status).toBe("ok");
     expect(result.receipt).toEqual(expect.objectContaining({
       outcome: "succeeded",

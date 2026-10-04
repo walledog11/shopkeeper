@@ -1477,8 +1477,9 @@ waiting for approval, its action ledger was empty and there was no customer
 reply. Handset receipt is unobserved. No approval, customer resend or provider
 effect was performed.
 
-The candidate `fix/merchant-follow-up-notification` starts from the deployed
-revision. Source inspection found conflicting notification guidance: support
+[Draft PR #161](https://github.com/walledog11/shopkeeper/pull/161), commit
+`4daf8956`, starts from the deployed revision. Source inspection found
+conflicting notification guidance: support
 required a reply after every action while the exchange contract asked it to
 confirm just the exchange and leave the missing label with the merchant. The
 support prompt now uses the same follow-up guidance as the offered schemas and
@@ -1495,6 +1496,61 @@ contract, not live wording quality. Live acceptance remains pending deployment.
 
 Agent typecheck/build, changed-file lint, structure/docs checks, the existing
 prompting, registry, loop and planner-evidence checks, and required workspace
-typechecks passed for `fix/merchant-follow-up-notification`. PR CI and live
-wording after deployment remain pending. No further live Rewrite is needed
-before this change is deployed.
+typechecks passed for `fix/merchant-follow-up-notification`. All required
+[PR CI](https://github.com/walledog11/shopkeeper/actions/runs/37192153419), the
+preview deployment and free preflight passed; paid campaigns were skipped.
+Live wording after deployment remains pending. No further live Rewrite is
+needed before this change is deployed.
+
+## Dashboard runs after #161, 2026-10-04
+
+#161 merged as `d2546dfb` at 09:42:41 UTC; the Vercel and Railway production
+deployment records report success at 09:44 UTC. `/health/deep` was not checked.
+
+**#1041 exchange.** The owner answered the morning briefing's first item, the
+exchange, with "Go ahead for 1". `create_exchange` opened #1041-R2 and the
+revision-3 reply was sent: "Hi Chain Market, I've opened an exchange on order
+#1041 (#1041-R2) — the regular Selling Plans Ski Wax coming back and swapped for
+the Sample Selling Plans Ski Wax. Our team will follow up with the return
+shipping instructions for sending the regular one back." The ticket confirmation
+read "Set up exchange (return number #1041-R2). Sent reply to Chain. Send Chain a
+return label yourself; I can't create one." Asked in the dashboard chat whether
+it went through in Shopify, the agent answered from its action record that
+#1041-R2 is open with the Sample variant as the replacement and that no refund,
+charge, shipment or price difference happened. That is #152's corrected exchange
+explanation, observed. The Shopify admin was not opened (it asked for an account
+sign-in).
+
+**Merchant writes from the dashboard agent chat.** Claude typed plain merchant
+instructions on the dev store; outcomes are from `/api/agent/actions`.
+
+- "ok go ahead and refund chain for 1040": `create_refund` was called twice with
+  only `order_id` and `reason`, and both were `policy_block` "refund amount must
+  be specified and cannot exceed $40." No Shopify write. Only the planner binds
+  the full-refund quote (`quoteFullRefundForApproval`); a direct call reaches
+  static policy and the spend reservation without it.
+- "run 20% off everything til tuesday night": the agent asked for the date; the
+  operator prompt has no current time. After "it's sunday afternoon",
+  `create_flash_sale` (entire catalog, 56 hours) created automatic discount
+  `1541461770474` but recorded unknown. Shopify reports `endsAt`
+  `2026-10-07T02:38:28Z` in whole seconds, while the adapter sent and compared
+  millisecond timestamps. The chat showed only "This request needs review before
+  it can continue." `answer_operator_question` also returned "no question is
+  awaiting the merchant's answer."
+- "is the sale actually live?": `list_flash_sales` showed it running. "ok
+  actually end it": `end_flash_sale` succeeded.
+- "bump the sample ski wax up to $11", then "nvm put it back to what it was":
+  `set_variant_prices` succeeded both ways ($9.95, $11.00, $9.95). The revert
+  took the original price from the recorded change.
+- "send chain market a free replacement regular ski wax, theirs came damaged":
+  a $0 custom line was refused ("price must be greater than zero").
+  `create_shopify_order` then created #1043, total $24.95, payment pending, and
+  the agent told the merchant "It's set to pending so they aren't charged."
+- "actually make that 2 of them": both `edit_shopify_order` attempts were
+  refused (the variant is already on the order; adding and removing one variant
+  in a single edit is blocked). "nah forget that, just throw a sample one in
+  there too": `edit_shopify_order` added the Sample variant to #1043.
+
+Also observed: Reopen on closed thread `e5d8b070` (#1040) returned HTTP 500
+"Failed to update thread" with nothing shown in the dashboard, consistent with
+`threads_one_open_per_customer` while `1254749e` is open.
