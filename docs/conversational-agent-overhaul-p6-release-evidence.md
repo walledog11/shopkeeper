@@ -1446,4 +1446,55 @@ work rather than an established customer commitment. Capture feedback omits the
 outstanding obligation when the plan includes its completing label attachment.
 Focused local regressions verify this structural information reaches the model
 without provider execution. This does not yet prove improved live wording.
-No second rewrite, merchant script, customer resend or provider effect ran.
+No second rewrite, merchant script, customer resend or provider effect ran during
+that pre-deployment investigation.
+
+## PR #160 deployment and retained exchange rewrite, 2026-10-04
+
+[PR #160](https://github.com/walledog11/shopkeeper/pull/160) merged at
+08:06:43 UTC as `d3de6ea5992c0a8104d5957f5eb32cae9dcdafd7`; required PR CI
+passed. At 09:12:58 UTC gateway `e91ac874`, worker `2173b7d6` and dashboard
+`dpl_C1391zGQwcUQnDAcUXPywqUgxukB` served that revision
+(SUCCESS/SUCCESS/READY). This is deployment evidence, not a new
+production-readiness suite.
+
+Read-only preflight found task `95c15cdb` still unapproved at revision 2,
+proposal `65892637`, with no actions or customer replies. One ordinary dashboard
+Rewrite at 09:15:50 UTC created request `303ee444` on the same task at revision
+3. Valid proposal `58574870` committed at 09:15:59 UTC, superseding the old
+proposal. It contains the requested regular-to-Sample #1041 exchange and one
+exact-draft reply bound to that action's `return_name`. Reload recovered it
+with HTTP 200. The task used two further model calls and $0.070325401, bringing
+its totals to eight calls and $0.223790001.
+
+The draft still says “Our team will follow up with the return shipping
+instructions for sending the regular one back.” The controlled store profile,
+all stored KB articles, active preferences and retained thread were inspected:
+none supplies return instructions or a merchant commitment to send them.
+#160 therefore did not pass wording acceptance. The replacement phone send was
+mirrored as `128582e7` at 09:16:08 UTC. At 09:16:39 UTC the task remained
+waiting for approval, its action ledger was empty and there was no customer
+reply. Handset receipt is unobserved. No approval, customer resend or provider
+effect was performed.
+
+The candidate `fix/merchant-follow-up-notification` starts from the deployed
+revision. Source inspection found conflicting notification guidance: support
+required a reply after every action while the exchange contract asked it to
+confirm just the exchange and leave the missing label with the merchant. The
+support prompt now uses the same follow-up guidance as the offered schemas and
+capture feedback, allowing an action-only handoff when the customer's remaining
+request cannot be answered. Exchange guidance agrees with that path. This is
+an application of the existing decision K, not a merchant repair script.
+
+The existing capture completion hook is also consulted when the model ends its
+turn. A model-ended plan with an outstanding merchant follow-up is complete, so
+the terminal-tool reprompt does not push it into another customer reply.
+Merchant-directed turns retain their prior behavior. Existing-loop regressions
+exercise both paths without executing providers; they establish the runtime
+contract, not live wording quality. Live acceptance remains pending deployment.
+
+Agent typecheck/build, changed-file lint, structure/docs checks, the existing
+prompting, registry, loop and planner-evidence checks, and required workspace
+typechecks passed for `fix/merchant-follow-up-notification`. PR CI and live
+wording after deployment remain pending. No further live Rewrite is needed
+before this change is deployed.

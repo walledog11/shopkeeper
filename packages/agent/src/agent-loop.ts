@@ -128,14 +128,15 @@ export interface RunAgentLoopParams {
     readBlocks: readonly Anthropic.ToolUseBlock[];
     readStatus: ReadonlyMap<string, ToolStatus>;
   }) => string | null;
-  // capture: consulted after each turn's reads, with the plan as it would stand
-  // including this turn's proposals. True means the plan is already complete
+  // capture: consulted after each turn's reads and when the model ends its turn,
+  // with the plan including this turn's proposals. True means it is complete
   // without a reply or a question for the merchant: the loop ends there, and any
   // proposed alongside is not recorded.
   captureCompleteTurn?: (proposal: {
     rawToolCalls: readonly RawToolCall[];
     readBlocks: readonly Anthropic.ToolUseBlock[];
     readStatus: ReadonlyMap<string, ToolStatus>;
+    modelEndedTurn?: boolean;
   }) => boolean;
 }
 
@@ -356,7 +357,10 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
     if (response.stop_reason === "max_tokens") return done("max_tokens", finalText, i + 1);
 
     if (response.stop_reason === "end_turn" || toolUseBlocks.length === 0) {
-      if (mode === "capture" && params.captureReprompt && !reprompted) {
+      const complete = mode === "capture" && params.captureCompleteTurn?.({
+        rawToolCalls, readBlocks, readStatus, modelEndedTurn: true,
+      });
+      if (mode === "capture" && params.captureReprompt && !reprompted && !complete) {
         reprompted = true;
         messages.push({ role: "user", content: CAPTURE_TERMINAL_PROMPT });
         return iterate(i + 1);
