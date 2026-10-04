@@ -15,8 +15,10 @@ agent chat on the dev store in plain merchant wording: `end_flash_sale`, both
 `create_shopify_order` created #1043 but told the merchant a pending $24.95 order
 was free; `create_flash_sale` went live but recorded unknown; a full refund
 instructed from the chat was refused before dispatch; and the agent did not know
-the date. #162 fixes those four; its live re-checks are next. Details are in the
-release evidence, *Dashboard runs after #161*.
+the date. #162 (`1c5125a2`, deployed 19:25 UTC) fixed those four, and its
+re-checks passed except the free-replacement question, which #163 enforces.
+Details are in the release evidence, *Dashboard runs after #161* and
+*Re-checks after #162*.
 
 Earlier live results (#136–#160) are recorded beside their items below and in
 the release evidence. Telegram was removed from product and release scope on
@@ -59,13 +61,12 @@ exchange committed as #1041-R2. Phone revision remains unobserved.
 
 Decision L governs what still needs a live run. In order:
 
-1. **Deploy #162 and re-run its flows once** from the dashboard agent chat, in
-   plain merchant wording: a full refund by order number (expect a committed
-   refund within the limit in shop money); a storewide sale "until" a named day
-   (expect no question about the date, a question about the sale's name, and a
-   committed `create_flash_sale` titled with that name or a generic one), then
-   ended; and a free replacement (expect the agent to ask the merchant how to
-   handle it before creating anything, decision M).
+1. **Deploy #163 and ask for one free replacement** from the dashboard agent
+   chat; expect the agent to ask the merchant how to handle it before creating
+   anything (decision M). #162's other re-checks passed on 2026-10-04 (release
+   evidence, *Re-checks after #162*): a chat-instructed full refund committed on
+   #1040 within the limit in shop money, a storewide sale asked for its name,
+   needed no date question, committed as "20% off everything" and was ended.
 2. **Items 11–13:** make v2 the default for new tasks (one Railway variable,
    run by the owner), delete the old active runtime by responsibility (Gate E
    list), and write the final documentation. Item 9's rollback rehearsal is
@@ -968,7 +969,10 @@ and commits cite it.
   in it. Whenever an order is meant as a free replacement, the agent asks the
   merchant how to handle it before creating anything, because
   `create_shopify_order` leaves the full total pending and cannot make an order
-  free. Both are in #162.
+  free. The sale name shipped in #162 and was observed working. The
+  free-replacement rule shipped in #162 as a sentence in the tool description,
+  and the live check created #1044 without asking; #163 makes it a typed
+  `free_of_charge` field that static policy refuses, so the merchant is asked.
 
 ## Outside this plan: recorded, not scheduled
 
