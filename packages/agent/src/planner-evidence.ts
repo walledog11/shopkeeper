@@ -167,17 +167,21 @@ function searchedAndMissed(input: Pick<KbMissInput, "readBlocks" | "readStatusMa
 
 // A return Shopkeeper opens but cannot send a label for is the whole plan once
 // the agent has nothing from the store on how items go back: the knowledge base
-// came up empty, or it is about to ask the merchant. The merchant is told to
+// came up empty, it is about to ask the merchant, or the model deliberately ends
+// with the action alone. The merchant is told to
 // send the label instead, so the planning loop ends the turn at the return. A
 // plan the merchant directed (their instruction, answer or revision) is exempt:
 // what they typed may be exactly the reply they want sent.
 export function completesAtMerchantFollowUp(
-  input: Pick<KbMissInput, "rawToolCalls" | "readBlocks" | "readStatusMap"> & { merchantDirected: boolean },
+  input: Pick<KbMissInput, "rawToolCalls" | "readBlocks" | "readStatusMap"> & {
+    merchantDirected: boolean;
+    modelEndedTurn?: boolean;
+  },
 ): boolean {
   if (input.merchantDirected) return false;
   const names = input.rawToolCalls.map((call) => call.name);
   if (outstandingMerchantFollowUps(names).length === 0) return false;
-  return searchedAndMissed(input) || names.includes("ask_operator");
+  return input.modelEndedTurn === true || searchedAndMissed(input) || names.includes("ask_operator");
 }
 
 // A customer reply drafted after the knowledge base came up empty. The planning

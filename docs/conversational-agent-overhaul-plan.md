@@ -1,12 +1,13 @@
 # Conversational agent overhaul plan
 
-Status, 2026-10-04: #157, #158 and #159 are merged; dashboard, gateway and
-worker serve `ab75c063`. All required #159 PR CI passed. One retained-request
-Rewrite on that deployment removed the replacement-shipment promise, but the
-draft still promises a follow-up with return instructions. Item 1 remains open;
-`fix/merchant-follow-up-facts` exposes the label obligation as unscheduled
-merchant work to the model. The new card is unapproved and no exchange action
-or customer reply has run.
+Status, 2026-10-04: #157–#160 are merged; dashboard, gateway and worker serve
+`d3de6ea5`. Required #160 CI passed. One retained-request Rewrite on that
+deployment still promises return shipping instructions; exposing the unscheduled
+merchant obligation did not resolve the wording defect. Item 1 remains open.
+`fix/merchant-follow-up-notification` aligns the support notification rule
+with the merchant handoff and preserves a model-ended action-only plan.
+Proposal `58574870` at task revision 3 is unapproved; no exchange action or
+customer reply has run.
 The #1041 exchange now scopes correctly, survives reload and has a successfully
 sent phone card, received by the owner. The exchange observation is incomplete:
 its draft contains unestablished shipping promises, and phone continuation,
@@ -109,9 +110,13 @@ for a failure, a relevant code change or an unresolved concern. In order:
    the scripted revision. #159 is now deployed on `ab75c063`; one Rewrite retained
    the same task at revision 2 and sent replacement proposal `65892637`. Shipment
    after receipt is no longer promised, but a return-instructions follow-up still
-   is. `fix/merchant-follow-up-facts` carries the unscheduled label obligation into
-   the model contract. Review, CI and deploy that candidate before another
-   affected-flow observation. No action or customer reply has run. Finish the
+   is. #160 is deployed on `d3de6ea5`; one Rewrite retained the same task at
+   revision 3, proposal `58574870`, and the return-instructions promise remains.
+   Reload and replacement phone send passed again; no action or customer reply
+   has run. `fix/merchant-follow-up-notification` removes the conflicting
+   mandatory-reply instruction and honors an action-only merchant handoff when
+   the model ends its turn. Review, CI and deployment precede one affected-flow
+   observation; do not repeat the Rewrite before deployment. Finish the
    source correction, then observe ordinary merchant approval and verify Shopify's receipt
    and customer delivery. Use a simple, natural edit if a revision is exercised;
    do not require the merchant to provide internal constraints to repair the draft.
@@ -145,8 +150,8 @@ for a failure, a relevant code change or an unresolved concern. In order:
 iMessage is the main channel. Telegram is excluded from product and release
 acceptance; do not build or test it.
 
-**Workspace handoff:** main, dashboard, gateway and worker are `ab75c063`
-(#159). The shared root checkout
+**Workspace handoff:** main, dashboard, gateway and worker are `d3de6ea5`
+(#160). The shared root checkout
 still has HEAD `606da169` and uncommitted phone, marketing and documentation
 edits, this document included. Preserve them, start code changes from an isolated
 worktree on `origin/master`, and do not reset the root or mistake its older files
@@ -789,7 +794,8 @@ sent at 06:48:49 UTC. At 06:51:59 UTC there were no actions or customer replies;
 handset receipt and approval remain unobserved. Do not ask the merchant to repair
 this wording or treat the partial improvement as completed acceptance.
 
-`fix/merchant-follow-up-facts`, based on `ab75c063`, carries the registry's
+[PR #160](https://github.com/walledog11/shopkeeper/pull/160), merged as
+`d3de6ea5`, carries the registry's
 `send_return_label` obligation into the offered tool descriptions and captured
 planning results as required, unscheduled merchant work. The approval-card
 reminder is not evidence of a customer commitment. A planned label attachment
@@ -797,9 +803,31 @@ satisfies the obligation, while store policy or an explicit merchant instruction
 can still establish a promise. This adds no prose matcher, knowledge-base lookup
 or refusal of merchant-authored replies. Agent typecheck and build, changed-file lint and
 existing loop, registry, planner and discovery checks passed, including focused
-regressions for the newly exposed contract. Review, CI and deployment
-precede one affected-flow observation. No further live rewrite is needed before
-that change is deployed.
+regressions for the newly exposed contract. Required CI passed; the deployed
+observation below did not resolve the remaining promise.
+
+**Exchange merchant handoff — #160 deployed; wording still fails.** At
+09:12:58 UTC, dashboard, gateway and worker served `d3de6ea5`. One ordinary
+Rewrite at 09:15:50 UTC continued task `95c15cdb` at revision 3 with proposal
+`58574870`. It still contains only the requested exchange and one receipt-bound
+reply, but says “Our team will follow up with the return shipping instructions
+for sending the regular one back.” Store policy, active preferences and the
+thread contain no instructions or merchant commitment establishing that promise.
+Reload returned HTTP 200; the replacement phone send was mirrored as `128582e7`
+at 09:16:08 UTC. At 09:16:39 UTC there were no actions or customer replies;
+handset receipt and approval remain unobserved. This is failed wording
+acceptance, not a completed observation.
+
+The candidate `fix/merchant-follow-up-notification`, based on `d3de6ea5`,
+removes the support prompt's unconditional requirement to notify after every
+action. Shared follow-up guidance leaves the reply with the merchant when the
+requested return instructions are unavailable; established policy and
+merchant-directed replies remain available. The existing completion hook also
+recognizes a model-ended action-only handoff, preventing the terminal-tool
+reprompt from forcing another reply. The loop does not strip an authored reply
+or classify its wording. Local checks and live acceptance are recorded in the
+release evidence; this candidate must be reviewed and deployed before another
+Rewrite. The prior scoping, reload and phone-delivery evidence remains valid.
 
 ### Release and runtime retirement
 

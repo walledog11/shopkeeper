@@ -332,6 +332,7 @@ export async function planAgent(
   const completeAtMerchantFollowUp: RunAgentLoopParams["captureCompleteTurn"] = (proposal) => (
     completesAtMerchantFollowUp({
       merchantDirected: options?.merchantInstruction === true,
+      modelEndedTurn: proposal.modelEndedTurn,
       rawToolCalls: proposal.rawToolCalls,
       readBlocks: proposal.readBlocks,
       readStatusMap: proposal.readStatus,

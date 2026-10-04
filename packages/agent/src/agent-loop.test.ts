@@ -4,6 +4,7 @@ import { runAgentLoop, type ToolExecMode } from "./agent-loop.js";
 import { SONNET_MODEL } from "./ai/index.js";
 import { createModelUsageMetrics } from "./usage.js";
 import type { BaseAgentContext } from "./agent-context.js";
+import { completesAtMerchantFollowUp } from "./planner-evidence.js";
 
 const { mockCreate, mockRecordSpend } = vi.hoisted(() => ({
   mockCreate: vi.fn(),
@@ -307,6 +308,34 @@ describe("runAgentLoop capture reply refusal", () => {
 });
 
 describe("runAgentLoop capture merchant follow-ups", () => {
+  it.each([false, true])("honors a model-ended merchant handoff only for customer planning (merchant directed: %s)", async (merchantDirected) => {
+    mockCreate
+      .mockResolvedValueOnce({
+        stop_reason: "tool_use",
+        content: [{ type: "tool_use", id: "tu_exchange", name: "create_exchange", input: { order_id: "1041", variant_id: "501", exchange_variant_id: "502" } }],
+        usage: { input_tokens: 1, output_tokens: 1 },
+      })
+      .mockResolvedValueOnce(endTurn("The merchant has the remaining return shipping work.", { input_tokens: 1, output_tokens: 1 }))
+      .mockResolvedValueOnce({
+        stop_reason: "tool_use",
+        content: [{ type: "tool_use", id: "tu_reply", name: "send_reply", input: { text: "Merchant-directed reply." } }],
+        usage: { input_tokens: 1, output_tokens: 1 },
+      });
+    const result = await runAgentLoop({
+      ctx, mode: "capture", messages: [{ role: "user", content: "go" }], systemPromptBlocks: [],
+      tools: [], model: "test-model", maxIterations: 10, maxTokensPerCall: 4096,
+      usageTotals: createModelUsageMetrics(), captureReprompt: true,
+      captureCompleteTurn: proposal => completesAtMerchantFollowUp({
+        merchantDirected, modelEndedTurn: proposal.modelEndedTurn,
+        rawToolCalls: proposal.rawToolCalls, readBlocks: proposal.readBlocks, readStatusMap: proposal.readStatus,
+      }),
+    });
+    expect(result.reprompted).toBe(merchantDirected);
+    expect(result.rawToolCalls.map(call => call.name)).toEqual(merchantDirected
+      ? ["create_exchange", "send_reply"] : ["create_exchange"]);
+    expect(result.stop).toBe(merchantDirected ? "terminal_captured" : "end_turn");
+  });
+
   it.each([false, true])("reports only outstanding label work while recording proposals without execution (label supplied: %s)", async (labelSupplied) => {
     const proposed = [
       { type: "tool_use", id: "tu_exchange", name: "create_exchange", input: { order_id: "1041", variant_id: "501", exchange_variant_id: "502" } },
