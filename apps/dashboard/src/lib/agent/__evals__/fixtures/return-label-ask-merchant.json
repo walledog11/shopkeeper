@@ -1,7 +1,7 @@
 {
   "id": "return-label-ask-merchant",
-  "description": "Customer wants to return a delivered item and asks for a prepaid shipping label. The agent cannot generate labels - it must open the return AND ask the merchant for a label URL via ask_operator (classifying as needs_merchant_input), not promise a label it doesn't have, reply without asking, or escalate. Advisory: pairing the return with the ask is a novel two-step judgment; tracked as a quality signal.",
-  "whyModelNeeded": "The model must decompose one customer request into an actionable return plus a focused merchant question for the missing label.",
+  "description": "Customer wants to return a delivered item and asks for a prepaid shipping label. Shopkeeper cannot create return labels, so the agent opens the return and leaves the label to the merchant, who is told to send one: it must not ask the merchant for a label URL, attach a label it does not have, refund, or escalate. Advisory: a model judgment tracked as a quality signal.",
+  "whyModelNeeded": "The model must recognise the return as the actionable part of the request without inventing a way to supply the label.",
   "advisory": true,
   "setup": {
     "classifierIntents": {
@@ -90,15 +90,15 @@
   "instruction": "Set up the customer's return and get them a shipping label.",
   "expectedPlan": {
     "mustCallTools": [
-      "create_return",
-      "ask_operator"
+      "create_return"
     ],
     "mustNotCallTools": [
+      "ask_operator",
       "attach_return_label",
       "create_refund",
       "escalate_to_human"
     ],
-    "mustClassifyAs": "needs_merchant_input"
+    "mustClassifyAs": "needs_review"
   },
   "suite": "extended"
 }

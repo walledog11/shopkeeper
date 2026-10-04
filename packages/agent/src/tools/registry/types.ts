@@ -384,6 +384,13 @@ export interface ToolPolicyMetadata {
 
 export type ToolAvailability = "active" | "retired";
 
+/**
+ * Work a tool leaves for the merchant to do themselves, because Shopkeeper has no
+ * capability for it. `send_return_label`: a return needs a shipping label, and
+ * Shopify does not sell return labels to apps.
+ */
+export type MerchantFollowUp = "send_return_label";
+
 export type ToolParser<TInput> = (input: unknown) => TInput;
 
 export interface AgentToolDefinition<TInput = unknown, TName extends string = string> {
@@ -412,6 +419,10 @@ export interface AgentToolDefinition<TInput = unknown, TName extends string = st
    * remain compatible while their result boundary is still in service.
    */
   requiredReceiptVersion: 1 | null;
+  /** What this tool leaves for the merchant to do themselves. */
+  merchantFollowUp: MerchantFollowUp | null;
+  /** The merchant follow-up this tool does itself, such as attaching a label they sent. */
+  completesMerchantFollowUp: MerchantFollowUp | null;
   execute(
     input: TInput,
     ctx: BaseAgentContext,

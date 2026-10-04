@@ -138,6 +138,8 @@ export const POST = withOrgRoute(
         ctx.agentTaskId = continuation.taskId;
       }
       const drafted = await planAgent(ctx, planningInstruction, settings, {
+        // The merchant typed this answer; it directs the plan.
+        merchantInstruction: true,
         ...(usesExactDraftProposals(continuation?.runtimeVersion) ? { exactDraftProposal: true } : {}),
         ...(continuation ? { runtimeVersion: continuation.runtimeVersion } : {}),
       });

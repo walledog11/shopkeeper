@@ -1,11 +1,14 @@
 # Conversational agent overhaul plan
 
-Status, 2026-10-03: #153 is merged; dashboard, gateway and worker serve
-`3e0f8cf1`, with all required PR CI and production readiness passed. #152
+Status, 2026-10-03: #154 is merged; dashboard, gateway and worker serve
+`6dffcb3c`, with all required PR CI and production readiness passed. #152
 corrects the exchange text behind the #1039 financial/capability claims and
 stops sending Shopify's `OTHER` return reason; #153 stops a request already
-handed to the merchant from being merged into later messages on the thread. One
-live return/exchange email is owed for both (8h). Live: typed phone outcomes
+handed to the merchant from being merged into later messages on the thread; #154
+lets the knowledge base report that it has nothing, so a policy question it cannot
+answer goes to the merchant instead of a guessed reply; its question path was
+observed live, and the answer-to-draft step is owed (8h). #153 needs a message on
+an escalated open thread. Live: typed phone outcomes
 (#137), durable phone
 instructions and dashboard Stop (#138), durable ticket-composer planning (#140),
 iMessage scope and wording (#141, #142), the lean order-status read (#144),
@@ -90,7 +93,10 @@ for a failure, a relevant code change or an unresolved concern. In order:
    on an escalated thread* under 8h), fixed in #153 and deployed on `3e0f8cf1`,
    but not yet exercised. The repeat email landed on a new thread and was answered
    from nothing because the knowledge-base guard could not fire (*Return email
-   answered from nothing* under 8h), fixed on `fix/kb-relevance-grounding`; after
+   answered from nothing* under 8h), fixed in #154 and deployed on `6dffcb3c`.
+   Its live run asked the merchant for a label URL; decision K replaces that with
+   opening the return and telling the merchant to send the label (*Return label
+   left to the merchant* under 8h), on `fix/return-label-merchant-followup`. After
    it deploys, ask the same question on a fresh thread. Keep over-limit approval
    refusal separate from the completed handoff wording check.
 2. **Fill missing live evidence:** group unverified effects and recovery paths
@@ -102,8 +108,8 @@ for a failure, a relevant code change or an unresolved concern. In order:
 iMessage is the main channel. Telegram is excluded from product and release
 acceptance; do not build or test it.
 
-**Workspace handoff:** main, dashboard, gateway and worker are `3e0f8cf1`
-(#153). The shared root checkout
+**Workspace handoff:** main, dashboard, gateway and worker are `6dffcb3c`
+(#154). The shared root checkout
 still has HEAD `606da169` and uncommitted phone, marketing and documentation
 edits, this document included. Preserve them, start code changes from an isolated
 worktree on `origin/master`, and do not reset the root or mistake its older files
@@ -589,8 +595,8 @@ deployed it, and `/health/deep` reported database, Redis, worker and queues ok.
 Owed: one more customer email on that thread, expecting a #1042 return proposal
 and nothing about #1038.
 
-**Return email answered from nothing (8h), 2026-10-03 — fix on
-`fix/kb-relevance-grounding`.** After #153 deployed, `e3759775` was closed from
+**Return email answered from nothing (8h), 2026-10-03 — deployed in #154,
+question path observed.** After #153 deployed, `e3759775` was closed from
 the dashboard (20:28:16 UTC) and the same #1042 question opened thread
 `b8d08c4a`, so #153 was not exercised. That card proposed `create_return` with a
 customer email promising "Once the merchant confirms, I'll follow up with a return
@@ -612,9 +618,60 @@ action when the aligned classifier says the customer asked a policy question. No
 prompt text changed. A real-API probe on synthetic articles kept only the returns
 page and found nothing in a privacy page alone. Agent typecheck, lint and the
 full agent unit suite passed; one boundary test covers the changed predicate and
-fails with the old scope. Owed after deployment: the same question on a fresh
-thread produces the return and a question to the merchant, not a draft, and the
-answer drafts the reply. The pending `b8d08c4a` card must not be approved.
+fails with the old scope. All required PR CI, including the free eval preflight,
+passed. PR #154 merged as `6dffcb3c` at 21:20:02 UTC on 2026-10-03; dashboard,
+gateway and worker deployed it, and `/health/deep` reported database, Redis,
+worker and queues ok.
+
+Observed on `6dffcb3c`: the same question, sent fresh at 21:34 UTC, opened thread
+`d8c9730b`. `search_kb("return process instructions")` returned the relevance
+check's own decision, "No knowledge base article answers that query" (not its
+failure message), and recorded no citations. The plan is `create_return` and
+`ask_operator` with no customer message; task `44489685` waits for the member's
+answer, and one card asked for a return label URL, saying the reply would be
+drafted after. Stored rows do not show whether the in-turn refusal fired or the
+model asked unprompted after the empty search. Owed: the answer drafts the reply.
+The old `b8d08c4a` plan is still parked beside the question, so a bare "yes"
+could approve its label-promise draft; close that thread before answering.
+
+**Return label left to the merchant (8h, decision K), 2026-10-03 — fix on
+`fix/return-label-merchant-followup`.** The owner rejected the label-URL question:
+a merchant on a phone has no label to hand over, and the agent should open the
+return and tell the merchant to send the label. Shopify sells return labels only
+in the admin (US locations); an app must buy one from a label provider and attach
+it with `reverseDeliveryCreateWithShipping`, which `attach_return_label` already
+does. No provider is integrated, and buying postage would be a new paid
+capability, so none was added.
+
+`create_return` and `create_exchange` now declare a typed `merchantFollowUp`
+(`send_return_label`) and `attach_return_label` declares that it completes it;
+`outstandingMerchantFollowUps` is the one owner of what a plan leaves to the
+merchant. The planning loop takes a `captureCompleteTurn` hook:
+`completesAtMerchantFollowUp` ends the turn at such a return once the knowledge
+base came up empty or the model proposes a merchant question, and drops a reply
+or question proposed beside it. A plan the merchant directed is exempt, keyed on
+the existing typed `merchantInstruction` planner option, which the composer
+already set and the merchant answer and revision paths (dashboard answer route,
+`operator-answer-replan`) now set too; otherwise a revision asking for a reply
+would lose it. #155 removed the label-URL hint for merchant answers, so a label
+the merchant supplies is attached through `attach_return_label`'s own
+description. Routing no longer counts the unanswered policy
+question as a gap when the plan leaves the follow-up to the merchant. Both
+approval cards say "I can't create return labels, so you'll need to send Chain
+one yourself.", and the confirmation adds "Send Chain a return label yourself;
+I can't create one." The support prompt's label-URL bullet and the
+`attach_return_label` description's ask_operator clause were deleted; fixtures
+`return-label-ask-merchant` and `create-return-fulfilled-order` now expect the
+return without a merchant question or a required reply.
+
+Typecheck of every workspace, lint, the full agent unit suite, the gateway plan
+card and return checks, the dashboard card and eval unit checks, and the free eval
+preflight's fixture loading passed. Two tests cover what a live email cannot
+reliably reach (the trigger matrix, and the loop dropping the question); both
+fail under their mutations. A render of the real formatters gave the card and
+confirmation text above. Owed: the live email produces that card, and approving
+it opens the return with that confirmation. Customer-requested returns with no
+KB search may still carry a drafted reply, which the merchant approves or not.
 
 ### Release and runtime retirement
 
@@ -793,6 +850,13 @@ and commits cite it.
   broad test audits, deletion campaigns and routine full-suite runs do not
   precede implementation. Use proportional local checks and the existing
   aggregate release/CI check. Unverified conversational behavior remains open.
+- **K. Shopkeeper opens a return and leaves the label to the merchant**
+  (2026-10-03). Shopify does not sell return labels to apps and no label
+  provider is integrated, so the agent never asks the merchant for a label URL
+  or promises a label it cannot send. It proposes the return; the approval card
+  and confirmation tell the merchant to send the label themselves. A label the
+  merchant does supply can still be attached. Buying labels through a provider
+  would be a new paid capability and needs its own decision.
 
 ## Outside this plan: recorded, not scheduled
 

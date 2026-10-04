@@ -11,6 +11,10 @@ import { formatBlockedTicketLine } from '../../../maintenance/digest-briefing/ti
 import type { ProposalCommunication } from '@shopkeeper/agent/types';
 import { displayApprovedDraft } from '@shopkeeper/agent/reply-placeholders';
 import { lineItemWriteSentence } from '@shopkeeper/agent/line-item-display';
+import {
+  merchantFollowUpBeforeApproval,
+  outstandingMerchantFollowUps,
+} from '@shopkeeper/agent/merchant-follow-up';
 import type { AgentPlan, PlanStep } from '../../../types.js';
 import { firstDraftExcerpt } from '../../operator/operator-ledger.js';
 import { requestDisplayHasContext, type RequestDisplay } from '../../shared/request-display.js';
@@ -254,6 +258,12 @@ export function formatOperatorPlanMessage(
     });
     lines.push('', "Here's what I'd do:", ...stepLines);
     if (draftBody) lines.push('', ...draftLines(false, 'The reply:'));
+  }
+
+  // What approving still leaves to them, said before they approve it.
+  const followUps = outstandingMerchantFollowUps(approvableSteps.flatMap((step) => (step.tool ? [step.tool] : [])));
+  if (followUps.length > 0) {
+    lines.push('', ...followUps.map((followUp) => merchantFollowUpBeforeApproval(followUp, personObject(person))));
   }
 
   // The reply goes out and the thread still lands on them. Without this the

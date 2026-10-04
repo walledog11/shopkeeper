@@ -328,6 +328,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     capabilities: ["shopify"],
     requiredScopes: ["write_returns"],
     requiredReceiptVersion: 1,
+    merchantFollowUp: "send_return_label",
     label: "Opened return",
     planStepLabel: "Open return",
     execute: async (input: CreateReturnInput, ctx, _settings, deps) => {
@@ -355,6 +356,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     capabilities: ["shopify"],
     requiredScopes: ["read_products", "write_returns"],
     requiredReceiptVersion: 1,
+    merchantFollowUp: "send_return_label",
     label: "Set up exchange",
     planStepLabel: "Set up exchange",
     execute: async (input: CreateExchangeInput, ctx, _settings, deps) => {
@@ -419,7 +421,7 @@ export const ORDER_TOOL_DEFINITIONS = [
   defineTool({
     name: "attach_return_label",
     description:
-      "Attach a return shipping label (a URL to the label file, e.g. a PDF) to the open return on a Shopify order, creating the reverse delivery. Use this after the merchant provides a label URL - typically as their answer to an ask_operator question. Requires an open return on the order: open one first with create_return or create_exchange. After attaching, your reply to the customer MUST include the label link so they can ship the items back.",
+      "Attach a return shipping label (a URL to the label file, e.g. a PDF) to the open return on a Shopify order, creating the reverse delivery. Use this only when the merchant provides a label URL. Requires an open return on the order: open one first with create_return or create_exchange. After attaching, your reply to the customer MUST include the label link so they can ship the items back.",
     fields: {
       order_id: stringArg("Shopify order ID (numeric) whose open return the label belongs to.", { required: true }),
       label_url: stringArg("Direct URL to the label file provided by the merchant.", { required: true }),
@@ -430,6 +432,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     capabilities: ["shopify"],
     requiredScopes: ["write_returns"],
     requiredReceiptVersion: 1,
+    completesMerchantFollowUp: "send_return_label",
     label: "Attached return label",
     planStepLabel: "Attach return label",
     execute: async (input: AttachReturnLabelInput, ctx, _settings, deps) => {

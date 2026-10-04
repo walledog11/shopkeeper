@@ -1,7 +1,14 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { ToolCategory } from "../../types.js";
 import type { ShopifyOAuthScope } from "../../shopify/integration-health.js";
-import type { AgentToolDefinition, ToolCapability, ToolGroup, ToolParser, ToolPolicyMetadata } from "./types.js";
+import type {
+  AgentToolDefinition,
+  MerchantFollowUp,
+  ToolCapability,
+  ToolGroup,
+  ToolParser,
+  ToolPolicyMetadata,
+} from "./types.js";
 
 type FieldDefinition =
   | {
@@ -52,6 +59,8 @@ interface DefineToolOptions<TInput, TName extends string> {
   requiredScopes?: readonly ShopifyOAuthScope[];
   /** Versioned outcome receipt required on identity-bearing executions. */
   requiredReceiptVersion?: 1;
+  merchantFollowUp?: MerchantFollowUp;
+  completesMerchantFollowUp?: MerchantFollowUp;
   policy?: Partial<Omit<ToolPolicyMetadata, "categoryPermission">> & {
     categoryPermission?: boolean;
   };
@@ -223,6 +232,8 @@ export function defineTool<const TName extends string, TInput>(
     availability: definition.availability ?? "active",
     requiredScopes: definition.requiredScopes ?? [],
     requiredReceiptVersion: definition.requiredReceiptVersion ?? null,
+    merchantFollowUp: definition.merchantFollowUp ?? null,
+    completesMerchantFollowUp: definition.completesMerchantFollowUp ?? null,
     execute: definition.execute,
   };
 }

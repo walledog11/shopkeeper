@@ -2,6 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import type { AgentContext } from "./agent-context.js";
 import { customerMessageTexts, hasActionableMutativeIntent } from "./intent.js";
 import { isMerchantAnswerPlanningInstruction } from "./kb-learned.js";
+import { outstandingMerchantFollowUps } from "./merchant-follow-up.js";
 import { merchantGapQuestion } from "./plan-preview.js";
 import {
   hasAmbiguousCustomerSearchResult,
@@ -158,6 +159,27 @@ function missedKbQueries(input: Pick<KbMissInput, "readBlocks" | "readStatusMap"
     .filter((query): query is string => typeof query === "string");
 }
 
+function searchedAndMissed(input: Pick<KbMissInput, "readBlocks" | "readStatusMap">): boolean {
+  return input.readBlocks.some(
+    (block) => block.name === "search_kb" && input.readStatusMap.get(block.id) === "not_found",
+  );
+}
+
+// A return Shopkeeper opens but cannot send a label for is the whole plan once
+// the agent has nothing from the store on how items go back: the knowledge base
+// came up empty, or it is about to ask the merchant. The merchant is told to
+// send the label instead, so the planning loop ends the turn at the return. A
+// plan the merchant directed (their instruction, answer or revision) is exempt:
+// what they typed may be exactly the reply they want sent.
+export function completesAtMerchantFollowUp(
+  input: Pick<KbMissInput, "rawToolCalls" | "readBlocks" | "readStatusMap"> & { merchantDirected: boolean },
+): boolean {
+  if (input.merchantDirected) return false;
+  const names = input.rawToolCalls.map((call) => call.name);
+  if (outstandingMerchantFollowUps(names).length === 0) return false;
+  return searchedAndMissed(input) || names.includes("ask_operator");
+}
+
 // A customer reply drafted after the knowledge base came up empty. The planning
 // loop refuses the reply while the turn is still open so the model asks the
 // merchant instead, and routing treats a reply that got through anyway as a gap.
@@ -166,10 +188,7 @@ function missedKbQueries(input: Pick<KbMissInput, "readBlocks" | "readStatusMap"
 // tell anyone how this store takes items back.
 export function kbMissNeedsMerchant(input: KbMissInput): boolean {
   if (isMerchantAnswerPlanningInstruction(input.instruction)) return false;
-  const searchedAndMissed = input.readBlocks.some(
-    (block) => block.name === "search_kb" && input.readStatusMap.get(block.id) === "not_found",
-  );
-  if (!searchedAndMissed) return false;
+  if (!searchedAndMissed(input)) return false;
   const shape = planShape(input.rawToolCalls);
   const routineOrderStatus = Boolean(
     input.ctx.classifierSignals?.intents.order_status
@@ -216,6 +235,9 @@ export function buildPlanRoutingEvidence(
     && !shape.hasSendReply
     && !shape.hasAskOperator
     && !shape.hasEscalation
+    // A plan that leaves the rest to the merchant, such as sending a return
+    // label, is answered by that follow-up rather than missing an answer.
+    && outstandingMerchantFollowUps(input.rawToolCalls.map((call) => call.name)).length === 0
   ) {
     codes.push("policy_gap");
   }

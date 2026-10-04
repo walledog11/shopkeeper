@@ -305,3 +305,33 @@ describe("runAgentLoop capture reply refusal", () => {
     expect(mockCreate).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("runAgentLoop capture turn completion", () => {
+  it("ends the turn at a complete plan and leaves out the question proposed beside it", async () => {
+    mockCreate.mockResolvedValueOnce({
+      stop_reason: "tool_use",
+      content: [
+        { type: "tool_use", id: "tu_return", name: "create_return", input: { order_id: "1042" } },
+        { type: "tool_use", id: "tu_ask", name: "ask_operator", input: { question: "Can you send a label URL?" } },
+      ],
+      usage: { input_tokens: 1, output_tokens: 1 },
+    });
+
+    const result = await runAgentLoop({
+      ctx,
+      mode: "capture",
+      messages: [{ role: "user", content: "go" }],
+      systemPromptBlocks: [],
+      tools: [],
+      model: "test-model",
+      maxIterations: 10,
+      maxTokensPerCall: 4096,
+      usageTotals: createModelUsageMetrics(),
+      captureCompleteTurn: ({ rawToolCalls }) => rawToolCalls.some((call) => call.name === "create_return"),
+    });
+
+    expect(result.stop).toBe("terminal_captured");
+    expect(result.rawToolCalls.map((call) => call.name)).toEqual(["create_return"]);
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+  });
+});

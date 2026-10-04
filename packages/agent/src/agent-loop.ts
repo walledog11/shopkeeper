@@ -118,7 +118,20 @@ export interface RunAgentLoopParams {
     readBlocks: readonly Anthropic.ToolUseBlock[];
     readStatus: ReadonlyMap<string, ToolStatus>;
   }) => string | null;
+  // capture: consulted after each turn's reads, with the plan as it would stand
+  // including this turn's proposals. True means the plan is already complete
+  // without a reply or a question for the merchant: the loop ends there, and any
+  // proposed alongside is not recorded.
+  captureCompleteTurn?: (proposal: {
+    rawToolCalls: readonly RawToolCall[];
+    readBlocks: readonly Anthropic.ToolUseBlock[];
+    readStatus: ReadonlyMap<string, ToolStatus>;
+  }) => boolean;
 }
+
+// The terminal tools that answer someone. Escalation is not one: it hands the
+// thread over, which a complete plan can still need.
+const CONVERSATION_TERMINAL_NAMES = new Set(["send_reply", "send_email", "ask_operator"]);
 
 // Executes reads for real (preserving the structured ToolStatus that plan
 // signals + routing depend on) and records every emitted tool call as a plan
@@ -137,6 +150,7 @@ async function handleCaptureBlocks(
     captureStopToolNames?: readonly string[];
     captureDiscovery?: RunAgentLoopParams["captureDiscovery"];
     captureRefuseReply?: RunAgentLoopParams["captureRefuseReply"];
+    captureCompleteTurn?: RunAgentLoopParams["captureCompleteTurn"];
     replyRefused: boolean;
     activeToolNames: ReadonlySet<string>;
   },
@@ -176,8 +190,17 @@ async function handleCaptureBlocks(
     for (const [id, status] of executed.readStatusMap) state.readStatus.set(id, status);
   }
 
+  const completesTurn = Boolean(state.captureCompleteTurn?.({
+    rawToolCalls: [
+      ...state.rawToolCalls,
+      ...planBlocks.map((b) => ({ id: b.id, name: b.name, input: b.input })),
+    ],
+    readBlocks: state.readBlocks,
+    readStatus: state.readStatus,
+  }));
+
   const refusals = new Map<string, string>();
-  if (state.captureRefuseReply && !state.replyRefused && planBlocks.some((b) => b.name === "send_reply")) {
+  if (!completesTurn && state.captureRefuseReply && !state.replyRefused && planBlocks.some((b) => b.name === "send_reply")) {
     const refusal = state.captureRefuseReply({
       rawToolCalls: [
         ...state.rawToolCalls,
@@ -190,13 +213,15 @@ async function handleCaptureBlocks(
       for (const b of planBlocks) if (b.name === "send_reply") refusals.set(b.id, refusal);
     }
   }
-  const proposedBlocks = planBlocks.filter((b) => !refusals.has(b.id));
+  const proposedBlocks = planBlocks.filter((b) => (
+    !refusals.has(b.id) && !(completesTurn && CONVERSATION_TERMINAL_NAMES.has(b.name))
+  ));
 
   for (const b of proposedBlocks) {
     state.rawToolCalls.push({ id: b.id, name: b.name, input: b.input });
   }
 
-  const terminalReached = proposedBlocks.some((b) => (
+  const terminalReached = completesTurn || proposedBlocks.some((b) => (
     TERMINAL_TOOL_NAMES.has(b.name)
     || state.captureStopToolNames?.includes(b.name)
   ));
@@ -347,6 +372,7 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
         captureStopToolNames: params.captureStopToolNames,
         captureDiscovery: params.captureDiscovery,
         captureRefuseReply: params.captureRefuseReply,
+        captureCompleteTurn: params.captureCompleteTurn,
         replyRefused,
         activeToolNames: new Set(tools.map((tool) => tool.name)),
       });

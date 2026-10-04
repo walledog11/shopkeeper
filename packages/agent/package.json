@@ -26,6 +26,10 @@
       "types": "./dist/line-item-display.d.ts",
       "default": "./dist/line-item-display.js"
     },
+    "./merchant-follow-up": {
+      "types": "./dist/merchant-follow-up.d.ts",
+      "default": "./dist/merchant-follow-up.js"
+    },
     "./context": {
       "types": "./dist/agent-context.d.ts",
       "default": "./dist/agent-context.js"
