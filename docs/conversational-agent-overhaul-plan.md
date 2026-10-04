@@ -16,7 +16,7 @@ agent chat on the dev store in plain merchant wording: `end_flash_sale`, both
 was free; `create_flash_sale` went live but recorded unknown; a full refund
 instructed from the chat was refused before dispatch; and the agent did not know
 the date. #162 (`1c5125a2`, deployed 19:25 UTC) fixed those four, and its
-re-checks passed except the free-replacement question, which #163 enforces.
+re-checks passed except the free-replacement question, which #164 enforces.
 Details are in the release evidence, *Dashboard runs after #161* and
 *Re-checks after #162*.
 
@@ -61,7 +61,7 @@ exchange committed as #1041-R2. Phone revision remains unobserved.
 
 Decision L governs what still needs a live run. In order:
 
-1. **Deploy #163 and ask for one free replacement** from the dashboard agent
+1. **Deploy #164 and ask for one free replacement** from the dashboard agent
    chat; expect the agent to ask the merchant how to handle it before creating
    anything (decision M). #162's other re-checks passed on 2026-10-04 (release
    evidence, *Re-checks after #162*): a chat-instructed full refund committed on
@@ -971,8 +971,11 @@ and commits cite it.
   `create_shopify_order` leaves the full total pending and cannot make an order
   free. The sale name shipped in #162 and was observed working. The
   free-replacement rule shipped in #162 as a sentence in the tool description,
-  and the live check created #1044 without asking; #163 makes it a typed
-  `free_of_charge` field that static policy refuses, so the merchant is asked.
+  and the live check created #1044 without asking. #163's optional
+  `free_of_charge` flag also failed live: #1045 was created and the flag was
+  never set. #164 makes the model state who pays on every order (`payment`,
+  required in the schema the model sees and optional for persisted inputs), and
+  static policy refuses `"free"`, so the merchant is asked.
 
 ## Outside this plan: recorded, not scheduled
 

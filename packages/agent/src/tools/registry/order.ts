@@ -252,7 +252,7 @@ export const ORDER_TOOL_DEFINITIONS = [
         { required: true, minItems: 1 },
       ),
       note: stringArg("Optional note to attach to the order."),
-      free_of_charge: booleanArg("Set true when the order is meant to cost the customer nothing, such as a free replacement. Such an order is refused, so the merchant is asked how to handle it; if they then choose an unpaid order instead, leave this unset."),
+      payment: stringArg('Who pays for the order: "customer_pays" when the customer owes its total, or "free" when it should cost them nothing, such as a free replacement or a gift.', { modelRequired: true, enum: ["customer_pays", "free"] }),
     },
     category: "action",
     group: "order",

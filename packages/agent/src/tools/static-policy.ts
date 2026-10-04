@@ -157,10 +157,10 @@ export function checkParsedStaticToolPolicy(
     }
   }
 
-  if (definition.policy.freeOfChargeRefused && (input as { free_of_charge?: unknown }).free_of_charge === true) {
+  if (definition.policy.freeOfChargeRefused && (input as { payment?: unknown }).payment === "free") {
     return {
       blocked: true,
-      reason: "this order cannot be made free: it would be created unpaid with its full total pending. Ask the merchant how they want the free replacement handled before creating anything.",
+      reason: "this order cannot be made free: it would be created unpaid with its full total pending. Ask the merchant how they want the free order handled before creating anything.",
     };
   }
 

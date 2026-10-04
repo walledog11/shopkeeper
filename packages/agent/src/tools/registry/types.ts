@@ -130,7 +130,8 @@ export interface CreateShopifyOrderInput {
   country: string;
   line_items: CreateShopifyOrderLineItem[];
   note?: string;
-  free_of_charge?: boolean;
+  /** Absent on inputs persisted before the field existed. */
+  payment?: "customer_pays" | "free";
 }
 
 export interface AddInternalNoteInput {
@@ -382,8 +383,8 @@ export interface ToolPolicyMetadata {
   cancellationDisabled?: boolean;
   customLineItemsDisabled?: boolean;
   /**
-   * The tool cannot make what it creates free, so a call flagged
-   * `free_of_charge` is refused and the merchant decides how to handle it.
+   * The tool cannot make what it creates free, so a call whose `payment` is
+   * `"free"` is refused and the merchant decides how to handle it.
    */
   freeOfChargeRefused?: boolean;
 }
