@@ -399,11 +399,13 @@ and commits cite it.
 
 ## Outside this plan: recorded, not scheduled
 
-Oct 4 follow-ups: raw escalation reason on an already-escalated ticket; silent
-Reopen HTTP 500 when another open thread exists; answering the agent's own
-operator-chat question reports no pending question; product-search chips print
-an ID as a count; and changing an order line's quantity is unsupported. Unknown
-  summaries and refused-action success labels are fixed in deployed #165.
+Oct 4 follow-ups: raw escalation reason on an already-escalated ticket;
+answering the agent's own operator-chat question reports no pending question;
+product-search chips print an ID as a count; and changing an order line's
+quantity is unsupported. Unknown summaries and refused-action success labels
+are fixed in deployed #165. Reopen on a ticket whose customer has another open
+conversation on that channel now refuses with that reason instead of a silent
+HTTP 500.
 
 
 The 2026-09-25 audit also found decisions made by matching English outside the

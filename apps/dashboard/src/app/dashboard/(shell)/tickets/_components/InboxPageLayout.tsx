@@ -1,6 +1,7 @@
 "use client"
 
 import { useLayoutEffect, useRef, type ComponentProps } from "react"
+import { createPortal } from "react-dom"
 import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import { AlertCircle, CheckCircle2, X } from "lucide-react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
@@ -299,14 +300,17 @@ export function InboxPageLayout({
         </DialogContent>
       </Dialog>
 
-      {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-foreground text-background text-sm font-medium px-4 py-2.5 rounded-full shadow-lg pointer-events-none">
+      {/* Portaled above the conversation dialog: the page content is its own
+          stacking context, so an in-place toast sits under an open dialog. */}
+      {toast && createPortal(
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[90] flex w-max max-w-[calc(100vw-2rem)] items-center gap-2 bg-foreground text-background text-sm font-medium px-4 py-2.5 rounded-full shadow-lg pointer-events-none">
           {toast.tone === "error"
             ? <AlertCircle className="size-4 text-red-600 shrink-0" />
             : <CheckCircle2 className="size-4 text-emerald-600 shrink-0" />
           }
           {toast.message}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )

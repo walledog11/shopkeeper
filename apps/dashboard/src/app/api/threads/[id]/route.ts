@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db, Prisma, ThreadFilterStatus, ThreadFilterFeedback } from '@shopkeeper/db';
-import { NotFoundError } from '@/lib/api/errors';
+import { ConflictError, NotFoundError } from '@/lib/api/errors';
 import { readRequiredJsonObject } from '@/lib/api/body';
 import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
 import { merchantInboxInternalChannelFilter } from '@shopkeeper/agent/merchant-inbox-surfaces';
@@ -65,7 +65,7 @@ export const PATCH = withOrgRoute<{ id: string }>(
 
     const thread = await db.thread.findUnique({
       where: { id },
-      select: { organizationId: true, filterStatus: true },
+      select: { organizationId: true, filterStatus: true, customerId: true, channelType: true },
     });
     assertEntityInOrg(thread, org.id, 'Thread not found');
 
@@ -76,6 +76,27 @@ export const PATCH = withOrgRoute<{ id: string }>(
             : undefined);
 
     const updated = await db.$transaction(async (tx) => {
+      // One open thread per customer per channel (threads_one_open_per_customer).
+      // Lock the customer row as inbound episode resolution does, so an arriving
+      // message cannot open one between this check and the update.
+      if (status === THREAD_STATUS.OPEN) {
+        await tx.$queryRaw`SELECT id FROM customers WHERE id = ${thread.customerId}::uuid FOR UPDATE`;
+        const openThread = await tx.thread.findFirst({
+          where: {
+            organizationId: org.id,
+            customerId: thread.customerId,
+            channelType: thread.channelType,
+            status: THREAD_STATUS.OPEN,
+            id: { not: id },
+          },
+          select: { id: true },
+        });
+        if (openThread) {
+          throw new ConflictError(
+            'This customer already has an open conversation on this channel. Close it to reopen this one.',
+          );
+        }
+      }
       const row = await tx.thread.update({
         where: { id },
         data: {

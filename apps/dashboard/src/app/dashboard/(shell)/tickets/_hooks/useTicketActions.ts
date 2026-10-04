@@ -56,7 +56,8 @@ export function useTicketActions({
   const showToast = useCallback((message: string, tone: TicketToast['tone'] = 'success') => {
     if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current)
     setToast({ message, tone })
-    toastTimeoutRef.current = setTimeout(() => setToast(null), 2500)
+    // An error explains what to do next, which takes longer to read.
+    toastTimeoutRef.current = setTimeout(() => setToast(null), tone === 'error' ? 6000 : 2500)
   }, [])
 
   const handleSendMessage = useCallback(async (noteMode: boolean) => {
@@ -134,22 +135,24 @@ export function useTicketActions({
     }
   }, [activeTicketId, moveThreadStatus, revalidateThreadCaches, setActiveTicketId, showToast])
 
+  // Not optimistic: a reopen is refused while the customer has another open
+  // conversation on the channel, so the ticket stays put until the server agrees.
   const handleReopen = useCallback(async () => {
     if (!activeTicketId) return
     const reopenId = activeTicketId
 
+    try {
+      await requestOk(`/api/threads/${reopenId}`, jsonPatch({ status: 'open' }), 'Failed to reopen ticket')
+    } catch (err) {
+      console.error('Failed to reopen ticket', err)
+      showToast(errorMessageFromUnknown(err, 'Failed to reopen ticket.'), 'error')
+      return
+    }
+
     await moveThreadStatus(reopenId, 'open')
     setActiveTicketId(null)
     showToast('Ticket reopened')
-
-    try {
-      await requestOk(`/api/threads/${reopenId}`, jsonPatch({ status: 'open' }), 'Failed to reopen ticket')
-      revalidateThreadCaches()
-    } catch (err) {
-      console.error('Failed to reopen ticket', err)
-      await revalidateThreadCaches()
-      showToast(errorMessageFromUnknown(err, 'Failed to reopen ticket.'), 'error')
-    }
+    revalidateThreadCaches()
   }, [activeTicketId, moveThreadStatus, revalidateThreadCaches, setActiveTicketId, showToast])
 
   const handleLinkShopifyCustomer = useCallback(async (customerId: string | null) => {
