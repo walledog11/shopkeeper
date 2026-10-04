@@ -8,7 +8,9 @@ import {
   recordModelUsage,
   type ModelUsageMetrics,
 } from "./usage.js";
-import { TOOL_CATEGORIES } from "./tools/registry/index.js";
+import { getToolDefinition, TOOL_CATEGORIES } from "./tools/registry/index.js";
+import { MERCHANT_FOLLOW_UP_GUIDANCE, merchantFollowUpModelFacts } from "./tools/registry/model-contract.js";
+import { outstandingMerchantFollowUps } from "./merchant-follow-up.js";
 import { executePlanningReadTools } from "./planner-read-tools.js";
 import type { AgentContext, BaseAgentContext } from "./agent-context.js";
 import type { OrgSettings, RawToolCall } from "./types.js";
@@ -33,6 +35,14 @@ const TERMINAL_TOOL_NAMES = new Set([
 // What captured (non-executed) tool calls report back to the model so the loop
 // can continue to a terminal tool without performing the side effect.
 const CAPTURE_NOT_EXECUTED = "Not executed during planning.";
+
+function capturedToolResult(name: string, outstandingFollowUps: ReadonlySet<string>): string {
+  const definition = getToolDefinition(name);
+  const followUp = definition && merchantFollowUpModelFacts(definition);
+  return followUp && outstandingFollowUps.has(followUp.kind)
+    ? `${CAPTURE_NOT_EXECUTED}\n${MERCHANT_FOLLOW_UP_GUIDANCE}\n${JSON.stringify({ merchant_follow_up: followUp })}`
+    : CAPTURE_NOT_EXECUTED;
+}
 
 // Re-prompt used once when a capture run stops without a terminal tool. Replaces
 // the old regex-triggered reply-draft / replan-retry phases with a structural
@@ -228,6 +238,7 @@ async function handleCaptureBlocks(
 
   // Only feed results back when the loop will continue; a terminal ends the turn.
   if (!terminalReached) {
+    const outstandingFollowUps = new Set(outstandingMerchantFollowUps(state.rawToolCalls.map(call => call.name)));
     const toolResults: Anthropic.ToolResultBlockParam[] = blocks.map((b) => {
       const refusal = refusals.get(b.id);
       if (refusal) return { type: "tool_result", tool_use_id: b.id, content: refusal, is_error: true };
@@ -237,7 +248,7 @@ async function handleCaptureBlocks(
         content: discoveryContent.get(b.id)
           ?? (TOOL_CATEGORIES[b.name] === "read"
             ? (state.readResults.get(b.id) ?? CAPTURE_NOT_EXECUTED)
-            : CAPTURE_NOT_EXECUTED),
+            : capturedToolResult(b.name, outstandingFollowUps)),
       };
     });
     state.messages.push({ role: "user", content: toolResults });

@@ -1,7 +1,12 @@
 # Conversational agent overhaul plan
 
-Status, 2026-10-04: #157 and #158 are merged; dashboard, gateway and worker
-serve `9f62ce86`, with all required PR CI and production readiness passed.
+Status, 2026-10-04: #157, #158 and #159 are merged; dashboard, gateway and
+worker serve `ab75c063`. All required #159 PR CI passed. One retained-request
+Rewrite on that deployment removed the replacement-shipment promise, but the
+draft still promises a follow-up with return instructions. Item 1 remains open;
+`fix/merchant-follow-up-facts` exposes the label obligation as unscheduled
+merchant work to the model. The new card is unapproved and no exchange action
+or customer reply has run.
 The #1041 exchange now scopes correctly, survives reload and has a successfully
 sent phone card, received by the owner. The exchange observation is incomplete:
 its draft contains unestablished shipping promises, and phone continuation,
@@ -100,10 +105,14 @@ for a failure, a relevant code change or an unresolved concern. In order:
    unanswered burst as the summarizer and fixes the ticket-history 403. Live
    regeneration and reload passed on `e3e9f83a`. #158 is deployed on
    `9f62ce86`; one Rewrite delivered proposal `5689558d` at task revision 1,
-   superseding `7d72173d`. It remains unapproved with no action or customer reply.
-   The owner confirmed receiving the card and rejected the proposed scripted
-   revision test. Correct the draft's unestablished shipping promises at their
-   source, then observe ordinary merchant approval and verify Shopify's receipt
+   superseding `7d72173d`. The owner confirmed receiving that card and rejected
+   the scripted revision. #159 is now deployed on `ab75c063`; one Rewrite retained
+   the same task at revision 2 and sent replacement proposal `65892637`. Shipment
+   after receipt is no longer promised, but a return-instructions follow-up still
+   is. `fix/merchant-follow-up-facts` carries the unscheduled label obligation into
+   the model contract. Review, CI and deploy that candidate before another
+   affected-flow observation. No action or customer reply has run. Finish the
+   source correction, then observe ordinary merchant approval and verify Shopify's receipt
    and customer delivery. Use a simple, natural edit if a revision is exercised;
    do not require the merchant to provide internal constraints to repair the draft.
    No repeat customer email or restart is needed. #155's live continuation remains
@@ -136,8 +145,8 @@ for a failure, a relevant code change or an unresolved concern. In order:
 iMessage is the main channel. Telegram is excluded from product and release
 acceptance; do not build or test it.
 
-**Workspace handoff:** main, dashboard, gateway and worker are `9f62ce86`
-(#158). The shared root checkout
+**Workspace handoff:** main, dashboard, gateway and worker are `ab75c063`
+(#159). The shared root checkout
 still has HEAD `606da169` and uncommitted phone, marketing and documentation
 edits, this document included. Preserve them, start code changes from an isolated
 worktree on `origin/master`, and do not reset the root or mistake its older files
@@ -767,22 +776,30 @@ the planned iMessage revision. The owner confirmed handset receipt and declined
 the scripted revision; it is withdrawn. Ordinary continuation, approval and
 provider execution remain unverified; this exchange is still unapproved.
 
-**Exchange shipping claims — source correction prepared on
-`fix/exchange-draft-grounding`, based on `9f62ce86`.** The exchange argument and
-fallback plan summary described shipping the replacement, while the capability,
-support/operator instructions and success text described later fulfillment and
-asked for return instructions that this tool does not supply. The candidate
-shares the actual effect and evidence requirements across those owners: opening
-the exchange records a return and replacement; return instructions and future
-shipment commitments need store policy or a merchant instruction. The existing
-card's label follow-up remains the merchant's work. No prose matcher or new
-knowledge-base lookup is added. Agent typecheck, build, changed-file lint and
-existing registry, prompt, planner and exchange checks passed. This is a source
-correction, not a live-model observation. Review, CI and deployment are still
-owed, followed by one Rewrite of the retained #1041 request to replace the old
-draft, ordinary approval, and provider/customer-delivery verification. Preserve
-the already-passed request, reload and phone-delivery evidence; no customer
-resend or scripted merchant repair is needed.
+**Exchange shipping claims — #159 deployed; one claim remains.**
+[PR #159](https://github.com/walledog11/shopkeeper/pull/159) merged as `ab75c063`
+at 06:20:59 UTC; required CI passed and dashboard, gateway and worker serve that
+revision. One ordinary Rewrite at 06:48:33 UTC continued task `95c15cdb` at
+revision 2, replacing `5689558d` with valid proposal `65892637`. It still has
+only the requested #1041 exchange and one receipt-bound reply; reload returned
+the same draft. The reply no longer promises shipment after receipt, but still
+says “We'll follow up with instructions on sending the original item back.”
+There is no merchant instruction establishing that promise. The phone card was
+sent at 06:48:49 UTC. At 06:51:59 UTC there were no actions or customer replies;
+handset receipt and approval remain unobserved. Do not ask the merchant to repair
+this wording or treat the partial improvement as completed acceptance.
+
+`fix/merchant-follow-up-facts`, based on `ab75c063`, carries the registry's
+`send_return_label` obligation into the offered tool descriptions and captured
+planning results as required, unscheduled merchant work. The approval-card
+reminder is not evidence of a customer commitment. A planned label attachment
+satisfies the obligation, while store policy or an explicit merchant instruction
+can still establish a promise. This adds no prose matcher, knowledge-base lookup
+or refusal of merchant-authored replies. Agent typecheck and build, changed-file lint and
+existing loop, registry, planner and discovery checks passed, including focused
+regressions for the newly exposed contract. Review, CI and deployment
+precede one affected-flow observation. No further live rewrite is needed before
+that change is deployed.
 
 ### Release and runtime retirement
 
