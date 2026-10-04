@@ -219,6 +219,8 @@ export async function planAgent(
   const historyWindow = operatorMode ? ctx.recentMessages.slice(-4) : ctx.recentMessages;
   const baseMessages = buildMessageHistory(historyWindow, modelInstruction, {
     segregateUntrusted: !operatorMode,
+    ...(!operatorMode && ctx.currentCustomerMessageIds
+      ? { currentCustomerMessageIds: ctx.currentCustomerMessageIds } : {}),
   });
   // Decided once so the prompt describes the tool set the model is offered.
   const capabilityDiscovery = usesCapabilityDiscovery(options?.runtimeVersion);

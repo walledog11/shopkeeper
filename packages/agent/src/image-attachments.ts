@@ -34,6 +34,8 @@ const AGENT_IMAGE_MEDIA_TYPES = new Set<AgentImageMediaType>([
 ]);
 
 export interface RecentMessageAttachmentRefs {
+  id?: AgentRecentMessage["id"];
+  task?: AgentRecentMessage["task"];
   senderType: string;
   contentText: string | null;
   attachmentRefs: readonly string[];
@@ -195,6 +197,8 @@ export async function hydrateAgentMessageImages(
   limits: AgentImageLimits = AGENT_IMAGE_LIMITS,
 ): Promise<AgentRecentMessage[]> {
   const hydrated: AgentRecentMessage[] = messages.map((message) => ({
+    ...(message.id ? { id: message.id } : {}),
+    ...(message.task ? { task: message.task } : {}),
     senderType: message.senderType,
     contentText: message.contentText,
   }));

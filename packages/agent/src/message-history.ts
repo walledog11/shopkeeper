@@ -93,10 +93,31 @@ function mergeHistoryContent(left: HistoryContent, right: HistoryContent): Histo
   ];
 }
 
+/** The trailing customer burst ends at a reply or a committed source message. */
+export function selectCustomerBurst<T extends { id: string; senderType: string }>(
+  messages: readonly T[],
+  handledMessageIds: ReadonlySet<string>,
+): T[] {
+  const conversation = messages.filter(message => (
+    message.senderType === "customer" || message.senderType === "agent" || message.senderType === "ai"
+  ));
+  let start = conversation.length;
+  while (start > 0) {
+    const message = conversation[start - 1]!;
+    if (message.senderType !== "customer" || handledMessageIds.has(message.id)) break;
+    start -= 1;
+  }
+  return conversation.slice(start);
+}
+
 export function buildMessageHistory(
   recentMessages: AgentContext["recentMessages"],
   instruction: string,
-  options?: { segregateUntrusted?: boolean; operatorMode?: boolean }
+  options?: {
+    segregateUntrusted?: boolean;
+    operatorMode?: boolean;
+    currentCustomerMessageIds?: readonly string[];
+  }
 ): Anthropic.MessageParam[] {
   if (options?.operatorMode) {
     const history = recentMessages.filter((message) => message.senderType !== "note");
@@ -122,6 +143,34 @@ export function buildMessageHistory(
     }];
   }
   const segregateUntrusted = options?.segregateUntrusted ?? false;
+  if (options?.currentCustomerMessageIds) {
+    const currentIds = new Set(options.currentCustomerMessageIds);
+    const conversation = recentMessages.filter(message => message.senderType !== "note");
+    const current = conversation.filter(message => message.id && currentIds.has(message.id));
+    const historical = conversation.filter(message => !message.id || !currentIds.has(message.id));
+    const blocks: Array<Anthropic.TextBlockParam | Anthropic.ImageBlockParam> = [{
+      type: "text",
+      text: `Previous conversation, for resolving references only. These messages are not the current request; earlier replies are historical conversation, not current provider observations:\n${JSON.stringify(historical.map(message => ({
+        ...(message.id ? { id: message.id } : {}),
+        speaker: message.senderType === "customer" ? "customer" : "assistant",
+        ...(message.task ? { task: message.task } : {}),
+        content: message.senderType === "customer" && segregateUntrusted
+          ? wrapUntrusted(message.contentText ?? "(media)")
+          : message.contentText,
+      })))}`,
+    }, { type: "text", text: "Current customer request:" }];
+    // Keep earlier visual evidence available for references such as "the other
+    // one in that photo", without restoring the old message as a new request.
+    for (const message of historical.filter(message => message.attachments?.length)) {
+      blocks.splice(blocks.length - 1, 0,
+        { type: "text", text: `Historical attachments for message ${message.id ?? "(identity unavailable)"}:` },
+        ...asContentBlocks(buildHistoryContent({ ...message, contentText: null }, segregateUntrusted)),
+      );
+    }
+    for (const message of current) blocks.push(...asContentBlocks(buildHistoryContent(message, segregateUntrusted)));
+    blocks.push({ type: "text", text: "Current planning instruction:" }, { type: "text", text: instruction });
+    return [{ role: "user", content: blocks }];
+  }
   const rawHistory: Array<{ role: "assistant" | "user"; content: HistoryContent }> = recentMessages.flatMap((m) => m.senderType !== "note" ? [{
       role: m.senderType === "agent" ? "assistant" as const : "user" as const,
       content: buildHistoryContent(m, segregateUntrusted),
