@@ -20,11 +20,11 @@ test('release budget reserves the bounded gateway cost without starving dashboar
     result.stdout,
     /allocations dashboard=\$0\.7000\/114calls gateway=\$0\.0500\/6calls/,
   );
-  assert.match(result.stdout, /mode=release fixtures=35 repeats=1 judges=14/);
-  assert.match(result.stdout, /calls=82\/120/);
+  assert.match(result.stdout, /mode=release fixtures=37 repeats=1 judges=15/);
+  assert.match(result.stdout, /calls=87\/120/);
 });
 
-test('a runtime-v2 fixture counts only toward a runtime-v2 budget', () => {
+test('current preflight includes v2 fixtures and rejects the retired runtime', () => {
   const run = runtimeVersion => spawnSync(process.execPath, [
     'scripts/eval-budget-preflight.mjs',
     '--mode', 'release',
@@ -38,7 +38,9 @@ test('a runtime-v2 fixture counts only toward a runtime-v2 budget', () => {
     encoding: 'utf8',
   });
 
-  assert.match(run('1').stdout, /mode=release fixtures=35 /);
+  assert.notEqual(run('1').status, 0);
+  assert.match(run('1').stderr, /runtime 1 is retired/);
+  assert.match(run('current').stdout, /mode=release fixtures=37 /);
   assert.match(run('2').stdout, /mode=release fixtures=37 /);
 });
 
@@ -56,7 +58,7 @@ test('release preflight rejects the call ceiling exhausted by the observed suite
   });
 
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /Estimated 82 calls exceeds the approved 80-call ceiling/);
+  assert.match(result.stderr, /Estimated 87 calls exceeds the approved 80-call ceiling/);
 });
 
 test('targeted preflight accounts for isolated cold-cache cost and planner call bounds', () => {

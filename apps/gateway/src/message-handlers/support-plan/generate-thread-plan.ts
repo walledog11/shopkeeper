@@ -1,8 +1,8 @@
 import { db } from '@shopkeeper/db';
 import { requireOrgThread, getLatestConversationMessage } from '@shopkeeper/agent/thread-auth';
 import { buildContext } from '@shopkeeper/agent/build-context';
-import { planAgent, usesExactDraftProposals } from '@shopkeeper/agent/planner';
-import { resolveAgentRuntimeVersionForOrg } from '@shopkeeper/agent/runtime-modes';
+import { planAgent } from '@shopkeeper/agent/planner';
+import { DURABLE_AGENT_RUNTIME_VERSION } from '@shopkeeper/agent/runtime-modes';
 import { decideAutonomy } from '@shopkeeper/agent/autonomy';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import {
@@ -229,7 +229,7 @@ export async function generateThreadPlan(
   // sender, a superseded job, an answered thread and an unroutable mailbox each
   // leave before a request exists, because none of them is a request the agent
   // accepted. From here the customer's message is durable work.
-  const selectedRuntimeVersion = resolveAgentRuntimeVersionForOrg(organizationId);
+  const selectedRuntimeVersion = DURABLE_AGENT_RUNTIME_VERSION;
   const durableResult = await openDurableSupportTask({
     organizationId,
     threadId,
@@ -237,7 +237,7 @@ export async function generateThreadPlan(
     objective: instruction,
     continuity: parseClassifierSignals(thread.classifierSignals)?.requestFacts,
     runtimeVersion: selectedRuntimeVersion,
-    ...(selectedRuntimeVersion >= 2 ? { continuityMode: 'classified' as const } : {}),
+    continuityMode: 'classified',
   });
   const scope: PlanAttemptScope = {
     organizationId, threadId, allowAutoExecute, instruction, thread, settings,
@@ -313,9 +313,8 @@ function supportTaskModelBudget(
   return taskModelBudget(claim);
 }
 
-// The plan attempt itself: serve a warm cache or plan and cache a fresh one,
-// then auto-execute within business hours. Unchanged by the task around it
-// except that its executions name the request they belong to.
+// A claimed attempt drafts a fresh plan and may execute within business hours.
+// It never adopts a taskless cache as new execution authority.
 async function runPlanAttempt(scope: PlanAttemptScope): Promise<GeneratedThreadPlan> {
   const {
     organizationId, threadId, allowAutoExecute, instruction, thread, settings,
@@ -327,40 +326,9 @@ async function runPlanAttempt(scope: PlanAttemptScope): Promise<GeneratedThreadP
   // escalation flag is cleared — bias to escalation over confident wrong action.
   const autonomousWorkAllowed = !thread.escalatedAt;
 
-  const cached = readAgentPlanCache(thread.cachedPlan);
-  if (isAgentPlanCacheHit({
-    cache: cached,
-    instruction,
-    lastCustomerMessageId: pendingCustomerMessageId,
-    settings,
-  })) {
-    if (cached?.planId && (cached.plan.steps.length > 0 || cached.plan.validation?.status === 'invalid')) {
-      void captureAgentPlanGenerated({
-        cacheHit: true,
-        channel: thread.channelType,
-        generationMs: Date.now() - generationStartedAt,
-        organizationId,
-        planId: cached.planId,
-        stepCount: cached.plan.steps.length,
-      });
-    }
-    const autoExecution = autonomousWorkAllowed
-      ? await buildAutoExecutionResult(scope)
-      : {};
-    return {
-      plan: toGatewayAgentPlan(cached?.plan ?? null),
-      instruction,
-      ...(cached?.plan ? { identity: planIdentity({
-        planId: cached.planId,
-        sourceMessageId: cached.lastCustomerMessageId,
-        instruction: cached.instruction,
-        plan: cached.plan,
-      }) } : {}),
-      merchantQuestion: merchantQuestionFor(cached?.plan ?? null, settings),
-      ...autoExecution,
-    };
-  }
-
+  // A cache without this task's persisted proposal is historical display data.
+  // A claimed planning attempt always drafts against its current source; duplicate
+  // jobs read their existing plan through readCurrentPlanWithoutWork above.
   const ctx = await buildContext(threadId, organizationId, gatewayThreadSink,
     scope.durableTurn?.runtimeVersion !== undefined
       ? { runtimeVersion: scope.durableTurn.runtimeVersion }
@@ -372,7 +340,6 @@ async function runPlanAttempt(scope: PlanAttemptScope): Promise<GeneratedThreadP
     instruction,
     settings,
     {
-      ...(usesExactDraftProposals(scope.durableTurn?.runtimeVersion) ? { exactDraftProposal: true } : {}),
       ...(scope.durableTurn?.runtimeVersion !== undefined
         ? { runtimeVersion: scope.durableTurn.runtimeVersion }
         : {}),

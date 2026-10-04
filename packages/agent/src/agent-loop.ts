@@ -102,15 +102,9 @@ export interface RunAgentLoopParams {
   // Support planning sets this; operator planning does not (no customer to
   // reply to).
   captureReprompt?: boolean;
-  // Planning-only control tools can end a narrowed attempt without becoming an
-  // executable plan. The planner consumes the signal and retries from a clean
-  // transcript with a wider registry.
-  captureStopToolNames?: readonly string[];
-  // capture: resolve a discovery control call into extra schemas for the rest of
-  // this turn. Unlike the namespace-miss stop above, the attempt continues:
-  // observations, transcript and budget are kept and the next model call carries
-  // the discovered tools. Discovery performs no effect, so it is never recorded
-  // as a plan step.
+  // capture: add authorized discovery schemas within the same bounded turn.
+  // Observations, transcript and budget are kept; discovery performs no effect
+  // and is never recorded as a plan step.
   captureDiscovery?: {
     toolName: string;
     resolve: (
@@ -158,7 +152,6 @@ async function handleCaptureBlocks(
     readBlocks: Anthropic.ToolUseBlock[];
     readResults: Map<string, string>;
     readStatus: Map<string, ToolStatus>;
-    captureStopToolNames?: readonly string[];
     captureDiscovery?: RunAgentLoopParams["captureDiscovery"];
     captureRefuseReply?: RunAgentLoopParams["captureRefuseReply"];
     captureCompleteTurn?: RunAgentLoopParams["captureCompleteTurn"];
@@ -234,7 +227,6 @@ async function handleCaptureBlocks(
 
   const terminalReached = completesTurn || proposedBlocks.some((b) => (
     TERMINAL_TOOL_NAMES.has(b.name)
-    || state.captureStopToolNames?.includes(b.name)
   ));
 
   // Only feed results back when the loop will continue; a terminal ends the turn.
@@ -384,7 +376,6 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
         readBlocks,
         readResults,
         readStatus,
-        captureStopToolNames: params.captureStopToolNames,
         captureDiscovery: params.captureDiscovery,
         captureRefuseReply: params.captureRefuseReply,
         captureCompleteTurn: params.captureCompleteTurn,

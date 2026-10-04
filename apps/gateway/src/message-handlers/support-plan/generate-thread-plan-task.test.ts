@@ -67,7 +67,7 @@ afterEach(async () => {
 });
 
 describe('durable support task', () => {
-  it('selects v2 only for the rollout workspace when accepting customer work', async () => {
+  it('accepts all new customer work on v2 regardless of retired rollout flags', async () => {
     const selected = await seedThread();
     const other = await seedThread();
     vi.stubEnv('AGENT_RUNTIME_VERSION', '1');
@@ -79,14 +79,13 @@ describe('durable support task', () => {
 
     const selectedTask = await taskFor(selected.organizationId);
     expect(selectedTask).toMatchObject({ runtimeVersion: 2 });
-    expect(await taskFor(other.organizationId)).toMatchObject({ runtimeVersion: 1 });
+    expect(await taskFor(other.organizationId)).toMatchObject({ runtimeVersion: 2 });
 
     vi.stubEnv('AGENT_RUNTIME_V2_ORG_IDS', other.organizationId);
     await createTestMessage(selected.threadId, 'Actually, keep working on the refund.');
     await generateThreadPlan(selected.organizationId, selected.threadId, false);
-    expect(await taskFor(selected.organizationId)).toMatchObject({
-      id: selectedTask.id, runtimeVersion: 2,
-    });
+    expect(await taskFor(selected.organizationId)).toMatchObject({ runtimeVersion: 2 });
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: selectedTask.id } })).toMatchObject({ runtimeVersion: 2 });
   });
 
   it('records the customer message as a request and parks the proposal on its task', async () => {
@@ -186,7 +185,7 @@ describe('durable support task', () => {
     });
   });
 
-  it('supersedes the parked proposal when the customer writes again', async () => {
+  it('preserves separate work when a new request has no classified continuity', async () => {
     const seed = await seedThread();
     mockPlanAgent.mockResolvedValue(agentPlanFromRawToolCalls([refund, reply]));
     await generateThreadPlan(seed.organizationId, seed.threadId, false);
@@ -200,10 +199,10 @@ describe('durable support task', () => {
     await generateThreadPlan(seed.organizationId, seed.threadId, false);
 
     const second = await taskFor(seed.organizationId);
-    expect(second.id).toBe(first.id);
-    expect(second.revision).toBe(1);
+    expect(second.id).not.toBe(first.id);
+    expect(second.revision).toBe(0);
     expect(second.activeProposalId).not.toBe(first.activeProposalId);
-    expect(await db.agentTask.count({ where: { organizationId: seed.organizationId } })).toBe(1);
+    expect(await db.agentTask.count({ where: { organizationId: seed.organizationId } })).toBe(2);
     expect(await db.agentRequest.count({ where: { organizationId: seed.organizationId } })).toBe(2);
   });
 

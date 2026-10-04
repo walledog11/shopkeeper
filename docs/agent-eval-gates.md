@@ -6,10 +6,10 @@ paid run.
 
 | Mode | Purpose | Dashboard fixtures | Repeats | Semantic judges | Release blocking |
 | --- | --- | ---: | ---: | --- | --- |
-| `release` | Certify a release candidate | 48 core, hard-gated | 1 | Only objective `gate: true` checks | No — advisory since 2026-09-28 |
+| `release` | Certify a release candidate | 37 current core, hard-gated | 1 | Only objective `gate: true` checks | No — advisory since 2026-09-28 |
 | `targeted` | Diagnose named fixtures | Selected IDs | 1–3 | Caller choice | Selected hard fixtures only |
-| `drift` | Measure the complete model surface | All 84 | 3 | All rubric checks | Hard drift only; advisory is reported |
-| `baseline` | Replace comparable three-repeat evidence | All 84 | 3 | All rubric checks | Capture must complete |
+| `drift` | Measure the complete model surface | All 52 current | 3 | All rubric checks | Hard drift only; advisory is reported |
+| `baseline` | Replace comparable three-repeat evidence | All 52 current | 3 | All rubric checks | Capture must complete |
 
 No paid mode blocks a release. A paid run happens only when the release owner
 asks, and rollout rests on the controlled real-provider runs (Gate C in the
@@ -27,15 +27,11 @@ fixture run must include both ceilings:
 EVAL_MAX_USD=0.10 EVAL_MAX_MODEL_CALLS=20 EVAL_FIXTURE=fixture-id npm run test:evals:fixture -w apps/dashboard
 ```
 
-Package 6 runtime comparisons must additionally set
-`EVAL_AGENT_RUNTIME_VERSION=1` or `2`. The dashboard runner passes that version
-through the same planner options used by persisted tasks; version 2 also stops
-planning at a write proposal. The unset value, or `current`, preserves the
-historical eval behavior. Run v1 and v2 from the same commit with identical
-fixture selection, repeats, judges, models, and budgets. Keep
-`AGENT_CAPABILITY_DISCOVERY_MODE=off` and
-`AGENT_PROPOSAL_SUSPENSION_MODE=off` during the comparison so compatibility
-flags do not alter the explicitly selected v1 arm.
+Current evals always use runtime 2. `EVAL_AGENT_RUNTIME_VERSION=2` or `current`
+selects that same contract; runtime 1 is refused before model work. Historical
+v1/v2 comparison results remain in the release evidence and git history. The
+retired runtime and compatibility flags cannot be re-enabled in the current
+image. No paid comparison was run for retirement.
 
 ## Release semantics
 
@@ -57,8 +53,9 @@ estimate exceeds either caller-approved ceiling. It divides the total ceiling
 between dashboard and gateway so the two concurrent jobs cannot each spend the
 full authorization. Release call estimates reserve 2.25 calls per dashboard
 fixture, based on the 2026-09-07 observed run. A targeted fixture instead
-reserves the planner's mechanical bound: 10 calls for the narrowed attempt and
-10 for its possible full-registry retry. Fixtures that exercise execution add
+reserves the planner's mechanical bound: 10 calls for the selected tools and
+10 for the optional low-tier safety retry. The full-registry widening retry is
+retired; the conservative estimate still reserves both possible model tiers. Fixtures that exercise execution add
 another 10 calls, and judged fixtures add one. Targeted dollar estimates use
 the greater of two-times baseline cost or the observed isolated cold-start cost
 plus 20% contingency because a small selection receives less benefit from

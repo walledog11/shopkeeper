@@ -22,6 +22,7 @@ import {
   ANY_MEMBER_ACTOR_KEY, actorMayEndWait, NO_SUSPENSION, requireMemberActorKey,
 } from "./task-ledger.js";
 import { communicationFromColumns } from "./proposal-communication.js";
+import { requireDurableAgentRuntime } from "./runtime-modes.js";
 import type { ProposalCommunication, RawToolCall } from "./types.js";
 
 export interface AuthorizedProposal {
@@ -96,7 +97,7 @@ export async function readDurableProposalExecutionSource(input: {
     where: {
       id: input.proposalId,
       organizationId: input.organizationId,
-      task: { threadId: input.threadId, runtimeVersion: { gte: 2 } },
+      task: { threadId: input.threadId },
     },
     include: {
       task: {
@@ -110,6 +111,7 @@ export async function readDurableProposalExecutionSource(input: {
     },
   });
   if (!proposal) return null;
+  requireDurableAgentRuntime(proposal.task.runtimeVersion);
   const allowedRequestIds = new Set(sourceRequestIds(proposal.sourceRequestIds));
   const source = proposal.task.requests.find((request) => (
     allowedRequestIds.has(request.id) && request.sourceMessageId
@@ -148,9 +150,9 @@ export interface ProposalApprovalInput {
 
 /**
  * Returns null when the approval names no durable proposal — every plan parked
- * before this boundary existed, and any card whose task was never created. Those
- * approvals proceed exactly as they did before. A named proposal is verified or
- * refused; it is never silently skipped.
+ * before this boundary existed, and any card whose task was never created. The
+ * execution boundary refuses those cards and requires regeneration. A named
+ * proposal is verified or refused; it is never silently skipped.
  */
 export async function authorizeAgentProposal(
   input: ProposalApprovalInput,
@@ -213,6 +215,7 @@ export async function authorizeAgentProposal(
     if (!task || !actorMayEndWait(scope, { kind: "member", key: actorKey })) {
       throw new ForbiddenError("This proposal is not available to the member.");
     }
+    requireDurableAgentRuntime(task.runtimeVersion);
     // Checked before anything else about the task: what is about to run has to
     // be what was shown, whatever state the task reached since.
     if (proposal.proposalHash !== approvedHash) {

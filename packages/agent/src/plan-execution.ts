@@ -1,4 +1,5 @@
 import { Prisma, db, type DbChannelType } from "@shopkeeper/db";
+import { requireDurableAgentRuntime } from "./runtime-modes.js";
 import { isDeepStrictEqual } from "node:util";
 import { randomUUID } from "node:crypto";
 import { BadRequestError, ConflictError } from "./errors.js";
@@ -550,9 +551,9 @@ export async function dismissCurrentCachedPlan(params: {
 export interface DurableTurnIdentity {
   requestId: string;
   taskId: string;
-  runtimeVersion?: number;
-  expectedRevision?: number;
-  claimToken?: string;
+  runtimeVersion: number;
+  expectedRevision: number;
+  claimToken: string;
 }
 
 export async function executeCurrentCachedHomePlan(params: {
@@ -629,12 +630,12 @@ export async function executeCurrentCachedHomePlan(params: {
     throw new ConflictError("This plan predates durable approvals. Regenerate it before executing.");
   }
 
-  // The durable approval, taken here because every approval surface enters this
-  // function and none of them should own the decision separately. Null means the
-  // parked plan names no proposal — a card from before the ledger existed — and
-  // those execute exactly as they did before. Taken before the execution claim
-  // so a superseded or out-of-scope approval stops before anything is claimed.
+  // Every approval surface enters this boundary. Taskless historical cards are
+  // readable, but require regeneration and fresh review before any dispatch.
   const ledgerMode = resolvePlanExecutionLedgerMode();
+  if (ledgerMode !== "enforce") {
+    throw new ConflictError("Durable proposals require the execution ledger.");
+  }
   const authorized = params.executionIntent === "merchant_approved" && params.approver
     ? await authorizeAgentProposal({
         organizationId: params.orgId,
@@ -647,10 +648,17 @@ export async function executeCurrentCachedHomePlan(params: {
         executionLedgerEnforced: ledgerMode === "enforce",
       })
     : null;
-  const proposalBacked = authorized && authorized.runtimeVersion >= 2;
-  // Runtime v2 executes the immutable proposal bundle returned by the same
-  // transaction that authorized it. The thread cache remains a presentation
-  // and v1 compatibility record; it is no longer the source of write inputs.
+  if (params.executionIntent === "merchant_approved" && !authorized) {
+    throw new ConflictError("This plan predates durable approvals. Regenerate and review it before executing.");
+  }
+  if (params.executionIntent === "automatic"
+    && (!params.durableTurn?.claimToken || params.durableTurn.expectedRevision === undefined)) {
+    throw new ConflictError("Automatic execution requires a claimed durable task. Regenerate this plan.");
+  }
+  requireDurableAgentRuntime(authorized?.runtimeVersion ?? params.durableTurn?.runtimeVersion);
+  const proposalBacked = authorized !== null;
+  // Reviewed execution uses the immutable authorized bundle. The thread cache
+  // remains a presentation and historical-reader projection.
   const approvedToolCalls = proposalBacked
     ? authorized.canonicalActions
     : requestedToolCalls;
@@ -686,16 +694,12 @@ export async function executeCurrentCachedHomePlan(params: {
     approvedAt: approval?.approvedAt,
     ...(authorized ? { taskId: authorized.taskId, proposalId: authorized.proposalId } : {}),
   };
-  let executionId: string | undefined;
-  let claimToken: string | undefined;
-  if (ledgerMode === "enforce") {
-    const claim = await claimCurrentPlanExecution(identity);
-    if (!claim.claimed || !claim.claimToken) {
-      throw new ConflictError("This plan has already been approved or is currently running.");
-    }
-    executionId = claim.execution.id;
-    claimToken = claim.claimToken;
+  const claim = await claimCurrentPlanExecution(identity);
+  if (!claim.claimed || !claim.claimToken) {
+    throw new ConflictError("This plan has already been approved or is currently running.");
   }
+  const executionId = claim.execution.id;
+  const claimToken = claim.claimToken;
 
   let result: AgentResult;
   let terminalExecutionStatus: "committed" | "failed" | "unknown" = "committed";
@@ -713,16 +717,12 @@ export async function executeCurrentCachedHomePlan(params: {
         turnId: params.durableTurn.requestId,
         agentRequestId: params.durableTurn.requestId,
         agentTaskId: params.durableTurn.taskId,
-        ...(params.durableTurn.expectedRevision !== undefined && params.durableTurn.claimToken
-          ? {
-              taskAuthority: {
-                kind: "claim" as const,
-                taskId: params.durableTurn.taskId,
-                expectedRevision: params.durableTurn.expectedRevision,
-                claimToken: params.durableTurn.claimToken,
-              },
-            }
-          : {}),
+        taskAuthority: {
+          kind: "claim" as const,
+          taskId: params.durableTurn.taskId,
+          expectedRevision: params.durableTurn.expectedRevision,
+          claimToken: params.durableTurn.claimToken,
+        },
       } : {}),
       // An approved run belongs to the task that parked the proposal, so its
       // messages name that task. `agentRequestId` is deliberately not set: the
@@ -761,7 +761,7 @@ export async function executeCurrentCachedHomePlan(params: {
         status: terminalExecutionStatus,
         error: findFailedToolResult(result)?.result ?? null,
         // Only a durable proposal that bound an exact draft owes the customer a
-        // follow-up; a legacy plan keeps its own bounded replan below.
+        // follow-up; automatic work retains its bounded child replan below.
         ...(proposalBacked && approvedCommunication?.mode === "exact_draft"
           ? { withheldMessage: withheldApprovedMessage(result.actionsPerformed) }
           : {}),

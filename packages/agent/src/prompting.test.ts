@@ -329,16 +329,10 @@ describe('buildSystemPromptParts caching split', () => {
   });
 });
 
-// The prompt and the tool set are two halves of one decision. Gift-card
-// issuance left the default support selection on the discovery runtime, so the
-// compensation tree's gift-card branch has to stop naming a tool that turn does
-// not hold — and has to keep naming it while the legacy bucket still loads it.
-describe('gift-card issuance follows the runtime that offers it', () => {
-  it('names create_gift_card only on the runtime that loads it', () => {
-    const legacy = buildSystemPrompt(makeCtx());
-    const { stable, volatile } = buildSystemPromptParts(makeCtx(), undefined, { capabilityDiscovery: true });
-
-    expect(legacy).toContain('create_gift_card');
-    expect(`${stable}\n\n${volatile}`).not.toContain('create_gift_card');
+describe('gift-card discovery guidance', () => {
+  it('directs support to an offered or discovered merchant-authorized capability', () => {
+    const { stable } = buildSystemPromptParts(makeCtx());
+    expect(stable).toContain('use the gift-card tool if offered or discover that capability');
+    expect(stable).toContain('Never infer a gift card or account credit from a customer complaint');
   });
 });

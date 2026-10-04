@@ -1,6 +1,6 @@
 import { db } from '@shopkeeper/db';
 import { buildContext } from '@shopkeeper/agent/build-context';
-import { planAgent, usesExactDraftProposals } from '@shopkeeper/agent/planner';
+import { planAgent } from '@shopkeeper/agent/planner';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { requireOrgThread } from '@shopkeeper/agent/thread-auth';
 import { buildAgentPlanCacheRecord, readAgentPlanCache } from '@shopkeeper/agent/plan-cache';
@@ -37,7 +37,7 @@ export async function runComposerTask(input: TaskClaimIdentity & {
   ctx.assertExecutionAllowed = input.assertExecutionAllowed;
   const plan = await planAgent(ctx, input.instruction, settings, {
     merchantInstruction: true, runtimeVersion: input.runtimeVersion,
-    ...(usesExactDraftProposals(input.runtimeVersion) ? { exactDraftProposal: true } : {}),
+
   });
   input.assertExecutionAllowed();
   const cache = buildAgentPlanCacheRecord({

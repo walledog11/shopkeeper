@@ -1,5 +1,6 @@
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import logger from "@/lib/server/logger";
+import { getE2EAuthIdentity } from "@/lib/e2e-auth";
 import type { ApproverIdentity } from "@shopkeeper/agent/plan-execution";
 
 function bestDisplayName(user: {
@@ -17,6 +18,8 @@ function bestDisplayName(user: {
 }
 
 export async function resolveSessionApprover(): Promise<ApproverIdentity | undefined> {
+  const testIdentity = getE2EAuthIdentity();
+  if (testIdentity) return { clerkUserId: testIdentity.userId, displayName: null };
   const { userId } = await auth();
   if (!userId) return undefined;
 

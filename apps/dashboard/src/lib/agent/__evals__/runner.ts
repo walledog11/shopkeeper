@@ -306,7 +306,7 @@ async function runFixture(
     const plan = await planAgent(environment.ctx, fixture.instruction, resolvedSettings, {
       merchantInstruction: fixture.merchantInstruction === true,
       ...(runtimeVersion !== undefined ? { runtimeVersion } : {}),
-      ...(runtimeVersion === 2 ? { exactDraftProposal: true } : {}),
+
       ...(fixture.withheldMessageFollowUp ? { withheldMessageFollowUp: true } : {}),
     })
     currentPhase = null

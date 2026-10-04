@@ -20,7 +20,7 @@ import {
 } from "./task-ledger.js";
 
 const orgIds: string[] = [];
-const budget = { runtimeVersion: 1, modelCallLimit: 20, activeTimeMsLimit: 120000, spendNanoUsdLimit: 1000000000n };
+const budget = { runtimeVersion: 2, modelCallLimit: 20, activeTimeMsLimit: 120000, spendNanoUsdLimit: 1000000000n };
 async function seed() {
   const org = await createTestOrg();
   orgIds.push(org.id);
@@ -461,7 +461,7 @@ describe("durable dashboard persistence foundation", () => {
     await db.agentTask.update({ where: { id: task.id }, data: { revision: 2, modelCallsUsed: 2 } });
     await expect(db.agentTask.update({ where: { id: task.id }, data: { revision: 1 } })).rejects.toThrow();
     await expect(db.agentTask.update({ where: { id: task.id }, data: { modelCallsUsed: 1 } })).rejects.toThrow();
-    await expect(db.agentTask.update({ where: { id: task.id }, data: { runtimeVersion: 2 } })).rejects.toThrow();
+    await expect(db.agentTask.update({ where: { id: task.id }, data: { runtimeVersion: 3 } })).rejects.toThrow();
     const proposal = await db.agentProposal.create({ data: proposalData(task) });
     await expect(db.agentProposal.update({ where: { id: proposal.id }, data: { canonicalActions: [{ tool: "refund" }] } })).rejects.toThrow();
     await expect(db.agentProposal.update({ where: { id: proposal.id }, data: { status: "approved" } })).rejects.toThrow();

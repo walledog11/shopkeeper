@@ -17,6 +17,8 @@ import {
   type PlanExecutionDeps,
 } from "./plan-execution.js";
 import { resolveAgentSettings } from "./settings.js";
+import { ANY_MEMBER_ACTOR_KEY, acceptCustomerAgentRequest, claimAgentTask, settleAgentTaskClaim } from "./task-ledger.js";
+import { deriveProposalCommunication } from "./proposal-communication.js";
 import type { AgentContext } from "./agent-context.js";
 import type { AgentPlan } from "./types.js";
 import {
@@ -28,6 +30,27 @@ import {
 } from "./execution-ledger.js";
 
 const orgIds: string[] = [];
+
+async function seedDurableTask(orgId: string, threadId: string, sourceMessageId: string, plan: AgentPlan, proposalId?: string) {
+  const { request, task } = await acceptCustomerAgentRequest({
+    organizationId: orgId, threadId, sourceMessageId, objective: plan.instruction,
+    budget: { runtimeVersion: 2, modelCallLimit: 20, activeTimeMsLimit: 120000, spendNanoUsdLimit: 1000000000n },
+  });
+  const claim = await claimAgentTask({ organizationId: orgId, taskId: task.id, expectedRevision: task.revision });
+  if (!claim) throw new Error("Could not claim the execution fixture");
+  if (proposalId) {
+    await db.orgMember.create({ data: { organizationId: orgId, clerkUserId: "usr_test" } });
+    await settleAgentTaskClaim({
+      organizationId: orgId, taskId: task.id, expectedRevision: task.revision, claimToken: claim.claimToken, requestId: request.id,
+      settlement: {
+        status: "waiting_approval",
+        proposal: { proposalId, instruction: plan.instruction, rawToolCalls: plan.rawToolCalls, communication: plan.communication, sourceRequestIds: [request.id] },
+        approver: { kind: "member", key: ANY_MEMBER_ACTOR_KEY },
+      },
+    });
+  }
+  return { requestId: request.id, taskId: task.id, runtimeVersion: task.runtimeVersion, expectedRevision: task.revision, claimToken: claim.claimToken };
+}
 
 async function seedIdentity(): Promise<PlanExecutionIdentity> {
   const org = await createTestOrg();
@@ -104,6 +127,7 @@ describe("plan execution ledger", () => {
       settings,
       failureRoute: "test",
       allowMutativeAutoExecute: false,
+      durableTurn: await seedDurableTask(org.id, thread.id, message.id, plan),
     }, deps);
 
     expect(sends).toBe(1);
@@ -238,7 +262,7 @@ describe("plan execution ledger", () => {
     expect(action.execution?.planId).toBe(identity.planId);
   });
 
-  it("allows only one cross-runtime approved execution to reach the provider seam", async () => {
+  it("allows only one concurrent durable approval to reach the provider seam", async () => {
     const org = await createTestOrg();
     orgIds.push(org.id);
     const customer = await createTestCustomer(org.id, `${randomUUID()}@test.com`);
@@ -257,6 +281,7 @@ describe("plan execution ledger", () => {
       }],
       rawToolCalls: [{ id: "send_1", name: "send_reply", input: { text: "Hello" } }],
     };
+    plan.communication = deriveProposalCommunication(plan.rawToolCalls, thread) ?? undefined;
     const cache = buildAgentPlanCacheRecord({
       instruction: "Handle this",
       lastCustomerMessageId: message.id,
@@ -267,6 +292,7 @@ describe("plan execution ledger", () => {
       where: { id: thread.id },
       data: { cachedPlanMessageId: message.id, cachedPlan: cache as object },
     });
+    await seedDurableTask(org.id, thread.id, message.id, plan, cache.planId ?? undefined);
 
     let providerCalls = 0;
     let releaseProvider!: () => void;
@@ -294,6 +320,7 @@ describe("plan execution ledger", () => {
       settings,
       executionIntent: "merchant_approved",
       failureRoute: "test",
+      approver: { clerkUserId: "usr_test" },
     }, deps);
 
     await expect(executeCurrentCachedHomePlan({

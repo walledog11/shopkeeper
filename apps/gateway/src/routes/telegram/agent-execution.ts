@@ -43,7 +43,7 @@ export async function executeFreeFormInstruction(
       instruction: message.body,
       dedupeKey: `operator-event:${eventId}`,
       sourceOperatorEventId: eventId,
-      budget: memberAgentTaskBudget(organizationId),
+      budget: memberAgentTaskBudget(),
     });
     if (!accepted.task) throw new Error('Accepted phone request has no task.');
     try {

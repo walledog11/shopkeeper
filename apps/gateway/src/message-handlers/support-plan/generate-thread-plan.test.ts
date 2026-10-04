@@ -137,6 +137,8 @@ beforeEach(() => {
     },
   });
   mockReadAgentPlanCache.mockReturnValue({ plan: cachedPlan });
+  mockPlanAgent.mockResolvedValue(cachedPlan);
+  mockBuildContext.mockResolvedValue({});
   mockGetLatestConversationMessage.mockResolvedValue({ id: 'msg_1', senderType: 'customer' });
   mockBuildAgentPlanCacheRecord.mockImplementation((input) => ({
     planId: `plan_${input.lastCustomerMessageId}`,
@@ -150,11 +152,11 @@ beforeEach(() => {
   mockMaybeAutoExecute.mockResolvedValue(null);
   mockEscalateToHuman.mockResolvedValue({ status: 'escalated', message: 'escalated' });
   mockAcceptCustomerAgentRequest.mockResolvedValue({
-    request: { id: 'request_1' }, task: { id: 'task_1', revision: 0, runtimeVersion: 1 },
+    request: { id: 'request_1' }, task: { id: 'task_1', revision: 0, runtimeVersion: 2 },
   });
   mockClaimAgentTask.mockResolvedValue({
     claimToken: 'claim_1',
-    task: { id: 'task_1', revision: 0, runtimeVersion: 1 },
+    task: { id: 'task_1', revision: 0, runtimeVersion: 2 },
   });
   mockSettleAgentTaskClaim.mockResolvedValue({});
 });

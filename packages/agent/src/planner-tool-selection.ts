@@ -3,28 +3,6 @@ import type { ClassifierSignals } from "./classifier-signals.js";
 import { TOOL_DEFINITIONS } from "./tools/registry/index.js";
 import type { AgentToolDefinition } from "./tools/registry/types.js";
 
-export const NAMESPACE_MISS_TOOL_NAME = "request_wider_tool_set";
-
-// Planning-only control signal. It is deliberately not part of the executable
-// registry: a model can ask the planner for one clean, widened retry, but no
-// cached plan can ever execute this as an action.
-const NAMESPACE_MISS_TOOL: Anthropic.Tool = {
-  name: NAMESPACE_MISS_TOOL_NAME,
-  description:
-    "Call this only when the customer's request requires a capability that is not present in the current tool list. Name the missing capability. Do not use it for missing facts, policy uncertainty, fraud, or out-of-scope work; use ask_operator or escalate_to_human for those.",
-  input_schema: {
-    type: "object",
-    properties: {
-      capability: {
-        type: "string",
-        description: "The concrete missing capability, such as 'change customer email' or 'create a replacement order'.",
-      },
-    },
-    required: ["capability"],
-    additionalProperties: false,
-  },
-};
-
 export const DISCOVERY_TOOL_NAME = "discover_capabilities";
 
 // Planning-only loop control, and the replacement for the namespace-miss retry:
@@ -69,7 +47,6 @@ type PlanningToolSelectionReason =
   | "unclassified_request"
   | "intent_bucket";
 
-type NamespaceMissReason = "empty_plan" | "incomplete_plan" | "model_signal";
 
 export interface PlanningToolSelection {
   tools: Anthropic.Tool[];
@@ -91,11 +68,6 @@ interface SelectPlanningToolsInput {
   // what the *customer* said, so applying it here would let a status question
   // hide a tool the merchant explicitly asked for.
   merchantInstruction?: boolean;
-  // The caller plans on the discovery runtime: an absent, stale or inconclusive
-  // classification takes the compact starter set rather than the whole registry,
-  // and a narrowed set carries discovery rather than the namespace-miss retry.
-  // Absent for every legacy caller, which keeps both full-registry fallbacks.
-  capabilityDiscovery?: boolean;
   // The classifier resolved a terse follow-up to no unique conversational
   // referent. This is a clarification turn, so it may answer the customer but
   // may not widen into an action the customer did not unambiguously select.
@@ -147,48 +119,6 @@ const STARTER_TOOL_NAMES: ReadonlySet<string> = new Set<string>([
   ...MUTATION_COMMON_TOOL_NAMES,
 ]);
 
-// The legacy runtime's answer to any mutative request: every order write at
-// once, because the classifier says a write is wanted without saying which.
-// Reached only with capability discovery off; under discovery these are what
-// `discover_capabilities` returns, one named capability at a time.
-export const BROAD_ORDER_MUTATION_TOOL_NAMES = [
-  "update_shopify_order_address",
-  "create_refund",
-  "create_partial_refund",
-  "cancel_order",
-  "edit_shopify_order",
-  "create_return",
-  "create_exchange",
-  "create_gift_card",
-  "attach_return_label",
-] as const;
-
-// Tools no customer intent may unlock. They stay reachable through the
-// merchant-authored fail-opens above, and through the designed escape when a
-// request genuinely needs one of them: the namespace-miss retry on the legacy
-// runtime, a named discovery call on the discovery one.
-//
-// The list is explicit so the coverage test can tell a deliberate exclusion from
-// an accidental one. A tool added to the registry with neither a bucket nor an
-// entry here is unreachable by omission and fails that test — which is how
-// fulfill_order's absence should have surfaced instead of showing up as a
-// merchant instruction silently answered with "hasn't shipped yet".
-export const NARROWING_EXEMPT_TOOL_NAMES = [
-  // Merchant-initiated order operations. A customer asking for a refund or a
-  // cancellation must never widen into creating or fulfilling an order.
-  "fulfill_order",
-  "create_shopify_order",
-  // Customer-record writes. Reachable after a namespace-miss retry; see
-  // planner.test.ts, which pins them out of the first call and into the second.
-  "update_shopify_customer_info",
-  "add_shopify_customer_note",
-  // Operator/insights reporting; operator turns take the operatorMode fail-open.
-  "get_support_stats",
-  // Proactive outbound to an arbitrary address. A customer-request turn answers
-  // in the thread with send_reply; reaching out is an operator action.
-  "send_email",
-] as const;
-
 const RISK_INTENTS = [
   "fraud_signals",
   "contradiction",
@@ -218,8 +148,8 @@ function fullSelection(
 }
 
 /**
- * What the discovery runtime returns where the legacy runtime returns the whole
- * registry. The set is the same for every one of those reasons because the
+ * The compact starter set for an uncertain classification. The set is the same
+ * for every one of those reasons because the
  * reason is exactly the thing that is unknown: nothing here is evidence about
  * which mutation the request needs, so discovery answers that when it arises.
  */
@@ -248,10 +178,8 @@ function addBucket(
 
 /**
  * Narrow aligned customer plans by the classifier's typed intent output.
- * Unknown or internally inconsistent request shapes retain the full registry on
- * the legacy runtime, where a false negative costs tokens while a false positive
- * can hide a capability, and take the starter set plus discovery on the
- * discovery runtime, where the same false positive is recoverable in-loop.
+ * Unknown or inconsistent request shapes use the starter set plus discovery;
+ * a missing capability is recoverable in the same bounded loop.
  *
  * RequestFacts deliberately do not participate. The eval suite grades the
  * boolean intent vocabulary on planner behavior; the facts fields are a
@@ -290,16 +218,11 @@ export function selectPlanningTools(input: SelectPlanningToolsInput): PlanningTo
     };
   }
 
-  // Everything below is a classification failure. The legacy runtime answers
-  // each with the full registry; the discovery runtime answers each with the
-  // starter set, because loading every schema is the widening it replaces.
+  // Classification failures start with reads and controls. Capabilities are
+  // added by bounded discovery against the actor's authorized registry.
   const unclassified = (
     reason: Exclude<PlanningToolSelectionReason, "intent_bucket">,
-  ): PlanningToolSelection => (
-    input.capabilityDiscovery
-      ? starterSelection(input.availableTools, reason)
-      : fullSelection(input.availableTools, reason)
-  );
+  ): PlanningToolSelection => starterSelection(input.availableTools, reason);
 
   if (!input.classifierSignals) return unclassified("no_classifier_signals");
   if (!classifierIsAligned(input)) return unclassified("classifier_unaligned");
@@ -320,7 +243,6 @@ export function selectPlanningTools(input: SelectPlanningToolsInput): PlanningTo
       // compensation schema, which is what the broad bucket did to it.
       addBucket(buckets, selectedNames, "order_mutation", [
         ...MUTATION_COMMON_TOOL_NAMES,
-        ...(input.capabilityDiscovery ? [] : BROAD_ORDER_MUTATION_TOOL_NAMES),
       ]);
     }
     if (intents.policy_question) {
@@ -351,30 +273,11 @@ export function selectPlanningTools(input: SelectPlanningToolsInput): PlanningTo
 
   const bucket = [...buckets].sort().join("+");
   return {
-    tools: [...selected, input.capabilityDiscovery ? DISCOVERY_TOOL : NAMESPACE_MISS_TOOL],
+    tools: [...selected, DISCOVERY_TOOL],
     bucket,
     reason: "intent_bucket",
     narrowed: true,
   };
-}
-
-const CUSTOMER_TERMINAL_TOOL_NAMES = new Set([
-  "send_reply",
-  "send_email",
-  "escalate_to_human",
-  "ask_operator",
-]);
-
-export function namespaceMissReason(
-  rawToolCalls: readonly { name: string }[],
-): NamespaceMissReason | null {
-  if (rawToolCalls.some((toolCall) => toolCall.name === NAMESPACE_MISS_TOOL_NAME)) {
-    return "model_signal";
-  }
-  if (rawToolCalls.some((toolCall) => CUSTOMER_TERMINAL_TOOL_NAMES.has(toolCall.name))) {
-    return null;
-  }
-  return rawToolCalls.length === 0 ? "empty_plan" : "incomplete_plan";
 }
 
 /**

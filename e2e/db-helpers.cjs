@@ -17,9 +17,11 @@ async function getAgentPlanHelpers() {
   agentPlanHelpersPromise ??= Promise.all([
     import('@shopkeeper/agent/plan-cache'),
     import('@shopkeeper/agent/settings'),
-  ]).then(([planCache, settings]) => ({
+    import('@shopkeeper/agent/task-ledger'),
+  ]).then(([planCache, settings, tasks]) => ({
     buildAgentPlanCacheRecord: planCache.buildAgentPlanCacheRecord,
     resolveAgentSettings: settings.resolveAgentSettings,
+    ...tasks,
   }));
   return agentPlanHelpersPromise;
 }
@@ -258,7 +260,14 @@ async function seedEmailThreadWithCachedPlan(
       },
     ],
   };
-  const { buildAgentPlanCacheRecord, resolveAgentSettings } = await getAgentPlanHelpers();
+  const {
+    buildAgentPlanCacheRecord, resolveAgentSettings,
+    acceptCustomerAgentRequest, claimAgentTask, settleAgentTaskClaim, ANY_MEMBER_ACTOR_KEY,
+  } = await getAgentPlanHelpers();
+  plan.communication = {
+    mode: 'exact_draft', destination: { kind: 'thread', id: thread.id, channel: thread.channelType },
+    draft: replyText, allowedResultBindings: [],
+  };
   const cachedPlan = buildAgentPlanCacheRecord({
     instruction,
     lastCustomerMessageId: customerMessage.id,
@@ -274,6 +283,32 @@ async function seedEmailThreadWithCachedPlan(
     },
   });
 
+  // Browser approval fixtures use the same durable proposal authority as the app.
+  const clerkUserId = process.env.E2E_CLERK_USER_ID || 'user_e2e_test';
+  await db.orgMember.upsert({
+    where: { organizationId_clerkUserId: { organizationId: orgId, clerkUserId } },
+    create: { organizationId: orgId, clerkUserId }, update: {},
+  });
+  const { request, task } = await acceptCustomerAgentRequest({
+    organizationId: orgId, threadId: thread.id, sourceMessageId: customerMessage.id,
+    objective: instruction,
+    budget: { runtimeVersion: 2, modelCallLimit: 20, activeTimeMsLimit: 120000, spendNanoUsdLimit: 1000000000n },
+  });
+  const claim = await claimAgentTask({ organizationId: orgId, taskId: task.id, expectedRevision: task.revision });
+  if (!claim) throw new Error('Could not claim the local browser approval fixture');
+  const settled = await settleAgentTaskClaim({
+    organizationId: orgId, taskId: task.id, expectedRevision: task.revision,
+    claimToken: claim.claimToken, requestId: request.id,
+    settlement: {
+      status: 'waiting_approval',
+      proposal: {
+        proposalId: cachedPlan.planId, instruction, rawToolCalls: plan.rawToolCalls,
+        communication: plan.communication, sourceRequestIds: [request.id],
+      },
+      approver: { kind: 'member', key: ANY_MEMBER_ACTOR_KEY },
+    },
+  });
+  if (!settled) throw new Error('Could not park the local browser approval fixture');
   return {
     customer,
     customerMessage,
@@ -294,6 +329,14 @@ async function deleteTestCustomers(customerIds) {
     select: { id: true },
   });
   const threadIds = threads.map((thread) => thread.id);
+  if (threadIds.length > 0) {
+    await db.$transaction(async (tx) => {
+      await tx.agentAction.deleteMany({ where: { threadId: { in: threadIds } } });
+      await tx.planExecution.deleteMany({ where: { threadId: { in: threadIds } } });
+      await tx.agentRequest.deleteMany({ where: { threadId: { in: threadIds } } });
+      await tx.agentTask.deleteMany({ where: { threadId: { in: threadIds } } });
+    });
+  }
   await db.requestEpisodeOutcome.deleteMany({
     where: {
       OR: [

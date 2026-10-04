@@ -29,7 +29,7 @@ import { hashInstruction, hashPlan } from "./agent-actions.js";
 import { claimCurrentPlanExecution } from "./execution-ledger.js";
 import {
   acceptCustomerAgentRequest, claimAgentTask, claimWithheldMessageFollowUp, findQueuedAgentTasks,
-  finishWithheldMessageFollowUp, settleAgentTaskClaim, withheldMessageFollowUp,
+  finishWithheldMessageFollowUp, settleAgentTaskClaim, withheldMessageFollowUp, ANY_MEMBER_ACTOR_KEY,
 } from "./task-ledger.js";
 import { updateThreadStatusMutation } from "./thread-io/db-mutations.js";
 import { authorizeAgentProposal } from "./task-approval.js";
@@ -229,7 +229,7 @@ async function seedThreadWithPlan(options: {
 // A support conversation whose parked card is also a durable proposal: the
 // planning job accepts the customer's message, runs an attempt, and settles on
 // whatever `supportAttemptSettlement` reads back out of the cached plan.
-async function seedSupportCardParkedOnTask(runtimeVersion = 1, authored: AgentPlan = threeStepPlan()) {
+async function seedSupportCardParkedOnTask(runtimeVersion = 2, authored: AgentPlan = threeStepPlan()) {
   const settings = resolveAgentSettings({ autonomyTier: "guarded", maxRefundAmount: 100 });
   const seeded = await seedThreadWithPlan({ plan: authored, settings, exactDraft: runtimeVersion >= 2 });
   const plan = seeded.plan;
@@ -259,6 +259,46 @@ async function seedSupportCardParkedOnTask(runtimeVersion = 1, authored: AgentPl
   expect((await db.agentTask.findUniqueOrThrow({ where: { id: task.id } })).activeProposalId)
     .toBe(seeded.cache.planId);
   return { ...seeded, member, task, request };
+}
+
+// Exercise execution through the same accepted task/proposal contract as production.
+async function seedExecutablePlan(options: Parameters<typeof seedThreadWithPlan>[0] & { automatic?: boolean } = {}) {
+  const seeded = await seedThreadWithPlan({ ...options, exactDraft: true });
+  const member = await db.orgMember.create({
+    data: { organizationId: seeded.org.id, clerkUserId: randomUUID() },
+  });
+  const { request, task } = await acceptCustomerAgentRequest({
+    organizationId: seeded.org.id, threadId: seeded.thread.id, sourceMessageId: seeded.message.id,
+    objective: seeded.plan.instruction,
+    budget: { runtimeVersion: 2, modelCallLimit: 20, activeTimeMsLimit: 120000, spendNanoUsdLimit: 1000000000n },
+  });
+  const claim = await claimAgentTask({ organizationId: seeded.org.id, taskId: task.id, expectedRevision: task.revision });
+  expect(claim).not.toBeNull();
+  if (!options.automatic) {
+    expect(await settleAgentTaskClaim({
+      organizationId: seeded.org.id, taskId: task.id, expectedRevision: task.revision,
+      claimToken: claim!.claimToken, requestId: request.id,
+      settlement: {
+        status: "waiting_approval",
+        proposal: {
+          proposalId: seeded.cache.planId!, instruction: seeded.plan.instruction,
+          rawToolCalls: seeded.plan.rawToolCalls, communication: seeded.plan.communication,
+          sourceRequestIds: [request.id],
+        },
+        approver: { kind: "member", key: ANY_MEMBER_ACTOR_KEY },
+      },
+    })).toBe(true);
+  }
+  return {
+    ...seeded, member, task, request,
+    execution: {
+      approver: options.automatic ? undefined : { clerkUserId: member.clerkUserId, displayName: null as string | null },
+      durableTurn: options.automatic ? {
+        requestId: request.id, taskId: task.id, runtimeVersion: 2,
+        expectedRevision: task.revision, claimToken: claim!.claimToken,
+      } : undefined,
+    },
+  };
 }
 
 // Release-owner decision C: closing a conversation stops every task on it that
@@ -477,6 +517,7 @@ describe("plan execution helpers", () => {
       proposalId: support.cache.planId!,
       instruction: support.plan.instruction,
       approvedToolCalls: support.plan.rawToolCalls,
+      communication: support.plan.communication,
     })).not.toBeNull();
 
     // No execution row exists yet, so the ledger's own status is the only thing
@@ -1006,27 +1047,34 @@ describe("executeCurrentCachedHomePlan execution", () => {
     });
   });
 
-  it("keeps a v1 durable approval pinned to cached-plan interpretation", async () => {
-    const support = await seedSupportCardParkedOnTask(1);
-
-    await executeCurrentCachedHomePlan({
-      orgId: support.org.id,
-      threadId: support.thread.id,
-      settings: support.settings,
-      executionIntent: "merchant_approved",
-      failureRoute: "test",
+  it("refuses a historical v1 proposal without recording approval or dispatch", async () => {
+    const support = await seedSupportCardParkedOnTask(2);
+    // Seed historical evidence directly; new task acceptance refuses runtime 1.
+    const historicalTask = await db.agentTask.create({ data: {
+      organizationId: support.org.id, threadId: support.thread.id, objective: support.plan.instruction,
+      initiatingActorKind: "customer", initiatingActorKey: `customer:${support.thread.customerId}`,
+      runtimeVersion: 1, modelCallLimit: 20, activeTimeMsLimit: 120000, spendNanoUsdLimit: 1000000000n,
+      checkpointVersion: 1, checkpoint: {},
+    } });
+    const original = await db.agentProposal.findUniqueOrThrow({ where: { id: support.cache.planId! } });
+    const historicalProposal = await db.agentProposal.create({ data: {
+      organizationId: support.org.id, taskId: historicalTask.id, taskRevision: 0,
+      schemaVersion: original.schemaVersion, instruction: original.instruction,
+      canonicalActions: original.canonicalActions as Prisma.InputJsonValue, proposalHash: original.proposalHash,
+      dependencies: [],
+      approverScopeKind: "member", approverScopeKey: ANY_MEMBER_ACTOR_KEY,
+      sourceRequestIds: original.sourceRequestIds as Prisma.InputJsonValue,
+    } });
+    await db.thread.update({ where: { id: support.thread.id }, data: {
+      cachedPlan: { ...support.cache, planId: historicalProposal.id } as unknown as Prisma.InputJsonValue,
+    } });
+    await expect(executeCurrentCachedHomePlan({
+      orgId: support.org.id, threadId: support.thread.id, settings: support.settings,
+      executionIntent: "merchant_approved", failureRoute: "test",
       approver: { clerkUserId: support.member.clerkUserId, displayName: null },
-    }, makeDeps());
-
-    const execution = await db.planExecution.findUniqueOrThrow({
-      where: {
-        organizationId_planId: {
-          organizationId: support.org.id,
-          planId: support.cache.planId!,
-        },
-      },
-    });
-    expect(execution.planHash).toBe(hashPlan(support.plan));
+    }, unreachableDeps())).rejects.toBeInstanceOf(ConflictError);
+    expect(await db.agentProposal.findUniqueOrThrow({ where: { id: historicalProposal.id } }))
+      .toMatchObject({ status: "ready", approvedAt: null });
   });
 
   it("refuses approval of an escalation-only plan before executing", async () => {
@@ -1041,17 +1089,18 @@ describe("executeCurrentCachedHomePlan execution", () => {
   });
 
   it("executes a handoff without approval even with store-write rollout disabled", async () => {
-    const { org, thread, settings } = await seedThreadWithPlan({ plan: escalationPlan() });
+    const { org, thread, settings, execution } = await seedExecutablePlan({ automatic: true, plan: escalationPlan() });
     const executed = await maybeAutoExecuteCurrentCachedHomePlan({
       orgId: org.id, threadId: thread.id, settings,
       allowMutativeAutoExecute: false, failureRoute: "test",
+      ...execution,
     }, makeDeps());
     expect(executed?.approvedToolCalls).toEqual(escalationPlan().rawToolCalls);
     expect(readAgentPlanCache((await db.thread.findUniqueOrThrow({ where: { id: thread.id } })).cachedPlan)).toBeNull();
   });
 
   it("runs the approved calls, records the approver, and consumes the cache", async () => {
-    const { org, thread, settings } = await seedThreadWithPlan();
+    const { org, thread, settings, execution } = await seedExecutablePlan();
     const runAgent = vi.fn(async () => okResult);
 
     const executed = await executeCurrentCachedHomePlan({
@@ -1060,7 +1109,8 @@ describe("executeCurrentCachedHomePlan execution", () => {
       settings,
       executionIntent: "merchant_approved",
       failureRoute: "test",
-      approver: { clerkUserId: "user_1", displayName: "Ada" },
+      ...execution,
+      approver: { ...execution.approver!, displayName: "Ada" },
     }, makeDeps({ runAgent }));
 
     expect(runAgent).toHaveBeenCalledOnce();
@@ -1090,7 +1140,7 @@ describe("executeCurrentCachedHomePlan execution", () => {
         }),
       },
     };
-    const { org, thread, settings } = await seedThreadWithPlan({ plan });
+    const { org, thread, settings, execution } = await seedExecutablePlan({ plan });
     const runAgent = vi.fn(async () => okResult);
 
     await executeCurrentCachedHomePlan({
@@ -1099,6 +1149,8 @@ describe("executeCurrentCachedHomePlan execution", () => {
       settings,
       executionIntent: "merchant_approved",
       failureRoute: "test",
+      ...execution,
+      approvedToolCalls: plan.rawToolCalls,
     }, makeDeps({ runAgent }));
 
     expect(runAgent.mock.calls[0]?.[4].completionEvidence).toEqual([
@@ -1113,58 +1165,32 @@ describe("executeCurrentCachedHomePlan execution", () => {
   // Package 5: the request ID is the turn ID because that is how settlement finds
   // the rows this execution wrote. Both halves are asserted, because a turn ID
   // that does not match the request links nothing and still looks correct.
-  it("runs an approved plan as the turn of the request that authorized it", async () => {
-    const { org, thread, message, settings } = await seedThreadWithPlan();
+  it("attributes approved execution to its proposal task and a distinct approved turn", async () => {
+    const { org, thread, settings, task, request, execution } = await seedExecutablePlan();
     const runAgent = vi.fn(async () => okResult);
-    const { request, task } = await acceptCustomerAgentRequest({
-      organizationId: org.id, threadId: thread.id, sourceMessageId: message.id,
-      objective: "Answer the shipping question",
-      budget: {
-        runtimeVersion: 1, modelCallLimit: 20,
-        activeTimeMsLimit: 120000, spendNanoUsdLimit: 1000000000n,
-      },
-    });
-    const durableTurn = { requestId: request.id, taskId: task.id };
-
     await executeCurrentCachedHomePlan({
-      orgId: org.id,
-      threadId: thread.id,
-      settings,
-      executionIntent: "merchant_approved",
-      failureRoute: "test",
-      durableTurn,
+      orgId: org.id, threadId: thread.id, settings, executionIntent: "merchant_approved",
+      failureRoute: "test", ...execution,
     }, makeDeps({ runAgent }));
-
-    expect(runAgent.mock.calls[0]?.[4].turnId).toBe(durableTurn.requestId);
-    const note = await db.message.findFirstOrThrow({
-      where: { threadId: thread.id, senderType: "note" },
-    });
-    expect(note).toMatchObject({
-      agentRequestId: durableTurn.requestId,
-      agentTaskId: durableTurn.taskId,
-    });
+    const turnId = runAgent.mock.calls[0]?.[4].turnId;
+    expect(turnId).toEqual(expect.any(String));
+    expect(turnId).not.toBe(request.id);
+    expect(await db.message.findFirstOrThrow({ where: { threadId: thread.id, senderType: "note" } }))
+      .toMatchObject({ agentRequestId: null, agentTaskId: task.id });
   });
 
-  it("generates its own turn identity when the caller has no durable task", async () => {
+  it("refuses a taskless plan before creating a turn or reaching the provider", async () => {
     const { org, thread, settings } = await seedThreadWithPlan();
     const runAgent = vi.fn(async () => okResult);
-
-    await executeCurrentCachedHomePlan({
-      orgId: org.id,
-      threadId: thread.id,
-      settings,
-      executionIntent: "merchant_approved",
-      failureRoute: "test",
-    }, makeDeps({ runAgent }));
-
-    expect(runAgent.mock.calls[0]?.[4].turnId).toEqual(expect.any(String));
-    expect(await db.message.findFirstOrThrow({
-      where: { threadId: thread.id, senderType: "note" },
-    })).toMatchObject({ agentRequestId: null, agentTaskId: null });
+    await expect(executeCurrentCachedHomePlan({
+      orgId: org.id, threadId: thread.id, settings, executionIntent: "merchant_approved", failureRoute: "test",
+    }, makeDeps({ runAgent }))).rejects.toBeInstanceOf(ConflictError);
+    expect(runAgent).not.toHaveBeenCalled();
+    expect(await db.message.count({ where: { threadId: thread.id, senderType: "note" } })).toBe(0);
   });
 
   it("leaves a plan that drafted its own reply to send that reply", async () => {
-    const { org, thread, settings } = await seedThreadWithPlan({ plan: mutativePlan() });
+    const { org, thread, settings, execution } = await seedExecutablePlan({ plan: mutativePlan() });
     const runAgent = vi.fn(async () => okResult);
 
     await executeCurrentCachedHomePlan({
@@ -1173,19 +1199,21 @@ describe("executeCurrentCachedHomePlan execution", () => {
       settings,
       executionIntent: "merchant_approved",
       failureRoute: "test",
+      ...execution,
     }, makeDeps({ runAgent }));
 
     expect(runAgent.mock.calls[0]?.[2]).toEqual([noteCall, sendReplyCall]);
   });
 
   it("refuses a second execution of the same plan", async () => {
-    const { org, thread, settings } = await seedThreadWithPlan();
+    const { org, thread, settings, execution } = await seedExecutablePlan();
     const params = {
       orgId: org.id,
       threadId: thread.id,
       settings,
       executionIntent: "merchant_approved",
       failureRoute: "test",
+      ...execution,
     };
 
     await executeCurrentCachedHomePlan(params, makeDeps());
@@ -1196,7 +1224,7 @@ describe("executeCurrentCachedHomePlan execution", () => {
   });
 
   it("clears the cache even when the turn throws, so a failed plan is not replayable", async () => {
-    const { org, thread, settings } = await seedThreadWithPlan();
+    const { org, thread, settings, execution } = await seedExecutablePlan();
 
     await expect(executeCurrentCachedHomePlan({
       orgId: org.id,
@@ -1204,6 +1232,7 @@ describe("executeCurrentCachedHomePlan execution", () => {
       settings,
       executionIntent: "merchant_approved",
       failureRoute: "test",
+      ...execution,
     }, makeDeps({
       runAgent: async () => {
         throw new Error("provider exploded mid-turn");
@@ -1215,7 +1244,7 @@ describe("executeCurrentCachedHomePlan execution", () => {
   });
 
   it("reports a failed tool as a non-committed execution", async () => {
-    const { org, thread, settings } = await seedThreadWithPlan();
+    const { org, thread, settings, execution } = await seedExecutablePlan();
     const failed: AgentResult = {
       summary: "Could not reply",
       actionsPerformed: [{ tool: "send_reply", result: "provider rejected", status: "error" }],
@@ -1227,36 +1256,30 @@ describe("executeCurrentCachedHomePlan execution", () => {
       settings,
       executionIntent: "merchant_approved",
       failureRoute: "test",
+      ...execution,
     }, makeDeps({ runAgent: async () => failed }));
 
     expect(executed.execution.status).not.toBe("committed");
   });
 
-  it("runs without a durable claim when the ledger is switched off", async () => {
+  it("refuses a durable approval when the execution ledger is switched off", async () => {
     vi.stubEnv("PLAN_EXECUTION_LEDGER_MODE", "off");
-    const { org, thread, settings } = await seedThreadWithPlan();
-
-    const executed = await executeCurrentCachedHomePlan({
-      orgId: org.id,
-      threadId: thread.id,
-      settings,
-      executionIntent: "merchant_approved",
-      failureRoute: "test",
-    }, makeDeps());
-
-    expect(executed.execution.id).toBeNull();
-    expect(executed.result).toEqual(okResult);
+    const { org, thread, settings, execution, cache } = await seedExecutablePlan();
+    await expect(executeCurrentCachedHomePlan({
+      orgId: org.id, threadId: thread.id, settings, executionIntent: "merchant_approved",
+      failureRoute: "test", ...execution,
+    }, unreachableDeps())).rejects.toThrow("Durable proposals require the execution ledger");
+    expect(await db.agentProposal.findUniqueOrThrow({ where: { id: cache.planId! } }))
+      .toMatchObject({ status: "ready", approvedAt: null });
   });
+
 });
 
-// Overhaul plan, Next work item 3 (decision A): a v2 proposal that messages the
-// customer binds that exact message and where it goes into the approval.
+// Decision A: a proposal binds the exact customer message and its destination.
 describe("exact-draft proposals", () => {
   const cardIdentity = (support: Awaited<ReturnType<typeof seedSupportCardParkedOnTask>>, plan: AgentPlan) => ({
-    planId: support.cache.planId!,
-    sourceMessageId: support.message.id,
-    planHash: hashPlan(plan),
-    instructionHash: hashInstruction(plan.instruction),
+    planId: support.cache.planId!, sourceMessageId: support.message.id,
+    planHash: hashPlan(plan), instructionHash: hashInstruction(plan.instruction),
   });
 
   it("persists the exact draft and its destination as part of the proposal's identity", async () => {
@@ -1362,19 +1385,11 @@ describe("exact-draft proposals", () => {
     expect(runAgent.mock.calls[0]?.[4].approvedCommunication).toMatchObject({ allowedResultBindings: [binding] });
   });
 
-  it("gives a legacy plan's reply no approved snapshot, so it keeps the legacy grounding", async () => {
+  it("requires regeneration of a legacy reply before approval can send it", async () => {
     const { org, thread, settings } = await seedThreadWithPlan({ plan: mutativePlan() });
-    const runAgent = vi.fn(async () => okResult);
-
-    await executeCurrentCachedHomePlan({
-      orgId: org.id,
-      threadId: thread.id,
-      settings,
-      executionIntent: "merchant_approved",
-      failureRoute: "test",
-    }, makeDeps({ runAgent }));
-
-    expect(runAgent.mock.calls[0]?.[4].approvedCommunication).toBeUndefined();
+    await expect(executeCurrentCachedHomePlan({
+      orgId: org.id, threadId: thread.id, settings, executionIntent: "merchant_approved", failureRoute: "test",
+    }, unreachableDeps())).rejects.toBeInstanceOf(ConflictError);
   });
 
   it("sends nothing on a proposal that authorizes no message", async () => {
@@ -1450,7 +1465,7 @@ describe("maybeAutoExecuteCurrentCachedHomePlan", () => {
   });
 
   it("sends a clean quick reply without consuming merchant attention", async () => {
-    const { org, thread, settings } = await seedThreadWithPlan();
+    const { org, thread, settings, execution } = await seedExecutablePlan({ automatic: true });
     const runAgent = vi.fn(async () => okResult);
 
     const result = await maybeAutoExecuteCurrentCachedHomePlan({
@@ -1458,6 +1473,7 @@ describe("maybeAutoExecuteCurrentCachedHomePlan", () => {
       threadId: thread.id,
       settings,
       failureRoute: "test",
+      ...execution,
     }, makeDeps({ runAgent }));
 
     expect(runAgent).toHaveBeenCalledOnce();
@@ -1467,13 +1483,14 @@ describe("maybeAutoExecuteCurrentCachedHomePlan", () => {
   it("sends a quick reply even when mutative auto-execution is switched off", async () => {
     // Turning on clarifying replies must not be coupled to turning on refunds,
     // and the reverse must hold too.
-    const { org, thread, settings } = await seedThreadWithPlan();
+    const { org, thread, settings, execution } = await seedExecutablePlan({ automatic: true });
 
     const result = await maybeAutoExecuteCurrentCachedHomePlan({
       orgId: org.id,
       threadId: thread.id,
       settings,
       failureRoute: "test",
+      ...execution,
       allowMutativeAutoExecute: false,
     }, makeDeps());
 
@@ -1526,7 +1543,7 @@ describe("maybeAutoExecuteCurrentCachedHomePlan", () => {
 
   it("executes a mutative plan only when the tier and the gate both allow it", async () => {
     const settings = resolveAgentSettings({ autonomyTier: "trusted", autoExecuteMode: "live" });
-    const { org, thread } = await seedThreadWithPlan({ plan: mutativePlan(), settings });
+    const { org, thread, execution } = await seedExecutablePlan({ automatic: true, plan: mutativePlan(), settings });
     const runAgent = vi.fn(async () => okResult);
 
     const result = await maybeAutoExecuteCurrentCachedHomePlan({
@@ -1534,6 +1551,7 @@ describe("maybeAutoExecuteCurrentCachedHomePlan", () => {
       threadId: thread.id,
       settings,
       failureRoute: "test",
+      ...execution,
       allowMutativeAutoExecute: true,
     }, makeDeps({ runAgent }));
 
@@ -1545,7 +1563,7 @@ describe("maybeAutoExecuteCurrentCachedHomePlan", () => {
 describe("bounded failure replan", () => {
   it("replans once after a definite partial failure and completes remaining work", async () => {
     const settings = resolveAgentSettings({ autonomyTier: "trusted", autoExecuteMode: "live" });
-    const { org, thread } = await seedThreadWithPlan({ plan: threeStepPlan(), settings });
+    const { org, thread, execution } = await seedExecutablePlan({ automatic: true, plan: threeStepPlan(), settings });
     const partialResult: AgentResult = {
       summary: "Refund failed",
       actionsPerformed: [
@@ -1564,6 +1582,7 @@ describe("bounded failure replan", () => {
       settings,
       executionIntent: "automatic",
       failureRoute: "test",
+      ...execution,
       allowMutativeAutoExecute: true,
     }, makeDeps({ runAgent, planAgent: mockPlanAgent }));
 
@@ -1608,7 +1627,11 @@ describe("bounded failure replan", () => {
         spendNanoUsdLimit: 1000000000n,
       },
     });
-    const durableTurn = { requestId: request.id, taskId: task.id, runtimeVersion: 2 };
+    const claim = await claimAgentTask({ organizationId: org.id, taskId: task.id, expectedRevision: task.revision });
+    const durableTurn = {
+      requestId: request.id, taskId: task.id, runtimeVersion: 2,
+      expectedRevision: task.revision, claimToken: claim!.claimToken,
+    };
 
     await executeCurrentCachedHomePlan({
       orgId: org.id,
@@ -1633,10 +1656,10 @@ describe("bounded failure replan", () => {
   // The dashboard ticket card posts the reviewed tool calls back to /api/agent.
   // The child shares none of them, so the parent's approval envelope must not
   // travel into the child execution.
-  it("recovers when the approver posted an explicit approved tool-call set", async () => {
+  it("does not carry explicit merchant approval into a speculative failure replan", async () => {
     const settings = resolveAgentSettings({ autonomyTier: "trusted", autoExecuteMode: "live" });
     const plan = threeStepPlan();
-    const { org, thread } = await seedThreadWithPlan({ plan, settings });
+    const { org, thread, execution } = await seedExecutablePlan({ plan, settings });
     const partialResult: AgentResult = {
       summary: "Refund failed",
       actionsPerformed: [
@@ -1655,21 +1678,22 @@ describe("bounded failure replan", () => {
       settings,
       executionIntent: "merchant_approved",
       failureRoute: "test",
+      ...execution,
       approvedToolCalls: [noteCall, refundCall, sendReplyCall],
       expectedIdentity: { instructionHash: hashInstruction(plan.instruction) },
       allowMutativeAutoExecute: true,
     }, makeDeps({ runAgent, planAgent: mockPlanAgent }));
 
-    expect(runAgent).toHaveBeenCalledTimes(2);
-    expect(executed.execution.status).toBe("committed");
-    expect(executed.failureReplanRecovery).toMatchObject({
-      context: expect.objectContaining({ failureTool: "create_refund" }),
-    });
+    expect(runAgent).toHaveBeenCalledOnce();
+    expect(mockPlanAgent).not.toHaveBeenCalled();
+    expect(executed.execution.status).toBe("partial");
+    expect(executed.failureReplanRecovery).toBeUndefined();
+
   });
 
-  it("recovers on the quick-approve path, which posts no approved tool calls", async () => {
+  it("does not reuse quick approval for a speculative failure replan", async () => {
     const settings = resolveAgentSettings({ autonomyTier: "trusted", autoExecuteMode: "live" });
-    const { org, thread } = await seedThreadWithPlan({ plan: threeStepPlan(), settings });
+    const { org, thread, execution } = await seedExecutablePlan({ plan: threeStepPlan(), settings });
     const partialResult: AgentResult = {
       summary: "Refund failed",
       actionsPerformed: [
@@ -1688,16 +1712,18 @@ describe("bounded failure replan", () => {
       settings,
       executionIntent: "merchant_approved",
       failureRoute: "test",
+      ...execution,
       allowMutativeAutoExecute: true,
     }, makeDeps({ runAgent, planAgent: mockPlanAgent }));
 
-    expect(runAgent).toHaveBeenCalledTimes(2);
-    expect(executed.failureReplanRecovery).toBeDefined();
+    expect(runAgent).toHaveBeenCalledOnce();
+    expect(mockPlanAgent).not.toHaveBeenCalled();
+    expect(executed.failureReplanRecovery).toBeUndefined();
   });
 
-  it("caches a child that cannot run on its own authority instead of executing it", async () => {
+  it("reports the approved failure without drafting a child on spent authority", async () => {
     const settings = resolveAgentSettings({ autonomyTier: "guarded", requireApprovalForActions: true });
-    const { org, thread, message } = await seedThreadWithPlan({ plan: threeStepPlan(), settings });
+    const { org, thread, execution } = await seedExecutablePlan({ plan: threeStepPlan(), settings });
     const retryRefund: RawToolCall = {
       id: "child_refund_1",
       name: "create_refund",
@@ -1733,28 +1759,21 @@ describe("bounded failure replan", () => {
       settings,
       executionIntent: "merchant_approved",
       failureRoute: "test",
+      ...execution,
       approvedToolCalls: [noteCall, refundCall, sendReplyCall],
     }, makeDeps({ runAgent, planAgent: mockPlanAgent }));
 
-    // The child never ran, and the parent's committed work is still reported.
     expect(runAgent).toHaveBeenCalledOnce();
+    expect(mockPlanAgent).not.toHaveBeenCalled();
     expect(executed.failureReplanRecovery).toBeUndefined();
+    expect(executed.failureReplanAwaitingApproval).toBeUndefined();
     expect(executed.result.actionsPerformed).toHaveLength(2);
-    expect(executed.failureReplanAwaitingApproval).toMatchObject({
-      context: expect.objectContaining({ failureTool: "create_refund" }),
-    });
-
-    // It is waiting on the thread for the merchant, marked so it cannot replan again.
-    const threadAfter = await db.thread.findUniqueOrThrow({ where: { id: thread.id } });
-    const cached = readAgentPlanCache(threadAfter.cachedPlan);
-    expect(cached?.plan.rawToolCalls.map((call) => call.id)).toEqual(["child_refund_1"]);
-    expect(cached?.failureReplan?.failureTool).toBe("create_refund");
-    expect(threadAfter.cachedPlanMessageId).toBe(message.id);
+    expect((await db.thread.findUniqueOrThrow({ where: { id: thread.id } })).cachedPlan).toBeNull();
   });
 
   it("does not replan after an unknown provider outcome and escalates the thread", async () => {
     const settings = resolveAgentSettings({ autonomyTier: "trusted", autoExecuteMode: "live" });
-    const { org, thread } = await seedThreadWithPlan({ plan: threeStepPlan(), settings });
+    const { org, thread, execution } = await seedExecutablePlan({ automatic: true, plan: threeStepPlan(), settings });
     const unknownResult: AgentResult = {
       summary: "Unknown refund outcome",
       actionsPerformed: [
@@ -1771,6 +1790,7 @@ describe("bounded failure replan", () => {
       settings,
       executionIntent: "automatic",
       failureRoute: "test",
+      ...execution,
       allowMutativeAutoExecute: true,
     }, makeDeps({ runAgent, planAgent: mockPlanAgent }));
 

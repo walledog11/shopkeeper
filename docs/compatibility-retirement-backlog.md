@@ -4,7 +4,18 @@ Evidence-gated removal of compatibility surfaces identified in the 2026-07-10
 codebase audit (in git history). One candidate per pull request; never
 batch unrelated retirements.
 
-Last reviewed: 2026-09-26.
+Last reviewed: 2026-10-04.
+
+## Runtime retirement candidate — 2026-10-04
+
+The conversational retirement branch removes runtime selection/compatibility
+flags, full-registry retries, mutation result-text inference, and taskless
+continuation/approval fallbacks. The production read-only inventory found no v1
+tasks or proposals and no legacy unknown actions. Five current taskless caches
+remain readable and require regeneration; two v2 unknown actions retain their
+reconciliation identities. Release verification and deployment are recorded in
+the [overhaul release evidence](conversational-agent-overhaul-p6-release-evidence.md).
+See [agent-runtime.md](agent-runtime.md) for retained readers and rollback.
 
 ## Completed
 
@@ -34,7 +45,7 @@ repeatable schedulers and can break operator digests and async outbound recovery
 | WhatsApp-named BullMQ queue IDs | Gateway / platform | `npm run audit:bullmq-compatibility-names` inventories live repeatable jobs; rename only after old Redis entries are removed and recreated | Deferred — storage compatibility names per AUD-021 |
 | `OUTBOUND_SEND_SWEEP` legacy string | Gateway maintenance | Same BullMQ audit; sweep is channel-agnostic (email + iMessage) | Deferred — cosmetic rename blocked on Redis migration |
 | Identity-less operator queue entries | Operator channels | `npm run audit:operator-context-compatibility` must report zero `identityLessQueuedPlans`. Queue entries written before durable approval carry no `planId`/`sourceMessageId`/`planHash`/`instructionHash`; `operator-context.ts` refuses to offer them rather than risk running a stale plan. That reader retires when no such rows remain | Deferred — live rows reference it |
-| Cached-plan digest / plan-recovery maintenance | Gateway | `Thread.cachedPlan` and runtime v1 paths still active until Package 6 production cutover | Deferred — trim after agent v1 deletion |
+| Cached-plan digest / plan-recovery maintenance | Gateway | Current durable proposals still project to `Thread.cachedPlan`; missing-plan recovery accepts durable work | Retained current functionality, independent of v1. Historical cache decoders remain while stored records require them |
 
 ## Product decisions blocking retirement
 

@@ -125,7 +125,7 @@ describe("agent action dispatch lifecycle", () => {
     const { request, task } = await acceptMemberAgentRequest({
       ...input,
       budget: {
-        runtimeVersion: 1, modelCallLimit: 20,
+        runtimeVersion: 2, modelCallLimit: 20,
         activeTimeMsLimit: 120000, spendNanoUsdLimit: 1000000000n,
       },
     });

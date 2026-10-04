@@ -12,18 +12,16 @@ export function requestedEvalSuite(value: string | undefined = process.env.EVAL_
 }
 
 /**
- * Pins a paid comparison run to the same runtime choice that production stores
- * on a newly-created task. Unset/"current" preserves the pre-Package-6 eval
- * behavior so ordinary release gates do not silently change semantics.
+ * Pins evals to the sole executable runtime. Historical v1 comparisons belong
+ * to the deployment revision that still implements v1.
  */
 export function requestedEvalAgentRuntimeVersion(
   value: string | undefined = process.env.EVAL_AGENT_RUNTIME_VERSION,
-): EvalAgentRuntimeVersion | undefined {
+): 2 {
   const normalized = value?.trim().toLowerCase()
   if (normalized === undefined || normalized === "" || normalized === "current") {
-    return undefined
+    return 2
   }
-  if (normalized === "1") return 1
   if (normalized === "2") return 2
   throw new Error(`Invalid EVAL_AGENT_RUNTIME_VERSION ${JSON.stringify(normalized)}`)
 }
@@ -56,7 +54,7 @@ export function selectFixtures(
   fixtures: readonly Fixture[],
   suite: EvalSuite,
   requested: ReadonlySet<string> | null,
-  runtimeVersion: EvalAgentRuntimeVersion | undefined = requestedEvalAgentRuntimeVersion(),
+  runtimeVersion: 2 = requestedEvalAgentRuntimeVersion(),
 ): Fixture[] {
   // A fixture for behavior only one runtime has, such as a receipt placeholder
   // in an exact draft, runs only when that runtime is pinned.

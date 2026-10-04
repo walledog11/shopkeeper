@@ -50,6 +50,7 @@ function durableRequestPayload(request: MemberRequestRecord) {
     acceptedAt: request.acceptedAt,
     updatedAt: task?.updatedAt ?? request.attachedAt ?? request.acceptedAt,
     response: response ? {
+      requestId: response.agentRequestId,
       summary: response.contentText ?? '',
       actionsPerformed: (task?.actions ?? []).map((action) => ({
         tool: action.tool,
@@ -85,7 +86,7 @@ export function registerInternalOperatorRoutes(router: Router): void {
     try {
       const accepted = await acceptTicketAgentRequest({
         organizationId, clerkUserId, threadId, dedupeKey: clientRequestId, instruction,
-        force: body.force, budget: memberAgentTaskBudget(organizationId),
+        force: body.force, budget: memberAgentTaskBudget(),
       });
       if (!accepted.deduplicated) await removePendingPlanForThread(organizationId, threadId);
       try {
@@ -125,7 +126,7 @@ export function registerInternalOperatorRoutes(router: Router): void {
         threadId: thread.id,
         dedupeKey: clientRequestId,
         instruction,
-        budget: memberAgentTaskBudget(organizationId),
+        budget: memberAgentTaskBudget(),
       });
       if (!accepted.task) throw new Error('Accepted dashboard request has no task.');
       try {

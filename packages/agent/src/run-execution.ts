@@ -90,8 +90,8 @@ function isCustomerMessage(toolName: string): boolean {
 
 /**
  * What an approved proposal lets this run say to the customer. Present only when
- * executing a proposal that binds its communication (runtime v2); absent on the
- * legacy path and on model turns, whose replies keep the legacy grounding.
+ * executing a proposal that binds its communication; model turns instead ground
+ * their replies in successful receipts and live provider reads.
  */
 export interface ApprovedMessage {
   communication: ProposalCommunication;
@@ -387,19 +387,17 @@ export async function executeAgentToolCall(
   const approvedMessage = input.approvedMessage && isCustomerMessage(toolCall.name)
     ? prepareApprovedMessage(toolCall, input.approvedMessage, actionsPerformed)
     : null;
-  // The legacy runtime's replies keep their bounded compatibility reader over
-  // string-only action rows until that path is deleted (Gate E). An approved
-  // exact draft never reaches it.
-  const legacyReplyFacts = !input.approvedMessage && isCustomerMessage(toolCall.name)
+  // Non-draft communication also grounds completion claims in validated receipts.
+  const receiptReplyFacts = !input.approvedMessage && isCustomerMessage(toolCall.name)
     ? [
       ...(input.completionEvidence ?? []),
-      ...executedCompletionFacts(actionsPerformed, ctx, { allowHistoricalResultInference: true }),
+      ...executedCompletionFacts(actionsPerformed, ctx),
     ]
     : null;
   const authoredToolCall = approvedMessage && "call" in approvedMessage
     ? approvedMessage.call
-    : legacyReplyFacts
-      ? renderReplyCompletionClaims(toolCall, legacyReplyFacts, ctx)
+    : receiptReplyFacts
+      ? renderReplyCompletionClaims(toolCall, receiptReplyFacts, ctx)
       : toolCall;
   const quoted = input.quoteModelRefunds && !readOnly && !hasUnknownProviderOutcome(actionsPerformed)
     ? await quoteModelFullRefund(authoredToolCall, ctx)
@@ -453,13 +451,13 @@ export async function executeAgentToolCall(
     status = quoted.refusal.status === "policy_block" ? "policy_block" : "error";
     errorDetail = result;
   } else if (
-    legacyReplyFacts
+    receiptReplyFacts
     // Validate the exact receipt-bound text that will be dispatched. The model
     // draft may contain a broader phrase (for example "shipping address") that
     // the canonical renderer deliberately replaces with one grounded claim;
     // checking the discarded draft can reject a safe reply for a claim no
     // customer will receive.
-    && unsupportedReplyCompletionClaims(executableToolCall, legacyReplyFacts, ctx).length > 0
+    && unsupportedReplyCompletionClaims(executableToolCall, receiptReplyFacts, ctx).length > 0
   ) {
     result = `Error: skipped ${toolCall.name} because its completion claim is not supported by a successful action result.`;
     status = "error";

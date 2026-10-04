@@ -18,11 +18,11 @@ import type { OperatorMessageContext } from '../../routes/operator-message.js';
 export interface RunOperatorFreeFormTurnParams {
   organizationId: string;
   clerkUserId: string;
-  requestId?: string;
-  taskId?: string;
-  taskAuthority?: AgentActionTaskAuthority;
-  assertExecutionAllowed?: () => void;
-  taskBudget?: TaskModelBudget;
+  requestId: string;
+  taskId: string;
+  taskAuthority: AgentActionTaskAuthority;
+  assertExecutionAllowed: () => void;
+  taskBudget: TaskModelBudget;
   message: OperatorMessageContext;
   context: OperatorContext;
 }
@@ -38,9 +38,8 @@ export async function runOperatorFreeFormTurn(
   params: RunOperatorFreeFormTurnParams,
 ): Promise<ExecuteOperatorAgentTurnResult> {
   const { organizationId, clerkUserId, context } = params;
-  const { body, presence, senderRef, deliveryRef, turnId } = params.message;
+  const { body, presence, senderRef, deliveryRef } = params.message;
   const deskMode = !deliveryRef;
-  const durableTurnId = params.requestId ?? turnId;
 
   // No delivery ref means no provider push: the merchant is at the dashboard,
   // where a pending plan is a button rather than a line to reply to.
@@ -70,12 +69,12 @@ export async function runOperatorFreeFormTurn(
     () => executeOperatorAgentTurn({
       orgId: organizationId,
       instruction: body,
-      ...(durableTurnId ? { turnId: durableTurnId } : {}),
-      ...(params.requestId ? { agentRequestId: params.requestId } : {}),
-      ...(params.taskId ? { agentTaskId: params.taskId } : {}),
-      ...(params.taskAuthority ? { taskAuthority: params.taskAuthority } : {}),
-      ...(params.assertExecutionAllowed ? { assertExecutionAllowed: params.assertExecutionAllowed } : {}),
-      ...(params.taskBudget ? { taskBudget: params.taskBudget } : {}),
+      turnId: params.requestId,
+      agentRequestId: params.requestId,
+      agentTaskId: params.taskId,
+      taskAuthority: params.taskAuthority,
+      assertExecutionAllowed: params.assertExecutionAllowed,
+      taskBudget: params.taskBudget,
       operatorKey: senderRef,
       ...(deliveryRef ? { senderPhone: deliveryRef } : {}),
       clerkUserId,
