@@ -6,9 +6,9 @@ batch unrelated retirements.
 
 Last reviewed: 2026-10-04.
 
-## Runtime retirement candidate — 2026-10-04
+## Completed runtime retirement — 2026-10-04
 
-The conversational retirement branch removes runtime selection/compatibility
+PR #165, deployed as `17afc644` across all hosts, removed runtime selection/compatibility
 flags, full-registry retries, mutation result-text inference, and taskless
 continuation/approval fallbacks. The production read-only inventory found no v1
 tasks or proposals and no legacy unknown actions. Five current taskless caches
