@@ -71,6 +71,7 @@ describe("buildContext customer image attachments", () => {
     const context = await buildContext(thread.id, org.id, sink);
 
     expect(context.recentMessages).toEqual([{
+      id: message.id,
       senderType: "customer",
       contentText: "[Instagram image attachment]",
       attachments: [{
@@ -108,6 +109,7 @@ describe("buildContext customer image attachments", () => {
     const context = await buildContext(thread.id, org.id, sink);
 
     expect(context.recentMessages).toEqual([{
+      id: message.id,
       senderType: "customer",
       contentText: "My mug arrived damaged — see photo.",
       attachments: [{
@@ -166,6 +168,7 @@ describe("buildContext customer image attachments", () => {
     const context = await buildContext(thread.id, org.id, sink);
 
     expect(context.recentMessages).toEqual([{
+      id: message.id,
       senderType: "customer",
       contentText: "See attachment",
     }]);
