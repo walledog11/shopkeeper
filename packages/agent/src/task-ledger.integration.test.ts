@@ -12,6 +12,7 @@ import {
   acceptCustomerAgentRequest,
   acceptTicketAgentRequest,
   acceptMemberAgentRequest, attachMemberAgentTask, getMemberAgentRequest,
+  listMemberAgentRequests,
   cancelMemberAgentTask, claimAgentTask, claimContinuedAgentTask,
   failAgentTaskClaim, findQueuedAgentTasks,
   recordAgentTaskModelUsage, reconcileExpiredAgentTaskClaims, renewAgentTaskLease,
@@ -1303,6 +1304,18 @@ describe("support approval-wait continuation", () => {
     const published = await db.thread.findUniqueOrThrow({ where: { id: seeded.threadId } });
     const parked = await db.agentTask.findUniqueOrThrow({ where: { id: continued.task.id } });
     expect(published.cachedPlan).toMatchObject({ planId: parked.activeProposalId });
+    const history = await listMemberAgentRequests(seeded);
+    expect(history).toHaveLength(1);
+    expect(history[0]).toMatchObject({
+      id: continued.request.id,
+      task: { id: continued.task.id, activeProposal: { id: parked.activeProposalId } },
+      thread: { cachedPlan: { planId: parked.activeProposalId } },
+    });
+    expect(await listMemberAgentRequests({ ...seeded, clerkUserId: seeded.drafted.clerkUserId })).toEqual([]);
+    const foreign = await seedReviseable();
+    await expect(listMemberAgentRequests({ ...seeded, threadId: foreign.threadId })).rejects.toBeInstanceOf(ForbiddenError);
+    await db.orgMember.delete({ where: { id: seeded.revising.id } });
+    await expect(listMemberAgentRequests(seeded)).rejects.toBeInstanceOf(ForbiddenError);
   });
 
   it("orders composer regeneration against a concurrent approval without changing work that was approved", async () => {

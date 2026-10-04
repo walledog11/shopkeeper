@@ -355,7 +355,22 @@ export async function listMemberAgentRequests(input: {
     throw new BadRequestError("Request history limit must be 1–50.");
   }
   return db.$transaction(async (tx) => {
-    const actorKey = await requireMemberActorKey(tx, input);
+    const actorKey = await requireMemberActorKey(tx, {
+      organizationId: input.organizationId, clerkUserId: input.clerkUserId,
+    });
+    if (input.threadId) {
+      // Ticket history belongs to a shared customer thread. Only private
+      // operator history requires the thread's operatorKey to match the member.
+      const thread = await tx.thread.findFirst({
+        where: {
+          id: input.threadId, organizationId: input.organizationId,
+          channelType: { not: "operator" }, deletedAt: null, archivedAt: null,
+          organization: { lifecycleStatus: "active" },
+        },
+        select: { id: true },
+      });
+      if (!thread) throw new ForbiddenError("This ticket is not available to the member.");
+    }
     return tx.agentRequest.findMany({
       where: {
         organizationId: input.organizationId, actorKind: "member", actorKey,

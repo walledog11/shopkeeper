@@ -1297,3 +1297,15 @@ retaining task state and images. Existing input and placeholder rejection remain
 intact. Targeted local checks use real isolated Postgres and controlled inputs;
 live regeneration, revised-card delivery, approval and Shopify exchange outcome
 remain owed. No customer resend is required.
+
+Authenticated dashboard inspection also exposed a second concrete failure on
+this ticket: `GET /api/agent/plan?threadId=1254749e…` returned 403 with “This
+conversation is not available to the member.” Ticket history used the private
+operator-thread check, which requires an operator key on a customer thread.
+The same candidate now validates membership and the organization's active
+customer thread separately. Request history remains scoped to the requesting
+member; private operator history retains its operator key constraint. The
+existing real-Postgres composer regression failed with the live error before
+the fix and passed afterward, including another member's empty history,
+foreign-thread refusal and revoked-membership refusal. All 63 ledger checks
+passed. Live ticket reload verification remains owed after deployment.

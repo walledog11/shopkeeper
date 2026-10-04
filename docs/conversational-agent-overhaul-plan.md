@@ -91,7 +91,8 @@ for a failure, a relevant code change or an unresolved concern. In order:
    draft; no action or customer reply ran. The candidate on
    `fix/support-request-history` gives the planner the same runtime-selected
    unanswered burst as the summarizer, with earlier messages kept as reference
-   data. Review, PR CI and deployment precede regenerating the original request;
+   data. It also corrects the customer-ticket history authorization that caused
+   a live dashboard 403 on reload. Review, PR CI and deployment precede regenerating the original request;
    no repeat customer email is needed. #155's live continuation remains open.
    #151's handoff grounding fix
    is deployed on `6c6b9499`, and the owner confirmed the single approved #1038
@@ -720,6 +721,14 @@ unchanged. Targeted context checks use real isolated local Postgres; they prove
 the boundary, not model quality. After review, CI and deployment, regenerate
 against the original customer message, then verify the revised card and approved
 exchange normally. The customer need not resend or change their request.
+
+The same ticket's dashboard also showed “This conversation is not available to
+the member.” An authenticated read confirmed `/api/agent/plan` returned 403:
+`listMemberAgentRequests` passed a customer thread to the private operator-thread
+membership check. The candidate checks membership and the active organization-owned
+customer thread separately, retaining member-specific request history and private
+operator isolation. The existing composer regeneration check reproduced the failure
+before the fix and passed afterward, including foreign-thread and revoked-member refusal.
 
 ### Release and runtime retirement
 
