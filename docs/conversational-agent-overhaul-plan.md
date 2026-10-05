@@ -435,11 +435,12 @@ success labels are fixed in deployed #165. Reopen on a ticket whose customer
 has another open conversation on that channel now refuses with that reason
 instead of a silent HTTP 500.
 
-Oct 5 follow-up: the dashboard chat's client-side navigation matcher
-(`matchConciergeNavigationIntent`) opens a page instead of sending any
-instruction that pairs add, change, update or edit with a page keyword such as
-"profile", "shopify", "orders" or "notes", and drops the instruction silently
-(release evidence, *First live write after retirement*).
+Oct 5: the dashboard chat's client-side navigation matcher opened a page
+instead of sending any instruction that paired add, change, update or edit with
+a page keyword such as "profile", "shopify", "orders" or "notes", and dropped
+the instruction silently (release evidence, *First live write after
+retirement*). #168 removes it: every message reaches the agent, and only the
+agent's `navigate_dashboard` call navigates.
 
 
 The 2026-09-25 audit also found decisions made by matching English outside the
