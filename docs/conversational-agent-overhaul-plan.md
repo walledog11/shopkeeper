@@ -84,7 +84,8 @@ resolving a reference such as "the other one", returning to an earlier topic,
 revising through conversation, and new phrasing, language or brand voice.
 
 Rollback no longer uses an environment flag; redeploy #164 as described in the
-runbook. iMessage is the main phone channel. Telegram and stop-by-text (10c)
+runbook, which still needs `AGENT_RUNTIME_VERSION=2` kept on Railway.
+iMessage is the main phone channel. Telegram and stop-by-text (10c)
 are excluded.
 
 ## Shipping objective
@@ -169,7 +170,7 @@ retirement inventory is a fresh read-only production inspection on 2026-10-04.
 | Conversational acceptance | A one-order status question is answered briefly and in ordinary language after #144 (owner phone check and stored turns, one sample per question). #151's handoff removes the unsupported return/refund suggestion; the owner confirmed iMessage receipt and wording. The #1039 investigation read current data and preserved the no-return constraint; its explanation-only follow-up made no actions. Financial explanations (8h) and status-by-name padding are recorded under *Outside this plan*; rows not yet seen are under *Normal-use observations*. |
 | Rollout and runtime retirement | Items 11–13 done. Runtime retirement deployed as `17afc644` (#165); required PR checks and production verification passed. Historical readers and v2 reconciliation/delivery remain. Rehearsal waived (decision L). |
 | Optional paid comparison (Gate B) | Last comparison on `cf41c169` failed; it was incorrectly called passed before correction. #125 fixed the C08 runtime defect, so that input is no longer held out. Comparison tooling (Gate A) exists; neither a rerun nor new fixtures are required unless requested. |
-| Active runtime and rollback | Retirement creates only runtime-2 tasks and refuses other versions. Historical rollout variables become inert. Rollback redeploys #164 across all hosts; retain the additive schema and v2 operation identities. See [agent-runtime.md](agent-runtime.md). |
+| Active runtime and rollback | Retirement creates only runtime-2 tasks and refuses other versions. Historical rollout variables are inert on the current image, but the #164 rollback image still reads `AGENT_RUNTIME_VERSION`. Rollback redeploys #164 across all hosts; retain the additive schema and v2 operation identities. See [agent-runtime.md](agent-runtime.md). |
 
 ## Final work sequence
 
@@ -410,16 +411,17 @@ balance owed, with no Shopify financial calculation behind it, and that
 adapter does not do (release evidence, *Conversation A first turn* and
 *Conversation A explanation-only follow-up*). #152 rewrote the
 `create_exchange` description, result and prompt lines those claims
-paraphrased. A local follow-up now provides the read-only `get_exchange_quote`
-tool, backed by Shopify's `returnCalculate` for the exact returned item,
-replacement and quantity. It exposes discounted amounts, tax and calculated
-fees separately in customer and shop currencies, with exact decimal arithmetic.
+paraphrased. #167 (`46745cf7`, deployed 2026-10-05) adds the read-only
+`get_exchange_quote` tool, backed by Shopify's `returnCalculate` for the exact
+returned item, replacement and quantity. It exposes discounted amounts, tax and
+calculated fees separately in customer and shop currencies, with exact decimal
+arithmetic.
 Incomplete or mismatched provider data withholds the estimate. Guidance now
 distinguishes that estimate from a settled balance and removes the claim that
 catalog-price eligibility establishes what the customer owes. Execution still
-records no financial consequence from opening the exchange alone. This change
-is not deployed or observed in live conversation; those remain open follow-up
-work. Do not rerun the withdrawn #1039 financial probes to check it.
+records no financial consequence from opening the exchange alone. It has not
+been observed in live conversation; that remains open follow-up work. Do not
+rerun the withdrawn #1039 financial probes to check it.
 
 An order-status question that names the customer rather than the order still
 uses the full order read and can pad the reply; one-order questions use the lean
@@ -427,11 +429,17 @@ uses the full order read and can pad the reply; one-order questions use the lean
 
 Oct 4 follow-ups: raw escalation reason on an already-escalated ticket;
 answering the agent's own operator-chat question reports no pending question;
-product-search chips print an ID as a count; and changing an order line's
-quantity is unsupported. Unknown summaries and refused-action success labels
-are fixed in deployed #165. Reopen on a ticket whose customer has another open
-conversation on that channel now refuses with that reason instead of a silent
-HTTP 500.
+product- and customer-search chips print an ID as a count; and changing an
+order line's quantity is unsupported. Unknown summaries and refused-action
+success labels are fixed in deployed #165. Reopen on a ticket whose customer
+has another open conversation on that channel now refuses with that reason
+instead of a silent HTTP 500.
+
+Oct 5 follow-up: the dashboard chat's client-side navigation matcher
+(`matchConciergeNavigationIntent`) opens a page instead of sending any
+instruction that pairs add, change, update or edit with a page keyword such as
+"profile", "shopify", "orders" or "notes", and drops the instruction silently
+(release evidence, *First live write after retirement*).
 
 
 The 2026-09-25 audit also found decisions made by matching English outside the

@@ -1,6 +1,6 @@
 # Conversational agent runtime
 
-Last reviewed: 2026-10-04.
+Last reviewed: 2026-10-05.
 
 Retirement shipped in [PR #165](https://github.com/walledog11/shopkeeper/pull/165)
 as `17afc644` on dashboard, gateway and worker. Required PR checks and production
@@ -73,17 +73,21 @@ rows were rewritten or deleted. See the [release evidence](conversational-agent-
 ## Deployment and rollback
 
 Deploy gateway, worker, and dashboard from the same reviewed retirement commit.
-No schema rollback or data migration is required. Existing environment values
+No schema rollback or data migration is required. The current image ignores
 `AGENT_RUNTIME_VERSION`, `AGENT_RUNTIME_V2_ORG_IDS`,
-`AGENT_PROPOSAL_SUSPENSION_MODE`, and `AGENT_CAPABILITY_DISCOVERY_MODE` are ignored
-and can be removed from deployment configuration.
+`AGENT_PROPOSAL_SUSPENSION_MODE`, and `AGENT_CAPABILITY_DISCOVERY_MODE`. The
+rollback image below does not: it picks each new task's runtime from the first
+two, and starts it on runtime 1 when `AGENT_RUNTIME_VERSION` is unset. Until the
+rollback target includes #165, keep `AGENT_RUNTIME_VERSION=2` and leave
+`AGENT_RUNTIME_V2_ORG_IDS` unset on the `shopkeeper` gateway and `Gateway Worker`
+Railway services. A task started on runtime 1 during a rollback is refused as
+retired once the current image is redeployed.
 
 Rollback means redeploying the previous known-good application revision
 `ecb514bbe531116dd94ed5317f37aaf95da7ccfd` (#164) to all three hosts. That revision
 contains both runtime implementations and understands the retained additive
-schema and runtime-2 records. Keep its rollout configuration on runtime 2 for
-new work unless a separate routing decision is made. Setting runtime 1 on the
-retirement image cannot restore deleted code.
+schema and runtime-2 records. With the variables above it runs new work on
+runtime 2. Setting runtime 1 on the retirement image cannot restore deleted code.
 
 Do not rewrite task versions, drop ledger/receipt columns, resubmit unknown
 provider operations, or retry an uncertain customer delivery. Preserve the

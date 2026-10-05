@@ -1716,6 +1716,33 @@ No fresh live conversational/effect observation or paid eval is claimed.
 The previous deployment `ecb514bb` is the rollback image; decision L's rehearsal
 waiver stands.
 
+## First live write after retirement, 2026-10-05
+
+Production on `46745cf7` (#167, which includes #165). No agent action had run
+since #1033's refund on 2026-10-04. Claude ran it from the dashboard agent chat
+in plain merchant wording.
+
+- "put a note on chain's customer record that they're mid exchange on 1041,
+  still waiting on the regular wax to come back" (19:44:43 UTC, entry
+  `6f6ec20f`, `human_approved` by the merchant): `find_customer` found Chain
+  Market, then `add_shopify_customer_note` succeeded, and the agent replied
+  "Done, added a note to Chain Market's customer record about the pending
+  regular wax return on order #1041." Shopify afterwards, read through the
+  dashboard's live customer route: the note is exactly the text written. The
+  customer had no earlier note, so nothing was replaced.
+- Not exercised: a customer-ticket approval card. None of the open tickets had
+  an unanswered customer message at a deliverable address, and the ticket
+  composer refuses a merchant instruction on an answered ticket by design
+  ("This ticket has no unanswered customer message to plan for.").
+- Defect found: the first wording, "add a note on chain's profile …", never
+  reached the agent. The dashboard chat's client-side navigation matcher
+  (`matchConciergeNavigationIntent`, since `ca9acbf4`) treats "add", "change",
+  "update" or "edit" plus a page keyword ("profile", "shopify", "orders",
+  "notes", "plan", "today", …) as a request to open that page. It opened account
+  settings and dropped the instruction without a message.
+- The customer-lookup chip printed the customer ID as a count ("9142143811818
+  customers"), like the product-search chip under *Outside this plan*.
+
 ## Implementation history carried from the plan — through #164
 
 The following is a historical record, retained when the active plan was reconciled
