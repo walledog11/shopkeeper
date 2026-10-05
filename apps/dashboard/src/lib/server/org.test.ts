@@ -7,10 +7,11 @@ import {
   installProductAnalytics,
 } from '@shopkeeper/analytics'
 
-const { mockAuth, mockGetOrganization, mockGetUser } = vi.hoisted(() => ({
+const { mockAuth, mockGetOrganization, mockGetUser, mockGetMembershipList } = vi.hoisted(() => ({
   mockAuth: vi.fn(),
   mockGetOrganization: vi.fn(),
   mockGetUser: vi.fn(),
+  mockGetMembershipList: vi.fn(),
 }))
 
 vi.mock('@clerk/nextjs/server', () => ({
@@ -19,7 +20,7 @@ vi.mock('@clerk/nextjs/server', () => ({
 }))
 
 import { auth, clerkClient } from '@clerk/nextjs/server'
-import { NoActiveOrganizationError, UnauthorizedError } from '@/lib/api/errors'
+import { ForbiddenError, NoActiveOrganizationError, UnauthorizedError } from '@/lib/api/errors'
 import { resolveAgentSettings } from '@shopkeeper/agent/settings'
 import type { OrgSettings } from '@/types'
 import { getOrCreateOrg } from './org'
@@ -48,8 +49,13 @@ beforeEach(() => {
   delete process.env.E2E_CLERK_ORG_ID
   delete process.env.E2E_CLERK_USER_ID
   delete process.env.E2E_TEST_ORG_NAME
+  // Clerk lists every signed-in user as a member unless a test says otherwise.
+  mockGetMembershipList.mockImplementation(async ({ userId }: { userId: string[] }) => ({
+    data: userId.map(id => ({ publicUserData: { userId: id } })),
+    totalCount: userId.length,
+  }))
   vi.mocked(clerkClient).mockResolvedValue({
-    organizations: { getOrganization: mockGetOrganization },
+    organizations: { getOrganization: mockGetOrganization, getOrganizationMembershipList: mockGetMembershipList },
     users: { getUser: mockGetUser },
   } as unknown as Awaited<ReturnType<typeof clerkClient>>)
 })
@@ -85,6 +91,28 @@ describe('getOrCreateOrg', () => {
     expect(result.id).toBe(seeded.id)
     expect(result.clerkOrgId).toBe(clerkOrgId)
     expect(mockGetOrganization).not.toHaveBeenCalled()
+  })
+
+  it('records the signed-in member once Clerk confirms the membership', async () => {
+    const clerkOrgId = trackClerkOrg(`org_clerk_${randomUUID()}`)
+    const seeded = await seedOrg(clerkOrgId)
+    mockAuth.mockResolvedValue({ userId: 'usr_member', orgId: clerkOrgId } as unknown as AuthResult)
+
+    await getOrCreateOrg()
+
+    expect(await db.orgMember.findUnique({
+      where: { organizationId_clerkUserId: { organizationId: seeded.id, clerkUserId: 'usr_member' } },
+    })).not.toBeNull()
+  })
+
+  it('refuses a signed-in user whose Clerk membership has ended', async () => {
+    const clerkOrgId = trackClerkOrg(`org_clerk_${randomUUID()}`)
+    const seeded = await seedOrg(clerkOrgId)
+    mockAuth.mockResolvedValue({ userId: 'usr_removed', orgId: clerkOrgId } as unknown as AuthResult)
+    mockGetMembershipList.mockResolvedValue({ data: [], totalCount: 0 })
+
+    await expect(getOrCreateOrg()).rejects.toBeInstanceOf(ForbiddenError)
+    expect(await db.orgMember.count({ where: { organizationId: seeded.id } })).toBe(0)
   })
 
   it('uses the E2E bypass org without calling Clerk auth when explicitly enabled', async () => {
