@@ -2,7 +2,7 @@ import { cache } from 'react';
 import { productEventInsertId } from '@shopkeeper/analytics';
 import { db } from '@shopkeeper/db';
 import { auth, clerkClient } from '@clerk/nextjs/server';
-import { NoActiveOrganizationError, UnauthorizedError } from '@/lib/api/errors';
+import { ForbiddenError, NoActiveOrganizationError, UnauthorizedError } from '@/lib/api/errors';
 import type { OrgSettings } from '@/types';
 import { getE2EBypassOrg } from './e2e-org';
 import { captureDashboardProductEvent } from './product-analytics';
@@ -46,8 +46,8 @@ function composeAiContext(useCases: unknown, teamSize: unknown): string {
 }
 
 /**
- * Looks up the Organization for the currently active Clerk organization.
- * Creates one on first use if it doesn't exist yet.
+ * Looks up the Organization for the currently active Clerk organization and
+ * the signed-in user's member record in it. Creates either on first use.
  */
 export const getOrCreateOrg = cache(async () => {
   const e2eOrg = await getE2EBypassOrg();
@@ -58,6 +58,44 @@ export const getOrCreateOrg = cache(async () => {
   if (!userId) throw new UnauthorizedError();
   if (!orgId) throw new NoActiveOrganizationError();
 
+  const org = await findOrProvisionOrg(orgId, userId);
+  await recordSessionMember(org, orgId, userId);
+  return org;
+});
+
+/**
+ * OrgMember mirrors Clerk membership: agent requests and approvals refuse a
+ * user without one, and Clerk's webhook deletes it when the membership ends.
+ * Nothing else creates it for a member who never linked a phone or used the
+ * agent chat, so the first signed-in request does, once Clerk confirms the
+ * membership — a session token can outlive a removal by about a minute.
+ */
+async function recordSessionMember(
+  org: { id: string; lifecycleStatus: string },
+  clerkOrgId: string,
+  clerkUserId: string,
+) {
+  const existing = await db.orgMember.findUnique({
+    where: { organizationId_clerkUserId: { organizationId: org.id, clerkUserId } },
+    select: { id: true },
+  });
+  if (existing || org.lifecycleStatus !== 'active') return;
+
+  const client = await clerkClient();
+  const { data } = await client.organizations.getOrganizationMembershipList({
+    organizationId: clerkOrgId,
+    userId: [clerkUserId],
+  });
+  if (!data.some(membership => membership.publicUserData?.userId === clerkUserId)) {
+    throw new ForbiddenError('You are no longer a member of this workspace.');
+  }
+  await db.orgMember.createMany({
+    data: [{ organizationId: org.id, clerkUserId }],
+    skipDuplicates: true,
+  });
+}
+
+async function findOrProvisionOrg(orgId: string, userId: string) {
   const existing = await db.organization.findUnique({
     where: { clerkOrgId: orgId },
   });
@@ -96,4 +134,4 @@ export const getOrCreateOrg = cache(async () => {
     if ((err as { code?: string }).code !== 'P2002') throw err;
     return db.organization.findUniqueOrThrow({ where: { clerkOrgId: orgId } });
   }
-});
+}
