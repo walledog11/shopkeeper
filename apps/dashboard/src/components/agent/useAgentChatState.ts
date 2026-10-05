@@ -9,8 +9,6 @@ import { dispatchNavProgressStart } from "@/app/dashboard/_components/sidebar/si
 import { getConciergeFillerPhrases } from "@/lib/agent/concierge-filler-phrases"
 import {
   extractConciergeNavigation,
-  isConciergeNavigationRequest,
-  matchConciergeNavigationIntent,
   type NavigateDashboardPayload,
 } from "@/lib/agent/concierge-navigation"
 import {
@@ -202,14 +200,6 @@ export function useAgentChatState({ restoreHistory = true }: UseAgentChatStatePr
     const displayText = (options.displayText ?? text).trim()
     if (!trimmed || !displayText || isRunning) return
 
-    const navIntent = matchConciergeNavigationIntent(trimmed)
-
-    if (navIntent) {
-      navigateConcierge(navIntent)
-      textareaRef.current?.focus()
-      return
-    }
-
     const sentAt = new Date()
     setFillerPhrases([...getConciergeFillerPhrases(trimmed)])
     setIsRunning(true)
@@ -245,11 +235,7 @@ export function useAgentChatState({ restoreHistory = true }: UseAgentChatStatePr
       }
 
       const navigation = extractConciergeNavigation(result.actionsPerformed)
-      if (navigation && isConciergeNavigationRequest(trimmed)) {
-        navigateConcierge(navigation)
-        setMessages(prev => prev.slice(0, -2))
-        return
-      }
+      if (navigation) navigateConcierge(navigation)
 
       setMessages(prev => [
         ...prev.slice(0, -1),

@@ -3,7 +3,6 @@ export interface DashboardDestination {
   href: string;
   label: string;
   description: string;
-  keywords: readonly string[];
 }
 
 export const DASHBOARD_DESTINATIONS: readonly DashboardDestination[] = [
@@ -12,89 +11,60 @@ export const DASHBOARD_DESTINATIONS: readonly DashboardDestination[] = [
     href: "/dashboard",
     label: "Home",
     description: "Dashboard home and daily briefing",
-    keywords: ["home", "today", "briefing", "dashboard"],
   },
   {
     id: "inbox",
     href: "/dashboard/tickets",
     label: "Inbox",
     description: "Support tickets and customer conversations",
-    keywords: ["inbox", "tickets", "messages", "support"],
   },
   {
     id: "integrations",
     href: "/dashboard/integrations",
     label: "Integrations",
     description: "Connect email, Instagram, iMessage, and other channels",
-    keywords: [
-      "integrations",
-      "channels",
-      "email",
-      "gmail",
-      "instagram",
-      "imessage",
-      "connect",
-      "add email",
-      "forwarding",
-    ],
   },
   {
     id: "agent_settings",
     href: "/dashboard/agent/configure",
     label: "Agent configure",
     description: "Store identity, trust level, brand voice, and autonomy",
-    keywords: [
-      "agent settings",
-      "agent configure",
-      "configure agent",
-      "trust level",
-      "trust",
-      "autonomy",
-      "voice",
-      "brand",
-    ],
   },
   {
     id: "memory",
     href: "/dashboard/kb",
     label: "Memory",
     description: "Facts, policies, and learned answers",
-    keywords: ["memory", "knowledge base", "kb", "policies", "facts", "notes"],
   },
   {
     id: "review",
     href: "/dashboard/review",
     label: "Review",
     description: "Approve and refine agent responses",
-    keywords: ["review", "approvals", "history", "audit"],
   },
   {
     id: "orders",
     href: "/dashboard/orders",
     label: "Shop",
     description: "Orders that need a look",
-    keywords: ["orders", "shop", "shopify"],
   },
   {
     id: "workspace_settings",
     href: "/dashboard/settings",
     label: "Workspace settings",
     description: "Billing and workspace admin",
-    keywords: ["organization settings", "workspace settings", "billing", "admin", "subscription", "plan"],
   },
   {
     id: "account_settings",
     href: "/dashboard/account",
     label: "Account settings",
     description: "Profile, sign-in, and logout",
-    keywords: ["account settings", "profile", "sign in"],
   },
   {
     id: "team",
     href: "/dashboard/team",
     label: "Team",
     description: "Members, roles, and access",
-    keywords: ["team", "members", "roles", "invite"],
   },
 ] as const;
 
