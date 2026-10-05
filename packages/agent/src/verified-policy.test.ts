@@ -22,6 +22,8 @@ const VERIFIED = { authState: "verified" as const, verifiedOrders: [ORDER] };
 // rather than derived, so widening the allowlist cannot silently delete its own
 // test.
 const FORBIDDEN_WHEN_VERIFIED = [
+  // Financial exchange estimates stay on merchant/support surfaces.
+  "get_exchange_quote",
   // Customer-wide reads: this session proved control of an order, not an account.
   "get_shopify_orders",
   "find_customer",

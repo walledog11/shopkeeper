@@ -410,10 +410,16 @@ balance owed, with no Shopify financial calculation behind it, and that
 adapter does not do (release evidence, *Conversation A first turn* and
 *Conversation A explanation-only follow-up*). #152 rewrote the
 `create_exchange` description, result and prompt lines those claims
-paraphrased. That corrects the source text, not the behavior, and a correct
-explanation has not been seen since. The structural fix is to state an exchange
-balance only from Shopify's `returnCalculate`. Do not rerun the withdrawn #1039
-financial probes to check it.
+paraphrased. A local follow-up now provides the read-only `get_exchange_quote`
+tool, backed by Shopify's `returnCalculate` for the exact returned item,
+replacement and quantity. It exposes discounted amounts, tax and calculated
+fees separately in customer and shop currencies, with exact decimal arithmetic.
+Incomplete or mismatched provider data withholds the estimate. Guidance now
+distinguishes that estimate from a settled balance and removes the claim that
+catalog-price eligibility establishes what the customer owes. Execution still
+records no financial consequence from opening the exchange alone. This change
+is not deployed or observed in live conversation; those remain open follow-up
+work. Do not rerun the withdrawn #1039 financial probes to check it.
 
 An order-status question that names the customer rather than the order still
 uses the full order read and can pad the reply; one-order questions use the lean

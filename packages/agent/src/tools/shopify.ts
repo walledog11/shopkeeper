@@ -2,6 +2,7 @@ export {
   attachReturnLabel,
   cancelOrder,
   createExchange,
+  getExchangeQuote,
   createGiftCard,
   createRefund,
   createPartialRefund,

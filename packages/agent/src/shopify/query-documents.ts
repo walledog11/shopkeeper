@@ -18,6 +18,7 @@
 // are the same constants, not copies - so validating one of these validates the
 // string that actually runs.
 import { VARIANT_PRICES_QUERY } from "./exchanges.js";
+import { EXCHANGE_QUOTE_QUERY } from "./exchange-quote.js";
 import { DISCOUNT_CODES_BY_CODE_QUERY } from "./discounts.js";
 import {
   ORDER_FULFILLMENTS_TRACKING_QUERY,
@@ -52,6 +53,16 @@ export interface ShopifyQueryDocument {
 }
 
 export const SHOPIFY_QUERY_DOCUMENTS: Record<string, ShopifyQueryDocument> = {
+  exchangeQuote: {
+    document: EXCHANGE_QUOTE_QUERY,
+    variables: {
+      input: {
+        orderId: "gid://shopify/Order/1",
+        returnLineItems: [{ fulfillmentLineItemId: "gid://shopify/FulfillmentLineItem/1", quantity: 1 }],
+        exchangeLineItems: [{ variantId: "gid://shopify/ProductVariant/1", quantity: 1 }],
+      },
+    },
+  },
   discountCodesByCode: {
     document: DISCOUNT_CODES_BY_CODE_QUERY,
     variables: { code: "SHOPKEEPER-VALIDATION" },
