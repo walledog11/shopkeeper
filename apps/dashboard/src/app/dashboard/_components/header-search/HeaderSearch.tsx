@@ -3,17 +3,14 @@
 import { Search } from "lucide-react"
 import { useCallback, useEffect, useState, type KeyboardEvent } from "react"
 import { createPortal } from "react-dom"
-import { usePathname, useRouter } from "next/navigation"
 import { AnimatePresence, LazyMotion, domAnimation, m } from "motion/react"
 import AgentChatClient from "@/components/agent/AgentChatClient"
 import { cn } from "@/lib/ui/cn"
-import { matchConciergeNavigationIntent } from "@/lib/agent/concierge-navigation"
 import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import { GLASS_PILL_SURFACE } from "@/lib/ui/glass-card-styles"
 import { useAgentPanel } from "../agent-panel/AgentPanelContext"
 import {
   desktopTopBarUtilityPillClass,
-  dispatchNavProgressStart,
   topBarIconButtonClass,
 } from "../sidebar/sidebar-helpers"
 
@@ -38,8 +35,6 @@ export function HeaderSearch({ variant = "topBar" }: HeaderSearchProps) {
     expand,
     startFreshConversation,
   } = useAgentPanel()
-  const router = useRouter()
-  const pathname = usePathname()
   const isMobile = variant === "mobile"
   const { input, setInput, isRunning, handleSendText } = chatState
   const [portalReady, setPortalReady] = useState(false)
@@ -52,22 +47,11 @@ export function HeaderSearch({ variant = "topBar" }: HeaderSearchProps) {
     const trimmed = input.trim()
     if (!trimmed || isRunning) return
 
-    const navIntent = matchConciergeNavigationIntent(trimmed)
-    if (navIntent) {
-      if (navIntent.href !== pathname) {
-        router.prefetch(navIntent.href)
-        dispatchNavProgressStart()
-        router.push(navIntent.href)
-      }
-      setInput("")
-      return
-    }
-
     startFreshConversation()
     setInput("")
     expand()
     await handleSendText(trimmed)
-  }, [expand, handleSendText, input, isRunning, pathname, router, setInput, startFreshConversation])
+  }, [expand, handleSendText, input, isRunning, setInput, startFreshConversation])
 
   const handleCollapsedKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
