@@ -1,7 +1,7 @@
 import { noShopify, cancelReasons, requireShopify, returnReasons, maybeRecordReturnWatch } from "./helpers.js";
 import { arrayArg, booleanArg, defineTool, numberArg, stringArg } from "./schema.js";
 import { toolPolicyBlock } from "../result.js";
-import { EXCHANGE_EFFECT_DESCRIPTION, EXCHANGE_REPLY_GUIDANCE } from "../../shopify/exchange-contract.js";
+import { EXCHANGE_EFFECT_DESCRIPTION, EXCHANGE_REPLY_GUIDANCE, EXCHANGE_FINANCIAL_GUIDANCE } from "../../shopify/exchange-contract.js";
 import type {
   AttachReturnLabelInput,
   CancelOrderInput,
@@ -12,6 +12,7 @@ import type {
   CreateReturnInput,
   CreateShopifyOrderInput,
   EditShopifyOrderInput,
+  ExchangeQuoteInput,
   FulfillOrderInput,
   GetOrderByNameInput,
   GetOrderFulfillmentStatusInput,
@@ -345,7 +346,7 @@ export const ORDER_TOOL_DEFINITIONS = [
   defineTool({
     name: "create_exchange",
     description:
-      `Set up an exchange on a fulfilled Shopify order for the item the customer is sending back. Use this instead of create_refund when the customer wants a different size, color, or variant rather than their money back. ${EXCHANGE_EFFECT_DESCRIPTION} ${EXCHANGE_REPLY_GUIDANCE} Only works for items that have shipped; for unshipped orders use edit_shopify_order to swap items directly. If they are sending the item back and not taking a replacement, use create_return. The replacement must cost the same or less than the returned item - if it costs more, the customer would owe a balance this tool cannot collect, so escalate to the merchant instead of calling this.`,
+      `Set up an exchange on a fulfilled Shopify order for the item the customer is sending back. Use this instead of create_refund when the customer wants a different size, color, or variant rather than their money back. ${EXCHANGE_EFFECT_DESCRIPTION} ${EXCHANGE_REPLY_GUIDANCE} ${EXCHANGE_FINANCIAL_GUIDANCE} Only works for items that have shipped; for unshipped orders use edit_shopify_order to swap items directly. If they are sending the item back and not taking a replacement, use create_return. Automatic exchanges require the replacement's current catalog price to be the same or lower; a higher catalog price requires merchant handling. That eligibility check does not establish the customer's balance.`,
     fields: {
       order_id: stringArg("Shopify order ID (numeric). Use the id field from the orders context.", { required: true }),
       variant_id: stringArg("Variant ID of the item the customer is sending back, from the orders context.", { required: true }),
@@ -368,6 +369,27 @@ export const ORDER_TOOL_DEFINITIONS = [
       const result = await deps.createExchange(input, shopify);
       await maybeRecordReturnWatch(ctx, result, deps);
       return result;
+    },
+  }),
+  defineTool({
+    name: "get_exchange_quote",
+    description:
+      `Read Shopify's current financial estimate for exchanging a fulfilled item for a selected replacement, including discounts, tax and calculated fees. No return is opened and no charge, refund or shipment happens. ${EXCHANGE_FINANCIAL_GUIDANCE}`,
+    fields: {
+      order_id: stringArg("Shopify order ID.", { required: true }),
+      variant_id: stringArg("Variant ID of the fulfilled item being returned.", { required: true }),
+      exchange_variant_id: stringArg("Variant ID of the selected replacement.", { required: true }),
+      quantity: numberArg("How many units to exchange. Defaults to 1."),
+    },
+    category: "read",
+    group: "order",
+    capabilities: ["shopify"],
+    requiredScopes: ["read_orders", "read_returns", "read_products"],
+    label: "Read exchange estimate",
+    planStepLabel: "Read exchange estimate",
+    execute: async (input: ExchangeQuoteInput, ctx, _settings, deps) => {
+      const shopify = requireShopify(ctx);
+      return shopify ? deps.getExchangeQuote(input, shopify) : noShopify;
     },
   }),
   defineTool({

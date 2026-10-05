@@ -33,6 +33,7 @@ export type {
   EditShopifyOrderInput,
   EndFlashSaleInput,
   EscalateToHumanInput,
+  ExchangeQuoteInput,
   FindCustomerInput,
   FlashSaleScope,
   FulfillOrderInput,

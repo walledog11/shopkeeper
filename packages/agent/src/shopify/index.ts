@@ -87,6 +87,7 @@ export { createShopifyOrder, type CreateShopifyOrderOptions } from "./order-crea
 export { editShopifyOrder } from "./order-edit.js";
 export { createReturn, fetchReturnableLineItems } from "./returns.js";
 export { createExchange } from "./exchanges.js";
+export { getExchangeQuote } from "./exchange-quote.js";
 export { createGiftCard } from "./gift-cards.js";
 export { attachReturnLabel, OPEN_RETURN_STATUSES } from "./return-labels.js";
 export {

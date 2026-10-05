@@ -181,7 +181,7 @@ export async function createExchange(
       return exchangeFailure(
         ctx,
         orderId,
-        toolPolicyBlock(`Error: could not set up exchange - the replacement costs more ($${replacementVariant.price} vs $${returnedVariant.price}), so the customer would owe a balance. Escalate to the merchant to handle the price difference.`),
+        toolPolicyBlock(`Error: could not set up exchange - the replacement costs more at current catalog prices (${replacementVariant.price} vs ${returnedVariant.price}), so automatic exchange is restricted. Escalate to the merchant to handle pricing. These catalog prices do not establish the customer's balance; get_exchange_quote can read Shopify's current estimate.`),
         "rejected",
         "replacement_price_higher",
       );

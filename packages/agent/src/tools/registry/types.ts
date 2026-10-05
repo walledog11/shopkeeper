@@ -209,11 +209,14 @@ export interface CreateGiftCardInput {
   expires_in_days?: number;
 }
 
-export interface CreateExchangeInput {
+export interface ExchangeQuoteInput {
   order_id: string;
   variant_id: string;
   exchange_variant_id: string;
   quantity?: number;
+}
+
+export interface CreateExchangeInput extends ExchangeQuoteInput {
   reason?: CreateReturnInput["reason"];
   approval_line_items?: ApprovalLineItem[];
 }
@@ -349,6 +352,7 @@ export interface ToolExecutionDeps {
   editShopifyOrder(input: EditShopifyOrderInput, ctx: ShopifyToolContext): Promise<ToolResult>;
   createReturn(input: CreateReturnInput, ctx: ShopifyToolContext): Promise<ToolResult>;
   createExchange(input: CreateExchangeInput, ctx: ShopifyToolContext): Promise<ToolResult>;
+  getExchangeQuote(input: ExchangeQuoteInput, ctx: ShopifyToolContext): Promise<ToolResult>;
   createGiftCard(input: CreateGiftCardInput, ctx: ShopifyToolContext): Promise<SpendToolResult>;
   attachReturnLabel(input: AttachReturnLabelInput, ctx: ShopifyToolContext): Promise<ToolResult>;
   fulfillOrder(input: FulfillOrderInput, ctx: ShopifyToolContext): Promise<ToolResult>;

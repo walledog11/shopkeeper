@@ -19,6 +19,7 @@ const GUEST = { authState: "guest" as const };
 // the allowlist — so that adding a tool to the allowlist cannot silently delete
 // its own test.
 const FORBIDDEN_FOR_GUESTS = [
+  "get_exchange_quote",
   // Order reads: the disclosure surface this milestone exists to close.
   "get_shopify_orders",
   "get_order_by_name",
