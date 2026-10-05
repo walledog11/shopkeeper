@@ -30,7 +30,7 @@ controlled organization on v2 and the default still v1. Composer and dashboard
 Stop/reload passed; the owner confirmed actual iMessage delivery after the
 Photon registration repair. Conversation scope/wording remains unfixed.
 See [the latest session evidence](#2026-09-30-durable-composer-and-phone-verification)
-and the plan's [next session](conversational-agent-overhaul-plan.md#next-session).
+and the plan's closing [normal-use observations](conversational-agent-overhaul-plan.md#normal-use-observations).
 The owner stopped Telegram testing and made iMessage the primary phone channel.
 
 ## Required controlled-release inputs

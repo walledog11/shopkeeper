@@ -1,12 +1,20 @@
 # Conversational agent overhaul plan
 
-Status, 2026-10-04: the migration is complete within the accepted release scope.
+**Closed 2026-10-04. This plan is historical and has no open work items.** The
+migration is complete within the release scope the owner accepted (decision L).
 Runtime retirement merged in [#165](https://github.com/walledog11/shopkeeper/pull/165)
-as `17afc644` and is deployed on dashboard, gateway and worker. Required PR checks
-and production verification passed. Items 12 and 13 are closed. Runtime v2 became
-the default for new tasks at 21:08 UTC; v1 execution is now removed.
-The [runtime runbook](agent-runtime.md) describes the single active contract,
+as `17afc644` and is deployed on dashboard, gateway and worker; #166 recorded the
+closeout. Required PR checks and production verification passed. Runtime v2
+became the default for new tasks at 21:08 UTC; v1 execution is removed. The
+[runtime runbook](agent-runtime.md) describes the single active contract,
 historical-data handling, and deployment rollback.
+
+Behavior that is built but not yet seen live is listed once under
+[Normal-use observations](#normal-use-observations). It is noted when it next
+happens in ordinary use; it is not staged and not scheduled. Known defects and
+follow-ups are under [Outside this plan](#outside-this-plan-recorded-not-scheduled).
+The rest of this document is the final status record, the settled decisions,
+and the contracts their owners still follow.
 
 The production retirement inventory at 21:38:51 UTC found 64 runtime-2 tasks,
 zero runtime-1 tasks or proposals, and no legacy unknown operations. Two v2
@@ -18,8 +26,8 @@ All retained Oct 4 dev-store rechecks after #162–#164 are recorded complete:
 phone approval of exchange #1041-R2; full refund #1040 in CAD with limits in shop
 money; one-line partial refund #1033; named sale creation and ending; price change
 and undo; order creation/editing; current-date answers; and refusal to silently
-create a paid order for a free replacement (decision M). These do not establish
-unobserved conversational or failure cases. Decision L defines those limits.
+create a paid order for a free replacement (decision M). They do not cover the
+items under *Normal-use observations*.
 
 Created 2026-09-11. Shipping priorities revised 2026-09-29 at the release
 owner's direction: this app is in development; finish working user flows,
@@ -43,35 +51,41 @@ Revision guidance reaches the planner even without a question; a label URL no
 longer asserts that a return has already been opened.
 
 Targeted checks used real isolated local Postgres with controlled model/provider
-responses. They verify persistence, approval identity and refusal behavior;
-manual dashboard/iMessage delivery and Shopify continuation evidence remain
-open. #155 merged as `1d88d6d6` and is included in deployed `7ef89abb`.
-The ordinary #1041 exchange email initially produced an invalid draft. #157's
-deployed regeneration now produces a valid exchange-only proposal and survives
-reload. #158 delivered its replacement card to the phone at 04:59:29 UTC.
-The owner confirmed receipt by quoting the delivered card. After three rewrites
-the owner approved the revision-3 draft from the phone on 2026-10-04, and the
-exchange committed as #1041-R2. Phone revision remains unobserved.
+responses. They verify persistence, approval identity and refusal behavior.
+#155 merged as `1d88d6d6` and is included in deployed `7ef89abb`. Manual
+delivery and Shopify continuation were then observed on #1041. The ordinary
+#1041 exchange email initially produced an invalid draft. #157's deployed
+regeneration now produces a valid exchange-only proposal and survives reload.
+#158 delivered its replacement card to the phone at 04:59:29 UTC. The owner
+confirmed receipt by quoting the delivered card. After three rewrites the owner
+approved the revision-3 draft from the phone on 2026-10-04, and the exchange
+committed as #1041-R2.
 
-## Normal-use follow-up
+## Normal-use observations
 
-No runtime migration work remains. Runtime selection can no longer be rolled
-back with an environment flag; redeploy #164 as described in the runbook.
+No migration work remains, and nothing in this section is a release gate
+(decision L). Each item is built and deployed but has not been seen live. When
+one happens in ordinary use, record the result in the release evidence and
+remove it here. Do not create staged tickets, induce a failure or book a paid
+eval to observe one.
 
-Observe remaining conversational checks in normal use under decision L. Do not
-create staged tickets or a paid eval campaign to close this migration. The
-unknown-summary and refused-action-label defects from Oct 4 are fixed in the
-deployed retirement change. Remaining small defects are recorded under *Outside
-this plan*; they are not migration gates.
+Built but not seen live:
 
-iMessage is the main phone channel. Telegram and stop-by-text are excluded.
+- the full-refund amount on an approval card, phone and dashboard (#148);
+- recovery when the customer reply fails after a committed write;
+- the provider id on a live dashboard `send_email` (8f, #146);
+- partial-refund cap refusal at execution;
+- refusal of a stale or over-limit approval;
+- a customer message on an already-escalated thread;
+- revising a proposal from the phone.
 
-**Workspace handoff:** production's verified retirement revision is `17afc644`.
-Retirement work is isolated in `/private/tmp/shopkeeper-retire-agent-v1`, branch
-`codex/close-agent-overhaul-plan` (documentation closeout after #165). The shared
-root checkout still has HEAD `606da169` and
-uncommitted phone, marketing and documentation work. Preserve those edits and
-use the isolated branch for this release.
+Conversation not yet seen (the [acceptance matrix](#acceptance-matrix) rows):
+resolving a reference such as "the other one", returning to an earlier topic,
+revising through conversation, and new phrasing, language or brand voice.
+
+Rollback no longer uses an environment flag; redeploy #164 as described in the
+runbook. iMessage is the main phone channel. Telegram and stop-by-text (10c)
+are excluded.
 
 ## Shipping objective
 
@@ -94,8 +108,8 @@ authorizations continue to apply. It supersedes the
 [maintainability audit](agent-maintainability-audit-2026-09-11.md) where they
 differ: conversation remains model-authored and tool discovery adaptive.
 
-Read *Current state*, *Remaining observations*, and *How to finish a change* before working.
-Use the contract sections when changing their owners. The
+*Current state* and *Final work sequence* are the closing record. Use the
+contract sections and *How to finish a change* when changing their owners. The
 [release evidence](conversational-agent-overhaul-p6-release-evidence.md)
 holds manual run results; the
 [release matrix](conversational-agent-overhaul-release-matrix.md) records
@@ -150,48 +164,38 @@ retirement inventory is a fresh read-only production inspection on 2026-10-04.
 | Core implementation | Receipts, task storage, claims, budgets, proposal binding, discovery and customer-task routing exist. Phone and composer integration, the order-status read, the refund-limit currency fix and the full-refund card amount are deployed through #148. Composer, dashboard Stop/reload, iMessage inbound/task/reply delivery and the #1035 recipient email are verified. |
 | Manual provider runs (Gate C) | Cancellation #1036/#1035, return #1042-R1, exchange #1041-R2, full refund #1040 (CAD), partial refund #1033, named sale creation/end, variant prices both ways, and order creation/editing passed the recorded retained runs. #162–#164 rechecks are complete, including free-replacement refusal. Fulfillment and customer-info updates were owner-observed without receipt read-back. Gift-card/label runs are excluded by decision L. |
 | Manually verified approval display | Cancellation quote display (8d) confirmed by the release owner on `6616da7f`, 2026-09-29. The exact-draft card with a labeled placeholder (8c) was seen on the customer-info ticket and on a full-refund card (`[refund amount]`), 2026-10-01 and 2026-10-02. |
-| Built changes awaiting observation | Full-refund amount on both card surfaces; definite reply-failure recovery; dashboard email provider id (8f); partial-refund cap refusal at execution. Full refund #1040 in CAD and partial refund #1033 committed on Oct 4. Phone approval/confirmation were observed. Stop-by-text and Telegram are excluded; unsafe failure cases remain recorded as not seen live (decision L). |
-| Known implementation gaps | No remaining core runtime migration behavior is identified. Unknown-summary/refused-label fixes are deployed in #165. Other small product defects are deferred below. Stale/over-limit approval refusal remains unobserved; stop-by-text is excluded (decision L). |
-| Conversational acceptance | A one-order status question is answered briefly and in ordinary language after #144 (owner phone check and stored turns, one sample per question). A status question by customer name still uses the full read and can pad. #151's handoff removes the unsupported return/refund suggestion; the owner confirmed iMessage receipt and wording. The #1039 investigation read current data and preserved the no-return constraint; its explanation-only follow-up made no actions. Financial explanations remain incorrect/unverified (8h). References, topic return, conversational revision and language/voice remain unobserved. |
+| Built, not yet seen live | Listed under [Normal-use observations](#normal-use-observations). Full refund #1040 in CAD and partial refund #1033 committed on Oct 4, with phone approval and confirmation observed. Stop-by-text and Telegram are excluded (decision L). |
+| Known implementation gaps | No core runtime migration behavior is missing. Unknown-summary/refused-label fixes are deployed in #165. Known defects are recorded under *Outside this plan*. |
+| Conversational acceptance | A one-order status question is answered briefly and in ordinary language after #144 (owner phone check and stored turns, one sample per question). #151's handoff removes the unsupported return/refund suggestion; the owner confirmed iMessage receipt and wording. The #1039 investigation read current data and preserved the no-return constraint; its explanation-only follow-up made no actions. Financial explanations (8h) and status-by-name padding are recorded under *Outside this plan*; rows not yet seen are under *Normal-use observations*. |
 | Rollout and runtime retirement | Items 11–13 done. Runtime retirement deployed as `17afc644` (#165); required PR checks and production verification passed. Historical readers and v2 reconciliation/delivery remain. Rehearsal waived (decision L). |
 | Optional paid comparison (Gate B) | Last comparison on `cf41c169` failed; it was incorrectly called passed before correction. #125 fixed the C08 runtime defect, so that input is no longer held out. Comparison tooling (Gate A) exists; neither a rerun nor new fixtures are required unless requested. |
 | Active runtime and rollback | Retirement creates only runtime-2 tasks and refuses other versions. Historical rollout variables become inert. Rollback redeploys #164 across all hosts; retain the additive schema and v2 operation identities. See [agent-runtime.md](agent-runtime.md). |
 
-## Remaining observations
+## Final work sequence
 
-The migration is closed. This table retains completed work and the observations
-left to normal use under decision L; it does not add migration release gates.
-Item numbers are stable references for existing evidence, not a rule to finish
-every historical sub-item before writing more code. Historical evidence may
-cite the earlier rule/package numbering. Work follows this sequence; manual
-runs also happen as soon as the affected flow is ready.
+The migration is closed, and every deliverable below is complete within the
+decision L scope. What was left unseen live is under
+[Normal-use observations](#normal-use-observations); known defects are under
+*Outside this plan*. Item numbers are stable references for existing evidence.
+Historical evidence may cite the earlier rule/package numbering.
 
 | Order | Deliverable | Items | Completion |
 | --- | --- | --- | --- |
-| 1 | Fix iMessage response scope and wording | 8h | One-order status verified on the phone after #144. Escalation-only approval fixed and deployed in #149. #151's deployed replay removes #150's unsupported return/refund suggestion; the owner confirmed phone receipt and correct wording. Approval refusal was not exercised; other acceptance rows are unobserved. |
-| 2 | Finish phone approval outcomes | 8g | PR #137 merged and deployed. Normal approval observed on the customer-info ticket (2026-10-01). Reply-failure recovery remains unverified. |
-| 3 | Verify the remaining built approval fixes | 8c, 8e, start/resume 8 | Draft display (8c), cancellation quote (8d), dashboard confirmation and the iMessage confirmation on the customer-info ticket (8e) are verified. The full-refund card (#148) awaits a live card. |
-| 4 | Merchant entry points | 10, 10a, 10c | Composer, dashboard Stop/reload, durable iMessage and recipient email passed. Stop-by-text is excluded. Definite reply-failure recovery is built but not observed live. |
-| 5 | Finish provider and delivery correctness | 8f, 10b | Code-complete and deployed: #146 (8f), #136 and #147 (10b). Read-only live checks passed; a full refund (#1040, CAD) and a partial refund (#1033) committed on 2026-10-04; the 8f send and the partial-refund cap refusal have not run. |
-| 6 | Retained behavior | remaining 8, 8h | Return/exchange and the retained Oct 4 merchant flows passed. #162–#164 rechecks are complete. Other conversational matrix observations remain open in normal use. |
+| 1 | Fix iMessage response scope and wording | 8h | One-order status verified on the phone after #144. Escalation-only approval fixed and deployed in #149. #151's deployed replay removes #150's unsupported return/refund suggestion; the owner confirmed phone receipt and correct wording. The financial-explanation defect moved to *Outside this plan*. |
+| 2 | Finish phone approval outcomes | 8g | PR #137 merged and deployed. Normal approval observed on the customer-info ticket (2026-10-01). |
+| 3 | Verify the remaining built approval fixes | 8c, 8e, start/resume 8 | Draft display (8c), cancellation quote (8d), dashboard confirmation and the iMessage confirmation on the customer-info ticket (8e) are verified. |
+| 4 | Merchant entry points | 10, 10a, 10c | Composer, dashboard Stop/reload, durable iMessage and recipient email passed. Stop-by-text is excluded. |
+| 5 | Finish provider and delivery correctness | 8f, 10b | Code-complete and deployed: #146 (8f), #136 and #147 (10b). Read-only live checks passed; a full refund (#1040, CAD) and a partial refund (#1033) committed on 2026-10-04. |
+| 6 | Retained behavior | remaining 8, 8h | Return/exchange and the retained Oct 4 merchant flows passed. #162–#164 rechecks are complete. |
 | 7 | Runtime retirement and final docs | 11–13 | Complete: #165 merged and deployed across all hosts; required PR checks and production verification passed. Rollback rehearsal waived. |
 
 ### Retained-flow status
 
-Items 8–10 are implemented and deployed through #164. Current observed results
-are recorded above and in the release evidence. The earlier chronological
+Items 8–10 are implemented and deployed through #164. Observed results are
+recorded above and in the release evidence. The earlier chronological
 implementation log is preserved in the release evidence under *Implementation
-history carried from the plan*.
-
-The following remain unobserved in ordinary use: phone revision, explicit
-stale/over-limit approval refusal, the full-refund amount on both card surfaces,
-definite customer-delivery failure recovery, the dashboard email provider id,
-partial-refund cap refusal at execution, and the conversational matrix's
-reference/topic/language/voice checks. Decision L accepts the unsafe or unusual
-failure cases as built but not seen live and does not require staged tickets.
-These observations are not proof of completion and are not additional migration
-work packages. Stop-by-text and Telegram are excluded. Gift cards and
-merchant-supplied return labels remain available without a dedicated live run.
+history carried from the plan*. Gift cards and merchant-supplied return labels
+remain available without a dedicated live run (decision L).
 
 ### Release and runtime retirement
 
@@ -273,18 +277,18 @@ not reopen settled product decisions as a testing prerequisite.
 | --- | --- |
 | 0 — Baseline | Capability/identity inventory, persisted-state inventory, budgets and evaluation manifest. |
 | 1 — Receipts | Versioned per-tool results, durable action identity and dispatch lifecycle, typed Shopify/internal/communication outcomes, explicit compatibility readers. |
-| 2 — Dashboard requests | Request/task/proposal storage, 202 submission/status recovery, worker claims, budgets, Stop and shared proposal authorization. Durable composer is deployed and exercised; dashboard Stop/reload and iMessage delivery passed. Remaining manual checks are above. |
+| 2 — Dashboard requests | Request/task/proposal storage, 202 submission/status recovery, worker claims, budgets, Stop and shared proposal authorization. Durable composer is deployed and exercised; dashboard Stop/reload and iMessage delivery passed. |
 | 3 — Adaptive slice | Write proposal suspension and receipt-based execution; partial-refund spend reservation moved to provider pricing. Customer composition later changed by decision A. |
 | 4 — Discovery | Registry-derived bounded discovery, restricted starter sets and context load tiers. |
-| 5 — Customer tasks | Durable inbound customer requests, proposal/runtime pinning, wait continuation, revisions, task settlement and attributed delivery. Broad real-app verification remains open. |
+| 5 — Customer tasks | Durable inbound customer requests, proposal/runtime pinning, wait continuation, revisions, task settlement and attributed delivery. Exercised live on the #1041 exchange and #1042 return emails. |
 | 6 — Release fixes | Canonical approval hash, exact draft/receipt placeholders, committed-effect vs delivery outcome, close-thread cancellation, withheld-message follow-up, line-item display and C08 routing correction. |
 | Cancellation (#132) | Clean dev-store cancellation/refund on #1036, matching receipt and approved customer delivery with provider id. |
 | Approval presentation | 8d is manually verified on `6616da7f`; dashboard receipt summary (8e) passed on `6031e3b4`; the iMessage draft (8c), approval and confirmation were observed on the customer-info ticket on 2026-10-01. |
 | Crash-sweep isolation (#134) | Existing recovery tests no longer race across organizations. No further cleanup is scheduled. |
 | Operator status answers (#141, #142, #144) | Task state retained in history, the current instruction separated, response guidance corrected, and a lean `get_order_status` read. One-order status verified on the phone and from stored turns on 2026-10-01 (one sample per question). |
 | Refund correctness (#136, #147) | Limits and the daily budget compared and reserved in shop-currency figures; planner over-cap routing fixed; unknown partial refunds reconcile; a partial refund's cap refusal is a `policy_block`. A full refund (#1040, CAD, held in shop money) and a partial refund (#1033) committed live on 2026-10-04. |
-| Email provider id (#146) | The dashboard `send_email` path keeps the provider id on the response and receipt. Live send not verified. |
-| Full-refund card amount (#148) | The phone and dashboard cards print a full refund's quote in the customer's currency and what it costs the shop. Deployed 2026-10-02; not yet seen on a live card. |
+| Email provider id (#146) | The dashboard `send_email` path keeps the provider id on the response and receipt. |
+| Full-refund card amount (#148) | The phone and dashboard cards print a full refund's quote in the customer's currency and what it costs the shop. Deployed 2026-10-02. |
 
 These entries describe implementation, not universal live proof. Detailed
 history is in `git show fff54dc4:docs/conversational-agent-overhaul-plan.md`
@@ -398,6 +402,22 @@ and commits cite it.
   after #164 deployed (release evidence, *Free-replacement check after #164*).
 
 ## Outside this plan: recorded, not scheduled
+
+**Exchange balance and capability explanations (8h), the top follow-up.** In
+the #1039 conversation the agent told the merchant an exchange would leave no
+balance owed, with no Shopify financial calculation behind it, and that
+`create_exchange` ships the replacement once the return comes back, which the
+adapter does not do (release evidence, *Conversation A first turn* and
+*Conversation A explanation-only follow-up*). #152 rewrote the
+`create_exchange` description, result and prompt lines those claims
+paraphrased. That corrects the source text, not the behavior, and a correct
+explanation has not been seen since. The structural fix is to state an exchange
+balance only from Shopify's `returnCalculate`. Do not rerun the withdrawn #1039
+financial probes to check it.
+
+An order-status question that names the customer rather than the order still
+uses the full order read and can pad the reply; one-order questions use the lean
+`get_order_status` read (#144).
 
 Oct 4 follow-ups: raw escalation reason on an already-escalated ticket;
 answering the agent's own operator-chat question reports no pending question;
@@ -691,10 +711,10 @@ Persist the composed response and its destination before attempting delivery. As
 
 ## Migration work packages
 
-Packages 0–5 provide the implementation summarized above. Package 6 closes the
-remaining user flows, verifies them in the real app, stages routing, and
-retires the old active runtime. Its work queue is
-[Remaining observations](#remaining-observations); its completion procedure is
+Packages 0–5 provide the implementation summarized above. Package 6 closed the
+remaining user flows, verified them in the real app, staged routing, and
+retired the old active runtime. Its completed sequence is
+[Final work sequence](#final-work-sequence); its completion procedure was
 [How to finish a change](#how-to-finish-a-change). Do not create a second
 verification backlog from the earlier package checklists.
 
@@ -711,7 +731,8 @@ manual evidence demonstrates retained and conversational behavior, outcomes
 agree with provider state and delivery, rollout/rollback work, and the old
 active orchestration path is removed. Historical readers may remain where
 actionable persisted state still needs them. A narrower release scope requires
-an explicit owner decision.
+an explicit owner decision; decision L is that decision, and Package 6 closed
+under it on 2026-10-04.
 
 ## Acceptance matrix
 
@@ -734,7 +755,8 @@ an explicit owner decision.
 
 Use this table during the same realistic dev-store/dashboard/phone sessions as
 item 8. Record which rows the session demonstrated. A conversational row is
-complete when observed working; “not verified” leaves it open. For dangerous
+complete when observed working; rows not yet seen are listed under
+[Normal-use observations](#normal-use-observations) (decision L). For dangerous
 or unreliable failure injections, inspect the implementation and reuse
 existing failure coverage. New automated cases follow the exception rule
 above. No fixture or test-file count is a completion target.
@@ -774,13 +796,14 @@ this flow. Topic changes, language changes, explanation-only requests and
 ambiguous references need a suitable merchant conversation when they arise;
 do not append them all to a customer return request. Recovery and concurrency
 retain their existing evidence paths; do not induce an uncertain provider write.
-Unobserved acceptance rows stay open without forcing the customer through them.
+Unobserved acceptance rows are listed under *Normal-use observations*; no
+customer is put through them.
 
 The #1039 investigation and explanation-only turns are retained as partial
 evidence in the release log. Investigation preserved the customer's no-return
 constraint and used fresh reads; the explanation-only turn had no effects.
-Financial and capability claims remain defective. Those are implementation
-findings to fix from the existing evidence, not additional customer steps.
+The financial and capability claims are recorded under *Outside this plan*;
+they are fixed from the existing evidence, not with additional customer steps.
 The direct provider probe opened #1041-R1 for its Sample item; that line is
 already on an OPEN return and must not be used for a duplicate return. Its
 regular line remained returnable at inspection. Confirm present eligibility and
@@ -876,3 +899,9 @@ execution; a new channel cannot acquire a copy of policy.
 Unverified required behavior remains open. If the release owner chooses a
 smaller initial scope, record the excluded behavior and enforce that scope
 before rollout; do not silently redefine completion.
+
+Completion was declared on 2026-10-04 under decision L, which records that
+narrower scope: acceptance rows not yet seen are judged in normal use, and
+failures that cannot be triggered safely are built but not seen live. Both are
+listed under [Normal-use observations](#normal-use-observations); known defects
+are under *Outside this plan*.
