@@ -1,24 +1,26 @@
 import { db, ThreadStatus } from '@shopkeeper/db';
-import { createHash } from 'node:crypto';
-import { defineTool, stringArg, toolError, toolNotFound, toolOk, toolUnknown, type AgentToolDefinition, type ReceiptV1 } from '@shopkeeper/agent/tools';
+import { createHash, randomUUID } from 'node:crypto';
+import { ApiError } from '@shopkeeper/shared/errors';
+import { defineTool, stringArg, toolError, toolNotFound, toolOk, type AgentToolDefinition, type ReceiptV1 } from '@shopkeeper/agent/tools';
 import { canonicalInboxThreadWhere } from '@shopkeeper/agent/inbox-filter';
 import { wrapUntrusted } from '@shopkeeper/agent/message-history';
 import { getCurrentPlanForThread } from '@shopkeeper/agent/plan-cache-shape';
 import { SENDER_TYPE, THREAD_STATUS } from '@shopkeeper/agent/thread-constants';
 import { relativeAge } from '../../routes/telegram/format.js';
 import type { PendingDigest } from '../../operator-context.js';
+import { submitTicketPlanRequest } from '../../agent-task-ingest.js';
 import {
   digestOrdinalFor,
   findInboxThread,
-  formatDigestReplyConfirmation,
   formatDigestSpamConfirmation,
   isThreadId,
   markInboxThreadSpam,
-  sendInboxThreadReply,
 } from '../support-plan/digest-triage.js';
 
 export interface OperatorInboxToolDeps {
   organizationId: string;
+  /** The member this turn acts for: a draft is their request on the ticket. */
+  clerkUserId: string;
   /** Display only: supplies the merchant's own number for a ticket they were shown. */
   pendingDigest?: PendingDigest | null;
 }
@@ -32,9 +34,9 @@ interface GetTicketInput {
   ticket_id: string;
 }
 
-interface SendTicketReplyInput {
+interface DraftTicketReplyInput {
   ticket_id: string;
-  text: string;
+  instruction: string;
 }
 
 interface MarkTicketSpamInput {
@@ -74,7 +76,7 @@ function asUntrustedTicketData(prefix: string, body: string): string {
 export function buildOperatorInboxTools(
   deps: OperatorInboxToolDeps,
 ): Record<string, AgentToolDefinition> {
-  const { organizationId, pendingDigest } = deps;
+  const { organizationId, clerkUserId, pendingDigest } = deps;
 
   const listActiveTickets = defineTool({
     name: 'list_active_tickets',
@@ -228,101 +230,53 @@ export function buildOperatorInboxTools(
     },
   });
 
-  // Reply and spam live beside the two reads because they share the read's
+  // Drafting and spam live beside the two reads because they share the read's
   // scope: any ticket in this org's inbox. They used to be gated on the flagged
   // subset of the last briefing, which meant the agent could read a ticket it
   // was then forbidden to answer — and the merchant's own "reply to that
   // customer" had no tool that could carry it out.
-  const sendTicketReply = defineTool({
-    name: 'send_ticket_reply',
+  //
+  // Nothing the agent writes reaches a customer before the merchant has read the
+  // exact text (release-owner decision A). A draft is the ticket's composer task:
+  // the support planner, with the store's voice and the claim checks, settles a
+  // proposal that reaches the merchant's devices as an approval card, so their
+  // "yes" sends what they read. Their own words need no draft: REPLY n sends
+  // them as typed.
+  const draftTicketReply = defineTool({
+    name: 'draft_ticket_reply',
     description:
-      'Send a reply to the customer on one of the inbox tickets, using the merchant\'s message. Takes any ticket id from the briefing or from list_active_tickets. This is how you answer a customer who already has a ticket; send_email is for contacting someone who does not.',
+      'Draft a reply to the customer on one of the inbox tickets. Nothing is sent: the reply is drafted on their ticket and the merchant gets the exact text to approve. Takes any ticket id from the briefing or from list_active_tickets. This is how you answer a customer who already has a ticket; send_email is for contacting someone who does not.',
     fields: {
       ticket_id: stringArg('The ticket id from the briefing or list_active_tickets.', { required: true }),
-      text: stringArg('The exact reply text to send to the customer.', { required: true }),
+      instruction: stringArg('What the reply should tell the customer, from what the merchant said.', { required: true }),
     },
-    // Communication, not a generic action: this is the tool that puts words in
-    // front of a customer, and `summarizeOperatorTurnDispatchFailure` keys on
-    // the category so a failed send is reported as a failed send.
-    category: 'communication',
+    category: 'internal',
     group: 'thread',
     capabilities: [],
-    label: 'Sent ticket reply',
-    planStepLabel: 'Send ticket reply',
+    label: 'Drafted ticket reply',
+    planStepLabel: 'Draft ticket reply',
     policy: { categoryPermission: false },
-    requiredReceiptVersion: 1,
-    execute: async (input: SendTicketReplyInput, ctx) => {
+    execute: async (input: DraftTicketReplyInput, ctx) => {
       const thread = await findInboxThread(organizationId, input.ticket_id);
-      if (!thread) {
-        const result = toolNotFound(TICKET_NOT_IN_INBOX);
-        if (!ctx.execution) return result;
-        return {
-          ...result,
-          receipt: {
-            version: 1,
-            operationId: ctx.execution.operationId,
-            executionId: ctx.execution.executionId,
-            tool: 'send_ticket_reply',
-            target: { kind: 'thread', id: input.ticket_id },
-            observedAt: new Date().toISOString(),
-            providerReference: null,
-            outcome: 'not_found',
-            code: 'ticket_not_in_inbox',
-          },
-        };
-      }
+      if (!thread) return toolNotFound(TICKET_NOT_IN_INBOX);
 
-      const response = await sendInboxThreadReply(input.ticket_id, input.text);
-      if (!response.ok) {
-        const result = response.outcome === 'unknown'
-          ? toolUnknown('I could not confirm whether that reply sent. Check the ticket before trying again.')
-          : toolError('Reply failed to send. Please try again from the dashboard.');
-        if (!ctx.execution) return result;
-        return {
-          ...result,
-          receipt: {
-            version: 1,
-            operationId: ctx.execution.operationId,
-            executionId: ctx.execution.executionId,
-            tool: 'send_ticket_reply',
-            target: { kind: 'thread', id: input.ticket_id },
-            observedAt: new Date().toISOString(),
-            providerReference: null,
-            outcome: response.outcome === 'unknown' ? 'unknown' : 'failed',
-            code: response.outcome === 'unknown' ? 'delivery_unknown' : 'delivery_failed',
-          },
-        };
+      const instruction = input.instruction.trim();
+      // One draft per instruction per merchant message, so a retried turn
+      // re-reads its request instead of opening a second one.
+      const dedupeKey = ctx.agentRequestId
+        ? `operator-draft:${ctx.agentRequestId}:${input.ticket_id}:${createHash('sha256').update(instruction).digest('hex').slice(0, 16)}`
+        : `operator-draft:${randomUUID()}`;
+      try {
+        await submitTicketPlanRequest({
+          organizationId, clerkUserId, threadId: input.ticket_id, dedupeKey, instruction, force: false,
+        });
+      } catch (error) {
+        if (error instanceof ApiError && error.status < 500) {
+          return toolError(`Error: ${error.message} Nothing was drafted or sent.`);
+        }
+        throw error;
       }
-
-      const result = toolOk(formatDigestReplyConfirmation(
-        thread.customer.name,
-        digestOrdinalFor(pendingDigest ?? null, input.ticket_id),
-        input.text,
-      ));
-      if (!ctx.execution) return result;
-      const deliveryState = response.data.sendStatus === 'pending' || response.data.sendStatus === 'processing'
-        ? 'accepted'
-        : 'sent';
-      const receipt: ReceiptV1 = {
-        version: 1,
-        operationId: ctx.execution.operationId,
-        executionId: ctx.execution.executionId,
-        tool: 'send_ticket_reply',
-        target: { kind: 'thread', id: response.data.threadId },
-        observedAt: new Date().toISOString(),
-        providerReference: response.data.messageId,
-        outcome: 'succeeded',
-        facts: {
-          logicalResponseId: response.data.messageId,
-          messageId: response.data.messageId,
-          threadId: response.data.threadId,
-          destination: { kind: 'thread', id: response.data.threadId },
-          contentSha256: createHash('sha256').update(input.text).digest('hex'),
-          deliveryState,
-          providerMessageId: response.data.providerMessageId,
-        },
-      };
-      return { ...result, receipt };
+      return toolOk('Drafting the reply on that ticket. The merchant gets the exact text to approve; nothing has been sent yet.');
     },
   });
 
@@ -372,7 +326,7 @@ export function buildOperatorInboxTools(
   return {
     list_active_tickets: listActiveTickets,
     get_ticket: getTicket,
-    send_ticket_reply: sendTicketReply,
+    draft_ticket_reply: draftTicketReply,
     mark_ticket_spam: markTicketSpam,
   };
 }

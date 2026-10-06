@@ -80,21 +80,21 @@ async function main() {
     });
 
     let captured: { ticketId: string; text: string } | null = null;
-    const sendTicketReply = defineTool({
-      name: 'send_ticket_reply',
-      description: 'Send the merchant-requested reply to one ticket from the current support digest.',
+    const draftTicketReply = defineTool({
+      name: 'draft_ticket_reply',
+      description: 'Draft the merchant-requested reply on one ticket from the current support digest.',
       fields: {
         ticket_id: stringArg('Exact ticket id from the digest ledger.', { required: true }),
-        text: stringArg('Reply text requested by the merchant.', { required: true }),
+        instruction: stringArg('What the merchant wants the reply to say.', { required: true }),
       },
-      category: 'action',
+      category: 'internal',
       group: 'messaging',
       capabilities: [],
-      label: 'Sent ticket reply',
-      planStepLabel: 'Send ticket reply',
-      execute: async (input: { ticket_id: string; text: string }) => {
-        captured = { ticketId: input.ticket_id, text: input.text };
-        return toolOk(`Recorded reply to ${input.ticket_id}: ${input.text}`);
+      label: 'Drafted ticket reply',
+      planStepLabel: 'Draft ticket reply',
+      execute: async (input: { ticket_id: string; instruction: string }) => {
+        captured = { ticketId: input.ticket_id, text: input.instruction };
+        return toolOk(`Recorded draft request for ${input.ticket_id}: ${input.instruction}`);
       },
     });
 
@@ -131,12 +131,12 @@ async function main() {
       undefined,
       {
         turnId: randomUUID(),
-        moduleTools: { send_ticket_reply: sendTicketReply },
+        moduleTools: { draft_ticket_reply: draftTicketReply },
       },
     );
 
     if (!captured) {
-      throw new Error(`The model did not call send_ticket_reply. Summary: ${result.summary}`);
+      throw new Error(`The model did not call draft_ticket_reply. Summary: ${result.summary}`);
     }
     const selected = captured as { ticketId: string; text: string };
     if (selected.ticketId !== ticketIds[1]) {

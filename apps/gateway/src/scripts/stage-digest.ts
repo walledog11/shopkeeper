@@ -265,7 +265,7 @@ async function main() {
     orgId = org.id;
   }
 
-  // send_ticket_reply hops to the dashboard, which refuses to send without a
+  // An approved reply hops to the dashboard, which refuses to send without a
   // resolvable email integration. One `platform: 'email'` row is enough — it
   // self-repairs as the org default — and E2E_OUTBOUND_MODE=record intercepts
   // the send before any provider call, so no real mail leaves.
@@ -469,7 +469,7 @@ async function main() {
   // start.ts spawns ./index.js and ./worker.js, so it only resolves from dist —
   // run both entrypoints directly under tsx. The worker is not optional: durable
   // operator events are the only inbound path, so nothing is interpreted without
-  // it. The dashboard serves the send_ticket_reply hop.
+  // it. The dashboard serves the approved reply's send hop.
   console.log('Serve the webhook half (separate shells), then reply from your phone:');
   console.log('   cloudflared tunnel --url http://localhost:8180');
   console.log('   node ../../scripts/with-test-env.mjs npx next dev -p 3100      # from apps/dashboard');
@@ -479,7 +479,7 @@ async function main() {
   console.log('');
   console.log('A2 script — both replies must reach the model, not the fast path:');
   console.log('   "the one from Sarah is spam"        → mark_ticket_spam on flagged 1');
-  console.log('   "reply to the second: we ship Friday" → send_ticket_reply on flagged 2');
+  console.log('   "reply to the second: we ship Friday" → draft_ticket_reply on flagged 2, then a draft card');
   console.log('Confirm in the gateway log + AgentAction rows, not just the text reply.');
 
   // notifyOperator's idempotency marker holds an open ioredis connection that

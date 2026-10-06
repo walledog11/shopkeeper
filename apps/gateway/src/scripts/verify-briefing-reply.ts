@@ -137,23 +137,23 @@ async function main() {
     });
 
     let captured: { ticketId: string; text: string } | null = null;
-    const recordingSend = defineTool({
-      name: 'send_ticket_reply',
+    const recordingDraft = defineTool({
+      name: 'draft_ticket_reply',
       description:
-        'Send a reply to the customer on one of the inbox tickets, using the merchant\'s message. Takes any ticket id from the briefing or from list_active_tickets.',
+        'Draft a reply to the customer on one of the inbox tickets. Nothing is sent: the reply is drafted on their ticket and the merchant gets the exact text to approve. Takes any ticket id from the briefing or from list_active_tickets.',
       fields: {
         ticket_id: stringArg('The ticket id from the briefing or list_active_tickets.', { required: true }),
-        text: stringArg('The exact reply text to send to the customer.', { required: true }),
+        instruction: stringArg('What the reply should tell the customer, from what the merchant said.', { required: true }),
       },
-      category: 'communication',
+      category: 'internal',
       group: 'thread',
       capabilities: [],
-      label: 'Sent ticket reply',
-      planStepLabel: 'Send ticket reply',
+      label: 'Drafted ticket reply',
+      planStepLabel: 'Draft ticket reply',
       policy: { categoryPermission: false },
-      execute: async (input: { ticket_id: string; text: string }) => {
-        captured = { ticketId: input.ticket_id, text: input.text };
-        return toolOk(`Recorded reply to ${input.ticket_id}.`);
+      execute: async (input: { ticket_id: string; instruction: string }) => {
+        captured = { ticketId: input.ticket_id, text: input.instruction };
+        return toolOk(`Recorded draft request for ${input.ticket_id}.`);
       },
     });
 
@@ -200,8 +200,8 @@ async function main() {
       {
         turnId: randomUUID(),
         moduleTools: {
-          ...buildOperatorInboxTools({ organizationId: org.id }),
-          send_ticket_reply: recordingSend,
+          ...buildOperatorInboxTools({ organizationId: org.id, clerkUserId: 'verify-briefing-reply' }),
+          draft_ticket_reply: recordingDraft,
         },
       },
     );

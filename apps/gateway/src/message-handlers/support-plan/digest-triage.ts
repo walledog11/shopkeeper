@@ -144,7 +144,7 @@ export async function buildDigestLedgerSection(
     ...(omitted > 0
       ? [`${omitted} further item${omitted === 1 ? '' : 's'} on that list are not spelled out here — find them with list_active_tickets.`]
       : []),
-    'Use get_ticket to open one. send_ticket_reply and mark_ticket_spam take any inbox ticket id,'
+    'Use get_ticket to open one. draft_ticket_reply and mark_ticket_spam take any inbox ticket id,'
     + ' whether or not it is on this list — this list only fixes what the numbers mean.',
   ].join('\n');
 }

@@ -92,6 +92,7 @@ describe('executeFreeFormInstruction', () => {
       'answer_operator_question',
       'approve_pending_plan',
       'create_flash_sale',
+      'draft_ticket_reply',
       'end_flash_sale',
       'get_order_status',
       'get_ticket',
@@ -102,7 +103,6 @@ describe('executeFreeFormInstruction', () => {
       'reject_pending_plan',
       'revise_pending_plan',
       'search_product_help',
-      'send_ticket_reply',
       'set_variant_prices',
     ]);
     const event = await db.operatorEvent.findUniqueOrThrow({ where: { id: message.turnId } });

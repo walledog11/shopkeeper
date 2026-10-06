@@ -2,7 +2,6 @@ import express, { type Request, type Response, type Router } from 'express';
 import { ApiError } from '@shopkeeper/shared/errors';
 import {
   acceptMemberAgentRequest,
-  acceptTicketAgentRequest,
   cancelMemberAgentTask,
   getMemberAgentRequest,
   listMemberAgentRequests,
@@ -21,9 +20,8 @@ import { resolveOperatorMemberKey } from '../operator-identity.js';
 import { pushOperatorEscalation } from '../operator-escalation.js';
 import { internalJsonParser } from './body-parsers.js';
 import { authorizeInternalRequest } from './internal-auth.js';
-import { ensureAgentTaskEnqueued, memberAgentTaskBudget } from '../agent-task-ingest.js';
+import { ensureAgentTaskEnqueued, memberAgentTaskBudget, submitTicketPlanRequest } from '../agent-task-ingest.js';
 import { readAgentPlanCache } from '@shopkeeper/agent/plan-cache';
-import { removePendingPlanForThread } from '../operator-context.js';
 
 function stringField(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -84,16 +82,9 @@ export function registerInternalOperatorRoutes(router: Router): void {
       return res.status(400).json({ error: 'organizationId, clerkUserId, threadId, clientRequestId, instruction, and force are required' });
     }
     try {
-      const accepted = await acceptTicketAgentRequest({
-        organizationId, clerkUserId, threadId, dedupeKey: clientRequestId, instruction,
-        force: body.force, budget: memberAgentTaskBudget(),
+      const accepted = await submitTicketPlanRequest({
+        organizationId, clerkUserId, threadId, dedupeKey: clientRequestId, instruction, force: body.force,
       });
-      if (!accepted.deduplicated) await removePendingPlanForThread(organizationId, threadId);
-      try {
-        if (accepted.task.status === 'queued') await ensureAgentTaskEnqueued(accepted.task);
-      } catch (error) {
-        logger.error({ err: error, taskId: accepted.task.id }, '[InternalOperator] Composer enqueue failed; sweep will recover');
-      }
       const request = await getMemberAgentRequest({ organizationId, clerkUserId, requestId: accepted.request.id });
       if (!request) throw new Error('Accepted composer request could not be read.');
       return res.status(202).json({
