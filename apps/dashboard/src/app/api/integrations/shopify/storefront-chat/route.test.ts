@@ -15,6 +15,9 @@ const FUTURE = new Date(Date.now() + 60 * 60 * 1000);
 
 beforeEach(async () => {
   org = await createTestOrg();
+  await db.orgMember.create({
+    data: { organizationId: org.id, clerkUserId: 'usr_storefront_chat' },
+  });
   vi.mocked(auth).mockResolvedValue({
     userId: 'usr_storefront_chat',
     orgId: org.clerkOrgId,

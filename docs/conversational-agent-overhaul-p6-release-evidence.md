@@ -2426,3 +2426,13 @@ patched versions `1.2.2` and `2.0.8`. A fresh production audit and the existing
 gateway health, body-limit and operator rate-limit checks passed. Required CI
 will rerun on that release candidate; the initial skipped build, coverage and
 E2E jobs are not treated as passed.
+
+Coverage then exposed stale dashboard auth fixtures from deployed #169, whose
+first signed-in request now records a Clerk-confirmed member. The shared test
+SDK supplies a membership response only when its stub omitted that endpoint;
+explicit membership responses and failures remain authoritative. Fixtures with
+their own team/organization SDK responses seed the valid caller's member row,
+and the unavailable-Telegram check asserts no channel binding or bind token.
+Production authorization is unchanged. Full dashboard coverage, dashboard
+typecheck and changed-file lint passed, including revoked-membership and tenant
+isolation checks. Full PR CI will rerun before merge.
