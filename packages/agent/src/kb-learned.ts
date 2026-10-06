@@ -15,12 +15,6 @@ export function isAgentLearnedKbArticle(tags: readonly string[]): boolean {
   return tags.some((tag) => tag.toLowerCase() === AGENT_LEARNED_KB_TAG);
 }
 
-const MERCHANT_ANSWER_INSTRUCTION_RE = /The store owner answered your question/i;
-
-export function isMerchantAnswerPlanningInstruction(instruction: string): boolean {
-  return MERCHANT_ANSWER_INSTRUCTION_RE.test(instruction);
-}
-
 export function buildMerchantAnswerPlanningInstruction(input: {
   baseInstruction: string;
   question: string | null;

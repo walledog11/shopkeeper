@@ -273,8 +273,8 @@ describe("selectPlanningTools on the discovery runtime", () => {
   // The acceptance sentence this package owns: an address question does not
   // load compensation schemas by default. On the legacy runtime it does, because
   // address changes and refunds share one coarse mutative bucket.
-  it("narrows a mutative request to the reads a write is proposed from", () => {
-    const selection = discover({ classifierSignals: signals({ mutative_request: true }) });
+  it.each(["mutative_request", "compensation_request"] as const)("narrows %s to the reads a write is proposed from", (intent) => {
+    const selection = discover({ classifierSignals: signals({ [intent]: true }) });
     const selected = names(selection);
 
     expect(selection).toMatchObject({ bucket: "order_mutation", reason: "intent_bucket", narrowed: true });

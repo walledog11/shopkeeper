@@ -168,6 +168,7 @@ function prefetchesKnowledgeBase(
 const KB_DEPENDENT_INTENTS = [
   "policy_question",
   "mutative_request",
+  "compensation_request",
   "fraud_signals",
   "contradiction",
   "out_of_scope_commercial",

@@ -4,19 +4,13 @@ import {
   isLowRiskPlanOutcome,
   resolvePlannerTierMode,
 } from "./planner-model-tier.js";
-import type { ClassifierIntents } from "./classifier-signals.js";
+import { emptyIntents, type ClassifierIntents } from "./classifier-signals.js";
 import { TOOL_CATEGORIES } from "./tools/registry/index.js";
 import type { RawToolCall } from "./types.js";
 
 function intents(overrides: Partial<ClassifierIntents> = {}): ClassifierIntents {
   return {
-    mutative_request: false,
-    policy_question: false,
-    order_status: false,
-    fraud_signals: false,
-    contradiction: false,
-    out_of_scope_commercial: false,
-    forwarded_injection: false,
+    ...emptyIntents(),
     ...overrides,
   };
 }
@@ -81,6 +75,7 @@ describe("decidePlannerTier", () => {
 
   it.each([
     "mutative_request",
+    "compensation_request",
     "fraud_signals",
     "contradiction",
     "out_of_scope_commercial",

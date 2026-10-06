@@ -2,6 +2,7 @@ import './test-fixtures/worker-test-setup.js';
 import { describe, it, expect, vi } from 'vitest';
 import { ChannelType, db } from '@shopkeeper/db';
 import { org } from './test-fixtures/worker-test-setup.js';
+import { CLASSIFIER_VERSION } from './message-handlers/inbound/classification-contract.js';
 import {
   classifierResponse,
   getCapturedHandlers,
@@ -50,10 +51,11 @@ describe('AI Summary worker — filter gating', () => {
     const updated = await db.thread.findUnique({ where: { id: thread.id } });
     expect(updated?.filterStatus).toBe('questionable');
     expect(updated?.classifierSignals).toEqual({
-      version: 5,
+      version: CLASSIFIER_VERSION,
       language: 'es',
       intents: {
         mutative_request: false,
+        compensation_request: false,
         policy_question: false,
         order_status: true,
         fraud_signals: false,

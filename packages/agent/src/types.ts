@@ -84,6 +84,9 @@ export type OrgSettingsPatch = Omit<Partial<OrgSettings>, 'toolsEnabled'> & {
 };
 
 // Agent plan — proposed steps before execution
+/** Host-authored context from a claimed merchant wait, never inferred from prose. */
+export type MerchantContinuationKind = 'answer' | 'revision'
+
 export type ToolCategory = 'action' | 'communication' | 'internal' | 'read'
 
 export interface RawToolCall {

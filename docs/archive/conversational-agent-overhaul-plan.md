@@ -1,12 +1,22 @@
 # Conversational agent overhaul plan
 
+**Archived 2026-10-05.** This is the historical closure snapshot. Its sections
+and item numbers are retained for the release evidence; do not update its work
+lists or use it as the current operating instructions. Standing decisions,
+architecture, contracts and change procedure now live in
+[agent-runtime.md](../agent-runtime.md). Current defects and unobserved
+normal-use behavior live in [agent-follow-ups.md](../agent-follow-ups.md);
+record observations in the
+[release evidence](../conversational-agent-overhaul-p6-release-evidence.md).
+The text below records the state at archival and grants no new authorization.
+
 **Closed 2026-10-04. This plan is historical and has no open work items.** The
 migration is complete within the release scope the owner accepted (decision L).
 Runtime retirement merged in [#165](https://github.com/walledog11/shopkeeper/pull/165)
 as `17afc644` and is deployed on dashboard, gateway and worker; #166 recorded the
 closeout. Required PR checks and production verification passed. Runtime v2
 became the default for new tasks at 21:08 UTC; v1 execution is removed. The
-[runtime runbook](agent-runtime.md) describes the single active contract,
+[runtime runbook](../agent-runtime.md) describes the single active contract,
 historical-data handling, and deployment rollback.
 
 Behavior that is built but not yet seen live is listed once under
@@ -106,16 +116,16 @@ scope needs an explicit product decision; test cleanup cannot change it.
 
 This document authorizes no production operation by itself. Existing session
 authorizations continue to apply. It supersedes the
-[maintainability audit](agent-maintainability-audit-2026-09-11.md) where they
+[maintainability audit](../agent-maintainability-audit-2026-09-11.md) where they
 differ: conversation remains model-authored and tool discovery adaptive.
 
 *Current state* and *Final work sequence* are the closing record. Use the
 contract sections and *How to finish a change* when changing their owners. The
-[release evidence](conversational-agent-overhaul-p6-release-evidence.md)
+[release evidence](../conversational-agent-overhaul-p6-release-evidence.md)
 holds manual run results; the
-[release matrix](conversational-agent-overhaul-release-matrix.md) records
+[release matrix](../conversational-agent-overhaul-release-matrix.md) records
 earlier implementation evidence. The
-[Package 0 baseline](conversational-agent-overhaul-p0-baseline.md)
+[Package 0 baseline](../conversational-agent-overhaul-p0-baseline.md)
 holds retained capabilities and budgets. Detailed history remains in git.
 
 ## Rules for implementing this plan
@@ -170,7 +180,7 @@ retirement inventory is a fresh read-only production inspection on 2026-10-04.
 | Conversational acceptance | A one-order status question is answered briefly and in ordinary language after #144 (owner phone check and stored turns, one sample per question). #151's handoff removes the unsupported return/refund suggestion; the owner confirmed iMessage receipt and wording. The #1039 investigation read current data and preserved the no-return constraint; its explanation-only follow-up made no actions. Financial explanations (8h) and status-by-name padding are recorded under *Outside this plan*; rows not yet seen are under *Normal-use observations*. |
 | Rollout and runtime retirement | Items 11–13 done. Runtime retirement deployed as `17afc644` (#165); required PR checks and production verification passed. Historical readers and v2 reconciliation/delivery remain. Rehearsal waived (decision L). |
 | Optional paid comparison (Gate B) | Last comparison on `cf41c169` failed; it was incorrectly called passed before correction. #125 fixed the C08 runtime defect, so that input is no longer held out. Comparison tooling (Gate A) exists; neither a rerun nor new fixtures are required unless requested. |
-| Active runtime and rollback | Retirement creates only runtime-2 tasks and refuses other versions. Historical rollout variables are inert on the current image, but the #164 rollback image still reads `AGENT_RUNTIME_VERSION`. Rollback redeploys #164 across all hosts; retain the additive schema and v2 operation identities. See [agent-runtime.md](agent-runtime.md). |
+| Active runtime and rollback | Retirement creates only runtime-2 tasks and refuses other versions. Historical rollout variables are inert on the current image, but the #164 rollback image still reads `AGENT_RUNTIME_VERSION`. Rollback redeploys #164 across all hosts; retain the additive schema and v2 operation identities. See [agent-runtime.md](../agent-runtime.md). |
 
 ## Final work sequence
 
@@ -876,7 +886,7 @@ cost when available; do not build instrumentation solely to fill a scorecard.
 
 ### Commands and evidence to record
 
-Use the relevant workspace scripts from [TESTING.md](../TESTING.md). Typical
+Use the relevant workspace scripts from [TESTING.md](../../TESTING.md). Typical
 choices are:
 
 ```sh

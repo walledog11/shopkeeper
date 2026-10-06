@@ -60,6 +60,9 @@ let otherOrg: Awaited<ReturnType<typeof createTestOrg>>;
 beforeEach(async () => {
   callerOrg = await createTestOrg();
   otherOrg = await createTestOrg();
+  await db.orgMember.create({
+    data: { organizationId: callerOrg.id, clerkUserId: 'usr_caller' },
+  });
   // An admin caller, so a tenant-scoping assertion can never be masked by a
   // role 403 on the admin-only surfaces this suite also exercises.
   vi.mocked(auth).mockResolvedValue({
@@ -340,4 +343,3 @@ function jsonReq(url: string, body: unknown) {
     body: JSON.stringify(body),
   });
 }
-

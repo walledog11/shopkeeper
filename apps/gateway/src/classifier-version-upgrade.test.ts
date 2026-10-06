@@ -22,13 +22,13 @@ import {
 } from './maintenance/digest-briefing/index.js';
 
 // Every persisted classifier version that has reached production, plus the two
-// shapes a row can degrade into. Version 5 is the control: it is the only
-// version written today, so a failure there is a failure in the current path
-// and a failure below it is a failure in the legacy fallback Milestone 1 shipped.
+// shapes a row can degrade into. Versions 5 and 6 share structured request
+// facts; version 6 only adds an intent flag. Earlier rows retain the legacy
+// fallback Milestone 1 shipped.
 //
 // This suite exists because "v5 is the only version ever written" was false.
 // CLASSIFIER_VERSION was 2 on 2026-07-07 and the 2026-08-23 production inventory
-// still found two live v4 threads. Any row that is not version 5 renders through
+// still found two live v4 threads. Rows before version 5 render through
 // unavailableRequestDisplay(), so the source-text fallback is the only thing
 // standing between a legacy row and a briefing that asks the merchant to decide
 // something it cannot show them.
@@ -42,9 +42,9 @@ afterEach(async () => {
   await cleanupTestData(org?.id);
 });
 
-function v5Signals() {
+function requestFactsSignals(version = 5) {
   return {
-    version: 5,
+    version,
     language: 'en',
     intents: {},
     requestFacts: {
@@ -137,9 +137,9 @@ function briefingRow(
 }
 
 describe('persisted classifier versions still render', () => {
-  it('reads structured facts on the version that writes them today', async () => {
+  it.each([5, 6])('reads structured facts on compatible version %s', async (version) => {
     org = await createTestOrg();
-    const seeded = await seedThread({ classifierSignals: v5Signals() });
+    const seeded = await seedThread({ classifierSignals: requestFactsSignals(version) });
 
     const display = await buildRequestDisplaySnapshot({
       organizationId: org.id,

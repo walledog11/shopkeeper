@@ -11,6 +11,7 @@
 // storable in a Json column without a cast at every write site.
 export type ClassifierIntents = {
   mutative_request: boolean; // asks to cancel/refund/return/exchange/edit
+  compensation_request: boolean; // explicitly asks for money back, a gift card or store credit
   policy_question: boolean; // shipping coverage, returns policy, discounts
   order_status: boolean;
   fraud_signals: boolean; // chargeback/dispute language or urgency + non-receipt
@@ -26,10 +27,9 @@ export type ClassifierIntents = {
   no_request: boolean;
 };
 
-// What the customer wants done, as a closed vocabulary rather than prose. The
-// briefing composes its line from these fields instead of rewriting the
-// classifier's English sentence, so the load-bearing fact can lead — a deadline
-// is useless buried 180 characters into a summary on a phone.
+// What the customer wants done, as a closed vocabulary rather than prose.
+// Briefings render these fields; planning refusal checks use the current ask
+// and order. They never establish permission or provider state.
 export const REQUEST_ASKS = [
   "refund",
   "cancel",
@@ -181,6 +181,7 @@ export function normalizeClassifierLanguage(value: unknown): string {
 
 export const INTENT_KEYS: readonly (keyof ClassifierIntents)[] = [
   "mutative_request",
+  "compensation_request",
   "policy_question",
   "order_status",
   "fraud_signals",
@@ -196,6 +197,7 @@ export const INTENT_KEYS: readonly (keyof ClassifierIntents)[] = [
 export function emptyIntents(): ClassifierIntents {
   return {
     mutative_request: false,
+    compensation_request: false,
     policy_question: false,
     order_status: false,
     fraud_signals: false,
@@ -208,8 +210,8 @@ export function emptyIntents(): ClassifierIntents {
 
 // Parsed form of `Thread.classifierSignals`. `null` when the thread has no
 // signals persisted (pre-Phase-1 threads, non-classified channels, classifier
-// outages) — routing treats that as "no classifier available" and falls back to
-// the regex path.
+// outages). Missing or stale classification requires review; proposed tool
+// targets remain subject to refusal checks without classification.
 export interface ClassifierSignals {
   version: number | null;
   language: string;
@@ -217,6 +219,18 @@ export interface ClassifierSignals {
   /** Structured form of the current ask. `ask: "none"` on threads classified
    *  before the field existed, which reads as "no facts" to every consumer. */
   requestFacts: RequestFacts;
+}
+
+/** Request signals belong to exactly the customer message being planned. */
+export function classifierAlignmentState(
+  signals: ClassifierSignals | null | undefined,
+  sourceMessageId: string | null | undefined,
+  latestCustomerMessageId: string | null | undefined,
+): 'aligned' | 'missing' | 'unaligned' {
+  if (!signals) return 'missing';
+  // Older in-process callers omit both; persisted host contexts supply both.
+  if (sourceMessageId === undefined && latestCustomerMessageId === undefined) return 'aligned';
+  return sourceMessageId && sourceMessageId === latestCustomerMessageId ? 'aligned' : 'unaligned';
 }
 
 // Lenient parse: any persisted object is read as "the classifier ran"; missing

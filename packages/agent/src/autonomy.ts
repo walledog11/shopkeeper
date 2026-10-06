@@ -236,7 +236,10 @@ export function decideAutonomy(
   }
 
   const askOperator = plan.rawToolCalls.find((call) => call.name === "ask_operator") ?? null;
-  const legacyKbGap = planSignals(plan).some((signal) => signal.code === "kb_no_match")
+  // Current plans carry the planner's decision about whether the merchant has
+  // supplied the missing fact. An advisory search miss cannot overturn it.
+  const legacyKbGap = !plan.routingEvidence
+    && planSignals(plan).some((signal) => signal.code === "kb_no_match")
     && plan.rawToolCalls.some((call) => call.name === "send_reply")
     && !plan.rawToolCalls.some((call) => TOOL_CATEGORIES[call.name] === "action");
   if (askOperator || evidence.question || evidence.codes.includes("policy_gap") || evidence.codes.includes("kb_gap") || legacyKbGap) {

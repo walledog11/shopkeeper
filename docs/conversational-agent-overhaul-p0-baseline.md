@@ -5,7 +5,7 @@ ownership and capability inventory were completed 2026-09-11 against commit
 `bd25cf3a`; the production aggregate inventory, compatibility decisions, exact
 additive schema contract, evaluation manifest, and first-slice limits were
 completed 2026-09-12. This artifact supplies the evidence and decisions required by
-[Package 0](conversational-agent-overhaul-plan.md#what-has-been-done).
+[Package 0](archive/conversational-agent-overhaul-plan.md#what-has-been-done).
 It is descriptive only: it does not authorize a production write, recovery run,
 canary, or cleanup.
 
@@ -708,14 +708,18 @@ Package 0 is complete. There is no unnamed retained write or unresolved storage
 owner. Unavailable task-level cost and avoidable-handoff measurements remain
 explicitly unavailable rather than guessed, and do not block Package 1.
 Package 1 began on 2026-09-12 with the typed, versioned write-receipt contract;
-its current progress and remaining gates are tracked in the overhaul plan.
+its implementation history is retained in the
+[archived overhaul plan](archive/conversational-agent-overhaul-plan.md). The
+migration is closed; current contracts live in [agent-runtime.md](agent-runtime.md)
+and remaining observations and defects in [agent-follow-ups.md](agent-follow-ups.md).
 
 ## Change record
 
 ### 2026-09-11 — repository baseline started
 
 - Files changed: this artifact and the Package 0 evidence link in
-  `docs/conversational-agent-overhaul-plan.md`.
+  `docs/conversational-agent-overhaul-plan.md` (now
+  [archived](archive/conversational-agent-overhaul-plan.md)).
 - Invariant documented: conversation, inbound request/event, task, proposal,
   execution claim, action, response, and delivery are separate identities with
   named current or proposed owners.

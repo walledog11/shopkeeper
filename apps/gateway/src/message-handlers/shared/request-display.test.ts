@@ -98,7 +98,7 @@ describe('buildRequestDisplaySnapshot', () => {
     })).resolves.toEqual({ version: 1, kind: 'unavailable' });
   });
 
-  it('never turns a pre-v5 classifier row into a classified snapshot', async () => {
+  it.each([4, 5.5, 7])('never turns unsupported classifier version %s into a classified snapshot', async (version) => {
     const customer = await createTestCustomer(org.id, 'old@example.com');
     const thread = await createTestThread(org.id, customer.id, ChannelType.email);
     const message = await createTestMessage(thread.id, 'Please refund #1024');
@@ -106,7 +106,7 @@ describe('buildRequestDisplaySnapshot', () => {
       where: { id: thread.id },
       data: {
         requestSourceMessageId: message.id,
-        classifierSignals: { ...v5Signals(), version: 4 },
+        classifierSignals: { ...v5Signals(), version },
       },
     });
 

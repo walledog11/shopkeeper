@@ -40,7 +40,6 @@ function context(overrides: Partial<AgentContext> = {}): AgentContext {
 function build(ctx: AgentContext) {
   return buildPlanRoutingEvidence({
     ctx,
-    instruction: "Handle it",
     rawToolCalls: [{ id: "reply", name: "send_reply", input: { text: "Hello." } }],
     readBlocks: [],
     readStatusMap: new Map(),
@@ -49,6 +48,79 @@ function build(ctx: AgentContext) {
 }
 
 describe("buildPlanRoutingEvidence", () => {
+  const blockedOrder = {
+    id: "9000001020", name: "#1020", created_at: null,
+    financial_status: "refunded", fulfillment_status: "fulfilled",
+    total_price: "38.00", currency: "USD", items: [],
+  };
+
+  it.each([
+    { ask: "cancel", code: "fulfilled_cancellation_request" },
+    { ask: "address_change", code: "fulfilled_address_change_request" },
+    { ask: "refund", code: "already_refunded_request" },
+  ] as const)("refuses a blocked $ask from current structured facts without English wording", ({ ask, code }) => {
+    const ctx = context({
+      recentMessages: [{ senderType: "customer", contentText: "Por favor, ayúdame con esto." }],
+      recentOrders: [blockedOrder],
+      classifierSignals: {
+        version: 6, language: "es", intents: { ...emptyIntents(), mutative_request: true },
+        requestFacts: { ...emptyRequestFacts(), ask, order: "#1020" },
+      },
+    });
+    expect(build(ctx).codes).toContain(code);
+  });
+
+  it("refuses the proposed write even when classification belongs to an older request", () => {
+    const ctx = context({
+      thread: { ...context().thread, requestSourceMessageId: "older_message" },
+      recentOrders: [blockedOrder],
+      classifierSignals: {
+        version: 6, language: "en", intents: { ...emptyIntents(), order_status: true },
+        requestFacts: { ...emptyRequestFacts(), ask: "order_status" },
+      },
+    });
+    const evidence = buildPlanRoutingEvidence({
+      ctx, rawToolCalls: [
+        { id: "write", name: "update_shopify_order_address", input: { order_id: blockedOrder.id } },
+      ],
+      readBlocks: [], readStatusMap: new Map(), readResultsMap: new Map(),
+    }).evidence;
+    expect(evidence.codes).toEqual(["classifier_unaligned", "fulfilled_address_change_request"]);
+  });
+
+  it("does not revive historical compensation when a current status lookup fails", () => {
+    const ctx = context({
+      recentMessages: [
+        { senderType: "customer", contentText: "Refund my order." },
+        { senderType: "agent", contentText: "That request is complete." },
+        { senderType: "customer", contentText: "¿Dónde está mi otro pedido?" },
+      ],
+      recentOrders: [{ ...blockedOrder, financial_status: "paid" }],
+      classifierSignals: {
+        version: 6, language: "es", intents: { ...emptyIntents(), order_status: true },
+        requestFacts: { ...emptyRequestFacts(), ask: "order_status" },
+      },
+    });
+    const evidence = buildPlanRoutingEvidence({
+      ctx, rawToolCalls: [],
+      readBlocks: [{ type: "tool_use", id: "lookup", name: "get_order_by_name", input: {} }],
+      readStatusMap: new Map([["lookup", "error"]]), readResultsMap: new Map(),
+    }).evidence;
+    expect(evidence.codes).toEqual([]);
+  });
+
+  it("escalates an explicit store-credit request without a safe financial action", () => {
+    const ctx = context({
+      recentMessages: [{ senderType: "customer", contentText: "Quisiera crédito en mi cuenta." }],
+      classifierSignals: {
+        version: 6, language: "es",
+        intents: { ...emptyIntents(), mutative_request: true, compensation_request: true },
+        requestFacts: { ...emptyRequestFacts(), ask: "other" },
+      },
+    });
+    expect(build(ctx).codes).toContain("compensation_exception");
+  });
+
   it("persists closed typed evidence for aligned classifier facts", () => {
     expect(build(context())).toMatchObject({
       classifierState: "aligned",
@@ -90,7 +162,7 @@ describe("buildPlanRoutingEvidence", () => {
         version: 2,
         language: "en",
         intents: { ...emptyIntents(), mutative_request: true },
-        requestFacts: emptyRequestFacts(),
+        requestFacts: { ...emptyRequestFacts(), ask: "refund", order: "#1020" },
       },
     });
     expect(build(ctx)).toMatchObject({
@@ -115,12 +187,11 @@ describe("buildPlanRoutingEvidence", () => {
         version: 2,
         language: "en",
         intents: { ...emptyIntents(), mutative_request: true, fraud_signals: true },
-        requestFacts: emptyRequestFacts(),
+        requestFacts: { ...emptyRequestFacts(), ask: "refund", order: "#1020" },
       },
     });
     const followUp = (withheldMessageFollowUp: boolean) => buildPlanRoutingEvidence({
       ctx,
-      instruction: "Handle it",
       rawToolCalls: [{ id: "reply", name: "send_reply", input: { text: "Hello." } }],
       readBlocks: [],
       readStatusMap: new Map(),
@@ -154,7 +225,6 @@ describe("buildPlanRoutingEvidence", () => {
     });
     const evidence = buildPlanRoutingEvidence({
       ctx,
-      instruction: "Handle it",
       rawToolCalls: [{
         id: "refund",
         name: "create_refund",
@@ -175,7 +245,6 @@ describe("buildPlanRoutingEvidence", () => {
     });
     const evidence = buildPlanRoutingEvidence({
       ctx,
-      instruction: "Handle it",
       rawToolCalls: [{ id: "reply", name: "send_reply", input: { text: "Trim the wick." } }],
       readBlocks: [{ type: "tool_use", id: "kb", name: "search_kb", input: { query: "candle burn tips" } }],
       readStatusMap: new Map([["kb", "not_found"]]),
@@ -197,15 +266,15 @@ describe("kbMissNeedsMerchant", () => {
   const reply = { id: "reply", name: "send_reply", input: { text: "Hi." } };
 
   it("holds a reply drafted after an empty search", () => {
-    expect(kbMissNeedsMerchant({ ctx: context(), instruction: "Handle it", rawToolCalls: [reply], ...missed }))
+    expect(kbMissNeedsMerchant({ ctx: context(), rawToolCalls: [reply], ...missed }))
       .toBe(true);
   });
 
   it("lets the reply through once the merchant has answered", () => {
     expect(kbMissNeedsMerchant({
       ctx: context(),
-      instruction: "Handle it",
-      rawToolCalls: [reply, { id: "ask", name: "ask_operator", input: { question: "?" } }],
+      merchantContinuation: "answer",
+      rawToolCalls: [reply],
       ...missed,
     })).toBe(false);
   });
@@ -221,9 +290,9 @@ describe("kbMissNeedsMerchant", () => {
       },
     });
 
-    expect(kbMissNeedsMerchant({ ctx: askedHowToReturn, instruction: "Handle it", rawToolCalls: withReturn, ...missed }))
+    expect(kbMissNeedsMerchant({ ctx: askedHowToReturn, rawToolCalls: withReturn, ...missed }))
       .toBe(true);
-    expect(kbMissNeedsMerchant({ ctx: context(), instruction: "Handle it", rawToolCalls: withReturn, ...missed }))
+    expect(kbMissNeedsMerchant({ ctx: context(), rawToolCalls: withReturn, ...missed }))
       .toBe(false);
   });
 });

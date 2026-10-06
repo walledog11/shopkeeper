@@ -5,9 +5,11 @@ import {
 } from '@shopkeeper/agent/classifier-signals';
 import { formatFactsBriefingLine } from '../../maintenance/briefing-fields.js';
 import { isRecord } from '../../lib/typing.js';
+import { CLASSIFIER_VERSION } from '../inbound/classification-contract.js';
 
 const REQUEST_DISPLAY_VERSION = 1 as const;
-const ALIGNED_CLASSIFIER_VERSION = 5;
+// Version 6 adds compensation intent; the version-5 request facts still render.
+const REQUEST_FACTS_MIN_VERSION = 5;
 const DISPLAY_TOPIC_LIMIT = 120;
 
 export type SystemRequestKind = 'delivery_exception' | 'return_arrival';
@@ -91,7 +93,9 @@ export async function buildRequestDisplaySnapshot(params: {
   if (
     !thread
     || thread.requestSourceMessageId !== params.sourceMessageId
-    || signals?.version !== ALIGNED_CLASSIFIER_VERSION
+    || !signals || signals.version === null
+    || !Number.isInteger(signals.version)
+    || signals.version < REQUEST_FACTS_MIN_VERSION || signals.version > CLASSIFIER_VERSION
   ) {
     return unavailableRequestDisplay();
   }
@@ -121,7 +125,7 @@ export function readRequestDisplay(value: unknown): RequestDisplay | undefined {
     return unavailableRequestDisplay();
   }
   const signals = parseClassifierSignals({
-    version: ALIGNED_CLASSIFIER_VERSION,
+    version: REQUEST_FACTS_MIN_VERSION,
     language: 'en',
     intents: { no_request: value.noRequest === true },
     requestFacts: value.facts,

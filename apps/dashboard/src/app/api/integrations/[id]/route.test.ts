@@ -39,6 +39,9 @@ let otherOrg: Awaited<ReturnType<typeof createTestOrg>> | null;
 
 beforeEach(async () => {
   org = await createTestOrg();
+  await db.orgMember.create({
+    data: { organizationId: org.id, clerkUserId: 'usr_test' },
+  });
   otherOrg = null;
   vi.mocked(auth).mockResolvedValue({
     userId: 'usr_test',

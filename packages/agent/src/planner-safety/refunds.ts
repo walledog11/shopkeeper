@@ -1,6 +1,6 @@
 import type { AgentContext, ShopifyOrderSummary } from "../agent-context.js"
-import { planningIntentTexts } from "../intent.js"
-import { findReferencedOrder } from "../order-reference.js"
+import type { RequestAsk } from "../classifier-signals.js"
+import { requestTargetOrders } from "./request.js"
 import type { RawToolCall } from "../types.js"
 
 function isOrderFullyRefunded(order: ShopifyOrderSummary): boolean {
@@ -11,72 +11,28 @@ function isOrderPaid(order: ShopifyOrderSummary): boolean {
   return order.financial_status?.toLowerCase() === "paid"
 }
 
-function refundTargetOrders(
-  ctx: AgentContext,
-  instruction: string,
-): ShopifyOrderSummary[] {
-  const intentTexts = planningIntentTexts(ctx, instruction)
-  const targets: ShopifyOrderSummary[] = []
-  for (const text of intentTexts) {
-    const matched = findReferencedOrder(ctx.recentOrders, text)
-    if (matched) targets.push(matched)
-  }
-  if (targets.length > 0) return targets
-
-  const wantsRefund = intentTexts.some(text => /\brefund(?:ed|ing|s)?\b/i.test(text))
-  if (wantsRefund && ctx.recentOrders.length === 1) {
-    return [ctx.recentOrders[0]]
-  }
-  return []
-}
+const REFUND_ASKS: ReadonlySet<RequestAsk> = new Set(["refund"])
+const REFUND_TOOLS: ReadonlySet<string> = new Set(["create_refund", "create_partial_refund"])
 
 export function refundTargetsAlreadyFullyRefunded(
   ctx: AgentContext,
-  instruction: string,
+  rawToolCalls: readonly RawToolCall[] = [],
 ): boolean {
-  const targets = refundTargetOrders(ctx, instruction)
-  return targets.length > 0 && targets.every(isOrderFullyRefunded)
+  return requestTargetOrders(ctx, REFUND_ASKS, REFUND_TOOLS, rawToolCalls).some(isOrderFullyRefunded)
 }
 
 export function refundTargetsNonPaidOrder(
   ctx: AgentContext,
-  instruction: string,
   rawToolCalls: readonly RawToolCall[],
 ): boolean {
-  if (refundTargetOrders(ctx, instruction).some(order => !isOrderPaid(order))) {
-    return true
-  }
-
-  return rawToolCalls.some(toolCall => {
-    if (toolCall.name !== "create_refund") return false
-    const orderId = refundOrderIdFromToolCall(toolCall)
-    if (!orderId) return false
-    return ctx.recentOrders.some(order => order.id === orderId && !isOrderPaid(order))
-  })
-}
-
-function refundOrderIdFromToolCall(toolCall: RawToolCall): string | null {
-  const input = toolCall.input
-  if (!input || typeof input !== "object") return null
-  const orderId = (input as Record<string, unknown>).order_id
-  return typeof orderId === "string" ? orderId : null
+  return requestTargetOrders(ctx, REFUND_ASKS, REFUND_TOOLS, rawToolCalls).some(order => !isOrderPaid(order))
 }
 
 export function shouldBlockCreateRefundForAlreadyRefundedOrder(
   ctx: AgentContext,
-  instruction: string,
   rawToolCalls: readonly RawToolCall[],
 ): boolean {
-  if (refundTargetOrders(ctx, instruction).some(isOrderFullyRefunded)) {
-    return true
-  }
-
-  return rawToolCalls.some(toolCall => {
-    if (toolCall.name !== "create_refund") return false
-    const orderId = refundOrderIdFromToolCall(toolCall)
-    if (!orderId) return false
-    return ctx.recentOrders.some(order => order.id === orderId && isOrderFullyRefunded(order))
-  })
+  return refundTargetsAlreadyFullyRefunded(ctx, rawToolCalls)
 }
 
 export function sendReplyHasText(toolCall: RawToolCall): boolean {

@@ -94,7 +94,10 @@ describe('/api/integrations/telegram', () => {
     const res = await POST();
 
     expect(res.status).toBe(503);
-    await expect(db.orgMember.count({ where: { organizationId: org!.id } })).resolves.toBe(0);
+    await expect(db.orgMember.findUnique({
+      where: { organizationId_clerkUserId: { organizationId: org!.id, clerkUserId: 'usr_telegram' } },
+      select: { telegramChats: { select: { id: true } } },
+    })).resolves.toEqual({ telegramChats: [] });
     await expect(
       db.orgMemberBindToken.count({ where: { organizationId: org!.id } }),
     ).resolves.toBe(0);

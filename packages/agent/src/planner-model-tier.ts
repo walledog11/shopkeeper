@@ -48,6 +48,7 @@ export function resolvePlannerTierMode(
 // matter what else the classifier found.
 const DISQUALIFYING_INTENTS: readonly (keyof ClassifierIntents)[] = [
   "mutative_request",
+  "compensation_request",
   "fraud_signals",
   "contradiction",
   "out_of_scope_commercial",

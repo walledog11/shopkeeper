@@ -11,6 +11,15 @@ import {
 } from "./planner-safety/index.js";
 import type { AgentContext } from "./agent-context.js";
 import type { RawToolCall } from "./types.js";
+import { emptyIntents, emptyRequestFacts, type RequestAsk } from "./classifier-signals.js";
+
+function requestSignals(ask: RequestAsk, order: string | null = null) {
+  return {
+    version: 6, language: "en",
+    intents: { ...emptyIntents(), mutative_request: true },
+    requestFacts: { ...emptyRequestFacts(), ask, order },
+  };
+}
 
 function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
   return {
@@ -21,6 +30,7 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
     openThreadCount: 1,
     shopify: { shop: "test-store.myshopify.com", accessToken: "shpat_test" },
     recentOrders: [],
+    classifierSignals: requestSignals("cancel"),
     linkedShopifyCustomerName: null,
     kbArticles: [],
     merchantPreferences: [],
@@ -31,6 +41,8 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
       tag: "Support",
       aiSummary: null,
       shopifyCustomerId: null,
+      requestSourceMessageId: "current_message",
+      latestCustomerMessageId: "current_message",
     },
     escalate: async () => {},
     io: {
@@ -45,6 +57,18 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
 }
 
 describe("shouldEscalateFulfilledCancelRequest", () => {
+  it("does not substitute another order when the current request's named order is missing", () => {
+    const ctx = makeCtx({
+      classifierSignals: requestSignals("cancel", "#9999"),
+      recentOrders: [{
+        id: "9000001104", name: "#1104", created_at: null,
+        financial_status: "paid", fulfillment_status: "fulfilled",
+        total_price: "64.00", currency: "USD", items: [],
+      }],
+    });
+    expect(shouldEscalateFulfilledCancelRequest(ctx)).toBe(false);
+  });
+
   it("detects cancel requests against fulfilled orders in context", () => {
     expect(shouldEscalateFulfilledCancelRequest(
       makeCtx({
@@ -60,7 +84,6 @@ describe("shouldEscalateFulfilledCancelRequest", () => {
           items: [],
         }],
       }),
-      "Reply to the customer about their cancellation request.",
     )).toBe(true);
   });
 
@@ -79,7 +102,6 @@ describe("shouldEscalateFulfilledCancelRequest", () => {
           items: [],
         }],
       }),
-      "Reply to the customer about their cancellation request.",
     )).toBe(false);
   });
   // Found in the 2026-09-27 audit: any shipped order in the customer's history
@@ -100,9 +122,9 @@ describe("shouldEscalateFulfilledCancelRequest", () => {
     expect(shouldEscalateFulfilledCancelRequest(
       makeCtx({
         recentMessages: [{ senderType: "customer", contentText: "Please cancel order #1045, wrong size." }],
+        classifierSignals: requestSignals("cancel", "#1045"),
         recentOrders: [unfulfilled, shipped],
       }),
-      "Handle the request.",
     )).toBe(false);
   });
 
@@ -135,7 +157,6 @@ describe("shouldEscalateFulfilledCancelRequest", () => {
         recentMessages: [{ senderType: "customer", contentText: "Please cancel my order." }],
         recentOrders: orders,
       }),
-      "Handle the request.",
       [{ id: "cancel_1", name: "cancel_order", input: { order_id: "9000001032" } }],
     )).toBe(true);
   });
@@ -160,18 +181,20 @@ describe("shouldEscalateFulfilledAddressChangeRequest", () => {
         contentText: "I gave the wrong address for order #1031. Please redirect it.",
       }],
       recentOrders: [fulfilledOrder],
+      classifierSignals: requestSignals("address_change", "#1031"),
     });
 
-    expect(shouldEscalateFulfilledAddressChangeRequest(ctx, "Handle the request.")).toBe(true);
+    expect(shouldEscalateFulfilledAddressChangeRequest(ctx)).toBe(true);
   });
 
   it("does not trigger for an unfulfilled order", () => {
     const ctx = makeCtx({
       recentMessages: [{ senderType: "customer", contentText: "Change address for order #1031." }],
       recentOrders: [{ ...fulfilledOrder, fulfillment_status: null }],
+      classifierSignals: requestSignals("address_change", "#1031"),
     });
 
-    expect(shouldEscalateFulfilledAddressChangeRequest(ctx, "Handle the request.")).toBe(false);
+    expect(shouldEscalateFulfilledAddressChangeRequest(ctx)).toBe(false);
   });
 });
 
@@ -195,7 +218,7 @@ describe("shouldBlockCreateRefundForAlreadyRefundedOrder", () => {
       { id: "tu_reply", name: "send_reply", input: { text: "Already refunded." } },
     ];
 
-    expect(shouldBlockCreateRefundForAlreadyRefundedOrder(ctx, "Reply to the customer.", calls)).toBe(true);
+    expect(shouldBlockCreateRefundForAlreadyRefundedOrder(ctx, calls)).toBe(true);
   });
 });
 

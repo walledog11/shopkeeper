@@ -29,6 +29,9 @@ function setAuth(overrides: Partial<{ userId: string | null; orgId: string | nul
 
 beforeEach(async () => {
   org = await createTestOrg();
+  await db.orgMember.create({
+    data: { organizationId: org.id, clerkUserId: 'usr_admin' },
+  });
   setAuth();
   vi.mocked(clerkClient).mockResolvedValue({
     organizations: {

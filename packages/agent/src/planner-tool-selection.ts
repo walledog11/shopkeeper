@@ -1,5 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import type { ClassifierSignals } from "./classifier-signals.js";
+import { classifierAlignmentState, type ClassifierSignals } from "./classifier-signals.js";
 import { TOOL_DEFINITIONS } from "./tools/registry/index.js";
 import type { AgentToolDefinition } from "./tools/registry/types.js";
 
@@ -127,12 +127,9 @@ const RISK_INTENTS = [
 ] as const;
 
 function classifierIsAligned(input: SelectPlanningToolsInput): boolean {
-  const source = input.requestSourceMessageId;
-  const latest = input.latestCustomerMessageId;
-  // Package tests and host modules that predate alignment metadata omit both.
-  // Production supplies both, and narrowing is allowed only for an exact match.
-  if (source === undefined && latest === undefined) return true;
-  return Boolean(source && latest && source === latest);
+  return classifierAlignmentState(
+    input.classifierSignals, input.requestSourceMessageId, input.latestCustomerMessageId,
+  ) === "aligned";
 }
 
 function fullSelection(
@@ -181,11 +178,10 @@ function addBucket(
  * Unknown or inconsistent request shapes use the starter set plus discovery;
  * a missing capability is recoverable in the same bounded loop.
  *
- * RequestFacts deliberately do not participate. The eval suite grades the
- * boolean intent vocabulary on planner behavior; the facts fields are a
- * renderer contract. Using them here would create a second, ungraded routing
- * contract and would hide adjacent mutation tools from the fixtures added to
- * protect those exact boundaries.
+ * RequestFacts do not narrow capability availability. They can identify the
+ * current request for refusal checks after planning, but do not hide adjacent
+ * tools or grant execution authority. Provider state and actor policy remain
+ * the execution backstop.
  */
 export function selectPlanningTools(input: SelectPlanningToolsInput): PlanningToolSelection {
   // First: whatever else is true of the conversation, this attempt may not
@@ -235,7 +231,7 @@ export function selectPlanningTools(input: SelectPlanningToolsInput): PlanningTo
   if (RISK_INTENTS.some((intent) => intents[intent])) {
     addBucket(buckets, selectedNames, "risk", []);
   } else {
-    if (intents.mutative_request) {
+    if (intents.mutative_request || intents.compensation_request) {
       // Which mutation the request needs is the one thing "mutative" does not
       // say, so on the discovery runtime the bucket loads what any mutation is
       // proposed from — the KB, product and order reads — and leaves the write

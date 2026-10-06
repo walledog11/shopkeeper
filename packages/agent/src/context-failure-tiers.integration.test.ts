@@ -238,6 +238,21 @@ describe("context dependency tiers", () => {
     expect(deferred.kbArticles).toEqual([]);
     // Deferred, not failed — the merchant is told about the second, never the first.
     expect(deferred.kbFetchFailed).toBeUndefined();
+
+    // A status question with an explicit compensation request still needs store
+    // policy, even when the classifier omitted the broader mutative flag.
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        classifierSignals: {
+          version: 6,
+          language: "en",
+          intents: { ...emptyIntents(), order_status: true, compensation_request: true },
+          requestFacts: emptyRequestFacts(),
+        },
+      },
+    });
+    expect((await buildContext(thread.id, org.id, sink)).kbArticles.length).toBeGreaterThan(0);
   });
 
   it("refuses to build a storefront turn when the verification evidence cannot be read", async () => {

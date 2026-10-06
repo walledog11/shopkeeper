@@ -9,7 +9,6 @@ import {
   storefrontToolNames,
 } from "./guest-policy.js";
 import { isOperatorChannel } from "./intent.js";
-import { isMerchantAnswerPlanningInstruction } from "./kb-learned.js";
 import logger from "./logger.js";
 import { buildMessageHistory } from "./message-history.js";
 import { decidePlannerTier, isLowRiskPlanOutcome } from "./planner-model-tier.js";
@@ -56,7 +55,7 @@ import {
   runCapabilityDiscovery,
   selectPlanningTools,
 } from "./planner-tool-selection.js";
-import type { AgentPlan, OrgSettings, PlanRoutingEvidence, ProducedPlanSignalCode } from "./types.js";
+import type { AgentPlan, MerchantContinuationKind, OrgSettings, PlanRoutingEvidence, ProducedPlanSignalCode } from "./types.js";
 import { createModelUsageMetrics, hashInstructionForLog } from "./usage.js";
 import {
   CONTEXT_BUDGETS,
@@ -72,6 +71,8 @@ export interface PlanAgentOptions {
   // derived from the customer's own message. Intent narrowing is inferred from
   // what the customer said, so it must not gate a tool the merchant named.
   merchantInstruction?: boolean;
+  /** Set by the host after claiming the merchant's question or proposal wait. */
+  merchantContinuation?: MerchantContinuationKind;
   /** Refuses a persisted task on a retired runtime before model work. */
   runtimeVersion?: number;
   /**
@@ -213,7 +214,7 @@ export async function planAgent(
 
   // A merchant-answer replan must reply to the customer with the supplied answer,
   // never re-park the ticket — so drop ask_operator from its tool set.
-  const merchantAnswerReplan = isMerchantAnswerPlanningInstruction(instruction);
+  const merchantAnswerReplan = options?.merchantContinuation === "answer";
   // A storefront shopper plans against their allowlist — the guest set, or the
   // verified set once they proved control of the email on an order. Narrowing
   // here rather than at execution means the model never drafts a plan step it
@@ -296,7 +297,7 @@ export async function planAgent(
   const refuseUngroundedReply: RunAgentLoopParams["captureRefuseReply"] = (proposal) => (
     kbMissNeedsMerchant({
       ctx,
-      instruction,
+      merchantContinuation: options?.merchantContinuation,
       rawToolCalls: proposal.rawToolCalls,
       readBlocks: proposal.readBlocks,
       readStatusMap: proposal.readStatus,
@@ -414,13 +415,13 @@ export async function planAgent(
   if (!operatorMode) {
     const built = buildPlanRoutingEvidence({
       ctx,
-      instruction,
       rawToolCalls,
       readBlocks: loop.readBlocks,
       readStatusMap: loop.readStatus,
       readResultsMap: loop.readResults,
       settings: resolvedSettings,
       withheldMessageFollowUp: options?.withheldMessageFollowUp === true,
+      merchantContinuation: options?.merchantContinuation,
     });
     routingEvidence = built.evidence;
     signalCodes.push(...built.signalCodes);
