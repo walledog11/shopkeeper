@@ -47,6 +47,7 @@ function classificationResult(): ClassificationResult {
     filterReason: '',
     intents: {
       mutative_request: true,
+      compensation_request: false,
       policy_question: false,
       order_status: false,
       fraud_signals: false,
@@ -161,10 +162,11 @@ describe('inbound classification channel contract', () => {
     );
     expect(await persistedRequestContract(emailThread.id)).toEqual({
       classifierSignals: {
-        version: 5,
+        version: CLASSIFIER_VERSION,
         language: 'en',
         intents: {
           mutative_request: true,
+          compensation_request: false,
           policy_question: false,
           order_status: false,
           fraud_signals: false,
@@ -236,7 +238,7 @@ describe('inbound classification channel contract', () => {
 
     expect(await persistedRequestContract(first!.thread.id)).toMatchObject({
       classifierSignals: expect.objectContaining({
-        version: 5,
+        version: CLASSIFIER_VERSION,
         requestFacts: REQUEST_FACTS,
       }),
       requestDisposition: 'merchant_action',
@@ -373,7 +375,7 @@ describe('inbound classification channel contract', () => {
     expect(getMockAnthropicCreate()).toHaveBeenCalledTimes(2);
     expect(await persistedRequestContract(emailThread.id)).toMatchObject({
       classifierSignals: expect.objectContaining({
-        version: 5,
+        version: CLASSIFIER_VERSION,
         requestFacts: REQUEST_FACTS,
       }),
       requestDisposition: 'merchant_action',

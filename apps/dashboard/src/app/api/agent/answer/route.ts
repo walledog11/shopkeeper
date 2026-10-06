@@ -127,6 +127,7 @@ export const POST = withOrgRoute(
       const drafted = await planAgent(ctx, planningInstruction, settings, {
         // The merchant typed this answer; it directs the plan.
         merchantInstruction: true,
+        merchantContinuation: "answer",
         runtimeVersion: continuation.runtimeVersion,
       });
       const plan = { ...drafted, instruction: baseInstruction };

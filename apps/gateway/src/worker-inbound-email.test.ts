@@ -8,6 +8,7 @@ import {
 import { ChannelType, EmailProvider, db } from '@shopkeeper/db';
 import { createTestOrg, cleanupTestData } from '@shopkeeper/db/test-helpers';
 import { org } from './test-fixtures/worker-test-setup.js';
+import { CLASSIFIER_VERSION } from './message-handlers/inbound/classification-contract.js';
 import {
   classifierResponse,
   getCapturedHandlers,
@@ -77,10 +78,11 @@ describe('Message worker — email branch', () => {
     expect(thread?.aiSummary).toBe('Customer needs shipping help.');
     expect(thread?.tag).toBe('Shipping');
     expect(thread?.classifierSignals).toEqual({
-      version: 5,
+      version: CLASSIFIER_VERSION,
       language: 'fr',
       intents: {
         mutative_request: false,
+        compensation_request: false,
         policy_question: true,
         order_status: false,
         fraud_signals: false,

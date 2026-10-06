@@ -1,7 +1,11 @@
 # Conversational agent release matrix
 
-This records implementation evidence for [the overhaul plan](conversational-agent-overhaul-plan.md).
-The plan's shipping queue and manual completion criteria are authoritative.
+This records historical implementation evidence for
+[the archived overhaul plan](archive/conversational-agent-overhaul-plan.md).
+The migration is closed. Current contracts, settled decisions and change
+procedure live in [agent-runtime.md](agent-runtime.md); remaining defects and
+unobserved normal-use behavior live in [agent-follow-ups.md](agent-follow-ups.md).
+The earlier "Next release evidence" columns below are historical, not a work queue.
 Use these rows to find existing checks and earlier evidence, not to create new
 tests or another cleanup campaign. Fake-provider results do not close real
 user flows; unverified behavior stays open. Retained capability scope comes

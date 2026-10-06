@@ -165,8 +165,9 @@ Read the customer message and produce these fields in strict JSON:
   - "filtered": clearly spam, newsletters, promotions, automated system alerts, or delivery status notifications.
 - "reason": one short sentence (under 20 words and at most 240 characters) justifying the classification.
 - "language": the ISO 639-1 code (two letters, lowercase) of the language the customer wrote in, e.g. "en", "es", "fr". Judge the customer's words, not the language you answer in.
-- "intents": an object of booleans describing what the customer is asking for. Set true only when clearly present:
+- "intents": an object of booleans describing ONLY the current request (the "CURRENT REQUEST" section when present, otherwise the customer's latest message). Earlier turns provide context for a clear referent, not an outstanding request of their own. Set true only when clearly present:
   - "mutative_request": asks to cancel, refund, return, exchange, or edit an order.
+  - "compensation_request": explicitly asks for money back, a refund, a gift card, store credit, or credit to their account. A complaint alone or a question about refund policy is false. A complaint with an explicit request for compensation is true. Also set mutative_request for an explicit compensation request.
   - "policy_question": asks about a policy — shipping coverage/cost, return/refund policy, or discounts.
   - "order_status": asks where an order is or when it will arrive.
   - "fraud_signals": signs of fraud — chargeback/dispute language or an urgent claim of non-receipt. A request to refund a different card is a payment-method policy issue, not by itself fraud.
@@ -182,7 +183,7 @@ Read the customer message and produce these fields in strict JSON:
   - "informational": a genuine question answerable by looking something up or stating a policy — where an order is, whether you ship somewhere, what the return window is.
   - "merchant_action": asks for something that changes an order, money, or inventory — refund, cancel, return, exchange, address edit — or otherwise needs the shop owner's decision.
   - "unclear": there is a request but you cannot tell what it needs. Prefer this over guessing.
-- "requestFacts": the same current request stated as fields rather than a sentence, so a phone briefing can lead with whichever one matters. Resolve a conversational reference from the earlier transcript only when exactly one prior request/entity fits (for example, "use that one" after one clearly named variant); copy that prior ask, subject, and order into the current facts. If two or more prior requests/entities could fit "yes", "it", or "that one", do not guess: use ask "other" with null subject/order so the agent asks one focused question. Never invent a fact that neither the current request nor its single clear referent supplied.
+- "requestFacts": the same current request stated as fields rather than a sentence, used for briefings and planning refusal checks. These fields never establish permission or provider state. Resolve a conversational reference from the earlier transcript only when exactly one prior request/entity fits (for example, "use that one" after one clearly named variant); copy that prior ask, subject, and order into the current facts. If two or more prior requests/entities could fit "yes", "it", or "that one", do not guess: use ask "other" with null subject/order so the agent asks one focused question. Never invent a fact that neither the current request nor its single clear referent supplied.
   - "ask": exactly one of "refund", "cancel", "return", "exchange", "address_change", "order_status", "product_question", "policy_question", "complaint", "other", "none". Use "none" when nothing is being asked.
   - "subject": the product or thing the request is about, in at most six words, with no order number ("the olive linen napkins"). Null when the request names none.
   - "order": the order the request concerns, as it was written ("#1024"). Null when none was given.
@@ -190,7 +191,7 @@ Read the customer message and produce these fields in strict JSON:
   - "deadlineText": the customer's own words that set that date ("before Friday", "by the 30th"), at most 40 characters. Null when they named no timing.
   - "alternative": a second option the customer said they would also accept, from the same list as "ask" ("refund or exchange" → ask "refund", alternative "exchange"). Null when they offered none.
 
-Respond ONLY in strict JSON: {"title":"...","summary":"...","tag":"...","classification":"...","reason":"...","language":"en","intents":{"mutative_request":false,"policy_question":false,"order_status":false,"fraud_signals":false,"contradiction":false,"out_of_scope_commercial":false,"forwarded_injection":false,"no_request":false},"requestSummary":"...","requestDisposition":"...","requestFacts":{"ask":"none","subject":null,"order":null,"deadline":null,"deadlineText":null,"alternative":null}}`;
+Respond ONLY in strict JSON: {"title":"...","summary":"...","tag":"...","classification":"...","reason":"...","language":"en","intents":${JSON.stringify(emptyIntents())},"requestSummary":"...","requestDisposition":"...","requestFacts":{"ask":"none","subject":null,"order":null,"deadline":null,"deadlineText":null,"alternative":null}}`;
 
 const REQUEST_DISPOSITIONS: readonly DbThreadRequestDisposition[] = [
   'none',

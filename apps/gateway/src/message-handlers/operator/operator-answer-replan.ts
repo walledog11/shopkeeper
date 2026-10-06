@@ -242,6 +242,7 @@ async function runAnswerReplan(
       {
         // The merchant typed this answer or revision; it directs the plan.
         merchantInstruction: true,
+        merchantContinuation: params.endsWait === 'question' ? 'answer' : 'revision',
         runtimeVersion,
       },
     );

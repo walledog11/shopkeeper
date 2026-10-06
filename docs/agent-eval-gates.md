@@ -12,8 +12,10 @@ paid run.
 | `baseline` | Replace comparable three-repeat evidence | All 52 current | 3 | All rubric checks | Capture must complete |
 
 No paid mode blocks a release. A paid run happens only when the release owner
-asks, and rollout rests on the controlled real-provider runs (Gate C in the
-[overhaul plan](conversational-agent-overhaul-plan.md)).
+asks. Rollout rests on the accepted real-provider observations described in
+[the runtime runbook](agent-runtime.md#verification-scope); historical Gate C
+results remain in the
+[release evidence](conversational-agent-overhaul-p6-release-evidence.md#gate-c--controlled-real-provider-and-delivery-exercise).
 
 Pull requests run only the deterministic preflight. They validate fixture
 structure, selection/retry/cache behavior, cost accounting, and the gateway

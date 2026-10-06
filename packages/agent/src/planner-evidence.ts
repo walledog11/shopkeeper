@@ -1,7 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { AgentContext } from "./agent-context.js";
-import { customerMessageTexts, hasActionableMutativeIntent } from "./intent.js";
-import { isMerchantAnswerPlanningInstruction } from "./kb-learned.js";
+import { classifierAlignmentState } from "./classifier-signals.js";
+import { currentRequestSignals } from "./planner-safety/request.js";
 import { outstandingMerchantFollowUps } from "./merchant-follow-up.js";
 import { merchantGapQuestion } from "./plan-preview.js";
 import {
@@ -20,6 +20,7 @@ import type { ToolStatus } from "./tools/result.js";
 import { shopMoneyAmountOf } from "./tools/static-policy.js";
 import type {
   ClassifierAlignmentState,
+  MerchantContinuationKind,
   OrgSettings,
   PlanRoutingEvidence,
   PlanRoutingEvidenceCode,
@@ -29,13 +30,13 @@ import type {
 
 export interface BuildPlanRoutingEvidenceInput {
   ctx: AgentContext;
-  instruction: string;
   rawToolCalls: readonly RawToolCall[];
   readBlocks: readonly Anthropic.ToolUseBlock[];
   readStatusMap: ReadonlyMap<string, ToolStatus>;
   readResultsMap: ReadonlyMap<string, string>;
   settings?: OrgSettings;
   withheldMessageFollowUp?: boolean;
+  merchantContinuation?: MerchantContinuationKind;
 }
 
 export interface BuiltPlanRoutingEvidence {
@@ -64,13 +65,9 @@ const ESCALATION_REASONS: Record<PlanRoutingEvidenceCode, string | undefined> = 
 };
 
 function classifierState(ctx: AgentContext): ClassifierAlignmentState {
-  if (!ctx.classifierSignals) return "missing";
-  const source = ctx.thread.requestSourceMessageId;
-  const latest = ctx.thread.latestCustomerMessageId;
-  // Hand-built contexts in package tests and non-host modules predate alignment
-  // metadata. Production buildContext always supplies both fields.
-  if (source === undefined && latest === undefined) return "aligned";
-  return source && latest && source === latest ? "aligned" : "unaligned";
+  return classifierAlignmentState(
+    ctx.classifierSignals, ctx.thread.requestSourceMessageId, ctx.thread.latestCustomerMessageId,
+  );
 }
 
 function planShape(rawToolCalls: readonly RawToolCall[]) {
@@ -96,22 +93,18 @@ function planExceedsCompensationCap(
 }
 
 function hasExplicitCompensationRequest(ctx: AgentContext): boolean {
-  if (!ctx.classifierSignals?.intents.mutative_request) return false;
-  if (ctx.classifierSignals.intents.policy_question) return false;
-  return customerMessageTexts(ctx).some((text) => {
-    const lower = text.toLowerCase();
-    return /\brefund(?:ed|ing|s)?\b/.test(lower)
-      || /\b(?:send|give|issue|create|provide)\b[^.?!]{0,48}\b(?:gift card|store credit)\b/.test(lower)
-      || /\bcredit\s+(?:my|the|this)\s+account\b/.test(lower);
-  });
+  const signals = currentRequestSignals(ctx);
+  return Boolean(signals?.intents.compensation_request
+    || (signals?.intents.mutative_request && !signals.intents.policy_question
+      && (signals.requestFacts?.ask === "refund" || signals.requestFacts?.alternative === "refund")));
 }
 
 function requestedWriteEscalationCode(input: BuildPlanRoutingEvidenceInput): PlanRoutingEvidenceCode | null {
-  const { ctx, instruction, rawToolCalls } = input;
-  if (shouldEscalateFulfilledCancelRequest(ctx, instruction, rawToolCalls)) return "fulfilled_cancellation_request";
-  if (shouldEscalateFulfilledAddressChangeRequest(ctx, instruction)) return "fulfilled_address_change_request";
-  if (refundTargetsAlreadyFullyRefunded(ctx, instruction)) return "already_refunded_request";
-  if (refundTargetsNonPaidOrder(ctx, instruction, rawToolCalls)) return "non_paid_refund_request";
+  const { ctx, rawToolCalls } = input;
+  if (shouldEscalateFulfilledCancelRequest(ctx, rawToolCalls)) return "fulfilled_cancellation_request";
+  if (shouldEscalateFulfilledAddressChangeRequest(ctx, rawToolCalls)) return "fulfilled_address_change_request";
+  if (refundTargetsAlreadyFullyRefunded(ctx, rawToolCalls)) return "already_refunded_request";
+  if (refundTargetsNonPaidOrder(ctx, rawToolCalls)) return "non_paid_refund_request";
   if (planExceedsCompensationCap(rawToolCalls, input.settings)) return "compensation_over_cap";
   const shape = planShape(rawToolCalls);
   if (!shape.hasAction && !shape.hasEscalation && hasExplicitCompensationRequest(ctx)) {
@@ -129,7 +122,10 @@ function escalationCode(input: BuildPlanRoutingEvidenceInput): PlanRoutingEviden
   if (writeCode) return writeCode;
   if (hasAmbiguousCustomerSearchResult(input.readBlocks, input.readResultsMap)) return "ambiguous_customer";
   if (hasCriticalPlanningReadErrorsForBlocks(input.readBlocks, input.readStatusMap)) {
-    if (hasActionableMutativeIntent(...customerMessageTexts(ctx)) || ctx.recentOrders.length === 0) {
+    const intents = currentRequestSignals(ctx)?.intents;
+    if (intents?.mutative_request || intents?.compensation_request
+      || input.rawToolCalls.some(call => TOOL_CATEGORIES[call.name] === "action")
+      || ctx.recentOrders.length === 0) {
       return "critical_planning_read_failure";
     }
   }
@@ -149,7 +145,7 @@ function classifierEscalationCodes(ctx: AgentContext): PlanRoutingEvidenceCode[]
 
 type KbMissInput = Pick<
   BuildPlanRoutingEvidenceInput,
-  "ctx" | "instruction" | "rawToolCalls" | "readBlocks" | "readStatusMap"
+  "ctx" | "merchantContinuation" | "rawToolCalls" | "readBlocks" | "readStatusMap"
 >;
 
 function missedKbQueries(input: Pick<KbMissInput, "readBlocks" | "readStatusMap">): string[] {
@@ -191,7 +187,7 @@ export function completesAtMerchantFollowUp(
 // when the customer also asked about store policy: opening a return does not
 // tell anyone how this store takes items back.
 export function kbMissNeedsMerchant(input: KbMissInput): boolean {
-  if (isMerchantAnswerPlanningInstruction(input.instruction)) return false;
+  if (input.merchantContinuation === "answer") return false;
   if (!searchedAndMissed(input)) return false;
   const shape = planShape(input.rawToolCalls);
   const routineOrderStatus = Boolean(
@@ -227,7 +223,7 @@ export function buildPlanRoutingEvidence(
   const shape = planShape(input.rawToolCalls);
   if (
     state === "aligned"
-    && input.ctx.classifierSignals?.intents.mutative_request
+    && (input.ctx.classifierSignals?.intents.mutative_request || input.ctx.classifierSignals?.intents.compensation_request)
     && !shape.hasAction
     && !shape.hasEscalation
   ) {

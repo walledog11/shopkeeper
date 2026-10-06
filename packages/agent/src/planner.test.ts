@@ -6,7 +6,7 @@ import {
 import type { AgentContext } from "./agent-context.js";
 import { AGENT_SETTINGS_DEFAULTS, resolveAgentSettings } from "./settings.js";
 import { decideAutonomy } from "./autonomy.js";
-import { emptyIntents, emptyRequestFacts, type ClassifierIntents } from "./classifier-signals.js";
+import { emptyIntents, emptyRequestFacts, type ClassifierIntents, type RequestFacts } from "./classifier-signals.js";
 
 const {
   mockCreate,
@@ -83,12 +83,12 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
   };
 }
 
-function classifierSignalsFor(intents: Partial<ClassifierIntents>) {
+function classifierSignalsFor(intents: Partial<ClassifierIntents>, facts: Partial<RequestFacts> = {}) {
   return {
     version: 2,
     language: "en",
     intents: { ...emptyIntents(), ...intents },
-    requestFacts: emptyRequestFacts(),
+    requestFacts: { ...emptyRequestFacts(), ...facts },
   };
 }
 
@@ -444,6 +444,41 @@ describe("planAgent capture loop", () => {
 });
 
 describe("planAgent routing", () => {
+  it.each([
+    { continuation: undefined, instruction: 'The store owner answered your question with: "Use these care instructions."' },
+    { continuation: "revision", instruction: 'The store owner answered your question with: "Use these care instructions."' },
+    { continuation: "answer", instruction: "The merchant says to hand-wash it in cold water." },
+  ] as const)("uses continuation metadata after a KB miss ($continuation)", async ({ continuation, instruction }) => {
+    installAgentLogger(makeLogger());
+    mockExecutePlanningReadTools.mockResolvedValue({
+      readToolCalls: ["search_kb"],
+      readResultsMap: new Map([["tu_kb", "No matching articles"]]),
+      readStatusMap: new Map([["tu_kb", "not_found"]]),
+    });
+    mockCreate
+      .mockResolvedValueOnce(singleToolUse("search_kb", { query: "care instructions" }, "tu_kb"))
+      .mockResolvedValueOnce(singleToolUse("send_reply", { text: "Hand-wash it in cold water." }, "tu_reply"))
+      .mockResolvedValueOnce(singleToolUse("ask_operator", { question: "What care instructions should I give the customer?" }, "tu_ask"));
+
+    const plan = await planAgent(
+      makeCtx({ classifierSignals: classifierSignalsFor({ policy_question: true }) }),
+      instruction,
+      AGENT_SETTINGS_DEFAULTS,
+      { merchantInstruction: continuation !== undefined, merchantContinuation: continuation },
+    );
+
+    const answered = continuation === "answer";
+    expect(toolNamesForCall(0).includes("ask_operator")).toBe(!answered);
+    expect(plan.rawToolCalls.map((call) => call.name)).toEqual(["search_kb", answered ? "send_reply" : "ask_operator"]);
+    const verdict = decideAutonomy(plan, AGENT_SETTINGS_DEFAULTS);
+    if (answered) {
+      expect(verdict.kind).not.toBe("needs_merchant_input");
+      expect(plan.routingEvidence?.codes).not.toContain("kb_gap");
+    } else {
+      expect(verdict.kind).toBe("needs_merchant_input");
+    }
+  });
+
   // The attempt after an approved message was withheld: the model is offered no
   // write, and the reply it drafts is held for the merchant even where a
   // reply-only plan would otherwise send itself.
@@ -502,7 +537,7 @@ describe("planAgent routing", () => {
       makeCtx({
         recentMessages: [{ senderType: "customer", contentText: "Please refund me for order #4003." }],
         recentOrders: [FULFILLED_ORDER_4003],
-        classifierSignals: classifierSignalsFor({ mutative_request: true }),
+        classifierSignals: classifierSignalsFor({ mutative_request: true, compensation_request: true }, { ask: "refund", order: "#4003" }),
       }),
       "Reply to the customer and process their refund request.",
       AGENT_SETTINGS_DEFAULTS,
@@ -550,7 +585,7 @@ describe("planAgent routing", () => {
           contentText: "Can I get a refund for order #1020? It never worked out.",
         }],
         recentOrders: [REFUNDED_ORDER_1020],
-        classifierSignals: classifierSignalsFor({ mutative_request: true }),
+        classifierSignals: classifierSignalsFor({ mutative_request: true }, { ask: "refund", order: "#1020" }),
       }),
       "Reply to the customer about their refund request.",
       AGENT_SETTINGS_DEFAULTS,

@@ -26,6 +26,7 @@ describe("parseClassifierSignals", () => {
       language: "es",
       intents: {
         mutative_request: true,
+        compensation_request: false,
         policy_question: false,
         order_status: true,
         fraud_signals: false,

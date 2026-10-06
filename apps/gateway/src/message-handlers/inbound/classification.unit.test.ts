@@ -32,6 +32,17 @@ function fullResponse(overrides: Record<string, unknown> = {}): string {
 }
 
 describe('parseClassifierJson — intents + language', () => {
+  it('persists an explicit compensation request independently of its language', () => {
+    const result = parseClassifierJson(fullResponse({
+      language: 'es',
+      requestSummary: 'Customer asks for store credit.',
+      intents: { mutative_request: true, compensation_request: true },
+      requestFacts: { ask: 'other', subject: null, order: null, deadline: null, deadlineText: null, alternative: null },
+    }));
+    expect(classifierSignals(result).intents.compensation_request).toBe(true);
+    expect(result.language).toBe('es');
+  });
+
   it('defaults intents to all-false and language to "" when absent', () => {
     const result = parseClassifierJson(
       JSON.stringify({

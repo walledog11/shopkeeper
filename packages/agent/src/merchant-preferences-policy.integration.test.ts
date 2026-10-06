@@ -101,7 +101,6 @@ describe("merchant preference policy backstop", () => {
 
     const { evidence } = buildPlanRoutingEvidence({
       ctx,
-      instruction: overCapRefundPlan().instruction,
       rawToolCalls,
       readBlocks: [],
       readStatusMap: new Map(),

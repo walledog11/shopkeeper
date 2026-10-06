@@ -41,7 +41,7 @@ export function validatePlan(params: {
    */
   unnamedTargetIds?: ReadonlySet<string>;
 }): PlanValidation {
-  const { ctx, instruction, rawToolCalls, readResults } = params;
+  const { ctx, rawToolCalls, readResults } = params;
   const issues: PlanValidationIssue[] = [];
   const seenIds = new Set<string>();
 
@@ -61,7 +61,7 @@ export function validatePlan(params: {
 
   if (
     rawToolCalls.some((toolCall) => toolCall.name === "create_refund")
-    && shouldBlockCreateRefundForAlreadyRefundedOrder(ctx, instruction, rawToolCalls)
+    && shouldBlockCreateRefundForAlreadyRefundedOrder(ctx, rawToolCalls)
   ) {
     const refund = rawToolCalls.find((toolCall) => toolCall.name === "create_refund");
     issues.push(issue("already_refunded_action", refund));

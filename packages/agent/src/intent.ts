@@ -1,4 +1,3 @@
-import type { AgentContext } from "./agent-context.js";
 import { isOperatorChannel } from "./thread-constants.js";
 
 export { isOperatorChannel };
@@ -28,24 +27,6 @@ export function hasCustomerMutativeIntent(text: string): boolean {
 
 export function hasActionableMutativeIntent(...texts: string[]): boolean {
   return texts.some((text) => hasCustomerMutativeIntent(text));
-}
-
-export function planningIntentTexts(ctx: AgentContext, instruction: string): string[] {
-  const texts = [instruction];
-  for (let index = ctx.recentMessages.length - 1; index >= 0; index -= 1) {
-    const message = ctx.recentMessages[index];
-    if (message.senderType === "customer" && message.contentText?.trim()) {
-      texts.push(message.contentText);
-      break;
-    }
-  }
-  return texts;
-}
-
-export function customerMessageTexts(ctx: AgentContext): string[] {
-  return ctx.recentMessages
-    .filter((message) => message.senderType === "customer" && message.contentText?.trim())
-    .map((message) => message.contentText as string);
 }
 
 export const SHIPPING_COVERAGE_QUESTION_RES: readonly RegExp[] = [

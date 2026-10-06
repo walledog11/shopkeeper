@@ -87,7 +87,7 @@ Standing rules for any change to agent behavior (promoted from the 2026-07 behav
 - **Customer-facing input stays in capture-mode planning** with deterministic adjudication.
 - **A new financial tool needs a prompt branch, not just a registry entry.** The compensation decision tree enumerates what is allowed and escalates the rest, so a tool absent from it is unreachable-to-unreliable whatever its description says. Adding to the shared registry also adds it to every support fixture's option set — grep the fixtures whose scenario the tool's own description claims *before* booking the gate.
 - **A validator rewrite that narrows what it inspects can loosen a safety check** while reading as a pure fix, and its own new tests will agree with it. Diff old against new verdicts on the same inputs; it costs nothing.
-- **Done means seen working.** A change is done when its behavior has been observed in the real app (dev store, phone, real channel), or it is reported as not verified. A green test, suite or eval is never the done criterion, and no test goes in an item's *done when*. The conversational agent overhaul is closed: [agent-runtime.md](../docs/agent-runtime.md) is the active runtime contract, and [conversational-agent-overhaul-plan.md](../docs/conversational-agent-overhaul-plan.md) keeps its settled decisions and the behavior not yet seen live. Run evidence goes in [conversational-agent-overhaul-p6-release-evidence.md](../docs/conversational-agent-overhaul-p6-release-evidence.md).
+- **Ship working flows.** This app is in development: implement the missing behavior, verify it manually in the real app (dev store, dashboard, phone), and move on. Unverified behavior stays open; a green suite or eval is not feature acceptance. The conversational agent overhaul is closed: [agent-runtime.md](../docs/agent-runtime.md) owns the active runtime contract, settled decisions and *How to finish a change*. Known defects and unobserved normal-use behavior are tracked in [agent-follow-ups.md](../docs/agent-follow-ups.md). Record short run results in [conversational-agent-overhaul-p6-release-evidence.md](../docs/conversational-agent-overhaul-p6-release-evidence.md); the release matrix's earlier fake-provider results are implementation history.
 - **Order-ops** stays flag-and-notify-only: `runOrderOps` selects read tools plus `flag_order` only. It sits outside autonomy tiers (`flag_order` sets `policy.categoryPermission: false`). Before any mutating order action: shadow period, P1 execution-claim rollout verified, per-module cap enforcement proven, and a separate rollout gate from `ORDER_RISK_MONITOR_ENABLED`.
 
 ## Other entry points
@@ -100,10 +100,11 @@ Both `DATABASE_URL`s append `?pgbouncer=true&connection_limit=1`. `TOKEN_ENCRYPT
 
 ## Architecture
 Design law is in the **Architecture** section below (2026-08-21 pipeline audit
-conclusions, kept here so agents read one file). The active agent runtime
-contract is [agent-runtime.md](../docs/agent-runtime.md); the closed
-[conversational-agent-overhaul-plan.md](../docs/conversational-agent-overhaul-plan.md)
-keeps the architecture and settled decisions behind it. It has no work queue.
+conclusions, kept here so agents read one file). The active agent architecture,
+contracts and settled decisions live in [agent-runtime.md](../docs/agent-runtime.md).
+Known defects and unobserved behavior live in [agent-follow-ups.md](../docs/agent-follow-ups.md).
+The [archived overhaul plan](../docs/archive/conversational-agent-overhaul-plan.md)
+is historical and has no work queue.
 These bullets describe the direction every change moves in, including changes that don't
 mention them. Moving away from one needs a reason in the diff.
 

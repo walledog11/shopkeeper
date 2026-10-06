@@ -529,12 +529,14 @@ describe('applyOperatorAnswerReplan', () => {
       capability, tool, originalInput, revisedInput, guidance,
     }) => {
       const objective = `${capability === 'return' ? 'Return' : 'Exchange'} an item from order #1001.`;
+      const shopifyCustomerId = '5000001001';
       const originalPlan = actionPlan(objective, tool, originalInput);
       const revisedPlan = actionPlan(objective, tool, revisedInput);
       const { member, thread, taskId, proposalId: originalProposalId } = await seedCardedSupportTask({
         customerText: `Please ${capability} the black shirt from order #1001.`,
         objective,
         plan: originalPlan,
+        shopifyCustomerId,
       });
       await createTestIntegration(org.id, {
         platform: 'shopify',
@@ -546,6 +548,11 @@ describe('applyOperatorAnswerReplan', () => {
       const mutationInputs: Record<string, unknown>[] = [];
       const providerFetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
         const url = String(input);
+        if (url.includes('/orders/9000001001.json')) {
+          return new Response(JSON.stringify({ order: {
+            id: '9000001001', customer: { id: shopifyCustomerId },
+          } }), { status: 200 });
+        }
         if (url.includes('/orders.json')) {
           return new Response(JSON.stringify({ orders: [] }), { status: 200 });
         }
@@ -896,7 +903,7 @@ describe('applyOperatorAnswerReplan', () => {
         expect.anything(),
         expect.any(String),
         expect.anything(),
-        { runtimeVersion: 2, merchantInstruction: true },
+        { runtimeVersion: 2, merchantInstruction: true, merchantContinuation: 'answer' },
       );
 
       const settled = await db.agentTask.findUniqueOrThrow({ where: { id: taskId } });
@@ -920,12 +927,14 @@ describe('applyOperatorAnswerReplan', () => {
       { providerOutcome: 'ambiguous' as const },
     ])('continues a return-label question through approval with a $providerOutcome provider outcome', async ({ providerOutcome }) => {
       const labelUrl = 'https://labels.example.com/return-1001.pdf';
+      const shopifyCustomerId = '5000001001';
       const { member, thread, taskId } = await seedWaitingSupportTask({
         pending: true,
         customerText: 'Please send me a label for my open return on order #1001.',
         objective: 'Attach the merchant-provided label to the open return for order #1001.',
         question: 'What return label URL should I use for order #1001?',
       });
+      await db.thread.update({ where: { id: thread.id }, data: { shopifyCustomerId } });
       await createTestIntegration(org.id, {
         platform: 'shopify',
         externalAccountId: `test-store-${org.id}.myshopify.com`,
@@ -934,6 +943,11 @@ describe('applyOperatorAnswerReplan', () => {
       });
       const providerFetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
         const url = String(input);
+        if (url.includes('/orders/9000001001.json')) {
+          return new Response(JSON.stringify({ order: {
+            id: '9000001001', customer: { id: shopifyCustomerId },
+          } }), { status: 200 });
+        }
         if (url.includes('/orders.json')) {
           return new Response(JSON.stringify({ orders: [] }), { status: 200 });
         }

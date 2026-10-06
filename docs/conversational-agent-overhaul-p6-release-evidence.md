@@ -4,9 +4,11 @@ Status, 2026-10-04: runtime retirement merged in #165 as `17afc644` and is deplo
 on dashboard, gateway and worker. Required PR checks and production verification
 passed; plan items 12 and 13 are closed. Retained-flow observations, exclusions
 and unobserved normal-use checks remain recorded below. This file is the execution record for Package
-6 of the [overhaul plan](conversational-agent-overhaul-plan.md). It records
+6 of the [archived overhaul plan](archive/conversational-agent-overhaul-plan.md). It records
 release inputs and evidence; it does not authorize a production effect by
-itself.
+itself. Current defects and unobserved ordinary-use behavior are tracked in
+[agent-follow-ups.md](agent-follow-ups.md); standing contracts and decisions live
+in [agent-runtime.md](agent-runtime.md).
 
 Started 2026-09-23 from commit `c2195343` (`Close conversational agent overhaul
 package 5`).
@@ -30,7 +32,7 @@ controlled organization on v2 and the default still v1. Composer and dashboard
 Stop/reload passed; the owner confirmed actual iMessage delivery after the
 Photon registration repair. Conversation scope/wording remains unfixed.
 See [the latest session evidence](#2026-09-30-durable-composer-and-phone-verification)
-and the plan's closing [normal-use observations](conversational-agent-overhaul-plan.md#normal-use-observations).
+and the current [normal-use observations](agent-follow-ups.md#normal-use-observations).
 The owner stopped Telegram testing and made iMessage the primary phone channel.
 
 ## Required controlled-release inputs
@@ -1956,7 +1958,7 @@ verification can use step 7 of the release evidence. Preserve unknown writes
 for reconciliation.
 
 **8h — Conversation during those same sessions.** Use the
-[acceptance matrix](#acceptance-matrix) to exercise investigation, clear and
+[acceptance matrix](archive/conversational-agent-overhaul-plan.md#acceptance-matrix) to exercise investigation, clear and
 ambiguous references, revision, topic changes, explanation without action,
 language/voice and useful handling of missing context. Several rows can be
 seen in one conversation. Record the rows actually observed; no separate paid
@@ -2325,3 +2327,95 @@ reply. All required CI and the free preflight passed.
 of promise the owner accepted on #1042-R1, where the card tells the merchant to
 send the label. The exchange committed as #1041-R2 and the reply was sent. #161's
 effect on new drafts is left to normal use; no further Rewrite is owed.
+
+## Merchant-answer continuation metadata, local implementation — 2026-10-05
+
+Source: local working tree; not merged or deployed. This cleanup does not reopen
+the closed runtime migration or change its accepted release scope.
+
+Dashboard answers and phone answers/revisions pass `merchantContinuation` from
+their claimed durable wait. The planner uses `"answer"` to remove `ask_operator`
+and accept the merchant's supplied fact after a KB miss; `"revision"` retains
+normal clarification behavior. Instruction prose no longer identifies an answer.
+Current routing evidence also outranks the advisory KB-miss signal; the fallback
+remains for older plans without routing evidence.
+
+Controlled-response regressions establish that a quoted merchant-answer template
+does not gain answer behavior, a revision does not bypass a missing store fact,
+and a typed answer works with different instruction wording. Existing
+dashboard and phone Postgres continuation checks passed for proposal persistence,
+approval binding, cumulative budgets, cancellation and lost/stale claims. The
+phone fixtures now provide the customer/order ownership evidence required by the
+current authorization guard; that guard was unchanged.
+
+The agent build, dashboard/gateway typechecks, targeted planner/autonomy checks
+and changed-file lint passed. The first host-test attempts could not connect to
+localhost from the sandbox; the permitted local-database runs completed. No
+live model/provider calls, customer deliveries, production changes or paid evals were
+made. Required PR CI and an ordinary-use live answer/revision observation have
+not been performed for this local change. Current follow-up status is in
+[agent-follow-ups.md](agent-follow-ups.md).
+
+## Structured support request routing, local implementation — 2026-10-05
+
+Source: local working tree on `ea81474a`; not merged or deployed. This cleanup
+does not reopen the closed migration. No live model/provider calls, customer
+deliveries or paid evals were made.
+
+Refund, cancellation and address-change refusal checks use aligned current
+`requestFacts` and separately inspect proposed write targets. Compensation
+routing reads an explicit intent flag, with a mutative refund-fact fallback for
+older rows. Critical lookup failure routing no longer scans old customer prose.
+The independent eval grader is unchanged. Classification does not supply
+provider state or execution permission. The classifier contract is version 6;
+absent compensation flags default to false and both version-5 and version-6
+request facts remain available on approval cards.
+
+Same-input comparisons against the old guards from `ea81474a` produced these
+refusal verdicts. Classification fields and provider summaries were supplied
+directly; this establishes runtime behavior, not live classifier accuracy.
+
+| Input | Old refusal | New refusal |
+| --- | --- | --- |
+| Fulfilled cancellation, English request | Yes | Yes |
+| Fulfilled address change, English request | Yes | Yes |
+| Already-refunded order, English refund request | Yes | Yes |
+| Proposed refund of refunded order, no classification | Yes | Yes |
+| Fulfilled cancellation, Spanish request with cancel facts | No | Yes |
+| Proposed fulfilled cancellation without cancel words | No | Yes |
+| Proposed fulfilled address change without address words | No | Yes |
+| Explicit missing order with a different sole fulfilled order | Yes | No |
+| Status question about a refunded order | Yes | No |
+
+The last two remove irrelevant refusals; they grant no write authority. Proposed
+targets and execution-time identity, grant, approval, policy and provider checks
+remain authoritative.
+
+Targeted planner, routing, classifier parsing, tool-selection and model-tier
+checks passed. Local Postgres checks passed for classifier persistence across
+channels, source alignment, request-display compatibility and compensation-aware
+context loading. Build, affected workspace typechecks, changed-file lint and
+documentation checks passed.
+
+In the original dirty checkout, the broader
+`generate-thread-plan-order-status.test.ts` host execution checks were partly
+failing: mock orders omit customer ownership or its REST lookup,
+so the current authorization guard refuses before the provider-adapter receipt
+assertion; the deliberate customer-mismatch case also expects the later adapter
+receipt. An isolated copy using the old routing modules with current
+authorization reproduced the same failures. No guard or unrelated host fixture
+was relaxed to make this run green. The separate, uncommitted ownership change
+is outside the release candidate prepared on current production `master`.
+
+Required PR CI and ordinary-use observation remain open. In particular, actual
+classifier accuracy for current compensation requests and non-English phrasing
+has not been observed by this local verification. Follow-up status is in
+[agent-follow-ups.md](agent-follow-ups.md).
+
+The release candidate was prepared in an isolated checkout of production
+`ecb19388`, preserving newer releases and excluding unrelated local changes.
+Canonical static and unit verification and the required production dependency
+audit passed. The order-status host checks above now pass on this candidate,
+alongside merchant-answer continuation, classifier persistence, request-display
+compatibility and dashboard answer checks. The deployed provider authorization
+was unchanged; no safety check was removed to obtain these results.

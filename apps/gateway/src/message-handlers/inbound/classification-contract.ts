@@ -30,7 +30,7 @@ export interface ClassificationResult {
 
 // Bumped whenever the classifier's output contract changes so persisted
 // signals can be interpreted against the schema that produced them.
-export const CLASSIFIER_VERSION = 5;
+export const CLASSIFIER_VERSION = 6;
 
 export const CLASSIFIER_MAX_TOKENS = 700;
 
