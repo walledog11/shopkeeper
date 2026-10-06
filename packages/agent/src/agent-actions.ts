@@ -399,6 +399,7 @@ export async function recordAgentTurnUsage(
       outputTokens: usage.outputTokens,
       cacheCreationInputTokens: usage.cacheCreationInputTokens,
       cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
+      firstCallCacheCreation1hInputTokens: usage.firstCallCacheCreation1hInputTokens,
       cacheReadInputTokens: usage.cacheReadInputTokens,
       totalTokens: usage.totalTokens,
       durationMs: params.durationMs,

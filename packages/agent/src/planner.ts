@@ -1,5 +1,7 @@
+import { randomUUID } from "node:crypto";
 import { buildSplitCachedSystemPrompt } from "./ai/anthropic.js";
 import { pickModel } from "./ai/index.js";
+import { recordAgentTurnUsage } from "./agent-actions.js";
 import type { AgentContext } from "./agent-context.js";
 import { runAgentLoop, type RunAgentLoopParams } from "./agent-loop.js";
 import {
@@ -367,6 +369,25 @@ export async function planAgent(
     }, "[agent:plan] low-tier plan proposed non-trivial work — re-planning on judgment tier");
     tierDowngraded = false;
     loop = await runLoop(pickModel("agent_run"));
+  }
+
+  // The planner's model work ends here. Persisted like an operator turn's, so a
+  // cold cache (the first call's 1h write) can be told apart from the cached
+  // prefix being rebuilt mid-turn (a later 1h write, as discovery causes).
+  try {
+    await recordAgentTurnUsage({
+      turnId: randomUUID(),
+      orgId: ctx.orgId,
+      threadId: ctx.thread.id,
+      purpose: "agent_plan",
+      channelType: ctx.thread.channelType,
+      outcome: loop.stop,
+      durationMs: Date.now() - startedAt,
+      usage: usageTotals,
+    });
+  } catch (err) {
+    // Never fatal: a metrics row, not part of the plan.
+    logger.error({ err, orgId: ctx.orgId, threadId: ctx.thread.id }, "[agent:plan] failed to persist turn usage");
   }
 
   // Validate the model's captured proposal exactly as authored. An invalid plan

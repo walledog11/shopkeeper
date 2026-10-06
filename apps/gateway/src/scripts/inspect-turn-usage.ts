@@ -24,6 +24,11 @@ loadGatewayEnv();
 // (>1h) or changed (a deploy), and a changed prefix writes a different number of
 // tokens than the one before it. The real fault this column catches is a write
 // with no 1h attribution AND no reads at all.
+//
+// `rebuilt` is the part of `1h-write` made after the first call: the cached
+// prefix written again mid-turn because the tool set changed, which on
+// `agent_plan` turns is capability discovery. A cold cache shows up only in the
+// first call's share. `-` means the row predates that measurement.
 
 function arg(name: string, fallback?: string): string | undefined {
   return process.env[name]?.trim() || fallback;
@@ -57,10 +62,14 @@ async function main() {
   console.log(
     `${'when'.padEnd(21)} ${'purpose'.padEnd(13)} ${'outcome'.padEnd(14)} `
     + `${'calls'.padStart(5)} ${'first'.padStart(7)} ${'total'.padStart(7)} `
-    + `${'%budget'.padStart(7)} ${'1h-write'.padStart(9)} ${'cache-read'.padStart(10)}`,
+    + `${'%budget'.padStart(7)} ${'1h-write'.padStart(9)} ${'rebuilt'.padStart(8)} `
+    + `${'cache-read'.padStart(10)}`,
   );
   for (const row of rows) {
     const pct = Math.round((row.budgetTokens / TOKEN_BUDGET) * 100);
+    const rebuilt = row.firstCallCacheCreation1hInputTokens === null
+      ? '-'
+      : String(row.cacheCreation1hInputTokens - row.firstCallCacheCreation1hInputTokens);
     console.log(
       `${row.createdAt.toISOString().slice(0, 19).padEnd(21)} `
       + `${row.purpose.padEnd(13)} ${row.outcome.padEnd(14)} `
@@ -69,6 +78,7 @@ async function main() {
       + `${String(row.budgetTokens).padStart(7)} `
       + `${`${pct}%`.padStart(7)} `
       + `${String(row.cacheCreation1hInputTokens).padStart(9)} `
+      + `${rebuilt.padStart(8)} `
       + `${String(row.cacheReadInputTokens).padStart(10)}`,
     );
   }
