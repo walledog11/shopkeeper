@@ -2419,3 +2419,10 @@ audit passed. The order-status host checks above now pass on this candidate,
 alongside merchant-answer continuation, classifier persistence, request-display
 compatibility and dashboard answer checks. The deployed provider authorization
 was unchanged; no safety check was removed to obtain these results.
+
+PR #170's initial CI audit found newly reported high/critical advisories in
+`source-map-js` and `proxy-addr`. Only those lockfile entries were updated to
+patched versions `1.2.2` and `2.0.8`. A fresh production audit and the existing
+gateway health, body-limit and operator rate-limit checks passed. Required CI
+will rerun on that release candidate; the initial skipped build, coverage and
+E2E jobs are not treated as passed.
