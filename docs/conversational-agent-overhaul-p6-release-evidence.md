@@ -2436,3 +2436,50 @@ and the unavailable-Telegram check asserts no channel binding or bind token.
 Production authorization is unchanged. Full dashboard coverage, dashboard
 typecheck and changed-file lint passed, including revoked-membership and tenant
 isolation checks. Full PR CI will rerun before merge.
+
+## Agent routing cleanup deployment — 2026-10-05
+
+The owner authorized committing and deploying the architecture cleanup, then
+explicitly approved pushing to `walledog11/shopkeeper`, opening the PR, merging
+after checks pass and continuing deployment. The release used an isolated
+checkout of production `ecb19388`; unrelated work in the original checkout was
+preserved.
+
+[PR #170](https://github.com/walledog11/shopkeeper/pull/170) merged at
+`2026-10-06T01:56:37Z` as `4bfd12583bd22de02cdac23924097c35e7598827`. It ships
+the typed merchant-answer/revision continuation, structured support request
+routing, active-contract extraction and plan archive described above. Its
+lockfile and dashboard auth fixture fixes are recorded in the preceding section;
+production authentication and execution authorization were unchanged.
+
+All required checks passed on PR head `d726c54602e2244b529a5f138b8fee3fe93a3156`:
+[CI run 37400842812](https://github.com/walledog11/shopkeeper/actions/runs/37400842812)
+passed secret scanning, static verification and the production dependency audit,
+unit verification, integration coverage, build and E2E. The
+[free deterministic eval preflight](https://github.com/walledog11/shopkeeper/actions/runs/37400842898)
+passed. Paid lanes were skipped; no paid eval ran.
+
+Expected: all three production hosts serve the merged revision, with healthy
+dependencies, worker heartbeat, queues and authenticated dashboard hop-back.
+Observed at `2026-10-06T02:02Z`: each deployment reported the exact merge SHA,
+with the following successful states.
+
+| Host | Deployment | State |
+| --- | --- | --- |
+| Dashboard, Vercel production | [shopkeeper-dashboard-qm8cmnq1p-rscoding11-6491s-projects.vercel.app](https://shopkeeper-dashboard-qm8cmnq1p-rscoding11-6491s-projects.vercel.app) | READY |
+| Gateway, Railway production `shopkeeper` | `70f1d803-b39e-441f-adc5-37e57963556f` | SUCCESS |
+| Worker, Railway production `Gateway Worker` | `dc959f76-1350-4c77-8707-fc053b02ab4e` | SUCCESS |
+
+`verify:production` passed against `https://app.useshopkeeper.com` and
+`https://clerk-production-e37f.up.railway.app`: dashboard and gateway deep
+health, worker heartbeat and queue health, authenticated dashboard hop-back
+validation, retired orchestration routes unreachable, and the configured Photon
+webhook reachable. The inbound email smoke was skipped. No customer/operator
+message, staged ticket, live model call or Shopify mutation was created for
+verification.
+
+Deployment and infrastructure verification are complete. Ordinary-use
+answer/revision behavior and actual classifier accuracy for current compensation
+requests and non-English phrasing remain open in
+[agent-follow-ups.md](agent-follow-ups.md). These results do not claim live
+conversational acceptance or reopen the closed runtime migration.

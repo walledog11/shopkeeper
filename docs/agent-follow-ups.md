@@ -1,7 +1,7 @@
 # Agent follow-ups
 
-Last reviewed: 2026-10-05. Closure status and subsequent local implementations
-are recorded here; this adds no new deployment or live-verification claim.
+Last reviewed: 2026-10-05. Closure status, deployed follow-ups and remaining
+ordinary-use observations are recorded here.
 
 The runtime migration closed on 2026-10-04 within the accepted scope. These
 follow-ups and normal-use observations are retained, not scheduled, and do not
@@ -51,25 +51,24 @@ the instruction silently (release evidence, *First live write after
 retirement*). #168 removes it: every message reaches the agent, and only the
 agent's `navigate_dashboard` call navigates.
 
-**Merchant-answer routing — local implementation awaiting release.** Dashboard
+**Merchant-answer routing — deployed in #170 (`4bfd1258`).** Dashboard
 and phone continuations now pass typed answer/revision metadata from their
 claimed wait. The generated-English matcher is removed, and current routing
-evidence is no longer overridden by the legacy KB-miss fallback. Local checks
-passed with controlled model/provider responses and isolated Postgres. Deployment
-and ordinary-use answer/revision observation remain outstanding; details are in
-the [release evidence](conversational-agent-overhaul-p6-release-evidence.md#merchant-answer-continuation-metadata-local-implementation--2026-10-05).
+evidence is no longer overridden by the legacy KB-miss fallback. Relevant local
+checks, required PR CI and production health verification passed. Ordinary-use
+answer/revision observation remains open; details are in the
+[release evidence](conversational-agent-overhaul-p6-release-evidence.md#agent-routing-cleanup-deployment--2026-10-05).
 
-**Support request routing — local implementation awaiting release.** Refund,
+**Support request routing — deployed in #170 (`4bfd1258`).** Refund,
 cancellation, address-change and compensation routing now uses aligned current
 classifier fields and independently checks proposed targets. Runtime English
 intent scans are removed; the eval grader retains its independent heuristic.
 Classifier version 6 adds explicit compensation intent, with version-5 request
-display compatibility preserved. Targeted local checks and old/new guard
-comparison passed. Ownership fixture/assertion failures in the original dirty
-checkout were reproduced with its old routing modules; that separate ownership
-change is outside this release candidate. Release and ordinary-use observation
-remain outstanding; details are in the
-[release evidence](conversational-agent-overhaul-p6-release-evidence.md#structured-support-request-routing-local-implementation--2026-10-05).
+display compatibility preserved. Targeted checks, the old/new guard comparison,
+required PR CI and production health verification passed. Actual classifier
+accuracy for current compensation requests and non-English phrasing remains
+unobserved in ordinary use; details are in the
+[release evidence](conversational-agent-overhaul-p6-release-evidence.md#agent-routing-cleanup-deployment--2026-10-05).
 
 The 2026-09-25 audit also found decisions made by matching English outside the
 paths the migration covered. They are listed so they are neither pulled into the

@@ -115,8 +115,10 @@ set it. Older persisted rows default that flag to false; an aligned mutative
 refund ask still supplies the older compensation signal. Approval-card request
 displays retain version-5 and version-6 facts. A failed lookup consults the
 current request and proposed actions, without reviving an earlier request.
-This cleanup is implemented locally; release and ordinary-use observation are
-tracked in [agent-follow-ups.md](agent-follow-ups.md).
+This cleanup shipped in [PR #170](https://github.com/walledog11/shopkeeper/pull/170)
+as `4bfd1258` on dashboard, gateway and worker; required CI and production health
+verification passed. Ordinary-use observations are tracked in
+[agent-follow-ups.md](agent-follow-ups.md).
 
 A customer message is an `exact_draft`, bound with its destination and action
 bundle into the durable proposal's hash. Only labeled placeholders explicitly
