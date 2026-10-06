@@ -30,6 +30,11 @@ export interface ModelUsageMetrics {
   // a cache-temperature problem, climbing to it over many calls is a loop. Not
   // part of `LlmUsageTokens`; pricing ignores it.
   firstCallBudgetTokens: number;
+  // The first model call's share of `cacheCreation1hInputTokens`: the stable
+  // prefix written on a cold cache. A 1h write later in the same turn is the
+  // prefix being rebuilt, which happens when the tool set changes mid-turn
+  // (capability discovery). Not part of `LlmUsageTokens`; pricing ignores it.
+  firstCallCacheCreation1hInputTokens: number;
 }
 
 type AnthropicUsageLike = {
@@ -55,6 +60,7 @@ export function createModelUsageMetrics(): ModelUsageMetrics {
     totalTokens: 0,
     budgetTokens: 0,
     firstCallBudgetTokens: 0,
+    firstCallCacheCreation1hInputTokens: 0,
   };
 }
 
@@ -95,7 +101,10 @@ export function readModelUsage(response: { usage?: unknown }) {
 
 export function recordModelUsage(metrics: ModelUsageMetrics, response: { usage?: unknown }) {
   const usage = readModelUsage(response);
-  if (metrics.modelCalls === 0) metrics.firstCallBudgetTokens = usage.budgetTokens;
+  if (metrics.modelCalls === 0) {
+    metrics.firstCallBudgetTokens = usage.budgetTokens;
+    metrics.firstCallCacheCreation1hInputTokens = usage.cacheCreation1hInputTokens;
+  }
   metrics.modelCalls += 1;
   metrics.inputTokens += usage.inputTokens;
   metrics.outputTokens += usage.outputTokens;

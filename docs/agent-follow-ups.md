@@ -70,6 +70,16 @@ accuracy for current compensation requests and non-English phrasing remains
 unobserved in ordinary use; details are in the
 [release evidence](conversational-agent-overhaul-p6-release-evidence.md#agent-routing-cleanup-deployment--2026-10-05).
 
+**Ticket planning cost is unattributed.** A production read of runtime-2
+`agent_tasks` on 2026-10-06 averaged $0.055 per customer email ticket (22 tasks)
+and $0.042 per operator task (40), against the eval's $0.0233. Capability
+discovery appends tools mid-turn, which rebuilds the cached prompt prefix, but
+cold caches on sparse traffic also raise cost, and planner turns recorded no
+cache split to tell the two apart. Planner turns now write `agent_turn_usage`
+rows (`purpose` `agent_plan`) with the first call's 1h cache write; the rest of a
+turn's 1h write is the prefix rebuilt mid-turn. `inspect-turn-usage.ts` prints it
+as `rebuilt`. Read it from ordinary tickets before changing discovery.
+
 The 2026-09-25 audit also found decisions made by matching English outside the
 paths the migration covered. They are listed so they are neither pulled into the
 closed migration nor forgotten. Changing any of them needs the release owner's

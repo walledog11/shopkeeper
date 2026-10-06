@@ -32,6 +32,12 @@ vi.mock("./spend.js", () => ({
   getDailySpendNano: vi.fn().mockResolvedValue(0),
 }));
 
+// planAgent persists its turn usage; keep that write off the database here.
+vi.mock("./agent-actions.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./agent-actions.js")>()),
+  recordAgentTurnUsage: vi.fn().mockResolvedValue(undefined),
+}));
+
 // Reads execute for real in capture mode; stub the read executor so tests never
 // hit Shopify/DB while the warning + routing pipeline stays real.
 vi.mock("./planner-read-tools.js", async (importOriginal) => {

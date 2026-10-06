@@ -1340,6 +1340,12 @@ model AgentTurnUsage {
   cacheReadInputTokens       Int @map("cache_read_input_tokens")
   totalTokens                Int @map("total_tokens")
 
+  // The first model call's share of cacheCreation1hInputTokens: a cold cache
+  // writing the stable prefix. The rest of the 1h write is the prefix rebuilt
+  // mid-turn, as when capability discovery changes the tool set. Null on rows
+  // written before it was recorded.
+  firstCallCacheCreation1hInputTokens Int? @map("first_call_cache_creation_1h_input_tokens")
+
   durationMs Int      @map("duration_ms")
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
 
