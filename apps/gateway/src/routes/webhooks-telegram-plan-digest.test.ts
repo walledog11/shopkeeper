@@ -8,6 +8,7 @@ import {
   createTestThread,
 } from '@shopkeeper/db/test-helpers';
 import { hashInstruction, hashPlan } from '@shopkeeper/agent/agent-actions';
+import { resolveOperatorThread } from '@shopkeeper/agent/internal-thread';
 import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import type { AgentPlan, PlanValidation } from '@shopkeeper/agent/types';
@@ -169,6 +170,43 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
 
     expect(executeOperatorAgentTurnSpy).not.toHaveBeenCalled();
     expect(lastReplyText()).toContain('Nothing is waiting for your approval');
+  });
+
+  // 2026-10-05: the agent's own reply asked "Want me to send a reply letting them
+  // know it's cancelled and refunded?", and the merchant's "Yes" got the answer
+  // above, because an offer in conversation is not a queued draft. When the
+  // agent's turn spoke last, only the agent knows what the yes agrees to.
+  it('"yes" right after the agent\'s own reply goes to the agent turn', async () => {
+    const chatId = '5555013';
+    const memberKey = await bindMember(chatId);
+    const operatorThread = await resolveOperatorThread(org.id, memberKey);
+    const task = await db.agentTask.create({ data: {
+      organizationId: org.id, threadId: operatorThread.id, initiatingActorKind: 'member',
+      initiatingActorKey: memberKey, objective: 'Was the customer notified?',
+      runtimeVersion: 2, checkpointVersion: 1, checkpoint: {},
+      modelCallLimit: 10, activeTimeMsLimit: 60000, spendNanoUsdLimit: 1000000n,
+    } });
+    await db.message.create({ data: {
+      threadId: operatorThread.id, organizationId: org.id, senderType: 'agent', agentTaskId: task.id,
+      contentText: "No, I haven't messaged them yet. Want me to send a reply letting them know it's cancelled and refunded?",
+    } });
+    executeOperatorAgentTurnSpy.mockResolvedValueOnce({
+      outcome: 'committed',
+      summary: 'Sent.',
+      threadId: operatorThread.id,
+      actionsPerformed: [],
+    });
+
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'Yes' } });
+
+    await processPendingOperatorEvents(org.id);
+    await waitForReplies(1);
+
+    expect(executeOperatorAgentTurnSpy).toHaveBeenCalledOnce();
+    expect(lastReplyText()).not.toContain('Nothing is waiting for your approval');
   });
 
   it('does not run or discard a plan that requires thread review', async () => {

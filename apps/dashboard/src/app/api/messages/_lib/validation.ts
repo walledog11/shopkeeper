@@ -30,7 +30,13 @@ export function parseInternalSendMessageBody(body: unknown) {
 
 export function parseAutoAckBody(body: unknown) {
   const candidate = requireJsonObject(body, { message: 'Validation failed' });
+  // Absent means after hours: a gateway deployed before `handoff` existed sends none.
+  const kind = candidate.kind ?? 'after_hours';
+  if (kind !== 'after_hours' && kind !== 'handoff') {
+    throw new BadRequestError('kind must be after_hours or handoff');
+  }
   return {
     threadId: requireNonEmptyString(candidate.threadId, 'threadId', 'Missing threadId'),
+    kind,
   };
 }

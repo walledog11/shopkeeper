@@ -60,6 +60,17 @@ export interface PrecomputedPlanResult {
   failureReplanFailureReason?: string;
 }
 
+/** Whether an auto-executed run's only effect was handing the customer to a
+ * person: it ran, but answered nobody. */
+export function autoExecutionOnlyHandedOff(
+  result: Pick<PrecomputedPlanResult, 'autoExecutionStatus' | 'autoExecutionActions'>,
+): boolean {
+  const effects = result.autoExecutionActions?.filter(action => !isReadToolName(action.tool));
+  return result.autoExecutionStatus === 'success' && !!effects?.length
+    && effects.every(action => action.tool === 'escalate_to_human'
+      && (action.status === 'escalated' || action.status === 'success'));
+}
+
 /** Whether auto-execution should fan out one operator notification. */
 export function shouldNotifyAutoExecution(
   result: Pick<
@@ -70,9 +81,6 @@ export function shouldNotifyAutoExecution(
   if (result.failureReplanRecovered || result.failureReplanAwaitingApproval) return true;
   // The escalation sink already sends the handoff. A second completion report
   // both duplicates it and claims the customer request was handled.
-  const effects = result.autoExecutionActions?.filter(action => !isReadToolName(action.tool));
-  if (result.autoExecutionStatus === 'success' && effects?.length
-    && effects.every(action => action.tool === 'escalate_to_human'
-      && (action.status === 'escalated' || action.status === 'success'))) return false;
+  if (autoExecutionOnlyHandedOff(result)) return false;
   return result.autoExecutionKind !== 'safe_reply' || result.autoExecutionStatus !== 'success';
 }
