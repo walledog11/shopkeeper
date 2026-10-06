@@ -195,7 +195,7 @@ const OPERATOR_INTEGRATION_GUIDANCE = `- When the operator describes a product b
 - Use search_kb to look up store policies or FAQs when the operator asks about return/shipping/refund rules.`;
 
 const OPERATOR_INSTRUCTIONS = `- Take action only when you are confident. When the operator's request is ambiguous, ask them one short clarifying question directly in your reply. When the customer is unresolved, a tool fails, policy blocks the action, or the request is out of scope, explain that plainly to the operator and ask how they want to proceed. Never escalate the operator conversation back to the operator.
-- To answer a customer who already has a ticket, call send_ticket_reply with that ticket's id - it replies on their thread, on the channel they wrote in on. To contact someone who has no ticket, call send_email. Don't claim you sent something you didn't.
+- To answer a customer who already has a ticket, call draft_ticket_reply with that ticket's id and what the merchant wants them told. It drafts the reply on their thread, on the channel they wrote in on, and the merchant gets the exact text to approve before anything is sent, so say the draft is on its way, not that it was sent. To contact someone who has no ticket, call send_email. Don't claim you sent something you didn't.
 - Do NOT call send_reply or add_internal_note.
 - When the merchant asks a question, answer it and stop. Use only the facts needed, in ordinary language: no provider field names, null values, internal IDs or raw quantities unless they ask for technical detail, no recap of earlier work, and no next steps, options or offers they did not ask for (for example, that an order can still be cancelled or changed). Lead with the answer, and start a yes/no answer with "Yes" or "No". A simple status question is one short sentence. When you carry out an action, confirm what you did; never just say "Done".
 - Write the way a person texts: friendly and plain, short sentences, no bullet characters, numbered lists or markdown, and never an em-dash (—); use a comma, a full stop, or a word like "so" instead. When a request needs more detail, use short paragraphs rather than stacked clauses.`;
@@ -212,10 +212,10 @@ const OPERATOR_CONTROL_TOOL_INSTRUCTIONS = `- When a plan is awaiting the mercha
 - When a question is awaiting the merchant's answer (see "## Pending state") and their message plausibly answers it, call answer_operator_question with the answer.
 - Call at most ONE of approve_pending_plan / reject_pending_plan / revise_pending_plan / answer_operator_question per turn. After you revise a plan, the merchant must see the new draft before approving it - do NOT revise and then approve in the same turn; stop after revising and let them approve on their next message.
 - When the merchant refers to a ticket from the briefing (see "## Pending state"), read its id off that list. The numbers there are the numbers they saw. An order number in the briefing text (#1024) is NOT a ticket id - never pass one as ticket_id; find the ticket on the list, or call list_active_tickets.
-  - If they want a reply sent, call send_ticket_reply with the ticket id and their exact reply text. Several tickets in one message is fine.
+  - If they want a reply sent, call draft_ticket_reply with the ticket id and what they want said. Several tickets in one message is fine.
   - If they clearly want one dismissed as spam, call mark_ticket_spam with its ticket id. If their intent is ambiguous ("that first one seems off"), ask one short confirming question before marking spam.
   - To open or read one, call get_ticket with its id — do not invent index numbers.
-  - The briefing list is not a permission list. send_ticket_reply, mark_ticket_spam and get_ticket take any ticket in the inbox, so a ticket the merchant names that was not on the briefing is still yours to act on — find it with list_active_tickets.
+  - The briefing list is not a permission list. draft_ticket_reply, mark_ticket_spam and get_ticket take any ticket in the inbox, so a ticket the merchant names that was not on the briefing is still yours to act on — find it with list_active_tickets.
 - A message about something else entirely (an order lookup, a brand-new instruction) is handled normally with your other tools and MUST NOT touch the pending plan, question, or digest unless the merchant is clearly referring to it. A message that names the pending plan's own action is not "something else" - naming it is the merchant referring to it.
 - After a control tool runs, state plainly what happened, quoting the concrete action (e.g. "Sent - Sarah gets the $12 refund." or "Re-drafted it warmer with 10% off - approve it when you're happy."). How the merchant approves depends on where they are; the pending-state section says which.`;
 
@@ -329,7 +329,9 @@ export function buildSystemPromptParts(
         // Built once per run, so the time is stable across that run's model calls.
         context: `## Current time\n${merchantLocalTime(s, new Date())}\n\n## Integrations\n${shopifyNote}\n${shopifyCustomerNote}${linkedCustomerSection}${ordersSection}${buildStoreProfileSection(ctx.orgName, s.aiContext)}${pendingStateSection}`,
         instructions,
-        trailer: `${OPERATOR_UNTRUSTED_CONTENT_GUIDANCE}${buildGuardrailSection(s, "operator")}${buildMerchantPreferencesSection(ctx)}`,
+        // The voice reaches whatever the merchant has the agent write to a
+        // customer from here, as it does every reply the support planner drafts.
+        trailer: `${OPERATOR_UNTRUSTED_CONTENT_GUIDANCE}${buildGuardrailSection(s, "operator")}${buildMerchantPreferencesSection(ctx)}${buildVoiceSection(s)}`,
       }),
     };
   }

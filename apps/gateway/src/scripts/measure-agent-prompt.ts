@@ -65,7 +65,7 @@ async function main() {
   const { stable, volatile } = buildSystemPromptParts(ctx, settings);
 
   const moduleTools = {
-    ...buildOperatorInboxTools({ organizationId: orgId }),
+    ...buildOperatorInboxTools({ organizationId: orgId, clerkUserId: 'measure-agent-prompt' }),
     ...buildOperatorProductHelpTools(),
     ...buildOperatorShopTools({ organizationId: orgId }),
   };
