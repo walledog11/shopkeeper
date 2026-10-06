@@ -21,7 +21,7 @@ import {
   sendOperatorPlanNotification,
   sendOperatorQuestionNotification,
 } from '../support-plan/planning-notifications.js';
-import { shouldNotifyAutoExecution } from '../support-plan/planning-types.js';
+import { autoExecutionOnlyHandedOff, shouldNotifyAutoExecution } from '../support-plan/planning-types.js';
 import type { AiSummaryJobData } from '../../types.js';
 
 export const DEFAULT_PLAN_INSTRUCTION = "Handle this customer's latest request";
@@ -53,6 +53,17 @@ export function resolveAiSummarySourceMessageId(
   return latestConversation?.senderType === 'customer'
     ? latestConversation.id
     : queuedSourceMessageId;
+}
+
+// Messaging channels with nothing else to tell a waiting customer. Handed to a
+// person, an Instagram or TikTok customer hears nothing until the merchant acts.
+// Storefront chat shows the same sentence in its widget, and an email customer
+// does not expect an instant reply.
+const HANDOFF_ACK_CHANNELS: ReadonlySet<string> = new Set([CHANNEL.IG_DM, CHANNEL.TIKTOK]);
+
+async function acknowledgeHandoff(organizationId: string, threadId: string, channelType: string): Promise<void> {
+  if (!HANDOFF_ACK_CHANNELS.has(channelType)) return;
+  await sendAutoAck(organizationId, threadId, 'handoff');
 }
 
 type PublishDecision =
@@ -225,7 +236,8 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
           planResult,
         );
       }
-      return;
+      // An auto-run handoff answered nobody, so it still owes the acknowledgement.
+      if (!autoExecutionOnlyHandedOff(planResult)) return;
     }
     const burst = await getConversationBurst(threadId);
     if (shouldSkipRequestWork(updatedThread, burst, sourceMessageId, skipSummary)) {
@@ -276,6 +288,11 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
         planResult.identity ? { identity: planResult.identity } : undefined,
       );
     }
+    // Both leave the customer waiting on the merchant: a handoff, or a follow-up
+    // card after a failed step.
+    if (autoExecutionOnlyHandedOff(planResult) || planResult.failureReplanAwaitingApproval) {
+      await acknowledgeHandoff(organizationId, threadId, channelType);
+    }
     return;
   }
 
@@ -318,6 +335,7 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
         sourceMessageId: planResult.identity.sourceMessageId,
       } : undefined,
     );
+    await acknowledgeHandoff(organizationId, threadId, channelType);
     return;
   }
 
@@ -331,4 +349,5 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
     planResult.instruction,
     planResult.identity ? { identity: planResult.identity } : undefined,
   );
+  await acknowledgeHandoff(organizationId, threadId, channelType);
 }

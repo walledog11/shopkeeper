@@ -3,7 +3,7 @@ import type { OrgSettings } from '@shopkeeper/agent/types';
 import { STATUS } from '../../constants.js';
 import logger from '../../logger.js';
 import { getConversationBurst, type ConversationBurst } from '../inbound/conversation-burst.js';
-import { requestAutoAck } from './planning-dashboard-client.js';
+import { requestAutoAck, type AutoAckKind } from './planning-dashboard-client.js';
 import { generateThreadPlan } from './generate-thread-plan.js';
 import { degradeForConversationLimit } from './plan-limit.js';
 import { mayParkMerchantWork, type PrecomputedPlanResult } from './planning-types.js';
@@ -108,23 +108,29 @@ export async function precomputeThreadPlan(
 }
 
 // Best-effort customer auto-ack: failures are logged only so the ai-summary job
-// still completes outside business hours.
-export async function sendAutoAck(organizationId: string, threadId: string): Promise<void> {
+// still completes.
+export async function sendAutoAck(
+  organizationId: string,
+  threadId: string,
+  kind: AutoAckKind = 'after_hours',
+): Promise<void> {
   try {
-    const response = await requestAutoAck(threadId);
+    const response = await requestAutoAck(threadId, kind);
     if (!response.ok) {
       logger.warn(
-        { status: response.status, outcome: response.outcome, threadId, organizationId },
+        { status: response.status, outcome: response.outcome, threadId, organizationId, kind },
         response.outcome === 'unknown'
           ? '[Worker] Auto-ack dispatch outcome unknown'
           : '[Worker] Auto-ack dispatch failed',
       );
     } else if (response.data.skipped) {
-      logger.warn({ threadId, organizationId }, '[Worker] Auto-ack skipped by dashboard — check businessHoursEnabled setting sync');
+      logger.info({ threadId, organizationId, kind }, kind === 'handoff'
+        ? '[Worker] Auto-ack skipped — customer already acknowledged while waiting'
+        : '[Worker] Auto-ack skipped by dashboard — no auto-acknowledgment message configured');
     } else {
-      logger.info({ threadId, organizationId }, '[Worker] Auto-ack sent to customer');
+      logger.info({ threadId, organizationId, kind }, '[Worker] Auto-ack sent to customer');
     }
   } catch (err) {
-    logger.error({ err: (err as Error).message, threadId }, '[Worker] sendAutoAck error');
+    logger.error({ err: (err as Error).message, threadId, kind }, '[Worker] sendAutoAck error');
   }
 }

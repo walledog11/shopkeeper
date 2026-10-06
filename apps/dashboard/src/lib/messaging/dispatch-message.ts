@@ -1,6 +1,6 @@
 import { CHANNEL_TYPE, THREAD_STATUS } from "@shopkeeper/agent/thread-constants"
 import { recordManualMerchantReplyForThread } from "@shopkeeper/agent/request-outcome"
-import { db } from "@shopkeeper/db"
+import { db, SenderType } from "@shopkeeper/db"
 import logger from "@/lib/server/logger"
 import { isOutboundEmailAsyncEnabled } from "@/lib/messaging/enqueue-outbound-email"
 import {
@@ -82,6 +82,61 @@ async function assertCurrentEpisode(thread: DispatchThread): Promise<DispatchFai
     }
   }
   return null
+}
+
+/**
+ * Tells a messaging-channel customer that a person is looking at their message.
+ * It is delivered like a reply but recorded as an internal note: it answers
+ * nothing, so the thread must keep awaiting a real reply and the plan the merchant
+ * is reviewing must stay current — an outbound message would end both.
+ *
+ * Once per wait: the note is keyed to the latest real reply, which an
+ * acknowledgement never moves, so a customer who writes again before anyone
+ * answers is not told the same thing twice. The key is claimed before the send
+ * and released if the provider definitely refuses it.
+ */
+export async function dispatchAcknowledgement(
+  thread: DispatchThread,
+  org: DispatchOrg,
+  text: string,
+): Promise<DispatchFailure | { ok: true; skipped: boolean }> {
+  const superseded = await assertCurrentEpisode(thread)
+  if (superseded) return superseded
+  if (thread.channelType !== CHANNEL_TYPE.IG_DM && thread.channelType !== CHANNEL_TYPE.TIKTOK) {
+    return { ok: false, error: "Unsupported channel" }
+  }
+
+  const lastReply = await db.message.findFirst({
+    where: {
+      organizationId: thread.organizationId,
+      threadId: thread.id,
+      senderType: { in: [SenderType.agent, SenderType.ai] },
+      deletedAt: null,
+    },
+    orderBy: [{ sentAt: "desc" }, { id: "desc" }],
+    select: { id: true },
+  })
+  const key = `handoff-ack:${thread.id}:${lastReply?.id ?? "start"}`
+  const claimed = await db.message.createMany({
+    data: {
+      threadId: thread.id,
+      organizationId: thread.organizationId,
+      senderType: SenderType.note,
+      externalMessageId: key,
+      contentText: `Sent automatically to the customer: "${text}"`,
+    },
+    skipDuplicates: true,
+  })
+  if (claimed.count === 0) return { ok: true, skipped: true }
+
+  const providerResult = thread.channelType === CHANNEL_TYPE.IG_DM
+    ? await dispatchInstagramDirect(thread, org, text, "auto_ack")
+    : await dispatchTikTokShopMessage(thread, org, text, "auto_ack")
+  // An unknown outcome may have reached the customer, so it keeps the claim.
+  if (!providerResult.ok && providerResult.outcome !== "unknown") {
+    await db.message.deleteMany({ where: { organizationId: thread.organizationId, externalMessageId: key } })
+  }
+  return providerResult.ok ? { ok: true, skipped: false } : providerResult
 }
 
 /**

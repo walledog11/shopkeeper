@@ -5,6 +5,10 @@ interface AutoAckResponse {
   skipped?: boolean;
 }
 
-export function requestAutoAck(threadId: string): Promise<DashboardApiResult<AutoAckResponse>> {
-  return postDashboardInternal('/api/messages/auto-ack', { threadId });
+/** `after_hours` sends the merchant's configured message; `handoff` tells a
+ * messaging-channel customer that a person is looking at their message. */
+export type AutoAckKind = 'after_hours' | 'handoff';
+
+export function requestAutoAck(threadId: string, kind: AutoAckKind): Promise<DashboardApiResult<AutoAckResponse>> {
+  return postDashboardInternal('/api/messages/auto-ack', { threadId, kind });
 }

@@ -1,3 +1,5 @@
+import { db, SenderType } from '@shopkeeper/db';
+import { resolveOperatorThread } from '@shopkeeper/agent/internal-thread';
 import { isReadToolName } from '@shopkeeper/agent/tools';
 import logger from '../../logger.js';
 import {
@@ -31,6 +33,20 @@ function stillWaitingSuffix(remaining: PendingPlan[]): string {
   return `\n(${remaining.length} more plans are still waiting for you.)`;
 }
 
+// A bare yes/no answers whatever the merchant read last. Cards, questions and
+// digests are pushed and mirrored onto the operator thread without a task; the
+// agent's own chat reply is written by its turn and carries that turn's task. When
+// the agent spoke last, only the agent knows what "yes" agrees to.
+async function agentTurnSpokeLast(organizationId: string, memberKey: string): Promise<boolean> {
+  const thread = await resolveOperatorThread(organizationId, memberKey);
+  const latest = await db.message.findFirst({
+    where: { organizationId, threadId: thread.id, senderType: SenderType.agent, deletedAt: null },
+    orderBy: [{ sentAt: 'desc' }, { id: 'desc' }],
+    select: { agentTaskId: true },
+  });
+  return latest?.agentTaskId != null;
+}
+
 export async function handlePendingPlanCommand(
   organizationId: string,
   clerkUserId: string,
@@ -39,6 +55,10 @@ export async function handlePendingPlanCommand(
   context: OperatorContext,
 ): Promise<boolean> {
   const { chatId, senderRef: memberKey, reply, presence } = message;
+  if (await agentTurnSpokeLast(organizationId, memberKey)) {
+    logger.info({ chatId, command: command.type }, '[Operator] Decision answers the agent turn — handing to the model');
+    return false;
+  }
   const pendingPlan = mostRecentPendingPlan(context.pendingPlans);
   if (!pendingPlan) {
     // A bare yes/no/skip is a decision about a specific draft. With none queued
