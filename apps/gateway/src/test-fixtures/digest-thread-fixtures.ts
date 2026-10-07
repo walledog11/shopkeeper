@@ -1,4 +1,4 @@
-import { db, ThreadFilterStatus } from '@shopkeeper/db';
+import { ThreadFilterStatus } from '@shopkeeper/db';
 
 export const DIGEST_FIXTURE_NOW = new Date('2026-04-29T12:00:00Z');
 export const DIGEST_FIXTURE_HOUR_MS = 3_600_000;
@@ -9,7 +9,7 @@ export function digestFiledSince(now: Date = DIGEST_FIXTURE_NOW): Date {
 }
 
 /** What the classifier persists for "hello" / "yo" / "Test": real person, no ask yet. */
-export const digestNoRequestClassifierSignals = {
+const digestNoRequestClassifierSignals = {
   version: 3,
   language: 'en',
   intents: { no_request: true },
@@ -77,19 +77,4 @@ export function makeDigestThreadRow(
     messages: [],
     classifierSignals: overrides.noRequest ? digestNoRequestClassifierSignals : null,
   };
-}
-
-// createTestMessage stamps sentAt from the clock, so two messages written in the
-// same millisecond fall back to the `id desc` tiebreak — a random UUID order,
-// which decides whether a thread reads as answered or as blocked. Any fixture
-// with more than one message has to pin the order it means.
-export async function pinMessageSentAtMinutesAgo(
-  messageId: string,
-  minutes: number,
-  now: Date = DIGEST_FIXTURE_NOW,
-) {
-  await db.message.update({
-    where: { id: messageId },
-    data: { sentAt: new Date(now.getTime() - minutes * 60_000) },
-  });
 }

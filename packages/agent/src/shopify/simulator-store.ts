@@ -69,15 +69,11 @@ interface SimulatorState {
 const UNPAID_FINANCIAL = new Set(["pending", "authorized", "partially_paid"]);
 const UNFULFILLED = new Set(["", "unfulfilled", "partial", "partially_fulfilled"]);
 
-let state: SimulatorState = createSeedState();
+const state: SimulatorState = createSeedState();
 
-export function isShopifySimulatorContext(ctx: { shop: string; accessToken?: string }): boolean {
+function isShopifySimulatorContext(ctx: { shop: string; accessToken?: string }): boolean {
   return normalizeSimulatorShop(ctx.shop) === SHOPIFY_SIMULATOR_DOMAIN
     || ctx.accessToken === SHOPIFY_SIMULATOR_TOKEN;
-}
-
-export function resetShopifySimulatorStore(): void {
-  state = createSeedState();
 }
 
 export function handleShopifySimulatorRest(

@@ -33,21 +33,6 @@ export interface BoundImessageMember {
   clerkUserId: string;
 }
 
-// Reply-free binding resolution by sender handle. The durable (P4-03) worker
-// re-runs this at claim time to re-validate ownership before running a turn; it
-// never mutates the binding or replies.
-export async function resolveBoundImessageMember(senderId: string): Promise<BoundImessageMember | null> {
-  const binding = await db.orgMemberImessageBinding.findUnique({
-    where: { senderId },
-    include: { orgMember: true },
-  });
-  if (!binding) return null;
-  return {
-    organizationId: binding.orgMember.organizationId,
-    clerkUserId: binding.orgMember.clerkUserId,
-  };
-}
-
 // Resolve the sender's binding and perform the synchronous binding maintenance
 // (connect-code binding/re-bind, unbound reply, and space/label refresh). Returns
 // the bound member when there is an operator turn left to run, or null when the

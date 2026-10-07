@@ -19,7 +19,7 @@ export interface BindWelcomeParams {
   storeName: string | null;
 }
 
-export function buildBindWelcome({ agentName, storeName }: BindWelcomeParams): string {
+function buildBindWelcome({ agentName, storeName }: BindWelcomeParams): string {
   const store = storeName?.trim() ? `${storeName.trim()}'s inbox` : 'your inbox';
   return [
     `Hi, it's ${agentName}. We're connected, and I'm watching ${store} from now on.`,

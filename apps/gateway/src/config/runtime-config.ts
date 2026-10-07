@@ -210,20 +210,6 @@ export function getInstagramWebhookConfig(): InstagramWebhookConfig {
   };
 }
 
-export interface MetaWebhookConfig {
-  verifyToken: string | null;
-  appSecret: string | null;
-  appId: string | null;
-}
-
-export function getMetaWebhookConfig(): MetaWebhookConfig {
-  return {
-    verifyToken: readOptionalTrimmedEnv('META_VERIFY_TOKEN'),
-    appSecret: readOptionalTrimmedEnv('META_APP_SECRET'),
-    appId: readOptionalTrimmedEnv('META_APP_ID'),
-  };
-}
-
 export interface TelegramConfig {
   botToken: string | null;
   webhookSecret: string | null;
