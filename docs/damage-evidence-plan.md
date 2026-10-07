@@ -1,8 +1,7 @@
 # Damage claims need evidence before compensation — implementation plan
 
-**Status (update as you go):** planned 2026-10-07 against `578da78b`. Nothing built.
-Decisions D1–D4 below are the recommended defaults and are **unconfirmed** — ask the
-user before Step 1 if they still are.
+**Status (update as you go):** planned 2026-10-07 against `578da78b`; decisions D1–D4
+confirmed by the user the same day. Nothing built.
 
 ## Why
 
@@ -12,14 +11,17 @@ customer's word alone. The merchant wants proof first: the agent should ask what
 damaged and for a photo, and the photo should reach the merchant with the approval card
 on every surface.
 
-## Decisions
+## Decisions (confirmed by the user, 2026-10-07)
 
-| # | Decision | Recommended default |
+| # | Decision | Answer |
 | --- | --- | --- |
-| D1 | Which claims need a photo | Every claim whose reason is `damaged` or `defective`; an amount threshold can come later |
-| D2 | What a missing photo holds back | All compensation: `create_refund`, `create_partial_refund`, `create_gift_card`, `create_exchange`, `create_shopify_order` (replacement) |
-| D3 | When the customer can't or won't send one | Ask once; on the next reply without a photo, escalate to the merchant with the customer's description |
-| D4 | Can damage compensation auto-execute with a photo | No. It always needs the merchant's approval; the agent never judges whether a photo is genuine |
+| D1 | Which claims need a photo | Both `damaged` and `defective` claims, when a photo is available. The agent asks only on a channel that can carry a customer photo: Instagram, email, TikTok (the set `shouldHydrateAgentMessageImages` covers). On any other channel there is nothing to ask for, so the conversation goes straight to the merchant |
+| D2 | What a missing photo does | Pushes the conversation to the merchant to take over: a structural escalation, not a review card the merchant could approve anyway. The agent never proposes compensation on a damage claim without a photo |
+| D3 | When the customer can't or won't send one | Ask once; on the next reply without a photo, escalate with the customer's description |
+| D4 | Can damage compensation auto-execute with a photo | No. With a photo, it always needs the merchant's approval; the agent never judges whether a photo is genuine |
+
+"Compensation" here is every tool that pays out or replaces: `create_refund`,
+`create_partial_refund`, `create_gift_card`, `create_exchange`, `create_shopify_order`.
 
 ## What already exists (verified 2026-10-07)
 
@@ -48,6 +50,13 @@ on every surface.
   `severityFor` (`packages/agent/src/plan-signals.ts`) makes it `blocking` only when the
   plan used customer or order data. `decideAutonomy` (`packages/agent/src/autonomy.ts`)
   already turns any blocking signal into `needs_review` with approval allowed.
+- **Structural escalation has a home.** `buildPlanRoutingEvidence` and
+  `requestedWriteEscalationCode` (`packages/agent/src/planner-evidence.ts`) turn plan facts
+  into a `PlanRoutingEvidenceCode` (`packages/agent/src/types.ts`) with a fixed entry in
+  `ESCALATION_REASONS`. A code in `ESCALATION_EVIDENCE` (`packages/agent/src/autonomy.ts`)
+  makes `decideAutonomy` return `escalate`, and `planner.ts` rewrites the plan with
+  `applyEscalationRouting`. `already_refunded_request` and `compensation_over_cap` work this
+  way.
 - **Compensation is already a registry fact.** `ToolPolicyMetadata.dailyRefundSpendLimit`
   (`packages/agent/src/tools/registry/types.ts`) is set on `create_refund`,
   `create_partial_refund` and `create_gift_card`; `create_shopify_order` has
@@ -80,8 +89,10 @@ on every surface.
 5. A prompt section, present only on damage claims, tells the planner what to do in each
    state. `SUPPORT_INSTRUCTIONS` does not grow (its size is an open item in
    `docs/agent-follow-ups.md`).
-6. Two signals keep it honest: `damage_photo_missing` and `damage_photo_attached`, blocking
-   whenever the plan holds a gated tool. No plan is rewritten; the merchant sees why.
+6. A missing photo hands the conversation over (D2): the routing code
+   `damage_photo_missing` escalates structurally, the same way an over-cap refund does. A
+   photo that is present raises `damage_photo_attached`, a blocking card signal, so
+   compensation always waits for the merchant (D4).
 7. The card shows the photos: dashboard thumbnails, and the images themselves on Telegram and
    iMessage.
 
@@ -145,8 +156,8 @@ runs. Paid evals run only when the user asks.
   (`apps/dashboard/src/lib/agent/__evals__/fixture-runtime.ts`). The real hosts set
   `awaitingCustomer = damage_photo` and `awaitingCustomerSince = now()` with an org-scoped
   update and return a typed result.
-- **Offer the tool only on damage claims.** Filter it out of the planner's tool set
-  otherwise, the way `planner.ts` filters guest-only tools. Every other support turn then
+- **Offer the tool only on damage claims on a photo-capable channel.** Filter it out of the
+  planner's tool set otherwise, the way `planner.ts` filters guest-only tools. Every other support turn then
   keeps a byte-identical tool list and prompt cache.
 - The registry is in the dashboard's client bundle: no `@shopkeeper/db` import in registry
   files. Run `npx turbo run build --filter=shopkeeper-dashboard`.
@@ -162,6 +173,9 @@ runs. Paid evals run only when the user asks.
   volatile half, next to `shopifyCustomerNote`. It returns `""` unless this is a damage claim,
   `s.damageEvidence === "photo_required"` and the thread is not an operator thread. Text
   per state:
+  - channel cannot carry a photo (D1): "The customer reports a damaged or defective item on
+    a channel that cannot carry a photo, so the merchant handles it. Call escalate_to_human
+    with what they said about the damage."
   - no photo, none requested: "The customer reports a damaged or defective item and has not
     sent a photo. Store policy asks for one before any refund, credit, exchange or
     replacement. Reply asking briefly what is damaged and for a photo of the item and its
@@ -174,49 +188,69 @@ runs. Paid evals run only when the user asks.
     photos before anything is sent. A photo never authorizes compensation by itself."
 - Don't touch `SUPPORT_INSTRUCTIONS`.
 
-**Step 7 — registry flag and signals.**
-- `ToolPolicyMetadata.damageEvidence?: true` in `tools/registry/types.ts`, set on the D2
-  tools.
-- `ProducedPlanSignalCode` in `packages/agent/src/types.ts`: add `damage_photo_missing` and
-  `damage_photo_attached`.
-- `packages/agent/src/plan-signals.ts`:
-  - messages: "No photo of the damage yet - ask the customer for one before compensating."
-    and "The customer sent photos of the damage - check them before approving."
-  - derive `DAMAGE_EVIDENCE_TOOLS` from `TOOL_DEFINITION_REGISTRY` (policy flag), as
-    `CUSTOMER_OR_ORDER_READ_TOOLS` is derived;
-  - in `severityFor`, both codes are `blocking` when `rawToolCalls` contain a gated tool,
-    `advisory` otherwise.
-- `appendInitialPlanningSignals` (`planner-read-tools.ts`): on a damage claim with the
-  setting on, push `damage_photo_missing` when `customerImages === 0`, else
-  `damage_photo_attached`. If it does not receive settings today, pass the resolved settings
-  in from `planner.ts`.
-- `decideAutonomy`: no change. Blocking signals already force review (D4).
+**Step 7 — registry flag, escalation code, review signal.**
+- Registry: `ToolPolicyMetadata.damageEvidence?: true` in `tools/registry/types.ts`, set on
+  the compensation tools listed under Decisions. Derive one `DAMAGE_EVIDENCE_TOOLS` set from
+  `TOOL_DEFINITION_REGISTRY` (as `CUSTOMER_OR_ORDER_READ_TOOLS` is derived in
+  `plan-signals.ts`), export it, and use it in both rules below.
+- **Missing photo → the merchant takes over (D2, D3, D1).** Add `damage_photo_missing` to
+  `PlanRoutingEvidenceCode` (`types.ts`), to `ESCALATION_EVIDENCE` (`autonomy.ts`), to
+  `ESCALATION_REASONS` (`planner-evidence.ts`): "Customer reports a damaged or defective
+  item without a photo — over to you." It also goes in `PLAN_ROUTING_EVIDENCE_CODES`
+  (`packages/agent/src/plan-cache-shape.ts`). That one is a plain array, so TypeScript won't
+  catch the omission, and a cached plan carrying the code would fail the cache shape check. In `planner-evidence.ts`, return the code on a damage
+  claim with the setting on and `customerImages === 0` when any of these holds:
+  - the plan contains a `DAMAGE_EVIDENCE_TOOLS` call (compensation proposed with no photo);
+  - `photoRequestedAt` is set (asked once, nothing came back);
+  - the channel cannot carry a photo.
+  The first-turn ask (`send_reply` + `await_customer_photo`, no compensation, photo-capable
+  channel, nothing requested yet) gets no code. `decideAutonomy` then escalates and
+  `applyEscalationRouting` rewrites the plan; neither needs changing. Check the code's
+  position among the existing structural codes: it should win over a generic
+  `compensation_exception`.
+- **Keep the first-turn ask from tripping today's checks.** A compensation request answered
+  by a plan with no action currently raises `compensation_exception` (structural escalation,
+  `requestedWriteEscalationCode`) and the blocking `mutative_intent_no_action` signal
+  (`buildPlanRoutingEvidence`). The photo ask is exactly that shape, so as things stand it
+  would escalate before the customer is ever asked. Teach `planShape` that an
+  `await_customer_photo` call answers the request (e.g. `hasEvidenceRequest`) and exclude
+  such plans from both.
+- **Photo present → merchant review (D4).** Add `damage_photo_attached` to
+  `ProducedPlanSignalCode` (`types.ts`) and `PLAN_SIGNAL_MESSAGES` (`plan-signals.ts`): "The
+  customer sent photos of the damage - check them before approving." In `severityFor` it is
+  `blocking` when the plan contains a `DAMAGE_EVIDENCE_TOOLS` call, `advisory` otherwise.
+  Push it from `appendInitialPlanningSignals` (`planner-read-tools.ts`) on a damage claim
+  with the setting on and `customerImages > 0`. If that function does not receive settings,
+  pass the resolved settings in from `planner.ts`. `decideAutonomy` already forces review on
+  a blocking signal.
 
 **Step 8 — tests (minimal; mutation-check each).**
-- One unit test on severity: `damage_photo_missing` and `damage_photo_attached` are blocking
-  with `create_refund` in the plan and advisory with only `send_reply` +
-  `await_customer_photo`. Break the severity branch and watch it go red.
-- Nothing that pins prompt wording, labels or the registry list (TESTING.md).
+- `buildPlanRoutingEvidence` returns `damage_photo_missing` for a damage claim with no photo
+  and a `create_refund` call, and for one where a photo was requested and none came back. For
+  the first-turn ask it returns no escalation code at all (no `compensation_exception`) and
+  no `mutative_intent_no_action` signal. These pin D2 and D3: a refund on the customer's
+  word alone never reaches an approval card, and the ask itself is not escalated.
+- `damage_photo_attached` is `blocking` with `create_refund` in the plan and `advisory`
+  without it (D4).
+- Break each condition and watch its test go red. Nothing that pins prompt wording, labels
+  or the registry list (TESTING.md).
 
 **Step 9 — eval harness (optional; free to build, paid to run).**
 - Let fixtures supply `setup.requestFacts` (types, `fixture-runtime.ts`,
   `fixture-validator.ts`). Add `damage-claim-no-photo-asks-for-photo`: `mustCallTools`
-  `send_reply`, `await_customer_photo`; `mustNotCallTools` the D2 tools. A with-photo fixture
-  only if fixtures can carry image attachments; check first.
+  `send_reply`, `await_customer_photo`; `mustNotCallTools` the compensation tools. A
+  with-photo fixture only if fixtures can carry image attachments; check first.
 
 ### PR 2 — dashboard
 
 **Step 10 — setting toggle** in `AgentAutonomyAdvancedSection.tsx`, beside
 `blockCancellations`: "Ask for a photo before refunding a damaged item".
 
-**Step 11 — evidence on the card.**
-- In `ActionPlanBody.tsx` (`.../tickets/_components/conversation/composer/`), under
-  `damage_photo_attached`, render the customer's photos. Move `AttachmentList` out of
-  `ChatTimeline.tsx` into a shared file and reuse it.
-- Under a blocking `damage_photo_missing`, add an "Ask for a photo" button. It requests a new
-  plan with a fixed instruction through `fetchAgentPlan`
-  (`.../tickets/_hooks/conversation-agent-requests.ts`), **not** through the composer's text
-  router in `useConversationAgentFlow.ts` (see Known issues).
+**Step 11 — evidence on the card.** In `ActionPlanBody.tsx`
+(`.../tickets/_components/conversation/composer/`), under `damage_photo_attached`, render the
+customer's photos. Move `AttachmentList` out of `ChatTimeline.tsx` into a shared file and
+reuse it. A missing photo never reaches a card (D2): it arrives as an escalation, which the
+inbox already shows as "Flagged for you".
 
 ### PR 3 — phone and briefing
 
@@ -238,13 +272,14 @@ fields.
 
 Drive the dashboard in the user's Chrome; the user sends customer messages from their phone.
 - IG DM "my order #____ arrived damaged, can I get a refund?" with no photo: the plan
-  replies asking for a photo and waits; no compensation step; the card shows
-  `damage_photo_missing`.
+  replies asking for a photo and waits (`await_customer_photo`); no compensation step.
 - Reply with a photo: the new plan proposes the refund; the card shows the photo and
   `damage_photo_attached`; approve; Shopify shows the refund (read back via
   `/api/orders?limit=50` in page JS).
 - The same card on the phone shows the photo.
-- Reply "I don't have a photo" after the ask: escalation with the description.
+- Reply "I don't have a photo" after the ask: the thread escalates to the merchant with the
+  customer's description; no second ask, no refund card.
+- A damage claim on the storefront chat (no photo channel): escalates without asking.
 - Setting off: today's behavior.
 - Email variant of the first two.
 
