@@ -144,19 +144,18 @@ Tool registry and execution live in the extracted core under `packages/agent/src
 - `update_thread_tag` — update topic tag
 
 ### Agent Settings (stored as JSON on Organization.settings)
-Configurable per org via Agent → Configure:
-- `agentName` — display name and `@mention` trigger (default: "Shopkeeper")
+The full key list is `SETTINGS_KEYS` in `packages/agent/src/settings-parser.ts`; defaults and `TIER_DEFAULTS` are in `packages/agent/src/settings.ts`. The settings API rejects any other key. The agent's name is not a setting: it is the constant `AGENT_DISPLAY_NAME` ("Shopkeeper", invoked as `@shopkeeper` in the ticket composer). The keys that shape agent behavior:
 - `aiContext` — optional store details (policies, products) prepended to system prompt; business name comes from `org.name`
 - `brandVoice` — tone brief appended to system prompt
-- `autoPlanOnOpen` — auto-generate plan when ticket opens (default: true)
-- `autonomyTier` — preset autonomy level (`watch`/`guarded`/`trusted`); drives runtime defaults via `TIER_DEFAULTS`
+- `autoPlanOnOpen` — auto-generate plan when ticket opens (default: true; no UI sets it)
+- `autonomyTier` — preset autonomy level (`watch`/`guarded`/`trusted`, default `guarded`); drives runtime defaults via `TIER_DEFAULTS`
+- `autoExecuteMode` — `off` (approval only) or `live` (auto-fire what `decideAutonomy` allows for the tier); default `off`
 - `defaultInstruction` — default agent instruction
-- `requireApprovalForActions` — show plan card before executing (default: true)
 - `toolsEnabled` — toggle tool categories: `action`, `communication`, `internal`, `read`
 - `maxRefundAmount` — dollar cap on refunds (null = unlimited)
 - `blockCancellations` — prevent cancel_order calls
-- `blockCustomLineItems` — require variant_id on all create_shopify_order line items
-- `maxIterations` — max tool-use loop iterations per run (default: 10)
+- `blockCustomLineItems` — require variant_id on all create_shopify_order line items (no UI sets it)
+- `maxIterations` — max tool-use loop iterations per run (default: 10; no UI sets it)
 
 ### Agent Safety / Guardrails
 - 20,000 token budget per run; stops and reports if exceeded

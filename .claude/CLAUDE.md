@@ -39,7 +39,7 @@ External webhook → `apps/gateway/src/routes/webhooks.ts` (HMAC verify, enqueue
 - `Thread` — `channelType`, `status` (open/pending/closed), `aiSummary`, `tag`, `shopifyCustomerId`, `cachedPlan`, soft-delete + archive
 - `Message` — `senderType`: customer/agent/ai/note. Agent turn transcripts in threads are `note` rows prefixed `__shopkeeper_agent__`; the audit trail is `AgentAction`, not note-row parsing.
 - `AgentAction` — first-class audit record per agent tool call (tool, category, status, mode, approver); backs `/api/agent/actions` and the Review page
-- `AutonomyShadowDecision` — per-plan shadow record while `autoExecuteMode: "shadow"`: what the agent would have auto-executed vs. what the human decided
+- `AutonomyShadowDecision` — historical per-plan shadow records (what the agent would have auto-executed vs. what the human decided). `autoExecuteMode` no longer has a `shadow` value, so nothing writes them; GDPR redaction still deletes them.
 - `OperatorContext` — per (org, `memberKey`) operator pending-state only: `pendingPlans` (a newest-last JSONB array, at most one entry per thread), `pendingQuestion`, `pendingDigest` (the approval ledger's backing store). **DB-backed, not Redis.**
 - `OperatorEvent` — durable inbound operator-message record (P4-03, complete): persisted+enqueued before the webhook ack, claimed once by the operator-event worker, unique `(channel, providerMessageId)` for dedupe. Always on for Telegram and iMessage. A 15-min `operator-event-sweep` maintenance job reconciles stale `claimed` rows to `unknown` and re-sends committed-but-undelivered replies.
 - `VoiceEdit` — merchant edits to AI drafts, consumed by gateway voice synthesis to refine the brand-voice brief
@@ -57,14 +57,14 @@ Not a copy of the core — these inject dashboard infrastructure into it.
 - `__evals__/` — agent eval harness, wired to `test:evals` / `test:evals:baseline`
 
 Modes:
-- **Support** — ticket threads. Auto-plan on open if last message is from the customer; plan cached in `Thread.cachedPlan`. `ActionPlanCard` → approve → `POST /api/agent`. Manual invoke via `@{agentName}` in the ticket composer.
+- **Support** — ticket threads. Auto-plan on open if last message is from the customer; plan cached in `Thread.cachedPlan`. `ActionPlanCard` → approve → `POST /api/agent`. Manual invoke via `@shopkeeper` (`AGENT_DISPLAY_NAME`, lowercased) in the ticket composer.
 - **Operator** — `/dashboard/agent` (Concierge: each session opens a new `dashboard_agent` thread and closes the previous), and Telegram/iMessage via `operator`: one durable operator thread per binding; pending approvals are agent state + control tools (approve/reject/revise/answer the pending plan), with a keyword fast path for literal yes/no/help.
 - **Shop management** — operator turns only, via gateway `moduleTools` (`operator-shop-tools.ts`): flash sales over the whole catalog or named variants, ending them, and enumerated repricing. Every write declares its Shopify scope. A support thread cannot reach these. **Nothing bounds the size of the change** — no variant cap, no discount-depth ceiling, no revenue-at-risk limit (removed 2026-08-29). A merchant setting their own prices knows what it costs them, and the guard that second-guessed it also blocked the undo of a write it had permitted. Operator-only reachability plus the merchant's own approval is the containment; do not reintroduce a bound without one.
 - **Composer-ask** — read-only Q&A inside the support composer (`POST /api/agent/ask`). Calls `runAgent(..., { readOnly: true })`, which filters tools to `read` category and never mutates anything.
 
 Read tool list and exact behavior from `packages/agent/src/tools/registry/` — do not infer.
 
-`Organization.settings` keys: `agentName`, `aiContext`, `brandVoice`, `autoPlanOnOpen`, `defaultInstruction`, `requireApprovalForActions`, `autonomyTier` (watch/guarded/trusted; stored `broad`/`full` map to trusted), `autoExecuteMode` (off/shadow/live; legacy boolean `autoExecuteEnabled` is migrated), `toolsEnabled` (action/communication/internal/read), `maxRefundAmount`, `blockCancellations`, `blockCustomLineItems`, and `maxIterations` (default 10). Note that `autoPlanOnOpen`, `maxIterations` and `blockCustomLineItems` are read but have no writer in either app.
+`Organization.settings` keys are `SETTINGS_KEYS` in `packages/agent/src/settings-parser.ts`; defaults and `TIER_DEFAULTS` are in `packages/agent/src/settings.ts`. Read them there, not from a list here. API patches (`parseOrgSettingsPatch`) reject any other key. Stored settings parse leniently (`parseStoredOrgSettingsPatch`): unknown keys and `OBSOLETE_STORED_SETTINGS_KEYS` are dropped, stored `broad`/`full` tiers read as `trusted`, a stored `autoExecuteMode: "shadow"` is dropped, and the legacy boolean `autoExecuteEnabled` becomes `autoExecuteMode` (`off`/`live`). `agentName` is obsolete: the agent's name is the constant `AGENT_DISPLAY_NAME`. `autonomyTier` is `watch`/`guarded`/`trusted` (default `guarded`). `autoPlanOnOpen`, `maxIterations` and `blockCustomLineItems` are accepted by the settings API, but no UI sets them.
 
 ### Agent-change invariants
 Standing rules for any change to agent behavior (promoted from the 2026-07 behavior plan):
@@ -142,10 +142,9 @@ mention them. Moving away from one needs a reason in the diff.
   each is now defined once. Grep before writing a text/format helper.
 - **Growth by special case means a capability is missing.** A prompt bullet, a repair pass, a
   regex carve-out, or a per-phrase fix added in response to one observed bad output is a
-  signal to find the missing structure, not a fix worth keeping. `SUPPORT_INSTRUCTIONS` was
-  27 bullets when this was written and is over fifty now, which is the law being broken
-  rather than followed; most describe invariants a schema or the executor could enforce
-  structurally.
+  signal to find the missing structure, not a fix worth keeping. `SUPPORT_INSTRUCTIONS` is the
+  standing example, and its size is an open item in `docs/agent-follow-ups.md`: most of its
+  bullets describe invariants a schema or the executor could enforce structurally.
 
 ## Coding
 - Don't add features, comments, error handling, or abstractions beyond what's asked. This
@@ -153,11 +152,13 @@ mention them. Moving away from one needs a reason in the diff.
   fifth copy of a helper, a seventh repair pass, a new branch on prose — build what was
   asked, then name the problem in a sentence. Staying silent is how the digest briefing
   passed a thousand lines one reasonable minimal diff at a time.
-- **Local verification is free; model calls are not.** Typecheck, lint, and unit/integration
-  runs cost nothing — run them without asking and before every push. Only live-model runs
-  (`test:evals*`, anything setting `EVAL_RUN=1`) need justifying. Eval-cost discipline is
-  never a reason to skip `npm run typecheck`.
-- **Run the whole suite, not the files you touched, before closing anything.** Milestones 4 and 6 both closed on targeted green runs; a full `npm run test:integration` would have caught a stale job count and an acceptance test that only passes on an empty database. Targeted runs are for the edit loop, never for the close.
+- **Keep verification proportional.** Typecheck changed code, use existing targeted
+  checks when they exercise the changed contract, and build when compilation or deployment
+  is affected. Documentation edits need documentation checks. Run the existing aggregate
+  `npm run verify:pr` for the release candidate / through CI; repeat broad local runs only
+  when subsequent changes or a failure justify them. Automated runs consume development
+  time even when they use no paid model. Paid eval campaigns (`test:evals*`, `EVAL_RUN=1`)
+  happen only when requested; normal authorized manual app exercises are the default.
 - **A red static stage hides everything behind it.** `Static Verification` gates Build, Integration/Coverage and E2E in `ci.yml`, so a lint, typecheck or knip failure skips all three and can let broken tests reach `master` unseen. Knip fails only on unused files and dependencies; unused export/type counts are a printed warning (since 2026-09-28).
 - **A migration that ships behind its code is an outage, not a lag.** Milestone 5 shipped `loadActiveMerchantPreferences` to production while its table did not exist; the `P2021` threw out of an uncaught `Promise.all` in `buildContext` and every inbound message went unplanned for a day. Read production `migrate status` before closing anything that adds a table, and give every fan-out load in `buildContext` its own catch.
 - **Cite names, not line numbers or counts.** A doc is read to decide what to build, so a
@@ -171,7 +172,7 @@ mention them. Moving away from one needs a reason in the diff.
 - Read the file before editing it.
 - Edit existing files. Don't create new ones unless necessary.
 - Tailwind classes, not inline `style`.
-- **Write a test only for what a live run can't safely show:** money, one organization's data reaching another, a refusal before a write (stale approval, revoked grant, changed balance), an uncertain provider outcome that must never be replayed, or a bug that actually happened and the fix doesn't make unrepresentable. Never pin wording or prompt text, restate config or registries, or assert calls to mocks. Real DB in tests; never mock the DB. A red gate (coverage, knip, a registry enumeration test) is never a reason to write a test: bring the user the choice. Details in `TESTING.md`, *When a test is worth writing*.
+- **New tests are an exception; broad test cleanup is deferred.** Add an automated test only for a concrete defect or change-specific failure that manual verification cannot safely or reliably reproduce, when it shortens diagnosis or prevents a meaningful recurrence. Check existing coverage first. Do not audit, trim, restore or rewrite the suite before shipping. Fix or remove a specific misleading check only when it obstructs the current change, then resume implementation. A mock's presence alone does not make an assertion useless; a scripted model does not demonstrate conversational quality. Never add tests to fill a registry, coverage target or checklist. Details in `TESTING.md`, *When a test is worth writing*.
 - `test-setup.ts` defaults `E2E_TEST_RUN=true` so rate-limited route tests pass on a bare `vitest run` — `rate-limit.ts` fails **closed** unless `NODE_ENV === 'development'`, and with no Upstash env under vitest every request would 429. Pass `E2E_TEST_RUN=false` to opt back into enforcement. A wall of 429s means the flag got unset, not that your change broke something.
 - Target user is a solo merchant / small team — optimize for simplicity, not power-user features.
 - Skip end-of-task summaries. The diff speaks.
