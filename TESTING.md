@@ -2,33 +2,47 @@
 
 ## When a test is worth writing
 
-A change is done when its behavior has been seen working in the real app (the
-dev store, the phone, a real channel), or when it is reported as not verified.
-A test is never the done criterion, so no test goes in an item's *done when*.
+This app is in development. The default is to implement a user flow, verify it
+manually in the dashboard, dev store or phone, and continue toward shipping.
+A flow is done when it has been seen working. “Not verified” leaves it open;
+neither a passing suite nor a scripted-model walkthrough closes it.
 
-Write a test only for what a live run cannot safely or reliably show:
+New automated tests are an exception. Add one only when:
 
-- money: refund and spend caps, amounts, currencies;
-- one organization's data, credentials or actions reaching another;
-- a refusal before a write: a stale, edited, replayed or concurrent approval, a
-  revoked grant, a balance that changed while waiting;
-- an uncertain provider outcome, which must be reconciled and never replayed;
-- a bug that actually happened, when the fix does not already make it
-  unrepresentable (one owner for the decision, a required parameter, a type).
+- it addresses a concrete defect or failure specific to the current change;
+- manual verification cannot safely or reliably reproduce that failure;
+- it shortens diagnosis or prevents a meaningful recurrence, and no existing
+  check already covers it.
 
-Do not write tests that pin wording (UI copy, notifications, briefings, prompt
-text), restate configuration, a registry or constants, assert calls to mocks,
-mock the database, or test the test, eval, gate or one-off-script tooling. A
-test with a fake model or fake provider shows only that the runtime refuses or
-recovers whatever the model does; it never shows that a feature works.
+Money, tenant isolation, approval races and unknown outcomes are examples where
+a focused check may be useful. They are not instructions to fill a coverage
+matrix. Reuse existing checks first. Scripted models and fake providers can
+exercise a runtime refusal or recovery; they do not establish conversational
+quality, real Shopify behavior or actual delivery.
 
-A red gate is not a reason to write a test. When coverage, Knip or a test that
-enumerates the registry blocks a change, bring the choice to the user: a test
-that meets this rule, or a change to the gate.
+Judge a test by the behavior it can catch. Mocked dependencies do not make every
+assertion useless; assertions that only echo mock calls, pin wording, or restate
+configuration are poor feature evidence. For database ownership and concurrency,
+exercise the real test database. Do not create testing infrastructure or a
+fixture campaign to certify an otherwise manually verifiable flow.
+
+Further broad test cleanup is deferred until after shipping. Keep existing tests
+unless a specific check blocks the current change, falsely rejects working
+behavior, or imposes a demonstrated delay. Make the smallest correction and
+resume implementation. Do not restore deleted tests as a prerequisite.
+
+A red check is investigated, not silently bypassed or called passed. Fix a real
+product defect or the specific misleading check; do not add tests to satisfy
+coverage percentages, registry enumeration or a checklist.
 
 ## Running the suites
 
-Use the root PR verification path before sending changes that touch app behavior:
+Use proportional local checks during implementation. Typecheck changed code,
+run existing targeted checks that exercise the changed contract, and build when
+compilation or deployment is affected. Documentation edits need documentation
+checks. Verify the actual user flow manually.
+
+The root PR verification path remains the aggregate release/CI contract:
 
 ```sh
 npm run verify:pr
@@ -41,10 +55,12 @@ test fixture once failed the static gate, which skips Build, E2E, and Integratio
 CI burned a full cycle and reported nothing. Turbo caches it to a few seconds. Bypass a
 known-good push with `git push --no-verify`.
 
-That is the canonical local and CI contract. It runs structure checks, repo and
-app lint, root Knip, an explicit workspace typecheck, fast unit tests, node
-script tests, auth-bypass smoke E2E, comprehensive coverage, and the production
-build. The coverage run owns the integration gate, so
+Run this aggregate check for the release candidate or through existing PR CI,
+not after every small edit or manual app exercise. Repeat broad local runs only
+when subsequent changes or a failure justify them. It runs structure checks,
+repo and app lint, root Knip, workspace typechecks, unit and node tests,
+auth-bypass smoke E2E, coverage reporting, and the production build. The coverage
+run owns the integration gate, so
 `verify:pr` does not run integration once normally and then repeat it under
 coverage. CI calls the same command with `--stage=static`, `unit`, `coverage`,
 `build`, or `e2e` so independent work remains parallel without duplicating the

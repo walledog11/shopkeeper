@@ -153,11 +153,13 @@ mention them. Moving away from one needs a reason in the diff.
   fifth copy of a helper, a seventh repair pass, a new branch on prose — build what was
   asked, then name the problem in a sentence. Staying silent is how the digest briefing
   passed a thousand lines one reasonable minimal diff at a time.
-- **Local verification is free; model calls are not.** Typecheck, lint, and unit/integration
-  runs cost nothing — run them without asking and before every push. Only live-model runs
-  (`test:evals*`, anything setting `EVAL_RUN=1`) need justifying. Eval-cost discipline is
-  never a reason to skip `npm run typecheck`.
-- **Run the whole suite, not the files you touched, before closing anything.** Milestones 4 and 6 both closed on targeted green runs; a full `npm run test:integration` would have caught a stale job count and an acceptance test that only passes on an empty database. Targeted runs are for the edit loop, never for the close.
+- **Keep verification proportional.** Typecheck changed code, use existing targeted
+  checks when they exercise the changed contract, and build when compilation or deployment
+  is affected. Documentation edits need documentation checks. Run the existing aggregate
+  `npm run verify:pr` for the release candidate / through CI; repeat broad local runs only
+  when subsequent changes or a failure justify them. Automated runs consume development
+  time even when they use no paid model. Paid eval campaigns (`test:evals*`, `EVAL_RUN=1`)
+  happen only when requested; normal authorized manual app exercises are the default.
 - **A red static stage hides everything behind it.** `Static Verification` gates Build, Integration/Coverage and E2E in `ci.yml`, so a lint, typecheck or knip failure skips all three and can let broken tests reach `master` unseen. Knip fails only on unused files and dependencies; unused export/type counts are a printed warning (since 2026-09-28).
 - **A migration that ships behind its code is an outage, not a lag.** Milestone 5 shipped `loadActiveMerchantPreferences` to production while its table did not exist; the `P2021` threw out of an uncaught `Promise.all` in `buildContext` and every inbound message went unplanned for a day. Read production `migrate status` before closing anything that adds a table, and give every fan-out load in `buildContext` its own catch.
 - **Cite names, not line numbers or counts.** A doc is read to decide what to build, so a
@@ -171,7 +173,7 @@ mention them. Moving away from one needs a reason in the diff.
 - Read the file before editing it.
 - Edit existing files. Don't create new ones unless necessary.
 - Tailwind classes, not inline `style`.
-- **Write a test only for what a live run can't safely show:** money, one organization's data reaching another, a refusal before a write (stale approval, revoked grant, changed balance), an uncertain provider outcome that must never be replayed, or a bug that actually happened and the fix doesn't make unrepresentable. Never pin wording or prompt text, restate config or registries, or assert calls to mocks. Real DB in tests; never mock the DB. A red gate (coverage, knip, a registry enumeration test) is never a reason to write a test: bring the user the choice. Details in `TESTING.md`, *When a test is worth writing*.
+- **New tests are an exception; broad test cleanup is deferred.** Add an automated test only for a concrete defect or change-specific failure that manual verification cannot safely or reliably reproduce, when it shortens diagnosis or prevents a meaningful recurrence. Check existing coverage first. Do not audit, trim, restore or rewrite the suite before shipping. Fix or remove a specific misleading check only when it obstructs the current change, then resume implementation. A mock's presence alone does not make an assertion useless; a scripted model does not demonstrate conversational quality. Never add tests to fill a registry, coverage target or checklist. Details in `TESTING.md`, *When a test is worth writing*.
 - `test-setup.ts` defaults `E2E_TEST_RUN=true` so rate-limited route tests pass on a bare `vitest run` — `rate-limit.ts` fails **closed** unless `NODE_ENV === 'development'`, and with no Upstash env under vitest every request would 429. Pass `E2E_TEST_RUN=false` to opt back into enforcement. A wall of 429s means the flag got unset, not that your change broke something.
 - Target user is a solo merchant / small team — optimize for simplicity, not power-user features.
 - Skip end-of-task summaries. The diff speaks.
