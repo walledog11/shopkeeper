@@ -89,6 +89,7 @@ test('gateway ThreadSink crosses the internal dashboard hop and commits send_rep
       organizationId?: string;
       source?: string;
       channel?: string;
+      provider?: string;
       text?: string;
     }) => (
       record.threadId === thread.id

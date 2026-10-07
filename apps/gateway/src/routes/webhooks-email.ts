@@ -1,4 +1,4 @@
-import type { Request, Response, Router } from 'express';
+import type { Request, RequestHandler, Response, Router } from 'express';
 import { createHash, randomUUID } from 'crypto';
 import { db, EmailProvider } from '@shopkeeper/db';
 import { getPostmarkWebhookConfig } from '../config/runtime-config.js';
@@ -38,6 +38,15 @@ function hasValidPostmarkAuth(req: Request): boolean {
   return safeEqual(user, expectedUser) && safeEqual(pass, expectedPass);
 }
 
+function requirePostmarkAuth(realm: string): RequestHandler {
+  return (req, res, next) => {
+    if (hasValidPostmarkAuth(req)) return next();
+    logger.warn('[Webhook] Postmark request rejected — invalid or missing basic auth');
+    res.set('WWW-Authenticate', `Basic realm="${realm}"`);
+    res.sendStatus(401);
+  };
+}
+
 function normalizeEmailAddress(value: string): string {
   return value.replace(/.*<(.+)>/, '$1').trim().toLowerCase();
 }
@@ -74,12 +83,7 @@ async function recordUnclaimedRecipient(recipient: string, reason: UnclaimedInbo
 }
 
 export function registerEmailWebhookRoutes(router: Router): void {
-  router.post('/email/inbound', emailInboundJsonParser(), emailInboundUrlencodedParser(), async (req: Request, res: Response) => {
-    if (!hasValidPostmarkAuth(req)) {
-      logger.warn('[Webhook] Inbound email rejected — invalid or missing basic auth');
-      res.set('WWW-Authenticate', 'Basic realm="postmark-inbound"');
-      return res.sendStatus(401);
-    }
+  router.post('/email/inbound', requirePostmarkAuth('postmark-inbound'), emailInboundJsonParser(), emailInboundUrlencodedParser(), async (req: Request, res: Response) => {
     try {
       const rawFrom: string | undefined = req.body.From || req.body.from;
       const originalRecipient: string | undefined =
@@ -177,13 +181,7 @@ export function registerEmailWebhookRoutes(router: Router): void {
   // the same basic auth. Anything this route cannot attribute is acknowledged
   // rather than retried: Postmark re-sends on non-2xx, and an unmatched bounce
   // will never start matching.
-  router.post('/email/bounce', emailInboundJsonParser(), async (req: Request, res: Response) => {
-    if (!hasValidPostmarkAuth(req)) {
-      logger.warn('[Webhook] Postmark bounce rejected — invalid or missing basic auth');
-      res.set('WWW-Authenticate', 'Basic realm="postmark-bounce"');
-      return res.sendStatus(401);
-    }
-
+  router.post('/email/bounce', requirePostmarkAuth('postmark-bounce'), emailInboundJsonParser(), async (req: Request, res: Response) => {
     try {
       const body = req.body as Record<string, unknown>;
       const recordType = typeof body.RecordType === 'string' ? body.RecordType : null;

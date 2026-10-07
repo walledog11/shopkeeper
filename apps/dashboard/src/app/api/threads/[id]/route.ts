@@ -1,18 +1,34 @@
 import { NextResponse } from 'next/server';
 import { db, Prisma, ThreadFilterStatus, ThreadFilterFeedback } from '@shopkeeper/db';
-import { ConflictError, NotFoundError } from '@/lib/api/errors';
+import { BadRequestError, ConflictError, NotFoundError } from '@/lib/api/errors';
 import { readRequiredJsonObject } from '@/lib/api/body';
 import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
 import { merchantInboxInternalChannelFilter } from '@shopkeeper/agent/merchant-inbox-surfaces';
 import { stopWaitingTasksOnClosedThreads } from '@shopkeeper/agent/task-ledger';
-import { THREAD_STATUS } from '@shopkeeper/agent/thread-constants';
+import { THREAD_STATUS, isAgentNoteContent, stripAgentNotePrefix } from '@shopkeeper/agent/thread-constants';
 import { parseThreadPatchBody } from '@/app/api/threads/_lib/validation';
 import type { AgentTurnAction } from '@shopkeeper/agent/turns';
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export const GET = withOrgRoute<{ id: string }>(
   { context: 'Threads GET by id', errorMessage: 'Failed to fetch thread' },
-  async ({ org, params }) => {
+  async ({ org, params, request }) => {
     const { id } = params;
+    const before = new URL(request.url).searchParams.get('before');
+    let cursor: { sentAt: Date; id: string } | undefined;
+    if (before) {
+      try {
+        const parsed = JSON.parse(Buffer.from(before, 'base64url').toString('utf8'));
+        if (typeof parsed.sentAt !== 'string' || typeof parsed.id !== 'string'
+          || !UUID.test(parsed.id)) throw new Error();
+        const sentAt = new Date(parsed.sentAt);
+        if (!Number.isFinite(sentAt.getTime())) throw new Error();
+        cursor = { sentAt, id: parsed.id };
+      } catch {
+        throw new BadRequestError('Invalid message cursor');
+      }
+    }
 
     const thread = await db.thread.findFirst({
       where: {
@@ -25,23 +41,44 @@ export const GET = withOrgRoute<{ id: string }>(
       include: {
         customer: true,
         messages: {
-          where: { deletedAt: null },
-          orderBy: { sentAt: 'asc' },
+          where: {
+            organizationId: org.id,
+            deletedAt: null,
+            ...(cursor ? { OR: [
+              { sentAt: { lt: cursor.sentAt } },
+              { sentAt: cursor.sentAt, id: { lt: cursor.id } },
+            ] } : {}),
+          },
+          orderBy: [{ sentAt: 'desc' }, { id: 'desc' }],
+          take: 101,
         },
       },
     });
 
     if (!thread) throw new NotFoundError('Thread not found');
+    const hasMore = thread.messages.length > 100;
+    thread.messages = thread.messages.slice(0, 100).reverse();
+    const oldest = thread.messages[0];
+    const nextMessageCursor = hasMore && oldest
+      ? Buffer.from(JSON.stringify({ sentAt: oldest.sentAt.toISOString(), id: oldest.id })).toString('base64url')
+      : null;
+    const turnIds = thread.messages.flatMap(message => {
+      if (!message.contentText || !isAgentNoteContent(message.contentText)) return [];
+      try {
+        const note = JSON.parse(stripAgentNotePrefix(message.contentText));
+        return typeof note.id === 'string' && UUID.test(note.id) ? [note.id] : [];
+      } catch { return []; }
+    });
 
     // Hydrate per-action records for inline display in the agent-turn notes.
     // New turns omit the actions array from note JSON; AgentAction is the
     // canonical record. Legacy turns keep their embedded actions and skip
     // the map entry (their note has no `id` to key on).
-    const actionRows = await db.agentAction.findMany({
-      where: { organizationId: org.id, threadId: id },
+    const actionRows = turnIds.length > 0 ? await db.agentAction.findMany({
+      where: { organizationId: org.id, threadId: id, turnId: { in: turnIds } },
       select: { turnId: true, tool: true, output: true, errorDetail: true, status: true },
       orderBy: { executedAt: 'asc' },
-    });
+    }) : [];
     const agentActionsByTurnId: Record<string, AgentTurnAction[]> = {};
     for (const row of actionRows) {
       const action: AgentTurnAction = {
@@ -52,7 +89,7 @@ export const GET = withOrgRoute<{ id: string }>(
       (agentActionsByTurnId[row.turnId] ??= []).push(action);
     }
 
-    return NextResponse.json({ thread, agentActionsByTurnId });
+    return NextResponse.json({ thread, agentActionsByTurnId, nextMessageCursor });
   },
 );
 

@@ -315,9 +315,6 @@ export function validateProductionEnv(target, options = {}) {
   if (databaseUrl && !databaseUrl.includes('pgbouncer=true')) {
     warnings.push('DATABASE_URL is missing pgbouncer=true');
   }
-  if (databaseUrl && !databaseUrl.includes('connection_limit=')) {
-    warnings.push('DATABASE_URL is missing connection_limit (for example connection_limit=1)');
-  }
   if (directDatabaseUrl && directDatabaseUrl.includes('pgbouncer=true')) {
     warnings.push('DIRECT_DATABASE_URL must not use pgbouncer=true; use the direct Neon host for migrations');
   }

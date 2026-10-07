@@ -52,6 +52,10 @@ export function useInboxPageView({
     activeTicket,
     conversationTicket,
     isConversationLoading,
+    hasOlderMessages,
+    isLoadingOlderMessages,
+    olderMessagesError,
+    loadOlderMessages,
     mutateActiveThread,
   } = useActiveThreadSelection({ queryThreadId, knownThreads })
 
@@ -129,9 +133,10 @@ export function useInboxPageView({
     revalidateThreadCaches,
   })
 
+  const lastMessageId = activeTicket?.messages.at(-1)?.id
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [activeTicket?.messages?.length, activeTicketId])
+  }, [lastMessageId, activeTicketId])
 
   const handleSearchChange = useCallback((value: string) => {
     setSearchQuery(value)
@@ -174,6 +179,9 @@ export function useInboxPageView({
         includeClosed,
         isAgentRunning,
         isConversationLoading,
+        hasOlderMessages,
+        isLoadingOlderMessages,
+        olderMessagesError,
         isLoadingMore: stream.isLoadingMore,
         isSearchLoading,
         isSearchMode,
@@ -199,6 +207,7 @@ export function useInboxPageView({
         onCorrectReplyDismiss: () => setDismissCorrectHint(true),
         onLinkShopifyCustomer: handleLinkShopifyCustomer,
         onLoadMore: stream.loadMore,
+        onLoadOlderMessages: loadOlderMessages,
         onNotReal: handleMarkAsSpam,
         onOpen: (id: string) => { setActiveTicketId(id); setSendError(null) },
         onRecover: handleRecover,

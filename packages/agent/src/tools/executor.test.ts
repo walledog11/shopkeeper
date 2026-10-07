@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { executeToolWithStatus } from "./executor.js";
 import type { BaseAgentContext } from "../agent-context.js";
 import { defineTool, numberArg } from "./registry/index.js";
@@ -80,6 +80,8 @@ beforeEach(() => {
   mockReleaseDailyRefundSpendReservation.mockResolvedValue(undefined);
   mockMarkDailyRefundSpendReservationUnknown.mockResolvedValue(undefined);
 });
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe("executeToolWithStatus on a thread-less BaseAgentContext", () => {
   it("returns the no-Shopify error for a Shopify read without throwing", async () => {
@@ -478,6 +480,79 @@ describe("customer-record execution identity", () => {
     kbArticles: [],
     merchantPreferences: [],
   } as BaseAgentContext;
+
+  it.each([
+    ['get_order_by_name', { order_name: '#9001' }],
+    ['create_refund', { order_id: '9001', amount: '10.00' }],
+  ])('blocks %s for an order owned by another customer before reading details or spending', async (name, input) => {
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      order: { id: 9001, customer: { id: 9999 } },
+      orders: [{ id: 9001, customer: { id: 9999 } }],
+    }), { status: 200 }));
+    vi.stubGlobal('fetch', fetch);
+    const ctx = { ...linkedSupportCtx, shopify: {
+      ...linkedSupportCtx.shopify!, grantedScopes: ['read_orders', 'write_orders'],
+    } };
+    const result = await executeToolWithStatus(name, input, ctx);
+    expect(result.status).toBe('policy_block');
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const requested = new URL(String(fetch.mock.calls[0][0]));
+    expect(requested.searchParams.get('fields')).toBe('id,customer');
+    expect(mockReserveDailyRefundSpend).not.toHaveBeenCalled();
+  });
+
+  it('blocks store-wide customer searches in customer conversations without a provider call', async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    const result = await executeToolWithStatus('find_customer', { by: 'query', value: 'victim@example.com' }, {
+      ...linkedSupportCtx,
+      shopify: { ...linkedSupportCtx.shopify!, grantedScopes: ['read_customers'] },
+    });
+    expect(result.status).toBe('policy_block');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  describe("with no Shopify customer linked to the thread", () => {
+    const linked = linkedSupportCtx as BaseAgentContext & { thread: Record<string, unknown> };
+    const unlinkedCtx = {
+      ...linked,
+      thread: { ...linked.thread, channelType: "instagram", shopifyCustomerId: null },
+      shopify: { ...linked.shopify!, grantedScopes: ["read_orders", "write_orders"] },
+    } as BaseAgentContext;
+
+    it("still reads the order the sender names, so the merchant gets a plan to review", async () => {
+      const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ orders: [] }), { status: 200 }));
+      vi.stubGlobal("fetch", fetch);
+      const result = await executeToolWithStatus("get_order_by_name", { order_name: "#9001" }, unlinkedCtx);
+      expect(result.status).not.toBe("policy_block");
+      expect(fetch).toHaveBeenCalled();
+    });
+
+    it("refuses a write nobody approved before any provider call or spend", async () => {
+      const fetch = vi.fn();
+      vi.stubGlobal("fetch", fetch);
+      const result = await executeToolWithStatus("create_refund", { order_id: "9001", amount: "10.00" }, unlinkedCtx);
+      expect(result.status).toBe("policy_block");
+      expect(result.result).toContain("could not be verified");
+      expect(fetch).not.toHaveBeenCalled();
+      expect(mockReserveDailyRefundSpend).not.toHaveBeenCalled();
+    });
+
+    it("lets the write through once the merchant has approved that exact call", async () => {
+      const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ errors: "Not Found" }), { status: 404 }));
+      vi.stubGlobal("fetch", fetch);
+      const result = await executeToolWithStatus(
+        "create_refund",
+        { order_id: "9001", amount: "10.00" },
+        unlinkedCtx,
+        undefined,
+        undefined,
+        { merchantApproved: true },
+      );
+      expect(result.result).not.toContain("could not be verified");
+      expect(fetch).toHaveBeenCalled();
+    });
+  });
 
   it.each([
     ["update_shopify_customer_info", { customer_id: "9999", email: "other@example.com" }],

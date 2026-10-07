@@ -363,6 +363,8 @@ export async function executeAgentToolCall(
     approvedMessage?: ApprovedMessage;
     /** The calls are the model's own, not an approved plan's (see quoteModelFullRefund). */
     quoteModelRefunds?: boolean;
+    /** The calls are exactly the ones a merchant approved (mode human_approved). */
+    merchantApproved?: boolean;
     beginAction?: (
       call: AgentToolCall,
       operationId: string,
@@ -498,6 +500,7 @@ export async function executeAgentToolCall(
         toolContext,
         settings,
         moduleTools,
+        { merchantApproved: input.merchantApproved === true },
       );
       result = executed.result;
       status = executed.status;

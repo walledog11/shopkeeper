@@ -151,7 +151,12 @@ export async function runAgent(
   let actionIndex = 0;
   const executeToolCalls = (
     toolCalls: { id: string; name: string; input: unknown }[],
-    executionOptions?: { stopOnDefiniteFailure?: boolean; approvedMessage?: ApprovedMessage; quoteModelRefunds?: boolean },
+    executionOptions?: {
+      stopOnDefiniteFailure?: boolean;
+      approvedMessage?: ApprovedMessage;
+      quoteModelRefunds?: boolean;
+      merchantApproved?: boolean;
+    },
   ) =>
     executeAgentToolCalls(toolCalls, {
       ctx,
@@ -217,6 +222,7 @@ export async function runAgent(
         ? { approvedMessage: executionOptions.approvedMessage }
         : {}),
       ...(executionOptions?.quoteModelRefunds ? { quoteModelRefunds: true } : {}),
+      ...(executionOptions?.merchantApproved ? { merchantApproved: true } : {}),
     });
 
   try {
@@ -236,6 +242,9 @@ export async function runAgent(
       await executeToolCalls(executableToolCalls, {
         stopOnDefiniteFailure: true,
         ...(approvedMessage ? { approvedMessage } : {}),
+        // An auto-executed plan arrives here too; only a human's approval
+        // stands in for the customer identity the support guard asks for.
+        ...(effectiveMode === "human_approved" ? { merchantApproved: true } : {}),
       });
 
       if (escalationReason) {

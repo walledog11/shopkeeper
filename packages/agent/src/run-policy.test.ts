@@ -54,6 +54,16 @@ vi.mock("./spend.js", () => ({
   getDailySpendNano: vi.fn().mockResolvedValue(0),
 }));
 
+// Exercise compensation and delivery after customer ownership is established.
+// The executor's own tests cover refused ownership evidence.
+vi.mock('./shopify/client.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('./shopify/client.js')>();
+  return { ...actual, shopifyRestJson: (...args: Parameters<typeof actual.shopifyRestJson>) =>
+    args[2]?.query?.fields === 'id,customer'
+      ? Promise.resolve({ order: { id: 123, customer: { id: 1234 } } })
+      : actual.shopifyRestJson(...args) };
+});
+
 vi.mock("./agent-actions.js", () => ({
   beginAgentActionAttempt: mockBeginAgentActionAttempt,
   authorizeAgentActionDispatch: vi.fn().mockResolvedValue(undefined),
@@ -138,7 +148,7 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
       channelType: "ig_dm",
       tag: "Support",
       aiSummary: null,
-      shopifyCustomerId: null,
+      shopifyCustomerId: '1234',
     },
     escalate: mockEscalateToHuman,
     io: makeIo(),

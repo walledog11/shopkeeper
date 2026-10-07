@@ -1,4 +1,6 @@
 import type { AgentPlan, PlanSignal, PlanSignalSeverity, ProducedPlanSignalCode, RawToolCall } from "./types.js"
+import { isGuestOnlyTool } from "./guest-policy.js"
+import { TOOL_DEFINITION_REGISTRY } from "./tools/registry/index.js"
 
 // The one place a plan signal's English lives. Producers push a code, consumers
 // branch on that code and render this text without ever reading it, so
@@ -49,17 +51,21 @@ export const PLAN_SIGNAL_MESSAGES: Record<ProducedPlanSignalCode, string> = {
 }
 
 // Reads that make an unlinked Shopify customer consequential: the plan leaned on
-// customer or order data to write its reply.
-const CUSTOMER_OR_ORDER_READ_TOOLS = new Set([
-  "find_customer",
-  // Retired, and kept here on purpose: a plan cached before find_customer
-  // landed still names them, and this set only reads what a plan already did.
-  "search_shopify_customers",
-  "get_shopify_customer",
-  "get_shopify_orders",
-  "get_order_by_name",
-  "get_order_tracking",
-])
+// customer or order data to write its reply. These are the reads the support
+// guard lets an unlinked thread make (`checkSupportAuthorization`), derived from
+// the same registry fields so the two cannot drift. Retired definitions stay in
+// the registry on purpose: a plan cached before find_customer landed still names
+// the older customer reads, and this set only reads what a plan already did.
+const CUSTOMER_OR_ORDER_READ_TOOLS: ReadonlySet<string> = new Set(
+  Object.values(TOOL_DEFINITION_REGISTRY).flatMap((definition) => (
+    (definition.group === "customer" || definition.group === "order")
+      && definition.category === "read"
+      && definition.capabilities.includes("shopify")
+      && !isGuestOnlyTool(definition.name)
+      ? [definition.name]
+      : []
+  )),
+)
 
 function severityFor(code: ProducedPlanSignalCode, rawToolCalls: RawToolCall[]): PlanSignalSeverity {
   switch (code) {

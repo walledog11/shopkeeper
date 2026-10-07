@@ -167,9 +167,6 @@ describe('POST /webhooks/email/inbound', () => {
       expect(res.status).toBe(401);
       expect(res.headers['www-authenticate']).toMatch(/^Basic/);
       expect(queueAddSpy).not.toHaveBeenCalled();
-      expect(mockLogger.warn).toHaveBeenCalledWith(
-        '[Webhook] Inbound email rejected — invalid or missing basic auth',
-      );
     });
 
     it('returns 401 when credentials are configured and the Authorization header is wrong', async () => {

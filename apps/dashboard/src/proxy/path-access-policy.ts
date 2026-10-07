@@ -32,6 +32,7 @@ export const publicRoutePatterns = [
   // session. Without this the proxy 401s it before withInternalRoute can check
   // the secret, so every integration disconnect fails its provider cleanup.
   "/api/integrations/internal(.*)",
+  "/api/org/internal/delete",
   // First shopper-facing public route on this list — everything else here is a
   // webhook or an OAuth callback. Authentication is Shopify's app-proxy
   // signature plus a session bearer token, enforced in the routes themselves.

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import { ChannelType } from '@shopkeeper/db';
 import { createTestIntegration } from '@shopkeeper/db/test-helpers';
@@ -31,9 +31,21 @@ describe('request body budgets', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     delete process.env.GATEWAY_ATTACHMENT_MAX_COUNT;
     delete process.env.GATEWAY_ATTACHMENT_MAX_BYTES;
   });
+
+  it.each(['/webhooks/email/inbound', '/webhooks/email/bounce'])(
+    'authenticates %s before parsing a malformed body', async route => {
+      vi.stubEnv('POSTMARK_INBOUND_USERNAME', 'postmark-test');
+      vi.stubEnv('POSTMARK_INBOUND_PASSWORD', 'postmark-password');
+      const res = await request(app).post(route)
+        .set('Content-Type', 'application/json').send('{malformed');
+      expect(res.status).toBe(401);
+      expect(queueAddSpy).not.toHaveBeenCalled();
+    },
+  );
 
   it.each(SIGNED_WEBHOOK_ROUTES)('rejects an oversized body on %s', async (route) => {
     const res = await request(app)

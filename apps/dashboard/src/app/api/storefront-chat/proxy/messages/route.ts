@@ -24,9 +24,10 @@ export async function GET(request: Request) {
       where: {
         threadId,
         organizationId: session.orgId,
+        deletedAt: null,
         senderType: { in: ["customer", "agent", "ai"] },
       },
-      orderBy: { sentAt: "asc" },
+      orderBy: [{ sentAt: 'desc' }, { id: 'desc' }],
       take: 100,
       select: { id: true, contentText: true, senderType: true, sentAt: true },
     }),
@@ -43,7 +44,7 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     escalated: thread?.escalatedAt != null,
-    messages: messages.map((m) => ({
+    messages: messages.reverse().map((m) => ({
       id: m.id,
       text: m.contentText ?? "",
       from: m.senderType === "customer" ? "customer" : "agent",

@@ -13,6 +13,7 @@ export interface ThreadSearchData {
 export interface ActiveThreadData {
   thread: Thread
   agentActionsByTurnId?: Record<string, AgentTurnAction[]>
+  nextMessageCursor?: string | null
 }
 
 /**
