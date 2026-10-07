@@ -3,9 +3,9 @@ import logger from '../../logger.js';
 import { buildProgressCopy, type ProgressContext } from './progress-copy.js';
 import type { TelegramReply } from './types.js';
 
-export const TYPING_REFRESH_MS = 4000;
+const TYPING_REFRESH_MS = 4000;
 export const PROGRESS_THRESHOLD_MS = 10000;
-export const RECEIPT_REACTION_EMOJI = '👀';
+const RECEIPT_REACTION_EMOJI = '👀';
 
 export interface OperatorPresenceOptions {
   chatId: string;

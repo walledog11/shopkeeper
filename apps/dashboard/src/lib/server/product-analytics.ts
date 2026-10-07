@@ -132,27 +132,6 @@ export async function captureSubscriptionStatusChanged(args: {
   });
 }
 
-export async function captureAgentPlanGenerated(args: {
-  cacheHit: boolean;
-  channel: MessageChannel;
-  generationMs: number;
-  organizationId: string;
-  planId: string;
-  stepCount: number;
-}): Promise<void> {
-  await captureDashboardProductEvent({
-    event: 'agent_plan_generated',
-    organizationId: args.organizationId,
-    source: 'dashboard',
-    channel: args.channel,
-    planSource: args.cacheHit ? 'cached' : 'generated',
-    stepCount: args.stepCount,
-    generationMs: Math.max(0, Math.floor(args.generationMs)),
-    cacheHit: args.cacheHit,
-    insertId: productEventInsertId.agentPlanGenerated(args.planId),
-  });
-}
-
 export function captureAgentActionsCompleted(actions: PersistedAgentAction[]): void {
   for (const action of actions) {
     if (

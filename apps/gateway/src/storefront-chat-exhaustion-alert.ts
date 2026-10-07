@@ -22,7 +22,7 @@ export function storefrontChatExhaustionIdempotencyKey(
   return `storefront-chat-exhausted:${organizationId}:${integrationId}:${day}`;
 }
 
-export function formatStorefrontChatExhaustionMessage(limit: number, shop: string | null): string {
+function formatStorefrontChatExhaustionMessage(limit: number, shop: string | null): string {
   // A report, not a card. There is no decision here for the merchant to approve
   // — the widget has already stopped answering — so it ends in a fact and an
   // option rather than a question.

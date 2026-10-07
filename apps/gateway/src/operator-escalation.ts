@@ -7,7 +7,7 @@ import type { OrgSettings } from '@shopkeeper/agent/types';
 import { composeOperatorHandoff } from './operator-handoff.js';
 import { channelNoun } from './message-handlers/support-plan/planning-notifications/headers.js';
 
-export function formatEscalationMessage(
+function formatEscalationMessage(
   customerName: string | null,
   channelType: DbChannelType,
   summary: string | null,

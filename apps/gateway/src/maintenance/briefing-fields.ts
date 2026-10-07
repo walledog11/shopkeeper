@@ -80,7 +80,7 @@ export function formatDeadlineLead(facts: RequestFacts, now: Date): string | nul
  * offered. Null when the classifier could not name an ask, which leaves the
  * caller on the prose path rather than printing an empty segment.
  */
-export function formatAskPhrase(facts: RequestFacts): string | null {
+function formatAskPhrase(facts: RequestFacts): string | null {
   const ask = ASK_COPY[facts.ask]?.label;
   if (!ask) return null;
   const alternative = facts.alternative ? ASK_COPY[facts.alternative]?.label : '';
