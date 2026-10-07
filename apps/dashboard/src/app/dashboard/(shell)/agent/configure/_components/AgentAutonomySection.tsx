@@ -1,10 +1,9 @@
 "use client"
 
 import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
-import { effectiveRefundCap, visibleAutonomyTiers } from "@/lib/agent/autonomy-tiers"
+import { AUTONOMY_TIERS, visibleAutonomyTiers } from "@/lib/agent/autonomy-tiers"
 import { SolidSettingsTile as SettingsTile } from "@/app/dashboard/(shell)/settings/_components/SettingsTile"
 import { cn } from "@/lib/ui/cn"
-import { tierDefaultForPath } from "./agent-tab-helpers"
 import type { AgentTabController } from "./useAgentTabState"
 
 export function AgentAutonomySection({ controller }: { controller: AgentTabController }) {
@@ -22,7 +21,7 @@ export function AgentAutonomySection({ controller }: { controller: AgentTabContr
     <SettingsTile
       id="autonomy"
       label="Trust level"
-      description={`How much ${AGENT_DISPLAY_NAME} can do before asking you. Most stores stay on Ask first.`}
+      description={`How much ${AGENT_DISPLAY_NAME} can do before asking you.`}
     >
       <div className="space-y-3">
         <div
@@ -32,10 +31,6 @@ export function AgentAutonomySection({ controller }: { controller: AgentTabContr
         >
           {tierOptions.map((option) => {
             const selected = settingsState.autonomyTier === option.id
-            const tierActs = tierDefaultForPath(option.id, "toolsEnabled.action") !== false
-            const cap = tierActs
-              ? effectiveRefundCap({ autonomyTier: option.id, maxRefundAmount: refundOverride })
-              : option.cap
             return (
               <button
                 key={option.id}
@@ -44,7 +39,7 @@ export function AgentAutonomySection({ controller }: { controller: AgentTabContr
                 aria-checked={selected}
                 onClick={() => selectTier(option.id)}
                 className={cn(
-                  "min-h-[104px] rounded-xl border p-3 text-left transition-all",
+                  "rounded-xl border p-3 text-left transition-all",
                   selected
                     ? "border-foreground/[0.40] bg-foreground/[0.07]"
                     : "border-foreground/[0.10] bg-foreground/[0.025] hover:border-foreground/[0.22] hover:bg-foreground/[0.05]",
@@ -60,14 +55,17 @@ export function AgentAutonomySection({ controller }: { controller: AgentTabContr
                   ) : null}
                 </div>
                 <p className="mt-2 text-xs leading-relaxed text-faint">{option.blurb}</p>
-                <p className="mt-2 font-mono text-xs uppercase tracking-[0.06em] text-faint">Refund cap ${cap}</p>
-                {cap !== option.cap ? (
-                  <p className="mt-0.5 text-[11px] leading-relaxed text-faint">Your limit · tier default ${option.cap}</p>
-                ) : null}
               </button>
             )
           })}
         </div>
+        {refundOverride != null ? (
+          <p className="text-xs text-faint">
+            Single refund limit: ${refundOverride} (tier default $
+            {AUTONOMY_TIERS.find((tier) => tier.id === settingsState.autonomyTier)?.cap ?? 50}{" "}
+            on {AUTONOMY_TIERS.find((tier) => tier.id === settingsState.autonomyTier)?.label ?? "this tier"}).
+          </p>
+        ) : null}
       </div>
     </SettingsTile>
   )

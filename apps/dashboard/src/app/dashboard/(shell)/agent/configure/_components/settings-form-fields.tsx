@@ -2,6 +2,7 @@ import type { ComponentProps } from "react"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/ui/cn"
+import { settingsFieldClassName } from "@/app/dashboard/(shell)/settings/_components/SettingsTile"
 import { settingsSelectClassName } from "./settings-form-styles"
 
 function FieldLabel({ label, hint }: { label: string; hint?: string }) {
@@ -12,9 +13,6 @@ function FieldLabel({ label, hint }: { label: string; hint?: string }) {
     </span>
   )
 }
-
-const SETTINGS_INPUT_CLASS =
-  "h-9 text-sm bg-foreground/[0.06] border-foreground/[0.12] text-strong placeholder:text-faint"
 
 type LabeledTextInputProps = Omit<ComponentProps<"input">, "className"> & {
   label: string
@@ -38,7 +36,7 @@ export function LabeledTextInput({
     <div className={cn("space-y-1.5", wrapperClassName)}>
       <FieldLabel label={label} hint={hint} />
       <div className={inputWidthClassName}>
-        <Input {...inputProps} className={cn(SETTINGS_INPUT_CLASS, inputClassName)} />
+        <Input {...inputProps} className={cn(settingsFieldClassName, inputClassName)} />
       </div>
       {description && <p className="text-xs text-faint">{description}</p>}
     </div>
@@ -78,7 +76,7 @@ export function NumberInput({
           type="number"
           value={value}
           onChange={event => onValueChange(event.target.value.replace(integerOnly ? /[^0-9]/g : /[^0-9.]/g, ""))}
-          className={cn(SETTINGS_INPUT_CLASS, inputClassName)}
+          className={cn(settingsFieldClassName, inputClassName)}
         />
       </div>
       {description && <p className="text-xs text-faint">{description}</p>}
@@ -117,7 +115,7 @@ export function MoneyInput({
           {...inputProps}
           value={value}
           onChange={event => onValueChange(event.target.value.replace(/[^0-9.]/g, ""))}
-          className={cn(SETTINGS_INPUT_CLASS, "pl-7", inputClassName)}
+          className={cn(settingsFieldClassName, "pl-7", inputClassName)}
         />
       </div>
       {description && <p className="text-xs text-faint">{description}</p>}

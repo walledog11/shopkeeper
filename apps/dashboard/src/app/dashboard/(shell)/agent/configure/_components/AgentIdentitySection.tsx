@@ -51,7 +51,7 @@ export function AgentIdentitySection({ controller }: { controller: AgentTabContr
 
       <SettingsTile
         label="Brand voice"
-        description="How the agent should sound. Max 200 characters."
+        description="How the agent should sound."
       >
         <div className="space-y-3">
           {proposal ? (

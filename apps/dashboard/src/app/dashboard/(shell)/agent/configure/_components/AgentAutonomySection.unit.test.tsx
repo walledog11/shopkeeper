@@ -17,34 +17,24 @@ function render(stored: Record<string, unknown>, explicit: AutonomyOverridePath[
 }
 
 describe("AgentAutonomySection refund cap", () => {
-  it("shows the tier default when no override is set", () => {
+  it("does not show refund cap copy when no override is set", () => {
     const html = render({ autonomyTier: "guarded" });
 
-    expect(html).toContain("Refund cap $0");
-    expect(html).toContain("Refund cap $50");
-    expect(html).toContain("Refund cap $100");
-    expect(html).not.toContain("tier default");
+    expect(html).not.toContain("Refund cap");
+    expect(html).not.toContain("Single refund limit");
   });
 
-  it("shows the override that is actually in force, with the tier default demoted", () => {
+  it("shows one override note for the active tier when a custom limit is set", () => {
     const html = render({ autonomyTier: "guarded", maxRefundAmount: 75 }, ["maxRefundAmount"]);
 
-    expect(html).toContain("Refund cap $75");
-    expect(html).toContain("tier default $50");
-    expect(html).not.toContain("Refund cap $50");
+    expect(html).toContain("Single refund limit: $75");
+    expect(html).toContain("tier default $50 on Ask first");
+    expect(html).not.toContain("Refund cap");
   });
 
-  it("carries the override onto the tiers that keep it when selected", () => {
-    const html = render({ autonomyTier: "guarded", maxRefundAmount: 75 }, ["maxRefundAmount"]);
+  it("uses the selected tier default in the override note", () => {
+    const html = render({ autonomyTier: "trusted", maxRefundAmount: 75 }, ["maxRefundAmount"]);
 
-    expect(html).toContain("tier default $100");
-    expect(html).not.toContain("Refund cap $100");
-  });
-
-  it("leaves Draft only at no refunds, since that tier cannot act at all", () => {
-    const html = render({ autonomyTier: "watch", maxRefundAmount: 75 }, ["maxRefundAmount"]);
-
-    expect(html).toContain("Refund cap $0");
-    expect(html).not.toContain("tier default $0");
+    expect(html).toContain("tier default $100 on Trusted");
   });
 });

@@ -40,7 +40,7 @@ export function MorningBriefingSection({
 
       <SettingsTile
         label="Low-stock alerts"
-        description="Adds a line when variant inventory is at or below your threshold. Leave off if you do not want inventory called out in the digest."
+        description="Call out variants at or below a stock threshold in your briefing."
         action={
           <Switch
             checked={lowStockEnabled}
@@ -57,9 +57,8 @@ export function MorningBriefingSection({
       >
         {lowStockEnabled ? (
           <NumberInput
-            label="Low-stock threshold"
+            label="Threshold"
             hint="units or fewer"
-            description="Variants at or below this count are listed in the digest."
             value={lowStockThresholdInput}
             onValueChange={setLowStockThresholdInput}
             min={0}

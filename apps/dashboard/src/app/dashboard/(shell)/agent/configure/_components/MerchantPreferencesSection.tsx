@@ -2,12 +2,8 @@
 
 import { Check, Loader2, Sparkles, Trash2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import {
-  SolidSettingsTile as SettingsTile,
-  settingsFieldClassName,
-  settingsTextareaClassName,
-} from "@/app/dashboard/(shell)/settings/_components/SettingsTile"
-import { CharacterCountTextarea } from "./settings-form-fields"
+import { SolidSettingsTile as SettingsTile, settingsTextareaClassName } from "@/app/dashboard/(shell)/settings/_components/SettingsTile"
+import { CharacterCountTextarea, SelectField } from "./settings-form-fields"
 import { GLASS_SETTINGS_ACTION } from "@/lib/ui/glass-card-styles"
 import type { MerchantPreferencesController } from "./useMerchantPreferencesState"
 
@@ -38,7 +34,7 @@ export function MerchantPreferencesSection({
   return (
     <SettingsTile
       label="Merchant preferences"
-      description="Saved judgment the agent can follow when drafting plans. Preferences are guidance only — they never override compensation caps, workspace policy, or approval rules."
+      description="Guidance for drafting plans. Does not override caps, policy, or approval rules."
     >
       <div className="space-y-4">
         {proposed.map((preference) => (
@@ -96,23 +92,19 @@ export function MerchantPreferencesSection({
         )}
 
         {canEdit ? (
-          <div className="space-y-3 rounded-xl border border-foreground/[0.08] p-4">
+          <div className="space-y-3 border-t border-foreground/[0.08] pt-4">
             <p className="text-sm font-semibold text-strong">Add a preference</p>
-            <label className="block space-y-1.5">
-              <span className="text-xs font-semibold uppercase tracking-wide text-faint">Category</span>
-              <select
-                aria-label="Preference category"
-                value={category}
-                onChange={(event) => setCategory(event.target.value as typeof category)}
-                className={settingsFieldClassName}
-              >
-                {categories.map((option) => (
-                  <option key={option} value={option}>
-                    {categoryLabels[option]}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <SelectField
+              label="Category"
+              ariaLabel="Preference category"
+              value={category}
+              onChange={setCategory}
+              options={categories.map((option) => ({
+                value: option,
+                label: categoryLabels[option],
+              }))}
+              widthClassName="w-full sm:w-56"
+            />
             <CharacterCountTextarea
               aria-label="Preference guidance"
               value={guidance}

@@ -2,11 +2,18 @@ import type { ReactNode } from "react"
 import { GLASS_SETTINGS_TILE, SOLID_SETTINGS_TILE } from "@/lib/ui/glass-card-styles"
 import { cn } from "@/lib/ui/cn"
 
-export const settingsFieldClassName =
-  "h-9 text-sm bg-foreground/[0.06] border-foreground/[0.12] text-strong placeholder:text-faint"
+const settingsControlFocus =
+  "shadow-none focus-visible:border-foreground/[0.28] focus-visible:ring-2 focus-visible:ring-foreground/[0.06] focus-visible:ring-offset-0"
 
-export const settingsTextareaClassName =
-  "text-sm bg-foreground/[0.06] border-foreground/[0.12] text-strong placeholder:text-faint"
+export const settingsFieldClassName = cn(
+  "h-9 w-full rounded-xl border border-foreground/[0.10] bg-transparent text-sm text-strong placeholder:text-faint",
+  settingsControlFocus,
+)
+
+export const settingsTextareaClassName = cn(
+  "min-h-[5rem] w-full resize-none rounded-xl border border-foreground/[0.10] bg-transparent px-3 py-2.5 text-sm text-strong placeholder:text-faint",
+  settingsControlFocus,
+)
 
 type SettingsTileProps = {
   action?: ReactNode
