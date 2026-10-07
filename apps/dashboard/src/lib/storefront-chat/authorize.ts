@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@shopkeeper/db";
+import { normalizeShopifyShopDomain } from '@/lib/shopify/oauth';
 import { verifyAppProxySignature, isProxyTimestampFresh } from "@/lib/shopify/app-proxy";
 import { verifySessionToken, type StorefrontTokenPayload } from "@/lib/storefront-chat/session-token";
 import {
@@ -40,13 +41,21 @@ export async function authorizeStorefrontRequest(
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
   const session = token ? verifySessionToken(token) : null;
   if (!session) return NextResponse.json({ error: "invalid session" }, { status: 401 });
+  if (normalizeShopifyShopDomain(url.searchParams.get('shop') ?? '') !== session.shop) {
+    return NextResponse.json({ error: "invalid session" }, { status: 401 });
+  }
 
   // The merchant flag is re-read here rather than trusted from the token: a
   // token minted while chat was enabled otherwise keeps working for its whole
   // hour of TTL, which is not what a kill switch means. The same read proves
   // the session is still live, so it costs no extra round trip.
   const record = await db.storefrontChatSession.findFirst({
-    where: { id: session.sessionId, organizationId: session.orgId, revokedAt: null },
+    where: {
+      id: session.sessionId, organizationId: session.orgId, integrationId: session.integrationId,
+      revokedAt: null, expiresAt: { gt: new Date() },
+      organization: { lifecycleStatus: 'active' },
+      integration: { lifecycleStatus: 'active' },
+    },
     select: { threadId: true, integration: { select: { metadata: true } } },
   });
   if (!record) return NextResponse.json({ error: "session not found" }, { status: 404 });

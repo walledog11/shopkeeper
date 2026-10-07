@@ -5,6 +5,7 @@ const BLOCKED_WRITE_STATUSES = new Set(['past_due', 'canceled']);
 
 export interface BillingWriteOrg {
   stripeStatus: string | null;
+  lifecycleStatus?: string;
 }
 
 class BillingWriteBlockedError extends ApiError {
@@ -19,6 +20,9 @@ function isBillingWriteBlocked(status: string | null | undefined): status is 'pa
 }
 
 export function assertBillingWriteAllowed(org: BillingWriteOrg): void {
+  if (org.lifecycleStatus && org.lifecycleStatus !== 'active') {
+    throw new ApiError('Workspace deletion is in progress.', 409);
+  }
   if (isBillingWriteBlocked(org.stripeStatus)) {
     throw new BillingWriteBlockedError(org.stripeStatus);
   }
@@ -27,7 +31,7 @@ export function assertBillingWriteAllowed(org: BillingWriteOrg): void {
 export async function assertBillingWriteAllowedForOrgId(orgId: string): Promise<void> {
   const org = await db.organization.findUnique({
     where: { id: orgId },
-    select: { stripeStatus: true },
+    select: { stripeStatus: true, lifecycleStatus: true },
   });
 
   if (!org) {

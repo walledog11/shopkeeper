@@ -10,6 +10,7 @@ import {
 } from '@shopkeeper/agent/attachment-ref';
 import { getOutboundAttachmentLimits } from '@shopkeeper/email/attachment-load';
 import { BadRequestError, NotFoundError } from '@/lib/api/errors';
+import { MAX_ATTACHMENT_UPLOAD_BYTES } from '@/lib/attachments/upload-limits';
 import { withOrgRoute } from '@/lib/api/route';
 import {
   attachmentBelongsToOrg,
@@ -108,7 +109,7 @@ export const POST = withOrgRoute(
       throw new BadRequestError(`${safeName} is a file type we can't send`);
     }
 
-    const { maxBytesEach } = getOutboundAttachmentLimits();
+    const maxBytesEach = Math.min(getOutboundAttachmentLimits().maxBytesEach, MAX_ATTACHMENT_UPLOAD_BYTES);
     if (file.size === 0) {
       throw new BadRequestError(`${safeName} is empty`);
     }

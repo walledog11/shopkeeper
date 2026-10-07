@@ -101,6 +101,35 @@ afterEach(async () => {
 });
 
 describe('storefront chat messages gating', () => {
+  it('keeps the newest message visible once a transcript exceeds the page limit', async () => {
+    const customer = await createTestCustomer(org.id, 'long-chat@example.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.shopify_chat);
+    await db.storefrontChatSession.update({ where: { id: session.id }, data: { threadId: thread.id } });
+    await db.message.createMany({ data: Array.from({ length: 101 }, (_, i) => ({
+      organizationId: org.id, threadId: thread.id, senderType: 'customer' as const,
+      contentText: `Message ${i}`, sentAt: new Date(Date.UTC(2024, 0, 1) + i * 1000),
+    })) });
+    const response = await GET(signedGetRequest());
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.messages).toHaveLength(100);
+    expect(body.messages[0].text).toBe('Message 1');
+    expect(body.messages.at(-1).text).toBe('Message 100');
+  });
+
+  it('rejects a session token signed for a different storefront', async () => {
+    token = mintSessionToken({ sessionId: session.id, orgId: org.id,
+      integrationId: integration.id, shop: 'another.myshopify.com' });
+    expect((await GET(signedGetRequest())).status).toBe(401);
+  });
+
+  it.each(['expired', 'deleting', 'disconnecting'])('refuses a live bearer token when its session is %s', async state => {
+    if (state === 'expired') await db.storefrontChatSession.update({ where: { id: session.id }, data: { expiresAt: new Date(0) } });
+    if (state === 'deleting') await db.organization.update({ where: { id: org.id }, data: { lifecycleStatus: 'deleting' } });
+    if (state === 'disconnecting') await db.integration.update({ where: { id: integration.id }, data: { lifecycleStatus: 'disconnecting' } });
+    expect((await GET(signedGetRequest())).status).toBe(404);
+  });
+
   it('serves an enabled session', async () => {
     const response = await GET(signedGetRequest());
 

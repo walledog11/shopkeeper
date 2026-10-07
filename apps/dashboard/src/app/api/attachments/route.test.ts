@@ -192,7 +192,7 @@ describe('POST /api/attachments', () => {
 
   it('refuses a file over the per-file ceiling', async () => {
     const oversized = new File(
-      [new Uint8Array(8 * 1024 * 1024)],
+      [new Uint8Array(4 * 1024 * 1024 + 1)],
       'huge.pdf',
       { type: 'application/pdf' },
     );

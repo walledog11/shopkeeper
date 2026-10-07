@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { productEventInsertId } from '@shopkeeper/analytics';
-import { db } from '@shopkeeper/db';
+import { beginWorkspaceDeletion, db, Prisma } from '@shopkeeper/db';
 import { normalizeStoredOrgSettings } from '@shopkeeper/agent/settings';
 import { clerkClient, auth } from '@clerk/nextjs/server';
 import { getOrCreateOrg } from '@/lib/server/org';
@@ -17,7 +17,6 @@ import {
   versionConflictResponse,
 } from './_lib/settings';
 import {
-  cancelWorkspaceSubscription,
   hasOtherWorkspace,
   LAST_WORKSPACE_MESSAGE,
   readWorkspaceDeleteConfirmation,
@@ -64,14 +63,22 @@ export const PATCH = withOrgRoute(
     }
 
     const updated = await db.organization.update({
-      where: { id: org.id },
+      where: { id: org.id, updatedAt: org.updatedAt },
       data: {
+        updatedAt: new Date(Math.max(Date.now(), org.updatedAt.getTime() + 1)),
         ...(name !== undefined && { name }),
         ...(settingsUpdate.changed && {
           settings: settingsUpdate.settings,
         }),
       },
+    }).catch((error: unknown) => {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2025') throw error;
+      return null;
     });
+    if (!updated) {
+      const current = await db.organization.findUniqueOrThrow({ where: { id: org.id } });
+      return versionConflictResponse(current);
+    }
 
     const onboardingWasCompleted = Boolean(
       normalizeStoredOrgSettings(org.settings).onboardingCompletedAt,
@@ -133,12 +140,12 @@ export const DELETE = withClerkOrgRoute(
       );
     }
 
-    await Promise.all([
-      cancelWorkspaceSubscription(org),
-      client.organizations.deleteOrganization(org.clerkOrgId),
-    ]);
-    await db.organization.deleteMany({ where: { id: org.id } });
-
-    return new NextResponse(null, { status: 204 });
+    const started = await beginWorkspaceDeletion(org.id);
+    if (!started) return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+    return NextResponse.json({
+      operationId: started.operation.id,
+      status: started.operation.status,
+      deduplicated: started.deduplicated,
+    }, { status: 202 });
   },
 );

@@ -33,6 +33,7 @@ import {
   fulfillOrder,
 } from "./shopify.js";
 import { checkParsedStaticToolPolicy, checkStorefrontToolAllowed, shopMoneyAmountOf } from "./static-policy.js";
+import { checkSupportAuthorization, type SupportAuthorizationOptions } from "./support-authorization.js";
 import { getSupportStats } from "./support-stats.js";
 import {
   ReceiptValidationError,
@@ -121,6 +122,7 @@ async function enforceToolPolicy(
   input: unknown,
   ctx: BaseAgentContext,
   settings?: OrgSettings,
+  authorization: SupportAuthorizationOptions = {},
 ): Promise<string | null> {
   // A merchant's "yes" approves the plan they were shown. When the control tool
   // could not find that plan, the turn has no standing authorization at all, and
@@ -165,7 +167,8 @@ async function enforceToolPolicy(
     }
   }
 
-  return null;
+  const supportBlock = await checkSupportAuthorization(definition, input, ctx, authorization);
+  return supportBlock ? formatPolicyError(supportBlock) : null;
 }
 
 const TOOL_EXECUTION_DEPS: ToolExecutionDeps = {
@@ -507,6 +510,7 @@ export async function executeToolWithStatus(
   // of the shared registry, so a module can inject its own terminal tool without
   // registering it in the support tool set.
   moduleTools?: Record<string, AgentToolDefinition>,
+  authorization: SupportAuthorizationOptions = {},
 ): Promise<ExecuteToolResult> {
   const storefrontBlock = storefrontToolBlock(name, ctx);
   if (storefrontBlock) return { result: storefrontBlock, status: "policy_block" };
@@ -519,7 +523,7 @@ export async function executeToolWithStatus(
     };
   }
 
-  const policyError = await enforceToolPolicy(prepared.definition, prepared.input, ctx, settings);
+  const policyError = await enforceToolPolicy(prepared.definition, prepared.input, ctx, settings, authorization);
   if (policyError) return { result: policyError, status: "policy_block" };
   const capabilityError = unmetToolCapability(prepared.definition, ctx);
   if (capabilityError) {

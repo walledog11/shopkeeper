@@ -81,6 +81,15 @@ export async function beginWorkspaceDeletion(
         stripeSubscriptionId: organization.stripeSubscriptionId,
       },
     });
+    // Running attempts observe cancellation before their next model call or
+    // action dispatch. Keep their claims until they settle or expire.
+    await tx.agentTask.updateMany({
+      where: {
+        organizationId, cancelledAt: null,
+        status: { in: ['queued', 'running', 'waiting_input', 'waiting_approval'] },
+      },
+      data: { cancelledAt: new Date() },
+    });
     return { deduplicated: false, operation };
   });
 }
@@ -267,7 +276,9 @@ export async function listRecoverableWorkspaceDeletions(
         { status: 'processing', claimedAt: { lt: staleBefore } },
       ],
     },
-    orderBy: { createdAt: 'asc' },
+    // Failed attempts move to the back so one provider outage cannot starve
+    // other workspaces when a sweep processes only a bounded batch.
+    orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     take: options.limit ?? 100,
   });
 }

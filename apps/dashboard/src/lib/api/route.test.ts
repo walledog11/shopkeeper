@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextResponse } from 'next/server';
 
-const { mockGetOrCreateOrg, mockRateLimit } = vi.hoisted(() => ({
+const { mockGetOrCreateOrg, mockRateLimit, mockAuth } = vi.hoisted(() => ({
   mockGetOrCreateOrg: vi.fn(),
   mockRateLimit: vi.fn(),
+  mockAuth: vi.fn(),
 }));
+
+vi.mock('@clerk/nextjs/server', () => ({ auth: mockAuth }));
 
 vi.mock('@/lib/server/org', () => ({
   getOrCreateOrg: mockGetOrCreateOrg,
@@ -33,6 +36,7 @@ import {
 
 const ORG = {
   id: 'org_1',
+  lifecycleStatus: 'active',
   stripeStatus: 'active' as string | null,
 };
 
@@ -48,6 +52,25 @@ describe('withOrgRoute', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('gives each authenticated teammate a separate read allowance', async () => {
+    const seen = new Set<string>();
+    mockRateLimit.mockImplementation(async key => {
+      const success = !seen.has(key);
+      seen.add(key);
+      return { success, remaining: 0, reset: 0 };
+    });
+    const route = withOrgRoute({
+      context: 'Read', errorMessage: 'failed',
+      rateLimit: { key: 'read', limit: 1, windowSecs: 60, scope: 'user' },
+    }, async () => NextResponse.json({ ok: true }));
+    mockAuth.mockResolvedValueOnce({ userId: 'teammate-a' });
+    expect((await route(makeRequest())).status).toBe(200);
+    mockAuth.mockResolvedValueOnce({ userId: 'teammate-b' });
+    expect((await route(makeRequest())).status).toBe(200);
+    mockAuth.mockResolvedValueOnce({ userId: 'teammate-a' });
+    expect((await route(makeRequest())).status).toBe(429);
   });
 
   it('invokes the handler with the resolved org', async () => {
@@ -119,7 +142,7 @@ describe('withOrgRoute', () => {
   });
 
   it('enforces billing write gate when requested', async () => {
-    mockGetOrCreateOrg.mockResolvedValueOnce({ id: 'org_1', stripeStatus: 'canceled' });
+    mockGetOrCreateOrg.mockResolvedValueOnce({ ...ORG, stripeStatus: 'canceled' });
     const handler = vi.fn();
     const route = withOrgRoute(
       { context: 'Test', errorMessage: 'failed', requireBillingWriteAllowed: true },

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db, SenderType, ThreadFilterStatus } from '@shopkeeper/db';
+import { db, Prisma, ThreadFilterStatus } from '@shopkeeper/db';
 import { withOrgRoute } from '@/lib/api/route';
 import {
   countThreadsBySqlFilters,
@@ -13,7 +13,7 @@ export const GET = withOrgRoute(
   {
     context: 'Threads GET',
     errorMessage: 'Failed to fetch threads',
-    rateLimit: { key: 'threads:get', limit: 60, windowSecs: 60 },
+    rateLimit: { key: 'threads:get', limit: 60, windowSecs: 60, scope: 'user' },
   },
   async ({ org, request }) => {
     const { searchParams } = new URL(request.url);
@@ -51,52 +51,50 @@ export const GET = withOrgRoute(
       return NextResponse.json({ threads: [], nextCursor: null, ...(totalCount !== undefined ? { totalCount } : {}) });
     }
 
-    const rows = await db.thread.findMany({
-      where: { id: { in: ids } },
-      include: {
-        customer: true,
-        messages: preview
-          ? {
-              where: { NOT: { senderType: SenderType.note }, deletedAt: null },
-              orderBy: { sentAt: 'desc' },
-              take: 1,
-            }
-          : { where: { deletedAt: null }, orderBy: { sentAt: 'asc' } },
-      },
-    });
-    // A preview row carries only the newest message, which on an escalated thread is
-    // the agent's handoff reply. One extra query per page gets each thread's newest
-    // customer message so the list can show what the customer actually said.
-    const latestCustomerMessages = preview
+    // Nested Prisma `take` trims multi-thread relations in memory. Limit each
+    // history in SQL; previews also retain the latest customer's question.
+    const [rows, messageIds] = await Promise.all([
+      db.thread.findMany({
+        where: { organizationId: org.id, id: { in: ids } },
+        include: { customer: true },
+      }),
+      db.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+          SELECT latest.id FROM unnest(ARRAY[${Prisma.join(ids)}]::uuid[]) AS selected(thread_id)
+          CROSS JOIN LATERAL (
+            (SELECT m.id FROM messages m
+             WHERE m.organization_id = ${org.id}::uuid AND m.thread_id = selected.thread_id
+               AND m.deleted_at IS NULL
+               ${preview ? Prisma.sql`AND m.sender_type <> 'note'` : Prisma.empty}
+             ORDER BY m.sent_at DESC, m.id DESC LIMIT ${preview ? 1 : 100})
+            ${preview ? Prisma.sql`UNION
+              (SELECT m.id FROM messages m
+               WHERE m.organization_id = ${org.id}::uuid AND m.thread_id = selected.thread_id
+                 AND m.sender_type = 'customer' AND m.deleted_at IS NULL
+               ORDER BY m.sent_at DESC, m.id DESC LIMIT 1)` : Prisma.empty}
+          ) latest
+        `),
+    ]);
+    const messages = messageIds.length > 0
       ? await db.message.findMany({
           where: {
             organizationId: org.id,
-            threadId: { in: ids },
-            senderType: SenderType.customer,
-            deletedAt: null,
+            id: { in: messageIds.map(row => row.id) },
           },
-          orderBy: [{ threadId: 'asc' }, { sentAt: 'desc' }],
-          distinct: ['threadId'],
+          orderBy: [{ sentAt: 'asc' }, { id: 'asc' }],
         })
       : [];
-    const latestCustomerByThread = new Map(
-      latestCustomerMessages.map(message => [message.threadId, message]),
-    );
+    const messagesByThread = new Map<string, typeof messages>();
+    for (const message of messages) {
+      const history = messagesByThread.get(message.threadId) ?? [];
+      history.push(message);
+      messagesByThread.set(message.threadId, history);
+    }
 
     const byId = new Map(rows.map(row => [row.id, row]));
     const threads = ids.flatMap((id: string) => {
       const thread = byId.get(id);
       if (!thread) return [];
-      const latestCustomer = latestCustomerByThread.get(id);
-      if (!latestCustomer || thread.messages.some(message => message.id === latestCustomer.id)) {
-        return [thread];
-      }
-      return [{
-        ...thread,
-        messages: [latestCustomer, ...thread.messages].sort(
-          (a, b) => a.sentAt.getTime() - b.sentAt.getTime(),
-        ),
-      }];
+      return [{ ...thread, messages: messagesByThread.get(id) ?? [] }];
     });
 
     return NextResponse.json({ threads, nextCursor, ...(totalCount !== undefined ? { totalCount } : {}) });

@@ -10,7 +10,8 @@ import {
   WORKFLOW_BANNER_EXPANDED_COOKIE,
 } from "@/lib/dashboard-dismissals"
 import { getOrCreateOrg } from "@/lib/server/org"
-import { getHomeChannelState, getHomeSummary } from "@/lib/server/home-summary"
+import { getHomeChannelState } from "@/lib/server/home-summary"
+import { getCachedHomeSummary } from "@/lib/server/cached-home-summary"
 import DashboardHomeClient from "../_components/home/DashboardHomeClient"
 
 export default async function DashboardPage() {
@@ -26,7 +27,7 @@ export default async function DashboardPage() {
     cookieStore.get(WORKFLOW_BANNER_EXPANDED_COOKIE)?.value,
   )
   const [initialHomeSummary, initialChannelState] = await Promise.all([
-    getHomeSummary(org.id, org.settings as Partial<OrgSettings> | null),
+    getCachedHomeSummary(org.id, org.settings as Partial<OrgSettings> | null),
     getHomeChannelState(org.id, userId),
   ])
 

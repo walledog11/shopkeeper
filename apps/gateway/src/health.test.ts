@@ -242,6 +242,7 @@ describe('health routes', () => {
         'gmailWatchMaintenance',
         'orderReview',
         'operatorEvent',
+        'agentTask',
         'integrationDisconnect',
       ]);
       expect(response.body.queues.aiSummary.failedJobs[0]).toMatchObject({

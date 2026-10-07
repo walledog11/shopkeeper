@@ -113,7 +113,7 @@ test('auth-bypass core workflow sends a manual reply and approves an agent plan'
   await waitForAgentMessage({ threadId: manualThread.id, textIncludes: manualReply });
   await waitForOutboundRecord((record: { threadId?: string; text?: string }) => (
     record.threadId === manualThread.id
-    && record.text?.includes(manualReply)
+    && record.text?.includes(manualReply) === true
   ));
   await expect(page.getByTestId('chat-message').filter({ hasText: manualReply })).toBeVisible();
 
@@ -154,7 +154,7 @@ test('auth-bypass core workflow sends a manual reply and approves an agent plan'
   await waitForOutboundRecord((record: { threadId?: string; source?: string; text?: string }) => (
     record.threadId === planThread.id
     && record.source === 'agent_send_reply'
-    && record.text?.includes(planReply)
+    && record.text?.includes(planReply) === true
   ));
   await expect.poll(
     () => db.agentAction.count({

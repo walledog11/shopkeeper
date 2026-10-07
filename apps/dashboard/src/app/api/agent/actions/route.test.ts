@@ -37,6 +37,7 @@ describe("GET /api/agent/actions", () => {
     } as ReturnType<typeof auth> extends Promise<infer T> ? T : never);
     vi.mocked(getOrCreateOrg).mockResolvedValue({
       id: "org_db_1",
+      lifecycleStatus: "active",
     } as Awaited<ReturnType<typeof getOrCreateOrg>>);
   });
 

@@ -16,6 +16,11 @@ vi.mock("@clerk/nextjs/server", () => ({
   clerkClient: vi.fn(),
 }))
 
+// Direct route tests have no Next server cache; keep the real tenant-scoped query.
+vi.mock("next/cache", () => ({
+  unstable_cache: <T>(load: T) => load,
+}))
+
 import { GET } from "./route"
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>

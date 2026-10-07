@@ -11,7 +11,7 @@ export const GET = withOrgRoute<{ customerId: string }>(
   {
     context: 'Customer threads GET',
     errorMessage: 'Failed to fetch customer threads',
-    rateLimit: { key: 'customer-threads', limit: 60, windowSecs: 60 },
+    rateLimit: { key: 'customer-threads', limit: 60, windowSecs: 60, scope: 'user' },
   },
   async ({ org, request, params }) => {
     const { customerId } = params;

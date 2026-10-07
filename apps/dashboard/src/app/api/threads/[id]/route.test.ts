@@ -52,6 +52,28 @@ afterEach(async () => {
 });
 
 describe('GET /api/threads/[id]', () => {
+  it('paginates equal-time messages without duplicates or missing history', async () => {
+    const customer = await createTestCustomer(org.id, 'pagination@test.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+    const ids = Array.from({ length: 205 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`);
+    await db.message.createMany({ data: ids.map(id => ({
+      id, organizationId: org.id, threadId: thread.id, contentText: id,
+      senderType: 'customer', sentAt: new Date('2024-01-01T00:00:00Z'),
+    })) });
+    const observed: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const url = `http://localhost/api/threads/${thread.id}${cursor ? `?before=${cursor}` : ''}`;
+      const response = await GET(new Request(url), { params: Promise.resolve({ id: thread.id }) });
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body.thread.messages.length).toBeLessThanOrEqual(100);
+      observed.unshift(...body.thread.messages.map((message: { id: string }) => message.id));
+      cursor = body.nextMessageCursor;
+    } while (cursor);
+    expect(observed).toEqual(ids);
+  });
+
   it('returns a full thread with ordered messages', async () => {
     const customer = await createTestCustomer(org.id, 'thread_detail@test.com');
     const thread = await createTestThread(org.id, customer.id, ChannelType.email);

@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import { errorMessageFromUnknown } from '@/lib/api/fetcher'
+import { MAX_ATTACHMENT_UPLOAD_BYTES } from '@/lib/attachments/upload-limits'
 
 export interface StagedAttachment {
   // Local identity, so a chip can be shown and removed while the upload is
@@ -34,6 +35,10 @@ export function useComposerAttachments() {
     setAttachments(prev => [...prev, ...staged])
 
     await Promise.all(staged.map(async (entry, index) => {
+      if (entry.bytes > MAX_ATTACHMENT_UPLOAD_BYTES) {
+        patch(entry.localId, { error: `${entry.name} is too large — uploads are limited to 4MB` })
+        return
+      }
       const body = new FormData()
       body.append('file', files[index])
       try {

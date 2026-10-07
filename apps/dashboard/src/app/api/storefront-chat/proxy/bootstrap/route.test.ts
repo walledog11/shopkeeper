@@ -1,9 +1,10 @@
 import { createHmac, randomUUID } from 'node:crypto';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChannelType, db } from '@shopkeeper/db';
 import { cleanupTestData, createTestIntegration, createTestOrg } from '@shopkeeper/db/test-helpers';
 import { appProxyCanonicalString } from '@/lib/shopify/app-proxy';
 import { POST } from './route';
+import * as limiter from '@/lib/server/rate-limit';
 
 const APP_SECRET = 'storefront-gate-test-secret';
 
@@ -11,7 +12,7 @@ let org: Awaited<ReturnType<typeof createTestOrg>>;
 let shopDomain: string;
 let envBackup: Record<string, string | undefined>;
 
-function signedBootstrapRequest() {
+function signedBootstrapRequest(body: Record<string, unknown> = {}) {
   const url = new URL('https://app.useshopkeeper.com/api/storefront-chat/proxy/bootstrap');
   url.searchParams.set('shop', shopDomain);
   url.searchParams.set('path_prefix', '/apps/shopkeeper-chat');
@@ -24,7 +25,7 @@ function signedBootstrapRequest() {
   return new Request(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pageUrl: 'https://shop.example.test/products/thing' }),
+    body: JSON.stringify({ pageUrl: 'https://shop.example.test/products/thing', ...body }),
   });
 }
 
@@ -51,6 +52,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await cleanupTestData(org?.id);
   for (const [key, value] of Object.entries(envBackup)) {
     if (value === undefined) delete process.env[key];
@@ -59,6 +61,18 @@ afterEach(async () => {
 });
 
 describe('storefront chat bootstrap gating', () => {
+  it('refuses new sessions at the store limit while allowing an existing session to resume', async () => {
+    await connectStore({ enabled: true });
+    const first = await POST(signedBootstrapRequest());
+    const session = await first.json();
+    vi.spyOn(limiter, 'rateLimit').mockImplementation(async key => ({
+      success: !key.startsWith('storefront:session-create:'), remaining: 0,
+      reset: Math.floor(Date.now() / 1000) + 60,
+    }));
+    expect((await POST(signedBootstrapRequest())).status).toBe(429);
+    expect((await POST(signedBootstrapRequest({ sessionId: session.sessionId, resumeToken: session.resumeToken }))).status).toBe(200);
+    expect(await db.storefrontChatSession.count({ where: { organizationId: org.id } })).toBe(1);
+  });
   it('refuses when the platform switch is off, before any session exists', async () => {
     await connectStore({ enabled: true });
     process.env.STOREFRONT_CHAT_ENABLED = 'false';

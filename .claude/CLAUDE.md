@@ -96,7 +96,7 @@ Standing rules for any change to agent behavior (promoted from the 2026-07 behav
 ## Env
 Names live in each app's `.env.example`; values in Vercel/Railway.
 
-Both `DATABASE_URL`s append `?pgbouncer=true&connection_limit=1`. `TOKEN_ENCRYPTION_KEY` (AES-256-GCM, 32 raw bytes — hex64, base64, or 32 ASCII chars) encrypts `Integration.accessToken`/`refreshToken` at rest, applied transparently via Prisma `$extends`; same value in both apps; required in production.
+Both `DATABASE_URL`s append `?pgbouncer=true`. Pool size and deadlines come from `DB_POOL_MAX`, `DB_CONNECT_TIMEOUT_MS`, `DB_POOL_WAIT_TIMEOUT_MS` and `DB_QUERY_TIMEOUT_MS` (`databasePoolConfig` in `packages/db/pool-config.ts`, per process), which override any `connection_limit` in the URL. `TOKEN_ENCRYPTION_KEY` (AES-256-GCM, 32 raw bytes — hex64, base64, or 32 ASCII chars) encrypts `Integration.accessToken`/`refreshToken` at rest, applied transparently via Prisma `$extends`; same value in both apps; required in production.
 
 ## Architecture
 Design law is in the **Architecture** section below (2026-08-21 pipeline audit

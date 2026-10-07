@@ -81,7 +81,7 @@ describe('billing write-gate route sweep', () => {
   for (const status of ['past_due', 'canceled'] as const) {
     describe(`when billing is ${status}`, () => {
       beforeEach(() => {
-        mockGetOrCreateOrg.mockResolvedValue({ id: 'org_1', stripeStatus: status });
+        mockGetOrCreateOrg.mockResolvedValue({ id: 'org_1', stripeStatus: status, lifecycleStatus: 'active' });
       });
 
       it.each(GATED_ROUTES)('blocks $name with the gate 402', async (route) => {

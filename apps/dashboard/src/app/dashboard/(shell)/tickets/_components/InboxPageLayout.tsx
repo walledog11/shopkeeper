@@ -26,6 +26,9 @@ interface InboxPageLayoutFlags {
   includeClosed: boolean
   isAgentRunning: boolean
   isConversationLoading: boolean
+  hasOlderMessages?: boolean
+  isLoadingOlderMessages?: boolean
+  olderMessagesError?: string | null
   isLoadingMore: boolean
   isSearchLoading: boolean
   isSearchMode: boolean
@@ -66,6 +69,7 @@ interface InboxPageLayoutActions {
   onCorrectReplyDismiss: () => void
   onLinkShopifyCustomer: (customerId: string | null) => Promise<void>
   onLoadMore: () => void
+  onLoadOlderMessages?: () => Promise<void>
   onNotReal: (id: string) => void
   onOpen: (id: string) => void
   onRecover: (id: string) => void
@@ -171,6 +175,12 @@ function TicketConversation({
       onReplyChange={actions.onReplyChange}
       onSend={actions.onSendMessage}
       embedded
+      history={{
+        hasMore: flags.hasOlderMessages ?? false,
+        loading: flags.isLoadingOlderMessages ?? false,
+        error: flags.olderMessagesError ?? null,
+        load: actions.onLoadOlderMessages,
+      }}
     />
   )
 }

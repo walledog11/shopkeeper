@@ -9,6 +9,7 @@ const { sendOperatorEventReplySpy } = vi.hoisted(() => ({
 
 vi.mock('../operator-event-reply.js', () => ({
   sendOperatorEventReply: sendOperatorEventReplySpy,
+  completeOperatorTaskReply: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../logger.js', () => ({
