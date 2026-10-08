@@ -248,6 +248,13 @@ export interface AgentPlan {
   /** True when the planner widened tool selection after a namespace-miss retry. */
   namespaceMiss?: boolean
   /**
+   * Stored references (URLs or `blob:` refs) of the customer's photos of a damage
+   * claim, the ones the planner counted. Present only beside the
+   * `damage_photo_attached` signal; every approval surface shows them, so the
+   * merchant reviews the photos the plan was made on.
+   */
+  damagePhotos?: string[]
+  /**
    * The customer message this plan asks approval for, on runtimes that bind one
    * into the proposal. Absent on legacy plans, whose draft is only a tool call.
    */

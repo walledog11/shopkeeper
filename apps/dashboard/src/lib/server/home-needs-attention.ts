@@ -11,6 +11,7 @@ import {
   HOME_NEEDS_ATTENTION_LIMIT,
   type HomeNeedsAttentionItem,
 } from "@/lib/home/summary-contract"
+import { toAttachmentDisplayUrl } from "@/lib/attachments/blob-ref"
 import { canonicalInboxThreadWhere } from "@/lib/messaging/inbox-filter"
 import { getChannelInfo } from "@/lib/messaging/channels"
 import { customerDisplayLabel, timeAgoShort } from "@/lib/messaging/customer-display"
@@ -109,6 +110,9 @@ export async function loadNeedsAttention(
       validationIssues: plan.validation?.status === "invalid"
         ? plan.validation.issues.map(issue => issue.message)
         : [],
+      ...(plan.damagePhotos?.length
+        ? { damagePhotos: plan.damagePhotos.map(toAttachmentDisplayUrl) }
+        : {}),
     }]
   })
 }

@@ -350,23 +350,26 @@ describe("damage claims", () => {
   }
 
   it("hands a refund on the customer's word alone to the merchant", () => {
-    const routed = route(damageClaim({ customerImages: 0, photoRequestedAt: null }), [refund, reply]);
+    const routed = route(damageClaim({ customerImages: [], photoRequestedAt: null }), [refund, reply]);
     expect(routed.evidence.codes).toContain("damage_photo_missing");
   });
 
   it("hands the conversation over when the requested photo never came", () => {
-    const routed = route(damageClaim({ customerImages: 0, photoRequestedAt: "2026-10-07T18:00:00.000Z" }), [reply]);
+    const routed = route(damageClaim({ customerImages: [], photoRequestedAt: "2026-10-07T18:00:00.000Z" }), [reply]);
     expect(routed.evidence.codes).toContain("damage_photo_missing");
   });
 
   it("lets the first photo request go out without escalating it", () => {
-    const routed = route(damageClaim({ customerImages: 0, photoRequestedAt: null }), [askForPhoto, reply]);
+    const routed = route(damageClaim({ customerImages: [], photoRequestedAt: null }), [askForPhoto, reply]);
     expect(routed.evidence.codes).toEqual([]);
     expect(routed.signalCodes).not.toContain("mutative_intent_no_action");
   });
 
   it("holds compensation on a photographed claim for the merchant, and not a reply alone", () => {
-    const { ctx, damageEvidence } = damageClaim({ customerImages: 2, photoRequestedAt: null });
+    const { ctx, damageEvidence } = damageClaim({
+      customerImages: ["blob:attachments/org/box.jpg", "blob:attachments/org/mug.jpg"],
+      photoRequestedAt: null,
+    });
     const codes: ProducedPlanSignalCode[] = [];
     appendInitialPlanningSignals({ ctx, operatorMode: false, codes, damageEvidence });
     const severity = (calls: RawToolCall[]) => (

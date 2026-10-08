@@ -7,6 +7,7 @@ import {
   NeedsYouPrimaryButton,
 } from "@/app/dashboard/_components/home/needs-you-card-ui"
 import { needsYouSecondaryButtonClassName } from "@/app/dashboard/_components/home/needs-you-card-styles"
+import { toAttachmentDisplayUrl } from "@/lib/attachments/blob-ref"
 import { cn } from "@/lib/ui/cn"
 import type { AgentPlan, PlanCardOutcome, RawToolCall } from "@/types"
 import { ActionPlanBody } from "./ActionPlanBody"
@@ -369,6 +370,7 @@ export default function ActionPlanCard({
               blockingSignals={blockingSignals}
               customerName={customerName}
               advisorySignals={advisorySignals}
+              damagePhotos={(plan.damagePhotos ?? []).map(toAttachmentDisplayUrl)}
               isExecuting={isRunning || Boolean(executionOutcome)}
               isMobileSticky={isMobileSticky}
               onFocusShopifyLink={onFocusShopifyLink}

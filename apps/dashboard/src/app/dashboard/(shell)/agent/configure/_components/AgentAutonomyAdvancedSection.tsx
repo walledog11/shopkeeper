@@ -1,7 +1,7 @@
 "use client"
 
 import { AUTONOMY_TIERS } from "@/lib/agent/autonomy-tiers"
-import type { AutonomyTier } from "@shopkeeper/agent/settings"
+import { AGENT_DISPLAY_NAME, type AutonomyTier } from "@shopkeeper/agent/settings"
 import type { OrgSettings } from "@/types"
 import {
   readSettingsPath,
@@ -73,6 +73,7 @@ export function AgentAutonomyAdvancedSection({
 }) {
   const {
     settingsState,
+    dispatch,
     payload,
     explicitOverrideSet,
     autonomyTier,
@@ -176,6 +177,18 @@ export function AgentAutonomyAdvancedSection({
           />
         </div>
       </SettingsTile>
+
+      <SettingsTile
+        label="Ask for a photo before refunding a damaged item"
+        description={`When a customer says an item arrived damaged or doesn't work, ${AGENT_DISPLAY_NAME} asks for a photo first. Without one, the conversation comes to you.`}
+        action={
+          <Switch
+            checked={settingsState.damageEvidence === "photo_required"}
+            onChange={(value) => dispatch({ type: "set", patch: { damageEvidence: value ? "photo_required" : "off" } })}
+            ariaLabel="Ask for a photo before refunding a damaged item"
+          />
+        }
+      />
     </>
   )
 }

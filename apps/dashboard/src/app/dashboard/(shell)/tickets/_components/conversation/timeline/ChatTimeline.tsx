@@ -1,8 +1,7 @@
 "use client"
 
-import { isImageAttachmentUrl } from "@/lib/attachments/blob-ref"
 import { AlertTriangle, Loader2, MessageSquare } from "lucide-react"
-import Image from "next/image"
+import { AttachmentList } from "@/app/dashboard/_components/AttachmentList"
 import { NeedsYouBubble } from "@/app/dashboard/_components/home/needs-you-card-ui"
 import type { AgentTurn, FailedMessage, Ticket } from "@/types"
 import AgentPrivateTurns from "./AgentPrivateTurns"
@@ -19,22 +18,6 @@ interface Props {
   pendingInstruction: string | null
   planPhrase: string
   runPhrase: string
-}
-
-function AttachmentList({ attachments }: { attachments: string[] }) {
-  if (attachments.length === 0) {
-    return null
-  }
-
-  return (
-    <div className="flex flex-wrap gap-2 mt-2">
-      {attachments.map((url) => (
-        isImageAttachmentUrl(url)
-          ? <Image key={url} src={url} alt="attachment" width={240} height={160} unoptimized className="h-auto max-w-[240px] rounded-md border border-foreground/[0.10]" />
-          : <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 underline">Download attachment</a>
-      ))}
-    </div>
-  )
 }
 
 export default function ChatTimeline({

@@ -587,5 +587,7 @@ export async function planAgent(
     warnings: signals.length > 0 ? signals.map(signal => signal.message) : undefined,
     routingEvidence,
     ...(communication ? { communication } : {}),
+    // Beside `damage_photo_attached`, which the same state raised.
+    ...(damageEvidence?.kind === "photos" ? { damagePhotos: damageEvidence.photos } : {}),
   };
 }

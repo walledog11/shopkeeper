@@ -4,6 +4,7 @@ import type { ReactNode } from "react"
 import Link from "next/link"
 import { AlertCircle, Loader2 } from "lucide-react"
 import MerchantAnswerForm from "@/components/agent/MerchantAnswerForm"
+import { AttachmentList } from "@/app/dashboard/_components/AttachmentList"
 import { cn } from "@/lib/ui/cn"
 import { canQuickApprove } from "@/lib/home/walkthrough"
 import type { HomeNeedsAttentionItem } from "@/lib/home/summary-contract"
@@ -129,6 +130,8 @@ export function NeedsYouCard({
 
       <NeedsYouCardBody>
         {item.customerMessage && <NeedsYouBubble tone="customer">{item.customerMessage}</NeedsYouBubble>}
+        {/* A damage claim's photos, so approving here is approving what they show. */}
+        <AttachmentList attachments={item.damagePhotos ?? []} compact />
         <div className="flex flex-col gap-3">{content}</div>
       </NeedsYouCardBody>
 
