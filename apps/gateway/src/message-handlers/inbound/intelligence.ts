@@ -1,10 +1,9 @@
 import { db, isSpendCapError, SenderType } from '@shopkeeper/db';
 import logger from '../../logger.js';
 import { publishThreadEvent } from '../../realtime/publish.js';
-import { MODEL } from '../../constants.js';
 import { enforceSpendCap, recordSpend } from '@shopkeeper/agent/spend';
 import { readModelUsage } from '@shopkeeper/agent/usage';
-import { anthropic } from '@shopkeeper/agent/ai';
+import { anthropic, HAIKU_MODEL } from '@shopkeeper/agent/ai';
 import {
   CONTEXT_BUDGETS,
   buildBoundedClassifierConversation,
@@ -88,8 +87,9 @@ export async function generateThreadIntelligence(
     );
 
     const aiResponse = await anthropic.messages.create({
-      model: MODEL.CLAUDE,
+      model: HAIKU_MODEL,
       max_tokens: CLASSIFIER_MAX_TOKENS,
+      thinking: { type: 'disabled' },
       system: classifierSystemPrompt(fullThread.channelType, verifiedOrderNames),
       output_config: {
         format: {
@@ -100,7 +100,7 @@ export async function generateThreadIntelligence(
       messages: [{ role: 'user', content: classifierUserInput(conversationText) }],
     });
     const usage = readModelUsage(aiResponse);
-    await recordSpend(fullThread.organizationId, usage, MODEL.CLAUDE);
+    await recordSpend(fullThread.organizationId, usage, HAIKU_MODEL);
     logger.info({
       threadId,
       organizationId: fullThread.organizationId,
@@ -112,7 +112,7 @@ export async function generateThreadIntelligence(
       inputChars: conversationText.length,
     }, '[Worker] AI model usage');
 
-    const block = aiResponse.content[0];
+    const block = aiResponse.content.find((part) => part.type === 'text');
     if (!block || block.type !== 'text') throw new Error('Unexpected AI response type');
     const aiData = parseClassifierJson(block.text);
 

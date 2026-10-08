@@ -1,7 +1,6 @@
 export const CHANNEL = { IG_DM: 'ig_dm', EMAIL: 'email', SHOPIFY: 'shopify', SHOPIFY_CHAT: 'shopify_chat', TIKTOK: 'tiktok' } as const;
 export const STATUS = { OPEN: 'open' } as const;
 export const MODEL = {
-  CLAUDE: 'claude-haiku-4-5-20251001',
   // Brand-voice synthesis rewrites a setting that shapes every future reply and
   // is human-approved before taking effect — judgment-grade, low-frequency.
   VOICE_SYNTHESIS: 'claude-sonnet-5',

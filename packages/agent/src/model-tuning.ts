@@ -8,10 +8,10 @@
 // across every planner iteration and every operator turn. Nobody chose that;
 // it arrived with a rename. This module makes the choice explicit.
 //
-// Model-aware by necessity, not by preference: `effort` is rejected outright by
-// Haiku 4.5, so sending it there would 400 every plan routed to the cheap tier
-// (see planner-model-tier.ts). Anything not known to support a knob gets the
-// parameter omitted rather than guessed.
+// Model-aware by necessity, not by preference: a model that rejects a knob 400s
+// every call that sends it (Haiku 4.5 rejected `effort`, which would have failed
+// every plan routed to the cheap tier — see planner-model-tier.ts). Anything not
+// known to support a knob gets the parameter omitted rather than guessed.
 
 import { HAIKU_MODEL, SONNET_MODEL } from "./ai/index.js";
 import type { ToolExecMode } from "./agent-loop.js";
@@ -35,10 +35,10 @@ export type PlannerThinkingMode = "disabled" | "adaptive";
  */
 const MODEL_SUPPORT: Record<string, { effort: boolean; thinking: boolean }> = {
   [SONNET_MODEL]: { effort: true, thinking: true },
-  // Haiku 4.5 predates both parameters. `effort` returns 400, and thinking is
-  // off unless explicitly enabled with the retired budget_tokens form — so the
-  // correct call for the cheap tier is to send neither and take the default.
-  [HAIKU_MODEL]: { effort: false, thinking: false },
+  // Haiku 5.5 takes both. Like Sonnet 5 it runs adaptive thinking when the
+  // parameter is omitted; unlike it, disabled thinking is accepted only at
+  // effort `high` or below.
+  [HAIKU_MODEL]: { effort: true, thinking: true },
 };
 
 /**

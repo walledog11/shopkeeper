@@ -344,7 +344,8 @@ export async function runAgent(
       tools,
       model: iterationModel,
       maxIterations,
-      maxTokensPerCall: readOnly ? 2048 : 4096,
+      // Composer-ask on Haiku 5.5 thinks by default, and thinking counts toward this.
+      maxTokensPerCall: 4096,
       settings,
       usageTotals,
       runTools: (toolCalls) => executeToolCalls(toolCalls, { quoteModelRefunds: true }),

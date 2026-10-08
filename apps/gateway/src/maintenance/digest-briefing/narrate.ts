@@ -1,7 +1,6 @@
-import { anthropic } from '@shopkeeper/agent/ai';
+import { anthropic, HAIKU_MODEL } from '@shopkeeper/agent/ai';
 import { enforceSpendCap, recordSpend, type SpendCapSettings } from '@shopkeeper/agent/spend';
 import { readModelUsage } from '@shopkeeper/agent/usage';
-import { MODEL } from '../../constants.js';
 import logger from '../../logger.js';
 import { isRecord } from '../../lib/typing.js';
 import { BRIEFING_RECITE_MAX } from './constants.js';
@@ -65,8 +64,9 @@ export async function narrateBriefingItems(
   try {
     await enforceSpendCap(organizationId, settings);
     const response = await anthropic.messages.create({
-      model: MODEL.CLAUDE,
+      model: HAIKU_MODEL,
       max_tokens: 4096,
+      thinking: { type: 'disabled' },
       system: SYSTEM,
       messages: [{ role: 'user', content: JSON.stringify(sources) }],
       output_config: { format: { type: 'json_schema', schema: {
@@ -79,7 +79,7 @@ export async function narrateBriefingItems(
         required: ['items'],
       } } },
     }, { timeout: 15_000, maxRetries: 0 });
-    await recordSpend(organizationId, readModelUsage(response), MODEL.CLAUDE);
+    await recordSpend(organizationId, readModelUsage(response), HAIKU_MODEL);
     if (response.stop_reason !== 'end_turn') return items;
     const body = response.content.find((block) => block.type === 'text');
     const parsed: unknown = body?.type === 'text' ? JSON.parse(body.text) : null;

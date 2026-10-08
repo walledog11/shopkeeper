@@ -77,6 +77,7 @@ export async function selectAnsweringKbArticles(request: {
     response = await anthropic.messages.create({
       model: HAIKU_MODEL,
       max_tokens: 256,
+      thinking: { type: "disabled" },
       system: RELEVANCE_SYSTEM_PROMPT,
       output_config: { format: { type: "json_schema", schema: RELEVANCE_OUTPUT_SCHEMA } },
       messages: [{ role: "user", content: relevanceInput(query, articles) }],

@@ -9,6 +9,7 @@ import {
   anthropic,
   buildCachedSystemPrompt,
   buildSplitCachedSystemPrompt,
+  HAIKU_MODEL,
   isDeterministicE2EAIEnabled,
 } from '@shopkeeper/agent/ai';
 import { enforceSpendCap, recordSpend } from '@shopkeeper/agent/spend';
@@ -29,7 +30,7 @@ import {
   INTENT_KEYS,
 } from '@shopkeeper/agent/classifier-signals';
 import logger from '../../logger.js';
-import { CHANNEL, MODEL } from '../../constants.js';
+import { CHANNEL } from '../../constants.js';
 import {
   CLASSIFIER_MAX_TOKENS,
   CLASSIFIER_VERSION,
@@ -484,8 +485,9 @@ export async function classifyAndSummarizeNewEmail(
     }, '[Worker] AI input budget');
 
     const response = await anthropic.messages.create({
-      model: MODEL.CLAUDE,
+      model: HAIKU_MODEL,
       max_tokens: CLASSIFIER_MAX_TOKENS,
+      thinking: { type: 'disabled' },
       system: classifierSystemPrompt(CHANNEL.EMAIL),
       output_config: {
         format: {
@@ -496,7 +498,7 @@ export async function classifyAndSummarizeNewEmail(
       messages: [{ role: 'user', content: classifierInput }],
     });
     const usage = readModelUsage(response);
-    await recordSpend(organizationId, usage, MODEL.CLAUDE);
+    await recordSpend(organizationId, usage, HAIKU_MODEL);
     logger.info({
       organizationId,
       purpose: 'email_classification',
@@ -506,7 +508,7 @@ export async function classifyAndSummarizeNewEmail(
       cacheReadInputTokens: usage.cacheReadInputTokens,
       inputChars: classifierInput.length,
     }, '[Worker] AI model usage');
-    const block = response.content[0];
+    const block = response.content.find((part) => part.type === 'text');
     if (!block || block.type !== 'text') throw new Error('Unexpected AI response type');
     return parseClassifierJson(block.text);
   } catch (error) {
