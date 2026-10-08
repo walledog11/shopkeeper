@@ -289,8 +289,8 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
     );
 
     // Explicit rather than inherited: see model-tuning.ts. Resolved per call
-    // because it depends on the model (Haiku rejects effort) and on the mode
-    // (thinking is only tuned for planning).
+    // because it depends on the model and on the mode (thinking is only tuned
+    // for planning).
     const tuning = resolveModelTuning(model, mode);
     const response = await anthropic.messages.create({
       model,
@@ -324,8 +324,8 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
         model,
         mode,
         // What was actually sent, not what the env intends. These are env-driven
-        // across two separately-deployed apps, so `null` on Sonnet is the signal
-        // that the tuning got dropped — on Haiku it is the expected value.
+        // across two separately-deployed apps, so a `null` effort is the signal
+        // that the tuning got dropped.
         effort: tuning.output_config?.effort ?? null,
         thinking: tuning.thinking?.type ?? null,
         stopReason: response.stop_reason,

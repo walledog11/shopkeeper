@@ -11,7 +11,12 @@ import { readModelUsage } from "../usage.js";
 // purpose to one of them. The judgment/mutative agent loop (end-to-end runs and
 // capture-mode planning) runs on Sonnet; everything else — composer-ask,
 // summaries, classification — stays on Haiku.
-export const HAIKU_MODEL = "claude-haiku-4-5-20251001";
+//
+// Haiku 5.5 thinks by default and thinking counts toward max_tokens, so the
+// one-shot calls (classification, summaries, KB relevance, briefing and handoff
+// text) send `thinking: { type: "disabled" }` to keep their output-sized budgets.
+// It rejects a non-default `temperature` and a trailing assistant turn.
+export const HAIKU_MODEL = "claude-haiku-5-5";
 export const SONNET_MODEL = "claude-sonnet-5";
 
 // A call's purpose, not its channel. Enumerated in full so each call site is
@@ -42,11 +47,9 @@ export interface AIMessage {
  * @param systemPrompt  Instructions for how the model should behave
  * @param messages      Conversation turns in chronological order
  * @param options.maxTokens  Max tokens in the response (default 1024)
- * @param options.temperature  0–1, higher = more creative (default 0.5)
  */
 export interface GenerateTextOptions {
   maxTokens?: number;
-  temperature?: number;
   // When provided, the call is gated by the org's daily LLM spend cap and the
   // token usage is recorded against the org. Omit only for tests / paths that
   // genuinely have no org context.
@@ -70,7 +73,7 @@ export async function generateText(
   const response = await anthropic.messages.create({
     model: HAIKU_MODEL,
     max_tokens: options?.maxTokens ?? 1024,
-    temperature: options?.temperature ?? 0.5,
+    thinking: { type: "disabled" },
     system: systemPrompt,
     messages,
   });

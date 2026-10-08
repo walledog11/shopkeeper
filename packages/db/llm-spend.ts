@@ -4,7 +4,7 @@
 // All amounts are tracked in nano-dollars (1 USD = 1_000_000_000) so token
 // pricing stays integer-clean and the running total stays a whole number.
 export const NANO_DOLLARS_PER_USD = 1_000_000_000;
-export const LLM_PRICING_AS_OF = '2026-09-07';
+export const LLM_PRICING_AS_OF = '2026-10-08';
 
 export interface LlmTokenPriceNanoUsd {
   inputPerToken: number;
@@ -16,6 +16,9 @@ export interface LlmTokenPriceNanoUsd {
   cacheWrite5mPerToken: number;
   cacheWrite1hPerToken: number;
   cacheReadPerToken: number;
+  // Haiku 5.5 prices a whole request by prompt length (input plus cache writes
+  // and reads): above `aboveTokens`, every token takes the `price` rates.
+  longPrompt?: { aboveTokens: number; price: LlmTokenPriceNanoUsd };
 }
 
 // Anthropic public pricing. Keep model IDs in sync with apps/*/constants.
@@ -28,6 +31,24 @@ export const LLM_PRICING: Record<string, LlmTokenPriceNanoUsd> = {
     cacheWrite5mPerToken: 1250, // $1.25 / MTok
     cacheWrite1hPerToken: 2000, // $2.00 / MTok
     cacheReadPerToken: 100,     // $0.10 / MTok
+  },
+  // Keep synchronized with @shopkeeper/agent/model-cost, long-prompt tier included.
+  "claude-haiku-5-5": {
+    inputPerToken: 100,         // $0.10 / MTok
+    outputPerToken: 500,        // $0.50 / MTok
+    cacheWrite5mPerToken: 125,  // $0.125 / MTok
+    cacheWrite1hPerToken: 200,  // $0.20 / MTok
+    cacheReadPerToken: 10,      // $0.01 / MTok
+    longPrompt: {
+      aboveTokens: 100_000,
+      price: {
+        inputPerToken: 500,         // $0.50 / MTok
+        outputPerToken: 2500,       // $2.50 / MTok
+        cacheWrite5mPerToken: 625,  // $0.625 / MTok
+        cacheWrite1hPerToken: 1000, // $1.00 / MTok
+        cacheReadPerToken: 50,      // $0.05 / MTok
+      },
+    },
   },
   // The agent eval judge (apps/dashboard/src/lib/agent/__evals__/judge.ts).
   // Sonnet-tier standard rate, same $3/$15 as Sonnet 5. Never reached by
@@ -73,9 +94,14 @@ export interface LlmUsageTokens {
 }
 
 export function usageToNanoDollars(usage: LlmUsageTokens, model: string): number {
-  const price = LLM_PRICING[model];
-  if (!price) throw new UnknownLlmModelPriceError(model);
+  const listed = LLM_PRICING[model];
+  if (!listed) throw new UnknownLlmModelPriceError(model);
   const cacheWrites = usage.cacheCreationInputTokens ?? 0;
+  const cacheReads = usage.cacheReadInputTokens ?? 0;
+  const promptTokens = usage.inputTokens + cacheWrites + cacheReads;
+  const price = listed.longPrompt && promptTokens > listed.longPrompt.aboveTokens
+    ? listed.longPrompt.price
+    : listed;
   // Without a breakdown, charge every cache write at the dearer 1-hour rate.
   // Splitting the difference would undercount whenever the 1-hour block missed,
   // and this backstop must never undercount.
@@ -86,7 +112,7 @@ export function usageToNanoDollars(usage: LlmUsageTokens, model: string): number
     usage.outputTokens * price.outputPerToken +
     write1h * price.cacheWrite1hPerToken +
     write5m * price.cacheWrite5mPerToken +
-    (usage.cacheReadInputTokens ?? 0) * price.cacheReadPerToken
+    cacheReads * price.cacheReadPerToken
   );
 }
 

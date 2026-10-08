@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const { create, cap, spend } = vi.hoisted(() => ({ create: vi.fn(), cap: vi.fn(), spend: vi.fn() }));
-vi.mock('@shopkeeper/agent/ai', () => ({ anthropic: { messages: { create } } }));
+vi.mock('@shopkeeper/agent/ai', () => ({ anthropic: { messages: { create } }, HAIKU_MODEL: 'test-model' }));
 vi.mock('@shopkeeper/agent/spend', () => ({ enforceSpendCap: cap, recordSpend: spend }));
 import { narrateBriefingItems } from './narrate.js';
 import { buildConversationBrief } from './conversation.js';

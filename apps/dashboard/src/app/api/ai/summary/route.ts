@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
-import { db, SenderType } from '@shopkeeper/db';
+import { db } from '@shopkeeper/db';
 import { generateText } from '@shopkeeper/agent/ai';
 import { fallbackTitleFromSummary } from '@shopkeeper/agent/classifier-signals';
+import { buildBoundedClassifierConversation } from '@shopkeeper/agent/context-budget';
 import { readRequiredJsonObject } from '@/lib/api/body';
 import { ApiError } from '@/lib/api/errors';
 import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
@@ -62,13 +63,11 @@ Return strict JSON with:
 - "summary": one short sentence, max 20 words, describing what the customer needs.
 No labels or markdown. Respond only as {"title":"...","summary":"..."}.`;
 
-    const messages = thread.messages.map((msg) => ({
-      role: msg.senderType === SenderType.customer ? 'user' as const : 'assistant' as const,
-      content: msg.contentText || "",
-    }));
+    // One transcript turn rather than role-played turns: Haiku 5.5 rejects a
+    // conversation that ends on an assistant turn, as any thread answered last would.
+    const transcript = buildBoundedClassifierConversation(thread.messages).text;
 
-    const refreshText = await generateText(systemPrompt, messages, {
-      temperature: 0.5,
+    const refreshText = await generateText(systemPrompt, [{ role: 'user', content: transcript }], {
       orgId: org.id,
       settings: (org.settings ?? null) as Partial<import('@/types').OrgSettings> | null,
     });

@@ -23,10 +23,11 @@ test('production and paid-eval model pricing stay in parity', () => {
   assert.equal(MODEL_PRICING_AS_OF, LLM_PRICING_AS_OF);
 
   for (const model of Object.keys(LLM_PRICING)) {
-    const productionUsd = usageToNanoDollars(representativeUsage, model)
-      / NANO_DOLLARS_PER_USD;
-    const evalUsd = estimateModelUsageCostUsd(model, representativeUsage);
-    assert.equal(evalUsd, productionUsd, `${model} pricing diverged`);
+    // Production counts whole nano-dollars; the eval path's float math on
+    // sub-dollar rates ($0.10, $0.01 per MTok) differs only below one.
+    const productionNano = usageToNanoDollars(representativeUsage, model);
+    const evalNano = Math.round(estimateModelUsageCostUsd(model, representativeUsage) * NANO_DOLLARS_PER_USD);
+    assert.equal(evalNano, productionNano, `${model} pricing diverged`);
   }
 });
 

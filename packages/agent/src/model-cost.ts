@@ -1,4 +1,4 @@
-export const MODEL_PRICING_AS_OF = "2026-09-07"
+export const MODEL_PRICING_AS_OF = "2026-10-08"
 
 interface ModelPricePerMillionTokens {
   input: number
@@ -6,6 +6,9 @@ interface ModelPricePerMillionTokens {
   cacheWrite5m: number
   cacheWrite1h: number
   cacheRead: number
+  // Haiku 5.5 prices a whole request by prompt length (input plus cache writes
+  // and reads): above `aboveTokens`, every token takes the `price` rates.
+  longPrompt?: { aboveTokens: number; price: ModelPricePerMillionTokens }
 }
 
 export interface BillableModelUsage {
@@ -23,6 +26,13 @@ const MODEL_PRICES: Record<string, ModelPricePerMillionTokens> = {
   "claude-sonnet-5": { input: 2, output: 10, cacheWrite5m: 2.5, cacheWrite1h: 4, cacheRead: 0.2 },
   "claude-sonnet-4-6": { input: 3, output: 15, cacheWrite5m: 3.75, cacheWrite1h: 6, cacheRead: 0.3 },
   "claude-haiku-4-5-20251001": { input: 1, output: 5, cacheWrite5m: 1.25, cacheWrite1h: 2, cacheRead: 0.1 },
+  "claude-haiku-5-5": {
+    input: 0.1, output: 0.5, cacheWrite5m: 0.125, cacheWrite1h: 0.2, cacheRead: 0.01,
+    longPrompt: {
+      aboveTokens: 100_000,
+      price: { input: 0.5, output: 2.5, cacheWrite5m: 0.625, cacheWrite1h: 1, cacheRead: 0.05 },
+    },
+  },
 }
 
 export class UnknownModelPriceError extends Error {
@@ -40,8 +50,12 @@ export class ModelSpendBudgetExceededError extends Error {
 }
 
 export function estimateModelUsageCostUsd(model: string, usage: BillableModelUsage): number {
-  const price = MODEL_PRICES[model]
-  if (!price) throw new UnknownModelPriceError(model)
+  const listed = MODEL_PRICES[model]
+  if (!listed) throw new UnknownModelPriceError(model)
+  const promptTokens = usage.inputTokens + usage.cacheCreationInputTokens + usage.cacheReadInputTokens
+  const price = listed.longPrompt && promptTokens > listed.longPrompt.aboveTokens
+    ? listed.longPrompt.price
+    : listed
   // Missing TTL attribution takes the dearer 1h price, matching the production
   // spend cap's fail-safe accounting.
   const cacheWrite1hTokens = Math.min(

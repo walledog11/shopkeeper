@@ -80,6 +80,8 @@ const prices = {
   'claude-sonnet-5': { input: 2, output: 10, cacheWrite: 4, cacheRead: 0.2 },
   'claude-sonnet-4-6': { input: 3, output: 15, cacheWrite: 6, cacheRead: 0.3 },
   'claude-haiku-4-5-20251001': { input: 1, output: 5, cacheWrite: 2, cacheRead: 0.1 },
+  // Prompts up to 100k tokens; baseline usage is aggregated, so the long-prompt tier can't apply.
+  'claude-haiku-5-5': { input: 0.1, output: 0.5, cacheWrite: 0.2, cacheRead: 0.01 },
 };
 const usageCost = (model, usage) => {
   const price = prices[model];
