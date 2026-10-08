@@ -39,6 +39,8 @@ export interface HomeNeedsAttentionItem {
   escalationReason: string | null
   /** Validation failures shown instead of approval controls for an invalid draft. */
   validationIssues?: string[]
+  /** Display URLs of the customer's photos of a damage claim, the ones the plan counted. */
+  damagePhotos?: string[]
 }
 
 export interface HomeClearedTopic {

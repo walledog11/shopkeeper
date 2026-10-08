@@ -188,8 +188,11 @@ export interface BaseAgentContext {
 // stored attachments rather than the hydrated images, which are channel-limited
 // and capped.
 export interface RequestEvidence {
-  /** Image attachments on customer messages: only those since the photo request while one is pending. */
-  customerImages: number;
+  /**
+   * Stored references (URLs or `blob:` refs) of the image attachments on customer
+   * messages, oldest first: only those since the photo request while one is pending.
+   */
+  customerImages: string[];
   /** When the agent asked for a photo of the damage (ISO 8601); null when it has not. */
   photoRequestedAt: string | null;
 }

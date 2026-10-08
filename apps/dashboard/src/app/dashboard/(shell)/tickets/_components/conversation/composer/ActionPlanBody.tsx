@@ -1,9 +1,11 @@
+import { Fragment } from "react"
 import { AlertTriangle, Check, Loader2 } from "lucide-react"
 import {
   merchantFollowUpBeforeApproval,
   outstandingMerchantFollowUps,
 } from "@shopkeeper/agent/merchant-follow-up"
 import { customerFirstName } from "@shopkeeper/agent/person-name"
+import { AttachmentList } from "@/app/dashboard/_components/AttachmentList"
 import {
   NeedsYouBubble,
   NeedsYouInfoCallout,
@@ -39,6 +41,7 @@ export function ActionPlanBody({
   blockingSignals,
   customerName,
   advisorySignals,
+  damagePhotos,
   isExecuting,
   isMobileSticky,
   onFocusShopifyLink,
@@ -51,6 +54,8 @@ export function ActionPlanBody({
   blockingSignals: PlanSignal[]
   customerName?: string | null
   advisorySignals: PlanSignal[]
+  /** Display URLs of the customer's photos the plan counted, shown under `damage_photo_attached`. */
+  damagePhotos: string[]
   isExecuting: boolean
   isMobileSticky: boolean
   onFocusShopifyLink?: () => void
@@ -59,9 +64,14 @@ export function ActionPlanBody({
   showReplyHero: boolean
   toggleStep: (id: string, tool: string) => void
 }) {
+  // No text color here: the reply bubble sets white text on its fixed dark fill,
+  // and a theme color would turn ink-dark on the paper theme.
   const draftTextClass = isMobileSticky
-    ? "text-[15px] leading-relaxed text-strong whitespace-pre-wrap max-h-[32vh] overflow-y-auto custom-scrollbar"
-    : "text-[15px] leading-relaxed text-strong whitespace-pre-wrap max-h-[34vh] overflow-y-auto custom-scrollbar"
+    ? "text-[15px] leading-relaxed whitespace-pre-wrap max-h-[32vh] overflow-y-auto custom-scrollbar"
+    : "text-[15px] leading-relaxed whitespace-pre-wrap max-h-[34vh] overflow-y-auto custom-scrollbar"
+  const photosFor = (signal: PlanSignal) => (
+    signal.code === "damage_photo_attached" ? <AttachmentList attachments={damagePhotos} compact /> : null
+  )
   // What approving the enabled steps still leaves to the merchant.
   const followUps = outstandingMerchantFollowUps(
     [...actionSteps, ...shopifyActionSteps].filter(step => step.enabled).map(step => step.tool),
@@ -73,41 +83,43 @@ export function ActionPlanBody({
       {(blockingSignals.length > 0 || advisorySignals.length > 0) && (
         <div className="mt-0.5 space-y-2">
           {blockingSignals.map(signal => (
-            <div
-              key={signal.message}
-              className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3"
-            >
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-red-600" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold leading-snug text-red-600">
-                    {signalDisplayText(signal)}
-                  </p>
-                  {isShopifyLinkSignal(signal) && onFocusShopifyLink && (
-                    <button
-                      type="button"
-                      onClick={onFocusShopifyLink}
-                      className="mt-1 text-xs font-semibold text-red-600 transition-colors hover:text-red-700"
-                    >
-                      Check customer panel →
-                    </button>
-                  )}
+            <Fragment key={signal.message}>
+              <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-red-600" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold leading-snug text-red-600">
+                      {signalDisplayText(signal)}
+                    </p>
+                    {isShopifyLinkSignal(signal) && onFocusShopifyLink && (
+                      <button
+                        type="button"
+                        onClick={onFocusShopifyLink}
+                        className="mt-1 text-xs font-semibold text-red-600 transition-colors hover:text-red-700"
+                      >
+                        Check customer panel →
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
+              {photosFor(signal)}
+            </Fragment>
           ))}
           {advisorySignals.map(signal => (
-            <NeedsYouInfoCallout
-              key={signal.message}
-              actionLabel={
-                isShopifyLinkSignal(signal) && onFocusShopifyLink
-                  ? "Check customer panel →"
-                  : undefined
-              }
-              onAction={isShopifyLinkSignal(signal) ? onFocusShopifyLink : undefined}
-            >
-              {signalDisplayText(signal)}
-            </NeedsYouInfoCallout>
+            <Fragment key={signal.message}>
+              <NeedsYouInfoCallout
+                actionLabel={
+                  isShopifyLinkSignal(signal) && onFocusShopifyLink
+                    ? "Check customer panel →"
+                    : undefined
+                }
+                onAction={isShopifyLinkSignal(signal) ? onFocusShopifyLink : undefined}
+              >
+                {signalDisplayText(signal)}
+              </NeedsYouInfoCallout>
+              {photosFor(signal)}
+            </Fragment>
           ))}
         </div>
       )}

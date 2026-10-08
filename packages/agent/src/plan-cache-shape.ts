@@ -164,6 +164,7 @@ function isAgentPlan(value: unknown, requireCurrentFields: boolean): value is Ag
   if (requireCurrentFields && !isPlanRoutingEvidence(value.routingEvidence)) return false
   if (value.routingEvidence !== undefined && !isPlanRoutingEvidence(value.routingEvidence)) return false
   if (value.namespaceMiss !== undefined && typeof value.namespaceMiss !== "boolean") return false
+  if (value.damagePhotos !== undefined && (!Array.isArray(value.damagePhotos) || !value.damagePhotos.every(ref => typeof ref === "string"))) return false
   if (value.communication !== undefined && !isProposalCommunication(value.communication)) return false
   if (value.suspendedAtProposal !== undefined && typeof value.suspendedAtProposal !== "boolean") return false
   if (value.routing !== undefined) {

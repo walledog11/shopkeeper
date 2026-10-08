@@ -115,8 +115,9 @@ function buildDamageEvidenceSection(state: DamageEvidenceState | null | undefine
       body = "The customer was already asked for a photo of the damage and replied without one. Do not ask again, and propose no compensation. Call escalate_to_human.";
       break;
     case "photos": {
-      const one = state.count === 1;
-      body = `The customer has sent ${one ? "a photo" : `${state.count} photos`} of the problem. Look at ${one ? "it" : "them"}, and in your reply say in one sentence what ${one ? "it shows" : "they show"}. Propose a resolution as usual: the merchant reviews the photos before anything is sent, and a photo never authorizes compensation by itself.`;
+      const count = state.photos.length;
+      const one = count === 1;
+      body = `The customer has sent ${one ? "a photo" : `${count} photos`} of the problem. Look at ${one ? "it" : "them"}, and in your reply say in one sentence what ${one ? "it shows" : "they show"}. Propose a resolution as usual: the merchant reviews the photos before anything is sent, and a photo never authorizes compensation by itself.`;
       break;
     }
   }

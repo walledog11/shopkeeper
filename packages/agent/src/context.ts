@@ -311,13 +311,15 @@ export async function buildContext(
 
   const isOperator = isOperatorChannel(thread.channelType);
   const isGatewayOperator = thread.channelType === "operator";
-  // Operation evidence for a damage claim. Counted from the stored attachments,
-  // not the hydrated images, which are capped and channel-limited and so are no
-  // count of what the customer sent. A failed count reads as no photo, which
-  // routes the claim to the merchant rather than toward compensation.
+  // Operation evidence for a damage claim. Read from the stored attachments, not
+  // the hydrated images, which are capped and channel-limited and so are no
+  // record of what the customer sent. The plan carries these references, so the
+  // approval cards show the merchant the photos the planner counted. A failed
+  // load reads as no photo, which routes the claim to the merchant rather than
+  // toward compensation.
   const photoRequestedAt = thread.awaitingCustomer === "damage_photo" ? thread.awaitingCustomerSince : null;
   const customerImagesPromise = !isOperator && shouldHydrateAgentMessageImages(thread.channelType)
-    ? loadNonFatalContext("request_evidence", scope, 0, async () => {
+    ? loadNonFatalContext<string[]>("request_evidence", scope, [], async () => {
         const messages = await db.message.findMany({
           where: {
             organizationId: orgId,
@@ -327,14 +329,12 @@ export async function buildContext(
             attachments: { isEmpty: false },
             ...(photoRequestedAt ? { sentAt: { gt: photoRequestedAt } } : {}),
           },
+          orderBy: [{ sentAt: "asc" }, { id: "asc" }],
           select: { attachments: true },
         });
-        return messages.reduce(
-          (count, message) => count + message.attachments.filter(looksLikeImageReference).length,
-          0,
-        );
+        return messages.flatMap((message) => message.attachments.filter(looksLikeImageReference));
       })
-    : Promise.resolve({ value: 0, failed: false });
+    : Promise.resolve({ value: [] as string[], failed: false });
   const historyTaskIds = [...new Set(thread.messages.flatMap((message) => message.agentTaskId ? [message.agentTaskId] : []))];
   const historyTasks = historyTaskIds.length > 0
     ? await db.agentTask.findMany({
