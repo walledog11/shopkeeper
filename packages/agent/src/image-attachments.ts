@@ -67,7 +67,8 @@ type AgentImageLoadResult =
   | { ok: true; image: LoadedAgentImage }
   | { ok: false; reason: AgentImageRejectionReason };
 
-function looksLikeImageReference(reference: string): boolean {
+/** Whether a stored attachment reference names an image, by its file extension. */
+export function looksLikeImageReference(reference: string): boolean {
   return IMAGE_EXTENSION_RE.test(reference);
 }
 

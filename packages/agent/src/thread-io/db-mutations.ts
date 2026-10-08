@@ -6,6 +6,7 @@ import { toolEscalated, toolError, toolNotFound, toolOk, type ToolResult } from 
 import type {
   AddInternalNoteInput,
   AskOperatorInput,
+  AwaitCustomerPhotoInput,
   EscalateToHumanInput,
   UpdateThreadStatusInput,
   UpdateThreadTagInput,
@@ -103,6 +104,23 @@ export async function updateThreadTagMutation(
     afterTag: observed.after,
   });
   return receipt ? { ...result, receipt } : result;
+}
+
+// Records the photo request the customer is now answering. Set regardless of
+// status: the request went out, so a reopened thread is still waiting on it.
+// Closing the thread is what ends the wait (stopWaitingTasksOnClosedThreads).
+export async function awaitCustomerPhotoMutation(
+  _input: AwaitCustomerPhotoInput,
+  ctx: ThreadSinkContext,
+  after?: ThreadMutationHook,
+): Promise<ToolResult> {
+  const updated = await db.thread.updateMany({
+    where: { id: ctx.threadId, organizationId: ctx.orgId },
+    data: { awaitingCustomer: "damage_photo", awaitingCustomerSince: new Date() },
+  });
+  if (updated.count !== 1) return toolNotFound("Error: thread not found.");
+  await runHook(after, ctx);
+  return toolOk("Waiting for the customer's photo of the damage.");
 }
 
 export async function escalateToHumanMutation(

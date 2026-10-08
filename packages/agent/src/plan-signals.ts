@@ -48,6 +48,8 @@ export const PLAN_SIGNAL_MESSAGES: Record<ProducedPlanSignalCode, string> = {
     "The customer reply has a placeholder that no single step in this draft can fill, so it cannot be approved as written.",
   unnamed_line_item_target:
     "Shopify doesn't show the item a step targets on that order, so the step can't say which item it changes and cannot be approved as written.",
+  damage_photo_attached:
+    "The customer sent photos of the damage - check them before approving.",
 }
 
 // Reads that make an unlinked Shopify customer consequential: the plan leaned on
@@ -67,6 +69,14 @@ const CUSTOMER_OR_ORDER_READ_TOOLS: ReadonlySet<string> = new Set(
   )),
 )
 
+// Tools that pay out or replace, read from the registry's `damageEvidence` flag
+// so the list lives on the definitions rather than in a copy here.
+export const DAMAGE_EVIDENCE_TOOLS: ReadonlySet<string> = new Set(
+  Object.values(TOOL_DEFINITION_REGISTRY).flatMap((definition) => (
+    definition.policy.damageEvidence ? [definition.name] : []
+  )),
+)
+
 function severityFor(code: ProducedPlanSignalCode, rawToolCalls: RawToolCall[]): PlanSignalSeverity {
   switch (code) {
     // Fires whenever the store has no matching article, which is routine for a
@@ -78,6 +88,12 @@ function severityFor(code: ProducedPlanSignalCode, rawToolCalls: RawToolCall[]):
     // or order data is unaffected by the link being absent.
     case "shopify_customer_unresolved":
       return rawToolCalls.some(toolCall => CUSTOMER_OR_ORDER_READ_TOOLS.has(toolCall.name))
+        ? "blocking"
+        : "advisory"
+    // The agent never judges whether a photo is genuine, so compensation on a
+    // damage claim always waits for the merchant. A reply alone does not.
+    case "damage_photo_attached":
+      return rawToolCalls.some(toolCall => DAMAGE_EVIDENCE_TOOLS.has(toolCall.name))
         ? "blocking"
         : "advisory"
     default:

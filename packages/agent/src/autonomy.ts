@@ -131,6 +131,7 @@ const ESCALATION_EVIDENCE = new Set<PlanRoutingEvidenceCode>([
   "ambiguous_customer",
   "critical_planning_read_failure",
   "compensation_over_cap",
+  "damage_photo_missing",
 ]);
 
 function replyText(toolCall: RawToolCall | null): string | null {

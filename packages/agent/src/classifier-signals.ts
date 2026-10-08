@@ -46,6 +46,20 @@ export const REQUEST_ASKS = [
 
 export type RequestAsk = typeof REQUEST_ASKS[number];
 
+// Why the customer wants it, when they said. A damaged or defective item needs
+// photo evidence before any compensation (`damageEvidence` setting).
+export const REQUEST_REASONS = [
+  "damaged",
+  "defective",
+  "wrong_item",
+  "not_received",
+  "late",
+  "changed_mind",
+  "other",
+] as const;
+
+export type RequestReason = typeof REQUEST_REASONS[number];
+
 // A type, not an interface, for the same reason as ClassifierIntents: it is
 // stored in a Prisma Json column and needs an implicit index signature.
 export type RequestFacts = {
@@ -60,6 +74,9 @@ export type RequestFacts = {
   deadlineText: string | null;
   /** A second option the customer offered ("refund or exchange"). */
   alternative: RequestAsk | null;
+  /** Why they want it. Absent when they gave no reason, and on every thread
+   *  classified before the field existed. */
+  reason?: RequestReason;
 };
 
 export const REQUEST_FACT_TEXT_LIMITS = {
@@ -69,9 +86,14 @@ export const REQUEST_FACT_TEXT_LIMITS = {
 } as const;
 
 const REQUEST_ASK_SET = new Set<string>(REQUEST_ASKS);
+const REQUEST_REASON_SET = new Set<string>(REQUEST_REASONS);
 
 export function isRequestAsk(value: unknown): value is RequestAsk {
   return typeof value === "string" && REQUEST_ASK_SET.has(value);
+}
+
+function isRequestReason(value: unknown): value is RequestReason {
+  return typeof value === "string" && REQUEST_REASON_SET.has(value);
 }
 
 export function emptyRequestFacts(): RequestFacts {
@@ -126,6 +148,8 @@ export function parseRequestFacts(raw: unknown): RequestFacts {
     alternative: isRequestAsk(source.alternative) && source.alternative !== "none"
       ? source.alternative
       : null,
+    // Closed vocabulary: an unknown reason is no reason, never a near match.
+    ...(isRequestReason(source.reason) ? { reason: source.reason } : {}),
   };
 }
 

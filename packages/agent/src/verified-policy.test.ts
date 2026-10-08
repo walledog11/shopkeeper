@@ -51,6 +51,8 @@ const FORBIDDEN_WHEN_VERIFIED = [
   // Stock position is the merchant's business too: how thin a line is running
   // is a fact about the shop, not an answer to the shopper's question.
   "get_inventory_status",
+  // A photo request; storefront chat cannot carry the photo.
+  "await_customer_photo",
 ] as const;
 
 const TIERS: AutonomyTier[] = ["watch", "guarded", "trusted", "broad", "full"];

@@ -158,6 +158,9 @@ export interface UpdateThreadTagInput {
   tag: string;
 }
 
+/** Takes no input: the runtime records which thread is waiting and since when. */
+export type AwaitCustomerPhotoInput = Record<string, never>;
+
 export interface EscalateToHumanInput {
   reason: string;
 }
@@ -391,6 +394,11 @@ export interface ToolPolicyMetadata {
    * `"free"` is refused and the merchant decides how to handle it.
    */
   freeOfChargeRefused?: boolean;
+  /**
+   * The tool pays out or replaces, so on a damage claim it needs the customer's
+   * photo first and the merchant's review after (`damageEvidence` setting).
+   */
+  damageEvidence?: true;
 }
 
 export type ToolAvailability = "active" | "retired";

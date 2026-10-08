@@ -38,6 +38,7 @@ const SETTINGS_KEYS = [
   "dailyLLMSpendCapUsd",
   "blockCancellations",
   "blockCustomLineItems",
+  "damageEvidence",
   "maxIterations",
   "digestEnabled",
   "digestFrequency",
@@ -143,6 +144,7 @@ const DIGEST_FREQUENCIES = [
   "every_12h",
 ] as const satisfies readonly OrgSettings["digestFrequency"][];
 const DIGEST_DAYS = ["every_day", "weekdays"] as const satisfies readonly OrgSettings["digestDays"][];
+const DAMAGE_EVIDENCE_MODES = ["photo_required", "off"] as const satisfies readonly OrgSettings["damageEvidence"][];
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -387,6 +389,7 @@ function parseSettingsObject(value: unknown, mode: ParseMode): OrgSettingsPatch 
   readAutonomyTier(value, output, context);
   readEnum(value, "digestFrequency", DIGEST_FREQUENCIES, output, context);
   readEnum(value, "digestDays", DIGEST_DAYS, output, context);
+  readEnum(value, "damageEvidence", DAMAGE_EVIDENCE_MODES, output, context);
   readToolsEnabled(value, output, context);
   readBusinessHoursDays(value, output, context);
 

@@ -4,6 +4,7 @@ import { defineTool, stringArg } from "./schema.js";
 import type {
   AddInternalNoteInput,
   AskOperatorInput,
+  AwaitCustomerPhotoInput,
   EscalateToHumanInput,
   UpdateThreadStatusInput,
   UpdateThreadTagInput,
@@ -58,6 +59,24 @@ export const THREAD_TOOL_DEFINITIONS = [
     execute: async (input: UpdateThreadTagInput, ctx) => (
       ctx.io ? (ctx.execution ? ctx.io.updateThreadTag(input, ctx.execution) : ctx.io.updateThreadTag(input)) : noThread
     ),
+  }),
+  // Offered only by the planner, and only on a damage claim that still needs
+  // its photo (`damageEvidenceState`); no other tool set includes it.
+  defineTool({
+    name: "await_customer_photo",
+    description:
+      "Record that your reply asks the customer for a photo of the damaged or defective item, so their next message is read against that request. Call it beside the send_reply that asks for the photo. It sends nothing to the customer.",
+    fields: {},
+    category: "internal",
+    group: "thread",
+    capabilities: ["thread-io"],
+    label: "Waiting for a photo of the damage",
+    planStepLabel: "Wait for a photo of the damage",
+    execute: async (input: AwaitCustomerPhotoInput, ctx) => {
+      const io = ctx.io;
+      if (!io?.awaitCustomerPhoto) return noThread;
+      return ctx.execution ? io.awaitCustomerPhoto(input, ctx.execution) : io.awaitCustomerPhoto(input);
+    },
   }),
   defineTool({
     name: "escalate_to_human",

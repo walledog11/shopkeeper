@@ -10,6 +10,7 @@ export {
 export {
   addInternalNoteMutation,
   askOperatorMutation,
+  awaitCustomerPhotoMutation,
   escalateToHumanMutation,
   updateThreadStatusMutation,
   updateThreadTagMutation,

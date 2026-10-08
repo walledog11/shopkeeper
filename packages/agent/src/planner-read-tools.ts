@@ -4,6 +4,7 @@ import type { OrgSettings, ProducedPlanSignalCode } from "./types.js";
 import { executeToolStructured } from "./tools/executor.js";
 import type { ToolStatus } from "./tools/result.js";
 import type { AgentContext, ShopifyOrderSummary } from "./agent-context.js";
+import type { DamageEvidenceState } from "./damage-evidence.js";
 import { hasUnresolvedShopifyCustomer } from "./guest-policy.js";
 import { normalizeOrderName } from "./order-reference.js";
 
@@ -56,8 +57,13 @@ export function appendInitialPlanningSignals(input: {
   ctx: AgentContext;
   operatorMode: boolean;
   codes: ProducedPlanSignalCode[];
+  damageEvidence?: DamageEvidenceState | null;
 }): void {
   const { ctx, operatorMode, codes } = input;
+  // Severity depends on the finished plan: blocking once it compensates.
+  if (input.damageEvidence?.kind === "photos") {
+    codes.push("damage_photo_attached");
+  }
   if (ctx.recentOrdersFetchFailed) {
     codes.push("recent_orders_fetch_failed");
   }

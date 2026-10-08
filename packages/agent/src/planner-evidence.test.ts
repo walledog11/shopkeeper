@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { AgentContext } from "./agent-context.js";
 import { emptyIntents, emptyRequestFacts } from "./classifier-signals.js";
+import { damageEvidenceState } from "./damage-evidence.js";
+import { buildPlanSignals } from "./plan-signals.js";
 import { buildPlanRoutingEvidence, completesAtMerchantFollowUp, kbMissNeedsMerchant } from "./planner-evidence.js";
+import { appendInitialPlanningSignals } from "./planner-read-tools.js";
 import { resolveAgentSettings } from "./settings.js";
+import type { ProducedPlanSignalCode, RawToolCall } from "./types.js";
 
 function context(overrides: Partial<AgentContext> = {}): AgentContext {
   return {
@@ -316,5 +320,59 @@ describe("completesAtMerchantFollowUp", () => {
     expect(completes([askMerchant], missed)).toBe(false);
     // A merchant's instruction, answer or revision may be the very reply they want.
     expect(completes([openReturn, reply], missed, true)).toBe(false);
+  });
+});
+
+describe("damage claims", () => {
+  const settings = resolveAgentSettings({});
+  const refund: RawToolCall = { id: "refund", name: "create_refund", input: { order_id: "9000001042" } };
+  const reply: RawToolCall = { id: "reply", name: "send_reply", input: { text: "Sorry about that. Could you send a photo?" } };
+  const askForPhoto: RawToolCall = { id: "ask", name: "await_customer_photo", input: {} };
+
+  function damageClaim(requestEvidence: NonNullable<AgentContext["requestEvidence"]>) {
+    const ctx = context({
+      thread: { ...context().thread, channelType: "ig_dm" },
+      recentMessages: [{ senderType: "customer", contentText: "Can I get a refund on 1042? It arrived damaged." }],
+      classifierSignals: {
+        version: 7, language: "en",
+        intents: { ...emptyIntents(), mutative_request: true, compensation_request: true },
+        requestFacts: { ...emptyRequestFacts(), ask: "refund", order: "#1042", reason: "damaged" },
+      },
+      requestEvidence,
+    });
+    return { ctx, damageEvidence: damageEvidenceState(ctx, settings) };
+  }
+
+  function route(claim: ReturnType<typeof damageClaim>, rawToolCalls: RawToolCall[]) {
+    return buildPlanRoutingEvidence({
+      ...claim, rawToolCalls, settings, readBlocks: [], readStatusMap: new Map(), readResultsMap: new Map(),
+    });
+  }
+
+  it("hands a refund on the customer's word alone to the merchant", () => {
+    const routed = route(damageClaim({ customerImages: 0, photoRequestedAt: null }), [refund, reply]);
+    expect(routed.evidence.codes).toContain("damage_photo_missing");
+  });
+
+  it("hands the conversation over when the requested photo never came", () => {
+    const routed = route(damageClaim({ customerImages: 0, photoRequestedAt: "2026-10-07T18:00:00.000Z" }), [reply]);
+    expect(routed.evidence.codes).toContain("damage_photo_missing");
+  });
+
+  it("lets the first photo request go out without escalating it", () => {
+    const routed = route(damageClaim({ customerImages: 0, photoRequestedAt: null }), [askForPhoto, reply]);
+    expect(routed.evidence.codes).toEqual([]);
+    expect(routed.signalCodes).not.toContain("mutative_intent_no_action");
+  });
+
+  it("holds compensation on a photographed claim for the merchant, and not a reply alone", () => {
+    const { ctx, damageEvidence } = damageClaim({ customerImages: 2, photoRequestedAt: null });
+    const codes: ProducedPlanSignalCode[] = [];
+    appendInitialPlanningSignals({ ctx, operatorMode: false, codes, damageEvidence });
+    const severity = (calls: RawToolCall[]) => (
+      buildPlanSignals(codes, calls).find((signal) => signal.code === "damage_photo_attached")?.severity
+    );
+    expect(severity([refund, reply])).toBe("blocking");
+    expect(severity([reply])).toBe("advisory");
   });
 });
