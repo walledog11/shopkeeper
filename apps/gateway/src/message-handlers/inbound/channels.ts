@@ -207,12 +207,8 @@ export async function handleIgDmJob(job: Job<InboundJobData>, aiSummaryQueue: Qu
 
     // Each transport reads the shopper's display name from its own surface: Meta's
     // Graph API for a direct row, and SocialAPI's conversation list for a provider
-    // row, which is the only place SocialAPI carries it. Attachment download still
-    // speaks Meta's Graph API with a token a SocialAPI row does not have, so its
-    // media renders through formatInstagramMessage as an unsupported-attachment
-    // marker rather than being silently dropped.
+    // row, which is the only place SocialAPI carries it.
     let customerName: string | null = null;
-    let storedAttachments: string[] = [];
     if (integration.transport === 'meta_direct') {
       const profileResult = await fetchInstagramMessagingUserProfile(
         senderIgsid,
@@ -232,13 +228,6 @@ export async function handleIgDmJob(job: Job<InboundJobData>, aiSummaryQueue: Qu
           '[Worker] Instagram profile enrichment failed',
         );
       }
-
-      storedAttachments = await persistProviderAttachments(
-        organizationId,
-        attachments.filter(attachment => isSupportedInstagramBinaryAttachment(attachment.type)),
-        downloadInstagramAttachment,
-        externalMessageId,
-      );
     } else if (providerConversationId) {
       // A display name is worth one bounded read, never the message: a failed
       // lookup leaves the ticket under its platform-id label and is retried by
@@ -262,6 +251,16 @@ export async function handleIgDmJob(job: Job<InboundJobData>, aiSummaryQueue: Qu
         );
       }
     }
+
+    // Media needs no token on either transport: the downloader fetches the URL
+    // itself, from an allowlisted host. A view-once photo arrives with no URL, so
+    // it stays the marker formatInstagramMessage writes.
+    const storedAttachments = await persistProviderAttachments(
+      organizationId,
+      attachments.filter(attachment => isSupportedInstagramBinaryAttachment(attachment.type)),
+      downloadInstagramAttachment,
+      externalMessageId,
+    );
 
     await processInboundMessage(
       organizationId,

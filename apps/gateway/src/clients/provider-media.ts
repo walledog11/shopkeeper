@@ -9,6 +9,10 @@ export function isAllowedProviderMediaUrl(value: string, suffixes: readonly stri
   } catch { return false; }
 }
 
+function hostOf(value: string): string | null {
+  try { return new URL(value).host; } catch { return null; }
+}
+
 export async function downloadProviderMedia(url: string, policy: {
   allowedUrl: (url: string) => boolean;
   allowedContentTypes: ReadonlySet<string>;
@@ -21,7 +25,11 @@ export async function downloadProviderMedia(url: string, policy: {
   const signal = policy.signal ? AbortSignal.any([policy.signal, timeout]) : timeout;
   try {
     for (let redirects = 0; redirects <= 3; redirects++) {
-      if (!policy.allowedUrl(url)) return null;
+      if (!policy.allowedUrl(url)) {
+        // The host only: provider media URLs carry signed, expiring credentials.
+        logger.warn({ host: hostOf(url), redirects }, '[Media] Media URL host not allowed');
+        return null;
+      }
       const response = await fetch(url, { redirect: 'manual', cache: 'no-store', signal });
       if ([301, 302, 303, 307, 308].includes(response.status)) {
         await response.body?.cancel();
