@@ -13,6 +13,7 @@ import {
   readRequestDisplay,
   systemRequestDisplay,
 } from './request-display.js';
+import { CLASSIFIER_VERSION } from '../inbound/classification-contract.js';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
 
@@ -98,7 +99,7 @@ describe('buildRequestDisplaySnapshot', () => {
     })).resolves.toEqual({ version: 1, kind: 'unavailable' });
   });
 
-  it.each([4, 5.5, 7])('never turns unsupported classifier version %s into a classified snapshot', async (version) => {
+  it.each([4, 5.5, CLASSIFIER_VERSION + 1])('never turns unsupported classifier version %s into a classified snapshot', async (version) => {
     const customer = await createTestCustomer(org.id, 'old@example.com');
     const thread = await createTestThread(org.id, customer.id, ChannelType.email);
     const message = await createTestMessage(thread.id, 'Please refund #1024');

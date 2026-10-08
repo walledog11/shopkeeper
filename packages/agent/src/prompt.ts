@@ -7,6 +7,7 @@ import {
   isVerifiedContext,
 } from "./guest-policy.js";
 import type { AgentContext } from "./agent-context.js";
+import type { DamageEvidenceState } from "./damage-evidence.js";
 import {
   CONTEXT_BUDGETS,
   budgetKbArticles,
@@ -94,6 +95,32 @@ function buildAutonomySection(s: ReturnType<typeof resolveAgentSettings>): strin
       return "";
   }
   return `\n\n## Your autonomy\n${body}`;
+}
+
+// Present only on a damage claim the planner is answering, so every other turn
+// keeps its prompt. Routing enforces each state; this tells the model which one
+// it is in, so the plan it drafts is the one that will ship.
+function buildDamageEvidenceSection(state: DamageEvidenceState | null | undefined): string {
+  if (!state) return "";
+  const compensation = "any refund, credit, exchange or replacement";
+  let body: string;
+  switch (state.kind) {
+    case "photo_impossible":
+      body = `The customer reports a damaged or defective item on a channel that cannot carry a photo, and store policy needs one before ${compensation}. Propose no compensation. Call escalate_to_human.`;
+      break;
+    case "ask":
+      body = `The customer reports a damaged or defective item and has not sent a photo. Store policy needs one before ${compensation}. Call await_customer_photo, then send_reply asking briefly what is damaged and for a photo of the item and its packaging. Propose no compensation yet.`;
+      break;
+    case "asked_without_photo":
+      body = "The customer was already asked for a photo of the damage and replied without one. Do not ask again, and propose no compensation. Call escalate_to_human.";
+      break;
+    case "photos": {
+      const one = state.count === 1;
+      body = `The customer has sent ${one ? "a photo" : `${state.count} photos`} of the problem. Look at ${one ? "it" : "them"}, and in your reply say in one sentence what ${one ? "it shows" : "they show"}. Propose a resolution as usual: the merchant reviews the photos before anything is sent, and a photo never authorizes compensation by itself.`;
+      break;
+    }
+  }
+  return `\n\n## Damage claim\n${body}`;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -265,7 +292,7 @@ ${OPERATOR_PRODUCT_HELP_INSTRUCTIONS}`;
 export function buildSystemPromptParts(
   ctx: AgentContext,
   settings?: Partial<OrgSettings>,
-  options?: { exactDraftProposal?: boolean },
+  options?: { exactDraftProposal?: boolean; damageEvidence?: DamageEvidenceState | null },
 ): { stable: string; volatile: string } {
   const s = resolveAgentSettings(settings);
   const isOperatorMode = isOperatorChannel(ctx.thread.channelType);
@@ -402,7 +429,7 @@ ${identitySection}${ordersSection}${guestSection}
 
 ## Integrations
 ${shopifyNote}
-${shopifyCustomerNote}${buildGuardrailSection(s)}${buildAutonomySection(s)}${buildStoreProfileSection(ctx.orgName, s.aiContext)}${kbSection}${buildVoiceSection(s)}${buildMerchantPreferencesSection(ctx)}${exactDraftSection}`;
+${shopifyCustomerNote}${buildGuardrailSection(s)}${buildAutonomySection(s)}${buildDamageEvidenceSection(options?.damageEvidence)}${buildStoreProfileSection(ctx.orgName, s.aiContext)}${kbSection}${buildVoiceSection(s)}${buildMerchantPreferencesSection(ctx)}${exactDraftSection}`;
 
   return {
     stable: SUPPORT_STABLE_PREFIX,

@@ -33,6 +33,9 @@ export interface OrgSettings {
   dailyLLMSpendCapUsd: number | null; // org-wide LLM spend cap per UTC day in USD; null = use DEFAULT_DAILY_LLM_SPEND_CAP_USD
   blockCancellations: boolean;
   blockCustomLineItems: boolean;
+  // A damaged or defective item needs the customer's photo before any refund,
+  // credit, exchange or replacement is proposed.
+  damageEvidence: 'photo_required' | 'off';
   maxIterations: number;
 
   // Operator digest (fanned out to bound Telegram/iMessage channels)
@@ -123,6 +126,7 @@ export type PlanRoutingEvidenceCode =
   | 'ambiguous_customer'
   | 'critical_planning_read_failure'
   | 'compensation_over_cap'
+  | 'damage_photo_missing'
   | 'policy_gap'
   | 'kb_gap'
   | 'circular_channel_deflection'
@@ -147,6 +151,7 @@ export type ProducedPlanSignalCode =
   | 'mutative_intent_no_action'
   | 'circular_channel_deflection'
   | 'approved_message_withheld'
+  | 'damage_photo_attached'
   | PlanValidationIssueCode
 
 export type PlanValidationIssueCode =

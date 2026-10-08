@@ -21,6 +21,7 @@ export type {
   AgentToolDefinition,
   AskOperatorInput,
   AttachReturnLabelInput,
+  AwaitCustomerPhotoInput,
   CancelOrderInput,
   CreateExchangeInput,
   CreateFlashSaleInput,

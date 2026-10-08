@@ -6,6 +6,7 @@ import { buildContext as coreBuildContext, type BuildContextOptions } from "@sho
 import {
   escalateToHuman,
   askOperator,
+  awaitCustomerPhoto,
   addInternalNote,
   sendReply,
   sendEmail,
@@ -27,6 +28,7 @@ export function buildContext(
     sendEmail,
     updateThreadStatus,
     updateThreadTag,
+    awaitCustomerPhoto,
   }, options);
 }
 

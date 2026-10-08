@@ -57,6 +57,7 @@ const PLAN_ROUTING_EVIDENCE_CODES: PlanRoutingEvidenceCode[] = [
   "ambiguous_customer",
   "critical_planning_read_failure",
   "compensation_over_cap",
+  "damage_photo_missing",
   "policy_gap",
   "kb_gap",
   "circular_channel_deflection",

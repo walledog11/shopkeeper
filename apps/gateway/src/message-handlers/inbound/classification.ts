@@ -25,6 +25,7 @@ import {
   emptyRequestFacts,
   parseRequestFacts,
   REQUEST_ASKS,
+  REQUEST_REASONS,
   INTENT_KEYS,
 } from '@shopkeeper/agent/classifier-signals';
 import logger from '../../logger.js';
@@ -190,8 +191,9 @@ Read the customer message and produce these fields in strict JSON:
   - "deadline": the date the customer needs this by, as YYYY-MM-DD, resolved against the "Today" line in the message. Null unless they named or implied a specific date.
   - "deadlineText": the customer's own words that set that date ("before Friday", "by the 30th"), at most 40 characters. Null when they named no timing.
   - "alternative": a second option the customer said they would also accept, from the same list as "ask" ("refund or exchange" → ask "refund", alternative "exchange"). Null when they offered none.
+  - "reason": why the customer wants it (not the classification "reason" above), exactly one of "damaged" (arrived broken, cracked, torn, dented or crushed), "defective" (arrived intact but does not work or has a manufacturing fault), "wrong_item" (a different item, size or colour than ordered), "not_received" (never arrived), "late" (arrived or is arriving later than expected), "changed_mind" (no longer wants it), "other". Null when they gave no reason.
 
-Respond ONLY in strict JSON: {"title":"...","summary":"...","tag":"...","classification":"...","reason":"...","language":"en","intents":${JSON.stringify(emptyIntents())},"requestSummary":"...","requestDisposition":"...","requestFacts":{"ask":"none","subject":null,"order":null,"deadline":null,"deadlineText":null,"alternative":null}}`;
+Respond ONLY in strict JSON: {"title":"...","summary":"...","tag":"...","classification":"...","reason":"...","language":"en","intents":${JSON.stringify(emptyIntents())},"requestSummary":"...","requestDisposition":"...","requestFacts":{"ask":"none","subject":null,"order":null,"deadline":null,"deadlineText":null,"alternative":null,"reason":null}}`;
 
 const REQUEST_DISPOSITIONS: readonly DbThreadRequestDisposition[] = [
   'none',
@@ -241,8 +243,11 @@ export const CLASSIFIER_OUTPUT_SCHEMA = {
         alternative: {
           anyOf: [{ type: 'string', enum: [...REQUEST_ASKS] }, { type: 'null' }],
         },
+        reason: {
+          anyOf: [{ type: 'string', enum: [...REQUEST_REASONS] }, { type: 'null' }],
+        },
       },
-      required: ['ask', 'subject', 'order', 'deadline', 'deadlineText', 'alternative'],
+      required: ['ask', 'subject', 'order', 'deadline', 'deadlineText', 'alternative', 'reason'],
     },
   },
   required: [

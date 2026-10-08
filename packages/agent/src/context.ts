@@ -14,6 +14,7 @@ import {
 } from "./merchant-preferences.js";
 import {
   hydrateAgentMessageImages,
+  looksLikeImageReference,
   shouldHydrateAgentMessageImages,
 } from "./image-attachments.js";
 import logger from "./logger.js";
@@ -23,16 +24,7 @@ import {
   budgetRecentMessages,
   truncateContextText,
 } from "./context-budget.js";
-import type { ToolResult } from "./tools/result.js";
-import type {
-  AddInternalNoteInput,
-  AskOperatorInput,
-  SendReplyInput,
-  SendEmailInput,
-  UpdateThreadStatusInput,
-  UpdateThreadTagInput,
-  EscalateToHumanInput,
-} from "./tools/registry/index.js";
+import type { ThreadSink } from "./thread-io/types.js";
 import type {
   AgentActionMode,
   AgentContext,
@@ -46,26 +38,7 @@ import type {
 // stack (Postmark/IG/email) here; the package itself never imports a provider.
 // `escalate` and `io` on the built context are wired from these, bound to the
 // thread's identity.
-interface ThreadSinkContext {
-  agentActionMode?: AgentActionMode;
-  threadId: string;
-  orgId: string;
-  orgName: string;
-  operationId?: string;
-  executionId?: string;
-  agentRequestId?: string;
-  agentTaskId?: string;
-}
-
-export interface ThreadSink {
-  escalateToHuman(input: EscalateToHumanInput, ctx: ThreadSinkContext): Promise<ToolResult>;
-  askOperator(input: AskOperatorInput, ctx: ThreadSinkContext): Promise<ToolResult>;
-  addInternalNote(input: AddInternalNoteInput, ctx: ThreadSinkContext): Promise<ToolResult>;
-  sendReply(input: SendReplyInput, ctx: ThreadSinkContext): Promise<ToolResult>;
-  sendEmail(input: SendEmailInput, ctx: ThreadSinkContext): Promise<ToolResult>;
-  updateThreadStatus(input: UpdateThreadStatusInput, ctx: ThreadSinkContext): Promise<ToolResult>;
-  updateThreadTag(input: UpdateThreadTagInput, ctx: ThreadSinkContext): Promise<ToolResult>;
-}
+export type { ThreadSink };
 
 type RawShopifyOrder = {
   id: number;
@@ -338,6 +311,30 @@ export async function buildContext(
 
   const isOperator = isOperatorChannel(thread.channelType);
   const isGatewayOperator = thread.channelType === "operator";
+  // Operation evidence for a damage claim. Counted from the stored attachments,
+  // not the hydrated images, which are capped and channel-limited and so are no
+  // count of what the customer sent. A failed count reads as no photo, which
+  // routes the claim to the merchant rather than toward compensation.
+  const photoRequestedAt = thread.awaitingCustomer === "damage_photo" ? thread.awaitingCustomerSince : null;
+  const customerImagesPromise = !isOperator && shouldHydrateAgentMessageImages(thread.channelType)
+    ? loadNonFatalContext("request_evidence", scope, 0, async () => {
+        const messages = await db.message.findMany({
+          where: {
+            organizationId: orgId,
+            threadId,
+            senderType: "customer",
+            deletedAt: null,
+            attachments: { isEmpty: false },
+            ...(photoRequestedAt ? { sentAt: { gt: photoRequestedAt } } : {}),
+          },
+          select: { attachments: true },
+        });
+        return messages.reduce(
+          (count, message) => count + message.attachments.filter(looksLikeImageReference).length,
+          0,
+        );
+      })
+    : Promise.resolve({ value: 0, failed: false });
   const historyTaskIds = [...new Set(thread.messages.flatMap((message) => message.agentTaskId ? [message.agentTaskId] : []))];
   const historyTasks = historyTaskIds.length > 0
     ? await db.agentTask.findMany({
@@ -463,6 +460,10 @@ export async function buildContext(
   }
 
   const openThreadCount = (await openThreadCountPromise).value;
+  const requestEvidence = {
+    customerImages: (await customerImagesPromise).value,
+    photoRequestedAt: photoRequestedAt?.toISOString() ?? null,
+  };
 
   const kbResult = await effectiveKbArticlesPromise;
   const allKbArticles = kbResult.value;
@@ -548,6 +549,7 @@ export async function buildContext(
       sendEmail: (input, execution?: AgentExecutionIdentity) => sink.sendEmail(input, { ...threadIo, ...execution }),
       updateThreadStatus: (input, execution?: AgentExecutionIdentity) => sink.updateThreadStatus(input, { ...threadIo, ...execution }),
       updateThreadTag: (input, execution?: AgentExecutionIdentity) => sink.updateThreadTag(input, { ...threadIo, ...execution }),
+      awaitCustomerPhoto: (input, execution?: AgentExecutionIdentity) => sink.awaitCustomerPhoto(input, { ...threadIo, ...execution }),
     },
   };
 
@@ -581,6 +583,7 @@ export async function buildContext(
     merchantPreferences,
     ...(scopesCustomerRequest ? { currentCustomerMessageIds } : {}),
     classifierSignals,
+    ...(isOperator ? {} : { requestEvidence }),
     ...(options?.operatorLedger
       ? {
           operatorLedger: truncateContextText(

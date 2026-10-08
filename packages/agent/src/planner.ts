@@ -19,6 +19,7 @@ import {
   appendPlanningReadSignals,
 } from "./planner-read-tools.js";
 import { applyEscalationRouting } from "./escalation-materialization.js";
+import { AWAIT_CUSTOMER_PHOTO_TOOL, damageEvidenceState } from "./damage-evidence.js";
 import { buildPlanRoutingEvidence, completesAtMerchantFollowUp, kbMissNeedsMerchant } from "./planner-evidence.js";
 import { decideAutonomy } from "./autonomy.js";
 import { recordMerchantPreferenceUsage } from "./merchant-preferences.js";
@@ -86,6 +87,9 @@ export interface PlanAgentOptions {
 
 const KB_MISS_REPLY_REFUSAL =
   "Not sent. Your knowledge base search found nothing on this, so you have no store information to answer from. Do not answer from general knowledge. Call ask_operator with the specific fact you need from the merchant, or escalate_to_human.";
+
+const DAMAGE_PHOTO_ASK_REFUSAL =
+  "Not sent. The customer reports a damaged or defective item and has not sent a photo. Call await_customer_photo with the reply that asks for one, and propose no compensation.";
 
 const TERSE_REFERENT = /^(?:yes|yeah|yep|yup|ok(?:ay)?|sure|go ahead|do it|that one|it)[.!?\s]*$/i;
 
@@ -210,9 +214,18 @@ export async function planAgent(
   });
   // Decided once so the prompt describes the tool set the model is offered.
   requireDurableAgentRuntime(options?.runtimeVersion);
-  const { stable, volatile } = buildSystemPromptParts(ctx, settings, { exactDraftProposal: true });
-  const systemPromptBlocks = buildSplitCachedSystemPrompt(stable, volatile);
   const resolvedSettings = resolveAgentSettings(settings);
+  // Customer-originated planning only. A merchant who instructs, answers or
+  // revises is already the person a missing photo would hand the claim to, and
+  // a withheld-message follow-up proposes no compensation at all.
+  const damageEvidence = operatorMode
+    || options?.merchantInstruction
+    || options?.merchantContinuation
+    || options?.withheldMessageFollowUp
+    ? null
+    : damageEvidenceState(ctx, resolvedSettings);
+  const { stable, volatile } = buildSystemPromptParts(ctx, settings, { exactDraftProposal: true, damageEvidence });
+  const systemPromptBlocks = buildSplitCachedSystemPrompt(stable, volatile);
 
   // A merchant-answer replan must reply to the customer with the supplied answer,
   // never re-park the ticket — so drop ask_operator from its tool set.
@@ -238,6 +251,11 @@ export async function planAgent(
   if (merchantAnswerReplan) {
     availableTools = availableTools.filter(tool => tool.name !== "ask_operator");
   }
+  // Offered only while a damage claim still needs its photo asked for, so every
+  // other turn keeps a byte-identical tool list and prompt cache.
+  availableTools = availableTools.filter(tool => (
+    tool.name !== AWAIT_CUSTOMER_PHOTO_TOOL || damageEvidence?.kind === "ask"
+  ));
   const toolSelection = selectPlanningTools({
     availableTools,
     classifierSignals: ctx.classifierSignals,
@@ -296,17 +314,28 @@ export async function planAgent(
   // nothing the store told us. Refuse it inside the turn so the model asks the
   // merchant for the missing fact, rather than parking a draft behind a question
   // the model never wrote.
-  const refuseUngroundedReply: RunAgentLoopParams["captureRefuseReply"] = (proposal) => (
-    kbMissNeedsMerchant({
+  //
+  // A photo request is recorded by the step beside the reply that makes it, or
+  // the customer's next message cannot be read as the answer to it. The loop
+  // ends at the reply, so a reply proposed without that step goes back once.
+  const refuseReply: RunAgentLoopParams["captureRefuseReply"] = (proposal) => {
+    if (kbMissNeedsMerchant({
       ctx,
       merchantContinuation: options?.merchantContinuation,
       rawToolCalls: proposal.rawToolCalls,
       readBlocks: proposal.readBlocks,
       readStatusMap: proposal.readStatus,
-    })
-      ? KB_MISS_REPLY_REFUSAL
-      : null
-  );
+    })) {
+      return KB_MISS_REPLY_REFUSAL;
+    }
+    if (
+      damageEvidence?.kind === "ask"
+      && !proposal.rawToolCalls.some(call => call.name === AWAIT_CUSTOMER_PHOTO_TOOL)
+    ) {
+      return DAMAGE_PHOTO_ASK_REFUSAL;
+    }
+    return null;
+  };
   // A return the merchant must finish, when the agent has nothing from the store
   // on how items go back, is already the whole plan: the turn ends there instead
   // of asking the merchant for a label Shopkeeper cannot use.
@@ -334,7 +363,7 @@ export async function planAgent(
     settings,
     usageTotals,
     captureReprompt: !operatorMode,
-    captureRefuseReply: operatorMode ? undefined : refuseUngroundedReply,
+    captureRefuseReply: operatorMode ? undefined : refuseReply,
     captureCompleteTurn: operatorMode ? undefined : completeAtMerchantFollowUp,
     captureDiscovery: offersDiscovery
       ? {
@@ -417,7 +446,7 @@ export async function planAgent(
   // Blocking, so `decideAutonomy` sends this draft to the merchant: a customer
   // message about a failed or unfinished approved action is never auto-sent.
   if (options?.withheldMessageFollowUp) signalCodes.push("approved_message_withheld");
-  appendInitialPlanningSignals({ ctx, operatorMode, codes: signalCodes });
+  appendInitialPlanningSignals({ ctx, operatorMode, codes: signalCodes, damageEvidence });
   appendPlanningReadSignals({
     codes: signalCodes,
     readBlocks: loop.readBlocks,
@@ -443,6 +472,7 @@ export async function planAgent(
       settings: resolvedSettings,
       withheldMessageFollowUp: options?.withheldMessageFollowUp === true,
       merchantContinuation: options?.merchantContinuation,
+      damageEvidence,
     });
     routingEvidence = built.evidence;
     signalCodes.push(...built.signalCodes);
@@ -507,6 +537,7 @@ export async function planAgent(
     loopStop: loop.stop,
     routingDecision,
     routingEvidenceCodes: routingEvidence.codes,
+    damageEvidence: damageEvidence?.kind ?? null,
     classifierState: routingEvidence.classifierState,
     modelCalls: usageTotals.modelCalls,
     usageTotals,

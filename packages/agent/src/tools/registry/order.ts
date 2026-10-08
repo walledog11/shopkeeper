@@ -154,6 +154,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     policy: {
       refundAmountLimits: true,
       dailyRefundSpendLimit: "input",
+      damageEvidence: true,
     },
     execute: async (input: CreateRefundInput, ctx, _settings, deps) => {
       const shopify = requireShopify(ctx);
@@ -195,6 +196,7 @@ export const ORDER_TOOL_DEFINITIONS = [
       // to Shopify's calculated figure, which is the only amount that exists
       // before the refund is committed - which is what `"provider"` says.
       dailyRefundSpendLimit: "provider",
+      damageEvidence: true,
     },
     execute: async (input: CreatePartialRefundInput, ctx, settings, deps) => {
       const shopify = requireShopify(ctx);
@@ -265,6 +267,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     policy: {
       customLineItemsDisabled: true,
       freeOfChargeRefused: true,
+      damageEvidence: true,
     },
     execute: async (input: CreateShopifyOrderInput, ctx, settings, deps) => {
       const shopify = requireShopify(ctx);
@@ -363,6 +366,9 @@ export const ORDER_TOOL_DEFINITIONS = [
     merchantFollowUp: "send_return_label",
     label: "Set up exchange",
     planStepLabel: "Set up exchange",
+    policy: {
+      damageEvidence: true,
+    },
     execute: async (input: CreateExchangeInput, ctx, _settings, deps) => {
       const shopify = requireShopify(ctx);
       if (!shopify) return noShopify;
@@ -435,6 +441,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     policy: {
       refundAmountLimits: true,
       dailyRefundSpendLimit: "input",
+      damageEvidence: true,
     },
     execute: async (input: CreateGiftCardInput, ctx, _settings, deps) => {
       const shopify = requireShopify(ctx);

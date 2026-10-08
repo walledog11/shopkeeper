@@ -77,6 +77,11 @@ enum ThreadFilterFeedback {
   confirmed_spam
 }
 
+// What the agent asked the customer for and is waiting on.
+enum CustomerWait {
+  damage_photo
+}
+
 enum PlanExecutionStatus {
   pending
   claimed
@@ -567,6 +572,11 @@ model Thread {
   // stays `open` so it remains in the inbox and inbound follow-ups correlate to
   // it. Set when the agent hands off to the merchant; null otherwise.
   escalatedAt               DateTime?            @map("escalated_at") @db.Timestamptz
+  // Set by the agent's await_customer_photo step; cleared whenever the thread
+  // closes (stopWaitingTasksOnClosedThreads), so a later conversation on a
+  // reopened thread never inherits it.
+  awaitingCustomer          CustomerWait?        @map("awaiting_customer")
+  awaitingCustomerSince     DateTime?            @map("awaiting_customer_since") @db.Timestamptz
   filterStatus              ThreadFilterStatus   @default(genuine) @map("filter_status")
   filterReason              String?              @map("filter_reason") @db.Text
   filterDecidedAt           DateTime?            @map("filter_decided_at") @db.Timestamptz

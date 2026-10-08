@@ -1736,13 +1736,25 @@ async function recordTaskStop(
  *
  * A task whose proposal is already approved is not waiting: its execution owns
  * it, and a plan that closes the ticket as its last step must not stop itself.
+ *
+ * It also ends a wait on the customer (`Thread.awaitingCustomer`). Every close
+ * path calls this, and nothing else clears that wait, so a reopened thread never
+ * reads a later message as the answer to a request made before the close.
  */
 export async function stopWaitingTasksOnClosedThreads(
-  tx: TaskStopTx & Pick<typeof db, "$queryRaw">,
+  tx: TaskStopTx & Pick<typeof db, "$queryRaw" | "thread">,
   input: { organizationId: string; threadIds: readonly string[]; now?: Date },
 ): Promise<number> {
   if (input.threadIds.length === 0) return 0;
   const now = input.now ?? new Date();
+  await tx.thread.updateMany({
+    where: {
+      organizationId: input.organizationId,
+      id: { in: [...input.threadIds] },
+      awaitingCustomer: { not: null },
+    },
+    data: { awaitingCustomer: null, awaitingCustomerSince: null },
+  });
   const locked = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
     SELECT id FROM agent_tasks
     WHERE organization_id = ${input.organizationId}::uuid

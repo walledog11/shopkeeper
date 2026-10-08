@@ -2,6 +2,7 @@ import type { ToolResult } from "../tools/result.js";
 import type {
   AddInternalNoteInput,
   AskOperatorInput,
+  AwaitCustomerPhotoInput,
   EscalateToHumanInput,
   SendEmailInput,
   SendReplyInput,
@@ -36,4 +37,5 @@ export interface ThreadSink {
   sendEmail(input: SendEmailInput, ctx: ThreadSinkContext): Promise<ToolResult>;
   updateThreadStatus(input: UpdateThreadStatusInput, ctx: ThreadSinkContext): Promise<ToolResult>;
   updateThreadTag(input: UpdateThreadTagInput, ctx: ThreadSinkContext): Promise<ToolResult>;
+  awaitCustomerPhoto(input: AwaitCustomerPhotoInput, ctx: ThreadSinkContext): Promise<ToolResult>;
 }

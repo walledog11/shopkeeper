@@ -17,6 +17,7 @@ import {
   type AgentToolDefinition,
 } from "./tools/registry/index.js";
 import { buildSystemPromptParts, buildComposerAskPrompt } from "./prompt.js";
+import { AWAIT_CUSTOMER_PHOTO_TOOL } from "./damage-evidence.js";
 import { isOperatorChannel } from "./intent.js";
 import { buildMessageHistory } from "./message-history.js";
 import { runAgentLoop } from "./agent-loop.js";
@@ -305,6 +306,9 @@ export async function runAgent(
       : selectAgentTools(settings, storefrontTools, grantedScopes).filter((tool) => (
           (guestOnlyReachable || !isGuestOnlyTool(tool.name))
           && (!gatewayOperatorMode || !OPERATOR_HIDDEN_TOOL_NAMES.has(tool.name))
+          // Only the support planner offers it, on a damage claim; an approved
+          // plan that contains it still executes it.
+          && tool.name !== AWAIT_CUSTOMER_PHOTO_TOOL
         ));
     const tools = readOnly
       ? selectedCoreTools

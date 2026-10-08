@@ -4,6 +4,7 @@ import type { MerchantPreferenceSummary } from "./merchant-preferences.js";
 import type { ToolResult } from "./tools/result.js";
 import type {
   AddInternalNoteInput,
+  AwaitCustomerPhotoInput,
   SendReplyInput,
   SendEmailInput,
   UpdateThreadStatusInput,
@@ -21,6 +22,8 @@ export interface AgentIO {
   sendEmail(input: SendEmailInput, execution?: AgentExecutionIdentity): Promise<ToolResult>;
   updateThreadStatus(input: UpdateThreadStatusInput, execution?: AgentExecutionIdentity): Promise<ToolResult>;
   updateThreadTag(input: UpdateThreadTagInput, execution?: AgentExecutionIdentity): Promise<ToolResult>;
+  /** Optional so a host that never plans support threads need not supply it. */
+  awaitCustomerPhoto?(input: AwaitCustomerPhotoInput, execution?: AgentExecutionIdentity): Promise<ToolResult>;
 }
 
 export interface AgentExecutionIdentity {
@@ -181,6 +184,16 @@ export interface BaseAgentContext {
   io?: AgentIO;
 }
 
+// What the customer has supplied toward the current request, counted from the
+// stored attachments rather than the hydrated images, which are channel-limited
+// and capped.
+export interface RequestEvidence {
+  /** Image attachments on customer messages: only those since the photo request while one is pending. */
+  customerImages: number;
+  /** When the agent asked for a photo of the damage (ISO 8601); null when it has not. */
+  photoRequestedAt: string | null;
+}
+
 // Support module context: the base plus the ticket, customer, Shopify linkage,
 // recent orders, and KB articles the support agent needs.
 export interface SupportContext extends BaseAgentContext {
@@ -227,6 +240,8 @@ export interface SupportContext extends BaseAgentContext {
   // present only for classified inbound threads. Routing (Phase 2) reads it;
   // absent/null means fall back to the regex path.
   classifierSignals?: ClassifierSignals | null;
+  // Absent on hosts that do not load it, which reads as no photo and no request.
+  requestEvidence?: RequestEvidence;
 }
 
 export type AgentContext = SupportContext;

@@ -59,6 +59,7 @@ export const AGENT_SETTINGS_DEFAULTS: OrgSettings = {
   dailyLLMSpendCapUsd: null,
   blockCancellations: false,
   blockCustomLineItems: false,
+  damageEvidence: "photo_required",
   maxIterations: 10,
   digestEnabled: false,
   digestFrequency: "daily",

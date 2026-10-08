@@ -79,6 +79,8 @@ interface SelectPlanningToolsInput {
   withheldMessageFollowUp?: boolean;
 }
 
+// `await_customer_photo` is listed so a narrowed set keeps it, but the planner
+// makes it available only while a damage claim still needs its photo.
 const CONTROL_TOOL_NAMES = [
   "add_internal_note",
   "update_thread_status",
@@ -86,6 +88,7 @@ const CONTROL_TOOL_NAMES = [
   "escalate_to_human",
   "ask_operator",
   "send_reply",
+  "await_customer_photo",
 ] as const;
 
 const ORDER_READ_TOOL_NAMES = [

@@ -49,6 +49,8 @@ const FORBIDDEN_FOR_GUESTS = [
   // Stock position is the shop's business, not the shopper's question.
   "get_inventory_status",
   "get_support_stats",
+  // A photo request; storefront chat cannot carry the photo.
+  "await_customer_photo",
 ] as const;
 
 describe("guest state", () => {

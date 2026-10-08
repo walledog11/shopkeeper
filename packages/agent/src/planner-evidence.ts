@@ -1,6 +1,8 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { AgentContext } from "./agent-context.js";
 import { classifierAlignmentState } from "./classifier-signals.js";
+import { AWAIT_CUSTOMER_PHOTO_TOOL, type DamageEvidenceState } from "./damage-evidence.js";
+import { DAMAGE_EVIDENCE_TOOLS } from "./plan-signals.js";
 import { currentRequestSignals } from "./planner-safety/request.js";
 import { outstandingMerchantFollowUps } from "./merchant-follow-up.js";
 import { merchantGapQuestion } from "./plan-preview.js";
@@ -37,6 +39,8 @@ export interface BuildPlanRoutingEvidenceInput {
   settings?: OrgSettings;
   withheldMessageFollowUp?: boolean;
   merchantContinuation?: MerchantContinuationKind;
+  /** The planner's `damageEvidenceState`; null or absent when no photo rule applies. */
+  damageEvidence?: DamageEvidenceState | null;
 }
 
 export interface BuiltPlanRoutingEvidence {
@@ -59,6 +63,7 @@ const ESCALATION_REASONS: Record<PlanRoutingEvidenceCode, string | undefined> = 
   ambiguous_customer: "Multiple matching customers found — needs a human to confirm identity.",
   critical_planning_read_failure: "Order or customer lookup failed — could not verify details to act safely.",
   compensation_over_cap: "Compensation above the workspace limit was planned — needs human review.",
+  damage_photo_missing: "Customer reports a damaged or defective item without a photo — over to you.",
   policy_gap: undefined,
   kb_gap: undefined,
   circular_channel_deflection: undefined,
@@ -76,7 +81,20 @@ function planShape(rawToolCalls: readonly RawToolCall[]) {
     hasAction: rawToolCalls.some((call) => TOOL_CATEGORIES[call.name] === "action"),
     hasSendReply: rawToolCalls.some((call) => call.name === "send_reply"),
     hasAskOperator: rawToolCalls.some((call) => call.name === "ask_operator"),
+    // Asking for the photo answers a compensation request on a damage claim:
+    // the customer's next message decides what happens.
+    hasEvidenceRequest: rawToolCalls.some((call) => call.name === AWAIT_CUSTOMER_PHOTO_TOOL),
   };
+}
+
+// A damage claim with no photo goes to the merchant: compensation proposed on
+// the customer's word alone, a photo asked for once and not sent, or a channel
+// that cannot carry one. The first ask is the one shape that waits instead.
+function damagePhotoMissing(input: BuildPlanRoutingEvidenceInput): boolean {
+  const state = input.damageEvidence;
+  if (!state || state.kind === "photos") return false;
+  if (state.kind === "ask") return input.rawToolCalls.some((call) => DAMAGE_EVIDENCE_TOOLS.has(call.name));
+  return true;
 }
 
 function planExceedsCompensationCap(
@@ -106,8 +124,9 @@ function requestedWriteEscalationCode(input: BuildPlanRoutingEvidenceInput): Pla
   if (refundTargetsAlreadyFullyRefunded(ctx, rawToolCalls)) return "already_refunded_request";
   if (refundTargetsNonPaidOrder(ctx, rawToolCalls)) return "non_paid_refund_request";
   if (planExceedsCompensationCap(rawToolCalls, input.settings)) return "compensation_over_cap";
+  if (damagePhotoMissing(input)) return "damage_photo_missing";
   const shape = planShape(rawToolCalls);
-  if (!shape.hasAction && !shape.hasEscalation && hasExplicitCompensationRequest(ctx)) {
+  if (!shape.hasAction && !shape.hasEscalation && !shape.hasEvidenceRequest && hasExplicitCompensationRequest(ctx)) {
     return "compensation_exception";
   }
   return null;
@@ -226,6 +245,7 @@ export function buildPlanRoutingEvidence(
     && (input.ctx.classifierSignals?.intents.mutative_request || input.ctx.classifierSignals?.intents.compensation_request)
     && !shape.hasAction
     && !shape.hasEscalation
+    && !shape.hasEvidenceRequest
   ) {
     signalCodes.push("mutative_intent_no_action");
   }
