@@ -31,8 +31,9 @@ import { loadLocalEnv } from '../../../../scripts/load-local-env.mjs';
 // `run` writes to production: it creates one customer and one thread in the
 // named organization and spends two Haiku classifier calls plus one plan
 // precompute. The sender is on example.com (RFC 2606), which cannot receive
-// mail, so an auto-executed reply would go nowhere. `cleanup` deletes the
-// synthetic customer, and Customer -> Thread -> Message cascades.
+// mail, so an auto-executed reply would go nowhere. `cleanup` erases the
+// synthetic customer through the customers/redact path: a planned thread holds
+// agent tasks and requests whose foreign keys restrict a plain customer delete.
 
 loadLocalEnv();
 
@@ -110,6 +111,8 @@ async function main(): Promise<void> {
   const organizationId = requireOrgId();
 
   if (command === 'cleanup') {
+    // Imported here, not at the top, so @shopkeeper/db loads after loadLocalEnv.
+    const { redactCustomerData } = await import('../routes/shopify-compliance.js');
     const customers = await db.customer.findMany({
       where: {
         organizationId,
@@ -117,10 +120,14 @@ async function main(): Promise<void> {
       },
       select: { id: true, platformId: true },
     });
-    const deleted = await db.customer.deleteMany({
-      where: { id: { in: customers.map((customer) => customer.id) } },
-    });
-    print({ command, organizationId, deletedCustomers: deleted.count, platformIds: customers.map((c) => c.platformId) });
+    let deletedCustomers = 0;
+    let deletedThreads = 0;
+    for (const customer of customers) {
+      const erased = await redactCustomerData(organizationId, { customer: { email: customer.platformId } });
+      deletedCustomers += erased.customerIds.length;
+      deletedThreads += erased.threadIds.length;
+    }
+    print({ command, organizationId, deletedCustomers, deletedThreads, platformIds: customers.map((c) => c.platformId) });
     await db.$disconnect();
     return;
   }

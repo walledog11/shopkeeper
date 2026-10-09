@@ -364,6 +364,16 @@ export async function preserveShopifyUninstallTombstone(shopDomain: string): Pro
   return integrations.length;
 }
 
+/** Erases a customer's threads, messages and agent records, as Shopify's customers/redact requires. */
+export async function redactCustomerData(
+  organizationId: string,
+  payload: ShopifyCompliancePayload,
+): Promise<CustomerDataSelection> {
+  const selection = await selectCustomerData(organizationId, payload);
+  await deleteSelectedCustomerData(organizationId, selection, payload);
+  return selection;
+}
+
 export async function handleShopifyComplianceWebhook(
   topic: ShopifyComplianceTopic,
   shopDomain: string,
@@ -419,8 +429,7 @@ export async function handleShopifyComplianceWebhook(
   }
 
   if (topic === 'customers/redact') {
-    const selection = await selectCustomerData(organizationId, payload);
-    await deleteSelectedCustomerData(organizationId, selection, payload);
+    const selection = await redactCustomerData(organizationId, payload);
     logger.info(
       {
         organizationId,
