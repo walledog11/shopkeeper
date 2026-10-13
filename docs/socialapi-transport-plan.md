@@ -165,7 +165,7 @@ Done when send, failure, reconnect, disconnect, and workspace deletion are provi
 ### S6. Observability, capacity, and operations
 
 - [ ] Tag integration analytics and ops alerts with `transport=meta_direct|socialapi`, keeping `channel=ig_dm`.
-- [ ] Count OAuth attempts/results, active SocialAPI organizations, signed/unmapped/duplicate webhooks, queue failures, reconciliation discoveries, attachment failures, provider status and latency, sends by result category, and reconnect-required accounts.
+- [ ] Count OAuth attempts/results, active SocialAPI organizations, webhooks that were signed, unmapped or duplicated, queue failures, reconciliation discoveries, attachment failures, provider status and latency, sends by result category, and reconnect-required accounts.
 - [ ] Measure provider-received-to-ticket lag and approval-to-provider-accepted latency without logging message content or customer identifiers.
 - [ ] Alert immediately on any isolation mismatch, confirmed missing supported message/attachment, or unrecovered reconciliation gap; alert on invalid-signature bursts and webhook-path inbound lag above two minutes.
 - [ ] Provider 5xx/timeout above 2% over a rolling 15 minutes with at least 100 calls; below that volume, alert and freeze onboarding after three consecutive failures within 15 minutes. Attachment failures above 1% with at least 100 attempts in 24 hours; below that, review each and freeze for confirmed loss.
