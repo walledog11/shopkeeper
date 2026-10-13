@@ -1,314 +1,82 @@
-# Shopkeeper — AI Support for Shopify Brands
+# Shopkeeper
 
-## What This Is
-Shopkeeper is an AI operating layer for solo and small e-commerce businesses on Shopify — a general-purpose agent that handles operational work and is reachable through iMessage; the dashboard is one surface, not *the* surface.
+An AI operating layer for solo and small Shopify businesses. Customers message the store
+on Instagram, email or storefront chat; the agent reads Shopify context and drafts a
+reply and any actions (refund, cancellation, address change…); the merchant approves from
+their phone over iMessage, or from the dashboard; Shopkeeper executes and replies.
 
-**Customer support is the V1 wedge and the current focus.** Think Zendesk but AI-first and purpose-built for Shopify: a multi-channel support inbox plus an AI agent that reads and acts on Shopify data (orders, customers, refunds, etc.) directly inside the workflow. The architecture is built so the same agent core — memory, approval/autonomy workflows, multi-channel interaction, tool use — extends into adjacent workflow modules over time: order operations → inventory & supplier comms → marketing ops → financial ops. Only the support module is built today; the codebase assumes the others will share the core.
+Customer support is the V1 wedge. Later modules (order ops, inventory, marketing,
+finance) share the same agent core. The channel model is in
+[docs/product-truth.md](docs/product-truth.md).
 
-Open work: [`docs/to-do-list.md`](docs/to-do-list.md).
+- What to work on: [docs/ROADMAP.md](docs/ROADMAP.md)
+- How the agent works: [docs/agent-runtime.md](docs/agent-runtime.md)
+- Deploys, env, migrations, incidents: [docs/production/runbook.md](docs/production/runbook.md)
+- Tests: [TESTING.md](TESTING.md)
+- Working rules for Claude sessions: [.claude/CLAUDE.md](.claude/CLAUDE.md)
 
-## Docs
-- Testing: [`TESTING.md`](TESTING.md); route coverage contract: [`docs/production/critical-path-test-checklist.md`](docs/production/critical-path-test-checklist.md)
-- Paid eval operating model: [`docs/agent-eval-gates.md`](docs/agent-eval-gates.md)
-- Production checklist: [`docs/production/checklist.md`](docs/production/checklist.md)
-- Deploy procedure, migrations, and operational response: [`docs/production/runbook.md`](docs/production/runbook.md)
+## Layout
 
-## Repo Layout
 ```
-shopkeeper/
-├── apps/
-│   ├── dashboard/          # Next.js 16 — marketing site, merchant UI, and API routes (Clerk, SWR, Tailwind)
-│   └── gateway/            # Express — webhook receiver + BullMQ worker
-├── packages/
-│   ├── agent/              # @shopkeeper/agent — planner, tools, Shopify client, observability
-│   ├── analytics/          # Product analytics helpers
-│   ├── db/                 # Prisma schema + shared @shopkeeper/db client (Neon PostgreSQL)
-│   ├── email/              # Gmail/Postmark outbound and inbound email helpers
-│   └── integrations/       # Provider clients (Instagram, TikTok Shop, shared integration errors)
-├── extensions/
-│   └── shopkeeper-chat/    # Shopify theme app extension — storefront chat widget
-├── scripts/                # Repo maintenance, audits, canaries, and test harnesses
-└── e2e/                    # Playwright smoke and browser specs
+apps/
+  dashboard/   Next.js 16 — marketing site, merchant UI, API routes (Clerk, SWR, Tailwind)
+  gateway/     Express + BullMQ — webhooks, durable inbound, planning, operator channels
+packages/
+  agent/       @shopkeeper/agent — planner, tools, Shopify client, execution, policy
+  db/          Prisma schema and shared client (Neon Postgres)
+  email/       Gmail and Postmark helpers
+  integrations/ Instagram, SocialAPI, TikTok Shop clients
+  analytics/   product analytics helpers
+  shared/      small cross-package utilities
+extensions/
+  shopkeeper-chat/  Shopify theme app extension (storefront chat widget)
+scripts/       repo checks, test harnesses, production audits and canaries
+e2e/           Playwright specs
 ```
 
-Local development and all deployed services use Node.js 22.x with npm 10.x.
-Run `nvm use` from the repository root to select the version declared in `.nvmrc`.
+Node 22.x and npm 10.x (`nvm use` reads `.nvmrc`).
 
-## Maintenance Commands
-- `npm run clean` — removes ignored build/test artifacts from the repo root and workspaces: `.turbo/`, `.next/`, `.next-dev/`, `.next-e2e/`, `coverage/`, `dist/`, `playwright-report/`, `test-results/`, `.nyc_output/`, `*.tsbuildinfo`, and `.DS_Store`.
-- `npm run clean:deps` — removes `node_modules/` from the repo root and workspaces. Use this only when you intentionally want to reinstall dependencies.
-- Preview either cleanup without deleting files by running the underlying script with `--dry-run`, for example `node ./scripts/clean.mjs artifacts --dry-run`.
+## Run it locally
 
-## Local Gateway Development
-- `npm run dev -w apps/gateway` — starts the gateway server and worker without a public tunnel.
-- `npm run dev:tunnel -w apps/gateway` — also starts ngrok. Install the ngrok CLI first.
-- Set `NGROK_DOMAIN` to use a reserved domain; otherwise ngrok assigns a temporary domain. Set `GATEWAY_PORT` to override port `8080`.
-
-## Hosting (Production)
-- **Dashboard** — Vercel (Next.js 16 serverless)
-- **Gateway** — Railway (Express + BullMQ worker, single service)
-- **Database** — Neon PostgreSQL (pooled via pgbouncer)
-- **Redis** — dashboard uses Upstash (`@upstash/redis` REST client) for rate limiting/locks/presence; gateway uses a dedicated per-instance Redis (e.g. Railway Redis) via `ioredis` with `REDIS_URL` for BullMQ. These are separate instances.
-## Request Flow (Inbound Message)
-1. External platform POSTs to gateway webhook (Railway URL)
-2. Gateway verifies signature (HMAC/Meta), resolves org, enqueues job to BullMQ
-3. Worker upserts customer/thread/message, sanitizes input (prompt injection protection), deduplicates by `externalMessageId`
-4. Worker enqueues AI summary job → Claude generates 1-sentence summary + tag (Shipping/Returns/Order Status/Product Inquiry/General)
-5. After summarizing, the worker generates the agent plan in-process (`@shopkeeper/agent` planner) and caches it on the thread, then sends an iMessage notification to bound org members; the internal Telegram test transport can exercise the same path in test environments
-6. Dashboard polls `/api/threads?status=open` via SWR every 3s and shows the new thread
-7. Agent opens the ticket → auto-plan is shown → agent approves → `POST /api/agent` executes
-
-## Auth & Multi-tenancy
-- Clerk.com handles user auth and org management
-- `getOrCreateOrg()` maps Clerk org ID → DB `Organization` row
-- All DB queries are scoped by `organizationId`
-
-## Channels
-- **Email** — complete. **One inbound transport per mailbox** (see [email inbound steady-state plan](docs/email-inbound-steady-state-plan.md)): forward-only workspaces use Postmark (`{orgId}@inbound.<domain>` → `POST /webhooks/email/inbound` → `process-email`); Gmail OAuth workspaces use Pub/Sub/history sync. Both adapters share one normalized `InboundEmailEvent` enqueue path. *Outbound* (replies) is per-integration from `Integration.metadata.provider` — Gmail API or Postmark fallback — with reply threading, quote stripping, and an AI spam filter on new senders. A daily `email-token-health` cron probes Gmail refresh tokens and flags "Reconnect" in Integrations on failure.
-- **Instagram DM** — Instagram Login OAuth, isolated inbound webhooks, private media storage, agent image understanding, exact-account replies, and token health are implemented. The complete Standard Access lifecycle has passed; Advanced Access approval and a non-role merchant pass remain launch gates
-- **Telegram test transport** — internal testing only; not a product integration and never a marketing or onboarding surface
-- **iMessage** — complete (operator-only, platform-wide Photon Spectrum line, merchant binds iPhone via connect code in Integrations, inbound via `/webhooks/photon`, outbound plan notifications with dashboard deep links, yes/no/skip approval via reply)
-- **Shopify** — complete (OAuth custom app, webhook ingestion for orders/created/fulfilled/updated/cancelled, HMAC verification, KB sync, Orders + Customers dashboard views)
-- **TikTok** — not started (type stubs and UI placeholder only)
-
-### Internal Channel Types (not user-facing)
-- `operator` — the merchant's durable operator thread (Telegram/iMessage bindings and Concierge on `/dashboard/agent`)
-
-## Dashboard Navigation Structure
+```sh
+npm ci
+cp apps/dashboard/.env.example apps/dashboard/.env.local   # fill in values
+cp apps/gateway/.env.example apps/gateway/.env             # fill in values
+npm run dev                          # builds packages, then runs both apps
+npm run dev:tunnel -w apps/gateway   # gateway with an ngrok tunnel for webhooks
 ```
-Home                     /dashboard               — daily briefing + open work
-Inbox                    /dashboard/tickets       — main support queue
-Agent
-  Settings               /dashboard/agent/configure — store identity, trust level, voice, duty hours
-  Memory                 /dashboard/kb            — knowledge base + brand context
-  Review                 /dashboard/review        — approve and refine agent responses
-Shop                     /dashboard/orders        — Shopify orders + customers
-Workspace
-  Billing                /dashboard/settings      — plan, payment, invoices; data export & delete below
-  Integrations           /dashboard/integrations  — connect channels and external tools
-  Team                   /dashboard/team          — members, roles, and access
-  Integrations           /dashboard/integrations  — connect channels and external tools
-  Team                   /dashboard/team          — members, roles, and access
+
+The dashboard runs on port 3000 and the gateway on 8080 (`GATEWAY_PORT` overrides it).
+Set `NGROK_DOMAIN` for a reserved tunnel domain.
+
+Useful commands:
+
+```sh
+npm run typecheck
+npm run lint
+npm run test:unit                 # no services needed
+npm run test:services:up          # local Postgres + Redis for integration tests
+npm run test:integration
+npm run verify:pr                 # what CI runs
+npm run clean                     # remove build/test artifacts (--dry-run to preview)
 ```
-The standalone Concierge agent chat lives at `/dashboard/agent` on `operator` threads; it is reached from the Agent surface rather than the top-level nav.
 
-## AI Agent System
-The agent is the core of the product. It operates in two modes:
+## Hosting
 
-The single active conversational runtime is v2. Its request, approval, receipt,
-recovery and rollback contracts are in [the runtime runbook](docs/agent-runtime.md).
+- Dashboard on Vercel; gateway (server + worker) on Railway.
+- Neon Postgres through pgbouncer.
+- Redis: Upstash REST for the dashboard; a dedicated Redis (`REDIS_URL`) for the
+  gateway's BullMQ. They are separate instances.
 
-### Support Mode (ticket threads: ig_dm, email, shopify)
+Env var names live in each app's `.env.example`; which ones production requires is the
+runbook's env matrix.
 
-Customer requests and ticket-composer instructions are accepted as durable tasks.
-The worker drafts a plan without executing proposed mutations and projects the
-current proposal to `Thread.cachedPlan`. The review card shows its actions and
-exact customer message, including labeled receipt placeholders. Approval runs
-the immutable durable proposal once; only successful receipts can fill those
-placeholders. Revised actions or messages require fresh review. Historical
-cached plans require regeneration before execution.
+## Where things are
 
-### Operator Mode (`operator`)
-Direct interface for the merchant/team. No customer in context — the agent takes instructions and acts on Shopify directly.
-- **Dashboard**: `/dashboard/agent` page has a persistent chat interface on `operator` threads.
-- **Telegram test transport**: internal-only harness for exercising notification, approval, skip, and freeform-instruction paths.
-- **iMessage**: product operator flow. Plan pushes include a dashboard deep link; reply `yes` / `no` / `skip N` or freeform from a linked iPhone.
-
-### Agent Tools
-Tool registry and execution live in the extracted core under `packages/agent/src/tools/` (`@shopkeeper/agent`).
-
-**Read tools** (no side effects, executed in plan phase 1.5 to inform dependent writes):
-- `search_kb` — full-text search of knowledge base articles
-- `search_shopify_products` — search product catalog by name/keyword, returns variants + IDs
-- `search_shopify_customers` — search by name or email to resolve customer ID
-- `get_shopify_customer` — fetch full customer profile (name, email, phone, address, order count)
-- `get_shopify_orders` — fetch up to 5 most recent orders for a customer
-- `get_order_by_name` — look up order by human-readable number (e.g. `#1234`)
-
-**Action tools** (write to Shopify):
-- `update_shopify_customer_info` — update name, email, phone
-- `update_shopify_order_address` — update shipping address on unfulfilled order + sync customer default address
-- `add_shopify_customer_note` — append note to Shopify customer record
-- `create_refund` — full or partial refund on an order
-- `cancel_order` — cancel unfulfilled order with restock option
-- `create_shopify_order` — create new order on behalf of customer
-- `edit_shopify_order` — add/remove/swap line items using Shopify Order Editing API
-
-**Communication tools**:
-- `send_reply` — send message on the customer's channel (IG DM, email, etc.)
-- `send_email` — send outbound email to any address (works from any channel type)
-
-**Internal tools**:
-- `add_internal_note` — add agent note to thread (not visible to customer)
-- `update_thread_status` — set open/pending/closed
-- `update_thread_tag` — update topic tag
-
-### Agent Settings (stored as JSON on Organization.settings)
-The full key list is `SETTINGS_KEYS` in `packages/agent/src/settings-parser.ts`; defaults and `TIER_DEFAULTS` are in `packages/agent/src/settings.ts`. The settings API rejects any other key. The agent's name is not a setting: it is the constant `AGENT_DISPLAY_NAME` ("Shopkeeper", invoked as `@shopkeeper` in the ticket composer). The keys that shape agent behavior:
-- `aiContext` — optional store details (policies, products) prepended to system prompt; business name comes from `org.name`
-- `brandVoice` — tone brief appended to system prompt
-- `autoPlanOnOpen` — auto-generate plan when ticket opens (default: true; no UI sets it)
-- `autonomyTier` — preset autonomy level (`watch`/`guarded`/`trusted`, default `guarded`); drives runtime defaults via `TIER_DEFAULTS`
-- `autoExecuteMode` — `off` (approval only) or `live` (auto-fire what `decideAutonomy` allows for the tier); default `off`
-- `defaultInstruction` — default agent instruction
-- `toolsEnabled` — toggle tool categories: `action`, `communication`, `internal`, `read`
-- `maxRefundAmount` — dollar cap on refunds (null = unlimited)
-- `blockCancellations` — prevent cancel_order calls
-- `blockCustomLineItems` — require variant_id on all create_shopify_order line items (no UI sets it)
-- `maxIterations` — max tool-use loop iterations per run (default: 10; no UI sets it)
-
-### Agent Safety / Guardrails
-- 20,000 token budget per run; stops and reports if exceeded
-- Prompt injection patterns stripped from all inbound messages in gateway
-- Inbound messages truncated at 4,000 chars in gateway
-- Rate limiting on agent endpoints via Upstash Redis
-
-## Key Features
-
-### Tickets (Inbox)
-- Thread list with SWR 3s polling, status tabs (open/closed), channel filter, search
-- Conversation view with chat timeline and composer
-- Presence tracking: heartbeat every 15s warns if multiple agents viewing same ticket
-- Failed message retry UI
-- Close/reopen thread, tag management
-
-### Concierge (Standalone Agent)
-- `/dashboard/agent` — direct chat interface with the AI agent
-- Session-based Concierge uses `operator` threads; previous sessions are closed when a new one opens
-- Activity log tab shows all past agent turns with actions performed
-
-### Knowledge Base (Memory)
-- Multi-base (named KBs), multi-article per base
-- Articles have tags for context-filtered retrieval (agent gets KB articles matching thread tag)
-- Shopify KB sync: imports products/policies from connected Shopify store
-
-### Review
-- `/dashboard/review` — approve, refine, and audit agent responses before they go out
-
-### Orders / Customers (Storefront)
-- `/dashboard/orders` — Shopify order browser with fulfillment/payment status filters, stat strip, search, pagination
-- Orders page has "New thread" action that finds/creates a support thread for a Shopify customer (`POST /api/threads/shopify`)
-
-### Billing
-- Stripe subscriptions (starter/pro tiers)
-- Checkout, portal, webhook sync, invoice history
-
-### Team
-- Org member management via Clerk.com
-- Bound iMessage handles for product operator notifications; Telegram chat bindings exist only for internal transport testing
-
-### Workspace
-- `/dashboard/settings`: org name, branding, billing, exports, retention, and workspace deletion
-- `/dashboard/integrations`: connect/disconnect Instagram, Shopify, iMessage, email, and other product channels
-- `/dashboard/team`: members, roles, and access
-- Personal profile and security live in the avatar menu via Clerk's account portal
-
-## Database Models (packages/db/prisma/schema.prisma)
-
-- **Organization** — one per merchant. Stores Stripe subscription fields + `settings` JSON (agent config).
-- **Integration** — one per connected platform per org. Stores access token, external account ID, token expiry.
-- **Customer** — unique by `(organizationId, platformId)`. `platformId` is email for email channel, IG sender ID for DMs.
-- **Thread** — belongs to org + customer. Has `channelType`, active `status` values (`open`/`closed`; legacy `pending` remains database-readable), orthogonal `escalated_at`, `aiSummary`, `tag`, `shopifyCustomerId`, `cachedPlan` (agent plan cache), soft-delete + archive fields.
-- **Message** — belongs to thread. `senderType`: customer/agent/ai/note. Agent action logs are stored as `note` messages prefixed with `__shopkeeper_agent__` (legacy rows may use `__clerk_agent__`).
-- **OperatorContext** — persists iMessage operator state and internal Telegram test state per organization and channel context key (pending plan/digest/question). DB-backed, not Redis.
-- **OrgMember** — extends Clerk org membership with iMessage sender bindings and internal Telegram test bindings.
-- **KnowledgeBase** — named KB container. `source`: "user" | "shopify".
-- **KbArticle** — belongs to org + KB. Has tags for context filtering.
-- **Feedback** — in-app NPS/survey (rating + comment + categories).
-
-## Key Files
-- `apps/gateway/src/routes/` — webhook handlers (Meta/Instagram, email, iMessage/Photon, Shopify, and the internal Telegram test transport)
-- `apps/gateway/src/worker.ts` — BullMQ worker: inbound message processing + AI summary + maintenance workers
-- `apps/gateway/src/message-handlers/` — per-channel job handlers (`channels.ts`), AI summary generation (`intelligence.ts`), and operator-channel planning/notifications
-- `apps/gateway/src/maintenance/workers.ts` — daily IG token health check, 90-day archive + 90-day purge workers
-- `packages/agent/` (`@shopkeeper/agent`) — extracted agent core (`context.ts`, `planner.ts`, `run.ts`, `prompt.ts`, `tools/registry/`, `shopify/`, `settings.ts`); consumed by both apps via subpath exports
-- `packages/agent/src/tools/registry/` — tool registry, categories, and plan-step labels
-- `packages/agent/src/settings.ts` — agent settings defaults + resolver
-- `apps/dashboard/src/lib/agent/runner.ts` — dashboard host adapter: re-exports core `buildContext()`/`planAgent()`/`runAgent()` with dashboard infrastructure injected
-- `apps/dashboard/src/lib/agent/thread-io/` — dashboard thread/message sink (provider delivery via `send.ts`, mutations via `@shopkeeper/agent/thread-io`)
-- `apps/dashboard/src/lib/agent/shopify/` — dashboard Shopify host wiring
-- `apps/dashboard/src/app/api/agent/route.ts` — POST: execute agent run on a ticket thread
-- `apps/dashboard/src/app/api/agent/plan/route.ts` — POST: generate plan (no side effects)
-- `apps/dashboard/src/app/api/agent/chat/route.ts` — standalone Concierge chat sessions
-- `apps/dashboard/src/app/api/messages/route.ts` — outbound message dispatch
-- `apps/dashboard/src/app/api/threads/route.ts` — GET threads list
-- `apps/dashboard/src/app/api/threads/shopify/route.ts` — POST: create thread from Shopify customer
-- `apps/dashboard/src/app/api/integrations/shopify/auth/route.ts` — Shopify OAuth initiation
-- `apps/dashboard/src/app/api/integrations/shopify/callback/route.ts` — Shopify OAuth callback
-- `apps/dashboard/src/app/api/billing/route.ts` — Stripe billing info
-- `apps/dashboard/src/app/api/billing/webhook/route.ts` — Stripe webhook sync
-- `apps/dashboard/src/lib/redis.ts` — Upstash Redis client (rate limiting)
-- `apps/dashboard/src/instrumentation.ts` — startup env validation
-- `packages/db/prisma/schema.prisma` — DB schema
-
-## Environment Variables
-
-### Dashboard (Vercel)
-Required at production boot:
-- `DATABASE_URL` — Neon pooled connection string with `?pgbouncer=true&connection_limit=1`
-- `DIRECT_DATABASE_URL` — same Neon database on the direct (non-pooler) host; required by Prisma `directUrl` for migrations and schema validation
-- `CLERK_SECRET_KEY`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` — Clerk.com app keys
-- `ANTHROPIC_API_KEY` — Claude, used for the agent tool-use loop and AI plan generation
-- `INTERNAL_API_SECRET` — shared secret with gateway for internal API calls
-- `APP_URL` — production dashboard URL, for example `https://app.yourdomain.com`
-- `TOKEN_ENCRYPTION_KEY` — 32-byte integration token encryption key, encoded as 64 hex chars, base64, or 32 raw chars
-- `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` — Upstash Redis REST credentials
-
-Required for launch-scope features:
-- `GATEWAY_INTERNAL_URL` — Railway gateway URL, for example `https://gateway.up.railway.app`
-- `POSTMARK_API_KEY`, `INBOUND_EMAIL_DOMAIN` — outbound email and inbound email domain
-- `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`, `SHOPIFY_APP_SECRET` — Shopify OAuth and webhook verification
-- `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `PRICE_ID_STARTER`, `PRICE_ID_PRO` — Stripe billing
-- `CLERK_WEBHOOK_SECRET` — Clerk lifecycle webhook signing secret for `/api/webhooks/clerk`
-- `BLOB_READ_WRITE_TOKEN` — Vercel Blob token for private inbound email and Instagram attachment storage and authenticated downloads
-- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — Gmail OAuth and token refresh
-- `GMAIL_PUBSUB_TOPIC` — fully qualified Gmail notification topic
-- `INSTAGRAM_INTEGRATION_ENABLED` — explicit production rollout switch; keep `false` until the intended test cohort is ready
-
-Optional dashboard variables:
-- `NEXT_PUBLIC_APP_URL` — public app URL; if set in production, it must match `APP_URL`
-- `NEXT_PUBLIC_CLERK_SIGN_IN_URL`, `NEXT_PUBLIC_CLERK_SIGN_UP_URL` — Clerk route overrides
-- `INTERNAL_API_SECRET_PREV` — previous internal secret during zero-downtime rotation
-- `OPENAI_API_KEY` — OpenAI-backed embeddings or drafts when those paths are enabled
-- `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET` — Instagram Login OAuth
-- `INSTAGRAM_BETA_ORG_IDS` — optional comma-separated Clerk organization IDs allowed to connect while the switch is enabled; empty enables every workspace
-- `INSTAGRAM_WEBHOOK_APP_SECRET` — parent Meta app signing secret, only needed when using the local dashboard webhook proxy
-- `TELEGRAM_BOT_USERNAME` — internal test-transport deep link
-- `IMESSAGE_LINE_HANDLE` — platform iMessage handle merchants text to bind (dashboard); enables Integrations + onboarding connect UX
-
-### Gateway (Railway)
-Required at production boot:
-- `DATABASE_URL` — Neon pooled connection string with `?pgbouncer=true&connection_limit=1`
-- `DIRECT_DATABASE_URL` — same Neon database on the direct (non-pooler) host; required by Prisma `directUrl` for migrations and schema validation
-- `REDIS_URL` — dedicated Redis for the BullMQ worker (e.g. Railway Redis), separate from the dashboard's Upstash. Railway private networking: `redis://...redis.railway.internal`; managed Redis over TLS: `rediss://...`
-- `ANTHROPIC_API_KEY` — Claude, used for AI summary and spam filtering in the worker
-- `INTERNAL_API_SECRET` — must match the dashboard value
-- `DASHBOARD_URL` — production dashboard URL used for internal API calls
-- `TOKEN_ENCRYPTION_KEY` — same 32-byte integration token encryption key used by the dashboard
-
-Required for launch-scope features:
-- `SHOPIFY_APP_SECRET` — Shopify HMAC webhook verification secret
-- `BLOB_READ_WRITE_TOKEN` — Vercel Blob token for private inbound email and Instagram attachment upload
-- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — Gmail token refresh
-- `GMAIL_PUBSUB_TOPIC` — fully qualified Gmail notification topic
-- `GMAIL_PUBSUB_AUDIENCE` — expected Pub/Sub OIDC token audience
-- `GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT` — expected Pub/Sub OIDC service-account email
-
-Optional gateway variables:
-- `EMAIL_INBOUND_MODE` — `standard` (default: both adapters; one transport per org in data), `postmark` (forward-only fleet — disables Gmail sync globally), or `gmail-only` (dev / all-native — Postmark inbound creds optional)
-- `PORT` — Railway sets this automatically
-- `DASHBOARD_INTERNAL_URL` — local dashboard URL used only for dev callback forwarding
-- `GATEWAY_RUNTIME_ROLE` — defaults to `all`; use only when splitting server and worker processes
-- `INSTAGRAM_WEBHOOK_APP_SECRET`, `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` — Instagram webhook signing and verification; the signing secret is the parent Meta app secret, not the Instagram Login OAuth secret
-- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` — internal Telegram test transport
-- `SPECTRUM_PROJECT_ID`, `SPECTRUM_PROJECT_SECRET`, `SPECTRUM_WEBHOOK_SECRET` — platform-wide Photon Spectrum credentials for the iMessage operator line (gateway)
-- `POSTMARK_INBOUND_USERNAME`, `POSTMARK_INBOUND_PASSWORD` — required in production for Postmark inbound webhook basic auth; optional in local dev
-- `LOG_LEVEL`, `LOG_PRETTY` — gateway logging controls
-
-## Coding Guidelines
-- Don't add features, comments, error handling, or abstractions beyond what's asked
-- Don't mock the DB in tests — use real DB connections
-- Keep responses concise — skip summaries of what was just done
-- Prefer editing existing files over creating new ones
-- Read files before modifying them
-- Target user is a solo Shopify merchant or small team — UI and features should optimize for simplicity and speed, not power-user complexity
+- Inbound webhooks: `apps/gateway/src/routes/`
+- Inbound processing, support planning, operator turns: `apps/gateway/src/message-handlers/`
+- Agent tools and their exact behavior: `packages/agent/src/tools/registry/`
+- Agent settings: `SETTINGS_KEYS` in `packages/agent/src/settings-parser.ts`, defaults
+  in `packages/agent/src/settings.ts`
+- Dashboard host adapters for the agent: `apps/dashboard/src/lib/agent/`
+- Database schema: `packages/db/prisma/schema.prisma`

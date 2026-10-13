@@ -1,26 +1,16 @@
 # Conversational agent runtime
 
-Last reviewed: 2026-10-05.
-
-Retirement shipped in [PR #165](https://github.com/walledog11/shopkeeper/pull/165)
-as `17afc644` on dashboard, gateway and worker. Required PR checks and production
-verification passed; deployment identities are in the release evidence.
-
 Runtime 2 is the sole executable agent runtime. New dashboard, composer,
-iMessage, and customer requests persist `runtimeVersion=2`; organization
-allowlists and the proposal/discovery rollout flags no longer select behavior.
-A persisted task on another version must be regenerated before execution or
+iMessage, and customer requests persist `runtimeVersion=2`
+(`DURABLE_AGENT_RUNTIME_VERSION`); no organization allowlist or rollout flag
+selects behavior. A persisted task on another version is refused by
+`requireDurableAgentRuntime` and must be regenerated before execution or
 continuation. Its version is never rewritten.
 
-This is the active owner of the runtime architecture, standing decisions and
-change procedure extracted from the
-[archived overhaul plan](archive/conversational-agent-overhaul-plan.md).
-[Agent follow-ups](agent-follow-ups.md) tracks known defects and behavior still
-unobserved in ordinary use; the
-[release evidence](conversational-agent-overhaul-p6-release-evidence.md) retains
-manual results. This document grants no production authorization by itself.
-It supersedes the [maintainability audit](agent-maintainability-audit-2026-09-11.md)
-where they differ: conversation remains model-authored and discovery adaptive.
+This document owns the runtime architecture, standing decisions and change
+procedure. Open defects and unverified behavior live in
+[ROADMAP.md](ROADMAP.md). Conversation remains model-authored and discovery
+adaptive. This document grants no production authorization by itself.
 
 ## Design boundaries
 
@@ -115,10 +105,6 @@ set it. Older persisted rows default that flag to false; an aligned mutative
 refund ask still supplies the older compensation signal. Approval-card request
 displays retain version-5 and version-6 facts. A failed lookup consults the
 current request and proposed actions, without reviving an earlier request.
-This cleanup shipped in [PR #170](https://github.com/walledog11/shopkeeper/pull/170)
-as `4bfd1258` on dashboard, gateway and worker; required CI and production health
-verification passed. Ordinary-use observations are tracked in
-[agent-follow-ups.md](agent-follow-ups.md).
 
 A customer message is an `exact_draft`, bound with its destination and action
 bundle into the durable proposal's hash. Only labeled placeholders explicitly
@@ -278,9 +264,9 @@ customer message to be an exact draft with receipt-bound placeholders. A model-p
 until the runtime parses and persists it. Budgets are persisted, reserved before
 dispatch, and never replenished by a restart or a human wait. Reconciliation and
 delivery keep their own bounded recovery, so exhausting model calls never
-abandons a submitted write. The frozen values are recorded in the
-[Package 0 baseline](conversational-agent-overhaul-p0-baseline.md), with one
-configuration owner.
+abandons a submitted write. Task limits (model calls, active time, spend) are
+set by `supportTaskBudget` for customer planning and `memberAgentTaskBudget`
+for merchant requests, and enforced against the persisted task row.
 
 ### Discovery, evidence and continuity
 
@@ -299,7 +285,7 @@ configuration owner.
 
 ### Response grounding and delivery
 
-New completion facts must come from stored, schema-valid receipts or authoritative provider observations with explicit provenance. A current order state can support “the order is cancelled”; it does not prove “I cancelled it” without a matching operation receipt. An input field or proposed action can support future-tense proposal wording only.
+New completion facts must come from stored, schema-valid receipts or authoritative provider observations with explicit provenance. A current order state can support “the order is cancelled”; it does not prove “I cancelled it” without a matching operation receipt. An input field or proposed action can support future-tense proposal wording only. The fact shape and wording rules are in [agent-completion-facts.md](agent-completion-facts.md).
 
 Reuse and narrow the existing completion-binding mechanism. Bind a specific receipt/operation, target and allowed field; reject mismatched tenant/task/target/outcome or unsupported field paths. Give the model structured outcomes and let it author surrounding prose. Amounts and provider references shown as consequential bindings are rendered by validated code. Prose checks remain heuristics: do not claim that field bindings prove the truth of every sentence.
 
@@ -307,8 +293,8 @@ Persist the composed response and its destination before attempting delivery. As
 
 ### Known limitations, accepted and not scheduled
 
-Each was recorded when its package closed and is not a defect against a
-contract. It is listed so nobody rediscovers it as new.
+These are not defects against a contract. They are listed so nobody
+rediscovers them as new.
 
 - A continuation (an answer, a revision) is a new attempt on the same task that
   re-derives its context from the conversation. It does not resume from the
@@ -335,44 +321,39 @@ keys, unknown-action reconciliation, and attributed delivery recovery remain.
 Cache digest and missing-plan recovery maintenance still serve current durable
 work. Their presence does not enable the retired runtime.
 
-The read-only `audit:agent-runtime-retirement -- --strict` gate reports task
-versions/statuses, historical proposals, unknown actions, and current taskless
-caches. Run it with the intended database target before deploying retirement.
-The 2026-10-04 production inventory found no v1 tasks/proposals or v1/taskless
-unknown actions. Five current taskless caches require regeneration and review;
-two unknown actions on runtime 2 remain under reconciliation. No production
-rows were rewritten or deleted. See the [release evidence](conversational-agent-overhaul-p6-release-evidence.md#runtime-retirement-inventory-2026-10-04).
+`npm run audit:agent-runtime-retirement -- --strict` is the read-only inventory
+of task versions/statuses, historical proposals, unknown actions, and current
+taskless caches; it refuses actionable non-v2 state. Run it against the
+intended database before removing any retained compatibility reader, and
+never rewrite or delete the rows it reports.
 
 ## Deployment and rollback
 
-Deploy gateway, worker, and dashboard from the same reviewed retirement commit.
-No schema rollback or data migration is required. The current image ignores
-`AGENT_RUNTIME_VERSION`, `AGENT_RUNTIME_V2_ORG_IDS`,
-`AGENT_PROPOSAL_SUSPENSION_MODE`, and `AGENT_CAPABILITY_DISCOVERY_MODE`. The
-rollback image below does not: it picks each new task's runtime from the first
-two, and starts it on runtime 1 when `AGENT_RUNTIME_VERSION` is unset. Until the
-rollback target includes #165, keep `AGENT_RUNTIME_VERSION=2` and leave
-`AGENT_RUNTIME_V2_ORG_IDS` unset on the `shopkeeper` gateway and `Gateway Worker`
-Railway services. A task started on runtime 1 during a rollback is refused as
-retired once the current image is redeployed.
+Deploy gateway, worker, and dashboard from the same reviewed commit. Runtime
+changes need no schema rollback or data migration: the schema is additive, and
+the current image ignores `AGENT_RUNTIME_VERSION`, `AGENT_RUNTIME_V2_ORG_IDS`,
+`AGENT_PROPOSAL_SUSPENSION_MODE`, and `AGENT_CAPABILITY_DISCOVERY_MODE`.
 
-Rollback means redeploying the previous known-good application revision
-`ecb514bbe531116dd94ed5317f37aaf95da7ccfd` (#164) to all three hosts. That revision
-contains both runtime implementations and understands the retained additive
-schema and runtime-2 records. With the variables above it runs new work on
-runtime 2. Setting runtime 1 on the retirement image cannot restore deleted code.
+Rollback means redeploying the previous known-good revision to all three hosts.
+A revision older than runtime retirement (`17afc644`, #165; the newest such
+revision is `ecb514bb`, #164) still contains runtime 1. It picks each new task's
+runtime from the first two variables above and starts it on runtime 1 when
+`AGENT_RUNTIME_VERSION` is unset. So for as long as a pre-#165 revision could be
+a rollback target, keep `AGENT_RUNTIME_VERSION=2` and leave
+`AGENT_RUNTIME_V2_ORG_IDS` unset on the `shopkeeper` gateway and `Gateway Worker`
+Railway services. A task started on runtime 1 during such a rollback is refused
+as retired once the current image is redeployed. Setting runtime 1 on a current
+image cannot restore deleted code.
 
 Do not rewrite task versions, drop ledger/receipt columns, resubmit unknown
 provider operations, or retry an uncertain customer delivery. Preserve the
 operation and delivery identities and use their existing reconciliation paths.
-The release owner waived a staged rollback rehearsal under decision L; this
-runbook does not claim one occurred.
+No staged rollback rehearsal has been run (decision L).
 
 ## Settled decisions
 
-The release owner's decisions retain their letters because commits and evidence
-cite them. The rules below remain binding. E, F and L also record the completed
-migration's scope; they create no new work queue or production authorization.
+Each keeps its letter because code comments and commits cite it; a retired
+letter (F) is not reused.
 
 - **A. What the merchant approves is what the customer receives.** Every
   customer message proposed alongside a write is an `exact_draft`, shown on the
@@ -391,9 +372,7 @@ migration's scope; they create no new work queue or production authorization.
   before the write; a flag requires review, and only receipt placeholders may
   be filled afterward.
 - **E. Phone instructions use durable tasks.** Reuse `OperatorEvent` claims and
-  sweeps. The synchronous operator execution path was retired.
-- **F. Historical Gate C scope.** The original fourteen-effect live-run
-  requirement was superseded by L. Do not reopen that checklist.
+  sweeps. There is no synchronous operator execution path.
 - **G. A withheld-message follow-up drafts; it does not escalate.** After a
   definite write failure, the bounded follow-up only reads and drafts a
   replacement message for review. Key that behavior on its typed follow-up
@@ -404,29 +383,27 @@ migration's scope; they create no new work queue or production authorization.
   receipt and bind the customer message to that fact. It stays outside per-call
   and daily compensation limits: returning payment for unshipped goods is not
   goodwill.
-- **I. Paid model comparison is advisory.** Run it only when the release owner
-  asks. It does not block rollout, which rests on the accepted real-provider
-  observations. A failed invocation does not authorize another paid run.
-- **Task budget.** The accepted comparison targets are active latency p95 at
-  most 10 seconds and mean task cost at most $0.035, measured by the eval
-  report's `[eval:task]` line. These targets do not authorize an eval run.
+- **I. Paid model comparison is advisory.** CI's free eval preflight is the
+  only automatic eval. A paid comparison runs only when the owner asks, does not
+  block rollout, and a failed invocation does not authorize another paid run.
+- **Task budget.** Target active latency p95 at most 10 seconds and mean task
+  cost at most $0.035, as reported by the eval report's `[eval:task]` line.
+  The target does not by itself justify an eval run.
 - **J. Ship through working flows.** Manual app verification is the default.
   Use proportional local checks and the existing aggregate release/CI check.
-  New tests need a concrete change-specific reason; broad test cleanup does not
-  precede implementation. Unverified behavior remains explicitly unverified.
+  New tests need a concrete change-specific reason. Unverified behavior remains
+  explicitly unverified.
 - **K. Shopkeeper opens a return and leaves the label to the merchant.** No
   label-purchase provider is integrated. Do not ask for a label URL or promise
   a label the agent cannot send. Approval and confirmation tell the merchant to
   send the label themselves. A merchant-supplied label can still be attached;
   buying labels would be a new paid capability requiring its own decision.
-- **L. Accepted migration verification scope.** Migration closed on
-  2026-10-04. Gift cards and merchant-supplied labels remain available without
-  dedicated live runs. Unseen acceptance cases and unsafe or unreliable failure
-  demonstrations are observed only in normal use, with no staged tickets,
-  induced failures or paid eval campaigns. iMessage is the main phone channel;
-  Telegram and stop-by-text are excluded unless the owner reopens them. The
-  staged rollback rehearsal was waived; rollback now redeploys #164. Current
-  observations are tracked in [agent-follow-ups.md](agent-follow-ups.md).
+- **L. Verification scope.** iMessage is the main phone channel; Telegram and
+  stop-by-text are verified only if the owner reopens them. Gift cards and
+  merchant-supplied labels are available without dedicated live runs. Unseen
+  acceptance cases and unsafe or unreliable failure demonstrations are observed
+  only in normal use, with no staged tickets, induced failures or paid eval
+  campaigns. The staged rollback rehearsal was waived.
 - **M. Sale names and free replacements go to the merchant.** Ask whether the
   merchant wants to name a sale unless they already have. The title shoppers see
   in Shopify is their name or a generic one such as "20% off everything",
@@ -440,30 +417,22 @@ migration's scope; they create no new work queue or production authorization.
 Existing local regression checks cover receipt grounding, durable approvals,
 continuation ownership, stale-source refusal, budget persistence, unknown
 outcomes, and delivery recovery. They use controlled model/provider responses
-and do not establish live conversational quality. The prior dev-store/phone
-observations are recorded in the
-[release evidence](conversational-agent-overhaul-p6-release-evidence.md). Accepted
-exclusions are in decision L; current defects and still-unobserved ordinary-use
-checks are tracked in [agent-follow-ups.md](agent-follow-ups.md).
-
-No paid comparison ran for retirement. The last historical comparison measured
-v2 at p95 8.2 seconds and mean $0.0233 per task, within the recorded task budget;
-it also cost approximately 44% more than v1. Deleting a widening retry removes a
-possible second planning attempt, but does not establish a new cost/latency
-measurement.
+and do not establish live conversational quality. Accepted exclusions are in
+decision L; open defects and still-unverified behavior are in
+[ROADMAP.md](ROADMAP.md).
 
 ## How to finish a change
 
 1. Implement the missing behavior in its existing owner.
-2. Run relevant cheap checks. Documentation-only changes need structure/docs
-   checks. For code, typecheck the affected workspace and use targeted existing
-   tests or a build where they help verify the change.
+2. Run relevant cheap checks. Documentation-only changes need
+   `npm run lint:structure`. For code, typecheck the affected workspace and use
+   targeted existing tests or a build where they help verify the change.
 3. Exercise the affected flow in the dashboard, dev store or phone, using
    existing authorized test destinations. Check actual provider state and
    delivery as applicable.
-4. Record: commit, request/surface, expected result, observed result, references,
-   and any remaining issue. Update [agent-follow-ups.md](agent-follow-ups.md)
-   as applicable and put manual results in the release evidence. No test-count narrative.
+4. If something is still broken or unverified, put it in
+   [ROADMAP.md](ROADMAP.md); remove the item when it closes. No evidence log and
+   no test-count narrative.
 5. Move to the next implementation item. A missing manual input leaves that
    verification open but does not prevent unrelated code work.
 
@@ -471,6 +440,9 @@ measurement.
 investigated for its relation to the change; resolve a real product defect or
 the specific broken check. Do not start a suite-wide audit or add tests to
 satisfy coverage. A required check cannot be silently bypassed or called passed.
+CI runs the free eval preflight on pull requests and pushes to master; paid
+evals, new fixtures and fixture expansion happen only when the owner asks, reuse
+the existing harnesses, and never tune against held-out inputs.
 
 Deliver the affected flow in its existing owner. Reuse the registry, task ledger,
 workers, approvals, providers and existing functions for tenant checks, policy,
@@ -487,21 +459,18 @@ with prompt patches or prose-matcher exceptions. Land agent-path work through
 PRs. Keep model/provider changes distinct when needed to isolate a runtime
 regression. Preserve the deployed behavior and compatibility of existing callers.
 
-New automated tests are an exception: first check existing coverage, then add a
+New automated tests are an exception: check existing coverage first, and add a
 case only for a concrete defect or change-specific failure that manual checks
-cannot safely or reliably reproduce, when it shortens diagnosis or prevents a
-meaningful recurrence. Broad cleanup is deferred. Fix or remove a particular
-misleading check only when it blocks the current change, falsely fails working
-behavior or demonstrably delays required verification. Do not audit, trim,
-restore or rewrite the suite as a prerequisite for shipping.
+cannot safely or reliably reproduce. Fix or remove a particular misleading check
+only when it blocks the current change. See [TESTING.md](../TESTING.md).
 
 ### Deterministic failure and race cases
 
-The existing D01–D20 cases describe contracts to preserve, not a new test list.
-Reuse `task-ledger.integration.test.ts`, `task-approval.integration.test.ts`,
+These are contracts to preserve, not a test list. Reuse
+`task-ledger.integration.test.ts`, `task-approval.integration.test.ts`,
 `plan-execution.integration.test.ts` and
 `unknown-outcome-reconciliation.integration.test.ts` when they cover the
-changed decision. The principal invariants are:
+changed decision.
 
 - Duplicate/redelivered requests and concurrent approvals have one owner;
   changed payloads or obsolete approvals do not gain authority.
@@ -515,23 +484,8 @@ changed decision. The principal invariants are:
   authoritative through waits, continuations and runtime routing changes.
 
 Do not manufacture an actual uncertain write for a manual demonstration.
-A small diagnostic or automated regression is warranted only when it resolves
-a concrete change-specific problem that cannot be reproduced manually.
-Existing historical case descriptions remain in git.
-
-Use the workspace scripts in [TESTING.md](../TESTING.md). Documentation-only
-changes use `npm run lint:structure`; code changes typecheck the affected
-workspace and use relevant existing tests or a build. Reserve aggregate local
-checks for the release candidate or a concrete unresolved failure. Repeat broad
-checks only when subsequent changes or a failure justify them. Paid comparisons,
-new fixtures and fixture expansion require the release owner's request; reuse
-the existing harnesses and do not tune against held-out inputs. C08 needs a new
-unseen variant only if a new comparison is requested, because #125 fixed the
-original input. No paid eval is implicit in a documentation or code change.
 
 Manual sessions assess investigation, clarification, reference resolution,
 instruction adherence, outcomes, delivery and natural communication. An
 unauthorized or duplicate effect or a known false completion claim is a defect
-regardless of wording quality. Record observed latency and cost when available;
-do not build instrumentation just to fill a scorecard. A missing manual input
-leaves that verification open without blocking unrelated work.
+regardless of wording quality.

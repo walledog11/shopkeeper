@@ -1,12 +1,9 @@
 # Google Gmail restricted-scope verification packet
 
-Prepared from the production deployment and repository behavior on
-2026-07-29; domain rows reconciled against the live deployment 2026-08-02;
-Branding, scope, publishing, and deletion rows reconciled 2026-08-30; the
-submission to-do list and the security-assessment section rewritten 2026-08-30
-against CASA Specification v2.1.1. This is an owner-ready working packet, not
-proof that Google has approved the app. Do not submit credentials, tokens,
-customer addresses, message content, or raw Gmail payloads.
+Owner-ready working packet for Google's restricted-scope verification of the
+Gmail integration, written against CASA Specification v2.1.1. It is not proof
+that Google has approved the app. Do not submit credentials, tokens, customer
+addresses, message content, or raw Gmail payloads.
 
 ## What is left to get verified
 
@@ -18,7 +15,7 @@ blocked on the Palette alias canary.
 
 - [ ] **Add at least two developer contacts.** Google Cloud console → OAuth
   Branding → developer contact information. They must be monitored owner or
-  editor addresses. Open since 2026-07-29 and the oldest blocker in the file.
+  editor addresses.
 - [ ] **Declare exactly the four scopes** in Google Cloud Data Access — the four
   under *Exact requested scopes* below, no more.
 - [ ] **Paste the scope justifications** from that same section, adjusted only
@@ -45,63 +42,55 @@ blocked on the Palette alias canary.
 
 ### Deliberately not blockers
 
-Both are real work, both are tracked in [../to-do-list.md](../to-do-list.md),
-and neither stands between the app and a submission:
+Both are real work, both are tracked in [ROADMAP.md](../ROADMAP.md), and
+neither stands between the app and a submission:
 
 - The Palette alias canary for `support@palettegarments.com`. It needs Gmail
-  administrator access the release workspace does not have. Earlier revisions of
-  this file gated the demo video on it; that was wrong.
+  administrator access the release workspace does not have. The demo video does
+  not depend on it.
 - Reconnecting `rscoding11@gmail.com` to pick up a non-expiring grant.
 
 ### Already established
 
-- [x] Attach an owned custom domain to Vercel. (`useshopkeeper.com`, 2026-08-02)
+- [x] Attach an owned custom domain to Vercel. (`useshopkeeper.com`)
 - [x] Verify that domain in Google Search Console using a project owner/editor.
-  (2026-08-02)
 - [x] Set `APP_URL` and `NEXT_PUBLIC_APP_URL` to the final domain and redeploy.
   (both `https://app.useshopkeeper.com`)
 - [x] Update the Google OAuth client redirect URI to the exact final callback.
 - [x] Add only the final owned domain to OAuth Branding authorized domains, and
   update the Branding app name / homepage / privacy and terms URLs to the apex.
-  (2026-08-30, owner-confirmed in console)
+  (owner-confirmed in console)
 - [x] Confirm homepage, privacy, and terms return 200 in an anonymous browser.
-  (re-verified 2026-08-30 on the apex)
 - [x] Confirm homepage visibly links the same privacy URL used in OAuth
   Branding. (`href="/privacy"` on the apex homepage)
 - [x] Confirm the support mailbox is monitored and matches the public brand.
-  (`hello@useshopkeeper.com` via ImprovMX, 2026-08-02)
-- [x] Publish the OAuth app to production. (2026-08-30, which ends the 7-day
-  refresh-token expiry for grants issued afterwards)
+  (`hello@useshopkeeper.com` via ImprovMX)
+- [x] Publish the OAuth app to production, which ends the 7-day refresh-token
+  expiry for grants issued afterwards.
 
 ## Submission status
 
 | Requirement | Current evidence | Owner action |
 |---|---|---|
-| Production app | Dashboard and two Railway gateway services reported healthy 2026-08-02; not re-checked since | Re-confirm immediately before submitting, and keep production stable through review |
-| Homepage | `https://useshopkeeper.com/` returns 200 and identifies Shopkeeper (owned domain, live 2026-08-02) | — |
-| Publishing status | Consent screen published to production 2026-08-30; separate from verification | Reconnect the live mailbox once to pick up a non-expiring grant |
+| Production app | Dashboard and two Railway gateway services | Re-confirm healthy immediately before submitting, and keep production stable through review |
+| Homepage | `https://useshopkeeper.com/` returns 200 and identifies Shopkeeper | — |
+| Publishing status | Consent screen published to production; separate from verification | Reconnect the live mailbox once to pick up a non-expiring grant |
 | Privacy policy | `https://useshopkeeper.com/privacy` returns 200 anonymously and publishes `hello@useshopkeeper.com` | Legal-review the Limited Use disclosure |
 | Terms | `https://useshopkeeper.com/terms` returns 200 anonymously | — |
-| OAuth redirect | `https://app.useshopkeeper.com/api/integrations/gmail/callback` set in Vercel and Google Console (2026-08-02) | — |
-| Authorized domains | `useshopkeeper.com` attached to Vercel and **verified in Search Console (2026-08-02)**; Branding app name, homepage, privacy and terms links updated to the apex (owner-confirmed in console 2026-08-30, not independently readable from the repo) | — |
-| User support email | Live policy publishes `hello@useshopkeeper.com`, forwarding via ImprovMX to a monitored inbox (verified 2026-08-02) | — |
+| OAuth redirect | `https://app.useshopkeeper.com/api/integrations/gmail/callback` set in Vercel and Google Console | — |
+| Authorized domains | `useshopkeeper.com` attached to Vercel and verified in Search Console; Branding app name, homepage, privacy and terms links point at the apex (owner-confirmed in console, not readable from the repo) | — |
+| User support email | Live policy publishes `hello@useshopkeeper.com`, forwarding via ImprovMX to a monitored inbox | — |
 | Developer contacts | Not discoverable from the repository | Add at least two monitored owner/editor contacts |
 | Demo video | Script below is ready and needs only a test mailbox | Record it — nothing gates it |
 | Restricted-scope assessment | `gmail.readonly` is restricted and server-side data is stored/transmitted | Downstream and Google-initiated; see *Security assessment (CASA)* |
 
-The owned-domain blocker is resolved: the homepage, privacy policy, and terms all
-serve from `useshopkeeper.com`, which the app owner controls and has verified in
-Search Console, and `hello@useshopkeeper.com` reaches a monitored inbox. The
-Branding page was updated to the apex on 2026-08-30. What remains is the
-*Blocks submission* list above — all of it console or desk work.
-
-Re-verified against the live deployment 2026-08-30: the apex homepage, `/privacy`
-and `/terms` each return 200 anonymously; the homepage links `/privacy` and
-`/terms`; the privacy policy carries both the Limited Use sentence and the
-"create, train, or improve a general-purpose AI model" prohibition; and the four
-scopes requested by `emailOAuthProviders` in
+Last checked against the live deployment 2026-08-30: the apex homepage,
+`/privacy` and `/terms` each return 200 anonymously; the homepage links
+`/privacy` and `/terms`; the privacy policy carries both the Limited Use sentence
+and the "create, train, or improve a general-purpose AI model" prohibition. The
+four scopes requested by `GMAIL_EMAIL_OAUTH` in
 `apps/dashboard/src/app/api/integrations/_lib/email-oauth-providers.ts` match the
-four declared below, with no drift.
+four declared below; re-check both before submitting.
 
 Note the apex/`app.` split when filling in console fields: the homepage and legal
 pages are on the **apex**, while the OAuth redirect URI is on **`app.`**.
@@ -115,7 +104,7 @@ pages are on the **apex**, while the OAuth redirect URI is on **`app.`**.
 - OAuth redirect URI:
   `https://app.useshopkeeper.com/api/integrations/gmail/callback`
 - User support email: `hello@useshopkeeper.com` (forwarding via ImprovMX to a
-  monitored inbox, verified 2026-08-02)
+  monitored inbox)
 - Authorized domain: `useshopkeeper.com`
 - Google Cloud project ID observed in production Gmail configuration:
   `shopkeeper-501301`
@@ -127,19 +116,15 @@ redirect:
 
 ## Publishing status and the 7-day refresh token
 
-**Published 2026-08-30.** Publishing status is separate from verification, which
-is why it did not wait on it.
+**Published to production.** Publishing status is separate from verification,
+which is why it did not wait on it.
 
 While an external-user-type consent screen sits in **Testing**, Google issues
 refresh tokens that expire after 7 days, so every connected mailbox stops
-sending weekly until the merchant reconnects. That was observed on the live
-`rscoding11@gmail.com` integration: the grant died on 2026-08-30 with a `400` on
-refresh, roughly four such cycles after the row was created on 2026-08-03.
-
-Publishing stops that clock only for grants issued **afterwards**. Tokens
-already issued keep their original expiry, so the live mailbox stays on a dying
-grant until it reconnects once — tracked in
-[../to-do-list.md](../to-do-list.md), not here.
+sending weekly until the merchant reconnects. Publishing stops that clock only
+for grants issued **afterwards**: a mailbox connected before publishing keeps
+its dying grant until it reconnects once (tracked in
+[ROADMAP.md](../ROADMAP.md)).
 
 The cost before verification is the unverified-app interstitial behind
 **Advanced** and a 100-user cap, neither of which binds before launch.
@@ -279,22 +264,15 @@ Gmail mailbox. The owner must communicate that boundary.
 
 Before security assessment, close or formally accept these operational gaps:
 
-- attachment deletion is an explicit operator step rather than an automatic
-  cascade;
-- `customers/redact` could not complete at all until 2026-08-30:
-  `request_episode_outcomes.source_message_id` was `NOT NULL` behind an
-  `ON DELETE SET NULL` foreign key, so the customer delete cascaded into a
-  message and raised `23502`, aborting the transaction and deleting nothing
-  while the webhook returned 200. Fixed by making the column nullable and
-  deleting the outcome rows in `deleteSelectedCustomerData`. A signed production
-  delivery on 2026-08-30 then erased a fixture customer carrying that exact
-  shape, with non-zero `deleted*` counts in the gateway log
-  (`canary:customer-redact:{seed,deliver,verify}`). A second delivery the same
-  day carried a real private Blob attachment and erased that too, so the
-  operator-step concern above is exercised rather than merely accepted. One gap
-  remains in that evidence: the canary holds the signing key, so it does not
-  show Shopify originated the call — only the admin **Erase personal data** path
-  does, on a ~10-day delay;
+- attachment deletion is automatic in in-app workspace deletion and in Shopify
+  `customers/redact` and `shop/redact`, but remains an explicit operator step on
+  the Clerk-webhook/manual workspace path and the manual customer-deletion path
+  (see the [data-deletion runbook](data-deletion.md));
+- `customers/redact` erasure of Neon rows and private Blob attachments is proven
+  against signed production deliveries
+  (`canary:customer-redact:{seed,deliver,verify}`). The canary holds the signing
+  key, so it does not show Shopify originating the call — only the admin
+  **Erase personal data** path does, on a ~10-day delay;
 - active messages do not have a fixed maximum lifetime while the merchant keeps
   the workspace;
 - verify backup/PITR deletion behavior and the exact production retention
@@ -360,8 +338,7 @@ submission in, and starting it early is worse than not starting it:** the Letter
 of Assessment expires 12 months after approval, so certifying before there are
 merchants spends a validity window on an empty application.
 
-The requirements are not the ones an earlier revision of this section listed. The
-current standard is **CASA Specification v2.1.1 (2026-06-03)**, published at
+The current standard is **CASA Specification v2.1.1 (2026-06-03)**, published at
 [appdefensealliance/ASA-WG](https://github.com/appdefensealliance/ASA-WG) —
 **23 requirements across 7 domains**: Authentication, Session Management, Access
 Control, Communications, Data Validation, Configuration, and Webhook Security.
@@ -390,16 +367,16 @@ or JavaScript applications**, so it cannot be used against this codebase at all.
 Semgrep is the substitute; an alternative tool additionally owes a CWE policy
 file, PASS/FAIL-per-CWE results, and an OWASP Benchmark scorecard.
 
-A requirement-by-requirement readiness assessment against all 23 — with the
-Semgrep result, the evidence per requirement, and the reasoning behind each
-status — was produced 2026-08-30. Static analysis found no findings in
-first-party application source across 2,007 files.
+A Semgrep pass on 2026-08-30 found no findings in first-party application
+source. The open items below are what that requirement-by-requirement readiness
+review left unresolved.
 
 Open before an assessment:
 
 - [ ] **Inbound attachment filtering is a denylist, and CASA 5.2.1 asks for an
-  allowlist.** `isBlocked` in `apps/gateway/src/storage/blob.ts` rejects
-  executables and shell scripts but passes `text/html` and `image/svg+xml`, and
+  allowlist.** `isBlockedAttachment` in `packages/agent/src/attachment-ref.ts`
+  rejects executables and shell scripts but passes `text/html` and
+  `image/svg+xml`, and
   `applyInboundAttachmentBudget` filters only on count and size. Inbound email is
   attacker-controlled. Mitigated but not resolved by private blob access and
   `nosniff`.
@@ -421,8 +398,8 @@ Open before an assessment:
   bill a model call per request.
 - [ ] **Exercise verified deletion** across Redis retention, backup/PITR, and
   connected-provider handoff. The Neon and Vercel Blob legs of
-  `customers/redact` are both proven against signed production deliveries
-  (2026-08-30); these three are not.
+  `customers/redact` are both proven against signed production deliveries;
+  these three are not.
 - [ ] **Select a Google-empanelled assessor** when a merchant is actually blocked
   by the unverified-app interstitial, or the 100-user cap comes into view.
 

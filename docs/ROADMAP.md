@@ -1,0 +1,195 @@
+# Roadmap
+
+The only planning doc. Each item says what is left and what closes it. Delete an item
+when it closes — git history is the record. No status narratives, evidence logs or
+"observe in normal use" lists; anything that blocks nothing does not belong here.
+Technical contracts and settled engineering decisions live with the code they govern
+([agent-runtime](agent-runtime.md), [runbook](production/runbook.md),
+[transport plan](socialapi-transport-plan.md)), not here.
+
+Last updated: 2026-10-13.
+
+## Now — finish the cleanup
+
+1. **Safety bugs found during the docs consolidation.** Small, fix first:
+   - `POST /api/agent/quick-approve` treats `planId` as optional
+     (`parseAgentQuickApproveBody`), so a request without one approves whichever plan
+     is current — possibly one the merchant never saw. Closes when a request without the
+     exact `planId` is refused and every caller sends it.
+   - `create_exchange`'s `replacement_price_higher` guard compares current catalog
+     prices (`packages/agent/src/shopify/exchanges.ts`), not what the customer paid.
+     Closes when it decides on the paid line price or Shopify's `returnCalculate`.
+   - Inbound attachment filtering is a denylist (`isBlockedAttachment`) that lets
+     `text/html` and `image/svg+xml` from untrusted email through. Closes with a MIME
+     allowlist.
+2. **Scripts and tooling.** Delete audit/canary scripts for finished migrations and the
+   one-off gateway scripts nothing runs; drop their `package.json` entries; make paid
+   evals one manual command and remove the leftover runtime-version switch in
+   `__evals__/selection.ts`; fix or delete `verify-production.mjs`'s inbound-email smoke
+   (it sends no Postmark auth, so production answers 401). Closes when every remaining
+   script is referenced by `package.json` or the runbook.
+3. **Test suite structure.** One naming rule everywhere (`*.integration.test.ts` needs
+   services, any other `*.test.ts` doesn't); move DB-free "integration" files to unit and
+   agent-package tests out of the gateway; replace the Clerk-mock patching in the
+   dashboard `test-setup.ts` with one `mockClerkSession()` helper; split scenario files
+   over ~600 lines; turn lint-style tests into ESLint rules. No new tests. Closes when
+   `npm run test:unit` covers every test that needs no database and runs without Docker.
+4. **Agent-core debt**, one PR each:
+   - Completion copy for replies without an approved draft comes from structured fields;
+     the English-verb regexes in `plan-grounding.ts` (`renderReplyCompletionClaims`,
+     `unsupportedReplyCompletionClaims`) stop deciding anything. Required before
+     `autoExecuteMode: live` for any real merchant.
+   - Typed tool status, error code and data flow end to end; nothing branches on
+     `Error:`/`Unknown:` prefixes (`message-dispatch.ts`, `tool-action-display.ts`,
+     `AgentChatMessage.tsx` — whose chips print an ID as a count — and
+     `AgentPrivateTurns.tsx`).
+   - The ticket composer stops routing instructions by regex
+     (`shouldUsePrivateComposerAsk` in `useConversationAgentFlow.ts`); the agent decides,
+     as it already does for dashboard navigation.
+   - Split `task-ledger.ts` by concern.
+   - One money formatter (copies in `sales-pulse.ts`, `conversation-attribution.ts`,
+     `lib/format/currency.ts`, `publicMoney`, the context-panel formatters).
+
+## Next — the first real merchant
+
+In order. This is the product's critical path.
+
+1. **Run one Instagram DM through phone approval to a reply the customer receives.**
+   Fresh DM from a controlled account (Instagram refuses business replies after 24h)
+   asking for a refund on a real dev-store order — it must carry an action-category call,
+   or the plan auto-sends and never reaches the phone. Revise once from the phone, then
+   approve on iMessage. Closes when the parked plan survives to the reply,
+   `approve_pending_plan` finds it, a `PlanExecution` exists with `executionId` on the
+   action rows and a named approver, the refund commits in the charged currency, and the
+   reply shows in the customer's app. Run a photographed damage claim the same way, and
+   confirm the SocialAPI gallery photo is stored on the ticket.
+2. **Find why a parked card was discarded before the merchant replied.** Each drop logs a
+   `PendingPlanStaleReason` (`apps/gateway/src/operator-context/persistence.ts`); the
+   suspect is `plan_replaced` after a re-plan. Closes when the cause is named and a
+   re-plan re-parks and re-notifies instead of orphaning a card the merchant is reading.
+3. **Phone approval cards show damage photos.** Dashboard cards do; the iMessage card
+   shows neither the photos nor `damage_photo_attached`, so a photographed refund can be
+   approved from the phone without seeing the evidence.
+4. **Close SocialAPI vendor diligence** before any external merchant's data flows: DPA,
+   written retention/deletion answers, the terms §11.4 contradiction, a "Powered by
+   SocialAPI" notice before the vendor redirect, and `/privacy` naming SocialAPI as a
+   processor. Gates are in [socialapi-s0-diligence](production/socialapi-s0-diligence-2026-09-07.md).
+5. **First live SocialAPI merchant connect** (runbook: *Instagram via SocialAPI*), with
+   the `SOCIALAPI_*` vars added to `scripts/check-production-env.mjs`. Closes when a
+   workspace connects from the dashboard and its next DM routes to it.
+6. **Disconnect and deletion revoke the SocialAPI account.** `disconnectInstagramAccount`
+   has no caller. Closes when disconnect revokes the remote account (or records why not)
+   and a disconnect → reconnect keeps routing and customer identity.
+7. **Rotate `SHOPIFY_APP_SECRET`** (exposed 2026-08-30; steps in the runbook).
+8. **Install the Shopify app on a real, non-dev store.** Closes when the install grants
+   every `SHOPIFY_OAUTH_SCOPES` scope and a missing scope shows the reconnect path.
+9. **Two supervised external merchants** complete real approved loops with no
+   wrong-recipient, unauthorized-money, duplicate-action or lost-message incident.
+
+## Later
+
+- **SocialAPI hardening** (S1–S6 in [the transport plan](socialapi-transport-plan.md)):
+  `dm.sent` correlation (a reply typed in the Instagram app never reaches the thread),
+  missed-delivery recovery, account health probing, failed-connect compensation.
+- **Agent rough edges seen live:** the operator agent's own chat question is reported as
+  an escalation and the merchant's answer errors (`answer_operator_question` only knows
+  ticket questions); cards on already-escalated threads print the raw
+  `escalate_to_human` reason instead of the grounded handoff; the ticket plan card can
+  go stale after a new customer message (unreproduced); a status question naming the
+  customer uses the full order read; the briefing has no "waiting on a photo" line.
+- **Concurrency-safe LLM allowances.** Reserve before each provider call and reconcile
+  after; keep merchant cap, service allowance and platform stop separate; extend
+  `llm_daily_spend` rather than adding a ledger.
+- **Cost envelope, billable unit and entitlements**, before charging anyone. Decide
+  whether an unknown price id should stay unbounded (`packages/db/plan-limits.ts`).
+- **Prior conversations in planner context**: at most ~3 summaries of the same verified
+  customer, newest first, own budget and own catch, never shown to an unverified shopper.
+- **A refusal shouldn't outlive the capability.** In a permanent operator thread the
+  agent keeps citing its own earlier "I can't" after a tool ships. Decide the mechanism;
+  a prompt bullet is not it.
+- **Ops alerts that bypass `emitOpsAlert` reach nobody** until log drains exist —
+  including the 30-day `customers/data_request` duty. Route them, and decide whether
+  anything external should notice a dead worker or a database outage.
+- **Compliance webhooks:** exercise `customers/data_request` and `shop/redact` once
+  ([data-deletion](production/data-deletion.md)).
+- **Production leftovers:** `audit:agent-runtime-retirement -- --strict` clean (taskless
+  cached plans regenerated, open unknown actions reconciled), then drop
+  `AGENT_RUNTIME_VERSION` from Railway; retire the identity-less operator queue reader
+  once `audit:operator-context-compatibility -- --strict` reports none.
+- **Gmail restricted-scope verification** — submit
+  ([packet](production/google-gmail-verification-packet.md)).
+- **Postmark:** credential canary to an off-domain recipient, then restore the
+  forwarding integration and send one reply with an attachment.
+- **Storefront chat on the dev store:** browser matrix, episode boundary, the
+  router-materialized escalation, one real merchant in approval mode, one
+  `chat_assisted` order ([findings](production/storefront-chat-verification-2026-08.md)).
+  Decide whether a verified shopper may start a mutation that goes to merchant approval.
+- **PostHog:** the privacy policy already discloses it — review staging payloads, then
+  set `PRODUCT_ANALYTICS_ENABLED=true`.
+- **Console residue:** Clerk application name (and delete the unused dev app), Shopify
+  Partner app name and privacy URL, Postmark sender branding.
+- **Collapse `vercel.json`'s build command** to `prisma generate` plus a turbo filter.
+- **Paid pilot:** decide the SocialAPI admission unit and contracted capacity, instrument
+  outcomes and per-org cost, benchmark 1x/10x pilot load, then recruit 5–10 owner-run
+  brands in one segment. Success: ≥5 paying and ≥3 renewing, ≥2 hours/week saved for ≥3,
+  ≥80% of routine plans approved unedited, no unresolved money or wrong-recipient
+  incident. Stripe prices only when the pilot tests renewal.
+- **Shopify App Store listing:** check whether one exists, then decide.
+
+## Parked — reopen on the trigger
+
+| Trigger | Work |
+| --- | --- |
+| A merchant asks for TikTok Shop | Configure-and-enable or cut — no more adapter code |
+| A merchant asks for account binding | Storefront chat Customer Account OAuth (blockers in the storefront doc) |
+| A merchant asks to change a line quantity | Quantity edits in `edit_shopify_order` |
+| The first merchant chooses email forwarding | Verify their sending domain in Postmark |
+| Zero forward-only merchants, and a decision | Remove Postmark inbound (keep the bounce webhook) |
+| The first unknown write on a merchant's store | A merchant-facing way to confirm what happened |
+| Before changing capability discovery or operator tool sets | Attribute planning cost (`inspect-turn-usage.ts`, `rebuilt`) |
+| The next support-prompt bullet for one bad output | Move `SUPPORT_INSTRUCTIONS` invariants into schema or executor |
+| The next change to merchant-answer KB or order-ops findings | Typed fields instead of regexes in `merchant-answer-kb.ts`, `order-ops/finding.ts` |
+| Async recovery exercised | Decide async-only outbound email and retire the sync path |
+| A few weeks of real merchant traffic | Baseline outcomes from `agent_actions`/`agent_tasks`/`agent_turn_usage` |
+| Attributed chat sales look too low | Anonymous-shopper attribution via cart attributes |
+| Classifier spend matters | Classify a two-message email burst once |
+| Tool-schema cost justifies a re-proof | Consolidate `get_shopify_orders`/`get_order_by_name`; `get_order_tracking` stays separate |
+| SocialAPI fails diligence or the cohort nears 100 | Revisit direct Meta (Meta console branding, native-ID mapping) |
+| Anything touches the gateway host | Move it to a `useshopkeeper.com` subdomain and re-point every webhook together |
+| Google requests a CASA assessment | Backup/log retention checks, a dynamic scan, the unverified requirements |
+| Paid beta | Better Stack Level 1 drains and escalation |
+| A merchant sees a duplicate over-plan notice | Move the marker off `Organization.settings` |
+| Gateway Redis leaves private networking | `REDIS_URL` → `rediss://` |
+| First customer launch | Decide `MERCHANT_PREFERENCE_OBSERVED_PROPOSALS` |
+| ~50 paying merchants or marketing spend | Revisit the trademark |
+
+## Decisions on record
+
+- **Make it work before making it certifiable.** A gate or hardening item earns its place
+  once the path it guards runs. Money, tenant isolation and truthful outcomes are never
+  skipped. (2026-09-10)
+- **SocialAPI is the `ig_dm` transport through the first 100 users.** Meta App Review
+  gates nothing; direct Meta stays closed to new workspaces. Admission is by
+  `SOCIALAPI_BRAND_ASSIGNMENTS`, capped by `SOCIALAPI_MAX_ACTIVE_ORGS` (max 8). (2026-09-09)
+- **Gmail working never proves Instagram ready.** Instagram is the core customer
+  channel, iMessage the control surface, Telegram internal only. (2026-09-07)
+- **Damage claims need a photo before any compensation.** A missing photo escalates; a
+  photographed claim always goes to the merchant; the agent never judges a photo.
+  (2026-10-07)
+- **Never relax financial approval to cut notifications**; batch, dedupe and use duty
+  hours instead.
+- **New capabilities need a named merchant job** and stay out of the default support
+  turn unless they earn it; gift cards are merchant-directed only. (2026-09-11)
+- **Plans sell volume and seats, never features.** (2026-08-19)
+- **Paid alerting waits for paid beta**; until then gateway alerts go to the operator
+  Telegram chat and the dashboard to Sentry. (2026-07-31)
+- **Synchronous outbound email stays the rollback rail** until async recovery is
+  exercised and an async-only date is set.
+- **Don't rename persisted enums or BullMQ queue/job names** for aesthetics — live
+  repeatable schedulers depend on them. Retire a compatibility path one per PR, after its
+  audit shows no production use.
+- **Episode memory stays deferred** (person identity, obligations, prior-episode
+  retrieval): it is a ranking problem with no traffic to rank. (2026-08-12)
+- **Evals can't see the Shopify layer** — every Shopify tool result is simulated, so the
+  dev store is the only test of `packages/agent/src/shopify/*`.
+- **Founder and test workspaces never count** as demand, success or renewal evidence.

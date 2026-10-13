@@ -1,9 +1,9 @@
 # Audit commands (when to run)
 
 Production audits live in the root `package.json` scripts. Use them as **gates**
-for retirements and rollouts — not as daily lint. Pair with
-[compatibility-retirement-backlog.md](./compatibility-retirement-backlog.md) for
-what each audit still blocks.
+for retirements and rollouts — not as daily lint. The deferred compatibility
+retirements each audit still blocks are under Decisions in
+[ROADMAP.md](./ROADMAP.md).
 
 ## Operator and channel compatibility
 
@@ -17,7 +17,7 @@ what each audit still blocks.
 | Command | Run when |
 | --- | --- |
 | `npm run audit:bullmq-compatibility-names` | Before renaming BullMQ queue or repeatable job IDs. |
-| `npm run audit:agent-action-operation-keys` | Before `migrate deploy` on any database carrying `agent_actions` history. Gates `20260912160000_add_agent_action_dispatch_lifecycle`, whose duplicate-key `RAISE` is the only data-dependent abort in the pending queue — a schema-only migration replay cannot surface it. Use `--strict`. |
+| `npm run audit:agent-action-operation-keys` | Before `migrate deploy` on any database carrying `agent_actions` history. Gates `20260912160000_add_agent_action_dispatch_lifecycle`, whose duplicate-key `RAISE` is data-dependent — a schema-only migration replay cannot surface it. Use `--strict`. |
 | `npm run audit:outbound-email-mode` | Before dropping the synchronous outbound email rollback path. |
 | `npm run audit:email-inbound-transport` | Email inbound steady-state: dual Gmail+Postmark integrations and dual-delivery risk. Use `--strict` after integration changes. |
 
@@ -27,7 +27,7 @@ what each audit still blocks.
 | --- | --- |
 | `npm run audit:plan-executions` | During agent execution or ledger rollouts. |
 | `npm run audit:conversational-overhaul-p0` | Historical cached-plan / pending-card compatibility and execution/delivery inventory. |
-| `npm run audit:agent-runtime-retirement -- --strict` | Before deploying runtime retirement. Read-only aggregate inventory of task versions, proposals, unknown operations, and current taskless caches; refuses actionable non-v2 state. |
+| `npm run audit:agent-runtime-retirement -- --strict` | Before removing a retained runtime-compatibility reader. Read-only aggregate inventory of task versions, proposals, unknown operations, and current taskless caches; refuses actionable non-v2 state. |
 | `npm run audit:classification-alignment` | After classifier contract or routing changes. |
 
 ## Repo hygiene
@@ -39,5 +39,4 @@ what each audit still blocks.
 | `npm run verify:pr` | Before opening or updating a pull request (full local gate). |
 
 Retire an audit script only when the **last** deferred candidate it measures is
-removed from the compatibility backlog — never because the completed table looks
-empty.
+removed from the roadmap — never because the list looks empty.

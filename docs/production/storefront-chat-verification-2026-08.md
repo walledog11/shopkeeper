@@ -1,16 +1,8 @@
 # Storefront chat — findings and standing constraints
 
-What survives from the August 2026 verification record: the findings that apply
-to work outside this channel, the invariants to read before changing anything
-inside it, and the M2 sketch.
-
-The incident chronology this was extracted from — the dated runs covering
-M0a/M0b, the escalation regression, the operator card, the guest-prompt collapse,
-M1.5, the episode loop, the reply loop, and the eval-gate archaeology — was
-deleted on 2026-09-01, once every finding it produced had been lifted into the two
-sections below. Read it in full at
-`git show c06be3b4:docs/production/storefront-chat-verification-2026-08.md`.
-That is the file to open when a finding below is too compressed to act on.
+The findings that apply beyond this channel, the invariants to read before
+changing anything inside it, and the deferred M2 sketch. The verification
+chronology these came from is in git history.
 
 ## Durable findings
 
@@ -18,75 +10,53 @@ Each one cost a live failure to learn.
 
 - **"On HEAD" has to name three deploy surfaces.** Vercel, Railway, *and* the
   Shopify app version. The theme extension asset ships inside the app version
-  and reaches no storefront until `shopify app deploy` — so the widget can be
-  days stale while both hosts are current. Found 2026-08-12, when the
-  verification card did not exist on the store while every route behind it was
-  live.
-- **A migration must reach production before the code that reads it.** Hit twice
-  on this feature, two for two (`20260807120000`, `20260808120000`). Nothing in
-  the deploy path enforces the ordering and the failure is invisible from the
+  and reaches no storefront until `shopify app deploy`, so the widget can be
+  days stale while both hosts are current. "Merged" is not "deployed" on any of
+  the three.
+- **A migration must reach production before the code that reads it.** Nothing
+  in the deploy path enforces the ordering, and the failure is invisible from the
   merchant side: the dashboard stays healthy and an unsigned probe answers `401`,
-  which reads as alive. Cheap check: `prisma migrate status` against production
-  as a release step.
+  which reads as alive. Check `prisma migrate status` against production as a
+  release step.
 - **A type error in a test file takes the gateway down silently.** The gateway
-  build runs `tsc` over the whole workspace including tests; Railway keeps the
-  last good container serving. Nothing distinguishes "deployed" from "deploying
-  onto a six-hour-old build" without `railway deployment list`. Check it whenever
+  build runs `tsc` over the whole workspace including tests, and Railway keeps
+  the last good container serving. Check `railway deployment list` whenever
   gateway-side code looks like it did not take effect.
-- **"Shipped" and "deployed" are different claims.** For most of 2026-08-08 the
-  plan described the spend budget as bounding spend. The code was merged; the
-  gateway was serving a build that predated it. Keep the distinction rather than
-  collapsing it.
 - **The agent registry and `static-policy.ts` reach the client bundle.** Anything
-  they import comes with them. `plan-preview` → `ConversationComposerArea` pulled
-  `node:crypto` in behind a `normalizeOrderName` import, the same shape as the
-  earlier `@shopkeeper/db`-from-the-registry break. Confirm with `next build`, not
-  by reasoning about it.
+  they import comes with them (`node:crypto` and `@shopkeeper/db` have both
+  leaked in this way). Confirm with `next build`, not by reasoning about it.
 - **Notification shape follows the decision the merchant has to make, not what
   the agent did.** Routine, safe, identity established → act, then report in one
   line. Genuine uncertainty → one question about the uncertain thing, not a
   restatement of the conversation. Risky or irreversible → the full card, and
-  "Good to send?" belongs there and only there. The test before shipping any
-  merchant-facing surface: read it as a 24-year-old selling artisan products, no
+  "Good to send?" belongs there and only there. Before shipping any
+  merchant-facing surface, read it as a 24-year-old selling artisan products, no
   e-commerce experience, who bought something that promised an employee rather
-  than a bot. If it reads as paperwork, the fix is upstream of the copy. The
-  decision that produced this is "The card was the wrong artifact" in the
-  deleted chronology.
+  than a bot. If it reads as paperwork, the fix is upstream of the copy.
 - **A prompt growing situation-by-situation means a capability is missing.**
-  The guest section reached 13 bullets and 649 words, each added after a specific
-  bad output; five commits tuned it and the fifth still shipped a bad turn. The
-  fix was a capability, after which it collapsed to 5 bullets and 269 words of
+  The guest section once grew to 13 bullets of per-output patches and still
+  shipped bad turns; adding the missing capability collapsed it to 5 bullets of
   principle.
 - **Stock-vs-flow.** A delta ("sent N more messages") pasted next to a stock
   (`aiSummary`, the whole conversation) makes every follow-up re-read as news.
-  Caught in the digest first, then in the operator card.
-- **The gate is only red once somebody runs it.** A fixture edit that could never
-  pass sat on master for three days unnoticed.
-- **A link that is built is not a link that resolves.** Every operator notification
-  had shipped a `Full thread:` deep link to a route that does not exist, because
-  the tests assert the string is constructed and nothing ever opened it. Any
-  outbound URL — notification, email, deep link — needs one live click, once.
-  Found 2026-08-19.
-- **Free text in a tool argument reaches the merchant ungrounded.** `escalate_to_human`
-  takes a model-authored `reason`, and the operator card renders it verbatim.
-  Nothing checks it against the tool calls actually in the plan, so a card can
-  assert an action — "a return has been initiated" — that was neither executed nor
-  proposed. `AgentAction` answers what ran and the cached plan answers what was
-  planned; a claim absent from both is fabricated, and only the pair proves it.
-  Found 2026-08-19.
+- **A link that is built is not a link that resolves.** Any outbound URL —
+  notification, email, deep link — needs one live click, once. Tests that assert
+  the string is constructed do not prove the route exists.
+- **Free text in a tool argument reaches the merchant ungrounded.** A
+  model-authored `escalate_to_human` reason rendered verbatim can assert an
+  action that was neither executed nor proposed. `AgentAction` answers what ran
+  and the cached plan answers what was planned; a claim absent from both is
+  fabricated, and only the pair proves it.
 - **A deterministic fast path passing is not the model path working.** `yes`
-  executed a pending plan verbatim; "go ahead and approve the refund" — same plan,
-  same thread — exhausted the iteration cap, because naming an action in prose
-  reads as a fresh instruction rather than as approval. Verify the prose path
-  separately or the keyword path will hide it. Found 2026-08-19.
+  can execute a pending plan while "go ahead and approve the refund" on the same
+  plan reads as a fresh instruction. Verify the prose path separately or the
+  keyword path will hide it.
 
 ---
 
 ## Standing constraints
 
-The invariants the implementation plan carried, kept here because they outlived
-it. Read these before changing anything on this channel; the reasoning behind
-each is in the deleted chronology named above.
+Read these before changing anything on this channel.
 
 **Identity and disclosure**
 
@@ -119,9 +89,8 @@ each is in the deleted chronology named above.
 - **Shop register, not system register.** Never name tools, lookups, widgets,
   integrations or permissions to a shopper, and never invent a support department
   or an email address that was never given.
-- **A prompt growing case by case means a capability is missing.** The guest
-  section is principle, not situation-patching. Read the 2026-08-09 guest-prompt
-  collapse in the deleted chronology before adding a bullet.
+- **The guest prompt section is principle, not situation-patching.** See the
+  finding above before adding a bullet.
 - **Every capability with an edge will try to narrate that edge.** State the
   boundary *and* the move that replaces talking about it, or the model will fill
   the gap by explaining itself.
@@ -148,10 +117,9 @@ each is in the deleted chronology named above.
   number is a one-line change if the trade stops being worth it.
 - **No cross-channel customer identity.** A shopper who chats on the storefront
   and later emails is two customers with two threads, and agent memory will not
-  join them. Superseded as an accepted model by conversation episodes, which
-  shipped; until cross-channel identity itself is built, channels stay separate
-  rather than joined by a weak name or address guess. The deferred identity tables
-  and their reasons are in [to-do-list.md](../to-do-list.md) under Parked.
+  join them. Until cross-channel identity is built, channels stay separate rather
+  than joined by a weak name or address guess. The deferred identity work is in
+  [ROADMAP.md](../ROADMAP.md).
 - **The merchant must disable Shopify Inbox** to avoid duplicate launchers. There
   is no coexistence story.
 
@@ -162,10 +130,10 @@ each is in the deleted chronology named above.
 Kept as a sketch. **Do not build against this section without specifying it
 properly.**
 
-M1.5 subsumed most of what this milestone was for, at a fraction of the cost and
+The emailed-code verification (M1.5) covers most of what this milestone was for,
 without forcing a re-authorization on anyone. What it does *not* cover is genuine
-account binding — order history across orders, saved addresses — which is the only
-reason left to build it, and only if a merchant actually asks.
+account binding — order history across orders, saved addresses — which is the
+only reason left to build it, and only if a merchant actually asks.
 
 Customer Account OAuth provides a high-assurance channel identity that links the
 storefront visitor to a canonical person. It does not turn the session into a
@@ -180,12 +148,10 @@ utilities; refresh and revalidation on later bootstraps with identity cleared on
 refresh failure; session revocation when a token refresh fails; and a persistent
 sign-in control in the widget.
 
-Two things must be settled before it is scheduled, both recorded in the
-[to-do-list.md](../to-do-list.md) entry:
+Two things must be settled before it is scheduled:
 
 - **Those scopes force re-authorization for every already-connected merchant** —
-  a migration with merchant-facing consequences, needing its own plan. Avoiding
-  exactly this is why M1 shipped without them.
+  a migration with merchant-facing consequences, needing its own plan.
 - **The Customer Account API requires the shop to be on new customer accounts.**
   Merchants on classic accounts could never use the verified path and would stay
   guest-only. Confirm the eligibility rule and decide whether a permanently

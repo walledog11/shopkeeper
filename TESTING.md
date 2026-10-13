@@ -2,246 +2,86 @@
 
 ## When a test is worth writing
 
-This app is in development. The default is to implement a user flow, verify it
-manually in the dashboard, dev store or phone, and continue toward shipping.
-A flow is done when it has been seen working. “Not verified” leaves it open;
-neither a passing suite nor a scripted-model walkthrough closes it.
+Add a test when you fix a bug and nothing existing would have caught it, and the test
+reproduces that bug. Money, tenant isolation, approval races and unknown provider
+outcomes are where such a test usually pays for itself; for database ownership and
+concurrency, use the real test database rather than a mock.
 
-New automated tests are an exception. Add one only when:
+Do not add tests to raise coverage, fill a registry or satisfy a checklist, and do not
+pin wording or echo mock calls. A user-facing flow is done when you have tried it once in
+the real app; a passing suite does not stand in for that, and a scripted model does not
+show conversational quality.
 
-- it addresses a concrete defect or failure specific to the current change;
-- manual verification cannot safely or reliably reproduce that failure;
-- it shortens diagnosis or prevents a meaningful recurrence, and no existing
-  check already covers it.
+A red check is investigated, not bypassed. Fix the product defect, or fix the specific
+misleading check.
 
-Money, tenant isolation, approval races and unknown outcomes are examples where
-a focused check may be useful. They are not instructions to fill a coverage
-matrix. Reuse existing checks first. Scripted models and fake providers can
-exercise a runtime refusal or recovery; they do not establish conversational
-quality, real Shopify behavior or actual delivery.
+## Suites
 
-Judge a test by the behavior it can catch. Mocked dependencies do not make every
-assertion useless; assertions that only echo mock calls, pin wording, or restate
-configuration are poor feature evidence. For database ownership and concurrency,
-exercise the real test database. Do not create testing infrastructure or a
-fixture campaign to certify an otherwise manually verifiable flow.
+| Command | What it runs | Needs |
+| --- | --- | --- |
+| `npm run test:unit` | unit tests in every workspace | nothing |
+| `npm run test:node` | `scripts/*.test.mjs` | nothing |
+| `npm run test:integration` | database/queue/route tests | `npm run test:services:up` |
+| `npm run test:e2e:smoke` | Playwright smoke with `E2E_AUTH_BYPASS=true` | services |
+| `npm run test:e2e:browser` | Playwright with real dev Clerk credentials | services, Clerk |
+| `npm run test:coverage` | unit + integration under V8 coverage (reported, never enforced) | services |
+| `npm run verify:pr` | everything CI runs (`--stage=static\|unit\|coverage\|build\|e2e`) | services |
 
-Further broad test cleanup is deferred until after shipping. Keep existing tests
-unless a specific check blocks the current change, falsely rejects working
-behavior, or imposes a demonstrated delay. Make the smallest correction and
-resume implementation. Do not restore deleted tests as a prerequisite.
+During a change, typecheck and run the targeted tests for what you touched. Leave
+`verify:pr` to CI unless something justifies a full local run.
 
-A red check is investigated, not silently bypassed or called passed. Fix a real
-product defect or the specific misleading check; do not add tests to satisfy
-coverage percentages, registry enumeration or a checklist.
+**Which suite a file belongs to is decided by its name**, and `npm run lint:structure`
+rejects a file no suite owns:
 
-## Running the suites
+- `apps/dashboard`, `apps/gateway`: `*.unit.test.ts(x)` is unit; any other `*.test.ts(x)`
+  is integration.
+- `packages/agent`: `*.integration.test.ts` is integration; any other `*.test.ts` is
+  unit.
+- Other packages: unit.
 
-Use proportional local checks during implementation. Typecheck changed code,
-run existing targeted checks that exercise the changed contract, and build when
-compilation or deployment is affected. Documentation edits need documentation
-checks. Verify the actual user flow manually.
+Unit tests must not need Postgres, Redis, Playwright, provider credentials or network.
 
-The root PR verification path remains the aggregate release/CI contract:
+## Test environment
 
-```sh
-npm run verify:pr
-```
+- `npm run test:services:up` starts Postgres and Redis from `docker-compose.test.yml`;
+  `test:integration` and `test:coverage` bootstrap the DB package and run migrations.
+- Vitest setup installs a fetch guard: localhost is allowed, real provider hosts are
+  blocked. Mock providers in-process (`vi.stubGlobal('fetch', …)`, SDK mocks, injected
+  dependencies). For a fixture host, use `allowTestNetworkHosts` from
+  `scripts/test-network-guard.mjs`; don't add env flags to bypass the guard.
+- `test-setup.ts` defaults `E2E_TEST_RUN=true` because the rate limiter fails closed
+  without Upstash; a wall of 429s means that flag got unset.
+- `with-test-env.mjs` loads `apps/dashboard/.env.local` and `apps/gateway/.env`, so a
+  real `ANTHROPIC_API_KEY` is usually present locally.
+- `.githooks/pre-push` runs `npm run typecheck`; enable it with
+  `git config core.hooksPath .githooks`.
+- In a sandboxed shell, Next builds can fail to bind a worker port and integration/E2E
+  can be denied the Postgres socket. That is inconclusive, not a failure — rerun with
+  local access or in CI.
 
-A pre-push hook runs `npm run typecheck` before every push — checked in at
-`.githooks/pre-push`, but inert until each clone runs `git config core.hooksPath
-.githooks`, since hook paths are local config. It exists because a widened type in a
-test fixture once failed the static gate, which skips Build, E2E, and Integration, so
-CI burned a full cycle and reported nothing. Turbo caches it to a few seconds. Bypass a
-known-good push with `git push --no-verify`.
+## Agent evals (paid — run only when asked)
 
-Run this aggregate check for the release candidate or through existing PR CI,
-not after every small edit or manual app exercise. Repeat broad local runs only
-when subsequent changes or a failure justify them. It runs structure checks,
-repo and app lint, root Knip, workspace typechecks, unit and node tests,
-auth-bypass smoke E2E, coverage reporting, and the production build. The coverage
-run owns the integration gate, so
-`verify:pr` does not run integration once normally and then repeat it under
-coverage. CI calls the same command with `--stage=static`, `unit`, `coverage`,
-`build`, or `e2e` so independent work remains parallel without duplicating the
-contract in workflow YAML. For a narrower loop, run the smallest script that
-covers your change:
+The live-model harness is `apps/dashboard/src/lib/agent/__evals__`: JSON fixtures, a
+committed `baseline.json`, and a judge. Eval test files are swept into integration runs
+but skip unless `EVAL_RUN=1` or `REQUIRE_MODEL_EVALS=1`, so ordinary runs never bill.
+Pull requests run only a free deterministic preflight.
 
-```sh
-npm run lint:structure
-npm run lint
-npm run lint:knip
-npm run typecheck
-npm run test:unit
-npm run test:node
-npm run test:integration
-npm run test:e2e:smoke
-npm run test:e2e:send-reply-hop
-npm run test:coverage
-```
-
-**Live-model eval files are swept into the integration and coverage runs, and
-opt out by default.** Nothing excludes them: the dashboard integration and
-coverage configs both `include: ['src/**/*.test.{ts,tsx}']`, which matches
-`src/lib/agent/__evals__/index.test.ts`, and the gateway's matches
-`src/order-ops.eval.test.ts`. The `src/**/__evals__/**` entry in `vitest.config.ts`
-sits under `coverage.exclude` — it drops the harness from the *report*, not from
-the *run*. Because `with-test-env.mjs` also supplies a real key from `.env.local`,
-a bare `npm run test:integration` or `verify:pr` used to bill a full 84-fixture
-suite (~$0.85) with no prompt. They now skip unless `EVAL_RUN=1` (set by every
-`test:evals*` script) or `REQUIRE_MODEL_EVALS=1` (set by the eval workflows) —
-see `__evals__/selection.ts:evalsEnabled`. Fixture loading and validation still
-run on every integration pass, and the gateway's free `order-ops deterministic
-pre-filter` suite is deliberately left ungated.
-
-Knip fails the static stage on unused files, dependencies, dev dependencies,
-unlisted imports, binaries, and duplicate exports. Unused exports and exported
-types are warnings: the `lint:knip` wrapper prints their counts and never fails
-on them. This includes exports referenced only inside their declaring file;
-Knip's broad `ignoreExportsUsedInFile` escape hatch is deliberately not used.
-
-The two ignored `.d.mts` files declare types for sibling runtime modules. The two
-ignored binaries (`docker-compose` and `ngrok`) are host tools spawned by local
-infrastructure scripts. Dependency exceptions are scoped to the workspace that
-loads them indirectly: CSS/tool configuration in the dashboard, Pino's string
-transport in the gateway, the Neon adapter's pinned transitive driver in the DB
-package, and the manually invoked Shopify CLI at the root. Root automation/E2E
-files and application operations scripts are explicit entry points because
-humans or package scripts invoke them. Do not add a directory-wide ignore to
-land a change: add the real entry point or dependency, remove the dead code, or
-document the smallest exception next to its Knip configuration with the
-invocation that requires it.
-
-## Test Ownership
-
-When a test meets *When a test is worth writing*, its suffix decides which suite
-runs it. Dashboard and gateway unit tests use the
-`*.unit.test.ts` or `*.unit.test.tsx` suffix and should not need Postgres,
-Redis, Playwright, provider credentials, or live network calls. Email package
-tests are unit-owned. Agent tests are unit-owned except explicit
-`*.integration.test.ts` database contracts such as support statistics.
-
-Integration tests cover route handlers, database-backed workflows, queues,
-Redis locks, and cross-module behavior where the database contract matters. In
-dashboard and gateway, regular `*.test.ts` files are integration-owned by
-default. Do not use an extra integration suffix: ownership is deliberately
-binary, and `npm run lint:structure` rejects overlap, missing configs, missing
-coverage participants, and unowned tests.
-
-Smoke E2E covers the default PR browser path with `E2E_AUTH_BYPASS=true`,
-including the seeded ticket → manual reply → recorded outbound delivery and
-seeded plan → approval → persistence workflow. Clerk browser-session E2E is
-intentionally separate via `npm run test:e2e:browser`, requires real
-development Clerk credentials, and is a nightly, release, or manual
-identity-provider contract. Its agent approval coverage includes a real
-recorded-delivery approval plus controlled server-authoritative committed,
-known-failure, and unknown presentation canaries. The failure canaries exercise
-recovery copy and live-region behavior without issuing a provider/customer
-side effect.
-
-`npm run test:e2e:send-reply-hop` is the focused cross-service delivery canary.
-It starts both apps, seeds an isolated email thread, invokes the gateway
-`ThreadSink` in a separate gateway process, crosses the authenticated
-`/api/agent/io-send-internal` HTTP boundary, and requires both a recorded
-provider call and one committed agent message. Test env forces synchronous
-record mode, a loopback dashboard URL, and an `example.com` recipient, so this
-canary cannot reach a real provider.
-
-Node script tests cover `scripts/*.test.mjs` and are part of PR verification through `npm run test:node`.
-
-## Local Services
-
-Integration and coverage runs expect local Postgres and Redis test services. Start them with:
+Every paid command refuses to start without both ceilings, `EVAL_MAX_USD` and
+`EVAL_MAX_MODEL_CALLS`; the call cap is the strict backstop.
 
 ```sh
-npm run test:services:up
+# one fixture, for diagnosis
+EVAL_MAX_USD=0.10 EVAL_MAX_MODEL_CALLS=20 EVAL_FIXTURE=refund-partial \
+  npm run test:evals:fixture -w apps/dashboard
+# full suite (~84 fixtures); the refusal message prints the ceilings to pass
+EVAL_CONFIRM=1 EVAL_MAX_USD=0.76 EVAL_MAX_MODEL_CALLS=149 npm run test:evals -w apps/dashboard
+# 3-repeat baseline comparison; test:evals:baseline:overwrite rewrites baseline.json
+EVAL_CONFIRM=1 EVAL_MAX_USD=2.58 EVAL_MAX_MODEL_CALLS=446 npm run test:evals:baseline -w apps/dashboard
 ```
 
-Coverage bootstraps the DB package, waits for test services, and runs migrations
-before collecting dashboard, gateway, agent, email, analytics, integrations, and
-`packages/db` coverage:
+In CI, paid modes are a manual `workflow_dispatch` of `evals.yml` with `max_usd` and
+`max_model_calls`.
 
-```sh
-npm run test:coverage
-```
-
-Each V8 config includes every eligible production `src/**/*.{ts,tsx}` file.
-Tests, declarations, eval harnesses, fixtures, and build outputs are excluded.
-Unimported production files remain in the report at 0%; coverage is not limited
-to modules reached by the tests. CI uploads each workspace's `coverage/` directory.
-
-## Coverage Is Reported, Not Enforced
-
-No coverage threshold fails a run. A percentage says which lines ran, not
-whether the behavior is right, and enforcing one rewarded tests written to walk
-defensive branches. Read the reports to find untested code worth a look; a
-coverage number is never a reason to write a test (see *When a test is worth
-writing*).
-
-## Network Calls
-
-Vitest setup installs a strict fetch guard in dashboard and gateway tests. Localhost and configured local dashboard/gateway URLs are allowed. Real provider hosts and unknown public hosts are blocked by default, including Upstash, Anthropic, Stripe, Clerk, Shopify, Postmark, Meta, Google, and Twilio.
-
-Mock provider calls in-process with `vi.stubGlobal('fetch', mockFetch)`, `vi.spyOn(globalThis, 'fetch')`, SDK mocks, or route-level dependency injection. If a test genuinely needs a fixture host, use the named helper:
-
-```ts
-import { allowTestNetworkHosts } from '../../../scripts/test-network-guard.mjs';
-
-const cleanup = allowTestNetworkHosts('provider-fixture.test');
-try {
-  // test code
-} finally {
-  cleanup();
-}
-```
-
-Do not add ad hoc environment flags to bypass the guard.
-
-## Agent evals
-
-The dashboard agent eval harness lives in `apps/dashboard/src/lib/agent/__evals__`. It runs live planner calls against JSON fixtures and compares pass rates to a committed baseline.
-
-```sh
-# Cheapest diagnosis — one fixture, ungated
-npm run test:evals:fixture -w apps/dashboard -- -t "refund-over-cap-escalate"
-
-# Fast local iteration (single repeat per fixture, ~$0.85)
-EVAL_CONFIRM=1 EVAL_REPEATS=1 npm run test:evals -w apps/dashboard
-
-# Pre-merge gate (matches CI) — prefer letting the PR trigger it instead
-EVAL_CONFIRM=1 EVAL_REPEATS=3 npm run test:evals -w apps/dashboard
-
-# Regenerate baseline.json — always use 3 repeats so flappy fixtures are visible.
-# Prefer CI; a local run refuses unless you opt in.
-gh workflow run evals.yml -f mode=baseline
-EVAL_CONFIRM=1 npm run test:evals:baseline -w apps/dashboard
-```
-
-`test:evals:baseline` sets `EVAL_REPEATS=3` and compares against the committed baseline; `test:evals:baseline:overwrite` adds `UPDATE_EVAL_BASELINE=1` and rewrites it. The two were split in `9fa26fe8` so a three-repeat capture can be read before it replaces anything. Do not regenerate the baseline at `EVAL_REPEATS=1`; that produces a noisy repeats=1 snapshot that hides flaky fixtures.
-
-Eval runs are the dominant line on the API bill — **74% of all Anthropic spend over 2026-08-16..19**, and only a quarter of the runs left a log behind. `scripts/confirm-eval-run.mjs` therefore gates **both** `test:evals` (~84 calls, ~$0.85) and `test:evals:baseline` (~252 calls, ~$2.55) on `EVAL_CONFIRM=1`. `CI=true` bypasses it, so the `core-dashboard` and `regenerate-baseline` workflow jobs are unaffected. `test:evals:fixture` is deliberately never gated — a single-fixture probe is the sanctioned way to diagnose.
-
-To audit eval spend from billing data alone: `claude-sonnet-4-6` is the eval judge (`__evals__/judge.ts`) and nothing else in this codebase uses it, so its daily cost in the Console is a pure eval meter — roughly **$0.114 per full 252-run suite**, and total eval spend is about **20x** the judge line.
-
-Two prerequisites, both of which fail quietly rather than loudly:
-
-- **`ANTHROPIC_API_KEY` resolves from `.env` files, not just the shell.** `with-test-env.mjs` merges `apps/dashboard/.env.local` and `apps/gateway/.env` (see `ENV_FILE_PATHS`) and falls back to the literal `test-anthropic-key` only when no file supplies one, at which point the suite reports `skipped` rather than failed. Verified 2026-08-19: with `ANTHROPIC_API_KEY` unset in the shell, `getTestEnv()` still returns the real 108-char local key. **So a live key is present by default on a dev machine, and anything that sweeps the eval files in bills for them** — see the warning above `npm run test:integration`.
-- **The test database must be up** (`npm run test:services:up`). Fixtures seed a real org, so with Postgres down every fixture fails instantly with `runner threw: … Can't reach database server`. The tell is `calls=0` in the `[eval]` line: no model call was made, so nothing was spent.
-
-To run a subset, filter by test name — the name is `<fixture id> — <description>`, so the filter matches description text too:
-
-```sh
-npx vitest run --config vitest.integration.config.ts src/lib/agent/__evals__/index.test.ts -t "fulfill"
-```
-
-On a subset run the suite still compares against the full baseline and will fail with an aggregate regression that only reflects the fixtures you ran. Read `[eval:gates]` and the per-category lines instead. Before treating a single-repeat failure as a regression, check the fixture's recorded rate in `baseline.json` and re-run it at `EVAL_REPEATS=3`: several fixtures sit at 66.7% by design, and advisory fixtures never hard-fail their own test but do move the aggregate.
-
-The live-AI eval workflow is separate from comprehensive coverage. The
-non-judge eval runs on relevant pull requests and manual dispatches; the
-judge-scored contract runs nightly or manually and remains non-blocking.
-
-Fixtures can set `expectedPlan.mustIncludeActionWhenMutativeIntent: true` to assert the hollow-reply invariant: when the customer asks for a refund/cancel/address change, a plan with `send_reply` must also include an action tool or `escalate_to_human`.
-
-## Expected Error Logs
-
-Tests that deliberately trigger OAuth CSRF failures, webhook signature failures, provider failures, or worker drops can inject a silent logger to keep CI output readable. Assert on a log call only when the log is the behavior, such as a security or ops alert that must fire.
+The test database must be up: with Postgres down every fixture fails before any model
+call (`calls=0`). Evals cannot see the Shopify layer — every Shopify tool result is
+simulated — so a broken Shopify tool only shows up when you try it against the dev store.

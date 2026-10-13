@@ -1,69 +1,49 @@
-# SocialAPI S0 diligence — 2026-09-07
+# SocialAPI S0 diligence
 
-Status: `in_progress`; public-document review complete, external and authenticated checks open.
-Owner: founder for vendor/commercial evidence; engineering for authenticated technical evidence.
+Status: open. Public-document review is complete; the DPA, written vendor
+answers, and authenticated checks are not. No external merchant data may be
+connected through SocialAPI until the gate below passes.
+Owner: founder for vendor/commercial evidence; engineering for authenticated
+technical evidence.
 
 This record supports S0 in the [SocialAPI transport plan](../socialapi-transport-plan.md).
-It contains no credentials or merchant data. Public documentation is evidence of the vendor's
-stated contract, not proof that production behavior matches it.
+It contains no credentials or merchant data. Public documentation is the
+vendor's stated contract, not proof of production behavior.
 
-## Public evidence reviewed
+## Open gates
 
-| Topic | Current public statement | Consequence for the transport | State |
-| --- | --- | --- | --- |
-| OAuth ownership | SocialAPI supplies the Instagram OAuth app, requests Instagram business messaging scopes, shows its own brand on consent, and does not currently support bring-your-own Meta apps. | The merchant disclosure must name SocialAPI; every SocialAPI merchant shares the vendor's Meta-app failure domain. | Documented; capture the live consent screen. |
-| Runtime key isolation | Keys can be restricted by scopes and brands. A merchant runtime key can hold `accounts:read`, `dms:read`, and `dms:send` for one brand. Empty scope or brand arrays mean unrestricted access. | Provision one least-privilege runtime key per assigned brand and reject any empty restriction set. | Documented; verify against a real account. |
-| Administrative credentials | Key/brand administration requires a full-access key or dashboard. Webhook management and analytics/event logs are account-wide and unavailable to brand-restricted keys. | Keep provisioning and webhook credentials out of normal messaging processes. Account-wide delivery records remain a wider operational trust boundary. | Documented; obtain written isolation/incident controls. |
-| DM storage | The inbox guide says DM conversations and messages are stored to support threading and pagination. The privacy policy says posts, comments, DMs, and engagement metrics are stored. | Treat SocialAPI as a processor that persistently holds customer-message content. | Documented. |
-| Retention and deletion | The privacy policy lists inbox data for the account lifetime, webhook audit logs for the account lifetime, media for 60 days, disconnect deletion within 30 days, and account deletion purge within 30 days. | Shopkeeper's notice, deletion procedure, and DPA must reflect these maximum windows. | Documented; DPA and backup deletion remain open. |
-| Terms contradiction | Section 11.4 of the terms says interaction, review, and message content is not persistently stored and is cached for at most five minutes. | The terms and privacy/inbox promises are mutually inconsistent. External merchant data remains blocked until the vendor reconciles them in writing and in the DPA. | **Blocking.** |
-| Webhook authenticity | The webhook guide documents V2 HMAC-SHA256 over `<timestamp>.<raw body>`, a timestamp header, and a delivery ID stable across retries. Five minutes is the recommended freshness window. | Implement V2 only for normal deliveries and deduplicate using the interaction ID plus delivery correlation. | Documented; verify live headers. |
-| Registration ping | The initial `webhook.test` ping occurs before the endpoint secret is revealed and the guide instructs the receiver to return `2xx` without verifying that first signature. Test deliveries also omit delivery IDs. | The route needs a narrowly defined unauthenticated registration-ping state or webhook registration must be performed only while an operator-controlled one-time gate is active. A permanent header-only bypass would be unsafe. | Design decision required before S3. |
-| Delivery behavior | Normal webhook delivery requires `2xx` within ten seconds and retries failed deliveries five times. Delivery records can be listed and replayed. | Durable queue admission must precede acknowledgement. Vendor retries supplement but do not replace Shopkeeper reconciliation. | Documented; verify live. |
-| Inbox recovery | Account sync refreshes only the conversation list; a conversation ID is required to refresh messages for one thread. Reads expose sync state and last-sync time. | A five-minute account sync alone cannot prove that every thread is recovered. The spike must enumerate changed conversations and exercise per-thread message recovery with bounded pagination. | Documented; algorithm remains unproven. |
-| Message identity | Webhook examples expose a SocialAPI interaction ID, provider account ID, author ID, received time, and conversation/message fields. Account events expose `platform_user_id`; stored message rows expose `platform_id`. | Live fixtures must prove which fields equal the IDs emitted by direct Meta and which are provider-only routing IDs. | **Blocking for external onboarding.** |
-| Attachments | The inbox guide documents `attachment_url` and image/video/audio/file types. It states that most platforms return platform URLs subject to platform expiry; special SocialAPI mirroring behavior is documented for WhatsApp. | Instagram URL lifetime, all required event shapes, and deletion/unsent behavior remain unproven. Shopkeeper must copy supported media into private storage immediately. | **Blocking for external onboarding.** |
-| SLA and termination | Paid terms promise 99.9% monthly API uptime excluding platform outages and allow termination with 30 days' notice for any reason. | A 30-day termination-for-any-reason clause is materially heavier now that this is the launch transport rather than a bridge with a rehearsed exit. Keep the staged admission limit and service-continuity procedure, and treat notice period and export commitments as negotiating points. | Documented; support and export commitments remain open. |
+Each blocks external merchant data. What closes it is in the last column.
 
-Sources reviewed on 2026-09-07 and rechecked against the live documentation on 2026-09-09:
+| Gate | What the public documents say | Closes when |
+| --- | --- | --- |
+| **Retention contradiction** | The privacy policy and inbox guide say DMs are stored for the account lifetime, webhook audit logs for the account lifetime, media for 60 days, with deletion within 30 days of disconnect or account deletion. Terms §11.4 says message content is never persistently stored and is cached at most five minutes. The inbox guide has also said both that DMs are stored for threading and that it proxies live data and never stores content. | The DPA and a written answer reconcile inbox, interaction/event, delivery-log payload, backup, and identifier storage, each with an exact retention and deletion window (vendor question 2). Do not infer the answer from either guide. |
+| **DPA and security** | Not received. | DPA, subprocessor schedule, hosting region, backup deletion, breach history, pen-test summary, and incident path received and reviewed (question 1). The DPA lives in the private vendor record, never this repository. |
+| **Message identity** | Webhooks expose an interaction ID, provider account ID, author ID, and message fields; stored rows expose `platform_id`. The webhook `platform_id` matches the stored row; the interaction ID does not. Neither the OAuth exchange nor the account read returns the native Instagram account ID. | The vendor exposes the native account ID and confirms which sender/message/conversation fields are native Meta IDs (question 5). |
+| **Attachments** | `attachment_url` with image/video/audio/file types; platform URLs expire. A view-once image arrived `ephemeral` with no URL. | Real payloads for every required shape, with URL lifetime and deleted/unsent behavior (question 4), and the authenticated media check below. |
+| **Recovery** | Account sync refreshes only the conversation list; per-thread refresh needs a conversation ID. Past-due webhook events are dropped while interactions stay discoverable through the events API. Failed deliveries retry five times and can be listed and replayed. | A written description of missed-event recovery (question 6) and the authenticated recovery check below. |
+| **Isolation** | Keys can be restricted by scope and brand; empty restriction arrays mean unrestricted. Key/brand administration, webhook management, and event logs are account-wide and unavailable to brand-restricted keys. | Written confirmation of cross-brand isolation and of how account-wide delivery logs are isolated (question 3), plus the cross-brand authenticated check. Provision one least-privilege runtime key (`accounts:read`, `dms:read`, `dms:send`) per brand and reject an empty restriction set. |
+| **Commercial terms** | Paid plans promise 99.9% monthly API uptime excluding platform outages and allow termination with 30 days' notice for any reason. | Written fair-use thresholds, rate limits, SLA coverage, support targets, incident timing, export on termination, and pricing along the 10/25/100-brand path (questions 7–9). Treat notice period and export as negotiating points. |
+| **Consent screen** | SocialAPI supplies its own Meta app, shows its own brand on consent, and does not support bring-your-own Meta apps, so every SocialAPI merchant shares its Meta-app failure domain. | The live consent screen is captured, the "Powered by SocialAPI" disclosure approved, and scope reduction answered (question 10). |
 
-- [Scoped API keys](https://docs.social-api.ai/guides/scoped-keys)
-- [Platform credentials](https://docs.social-api.ai/guides/platform-credentials)
-- [Unified inbox](https://docs.social-api.ai/guides/inbox)
-- [Webhooks](https://docs.social-api.ai/guides/webhooks)
-- [Inbox sync](https://docs.social-api.ai/api-reference/inbox/start-an-inbox-sync)
-- [Privacy policy](https://social-api.ai/privacy)
-- [Terms of service](https://social-api.ai/terms)
+Settled from the public documents and already implemented: webhooks use V2
+HMAC-SHA256 over `<timestamp>.<raw body>` with a five-minute freshness window
+and a delivery ID stable across retries; the initial `webhook.test` ping
+arrives unsigned before the endpoint secret exists and omits a delivery ID;
+normal delivery needs a `2xx` within ten seconds, so durable queue admission
+precedes acknowledgement.
 
-### 2026-09-09 live-documentation recheck
+Sources: [Scoped API keys](https://docs.social-api.ai/guides/scoped-keys),
+[Platform credentials](https://docs.social-api.ai/guides/platform-credentials),
+[Unified inbox](https://docs.social-api.ai/guides/inbox),
+[Webhooks](https://docs.social-api.ai/guides/webhooks),
+[Inbox sync](https://docs.social-api.ai/api-reference/inbox/start-an-inbox-sync),
+[Privacy policy](https://social-api.ai/privacy),
+[Terms of service](https://social-api.ai/terms).
 
-The current API reference still supports the planned core slice: assigned-brand Instagram connect,
-OAuth code exchange, brand-filtered account lookup, conversation-scoped send with an explicit
-`account_id`, and account disconnect. A typed, timeout-bounded client for that slice and a strict V2
-signature verifier now exist under `packages/integrations/src/socialapi`; they are reusable spike
-scaffolding, not live-provider acceptance.
+## Vendor message
 
-The current webhook guide documents both the legacy raw-body signature and the preferred V2
-`<timestamp>.<raw body>` signature, a stable delivery ID on real deliveries, and an unsigned initial
-`webhook.test` registration exception. It also says past-due webhook events are dropped while the
-underlying interactions remain recorded and later discoverable via the events API. Meanwhile, the
-current inbox guide says inbox calls proxy live data and that interaction content is never stored.
-That new contradiction reinforces, rather than clears, the retention blocker in the table above.
-Ask the vendor to reconcile inbox storage, underlying interaction/event storage, delivery-log
-payload storage, backups, and deletion in the DPA and written response. Do not infer the answer from
-either guide alone.
-
-## Vendor message draft
-
-Do not send this message until the founder chooses the sender/account. Send the questions as one
-thread and attach the received DPA to the private vendor record, not this repository.
-
-**Revised 2026-09-09 for the reframed envelope.** The original draft opened by describing a capped
-evaluation for up to eight merchants. That understated the ask: SocialAPI is now the selected
-Instagram transport through the first 100 users, not a 30-day loan against Meta approval. Asking
-for terms sized to eight merchants gets terms sized to eight merchants, and the capacity answer is
-one of the things Gate 2 depends on — so the opening and question 9 now state the staged path
-explicitly. Nothing else about the questions changed; they were already the right questions.
+The founder chooses the sender/account. Send the questions as one thread and
+attach the received DPA to the private vendor record, not this repository.
 
 > We are evaluating SocialAPI as the Instagram DM transport for a Shopify support product. Our
 > intended path is staged: two supervised canary merchants first, then a paid pilot of five to ten,
@@ -91,6 +71,7 @@ explicitly. Nothing else about the questions changed; they were already the righ
 >    lifetime, MIME type, size, and retry/delivery headers.
 > 5. Identify which account, sender, message, and conversation fields are native Meta identifiers.
 >    Are they stable and equal when the same account/message is observed through another Meta app?
+>    Can the API return the native Instagram account ID for a connected account?
 > 6. Describe missed-event recovery precisely. Does account-level inbox sync discover every
 >    conversation changed since a checkpoint? How are archived threads, pagination, deletions,
 >    unsends, out-of-order events, and gaps older than the staleness window handled?
@@ -111,43 +92,37 @@ explicitly. Nothing else about the questions changed; they were already the righ
 
 ## Authenticated verification queue
 
-These checks begin after the founder creates the production paid account and a separate test
-account/key. Never paste a key, token, payload containing customer content, or DPA into a tracked
-file.
+These start once the founder creates the paid production account and a separate
+test account/key. Never paste a key, token, payload containing customer content,
+or DPA into a tracked file.
 
 - [ ] Record production and non-production account ownership and billing owner in the private
   credential system.
 - [ ] Create one test brand and verify a non-empty brand restriction plus the minimum DM scopes.
-- [ ] Prove cross-brand reads and writes fail closed; confirm the response does not reveal whether
-  the foreign resource exists.
+- [ ] Prove cross-brand reads and writes fail closed without revealing whether the foreign
+  resource exists.
 - [ ] Capture the real scope catalog and compare it with the documented vocabulary.
 - [ ] Capture the live SocialAPI-branded Instagram consent screen and authorized scopes.
-- [ ] Register a disposable webhook and capture sanitized V2 headers, ping behavior, delivery ID,
-  retry timing, delivery-log visibility, and replay behavior.
-- [ ] Connect a controlled Instagram Professional account and capture sanitized account/message
-  identity fixtures for comparison with direct Meta.
-- [ ] Exercise text and every required inbound media/event shape, including URL expiry and provider
+- [ ] Capture sanitized V2 headers, retry timing, delivery-log visibility, and replay behavior on
+  a disposable webhook.
+- [ ] Exercise every required inbound media/event shape, including URL expiry and provider
   deletion behavior.
 - [ ] Disable webhook delivery, recover through stored reads and platform sync, and document the
-  earliest unrecoverable gap without relying on poll time as message time.
+  earliest unrecoverable gap without using poll time as message time.
 - [ ] Disconnect and delete the test account; verify remote authorization and provider-held data
   removal against the promised windows.
 
 ## Go/no-go gate
 
-Proceed from SP to production implementation only when:
+External merchant data is allowed only when:
 
 - the DPA and written retention answer are acceptable and mutually consistent;
-- live identity fixtures support safe tenant ownership, deduplication, and eventual direct-Meta
-  handoff;
+- live identity fixtures support safe tenant ownership, deduplication, and an eventual
+  direct-Meta handoff;
 - supported message/media coverage and recovery meet Shopkeeper's existing Instagram contract;
 - scoped runtime credentials contain a merchant compromise to one assigned brand; and
-- the contracted tier, rate limits, and support commitments credibly extend along the staged path
-  toward roughly 100 connected brands, since there is no direct-Meta timeline behind this one to
-  fall back to. *(Replaced 2026-09-09. The original criterion asked whether SocialAPI reached
-  merchants sooner than waiting for Advanced Access; with Meta approval no longer gating launch,
-  that comparison no longer decides anything.)*
+- the contracted tier, rate limits, and support commitments credibly extend toward roughly 100
+  connected brands.
 
-Any failure above is a no-go for external merchant data. A no-go is now a reason to fix the plan or
-change provider, not a reason to fall back to waiting for direct Meta — nothing is waiting on that.
-Reusable controlled-spike code may remain behind a disabled flag.
+Any failure is a no-go for external merchant data and a reason to fix the plan or change
+provider. Controlled-account code may remain behind its disabled flag.
