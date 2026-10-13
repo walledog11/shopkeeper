@@ -50,6 +50,19 @@ export const PLAN_SIGNAL_MESSAGES: Record<ProducedPlanSignalCode, string> = {
     "Shopify doesn't show the item a step targets on that order, so the step can't say which item it changes and cannot be approved as written.",
   damage_photo_attached:
     "The customer sent photos of the damage - check them before approving.",
+  reply_promises_follow_up:
+    "The reply promises the customer a follow-up that nothing in this plan does. Approve it only if someone will.",
+}
+
+// A promise of later work (looking into it, getting back to them) is kept by a
+// person, and a reply reaches nobody but the customer. A plan that escalates or
+// asks the merchant has already handed the thread to the one who keeps it.
+export function replyPromisesUnownedFollowUp(rawToolCalls: readonly RawToolCall[]): boolean {
+  return rawToolCalls.some(call => (
+    call.name === "send_reply"
+    && (call.input as { promises_follow_up?: unknown } | undefined)?.promises_follow_up === true
+  ))
+    && !rawToolCalls.some(call => call.name === "escalate_to_human" || call.name === "ask_operator")
 }
 
 // Reads that make an unlinked Shopify customer consequential: the plan leaned on

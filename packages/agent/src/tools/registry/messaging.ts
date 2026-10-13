@@ -10,6 +10,7 @@ export const MESSAGING_TOOL_DEFINITIONS = [
     fields: {
       text: stringArg("The message text to send.", { required: true, nonBlank: true }),
       await_response: booleanArg("Set true only when this reply asks the customer for information required to continue the current task."),
+      promises_follow_up: booleanArg("Set true when this reply tells the customer that you or anyone at the store will do something later, such as look into it, pass it along, or get back to them. Nothing does that work on its own, so the merchant approves the reply before it is sent."),
     },
     category: "communication",
     group: "messaging",

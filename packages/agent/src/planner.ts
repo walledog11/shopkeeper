@@ -25,7 +25,7 @@ import { decideAutonomy } from "./autonomy.js";
 import { recordMerchantPreferenceUsage } from "./merchant-preferences.js";
 import { detectUngroundedReplyText } from "./plan-grounding.js";
 import { validatePlan } from "./plan-validation.js";
-import { buildPlanSignals } from "./plan-signals.js";
+import { buildPlanSignals, replyPromisesUnownedFollowUp } from "./plan-signals.js";
 import { buildPlanSteps } from "./planner-steps.js";
 import { deriveProposalCommunication } from "./proposal-communication.js";
 import { buildSystemPromptParts } from "./prompt.js";
@@ -521,6 +521,11 @@ export async function planAgent(
   // force review but never decide that a plan cannot run.
   if (detectUngroundedReplyText(rawToolCalls, { ctx, readResults: Object.fromEntries(loop.readResults) }).length > 0) {
     signalCodes.push("ungrounded_customer_reply");
+  }
+  // The model declares the promise on the reply, so this reads a field rather
+  // than the wording. On an operator turn the merchant wrote the instruction.
+  if (!operatorMode && replyPromisesUnownedFollowUp(rawToolCalls)) {
+    signalCodes.push("reply_promises_follow_up");
   }
   const signals = buildPlanSignals(signalCodes, rawToolCalls);
   const validationIssueCounts = validation.issues.reduce<Record<string, number>>((counts, issue) => {

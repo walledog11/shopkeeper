@@ -152,6 +152,7 @@ export type ProducedPlanSignalCode =
   | 'circular_channel_deflection'
   | 'approved_message_withheld'
   | 'damage_photo_attached'
+  | 'reply_promises_follow_up'
   | PlanValidationIssueCode
 
 export type PlanValidationIssueCode =
