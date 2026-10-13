@@ -171,6 +171,19 @@ describe('POST /webhooks/shopify — mandatory compliance topics', () => {
         reservedCents: 100,
       },
     });
+    // One member's pending state holds parked work for several customers.
+    // Erasure takes this customer's plan, question and briefing, not the rest.
+    const keptPlan = { threadId: randomUUID(), instruction: 'Reply to keep@example.com', rawToolCalls: [] };
+    const operatorContext = await db.operatorContext.create({ data: {
+      organizationId: org.id,
+      memberKey: `member-${randomUUID()}`,
+      pendingPlans: [
+        { threadId: thread.id, instruction: 'Reply to redact@example.com', rawToolCalls: [] },
+        keptPlan,
+      ],
+      pendingQuestion: { threadId: thread.id, question: 'When does #299938 ship?' },
+      pendingDigest: { sentAt: new Date().toISOString(), items: [{ threadId: thread.id, kind: 'flagged' }] },
+    } });
 
     const response = await signedShopifyRequest('customers/redact', shopDomain, {
       shop_id: 954889,
@@ -199,6 +212,11 @@ describe('POST /webhooks/shopify — mandatory compliance topics', () => {
     expect(await db.refundSpendReservation.findUnique({
       where: { id: substringOnlyReservation.id },
     })).not.toBeNull();
+    expect(await db.operatorContext.findUnique({ where: { id: operatorContext.id } })).toMatchObject({
+      pendingPlans: [keptPlan],
+      pendingQuestion: null,
+      pendingDigest: null,
+    });
   });
 
   it('uses the uninstall tombstone to process Shopify-linked shop data later', async () => {

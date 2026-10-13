@@ -1,4 +1,5 @@
-import { db } from '@shopkeeper/db';
+import { db, Prisma } from '@shopkeeper/db';
+import type { Prisma as PrismaTypes } from '@prisma/client';
 import logger from '../logger.js';
 import { deleteOrgAttachments } from '../storage/blob.js';
 
@@ -45,6 +46,34 @@ function containsExactIdentifier(value: unknown, identifiers: ReadonlySet<string
     return Object.values(value).some(item => containsExactIdentifier(item, identifiers));
   }
   return false;
+}
+
+// A member's pending state holds parked work for every customer, so erasing one
+// customer removes only what mentions them: their queued plans, and the open
+// question if it is theirs. The briefing goes whole, because the merchant
+// answers its items by number and removing one would renumber the rest.
+function pendingStateWithout(
+  context: {
+    pendingPlans: PrismaTypes.JsonValue;
+    pendingDigest: PrismaTypes.JsonValue;
+    pendingQuestion: PrismaTypes.JsonValue;
+  },
+  identifiers: ReadonlySet<string>,
+): {
+  pendingPlans?: PrismaTypes.InputJsonArray | typeof Prisma.DbNull;
+  pendingDigest?: typeof Prisma.DbNull;
+  pendingQuestion?: typeof Prisma.DbNull;
+} {
+  const data: ReturnType<typeof pendingStateWithout> = {};
+  if (containsExactIdentifier(context.pendingPlans, identifiers)) {
+    const kept = Array.isArray(context.pendingPlans)
+      ? context.pendingPlans.filter(plan => !containsExactIdentifier(plan, identifiers))
+      : [];
+    data.pendingPlans = kept.length > 0 ? kept as PrismaTypes.InputJsonArray : Prisma.DbNull;
+  }
+  if (containsExactIdentifier(context.pendingDigest, identifiers)) data.pendingDigest = Prisma.DbNull;
+  if (containsExactIdentifier(context.pendingQuestion, identifiers)) data.pendingQuestion = Prisma.DbNull;
+  return data;
 }
 
 function stringId(value: unknown): string | null {
@@ -285,7 +314,19 @@ async function deleteSelectedCustomerData(
       },
     });
     await tx.refundSpendReservation.deleteMany({ where: { id: { in: reservationIds } } });
-    await tx.operatorContext.deleteMany({ where: { id: { in: operatorContextIds } } });
+    for (const contextId of operatorContextIds) {
+      // The row lock appendPendingPlan takes, so a plan parked while this runs
+      // is read here rather than overwritten.
+      await tx.$queryRaw`SELECT 1 FROM operator_contexts WHERE id = ${contextId}::uuid FOR UPDATE`;
+      const context = await tx.operatorContext.findUnique({
+        where: { id: contextId },
+        select: { pendingPlans: true, pendingDigest: true, pendingQuestion: true },
+      });
+      const data = context ? pendingStateWithout(context, identifiers) : {};
+      if (Object.keys(data).length > 0) {
+        await tx.operatorContext.update({ where: { id: contextId }, data });
+      }
+    }
     await tx.shopifyPrivacyRequest.deleteMany({
       where: {
         organizationId,
