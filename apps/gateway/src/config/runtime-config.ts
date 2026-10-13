@@ -144,7 +144,7 @@ export function getGatewayRuntimeFlags(): GatewayRuntimeFlags {
 // Max pending plans held per operator context (A6-step-2 queue). Default 1
 // reproduces the pre-queue single-slot overwrite exactly; raise it (bounded 1–5)
 // to let plans stack and be individually approved. Enablement is gated on P1
-// execution-ledger rollout — see docs/agent-behavior-and-expansion-plan.md.
+// execution-ledger rollout.
 export function getOperatorPlanQueueMax(): number {
   const parsed = parsePositiveIntEnv('OPERATOR_PLAN_QUEUE_MAX', 1);
   return Math.min(parsed, 5);
