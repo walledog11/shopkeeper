@@ -2,9 +2,7 @@
 nixPkgs = ["nodejs_22"]
 
 [phases.install]
-# With NODE_ENV=production a plain install skips devDependencies, and the build
-# needs typescript and the @types packages.
-cmds = ["npm install --include=dev"]
+cmds = ["npm install"]
 
 [phases.build]
 # turbo orders workspace builds from each package's own dependencies. A literal

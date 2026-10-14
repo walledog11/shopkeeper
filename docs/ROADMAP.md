@@ -11,13 +11,14 @@ Last updated: 2026-10-14.
 
 ## Now — finish the cleanup
 
-1. **The gateway may run without `NODE_ENV=production`** (it did at the 2026-09-08
-   release). That switches off the production boot checks in `validateGatewayEnv`, lets
-   `loadKey` fall back to a dev encryption key, lets `hasValidPostmarkAuth` accept
-   unauthenticated posts when its credentials are unset, and makes rate limiting fail
-   open. The build no longer blocks it (`nixpacks.toml` installs with `--include=dev`).
-   Closes when both Railway services run `NODE_ENV=production` and deploy, after the env
-   preflight passes against each (runbook: *Railway*).
+1. **Confirm the gateway runs with `NODE_ENV=production`.** Without it `validateGatewayEnv`
+   skips its production boot checks, `loadKey` can fall back to a dev encryption key,
+   `hasValidPostmarkAuth` accepts unauthenticated posts when its credentials are unset, and
+   rate limiting fails open. Nixpacks writes `NODE_ENV=production` into every Node image, so
+   both services have it unless a Railway variable overrides it. It also sets
+   `NPM_CONFIG_PRODUCTION=false`, so the earlier note that setting it broke the build by
+   skipping devDependencies is not the cause. Closes when both services' logs are JSON
+   (runbook: *Railway*).
 2. **Scripts and tooling.** Delete audit/canary scripts for finished migrations and the
    one-off gateway scripts nothing runs; drop their `package.json` entries; make paid
    evals one manual command and remove the leftover runtime-version switch in

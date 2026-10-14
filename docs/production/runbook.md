@@ -77,10 +77,12 @@ npx turbo run build --filter=shopkeeper-gateway
   `GATEWAY_WORKER_HEARTBEAT_STALE_MS=600000`. Their defaults (`parseGatewayProductionConfig`) depend
   on `NODE_ENV`; when the two services disagree about it, the web service judges a healthy worker
   stale and `/health/deep` fails.
-- **Both gateway services run `NODE_ENV=production`** (check with `railway variables --service <name> --environment production`).
-  The install phase in `nixpacks.toml` passes `--include=dev`, so the `tsc` build keeps its
-  `typescript` and `@types/*` devDependencies under it. A service running without it logs
-  pino-pretty text instead of JSON and has every gateway guard keyed on `NODE_ENV` switched off:
+- **Check `NODE_ENV` on both gateway services.** Nixpacks writes `NODE_ENV=production` into every
+  Node image (with `NPM_CONFIG_PRODUCTION=false`, so devDependencies still install), so a service
+  runs with it unless a Railway variable overrides it
+  (`railway variables --service <name> --environment production`); JSON logs mean it is set. A
+  service running without it logs pino-pretty text instead of JSON and has every gateway guard
+  keyed on `NODE_ENV` switched off:
   - the production boot checks in `validateGatewayEnv` (`TOKEN_ENCRYPTION_KEY`, `DIRECT_DATABASE_URL`,
     `PLAN_EXECUTION_LEDGER_MODE`, `DASHBOARD_URL`, Postmark inbound credentials);
   - `loadKey` in `packages/db/crypto.ts` falls back to an insecure dev key instead of throwing when
