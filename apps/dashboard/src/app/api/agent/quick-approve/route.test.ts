@@ -10,8 +10,8 @@ import {
 import { buildAgentPlanCacheRecord } from "@shopkeeper/agent/plan-cache";
 import { AGENT_PLAN_CACHE_VERSION } from "@shopkeeper/agent/plan-cache-shape";
 import { resolveAgentSettings } from "@shopkeeper/agent/settings";
-import { ANY_MEMBER_ACTOR_KEY, acceptCustomerAgentRequest, claimAgentTask, settleAgentTaskClaim } from "@shopkeeper/agent/task-ledger";
-import { getExecutablePlanToolCalls } from "@shopkeeper/agent/plan-execution";
+import { acceptCustomerAgentRequest, claimAgentTask, settleAgentTaskClaim } from "@shopkeeper/agent/task-ledger";
+import { supportAttemptSettlement } from "@shopkeeper/agent/plan-execution";
 import type { AgentPlan, OrgSettings } from "@/types";
 
 vi.mock("@clerk/nextjs/server", () => ({
@@ -94,8 +94,7 @@ async function createThreadWithCachedPlan(
   const thread = await createTestThread(org.id, customer.id, ChannelType.email);
   const message = await createTestMessage(thread.id, "Do you ship to the UK?");
   const settings = resolveAgentSettings(orgSettings ?? null);
-  const calls = getExecutablePlanToolCalls(plan);
-  const reply = calls.find((call) => call.name === "send_reply");
+  const reply = plan.rawToolCalls.find((call) => call.name === "send_reply");
   const replyInput = reply?.input as { text?: unknown } | undefined;
   plan = {
     ...plan,
@@ -122,13 +121,16 @@ async function createThreadWithCachedPlan(
   });
   const claim = await claimAgentTask({ organizationId: org.id, taskId: task.id, expectedRevision: task.revision });
   if (!claim) throw new Error("Could not claim the approval fixture");
+  // Parked the way planning parks it. manualReview is the dashboard draft path,
+  // which parks even a plan that could run on its own.
+  const settlement = await supportAttemptSettlement({
+    orgId: org.id, threadId: thread.id, settings, merchantQuestion: null,
+    sourceRequestIds: [request.id], manualReview: true,
+  });
+  if (settlement.status !== "waiting_approval") throw new Error("The fixture plan parks no proposal");
   await settleAgentTaskClaim({
     organizationId: org.id, taskId: task.id, expectedRevision: task.revision, claimToken: claim.claimToken, requestId: request.id,
-    settlement: {
-      status: "waiting_approval",
-      proposal: { proposalId: cachedPlan.planId ?? undefined, instruction, rawToolCalls: calls, communication: plan.communication, sourceRequestIds: [request.id] },
-      approver: { kind: "member", key: ANY_MEMBER_ACTOR_KEY },
-    },
+    settlement,
   });
 
   return { thread, message, planId: cachedPlan.planId };
@@ -155,7 +157,7 @@ describe("POST /api/agent/quick-approve", () => {
     expect(mockExecuteAgentTurn).not.toHaveBeenCalled();
   });
 
-  it("executes the current quick reply using only the send_reply tool call", async () => {
+  it("executes the current quick reply as the bundle it parked, reads included", async () => {
     const { thread, planId } = await createThreadWithCachedPlan(quickReplyPlan);
 
     const res = await POST(new Request("http://localhost:3000/api/agent/quick-approve", {
@@ -168,7 +170,7 @@ describe("POST /api/agent/quick-approve", () => {
     expect(mockExecuteAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
       threadId: thread.id,
       instruction: "Handle this",
-      approvedToolCalls: [{ id: "send_1", name: "send_reply", input: { text: "Yes, we ship to the UK." } }],
+      approvedToolCalls: quickReplyPlan.rawToolCalls,
     }), expect.anything());
 
     const updatedThread = await db.thread.findUnique({ where: { id: thread.id } });
