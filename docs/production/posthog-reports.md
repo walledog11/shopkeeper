@@ -114,7 +114,7 @@ One Trends tile per line (all filtered to `environment = production`):
 ## Verification
 
 Reports are "verified" once a controlled activation journey (staging first, then
-one production journey per the Phase 5 rollout) walks all seven funnel steps and
-each report reflects the events. Until `PRODUCT_ANALYTICS_ENABLED=true` and real
+one production journey) walks all seven funnel steps and each report reflects
+the events. Until `PRODUCT_ANALYTICS_ENABLED=true` and real
 traffic exists, saved reports render empty — that is expected; saving them is a
 prerequisite for enabling production capture, not a consumer of live data.

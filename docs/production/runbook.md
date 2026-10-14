@@ -1,43 +1,51 @@
-# Production Deploy Runbook
+# Production Runbook
 
-This runbook covers the first launch track:
-
-1. deploy the dashboard and gateway with a production-safe env contract
-2. run migrations
-3. verify health endpoints
-4. prove the live inbound-message path works end-to-end
-
-It absorbed `deployment.md` on 2026-09-01; the two had been describing the same deploy from two files, and the migration guidance was the half that mattered and was split across both. [`checklist.md`](checklist.md) stays separate as the short release gate — it is the sign-off contract, not the procedure.
+How to deploy and operate the dashboard (Vercel) and gateway (Railway): env contract, deploy and
+migrations, monitoring, triage, recovery, and channel smoke tests. Open work lives in
+[../ROADMAP.md](../ROADMAP.md), not here.
 
 ## Runtime Contract
 
-### Dashboard
+**Dashboard** — Vercel, `https://app.useshopkeeper.com`, built by [vercel.json](../../vercel.json),
+env validated in [apps/dashboard/src/lib/env/index.ts](../../apps/dashboard/src/lib/env/index.ts).
+Health ([apps/dashboard/src/app/api/health/route.ts](../../apps/dashboard/src/app/api/health/route.ts)):
 
-- Platform: Vercel
-- Build config: [vercel.json](../../vercel.json)
-- Health endpoint: [apps/dashboard/src/app/api/health/route.ts](../../apps/dashboard/src/app/api/health/route.ts)
-- Env validation: [apps/dashboard/src/lib/env/index.ts](../../apps/dashboard/src/lib/env/index.ts)
+- `GET /api/health` — liveness only, touches no dependency.
+- `GET /api/health/deep` — env, DB, Redis; `503` with `{"status":"degraded"` when any fails.
 
-### Gateway
+**Gateway** — Railway, `https://clerk-production-e37f.up.railway.app` (pre-rebrand name, never
+merchant-visible; renaming it means re-pointing every registered webhook in one sitting). Services
+`shopkeeper` (public server) and `Gateway Worker` when split. Start config [railway.json](../../railway.json),
+supervisor [apps/gateway/src/start.ts](../../apps/gateway/src/start.ts), env validated in
+[apps/gateway/src/config/env.ts](../../apps/gateway/src/config/env.ts) and
+[scripts/lib/production-config-schema.mjs](../../scripts/lib/production-config-schema.mjs).
+Health ([apps/gateway/src/health.ts](../../apps/gateway/src/health.ts)):
 
-- Platform: Railway
-- Start config: [railway.json](../../railway.json)
-- Supervisor entrypoint: [apps/gateway/src/start.ts](../../apps/gateway/src/start.ts)
-- Health endpoints: [apps/gateway/src/index.ts](../../apps/gateway/src/index.ts)
-- Env validation: [apps/gateway/src/config/env.ts](../../apps/gateway/src/config/env.ts)
+- `GET /health` — liveness only, touches no dependency.
+- `GET /health/deep` — DB, Redis, worker heartbeat, queue diagnostics (`503` when any fails), plus `checks.imessage.configured`.
+- `GET /health/queues` — needs `x-internal-secret`; queue counts, heartbeat, failed-job tenant
+  identifiers. Never give it to a third-party poller.
 
-### Verification Tooling
+**Tooling** — `npm run verify:production:env` ([scripts/check-production-env.mjs](../../scripts/check-production-env.mjs)),
+`npm run verify:production` ([scripts/verify-production.mjs](../../scripts/verify-production.mjs)),
+`npm run verify:production:alerts` ([scripts/verify-production-alerts.mjs](../../scripts/verify-production-alerts.mjs)).
+Rollout/retirement audits: [../audit-commands.md](../audit-commands.md). Gateway one-off scripts:
+[apps/gateway/src/scripts/README.md](../../apps/gateway/src/scripts/README.md).
 
-- Production env preflight: [scripts/check-production-env.mjs](../../scripts/check-production-env.mjs)
-- Production smoke script: [scripts/verify-production.mjs](../../scripts/verify-production.mjs)
-- DB migrate command: [package.json](../../package.json)
+**Gateway scripts read `apps/gateway/.env` first.** Scripts that call `loadGatewayEnv` let a local
+`apps/gateway/.env` override injected values unless `NODE_ENV=production`, and `railway run` sets
+`NODE_ENV` only if the service has it. They include most of `apps/gateway/src/scripts/`
+(`set-telegram-webhook.ts`, `inspect-failed-queue-jobs.ts`, `remove-failed-queue-job.ts`,
+`canary-outbound-gmail.ts`, `inspect-shopify-webhooks.ts`), plus `scripts/recover-gmail-history.ts`
+and `scripts/emit-controlled-ops-alert.ts --app=gateway`. Prefix `NODE_ENV=production` whenever one
+of them runs against production, or it silently uses your local bot token, database and Redis.
 
 ## Platform Commands
 
 ### Vercel
 
-- Install command: `npm install`
-- Build command:
+- Install: `npm install --ignore-scripts && npm run build -w @shopkeeper/shared && npm rebuild @shopkeeper/db`
+- Build:
 
 ```bash
 npx prisma generate --schema=packages/db/prisma/schema.prisma && npm run build -w packages/db && npm run build -w packages/agent && npm run build -w packages/integrations && npx turbo run build --filter=shopkeeper-dashboard
@@ -47,1446 +55,1084 @@ npx prisma generate --schema=packages/db/prisma/schema.prisma && npm run build -
 
 ### Railway
 
-- Start command:
-
-```bash
-npm run start -w apps/gateway
-```
-
-- The gateway start script launches both the HTTP server and the worker by default via `dist/start.js`.
-- Build command (`railway.json`, mirrored in `nixpacks.toml`), which is also the
-  local validation path:
+- Start (also in `nixpacks.toml`): `npm run start -w apps/gateway` — `dist/start.js` launches server and worker.
+- Build (`railway.json`, mirrored in `nixpacks.toml`; also the local validation path):
 
 ```bash
 npx turbo run build --filter=shopkeeper-gateway
 ```
 
-- **Never expand that into a literal sequence of `npm run build -w <package>` steps.**
-  turbo orders workspace builds from each package's own dependencies; a written-out
-  list is a second copy of the dependency graph and goes stale the moment a package
-  gains a workspace dependency. That is not hypothetical: `@shopkeeper/email` gained
-  an import from `@shopkeeper/agent`, and five separate copies of the order — two
-  build configs, two scripts, and this document — all still listed email first, so
-  the gateway deploy failed on a `dist/` that did not exist yet. Verify a build-order
-  change by deleting every `packages/*/dist` first; a stale artifact makes the wrong
-  order pass.
-- If Railway is configured with a custom build command in the console, use the same
-  command above rather than a hand-written sequence.
-- `nixpacks.toml` mirrors the start command.
-- `GATEWAY_RUNTIME_ROLE=all` is the default. For split Railway services, use `server` on the web service and `worker` on the background worker service, keeping the same start command.
-- Upstash's free tier is usually not enough for always-on BullMQ workers. Use pay-as-you-go/fixed pricing or another Redis deployment for production.
-- Cost-tuning env vars: `GATEWAY_BULLMQ_DRAIN_DELAY_SECONDS`, `GATEWAY_BULLMQ_STALLED_INTERVAL_MS`, `GATEWAY_WORKER_HEARTBEAT_INTERVAL_MS`, `GATEWAY_WORKER_HEARTBEAT_TTL_SECS`, `GATEWAY_WORKER_HEARTBEAT_STALE_MS`, `GATEWAY_QUEUE_DIAGNOSTICS_CACHE_MS`, `GATEWAY_ENABLE_MAINTENANCE_WORKERS`.
+- **Never expand that into a literal sequence of `npm run build -w <package>` steps.** turbo orders
+  builds from each package's own dependencies; a written-out list is a second copy of the
+  dependency graph and goes stale the moment a package gains a workspace dependency (that is how
+  `@shopkeeper/email` importing `@shopkeeper/agent` broke a gateway deploy). Verify a build-order
+  change by deleting every `packages/*/dist` first — a stale artifact makes the wrong order pass. A
+  custom build command in the Railway console must be the one above.
+- `GATEWAY_RUNTIME_ROLE`: `all` (default) | `server` (web service) | `worker` (background service); same start command.
+- Cost-tuning env vars: `GATEWAY_BULLMQ_DRAIN_DELAY_SECONDS`, `GATEWAY_BULLMQ_STALLED_INTERVAL_MS`,
+  `GATEWAY_WORKER_HEARTBEAT_INTERVAL_MS`, `GATEWAY_WORKER_HEARTBEAT_TTL_SECS`,
+  `GATEWAY_WORKER_HEARTBEAT_STALE_MS`, `GATEWAY_QUEUE_DIAGNOSTICS_CACHE_MS`, `GATEWAY_ENABLE_MAINTENANCE_WORKERS`.
+- **Set the heartbeat explicitly on both services** (`shopkeeper` and `Gateway Worker`):
+  `GATEWAY_WORKER_HEARTBEAT_INTERVAL_MS=300000`, `GATEWAY_WORKER_HEARTBEAT_TTL_SECS=900`,
+  `GATEWAY_WORKER_HEARTBEAT_STALE_MS=600000`. Their defaults (`parseGatewayProductionConfig`) depend
+  on `NODE_ENV`; when the two services disagree about it, the web service judges a healthy worker
+  stale and `/health/deep` fails.
+- **Check `NODE_ENV` on both gateway services** (`railway variables --service <name> --environment production`).
+  Setting `NODE_ENV=production` makes Railway's plain `npm install` skip devDependencies, including
+  the `typescript` and `@types/*` packages the `tsc` build needs, so the deploy fails; the code fix
+  is tracked in [../ROADMAP.md](../ROADMAP.md). A service running without it logs pino-pretty text
+  instead of JSON and has every gateway guard keyed on `NODE_ENV` switched off:
+  - the production boot checks in `validateGatewayEnv` (`TOKEN_ENCRYPTION_KEY`, `DIRECT_DATABASE_URL`,
+    `PLAN_EXECUTION_LEDGER_MODE`, `DASHBOARD_URL`, Postmark inbound credentials);
+  - `loadKey` in `packages/db/crypto.ts` falls back to an insecure dev key instead of throwing when
+    `TOKEN_ENCRYPTION_KEY` is missing;
+  - `hasValidPostmarkAuth` accepts unauthenticated inbound and bounce posts when the Postmark
+    credentials are unset;
+  - rate limiting (`rateLimit`, the storefront-chat limits) fails open during a Redis outage instead of closed.
 
-### Both platforms
+  On such a service the env preflight is the only check on those variables. Run it against each
+  service's Railway values after every gateway env change:
+  `railway run --service shopkeeper --environment production -- node scripts/check-production-env.mjs gateway`
+  (then `--service 'Gateway Worker'`).
 
-- Vercel and Railway build the shared DB and agent packages before their apps, so package output is current during deploy.
-- Neither uploads source maps at launch. The dashboard reports errors through `@sentry/nextjs`; the gateway build is compile-only (`tsc`).
-- **Neither platform runs migrations.** See [Migrations](#migrations).
+Both platforms build the shared packages before their app. Neither uploads source maps (dashboard
+errors go to `@sentry/nextjs`; the gateway build is compile-only `tsc`). **Neither runs migrations** — see [Migrations](#migrations).
 
 ## Prerequisites
 
-Before the first deploy:
-
-- Production Neon Postgres created. `DATABASE_URL` uses the pooled host with `pgbouncer=true&connection_limit=1`; `DIRECT_DATABASE_URL` uses the same database over the direct (non-pooler) host. Both apps need both set, because the schema declares `directUrl`.
-- Production Upstash Redis created for the dashboard (rate limiting, locks, presence), in the same region as Vercel.
-- A dedicated Redis created for the gateway's BullMQ queues (e.g. Railway Redis), **separate** from Upstash, with `maxmemory-policy=noeviction` and persistence enabled. Railway private networking uses `redis://...redis.railway.internal`; managed Redis over the public internet uses the TLS form `rediss://...`. Do not point it at Upstash.
-- A new production-only `INTERNAL_API_SECRET` generated.
-- Clerk lifecycle webhook endpoint configured to `https://<dashboard>/api/webhooks/clerk`, and `CLERK_WEBHOOK_SECRET` set on the dashboard.
-- Separate staging and production PostHog projects, before product analytics is enabled.
-- Launch env covers email and Shopify. Meta and Twilio vars are optional until those channels are reintroduced. There are no carrier-tracking env vars — shipment and delivery monitoring were removed on 2026-08-26.
+- **Neon Postgres.** `DATABASE_URL` = pooled host with `pgbouncer=true`; `DIRECT_DATABASE_URL` = same
+  database on the direct (non-`-pooler`) host. Both apps need both (the schema declares
+  `directUrl`). Pool size and deadlines come from `DB_POOL_MAX`, `DB_CONNECT_TIMEOUT_MS`,
+  `DB_POOL_WAIT_TIMEOUT_MS`, `DB_QUERY_TIMEOUT_MS` (`databasePoolConfig` in `packages/db/pool-config.ts`),
+  which override any `connection_limit` in the URL.
+- **Upstash Redis** for the dashboard (rate limits, locks, presence), same region as Vercel.
+- **A dedicated Redis for gateway BullMQ** (e.g. Railway Redis) with `maxmemory-policy=noeviction`
+  and persistence — never Upstash, whose per-command billing runs away under always-on workers (the
+  gateway warns at boot). Railway private networking: `redis://...redis.railway.internal`; over the internet: `rediss://...`.
+- **Secrets.** `INTERNAL_API_SECRET` (production-only, same on both apps), `TOKEN_ENCRYPTION_KEY`
+  (same on both apps; **never change it**: there is no rotation path. `decryptToken` reads one key
+  and returns `null` when it cannot decrypt, so a new key silently disconnects every stored
+  integration token, and a restore from before the change needs the old key), `OAUTH_ATTEMPT_SECRET`
+  (dashboard, ≥ 32 chars).
+  Both apps also accept `INTERNAL_API_SECRET_PREV`, so rotate without downtime: (1) set `_PREV` to
+  the new value on both and deploy both; (2) swap (`INTERNAL_API_SECRET`=new, `_PREV`=old) and deploy both; (3) clear `_PREV`.
+- **Clerk lifecycle webhook** at `https://<dashboard>/api/webhooks/clerk`, secret in dashboard `CLERK_WEBHOOK_SECRET`.
+- **Separate staging and production PostHog projects** before analytics is enabled.
 
 ## Environment Matrix
 
-### Dashboard Required At Production Boot
+Names and comments live in each app's `.env.example`; the contract the preflight enforces is
+`CONTRACTS` in `scripts/check-production-env.mjs`. Check what Vercel actually holds with
+`vercel env ls production` — `vercel env pull` writes sensitive vars as empty strings, which look
+the same as unset. Dashboard `UPSTASH_REDIS_REST_URL` and gateway
+`REDIS_URL` are **separate** instances. Redis locks are host-local latency guards; cross-host
+single-use lives in Postgres (plan claims, operator-event claims, goodwill reservations), as does the
+daily LLM spend cap (`llm_daily_spend`).
 
-- `DATABASE_URL`
-- `DIRECT_DATABASE_URL`
-- `CLERK_SECRET_KEY`
-- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
-- `ANTHROPIC_API_KEY`
-- `INTERNAL_API_SECRET`
-- `APP_URL`
-- `TOKEN_ENCRYPTION_KEY`
-- `UPSTASH_REDIS_REST_URL`
-- `UPSTASH_REDIS_REST_TOKEN`
+### Dashboard
 
-> Dashboard `UPSTASH_REDIS_REST_URL` (Upstash REST — rate limiting, locks, presence) and gateway `REDIS_URL` (a dedicated per-instance Redis for BullMQ) are **separate** instances and must not point at the same database. BullMQ holds a blocking connection per worker and polls continuously, so running it against Upstash's per-command billing is very expensive. Agent locks are therefore host-local latency guards, not the cross-host correctness boundary: reviewed actions are single-use through PostgreSQL plan claims, operator events through their durable event claim, and capped goodwill through reservations. Both lock adapters renew their token-checked lease during long turns and log a lost/unknown lease; release can never delete a successor's token. The daily LLM spend cap is also shared across both apps via Postgres (the `llm_daily_spend` table), so it stays per-org regardless of the Redis split.
+- **Boot:** `DATABASE_URL`, `DIRECT_DATABASE_URL`, `CLERK_SECRET_KEY`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`,
+  `ANTHROPIC_API_KEY`, `INTERNAL_API_SECRET`, `APP_URL`, `TOKEN_ENCRYPTION_KEY`, `OAUTH_ATTEMPT_SECRET`,
+  `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `PRODUCT_ANALYTICS_ENABLED`,
+  `PLAN_EXECUTION_LEDGER_MODE`. The runtime also refuses production boot without `BLOB_READ_WRITE_TOKEN`.
+- **Launch:** `GATEWAY_INTERNAL_URL` (the **public** gateway URL despite the name — every dashboard →
+  gateway hop: outbound-email enqueue, operator turns, storefront chat, dev webhook proxies), `POSTMARK_API_KEY`, `INBOUND_EMAIL_DOMAIN`,
+  `BLOB_READ_WRITE_TOKEN` (private attachments, served by `GET /api/attachments`), `SHOPIFY_CLIENT_ID`,
+  `SHOPIFY_CLIENT_SECRET`, `SHOPIFY_APP_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`,
+  `PRICE_ID_STARTER`, `PRICE_ID_PRO`, `CLERK_WEBHOOK_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
+  `GMAIL_PUBSUB_TOPIC` (`projects/<project>/topics/<topic>`), `IMESSAGE_LINE_HANDLE` (the handle
+  merchants text; not a secret), `INSTAGRAM_INTEGRATION_ENABLED` (see [direct Meta](#instagram-via-direct-meta)).
+- **Optional:**
+  - `NEXT_PUBLIC_APP_URL` — if set, must equal `APP_URL` (equality-checked in production).
+  - `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET` (required when `INSTAGRAM_INTEGRATION_ENABLED=true`);
+    `INSTAGRAM_BETA_ORG_IDS` (Clerk org IDs allowed a new direct-Meta connect — empty allows **no one**
+    in production); `INSTAGRAM_WEBHOOK_APP_SECRET` (local webhook proxy only).
+  - `SOCIALAPI_API_KEY`, `SOCIALAPI_ENABLED`, `SOCIALAPI_BRAND_ASSIGNMENTS` (`clerk_org_id:brand_id`
+    pairs), `SOCIALAPI_MAX_ACTIVE_ORGS`, `SOCIALAPI_BASE_URL` (test override only) — see
+    [Instagram via SocialAPI](#instagram-via-socialapi).
+  - `STOREFRONT_CHAT_ENABLED` (off unless exactly `true`), `STOREFRONT_CHAT_SIGNING_SECRET` (must not equal `INTERNAL_API_SECRET`).
+  - `NEXT_PUBLIC_GATEWAY_EVENTS_URL` — gateway base for live-inbox SSE (pairs with gateway `GATEWAY_REALTIME_ENABLED=true`); empty disables realtime.
+  - `TELEGRAM_BOT_USERNAME` — internal testing only; leave unset in production (when set, onboarding
+    offers Telegram to every merchant).
+  - `NEXT_PUBLIC_CONTACT_EMAIL`, `POSTHOG_PROJECT_TOKEN`, `POSTHOG_HOST` (see [Product Analytics](#product-analytics)).
 
-Rules:
+### Gateway
 
-- `APP_URL` must be a valid absolute `http` or `https` URL.
-- If `NEXT_PUBLIC_APP_URL` is set, it must be a valid absolute `http` or `https` URL and match `APP_URL`.
-- `DATABASE_URL` should include `pgbouncer=true` and `connection_limit=1`.
-- `DIRECT_DATABASE_URL` must use the direct Neon host (no `-pooler` suffix, no `pgbouncer=true`). Set it on Vercel and Railway even though runtime queries use the pooled URL.
+- **Boot:** `DATABASE_URL`, `DIRECT_DATABASE_URL`, `REDIS_URL`, `ANTHROPIC_API_KEY`, `INTERNAL_API_SECRET`,
+  `DASHBOARD_URL`, `TOKEN_ENCRYPTION_KEY`, `PRODUCT_ANALYTICS_ENABLED`, `PLAN_EXECUTION_LEDGER_MODE`,
+  plus `POSTMARK_INBOUND_USERNAME`/`POSTMARK_INBOUND_PASSWORD` unless `EMAIL_INBOUND_MODE=gmail-only`.
+- **Launch:** `SHOPIFY_APP_SECRET`, `POSTMARK_INBOUND_USERNAME`, `POSTMARK_INBOUND_PASSWORD` (basic
+  auth on `/webhooks/email/inbound` and `/webhooks/email/bounce`), `BLOB_READ_WRITE_TOKEN`,
+  `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GMAIL_PUBSUB_TOPIC`, `GMAIL_PUBSUB_AUDIENCE`,
+  `GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT` (audience and account must exactly match the push
+  subscription), `SPECTRUM_PROJECT_ID`, `SPECTRUM_PROJECT_SECRET`, `SPECTRUM_WEBHOOK_SECRET` (one
+  platform-wide Photon project; the webhook secret is per-endpoint and changes if it is recreated).
+- **Optional:**
+  - `EMAIL_INBOUND_MODE` — `standard` (default; both adapters, transport chosen per integration) |
+    `postmark` (Gmail sync off for **every** workspace — not a per-merchant rollback) | `gmail-only`
+    (no Postmark inbound creds). Legacy `hybrid` reads as `standard`.
+  - `INSTAGRAM_WEBHOOK_APP_SECRET` (the parent Meta app secret that owns the webhook subscription,
+    not the Instagram Login secret), `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` — direct-Meta DM webhooks.
+  - `SOCIALAPI_WEBHOOK_SECRET` (returned once when `/webhooks/socialapi` is registered), `SOCIALAPI_API_KEY` (display-name enrichment only).
+  - Storefront-chat containment, counted in shopper messages: `STOREFRONT_CHAT_MAX_MESSAGES_PER_SESSION`
+    (30), `STOREFRONT_CHAT_MAX_MESSAGES_PER_SHOP_DAY` (200), `STOREFRONT_CHAT_BURST_PER_SESSION` (5),
+    `STOREFRONT_CHAT_BURST_PER_IP` (20), `STOREFRONT_CHAT_BURST_WINDOW_SECS` (60).
+  - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`; `OPS_ALERT_TELEGRAM_CHAT_ID` (see [Ops alerts](#ops-alerts));
+    `GATEWAY_REALTIME_ENABLED`; `POSTHOG_PROJECT_TOKEN`, `POSTHOG_HOST`.
 
-### Dashboard Required For Launch Scope Features
+**Rules:** `APP_URL`, `DASHBOARD_URL` and `GATEWAY_INTERNAL_URL` are absolute `http(s)` URLs.
+`DASHBOARD_INTERNAL_URL` is dev-only (the gateway warns if set in production). `DIRECT_DATABASE_URL`
+uses the direct host (no `-pooler`, no `pgbouncer=true`) and differs from `DATABASE_URL`.
 
-- `GATEWAY_INTERNAL_URL`
-  Used for Shopify webhook registration during OAuth and for local webhook proxy routes. In production this should be the public Railway gateway URL even though the name says `internal`.
-- `POSTMARK_API_KEY`
-- `INBOUND_EMAIL_DOMAIN`
-- `SHOPIFY_CLIENT_ID`
-- `SHOPIFY_CLIENT_SECRET`
-- `SHOPIFY_APP_SECRET`
-- `STRIPE_SECRET_KEY`
-- `STRIPE_WEBHOOK_SECRET`
-- `CLERK_WEBHOOK_SECRET`
-  Used by `POST /api/webhooks/clerk` to verify Clerk lifecycle webhooks.
-- `BLOB_READ_WRITE_TOKEN`
-  Used for private inbound email and Instagram attachment storage and by `GET /api/attachments`
-  to stream those attachments to authenticated workspace members.
-- `PRICE_ID_STARTER`
-- `PRICE_ID_PRO`
-- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
-  Gmail OAuth credentials used for connection and watch registration.
-- `GMAIL_PUBSUB_TOPIC`
-  Fully qualified topic name, for example `projects/shopkeeper-prod/topics/gmail-inbound`.
-- `IMESSAGE_LINE_HANDLE`
-  The fixed iMessage handle merchants text to reach the operator agent. Presence makes iMessage
-  available in Integrations and onboarding; it is not a secret.
-- `INSTAGRAM_INTEGRATION_ENABLED`
-  Explicit production rollout switch. Keep it `false` outside the Standard Access test cohort
-  until Advanced Access is approved.
+### Plan-execution ledger
 
-Optional:
-
-- `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET` for Instagram Login OAuth.
-- `INSTAGRAM_BETA_ORG_IDS` optionally limits enabled Instagram OAuth to comma-separated Clerk
-  organization IDs. Leave it empty only when every workspace should be eligible.
-- `INSTAGRAM_WEBHOOK_APP_SECRET` only when the dashboard's local-development webhook proxy is used;
-  set it to the parent Meta app secret that signs webhook deliveries.
-- `TELEGRAM_BOT_USERNAME` for the operator-channel deep link in the dashboard.
-
-### Gateway Required At Production Boot
-
-- `DATABASE_URL`
-- `DIRECT_DATABASE_URL`
-- `REDIS_URL`
-- `ANTHROPIC_API_KEY`
-- `INTERNAL_API_SECRET`
-- `DASHBOARD_URL`
-- `TOKEN_ENCRYPTION_KEY`
-
-Rules:
-
-- `DASHBOARD_URL` must be a valid absolute `http` or `https` URL.
-- In production, `DASHBOARD_URL` is mandatory.
-- `DASHBOARD_INTERNAL_URL` is dev-only and should not be relied on in production.
-- `DATABASE_URL` should include `pgbouncer=true` and `connection_limit=1`.
-- `DIRECT_DATABASE_URL` must use the direct Neon host (no `-pooler` suffix, no `pgbouncer=true`).
-
-### Gateway Required For Launch Scope Features
-
-- `SHOPIFY_APP_SECRET`
-- `POSTMARK_INBOUND_USERNAME`, `POSTMARK_INBOUND_PASSWORD`
-  Required for inbound email webhook basic auth in production whenever the forwarding rail is
-  active — i.e. `EMAIL_INBOUND_MODE` is `standard` (default) or `postmark`. See the email
-  architecture note below.
-- `BLOB_READ_WRITE_TOKEN`
-  Required for inbound email and Instagram attachment upload in the gateway worker.
-- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
-- `GMAIL_PUBSUB_TOPIC`
-- `GMAIL_PUBSUB_AUDIENCE`
-- `GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT`
-  Gmail and authenticated Pub/Sub push settings. The audience and service-account email must
-  exactly match the push subscription configuration.
-- `SPECTRUM_PROJECT_ID`, `SPECTRUM_PROJECT_SECRET`, `SPECTRUM_WEBHOOK_SECRET`
-  Platform-wide Photon Spectrum credentials for the operator iMessage line (one project for all orgs).
-  `SPECTRUM_WEBHOOK_SECRET` is the per-endpoint secret shown when registering
-  `https://<gateway>/webhooks/photon` in [app.photon.codes](https://app.photon.codes) → Webhooks.
-  Rotates if that endpoint is recreated.
-
-Optional:
-
-- `EMAIL_INBOUND_MODE`
-  `standard` (default) | `postmark` | `gmail-only`. `standard` runs both inbound adapters;
-  transport choice is per integration (one mailbox, one path). `postmark` disables Gmail sync
-  globally for forward-only fleets. `gmail-only` skips Postmark inbound cred requirements (dev /
-  all-native). Legacy `hybrid` is accepted and treated as `standard`.
-- `GATEWAY_RUNTIME_ROLE`
-  Defaults to `all`. Only set it if you intentionally split server and worker processes.
-- `INSTAGRAM_WEBHOOK_APP_SECRET`, `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` for Instagram DM webhooks.
-  `INSTAGRAM_WEBHOOK_APP_SECRET` is the parent Meta app secret that owns the webhook subscription,
-  not the separate Instagram Login OAuth secret.
-- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` for the Telegram operator channel.
-
-### Email architecture: independent Gmail and forwarding integrations
-
-Each workspace can have one Gmail integration and one forwarded Email/Postmark integration
-simultaneously. Connecting, reconnecting, or deleting one must not modify the other.
-
-- **Inbound intake:** Gmail can receive native Pub/Sub push
-  notifications, synchronize mailbox history through `gmail-sync`, and enqueue the same
-  `process-email` jobs used by Postmark forwarding. Maintenance runs every 12
-  hours, enqueues one stable history catch-up per active integration, and
-  renews healthy watches daily. An expired history checkpoint triggers a
-  paginated seven-day inbox recovery capped at 2,000 messages; a larger result
-  stays degraded and alerts instead of silently advancing. Postmark accepts only
-  the generated organization recipient from `OriginalRecipient` and requires an active Postmark
-  integration row; the visible `To` header is not a tenancy key.
-- **Outbound routing:** `Integration.emailProvider` is authoritative. Replies and auto-acks use
-  the valid `Thread.replyIntegrationId` from the newest distinct inbound email, then fall back to
-  the workspace default if that source was deleted. Proactive email always uses
-  `Organization.defaultEmailIntegrationId`. The resolved integration is snapshotted on the
-  outbound message and queue job. The reply `From` uses `Integration.fromEmail` (falling back to
-  `externalAccountId`); the OAuth account email is the identity used for `replyTo` and token
-  refresh.
-- **Missing defaults:** one connected provider repairs a missing default automatically. With both
-  providers connected, a missing or invalid default is a configuration error and must be repaired
-  from Integrations; never choose an unordered email row.
-
-Gmail native inbound is implemented but remains in controlled rollout.
-
-#### Async outbound-email canary (P4-01)
-
-The async path creates the outbound `Message` first, enqueues it with that message ID as the
-stable BullMQ job ID, and claims delivery once in the gateway worker. Roll out Postmark and Gmail
-separately while keeping the synchronous path available as the rollback rail.
-
-Preflight:
-
-1. Confirm `npm run db:migrate:deploy` reports no pending migrations. Outbound claim fields come
-   from `20260714000000_add_outbound_send_claims`.
-2. Confirm the public gateway and separate worker run the same commit and `/health/deep` reports
-   database, Redis, worker, and queue checks healthy.
-3. Run the read-only baseline; every blocker list must be empty:
+`PLAN_EXECUTION_LEDGER_MODE` must be `enforce` on the dashboard and both gateway services; Postgres
+is the single-use boundary for reviewed plans. `off` makes every plan execution refuse ("Durable
+proposals require the execution ledger") — an emergency stop, not a rollback. A stored `shadow` reads
+as `enforce`. After any change, run `npm run verify:production` and:
 
 ```bash
 railway run --service shopkeeper --environment production -- \
-  npm run audit:outbound-email -- --hours=24 --strict
-```
-
-Canary one provider at a time with an internal organization:
-
-1. Enable `OUTBOUND_EMAIL_ASYNC=true` for the dashboard deployment and keep the prior deployment
-   available for immediate rollback. Do not remove the synchronous implementation.
-2. Send one ordinary reply through the selected provider. Confirm the UI moves
-   `pending -> processing -> sent`, the recipient gets exactly one message, and the row records a
-   provider message ID.
-3. Re-submit the same message ID to the internal enqueue boundary and confirm it is deduplicated;
-   do not create a second message row for this check.
-4. Require fresh delivered traffic for that provider:
-
-```bash
+  npm run audit:plan-executions -- --hours=240 --strict
 railway run --service shopkeeper --environment production -- \
-  npm run audit:outbound-email -- --hours=1 --strict --require-provider=postmark
+  npm run audit:unknown-outcomes -- --hours=240 --strict
 ```
 
-   Repeat with `--require-provider=gmail` only after the Postmark observation window is clean.
-5. Review gateway logs for ownership mismatches, lost claims, provider ambiguity, sweep alerts, or
-   permanently failed jobs. Repeat the strict 24-hour audit before expanding rollout.
+Require no unknown outcomes or stale claims. For an `unknown` execution, establish provider truth
+before any fresh instruction; never reset the row to `pending` or replay it.
 
-For a Gmail integration, the guarded self-addressed provider canary can establish
-queue/provider evidence before changing the broad dashboard flag. It sends one
-clearly labeled message only to the connected account's own plus-address, closes
-the staged ticket, and prints no address, token, body, or raw provider ID:
+### Rotating the Shopify app secret
 
-```bash
-railway run --service shopkeeper --environment production -- \
-  env GATEWAY_URL='https://<gateway>' \
-  npm run canary:outbound-gmail -w apps/gateway -- \
-    --integration-id='<gmail-integration-uuid>' \
-    --acknowledge-self-email \
-    --execute
-```
+Shopify signs webhooks, the OAuth callback and app-proxy requests with the app's client secret,
+which the apps hold under three names: gateway `SHOPIFY_APP_SECRET` (webhook HMAC on
+`/webhooks/shopify`), dashboard `SHOPIFY_CLIENT_SECRET` (OAuth callback HMAC and token exchange) and
+dashboard `SHOPIFY_APP_SECRET` (storefront-chat app-proxy signature).
 
-Require `sendStatus=sent`, `hasProviderMessageId=true`, and
-`deduplicated=true`, then run the strict required-Gmail audit. This does not
-replace recipient mailbox confirmation, the independent inbound/threading
-canary, or recovery-path exercises.
+1. Rotate the secret in the Shopify Partner Dashboard.
+2. In the same window, set the new value on Railway (`SHOPIFY_APP_SECRET`, both gateway services)
+   and Vercel (`SHOPIFY_CLIENT_SECRET` and `SHOPIFY_APP_SECRET`), then redeploy both. Until both
+   hold it, webhooks fail with `401` (`[Webhook] Shopify signature mismatch`, `webhook_signature`
+   alerts) and connects fail their HMAC check.
+3. Validate one OAuth install or reconnect and one signed order webhook the gateway accepts.
 
-Two attachment modes extend the same canary. `--attach` stores a few bytes under
-the org's attachment prefix and sends them for real — require the same three
-conditions plus `attachment: "sent"`, and open the file in the receiving mailbox,
-which no script can assert for you. Gmail and Postmark build the payload
-differently (`buildRawMime` multipart/mixed versus Postmark's `Attachments`
-field), so one passing says nothing about the other.
-
-`--attach-missing` stages a well-formed ref that was never written and asserts
-the refusal instead: `sendStatus=failed` with `providerWasAttempted=false` and a
-non-empty `sendError`. **`unknown` is the regression this exists to catch**, not a
-lesser pass — it suppresses automatic retry and pages ops, and
-`loadOutboundAttachments` runs ahead of the delivery claim in
-`handleOutboundEmailJob` precisely so an unreadable attachment cannot land there.
-A `sent` is worse still: the reply went out silently missing the merchant's file.
-The two modes are mutually exclusive because they assert opposite statuses.
-
-Rollback by setting `OUTBOUND_EMAIL_ASYNC=false` and redeploying the dashboard. Existing pending,
-processing, failed, or unknown rows remain recovery evidence; do not delete or blindly enqueue
-them during rollback.
-
-#### Failed or unknown outbound-email recovery
-
-The launch owner/on-call owns review. A `failed` row is retryable only when the recorded failure is
-known to have occurred before provider submission. An `unknown` row may already have been accepted
-and must never be retried until provider activity proves no delivery.
-
-1. Run `npm run audit:outbound-email -- --hours=24 --strict` and take the message, organization,
-   thread, integration, provider, claim/attempt times, status, and error from the report. It omits
-   message bodies, customer addresses, and raw provider IDs.
-2. Search Gmail or Postmark activity using the stored provider ID when present and the stable RFC
-   `Message-ID` `<message-{messageId}@{INBOUND_EMAIL_DOMAIN}>`. Check the recipient mailbox when
-   provider activity alone is inconclusive.
-3. If the provider proves no submission, leave or move the row to the normal `failed` recovery path
-   and let an authorized merchant retry it once. If delivery is proven, record only the missing
-   delivery identity/state; do not send again. If truth remains ambiguous, keep the row `unknown`,
-   record the incident, and escalate to the production owner.
-4. A stale unattempted claim may be converted to `failed` by `outbound-send-sweep`; a stale claim
-   with `sendAttemptedAt` is converted to `unknown`. Investigate sweep/worker health before any
-   manual state change.
-
-### Gmail native-inbound (steady state)
-
-**One inbound transport per mailbox.** Gmail OAuth workspaces use **inbound via Gmail sync**
-(Pub/Sub + history) only. **Inbound via forwarding** (Postmark webhook) is for forward-only
-workspaces without Gmail OAuth. Do not run both on the same merchant INBOX.
-
-Inventory and dual-delivery checks:
-
-```bash
-npm run audit:email-inbound-transport
-npm run audit:email-inbound-transport -- --strict   # fails when dual-delivery risk > 0
-```
-
-Before enabling Gmail inbound in production, verify the Pub/Sub topic, push subscription, OIDC
-audience, and service account. New Gmail OAuth connects register a watch automatically when
-inbox scopes are granted.
-
-Roll out in this order:
-
-1. Local and automated tests with mocked Gmail and Pub/Sub.
-2. One OAuth test user through a public development tunnel.
-3. Internal organizations — **one inbound path each** (Gmail sync *or* forwarding, not both).
-4. Google OAuth test users while restricted-scope verification is pending.
-5. Newly connected external merchants after verification.
-6. Existing Gmail merchants after explicit reconnection.
-
-For every stage, verify watch expiration, last successful sync, duplicate suppression, alias
-filtering, outbound send-as behavior, and reconnect/degraded states in Integrations. Roll back
-**per integration** (pause native sync or revert to forwarding-only) — do not re-enable global
-dual-rail hybrid as steady state. See [email-inbound-steady-state-plan.md](../email-inbound-steady-state-plan.md).
-
-#### Migration-only: parallel Postmark forward during native rollout
-
-While migrating a merchant from forward-only to Gmail sync, Postmark forward may stay on
-**temporarily** until native sync is verified, then **must be disabled** (merchant rule or
-disconnect the Email forwarding integration). This is not a supported production steady state.
-Do not rely on legacy `EMAIL_INBOUND_MODE=hybrid` in new configuration; use `standard` (or
-`gmail-only` / `postmark` when the fleet is homogeneous).
-
-After deploying Gmail reliability changes, allow one complete 12-hour
-maintenance interval and verify:
-
-1. `gmail-watch-maintenance` completed successfully.
-2. One `source=maintenance` job per active Gmail integration completed on
-   `gmail-sync`; its job ID uses
-   `gmail-sync-maintenance-<integration>-<12-hour-bucket>`.
-3. `lastSyncedAt` advanced even if the mailbox was idle.
-4. A watch whose `watchLastRenewedAt` is at least 24 hours old renewed without
-   replacing its stored history checkpoint.
-5. No integration has `lastError=sync_recovery_truncated`. If one does, do not
-   force it active or replace its checkpoint; investigate the mailbox window
-   and inspect an operator-controlled broader/full recovery:
-
-   ```bash
-   npm run recover:gmail-history -- \
-     --integration-id='<integration-uuid>' \
-     --max-messages=10000 \
-     --query='newer_than:30d in:inbox'
-   ```
-
-   After reviewing the sanitized preflight, reuse the incident identifier so
-   repeat invocations deduplicate:
-
-   ```bash
-   npm run recover:gmail-history -- \
-     --integration-id='<integration-uuid>' \
-     --max-messages=10000 \
-     --query='newer_than:30d in:inbox' \
-     --recovery-id='<incident-id>' \
-     --execute
-   ```
-
-   The worker accepts operator recovery only while the integration is degraded
-   specifically for `sync_recovery_truncated`; it caps the override at 50,000
-   messages and keeps the same checkpoint/idempotency rules.
-
-The 2026-07-29 production release and its observation checklist closed on 2026-08-07
-and the record was retired on 2026-08-27; read it at
-`git show cb61ac44:docs/production/gmail-rollout-evidence-2026-07-29.md`. The alias
-work it left open is in [`to-do-list.md`](../to-do-list.md).
-The owner-ready restricted-scope package is
-[`google-gmail-verification-packet.md`](google-gmail-verification-packet.md).
-
-### Independent-email canary (Palette)
-
-Steady-state goal: **one inbound path** for Palette (Gmail sync *or* forwarding alias, not both
-delivering the same INBOX). During migration only, dual paths may be tested with **separate**
-messages — never the same customer email on both rails.
-
-1. Confirm Palette's Gmail row and watch remain active (`npm run audit:email-inbound-transport`).
-2. If testing the forwarding product path, use a **different** test org or disconnect Gmail native
-   ingest first; do not connect `support@palettegarments.com` forwarding while Gmail watch reads the
-   same INBOX.
-3. Keep Gmail selected as the default for proactive email when Gmail is the inbound transport.
-4. Send **distinct** test messages per path (different subjects / Message-IDs). Do not replay one
-   message through Postmark forward and Gmail sync. Confirm one thread per message and replies
-   follow the correct integration.
-5. After native verification, disable Postmark forward to `{orgId}@inbound.*` and re-run the audit
-   with `--strict`.
-6. Monitor structured `unclaimed_recipient` events, default/source mismatches, provider send
-   failures, duplicate suppression, and Gmail watch health before expanding rollout.
-
-### Gmail Pub/Sub provisioning
-
-Authenticate `gcloud` as an administrator for the Google Cloud project that owns the Gmail OAuth
-client, then run the idempotent setup command:
-
-```bash
-GCP_PROJECT_ID='shopkeeper-prod' \
-GMAIL_PUBSUB_PUSH_ENDPOINT='https://gateway.example.com/webhooks/gmail/push' \
-GMAIL_PUBSUB_AUDIENCE='https://gateway.example.com/webhooks/gmail/push' \
-npm run configure:gmail-pubsub
-```
-
-The command creates the topic, grants Gmail's system publisher, creates the dedicated push service
-account, grants Pub/Sub permission to mint its OIDC token, and creates or updates the authenticated
-push subscription. Copy the three printed `GMAIL_PUBSUB_*` values into Vercel and Railway as listed
-above. The operator running it needs Pub/Sub Admin and permission to manage service accounts and
-their IAM policies, including `iam.serviceAccounts.actAs` on the push service account.
+Keep the value out of logs, transcripts and shell history.
 
 ## Deploy Sequence
 
-1. Prepare production URLs.
-   - Decide the canonical dashboard URL, for example `https://app.example.com`.
-   - Decide the public Railway gateway URL, for example `https://gateway.up.railway.app`.
-   - Set `APP_URL` to the canonical dashboard URL.
-   - If you define `NEXT_PUBLIC_APP_URL` for compatibility, set it to the same dashboard URL.
-   - Set dashboard `GATEWAY_INTERNAL_URL` to the public Railway gateway URL.
-   - Set gateway `DASHBOARD_URL` to the public dashboard URL.
+Pushing `master` deploys the Vercel dashboard and both Railway services, so the env gate and any
+migration come before the push or merge, not after.
 
-2. Load Vercel and Railway env vars.
-   - Populate every boot-required variable first.
-   - Populate the launch-scope integration variables before turning on real providers.
-   - Run `npm run verify:production:env` before deploy. For a boot-only pass, run `npm run verify:production:env -- --scope=boot`.
-   - If you want to validate app-specific env files locally instead of the current shell, run:
+1. **URLs.** `APP_URL` (and `NEXT_PUBLIC_APP_URL` if set) = dashboard origin; dashboard
+   `GATEWAY_INTERNAL_URL` = public gateway URL; gateway `DASHBOARD_URL` = public dashboard URL.
+2. **Env.** Boot variables first, launch-scope ones before turning on real providers. Run
+   `npm run verify:production:env` (boot-only: `-- --scope=boot`), or against env files:
 
 ```bash
 node scripts/check-production-env.mjs dashboard --scope=launch --env-file=apps/dashboard/.env.local
 node scripts/check-production-env.mjs gateway --scope=launch --env-file=apps/gateway/.env
 ```
 
-3. Run the production migration before first deploy.
+3. **Migrate** before deploying the build that reads new schema ([Applying one](#applying-one)).
+4. **Dashboard.** Deploy; `GET /api/health/deep` returns `status: ok`.
+5. **Gateway.** Deploy; `GET /health/deep` returns `status: ok` (`checks.worker.status: ok` is the
+   worker heartbeat); queue detail on `GET /health/queues` with `x-internal-secret`.
+6. **Smoke** (needs `INTERNAL_API_SECRET` in the environment — it checks `/health/queues`):
 
 ```bash
-DATABASE_URL='postgresql://...@ep-....-pooler.us-east-2.aws.neon.tech/neondb?pgbouncer=true&connection_limit=1' \
-DIRECT_DATABASE_URL='postgresql://...@ep-....us-east-2.aws.neon.tech/neondb?sslmode=require' \
-npm run db:migrate:deploy
-```
-
-Prisma routes migrations through `DIRECT_DATABASE_URL` (`directUrl` in the schema). CI and local migration runs need both URLs set. Every migration in this repo is hand-written — see [Migrations](#migrations) before authoring one.
-
-4. Deploy the dashboard to Vercel.
-   - Confirm `GET /api/health` returns `status: ok`.
-
-5. Deploy the gateway to Railway.
-   - Confirm `GET /health/deep` returns `status: ok` (`checks.worker.status: ok` confirms the worker heartbeat).
-   - For detailed queue counts and failed-job metadata, `GET /health/queues` with the `x-internal-secret` header.
-
-6. Run the smoke script against the live services.
-
-```bash
-DASHBOARD_URL='https://app.example.com' \
-GATEWAY_URL='https://gateway.up.railway.app' \
+DASHBOARD_URL='https://app.useshopkeeper.com' \
+GATEWAY_URL='https://clerk-production-e37f.up.railway.app' \
 npm run verify:production
 ```
 
-7. If email is part of the launch validation, run the optional inbound-email smoke check.
+   Leave `VERIFY_INBOUND_EMAIL_TO` unset: its inbound-email smoke sends no Postmark basic auth, so
+   production answers `401`. It also fails on any job left in a queue's `failed` set (`Queue
+   failures detected`). Triage each one per [BullMQ Failed Jobs](#bullmq-failed-jobs); never clear
+   them just to pass the smoke. `VERIFY_IMESSAGE=false` skips the iMessage checks.
+7. Run at least one real flow from [Channel Smoke Tests](#channel-smoke-tests-and-recovery), and
+   `migrate status` if the release carried a migration ([Verify](#verify-what-is-actually-applied)).
+8. **Confirm every surface runs what you meant** — a surface left behind fails silently. There are
+   four: Vercel and Railway (both services) — read the commit off the deployment record, Vercel's
+   `meta.githubCommitSha` (API) and Railway's `meta.commitHash` (`railway deployment list --json`),
+   never from a timestamp near a commit or from `/health`, which reports none; the production
+   database (`migrate status`); and the Shopify app version (`npx shopify app versions list --json`),
+   since the storefront-chat theme extension and `shopify.app.toml` ship only with `shopify app deploy`.
+
+## Release Checklist
+
+Before cutting a release candidate, from the repo root:
 
 ```bash
-DASHBOARD_URL='https://app.example.com' \
-GATEWAY_URL='https://gateway.up.railway.app' \
-VERIFY_INBOUND_EMAIL_TO='org-id@mail.example.com' \
-VERIFY_INBOUND_EMAIL_FROM='shopkeeper-smoke@example.com' \
-npm run verify:production
+npx prisma validate --schema=packages/db/prisma/schema.prisma
+npm run verify:production:env
+npm run verify:pr   # the contract CI runs (lint, Knip, typecheck, unit, node, e2e smoke, coverage incl. integration suites, build); a green CI run counts
 ```
+
+A sandboxed Next/Turbopack build that cannot bind an internal worker port is inconclusive, not a
+failure — rerun in CI or a normal shell. Then the deploy gate, all of:
+
+- launch-scope env populated on both platforms; `PRODUCT_ANALYTICS_ENABLED` and `PLAN_EXECUTION_LEDGER_MODE` explicitly set on both apps;
+- migrations applied with both database URLs, and `migrate status` shows none lagging its code;
+- dashboard `/api/health/deep`, gateway `/health/deep` and `/health/queues` healthy; `npm run verify:production` passes;
+- one real inbound message completes webhook → queue → worker → dashboard thread → plan → outbound reply.
 
 ## Migrations
 
-Every migration runs through `prisma migrate deploy` against
-`packages/db/prisma/schema.prisma`. **Nothing applies them automatically.** The
-Vercel build is `next build`, the Railway build is `tsc`, and CI only ever
-migrates a throwaway local database. A production migration is applied because a
-human ran it — which is why the failures at the end of this section keep
-recurring.
-
-Apply an additive migration **before** deploying the build that reads the new
-columns, and treat destructive cleanup as a separate later release.
+Every migration runs through `prisma migrate deploy` against `packages/db/prisma/schema.prisma`.
+**Nothing applies them automatically** (Vercel runs `next build`, Railway runs `tsc`, CI only migrates
+a throwaway database). Apply an additive migration **before** deploying the build that reads it;
+ship destructive cleanup as a separate later release.
 
 ### Writing one
 
-Standing rules for **every** migration in this repo, not one-time tasks.
+Production carries partial indexes `schema.prisma` cannot declare (Prisma 6.19.3 has no `where` on
+`@@unique`/`@@index`), created by raw SQL: `threads_one_open_per_customer`,
+`messages_org_external_id_unique`, `integrations_non_email_account_unique`,
+`integrations_instagram_organization_unique`, `integrations_instagram_account_unique`,
+`integrations_shopify_account_unique`, `integrations_provider_account_unique`, and the non-unique
+`messages_pending_inbound_processing_idx`. `prisma migrate dev` diffs a shadow database against the
+schema and emits a `DROP INDEX` for each inside whatever migration you author — silently removing
+inbound dedupe, open-thread race protection and the cross-tenant integration constraints at once.
 
-Production carries **six partial unique indexes that `schema.prisma` cannot
-declare**, created by raw SQL across six migrations:
-`threads_one_open_per_customer`, `messages_org_external_id_unique`,
-`integrations_instagram_organization_unique`,
-`integrations_instagram_account_unique`, `integrations_shopify_account_unique`,
-`integrations_non_email_account_unique`.
-
-Prisma has no `where` clause on `@@unique` or `@@index` (verified against the
-pinned 6.19.3), so `prisma migrate dev` builds its shadow database from the
-migration history, diffs it against `schema.prisma`, and emits a `DROP INDEX` for
-each one inside whatever migration you are authoring — silently removing inbound
-dedupe, the open-thread race protection, and every cross-tenant integration
-constraint at once. Hand-writing is not the fallback; it is the only path.
-
-- Hand-write the migration directory and its `migration.sql`, then apply with
-  `prisma migrate deploy`. Never run `prisma migrate dev` against this schema.
-- If you draft SQL with `prisma migrate diff`, delete every `DROP INDEX` from its
-  output before saving.
-- Verify the saved `migration.sql` contains no `DROP INDEX` before applying it.
-- After it lands, confirm all six survived — this must return 6:
+- Hand-write the migration directory and `migration.sql`; apply with `prisma migrate deploy`.
+  **Never run `prisma migrate dev` against this schema.** Name the directory like the newest
+  existing one (`<YYYYMMDD>120000_<what>`).
+- **Do not run `prisma format`**: it realigns the whole schema into a diff of several hundred lines.
+  Edit `schema.prisma` by hand in the existing style.
+- The local test database (`clerk_test`) is shared by every worktree, so a migration applied from
+  one worktree is visible to the others.
+- If you draft with `prisma migrate diff`, delete every `DROP INDEX`; check the saved file has none before applying.
+- A migration that adds another raw-SQL index adds it to the list above and the query below.
+- After it lands, confirm every listed index survived (all eight names must come back):
 
   ```sql
-  SELECT count(*) FROM pg_indexes WHERE indexname IN (
+  SELECT indexname FROM pg_indexes WHERE indexname IN (
     'threads_one_open_per_customer', 'messages_org_external_id_unique',
-    'integrations_instagram_organization_unique', 'integrations_instagram_account_unique',
-    'integrations_shopify_account_unique', 'integrations_non_email_account_unique');
+    'integrations_non_email_account_unique', 'integrations_instagram_organization_unique',
+    'integrations_instagram_account_unique', 'integrations_shopify_account_unique',
+    'integrations_provider_account_unique', 'messages_pending_inbound_processing_idx');
   ```
 
-**Run prisma from the repo root, never from inside `packages/db`.** That
-directory's `.env` points at the production Neon instance and *overrides* an
-inline `DATABASE_URL`, so `cd packages/db && DATABASE_URL=…local… npx prisma
-migrate deploy` silently targets production. It has done so once, landing a
-migration in production before its code. Additive and inert that time, so nothing
-broke, but read the `Datasource "db": … neon.tech` line before trusting where a
-migration went. The local test DB is `127.0.0.1:55432/clerk_test` and needs both
-`DATABASE_URL` and `DIRECT_DATABASE_URL` passed inline.
+**Run prisma from the repo root, never from inside `packages/db`.** The Prisma CLI auto-loads that
+directory's `.env` (the local dev database, per `packages/db/.env.example`), and it *overrides* an
+inline `DATABASE_URL`. So `cd packages/db && DATABASE_URL=… npx prisma migrate deploy` targets
+whatever that file holds, not what you exported. Read the `Datasource "db": …` line before trusting
+where a migration went.
+
+**Point audits at production explicitly.** Production credentials live only in the git-ignored
+`packages/db/.env.production`, which `loadLocalEnv` (`scripts/load-local-env.mjs`) reads only under
+`SHOPKEEPER_DB_TARGET=prod`. Every `loadLocalEnv` run prints `[env] database target: …`; read it.
+Audits that call `loadLocalEnv` (among them `audit:plan-executions`, `audit:unknown-outcomes`,
+`audit:email-inbound-transport`, `audit:retired-channel-types`, `audit:agent-action-operation-keys`,
+`audit:outbound-email-mode`) fill whatever the shell lacks from local env files, so run bare they
+audit the local database and can report a false clean. `audit:operator-events`,
+`audit:outbound-email` and `audit:instagram-rollout` load no env file and use whatever the shell
+holds. Run both kinds with `railway run --service shopkeeper --environment production --` (or
+`SHOPKEEPER_DB_TARGET=prod` for the first kind). Some audits gate specific migrations
+(`audit:agent-action-operation-keys`, `audit:retired-channel-types`); see
+[../audit-commands.md](../audit-commands.md).
 
 ### Env vars by context
 
-The datasource declares both URLs, so Prisma resolves **both** variables
-everywhere — even in contexts that never migrate:
+The datasource declares `url = env("DATABASE_URL")` (pooled) and `directUrl = env("DIRECT_DATABASE_URL")`
+(migrations travel over it), so Prisma resolves both everywhere — set both on Vercel and Railway too.
 
-```prisma
-datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")         // pooled (PgBouncer)
-  directUrl = env("DIRECT_DATABASE_URL")  // direct host; migrations travel over this
-}
-```
+| Context | `DATABASE_URL` | `DIRECT_DATABASE_URL` | Migrates? |
+|---------|----------------|-----------------------|-----------|
+| Production migration run (your machine) | pooled Neon host + `?pgbouncer=true` | direct host + `?sslmode=require` | **Yes — the only path that migrates production** |
+| Vercel / Railway | pooled Neon host | direct Neon host | No |
+| Local tests | injected by `scripts/with-test-env.mjs` (`TEST_DATABASE_URL` or the default below) | an already-exported `DIRECT_DATABASE_URL` if set, else the same value | Yes — `scripts/test-bootstrap.mjs` |
+| CI | same as local tests | same value | Yes — same bootstrap, CI service container |
 
-| Context | `DATABASE_URL` | `DIRECT_DATABASE_URL` | Runs migrations? |
-|---------|----------------|-----------------------|------------------|
-| Production migration run (your machine) | pooled Neon host + `?pgbouncer=true&connection_limit=1` | direct Neon host + `?sslmode=require` | **Yes — this is the only path that migrates production** |
-| Vercel (dashboard) | pooled Neon host | direct Neon host | No — `next build` only |
-| Railway (gateway server + worker) | pooled Neon host | direct Neon host | No — `npm run build` is compile-only |
-| Local tests | injected by `scripts/with-test-env.mjs` | same value | Yes — via `scripts/test-bootstrap.mjs` |
-| CI | same as local tests | same value | Yes — same bootstrap, against the CI service container |
+**Never run `test:integration`, `test:coverage` or `scripts/test-bootstrap.mjs` in a shell that
+holds a production `DIRECT_DATABASE_URL`** (an export, or inside `railway run`). `getTestEnv` keeps
+an exported `DIRECT_DATABASE_URL`, and `prisma migrate deploy` travels over `directUrl`, so the
+bootstrap would apply pending migrations to production. Its safety check (`assertTestDatabase`)
+inspects only `DATABASE_URL`.
 
-Set both variables in Vercel and Railway even though neither platform migrates:
-the schema declares `directUrl`, so both must resolve at client initialization.
-
-The local/CI test database defaults to
-`postgresql://postgres:postgres@127.0.0.1:55432/clerk_test?schema=public` and is
-overridden with `TEST_DATABASE_URL`. It is never a deployed database.
+The test database defaults to `postgresql://postgres:postgres@127.0.0.1:55432/clerk_test?schema=public`
+(override with `TEST_DATABASE_URL`); pass both URLs inline when targeting it by hand.
 
 ### Applying one
 
-Production — run before deploying the build that depends on the migration. This
-is step 3 of the [Deploy Sequence](#deploy-sequence):
-
 ```bash
-DATABASE_URL='postgresql://...@ep-....-pooler.us-east-2.aws.neon.tech/neondb?pgbouncer=true&connection_limit=1' \
-DIRECT_DATABASE_URL='postgresql://...@ep-....us-east-2.aws.neon.tech/neondb?sslmode=require' \
+DATABASE_URL='postgresql://...@ep-....-pooler.us-west-2.aws.neon.tech/neondb?pgbouncer=true' \
+DIRECT_DATABASE_URL='postgresql://...@ep-....us-west-2.aws.neon.tech/neondb?sslmode=require' \
 npm run db:migrate:deploy
 ```
 
-Local and CI — `test:integration` bootstraps the schema itself, so a new
-migration needs no separate step. To apply to the local test database without
-running the suite:
+Locally, `test:integration` bootstraps the schema itself; to apply without running the suite:
+`npm run test:services:up && node scripts/test-bootstrap.mjs`.
 
-```bash
-npm run test:services:up
-node scripts/test-bootstrap.mjs
-```
+**A PR that carries a migration** is migrated before it merges, because the merge deploys the code:
+
+1. With production env injected, check then apply. Railway links a directory, so a git worktree is
+   not linked — run from the linked checkout and `cd` inside the command:
+
+   ```bash
+   railway run --service shopkeeper sh -c 'cd <worktree> && npx prisma migrate status --schema=packages/db/prisma/schema.prisma'
+   ```
+
+   `status` must list only the new migration as pending; then run the same command with `migrate deploy`.
+2. Merge pinned to the reviewed head:
+   `gh pr merge <n> --squash --delete-branch --match-head-commit <sha>`.
+3. Watch the merge commit's statuses (Vercel, Railway `shopkeeper`, Railway `Gateway Worker`), then
+   `curl https://<gateway>/health/deep`.
 
 ### Verify what is actually applied
 
-**A migration that ships behind its code is an outage, not a lag.** Merging and
-deploying a feature does not imply its migration ran. Check explicitly, with
-production env injected and no credentials on your clipboard:
+**A migration that ships behind its code is an outage, not a lag.** Deploying does not mean the
+migration ran. With production env injected:
 
 ```bash
 railway run npx prisma migrate status --schema=packages/db/prisma/schema.prisma
 ```
 
-Run this after every deploy that included a migration, before closing anything
-that adds a table or column, and whenever a tool starts failing-and-warning for
-no apparent reason.
-
-Three failures this prevents, all caught by `migrate status` rather than by an
-error at deploy time:
-
-- **2026-07-22** — the B3/B4 watch-table migrations (`add_return_watches`,
-  `add_shipment_watches`) were found unapplied in production two days after their
-  code shipped, so their tool-success recording had been failing and warning the
-  entire time.
-- **2026-07-28** — release verification found the additive
-  `20260723000000_add_operator_pending_plans` had never been applied, well after
-  the feature merged.
-- **Milestone 5** — `loadActiveMerchantPreferences` shipped to production while
-  its table did not exist. The `P2021` threw out of an uncaught `Promise.all` in
-  `buildContext` and every inbound message went unplanned for a day. Give every
-  fan-out load in `buildContext` its own catch.
-
-## Product Analytics
-
-Both dashboard and gateway require an explicit `PRODUCT_ANALYTICS_ENABLED` value
-in production. Deploy new instrumentation with capture disabled first:
-
-```dotenv
-PRODUCT_ANALYTICS_ENABLED=false
-POSTHOG_PROJECT_TOKEN=<project-token>
-POSTHOG_HOST=https://us.i.posthog.com
-```
-
-When enabled, use the token for the environment-specific PostHog project. Product
-analytics is server-only and organization-scoped; do not add a browser PostHog
-key or enable autocapture, session replay, cookies, or person profiles.
-
-Before enabling production capture:
-
-1. enable and review every event in staging;
-2. confirm raw payloads contain no names, addresses, message content, prompts,
-   provider identifiers, credentials, or provider payloads;
-3. confirm deterministic retries retain one unique event;
-4. save and verify the reports specified in
-   [`posthog-reports.md`](posthog-reports.md); and
-5. assign an owner to monitor analytics-delivery warnings for the first
-   production week.
-
-After enabling, complete one controlled workspace journey and verify both the raw
-events and the saved reports. Do not backfill events from before deployment.
-
-## Manual End-to-End Smoke Tests
-
-Automated health checks are necessary but not sufficient. Before marking the deploy complete, run at least one real smoke flow through the current launch scope.
-
-### Email
-
-1. Send an inbound email to the production inbound address.
-2. Confirm the gateway returns `200 OK`.
-3. Confirm an inbound BullMQ job is created and processed.
-4. Confirm a new thread appears in the dashboard with an AI summary and cached plan.
-5. Approve a response and confirm the outbound email sends successfully.
-
-### Instagram DM (Controlled Rollout)
-
-The complete live Standard Access lifecycle has passed. Keep the integration workspace-gated until
-Advanced Access is approved for external merchants and a non-role merchant passes the same loop.
-The 2026-07-16 production preflight also confirmed a clean strict ownership/auth-model audit, an
-up-to-date migration history, rapid distinct inbound messages with provider timestamps, and an
-outbound provider message ID. Reconnect, disconnect suppression, reconnect, and controlled token
-refresh also passed.
-
-Before deployment, run the read-only ownership/auth-model audit against production and require a
-clean result:
-
-```bash
-railway run --service shopkeeper npm run audit:instagram-rollout -- --strict
-```
-
-Then:
-
-1. Enable `INSTAGRAM_INTEGRATION_ENABLED` and include the test workspace's Clerk organization ID
-   in `INSTAGRAM_BETA_ORG_IDS`.
-2. Complete Instagram OAuth through Shopkeeper and confirm `/subscribed_apps` contains `messages`.
-3. Verify the Meta webhook handshake succeeds on `GET /webhooks/meta`.
-4. Send two real DMs quickly from another Instagram account, including one attachment.
-5. Confirm both messages appear exactly once with the provider timestamps and private attachment.
-6. Approve a reply, confirm delivery, and confirm the outbound provider message ID was recorded.
-7. Reconnect the same account and verify existing thread routing remains intact.
-8. Disconnect, confirm later DMs create no tickets, then reconnect for the token-refresh check.
-
-### Telegram Operator Channel
-
-1. Point the Telegram bot webhook at `POST /webhooks/telegram` on the gateway, including the `TELEGRAM_WEBHOOK_SECRET` header.
-2. From a bound org member's Telegram chat, send a real inbound message to the bot.
-3. Confirm the gateway accepts the webhook and the worker processes the operator turn.
-4. Confirm a Telegram plan notification reaches bound org members for a new ticket.
-5. Reply `yes` / `no` / freeform and confirm the agent acts (or skips) accordingly.
-
-#### Durable operator events (P4-03) — complete
-
-Durable ingestion is the only path for Telegram and iMessage operator messages
-(completed 2026-07-20). Each inbound message is persisted and enqueued before
-the webhook acknowledges it; the operator-event worker claims the event once and
-runs the turn.
-
-**Routine monitoring:**
-
-```bash
-railway run --service shopkeeper --environment production -- \
-  npm run audit:operator-events -- --hours=24 --strict
-```
-
-Expect committed events with delivered replies and no failed, unknown, stale,
-undelivered, or repeated-claim records. Per-channel checks:
-
-```bash
-npm run audit:operator-events -- --hours=24 --strict --require-channel=telegram
-npm run audit:operator-events -- --hours=24 --strict --require-channel=imessage
-```
-
-There is no synchronous webhook fallback to roll back to. If durable ingestion
-must be disabled, redeploy a prior gateway build that still carried the
-fallback — do not delete or blindly re-enqueue existing `OperatorEvent` rows.
-
-#### Failed or unknown operator-event recovery
-
-The launch owner/on-call owns review. `failed` and `unknown` both mean a turn may have partially
-acted; neither state is safe to replay automatically.
-
-1. Run `npm run audit:operator-events -- --hours=24 --strict` and take the event ID, organization,
-   channel, claim/process times, error, and correlated action summaries from the report. The audit
-   intentionally omits merchant bodies, replies, chat IDs, and provider message IDs.
-2. For free-form queued turns deployed with durable turn correlation, inspect `agent_actions` where
-   `turn_id = <operator-event-id>`. For a keyword pending-plan decision, also inspect that
-   organization's plan-execution rows and actions in the claim-time window.
-3. Determine provider truth before taking another action: inspect Shopify transaction/order state,
-   the outbound message provider activity, and the dashboard action timeline as applicable. Never
-   infer “nothing happened” from a missing operator reply.
-4. If the provider proves no side effect, ask the merchant to issue a fresh instruction. If it
-   proves a commit, send only the missing confirmation or record a compensating follow-up. If truth
-   remains ambiguous, leave the event terminal, record the incident, and escalate to the production
-   owner; do not mutate it back to `pending`.
-5. A `committed` event with an undelivered reply is normally handled by
-   `operator-event-sweep`; it may resend the stored confirmation but never
-   reruns the turn. If `last_error` says the reply may have reached the provider,
-   the send outcome is ambiguous and the sweep deliberately excludes it from
-   automatic resend. Check Telegram/Photon activity and the recipient device;
-   never resend without positive no-delivery evidence. Any committed-undelivered
-   row remains a strict-audit blocker until it is reconciled.
-
-### iMessage Operator Channel (Phase 0 infra)
-
-One platform-wide Photon Spectrum line serves all orgs. Merchants bind their iPhone by texting a
-connect code; customers never use this channel.
-
-**One-time Photon setup**
-
-1. Confirm or create a Spectrum project with an iMessage line (shared pool is fine for beta).
-   Use `photon login` then `photon projects show` and `photon spectrum lines list`, or the
-   [Photon dashboard](https://app.photon.codes).
-2. Register the inbound webhook in app.photon.codes → **Webhooks**:
-   - URL: `https://<gateway>/webhooks/photon`
-   - Copy the endpoint signing secret into gateway `SPECTRUM_WEBHOOK_SECRET` on Railway (both
-     `shopkeeper` and `Gateway Worker` services if split).
-3. Set env vars:
-
-   | Service | Variables |
-   |---------|-----------|
-   | **Gateway (Railway)** | `SPECTRUM_PROJECT_ID`, `SPECTRUM_PROJECT_SECRET`, `SPECTRUM_WEBHOOK_SECRET` |
-   | **Dashboard (Vercel)** | `IMESSAGE_LINE_HANDLE` — must match the handle merchants text |
-
-4. Apply migration `20260624000000_add_org_member_imessage_bindings` (and later iMessage migrations)
-   if not already deployed: `npm run db:migrate:deploy`.
-5. Confirm `GATEWAY_RUNTIME_ROLE` includes `server` (default `all` on a single Railway service).
-   Spectrum inbound webhooks need the public gateway process.
-
-**Phase 0 verification**
-
-```bash
-# Webhook route must not return 503 (missing Spectrum creds)
-curl -sS -o /dev/null -w "%{http_code}\n" -X POST \
-  https://<gateway>/webhooks/photon \
-  -H "Content-Type: application/json" -d '{}'
-
-# After gateway deploy with imessage health check:
-curl -sS https://<gateway>/health/deep | jq '.checks.imessage'
-
-DASHBOARD_URL='https://<dashboard>' \
-GATEWAY_URL='https://<gateway>' \
-npm run verify:production
-```
-
-Pass criteria:
-
-- Photon webhook POST returns anything except `503` (signature errors `400`/`401` are fine pre-test).
-- Gateway logs `[Webhook] Photon delivery processed` with `status: 200` on a signed test inbound.
-- Dashboard Integrations shows iMessage Connect enabled (not disabled) when `IMESSAGE_LINE_HANDLE` is set.
-
-Full merchant flows (bind, plan push, approve) were signed off 2026-07-08; the
-Phase 1 detail is in git history (`docs/archive/imessage-production-readiness-plan.md`,
-deleted 2026-07-30).
-
-### iMessage down triage
-
-When merchants report missing plan pushes, bind replies, or digests:
-
-1. **Configured?** `curl -sS https://<gateway>/health/deep | jq '.checks.imessage'` — `ok` means
-   `isImessageConfigured()` passed (all three `SPECTRUM_*` vars set). `503` on
-   `POST /webhooks/photon` with `[Webhook] Photon webhook received but iMessage is not configured`
-   means missing creds on the gateway.
-2. **Webhook ingress** — Confirm Photon dashboard webhook URL is `https://<gateway>/webhooks/photon`
-   and `SPECTRUM_WEBHOOK_SECRET` matches the endpoint secret shown in
-   [app.photon.codes](https://app.photon.codes) → Webhooks. Signature failures emit
-   `category=webhook_signature`.
-3. **Credential rotation** — After rotating `SPECTRUM_PROJECT_ID`, `SPECTRUM_PROJECT_SECRET`, or
-   `SPECTRUM_WEBHOOK_SECRET`, redeploy the gateway and re-run Phase 1 bind smoke. A mismatched
-   webhook secret returns `401` on inbound Photon deliveries.
-4. **Stale `spaceId`** — Proactive sends (plan push, digest, escalation) use
-   `OrgMemberImessageBinding.spaceId`. Inbound refreshes `spaceId` on each merchant message; if
-   Photon re-provisioned the space, ask the merchant to text the line once before proactive sends
-   resume. Gateway logs `[Spectrum] iMessage send failed` or `[Spectrum] iMessage space load failed`
-   with `spaceId`; repeated failures emit `category=provider_send`, `provider=imessage`,
-   `channel=operator_notify`.
-5. **Device cap** — Telegram limits each member to 3 bound devices; iMessage has **no device cap**
-   (unlimited iPhones per member). Unlink stale handles from Integrations if a merchant rotates phones.
-6. **Proactive send dedupe** — BullMQ retries use Redis idempotency keys per channel
-   (`[OperatorNotify] Duplicate delivery skipped`) so a partial fan-out failure does not re-text
-   channels that already received the notification. Keys expire after 1 hour.
-7. **No delivery receipts** — A successful send means Spectrum `space.send()` resolved, not that the
-   message was read on the iPhone. Check gateway logs for `[Worker] Plan notification sent` with
-   `channel: imessage` vs `[Worker] Plan notification failed`.
-8. **Bind path** — Search `[iMessage] Bind succeeded`, `Bind rejected`, or `Bind failed` in gateway
-   logs. Unbound senders should receive connect instructions, not agent runs or ticket creation.
-
-Controlled validation (gateway iMessage `provider_send`):
-
-```bash
-cd apps/gateway
-PROVIDER_SEND_ALERT_THRESHOLD=1 OPS_ALERT_WINDOW_SECS=60 \
-  npx tsx src/scripts/emit-controlled-ops-alert.ts provider_send <test-org-id>
-```
-
-Expected log tags: `category=provider_send`, `service=gateway`, `provider=imessage`,
-`channel=operator_notify`.
-
-### iMessage bind support playbook
-
-**Binding security (verified in code):**
-
-- Each iPhone handle (`senderId`) binds to **one member globally** — unique index on
-  `org_member_imessage_bindings.sender_id`. Texting a fresh connect code from org B moves the
-  handle to org B; org A stops receiving operator notifications until someone re-binds there.
-- Connect codes are **single-use**, **24h TTL** (`ORG_MEMBER_BIND_TOKEN_TTL_SECONDS`), minted only
-  via `POST /api/integrations/imessage/bind` with `requireBillingWriteAllowed: true`.
-- Gateway bind logs include `senderId`, `spaceId`, `orgId`, and `outcome` only — never the token
-  or inbound message body at info/warn.
-
-**Wrong-org bind**
-
-1. Confirm which org owns the handle: Integrations → iMessage on each workspace, or query
-   `org_member_imessage_bindings` by `sender_id`.
-2. The merchant (or support) unlinks the handle from the **current** org's Integrations page, or
-   mints a code from the **intended** org and texts it — the global upsert moves the binding.
-3. Org that lost the handle sees no plan pushes until a member re-binds from that dashboard.
-
-**Lost operator access (no plan pushes / bind reply fails)**
-
-1. Check gateway `/health/deep` → `checks.imessage` is `ok` and `IMESSAGE_LINE_HANDLE` matches
-   Photon's line on the dashboard.
-2. Merchant: Integrations → iMessage → **Unlink**, mint a new code, text it from the iPhone.
-3. If proactive sends fail but inbound works, ask the merchant to text the line once (refreshes
-   stale `spaceId` — see triage above).
-4. Escalate to engineering if bind succeeds but sends still fail (`provider_send` ops alerts).
-
-**Legacy customer iMessage threads (pre-rewire)**
-
-The purge module was retired 2026-07-30, but the `imessage` enum value outlived it
-and is still a tracked retirement candidate — see
-[compatibility-retirement-backlog.md](../compatibility-retirement-backlog.md).
-Pre-GA customer-support rows on `channel_type = imessage` were migration tooling
-only; operator iMessage uses `operator` plus `org_member_imessage_bindings` and is
-unaffected. Verify with:
-
-```bash
-npm run audit:retired-channel-types -- --strict
-```
-
-Hard purge of soft-deleted rows follows the normal 90-day retention job in `maintenance/retention.ts`.
-
-### Shopify
-
-1. Complete a live Shopify OAuth connect flow from the production dashboard.
-2. Confirm the integration row is written in the DB.
-3. Confirm the four order webhooks are registered against the public gateway URL.
-4. Trigger one supported order event.
-5. Confirm the inbound event reaches the gateway and appears in the dashboard where applicable.
-
-### Clerk Lifecycle
-
-1. In the Clerk Dashboard, create or update a webhook endpoint for `https://<dashboard>/api/webhooks/clerk`.
-2. Subscribe it to `organization.deleted`, `user.deleted`, and `organizationMembership.deleted`.
-3. Store the endpoint signing secret as dashboard `CLERK_WEBHOOK_SECRET`.
-4. Use the Clerk webhook testing tab or a safe staging organization deletion to confirm the dashboard returns `200`.
-5. Confirm local rows are cleaned up: deleted organizations should cascade through workspace data, deleted users should remove matching `org_members`, and deleted memberships should remove only that organization's member row.
-
-## Production-Only Webhook Routing
-
-The dashboard webhook proxy routes are for local development convenience. In production, point provider traffic directly at the gateway:
-
-- Meta -> `https://<gateway>/webhooks/meta`
-- Telegram -> `https://<gateway>/webhooks/telegram`
-- Photon Spectrum (iMessage operator) -> `https://<gateway>/webhooks/photon`
-- Postmark inbound -> `https://<gateway>/webhooks/email/inbound`
-- Shopify -> `https://<gateway>/webhooks/shopify`
-
-Clerk lifecycle webhooks are the exception because they clean up dashboard-owned tenant records:
-
-- Clerk -> `https://<dashboard>/api/webhooks/clerk`
-
-Relevant proxy routes:
-
-- [apps/dashboard/src/app/api/webhooks/meta/route.ts](../../apps/dashboard/src/app/api/webhooks/meta/route.ts)
-- [apps/dashboard/src/app/api/webhooks/email/route.ts](../../apps/dashboard/src/app/api/webhooks/email/route.ts)
-
-Relevant signed dashboard webhook route:
-
-- [apps/dashboard/src/app/api/webhooks/clerk/route.ts](../../apps/dashboard/src/app/api/webhooks/clerk/route.ts)
-
-## Operational Guardrails
-
-The guardrail code is implemented, but the production checklist item is not complete until ops-alert log routing is validated against live or staging traffic. This section is the production operating procedure; the sign-off evidence is in [`alerting-evidence.md`](alerting-evidence.md). The V1 implementation plan that built these — thresholds, call sites, phase gates — had every code phase ticked and only its Phase 5 production rollout open, which is what `alerting-evidence.md` tracks. It was deleted on 2026-09-01; read it at `git show c06be3b4:docs/production/operational-guardrails.md`.
-
-### Plan-execution ledger staged enforcement (P1-02)
-
-`PLAN_EXECUTION_LEDGER_MODE=off|shadow|enforce` controls whether reviewed plans
-only record observations or atomically claim and complete their durable
-execution row. Roll out by host: dashboard first, then the public gateway and
-worker together after the dashboard observation window. PostgreSQL is the
-single-use boundary; Redis remains only a latency guard.
-
-**Current stage (2026-07-30):** dashboard, Railway public gateway, and Railway
-worker are all in `enforce`. Gateway canary execution
-`345be6f6-555e-4cde-9e1e-961fca91cb22` committed on 2026-07-30 with enforce-state
-invariants. Hold a normal 24-hour observation window with representative
-gateway/operator traffic; strict audits must stay clean.
-
-**Previous stage (2026-07-29):** the Vercel dashboard was in `enforce`; Railway
-public gateway and worker remained in `shadow`. Dashboard canary execution
-`6fdec37f-e92a-4115-b909-c8a226464fe4` committed with one linked successful
-internal action, zero shadow observations, and populated claim/completion
-timestamps. Representative reviewed execution
-`9bbe5f42-4da9-4f89-ad13-e10a7b167d49` subsequently committed one successful
-`send_reply` with the same enforce-state invariants and no error.
-
-Before and after every flag change:
-
-1. Verify the target host's non-secret flag directly. Do not infer it from
-   health alone, and do not let a local `.env.local` override the downloaded
-   Vercel production value.
-2. Run `npm run verify:production`.
-3. Run:
-
-   ```bash
-   railway run --service shopkeeper --environment production -- \
-     npm run audit:plan-executions -- --hours=240 --strict
-   railway run --service shopkeeper --environment production -- \
-     npm run audit:unknown-outcomes -- --hours=240 --strict
-   ```
-
-4. Require no repeated shadow observations, unknown outcomes, or stale claims.
-   In `enforce`, a successful canary must be terminal `committed`, have
-   `observationCount=0`, populated `claimedAt`/`completedAt`, no `lastError`,
-   and linked successful actions.
-
-Keep dashboard-only enforcement for at least one normal 24-hour observation
-window containing representative reviewed dashboard traffic before promoting
-gateway/worker. Gateway and worker were promoted to `enforce` on 2026-07-30;
-repeat the canary/audit sequence and hold a broad observation window after any
-future flag change.
-
-Dashboard rollback is configuration-only: restore the Vercel Production
-variable to explicit non-sensitive `shadow`, redeploy the same known-good
-artifact, verify the cloud value, and rerun both audits. Do not change the
-Railway flags during a dashboard-stage rollback. If an enforced execution is
-`unknown`, determine provider truth before any fresh instruction; never reset
-the row to `pending` or replay it.
-
-### External Monitors
-
-**Configured 2026-07-31** on the Better Stack free tier. Keep this manual in the
-Better Stack console; do not add Better Stack API tokens or credentials to the
-repo.
-
-**Two monitors, not three.** Corrected 2026-07-31 — this previously specified a
-third monitor against `/health/queues`, which is wrong on two counts:
-
-- That route requires the internal secret (`health.ts:214`, `authorizeInternalRequest`)
-  and deliberately exposes queue counts and failed-job **tenant identifiers**
-  (AUD-017). It must not be polled by a third-party vendor.
-- It is redundant. `/health/deep` already rolls up the worker heartbeat *and*
-  queue diagnostics and returns `503` if either is unhealthy, so a stale worker
-  already fails the gateway monitor.
-
-`/health/queues` is the manual drill-down *after* an alert fires:
-
-```bash
-curl -H "x-internal-secret: $INTERNAL_API_SECRET" \
-  https://<gateway-production-url>/health/queues
-```
+Run it after every deploy that carried a migration, before closing anything that adds a table or
+column, and whenever a tool starts failing-and-warning for no apparent reason.
+
+## Webhook Routing
+
+Point provider traffic directly at the gateway. The dashboard's `/api/webhooks/meta`,
+`/api/webhooks/email` and `/api/webhooks/tiktok-shop` routes are local-development proxies.
+
+| Provider | Production URL |
+| --- | --- |
+| Shopify (orders, `app/uninstalled`, compliance — declared in `shopify.app.toml`) | `https://<gateway>/webhooks/shopify` |
+| Postmark inbound / bounce | `https://<gateway>/webhooks/email/inbound`, `/webhooks/email/bounce` |
+| Gmail Pub/Sub push | `https://<gateway>/webhooks/gmail/push` |
+| Telegram | `https://<gateway>/webhooks/telegram` |
+| Photon Spectrum (iMessage operator) | `https://<gateway>/webhooks/photon` |
+| SocialAPI (Instagram) | `https://<gateway>/webhooks/socialapi` |
+| Meta (direct Instagram) | `https://<gateway>/webhooks/meta` |
+| TikTok Shop (gated off) | `https://<gateway>/webhooks/tiktok-shop` |
+| Clerk lifecycle | `https://<dashboard>/api/webhooks/clerk` |
+| Stripe | `https://<dashboard>/api/billing/webhook` |
+
+The storefront-chat app proxy (`/apps/shopkeeper-chat`) targets
+`https://app.useshopkeeper.com/api/storefront-chat/proxy`. Shopify app config and its rollback:
+[shopify-app-config-reference.md](shopify-app-config-reference.md).
+
+**If the gateway host changes**, re-point every gateway row above in one sitting, or that provider
+silently stops delivering: Telegram via `set-telegram-webhook.ts`; Postmark inbound and bounce in the
+Postmark server; Shopify by editing the `uri`s in `shopify.app.toml` and running `shopify app deploy`;
+Gmail by re-running `configure:gmail-pubsub` with the new endpoint and updating gateway
+`GMAIL_PUBSUB_AUDIENCE`; Photon and SocialAPI by registering new endpoints (each issues a new signing
+secret — see [Instagram via SocialAPI](#instagram-via-socialapi) for its registration order); Meta in
+the app console. Then update `SHOPIFY_WEBHOOK_ADDRESS` in
+`apps/gateway/src/scripts/inspect-shopify-webhooks.ts` (it matches only the old host), the Better
+Stack `Shopkeeper Gateway Health` URL, and dashboard `GATEWAY_INTERNAL_URL` and
+`NEXT_PUBLIC_GATEWAY_EVENTS_URL`. Then redeploy the dashboard: the latter is inlined at build and
+also sets the CSP `connect-src`.
+
+## Console Values
+
+What to paste into third-party consoles (Shopify Partner, Google, Meta, Clerk, Postmark, BotFather).
+Homepage and legal pages go on the apex; OAuth redirect URIs go on `app.`.
+
+| Field | Value |
+| --- | --- |
+| App / product name | Shopkeeper (never "ShopKeep") |
+| Homepage | `https://useshopkeeper.com` |
+| Privacy policy / terms / data deletion | `https://useshopkeeper.com/privacy`, `/terms`, `/data-deletion` |
+| OAuth redirect base | `https://app.useshopkeeper.com` |
+| Contact email | `hello@useshopkeeper.com` |
+| Inbound email domain | `inbound.useshopkeeper.com` |
+| Telegram bot | target `@useshopkeeperbot` (staging `@useshopkeeperdevbot`); the rename is open in [../ROADMAP.md](../ROADMAP.md), so confirm the live username in BotFather — see *Renaming or replacing the bot* |
+
+The Gmail OAuth client (`GOOGLE_CLIENT_ID`) is separate from Clerk's social-login Google client;
+do not edit the Clerk one when changing Gmail OAuth branding.
+
+## Monitoring
+
+### External monitors
+
+Better Stack free tier, configured in its console; keep its tokens out of the repo.
 
 | Monitor | URL | Required keyword |
 | --- | --- | --- |
-| `Shopkeeper Dashboard Health` | `https://<dashboard-production-url>/api/health` | `{"status":"ok"` |
-| `Shopkeeper Gateway Deep Health` | `https://<gateway-production-url>/health/deep` | `{"status":"ok"` |
+| `Shopkeeper Dashboard Health` | `https://app.useshopkeeper.com/api/health` | `{"status":"ok"` |
+| `Shopkeeper Gateway Health` | `https://<gateway>/health` | `{"status":"ok"` |
 
-**The keyword must include the leading brace.** A bare `"status":"ok"` matches a
-*degraded* response too, because the nested checks still contain it:
+- **Monitors must not query Postgres.** A `SELECT 1` every three minutes resets Neon's five-minute
+  scale-to-zero timer, so the compute bills as always-on. If you ever monitor a `deep` route, use an
+  interval well above five minutes.
+- **Keep the leading brace in the keyword.** A bare `"status":"ok"` also matches a degraded deep
+  response through its nested checks; `{"status":"ok"` only matches at the document root.
+- Settings: `keyword`, `GET`, every 3 minutes (free-tier floor), 15 s timeout, verify SSL, follow
+  redirects, region `us`, email the launch owner on failure **and** recovery. Test routing with
+  Better Stack's test notification, never by taking production down.
+- These see a dead web process only. A dead `Gateway Worker` or a database outage alerts nobody:
+  `queue_health` is raised inside the worker, and nothing polls `/health/deep`. Check `/health/deep`
+  (`checks.worker`, `checks.db`) after every deploy and whenever work stops flowing (open item in
+  [../ROADMAP.md](../ROADMAP.md)). Drill down after an alert with
+  `curl -H "x-internal-secret: $INTERNAL_API_SECRET" https://<gateway>/health/queues`.
 
-```json
-{"status":"degraded","checks":{"db":{"status":"error"},"redis":{"status":"ok"}, ...}}
+### Ops alerts
+
+Structured Pino logs with `opsAlert: true` and stable `category`, `service`, `tags`, `extra`,
+`fingerprint` fields. Field names are a contract: rewording a message is safe, renaming a field
+breaks routing. Categories (`OPS_ALERT_CATEGORIES` in `packages/agent/src/observability/ops-alerts.ts`):
+`queue_health`, `webhook_signature`, `provider_send`, `provider_cleanup`, `agent_failure`,
+`gmail_inbound`, `inbound_unclaimed`.
+
+- **Gateway → Telegram.** Every alert raised through `emitOpsAlert` is pushed to the chat in
+  `OPS_ALERT_TELEGRAM_CHAT_ID` (Railway); unset = log-only. Use a chat you own, never a merchant binding.
+- **Dashboard → Sentry.** `agent_failure`, `provider_send` and `provider_cleanup` call
+  `Sentry.captureMessage` with the alert fingerprint through the existing DSN; nothing to configure.
+- **Log drains are not configured** (Vercel → Better Stack, plus a forwarder for Railway, which has
+  no native drain). Until they are, a raw `logger.*({ opsAlert: true, … })` line that bypasses
+  `emitOpsAlert` reaches **only** the Railway/Vercel log viewer — among them `[OutboundSendSweep]`,
+  `[UnknownOutcomeSweep]`, `[OperatorEventSweep]`, `[AgentTaskSweep]`, `[WorkspaceDeletion] Cleanup
+  needs retry`, Shopify `customers/data_request` (a 30-day duty), `[EmailBounce] Outbound email
+  bounced`, `[StorefrontChat] Shop daily message budget exhausted`, `[WithheldMessageFollowUp]`,
+  `[OutboundEmail]` claim loss, ownership mismatch and unknown provider outcome, `[Worker] Org over
+  its monthly conversation allowance`, and the permanent-failure logs of `[AgentTask]` and
+  `[IntegrationDisconnect]`. Search those logs for `opsAlert` during triage.
+
+`apps/gateway/src/ops-alert-notify.ts` must keep three properties: it never uses
+`clients/telegram-client.sendMessage` (which raises its own `provider_send` alerts — a Telegram
+outage would alert about Telegram, over Telegram), and its sender records nothing and never throws;
+the push carries only level, message and the tags `category`, `service`, `queue`, `provider`,
+`channel`, `tool` — `extra`, `orgId` and `threadId` are dropped for the same reason `/health/queues`
+is behind auth (Sentry keeps `extra`; it is private); dispatch is fire-and-forget after the log
+write, and a suppressed alert never pushes.
+
+Thresholds and defaults: `OPS_ALERTS_ENABLED=true` (`false` silences threshold alerts, not ordinary
+logs), `OPS_ALERT_WINDOW_SECS=300`, `QUEUE_ALERT_FAILED_THRESHOLD=10`,
+`QUEUE_ALERT_WAITING_THRESHOLD=100`, `QUEUE_ALERT_ACTIVE_STUCK_MS=900000`,
+`WEBHOOK_SIGNATURE_ALERT_THRESHOLD=5`, `PROVIDER_SEND_ALERT_THRESHOLD=3`,
+`AGENT_FAILURE_ALERT_THRESHOLD=3`, `UNCLAIMED_RECIPIENT_ALERT_THRESHOLD=5`. Route both apps to the
+same launch owner; keep `service`, `queue`, `provider`, `channel`, `tool` visible, and do not route
+by `orgId`, which fragments platform incidents.
+
+### Controlled alert validation
+
+Test org/user data only, in a safe window. Set `OPS_ALERT_WINDOW_SECS=60` and the threshold under
+test to `1` on the target service; restore defaults afterwards.
+`npm run verify:production:alerts -- --dry-run` (needs `DASHBOARD_URL` and `GATEWAY_URL`) prints
+every step without firing anything.
+
+Triggers that fire from the **deployed** process (prove the whole path, Telegram/Sentry included):
+
+- `webhook_signature`: unsigned requests at the live gateway, each `401`:
+
+  ```bash
+  WEBHOOK_SIGNATURE_ALERT_THRESHOLD=1 \
+  DASHBOARD_URL=https://app.useshopkeeper.com \
+  GATEWAY_URL=https://clerk-production-e37f.up.railway.app \
+  npm run verify:production:alerts -- --execute webhook_signature
+  ```
+
+- `agent_failure` (the only trigger that exercises Sentry): as an authenticated test-org user,
+  `POST https://app.useshopkeeper.com/api/agent` with a valid test `threadId` and no approved plan →
+  controlled `400`; expect `category=agent_failure`, `service=dashboard`, `route=/api/agent`.
+- `queue_health`: if `/health/queues` already shows a failed, waiting or stuck condition, lower only
+  the matching queue threshold and let the maintenance worker emit naturally.
+
+Local emitters check threshold/counter logic and log to your terminal — they prove no drain, and the
+dashboard one cannot prove Sentry (a standalone `tsx` process never initializes it). Load the target
+app's production env first; never break live provider credentials to trigger `provider_send`:
+
+```bash
+NODE_ENV=production npx tsx scripts/emit-controlled-ops-alert.ts --app=gateway queue_health
+NODE_ENV=production npx tsx scripts/emit-controlled-ops-alert.ts --app=gateway webhook_signature
+NODE_ENV=production npx tsx scripts/emit-controlled-ops-alert.ts --app=gateway provider_send <test-org-id>   # provider=imessage channel=operator_notify
+npx tsx --tsconfig apps/dashboard/tsconfig.json scripts/emit-controlled-ops-alert.ts --app=dashboard provider_send <test-org-id>   # provider=postmark channel=email
+npx tsx --tsconfig apps/dashboard/tsconfig.json scripts/emit-controlled-ops-alert.ts --app=dashboard agent_failure <test-org-id>
 ```
 
-That monitor would sit green while the database is down. `{"status":"ok"` only
-matches at the document root. Both endpoints return compact JSON with no
-whitespace — verified live 2026-07-31.
+`gmail_inbound` (a Gmail **test** integration only; never touch a merchant grant): force its watch
+expiration into the renewal window and let `gmail-watch-maintenance` run; in an isolated
+configuration confirm the third consecutive renewal failure emits `category=gmail_inbound` (an
+expired watch emits it immediately) carrying only integration identifiers, the safe error category
+and the failure count; then constrain the stale-recovery bound and confirm incomplete pagination
+emits fingerprint `recovery_truncated`, leaves `inboundStatus=degraded`, and sets no new checkpoint.
 
-Settings for both monitors:
+Finally set `OPS_ALERTS_ENABLED=false` briefly on each app, confirm threshold alerts go silent while
+ordinary logs flow, then unset it.
 
-- Monitor type: `keyword`
-- HTTP method: `GET`
-- Check frequency: `3` minutes (free-tier floor; sub-3-minute is paid)
-- Request timeout: `15` seconds
-- Verify SSL: enabled
-- Follow redirects: enabled
-- Region: `us`
-- Notify: email to the launch owner, on failure **and** recovery
+### Triage by alert category
 
-Escalation policies and phone/SMS paging are paid features and are deliberately
-not used pre-merchant. Do not validate alert routing by intentionally taking
-production down; use Better Stack's built-in test notification.
+- **`queue_health`** — `/health/queues` for heartbeat and counts (coarse status on public
+  `/health/deep`); inspect stuck jobs by trace id in Railway logs ([BullMQ Failed Jobs](#bullmq-failed-jobs));
+  restart the worker only after Redis and the DB are confirmed healthy.
+- **`webhook_signature`** — provider URLs point directly at the gateway ([Webhook Routing](#webhook-routing));
+  provider secrets match production env; check whether failures concentrate on one provider or org.
+- **`provider_send`** — provider credentials, account status, rate limits, sandbox/live state, status
+  pages; confirm no successful outbound message was persisted for a failed send. `provider=imessage`:
+  [iMessage down triage](#imessage-down-triage).
+- **`agent_failure`** — group by tool and org; inspect `AgentAction` rows and logs; if write actions
+  put customers at risk, disable the affected tool categories in org settings.
+- **`gmail_inbound`** — see [Gmail native inbound](#gmail-native-inbound); never force a degraded
+  integration active or replace its checkpoint by hand.
+- **`inbound_unclaimed`** — Postmark deliveries no active forwarding integration claims (`reason` =
+  `missing_recipient` | `malformed_local_part` | `no_integration`). Check the merchant's forwarding
+  rule targets the generated `{orgId}@<INBOUND_EMAIL_DOMAIN>` address and the forwarding integration
+  still exists; logs carry `unclaimed_recipient`.
+- **`provider_cleanup`** — an Instagram webhook unsubscribe failed on disconnect
+  (`[Instagram Disconnect] Provider unsubscribe cleanup required`, `manualCleanupRequired: true`);
+  remove the subscription in the Meta app console for the logged account.
 
-Expected failure behavior:
-
-- Dashboard DB, Redis, or env failure makes `/api/health` return `503` with
-  `{"status":"degraded"`, failing the keyword and the status code.
-- Gateway DB, Redis, worker heartbeat, or queue-diagnostics failure makes
-  `/health/deep` return `503` the same way.
-
-These monitors cover "the process is dead." They structurally cannot see "the
-process is alive and something is wrong inside it" — that is what ops-alert
-routing below is for.
-
-### Neon PITR
-
-Confirmed 2026-07-31. Record the exact retention window Neon reports, never an
-assumed plan default.
+## Neon PITR
 
 | Field | Value |
 | --- | --- |
 | Project | `misty-bird-75162134` (`shopkeeper`), `aws-us-west-2`, PG 17 |
 | Production branch | `production` (`br-aged-union-akjqrbbs`) — the only branch |
-| Endpoint | `ep-red-waterfall-akf6xfkq` (`c-3.us-west-2`), the only endpoint |
-| PITR status | Enabled |
-| Retention window | **7 days** (`history_retention_seconds: 604800`) |
-| Confirmed at | 2026-07-31 |
+| Endpoint | `ep-red-waterfall-akf6xfkq`, the only endpoint |
+| PITR | Enabled, **7 days** (`history_retention_seconds: 604800`) |
+| `autoscaling_limit_max_cu` | `2` |
 
-Raised from **6 hours** to 7 days on 2026-07-31. Six hours does not survive a
-Friday-evening fault noticed on Saturday, which is the realistic failure mode for
-a solo operator. The increase is effectively free — see the cost note below.
+Record the retention Neon reports, never an assumed plan default, and do not shorten it — the bill is
+compute, not history, and a few hours does not survive a Friday-evening fault noticed on Saturday.
+The 2 CU cap bounds blast radius; sustained throttling means fix the query, not raise the ceiling.
 
-**Restore tested 2026-08-01.** Branch `pitr-test` (`br-purple-poetry-ak42k8g4`)
-created from LSN `0/2168BC20` at `2026-07-31T23:07:29Z`, verified, deleted. All
-seven checked tables matched production exactly, and the Shopify access token
-**decrypted correctly on the restored branch** — the risk worth testing, since
-`TOKEN_ENCRYPTION_KEY` lives outside the database and a restore returning
-undecryptable rows is a restore in name only.
-
-Repeat this after any change to `TOKEN_ENCRYPTION_KEY` or the retention window.
+Test a restore after any change to retention, and keep every `TOKEN_ENCRYPTION_KEY` value that
+encrypted rows still in the retention window. What matters is that encrypted integration tokens
+still decrypt — the key lives outside the database.
 
 ```bash
-# 1. Branch from a point in time. --parent takes a name OR a timestamp as a
-#    single value; `name@timestamp` is NOT valid syntax for create.
-#    --expires-at is a safety net so a forgotten branch cannot bill compute.
+# 1. Branch from a point in time. --parent takes a name OR a timestamp as a single value
+#    (`name@timestamp` is not valid for create). --expires-at stops a forgotten branch billing.
 neonctl branches create --project-id misty-bird-75162134 --name pitr-test \
   --parent '<ISO8601 timestamp>' --expires-at '<ISO8601 +2h>'
-
 # 2. Connection string (do not echo it — it carries credentials)
 neonctl connection-string pitr-test --project-id misty-bird-75162134
-
-# 3. Verify with DATABASE_URL/DIRECT_DATABASE_URL overridden to that string.
-#    Compare row counts against production AND confirm an Integration
-#    accessToken still decrypts (the client carries the encryption extension).
-
-# 4. Always delete — a forgotten branch keeps its own compute, and compute is
-#    the entire Neon bill.
+# 3. Override DATABASE_URL/DIRECT_DATABASE_URL with it; compare row counts against production AND
+#    confirm an Integration accessToken still decrypts (the Prisma client carries the encryption extension).
+# 4. Always delete — a forgotten branch keeps its own compute.
 neonctl branches delete pitr-test --project-id misty-bird-75162134
 ```
 
-**Do not confuse `branches create --parent <timestamp>` (non-destructive, makes a
-new branch — this is the test) with `branches restore` (destructive, rewinds the
-target branch).** Never use the latter for a test.
+**`branches create --parent <timestamp>` is non-destructive (the test). `branches restore` rewinds the
+target branch — never use it for a test.** Restore is whole-branch: to repair one merchant, restore to
+a *separate* branch and copy rows out. PITR restores Postgres only — not Vercel Blob, not Redis
+(in-flight BullMQ jobs are lost), and it does not un-charge Stripe, un-refund Shopify or un-send
+email, so after a restore the database disagrees with Clerk, Stripe and Shopify. `AgentAction` is the
+audit trail you would actually reconstruct from.
 
-#### What PITR does not cover
+## BullMQ Failed Jobs
 
-Branch restore is a **whole-branch** operation — you cannot restore one table or
-one organization. To repair a single merchant's data, restore to a *separate*
-branch and copy rows out; do not roll production back and lose everyone else's
-day.
+A retry-exhausted job lands in its queue's `failed` set. It is evidence, not proof the business
+operation failed — compare with Postgres and provider truth before replaying or removing it. Queues:
+`inbound-messages` (email, Shopify order events, deferred Instagram DMs), `ai-summary` (summary, plan
+precompute, auto-ack, notifications), `outbound-email`, `gmail-sync`, `gmail-watch-maintenance`,
+`order-review`, `operator-event`, `agent-task`, `integration-disconnect`.
 
-It restores Postgres only. It does not restore Vercel Blob (attachments), Redis
-(in-flight BullMQ jobs are simply lost), or the external systems of record.
-Rolling the database back does not un-charge a Stripe invoice, un-issue a Shopify
-refund, or un-send an email — after a restore the database disagrees with Clerk,
-Stripe and Shopify about what happened. PITR is a last resort; `AgentAction` is
-the audit trail you would actually reconstruct from.
-
-#### Cost shape (measured 2026-07-31)
-
-The Neon bill is **entirely compute**, which is why retention is cheap to extend:
-
-| Metric | Value |
-| --- | --- |
-| `active_time` | 742.0 h — **99.7% of a 744-hour month** |
-| `cpu_used_sec` | 330.1 CU-hours, averaging 0.445 CU while active |
-| Storage | 36 MB |
-
-The compute never suspends. Autosuspend requires zero client connections, and the
-gateway is an always-on Railway process holding a Prisma pool through pgbouncer —
-`pg_stat_activity` shows persistent idle pooler connections. `suspend_timeout_seconds: 0`
-is Neon's 5-minute default and never gets the chance to fire. This is
-architectural, not a misconfiguration: Neon's scale-to-zero pricing assumes bursty
-serverless access, and a 24/7 worker is the opposite. Even perfect idle-timeout
-tuning would be undone by the 15-minute maintenance sweeps, and each cold start
-would add latency to a merchant-facing agent.
-
-Consequences for anyone touching this:
-
-- **Raising history retention does not raise the bill** at this data volume. Do
-  not trade recoverability for a saving that is not there.
-- **`autoscaling_limit_max_cu` is capped at 2** (endpoint and project default),
-  lowered from 8 on 2026-07-31. This is a blast-radius cap, not a saving — it
-  bounds the damage when a query that was fine against 36 MB stops being fine
-  once a merchant's data lands. Sustained throttling at 2 CU is a signal to fix
-  the query, not to raise the ceiling.
-- If the bill ever grows materially, the lever is the always-on access pattern —
-  a fixed small Postgres instance suits it better than serverless pricing. That
-  is a migration with real risk; do not attempt it ahead of a merchant.
-
-### Ops Alert Log Routing
-
-Ops alerts emit structured Pino logs with `opsAlert: true` and stable `category`, `service`, `tags`, `extra`, and `fingerprint` fields. Forward both services' logs into Better Stack **Telemetry** — a Vercel log drain for the dashboard (needs Vercel Pro/Enterprise) and a **forwarder service** for the gateway, since **Railway has no native log drain** — then alert on `opsAlert` and `category`.
-
-#### Gateway → Telegram push (live since 2026-07-31)
-
-The log-drain path above is still deferred behind its paywalls. In the meantime
-the **gateway** pushes every alert it raises straight to an operator Telegram
-chat, which is the half external uptime monitors cannot see. Verified end to end
-in production on 2026-07-31 via `emit-controlled-ops-alert.ts queue_health`.
-
-- Set by `OPS_ALERT_TELEGRAM_CHAT_ID` on the Railway gateway service. **Unset
-  leaves alerts log-only** — the feature is inert until configured.
-- Use an operator chat you own, never a merchant binding. Alerts carry no
-  customer data, but they are internal diagnostics, not merchant-facing copy.
-- Covers the gateway's 13 call sites. The dashboard holds no
-  `TELEGRAM_BOT_TOKEN`, so its three (`agent_failure`, `provider_send`,
-  `provider_cleanup`) take the Sentry path below instead.
-
-Two design constraints in `apps/gateway/src/ops-alert-notify.ts` that must
-survive any edit:
-
-- It does **not** reuse `clients/telegram-client.sendMessage`. That path reports
-  its own failures through `recordProviderSendFailure`, which emits a
-  `provider_send` ops alert — routing through it would make a Telegram outage
-  generate alerts about Telegram, sent over Telegram. The dedicated sender
-  records nothing and never throws.
-- The payload carries level, message, and a whitelist of tags (`category`,
-  `service`, `queue`, `provider`, `channel`, `tool`). **`extra` is excluded and
-  `orgId`/`threadId` are dropped** for the same reason `/health/queues` is behind
-  auth (AUD-017): the alert push must not become the leak that route is not.
-
-Dispatch is fire-and-forget after the log write, so it can never delay or fail
-the caller that raised the alert, and a suppressed alert
-(`OPS_ALERTS_ENABLED=false`) never pushes.
-
-#### Dashboard → Sentry capture (shipped 2026-08-01, production round-trip unverified)
-
-The dashboard's three sources capture to Sentry instead
-(`apps/dashboard/src/lib/server/ops-alert-notify.ts`), on the same
-fire-and-forget rule and off the same `emitOpsAlert` seam, so a source added
-later is covered without new wiring.
-
-- No configuration: the DSN in `sentry.server.config.ts` is the one already
-  carrying dashboard exceptions. `OPS_ALERTS_ENABLED=false` suppresses the
-  capture with the log.
-- `captureMessage`, not `captureException` — `buildOpsAlertScope` computes the
-  grouping fingerprint, and an exception would regroup by stack trace instead.
-- `extra` **is** kept here, unlike the Telegram push: Sentry is a private
-  surface and the identifiers are what make an alert actionable.
-- Unverified in production, and **`emit-controlled-ops-alert.ts` cannot verify
-  it**: that script is a standalone `tsx` process, where `instrumentation.ts`
-  never runs and `Sentry.captureMessage` is a no-op against an uninitialized
-  client. It proves the log line, not the capture. Use the deployed
-  `agent_failure` trigger in
-  [alerting-evidence.md](alerting-evidence.md) — an authenticated `POST
-  /api/agent` with no approved plan — which raises the alert inside the Next
-  runtime where Sentry is initialized.
-
-Better Stack log alerting is **query/threshold-based on a saved Telemetry chart**,
-not raw-text keyword matching: filter the structured fields into a chart, save it,
-and attach a threshold rule. This is why the `category` / `service` / `fingerprint`
-field values are a stable contract — rewording an alert message is safe, renaming
-a field silently breaks paging. Sign-off evidence:
-[alerting-evidence.md](alerting-evidence.md). Paywalled Level 1 items are
-deferred in [to-do-list.md](../to-do-list.md).
-
-Alert categories:
-
-- `category=queue_health`
-- `category=webhook_signature`
-- `category=provider_send`
-- `category=agent_failure`
-
-Route both dashboard and gateway alerts to the same launch owner until ownership is split. Keep `service`, `queue`, `provider`, `channel`, and `tool` visible in notifications, and avoid routing by `orgId` because that fragments platform incidents.
-
-Before sign-off:
-
-1. Confirm `OPS_ALERTS_ENABLED` is unset or set to `true`.
-2. In staging or a safe production window, record the current alert env values.
-3. Temporarily set `OPS_ALERT_WINDOW_SECS=60` and set only the threshold under test to `1`.
-4. Trigger one controlled event per category.
-5. Confirm the structured log lands in your log drain with the expected `category` and `service` tags.
-6. Confirm the log-based alert routes to the launch owner.
-7. Confirm the log fields, grouping keys, and absence of customer-facing side effects.
-8. Restore the default thresholds after validation.
-9. Set `OPS_ALERTS_ENABLED=false` briefly and confirm threshold alerts are silenced without suppressing ordinary structured logs.
-
-Default thresholds to restore:
-
-- `OPS_ALERT_WINDOW_SECS=300`
-- `QUEUE_ALERT_FAILED_THRESHOLD=10`
-- `QUEUE_ALERT_WAITING_THRESHOLD=100`
-- `QUEUE_ALERT_ACTIVE_STUCK_MS=900000`
-- `WEBHOOK_SIGNATURE_ALERT_THRESHOLD=5`
-- `PROVIDER_SEND_ALERT_THRESHOLD=3`
-- `AGENT_FAILURE_ALERT_THRESHOLD=3`
-
-### Triage By Alert Category
-
-When `queue_health` fires:
-
-- Check `/health/queues` (send the `x-internal-secret` header) for worker heartbeat and queue counts. Coarse liveness (db/redis/worker/queue `status`) is on the public `/health/deep`.
-- If active jobs are stuck, inspect the job payload and trace id in Railway logs.
-- Restart the gateway worker only after confirming Redis and DB are healthy.
-
-When `webhook_signature` fires:
-
-- Confirm provider webhook URLs point directly at the gateway production routes.
-- Confirm provider secrets match production env vars.
-- Check whether failures are concentrated on one provider or one org.
-
-When `provider_send` fires:
-
-- Confirm provider credentials and account status.
-- Check rate limits, sandbox/live account state, and provider incident pages.
-- Confirm the app did not persist a successful outbound message for failed sends.
-
-When `agent_failure` fires:
-
-- Group failures by tool name and org.
-- Inspect the associated audit note and structured logs.
-- Disable affected tool categories in org settings if the issue involves write actions and customer risk.
-
-### Controlled Alert Validation
-
-Run these in a safe production window with test org/user data only.
-
-`webhook_signature`:
-
-1. Set `WEBHOOK_SIGNATURE_ALERT_THRESHOLD=1` and `OPS_ALERT_WINDOW_SECS=60` on the gateway.
-2. Send one intentionally unsigned or bad-signature request to `POST https://<gateway>/webhooks/shopify` or `POST https://<gateway>/webhooks/meta`.
-3. Confirm the app returns the existing rejection response, normally `401`.
-4. Confirm the log drain receives an entry tagged `category=webhook_signature` and `service=gateway`.
-
-`agent_failure`:
-
-1. Set `AGENT_FAILURE_ALERT_THRESHOLD=1` and `OPS_ALERT_WINDOW_SECS=60` on the dashboard.
-2. As an authenticated launch-test user in a test organization, call `POST https://<dashboard>/api/agent` with a valid test `threadId` but no approved plan.
-3. Confirm the route returns the controlled `400`.
-4. Confirm the log drain receives an entry tagged `category=agent_failure`, `service=dashboard`, and `route=/api/agent`.
-
-`provider_send`:
-
-1. Set `PROVIDER_SEND_ALERT_THRESHOLD=1` and `OPS_ALERT_WINDOW_SECS=60` on the gateway.
-2. Do not break live provider credentials. Trigger one controlled gateway-side provider alert using
-   the existing alert helper with test metadata:
-   `cd apps/gateway && npx tsx src/scripts/emit-controlled-ops-alert.ts provider_send <test-org-id>`
-3. Confirm the log drain receives an entry tagged `category=provider_send`, `service=gateway`,
-   `provider=imessage`, and `channel=operator_notify`.
-
-For dashboard email sends, repeat with the dashboard helper:
-`cd apps/dashboard && npx tsx src/scripts/emit-controlled-ops-alert.ts provider_send <test-org-id>`
-(tags: `service=dashboard`, `provider=postmark`, `channel=email`).
-
-`queue_health`:
-
-1. Check `GET https://<gateway>/health/queues` first.
-2. If there is already a failed, waiting, or active-stuck condition, lower only the matching queue threshold and let the maintenance worker emit naturally.
-3. If queues are clean, trigger one controlled gateway-side queue alert through the existing alert helper with `category=queue_health`, `queue=inbound`, and test metadata.
-4. Confirm the log drain receives an entry tagged `category=queue_health`, `service=gateway`, and `queue=inbound`.
-
-`gmail_inbound`:
-
-1. Use a Gmail test integration; do not revoke or alter a production merchant grant.
-2. Force the test integration's watch expiration into the renewal window and let
-   `gmail-watch-maintenance` run.
-3. For the failure path, use an isolated test configuration and confirm the third consecutive
-   renewal failure emits `category=gmail_inbound`. An expired watch emits the same category
-   immediately.
-4. Confirm the alert includes only integration identifiers, the safe error category, and the
-   failure count—not OAuth tokens or message content.
-5. In an isolated test integration, constrain the stale-recovery bound and
-   confirm incomplete pagination emits the same category with fingerprint
-   `recovery_truncated`, leaves `inboundStatus=degraded`, and does not establish
-   a new checkpoint.
-
-After each category, record the log entry timestamp, alert recipient, tags/extras checked, and any side-effect notes in [`alerting-evidence.md`](alerting-evidence.md).
-
-### Bounded AI context (P2-02, retired)
-
-Bounded recent-message, prior-summary, KB, store-profile, sample-reply, order,
-operator-ledger, and instruction context is unconditional. `AGENT_CONTEXT_BUDGET_MODE`
-and its legacy unbounded branch were removed once production had moved onto the
-bounded path; the flag, the `canary:context-budget` script, and the mode-comparison
-eval no longer exist. Rollback is a revert of that change, not an environment edit.
-
-The 2026-08-12 context correction still stands: token bounding is not a
-conversation boundary. Bounded context combines a whole-thread prior summary with
-recent messages and must not be presented as the fix for stale context. Episode
-boundaries are code-owned defaults with no flag behind them —
-`CHANNEL_EPISODE_POLICY` in
-`apps/gateway/src/message-handlers/resolve-inbound-episode.ts`, which carries the
-per-channel rule and the reason each absent channel never rolls.
-
-Budget telemetry remains: `[agent:context] budget` and `[Worker] AI input budget`
-carry counts and character totals only, never prompt text.
-
-### CSP report-only observation and enforcement (P8-03)
-
-The dashboard policy is intentionally report-only while browser compatibility is
-measured. Both `report-uri` and the Reporting API endpoint target
-`POST /api/security/csp-report`. The collector accepts no authenticated business
-action, caps requests at 16 KiB, and logs only normalized directives, status, and
-URL origins under `[CSP] Browser policy violation`; it discards paths, queries,
-fragments, code samples, and raw payloads.
-
-1. Deploy the collector without changing the
-   `Content-Security-Policy-Report-Only` header to enforcement. Confirm a
-   production dashboard response includes `report-uri
-   /api/security/csp-report`, `report-to csp-endpoint`, and the matching
-   `Reporting-Endpoints` header. Since 2026-07-30 the policy is built
-   **per request** by Clerk's middleware CSP option in
-   `apps/dashboard/src/proxy.ts` (it carries a fresh nonce), not by a static
-   `next.config.js` header — so check a real response, and expect the nonce and
-   `Reporting-Endpoints` to differ between requests.
-2. Submit one synthetic `application/csp-report` violation with test origins and
-   confirm the log drain contains only the sanitized origin/directive fields.
-   Confirm malformed and oversized requests do not create log entries.
-3. Observe normal authenticated login/signup, dashboard, analytics, Sentry,
-   OAuth, Clerk challenge, and supported browser traffic. Group violations by
-   effective directive and blocked origin. Add only a narrowly justified source;
-   never use captured customer URLs or script samples for diagnosis because the
-   collector deliberately does not retain them.
-4. ~~Remove production `unsafe-eval` and replace required inline execution with
-   per-request nonces.~~ **Done 2026-07-30**, ahead of the observation window.
-   `unsafe-eval` is dev-only, `http:`/`https:` are gone from `script-src`, and
-   every script carries a per-request nonce under `'strict-dynamic'`. The
-   surviving `'unsafe-inline'` is Clerk's intentional CSP2 fallback, which
-   `'strict-dynamic'` makes CSP3 browsers ignore — do not remove it. Still
-   exercise the full authenticated Playwright matrix in a production-like build
-   before enabling an enforcement canary.
-5. **Gate — resolve before any enforcement canary.** Clerk's own
-   `clerk.browser.js` `<script>` tag is server-rendered **without** a nonce, so
-   `'strict-dynamic'` blocks it the moment the header is enforced, breaking
-   authentication for every user. Already ruled out: the nonce is minted and
-   forwarded (`x-nonce` on request and response);
-   `buildClerkJSScriptAttributes` applies a nonce when given one (`@clerk/shared`,
-   `loadClerkJsScript`); and a server-component `providers.tsx` with
-   `dynamic` on `ClerkProvider` does not fix it. Expect this to appear in the
-   report-only telemetry as a `script-src` violation against the Clerk frontend
-   API origin — that is the policy working, not a collector fault.
-6. Canary `Content-Security-Policy` on limited production traffic and verify an
-   injected script fixture is blocked while supported flows remain clean. Roll
-   back by restoring the report-only header; keep the collector enabled so the
-   violation evidence remains available.
-
-### BullMQ Failed Jobs
-
-Retry-exhausted BullMQ jobs land in the queue's `failed` set after all configured attempts are used. A failed BullMQ row is evidence to triage, not proof that the underlying business operation failed. Always compare the job with PostgreSQL and provider truth before replaying or removing it.
-
-The launch queues most likely to need inspection are:
-
-- `inbound-messages` for inbound email, Shopify order events, and deferred Instagram DM jobs.
-- `ai-summary` for summary, plan precompute, auto-ack, and notification work.
-- `outbound-email` for a message whose durable send row owns delivery truth.
-- `gmail-sync` for Gmail history synchronization and stale-history recovery.
-- `gmail-watch-maintenance` for 12-hour catch-up admission, daily watch renewal,
-  and inbound health monitoring.
-- `order-review` for the flag-only order risk reviewer.
-- `operator-event` for durable Telegram and iMessage operator turns.
-
-Inspect failed jobs from a shell with production `REDIS_URL` loaded. This command intentionally prints only identifiers and failure metadata; do not dump arbitrary `job.data`, which can contain message content.
+Inspect with production `REDIS_URL` loaded (e.g. via `railway run`); it prints counts and identifiers
+only — never dump raw `job.data`, which can hold message content. The script calls `loadGatewayEnv`,
+which lets a local `apps/gateway/.env` override injected values unless `NODE_ENV=production`:
 
 ```bash
 cd apps/gateway
-QUEUE_NAME='inbound-messages' npx tsx -e "import { Queue } from 'bullmq'; import { createGatewayRedisClient } from './src/clients/redis-client.ts'; const allowed = new Set(['inbound-messages','ai-summary','outbound-email','gmail-sync','gmail-watch-maintenance','order-review','operator-event']); const name = process.env.QUEUE_NAME ?? ''; if (!allowed.has(name)) throw new Error('Unsupported QUEUE_NAME'); const conn = createGatewayRedisClient(); const q = new Queue(name, { connection: conn }); const jobs = await q.getJobs(['failed'], 0, 20, false); const keys = ['organizationId','threadId','messageId','integrationId','orderId','operatorEventId','sourceMessageId','platform','traceId']; for (const job of jobs) { const data = Object.fromEntries(keys.flatMap((key) => job.data?.[key] === undefined ? [] : [[key, job.data[key]]])); console.log(JSON.stringify({ id: job.id, name: job.name, failedReason: job.failedReason, attemptsMade: job.attemptsMade, timestamp: job.timestamp, processedOn: job.processedOn, finishedOn: job.finishedOn, data }, null, 2)); } await q.close(); await conn.quit();"
+NODE_ENV=production npx tsx src/scripts/inspect-failed-queue-jobs.ts inbound-messages
 ```
 
-Use the following recovery decision matrix. If the evidence does not fit the stated safe condition, escalate to the owning engineer instead of replaying.
+If the evidence does not fit the safe condition, escalate instead of replaying:
 
-| Queue | Durable/provider truth to inspect | Replay rule |
+| Queue | Truth to inspect | Replay rule |
 | --- | --- | --- |
-| `inbound-messages` | Provider message/webhook identity, persisted `Message`/order event, and downstream summary job | Replay the original job only after confirming its stable provider identity is present and the ingestion path deduplicates that exact identity. Do not reconstruct a new job with a new ID. |
-| `ai-summary` | `sourceMessageId`, latest customer message, cached-plan identity, and any `PlanExecution` | Replay only when `sourceMessageId` is still the latest customer request. A stale job should be left superseded. Auto-execution must be behind the durable execution ledger; legacy jobs without stable source identity are not replayable. |
-| `gmail-sync` | Integration history cursor, Gmail message ID, and stable `gmail-inbound-<integration>-<message>` jobs | Replay the original sync after credentials/provider health recover. The checkpoint is monotonic and individual inbound jobs use stable IDs. |
-| `gmail-watch-maintenance` | Integration watch expiration/status, scheduled catch-up admission, and current Pub/Sub configuration | Prefer letting the 12-hour repeat job run after the root cause is fixed. Run one manual maintenance invocation only for an expired/near-expiry watch or an overdue catch-up; do not create a second repeat schedule. |
-| `order-review` | Organization/order identity and existing `AgentAction` audit rows | Safe to replay one original job after the model/provider issue is fixed. The current reviewer is flag/log-only, but duplicate audit observations and model cost are possible. |
-| `outbound-email` | `Message.sendStatus`, `sendAttemptedAt`, `providerMessageId`, stable RFC `Message-ID`, and provider activity | **Never use generic BullMQ replay.** Follow the outbound-email recovery procedure above. Retry only a known pre-provider `failed` row through the authorized application path; `processing`/`unknown` after provider attempt requires provider reconciliation and positive no-send evidence. |
-| `operator-event` | `OperatorEvent.status`, claim timestamps, `replyText`, `replyDeliveredAt`, and channel-provider activity | **Never replay a claimed or terminal turn.** A `pending` event can be re-enqueued with its same event ID after infrastructure recovery. Let the sweep reconcile stale claims to `unknown`; it may re-send a committed reply but never re-run the turn. |
+| `inbound-messages` | Provider message/webhook identity, persisted `Message`/order event, downstream summary job | Replay the original job only once its stable provider identity is present and ingestion dedupes it. Never reconstruct a job with a new ID. |
+| `ai-summary` | `sourceMessageId`, latest customer message, cached-plan identity, any `PlanExecution` | Only while `sourceMessageId` is still the latest customer request; leave stale jobs superseded. No stable source identity = not replayable. |
+| `gmail-sync` | History cursor, Gmail message ID, stable `gmail-inbound-<integration>-<message>` jobs | Replay after credentials/provider recover; the checkpoint is monotonic and inbound jobs use stable IDs. |
+| `gmail-watch-maintenance` | Watch expiration/status, catch-up admission, Pub/Sub config | Prefer the next 12-hour run after the fix; one manual run only for an expired/near-expiry watch or overdue catch-up. Never create a second repeat schedule. |
+| `order-review` | Organization/order identity, existing `AgentAction` rows | One original job after the model/provider fix; duplicate audit observations and model cost are possible. |
+| `outbound-email` | `Message.sendStatus`, `sendAttemptedAt`, `providerMessageId`, RFC `Message-ID`, provider activity | **Never generic replay** — [outbound-email recovery](#failed-or-unknown-outbound-email-recovery). |
+| `operator-event` | `OperatorEvent.status`, claim timestamps, `replyText`, `replyDeliveredAt`, provider activity | **Never replay a claimed or terminal turn.** A `pending` event may be re-enqueued with its same ID; the sweep reconciles stale claims to `unknown` and may resend a committed reply but never reruns the turn. |
+| `agent-task`, `integration-disconnect` | The durable task / `IntegrationDisconnect` row | No generic replay; their sweeps own retry. Escalate. |
 
-Before any permitted replay:
-
-- Check `failedReason`, `attemptsMade`, `traceId`, tenant identifiers, and provider response category in Railway logs.
-- Confirm Redis, PostgreSQL, and the relevant provider are healthy and the code/config root cause is fixed.
-- Record the database/provider evidence that proves the operation is safe to run again.
-- Replay one job first and watch authenticated `/health/queues`, the durable row, and provider activity before a batch.
-
-For a queue whose matrix entry permits BullMQ replay, retry the existing failed job without changing its identity:
+Before any permitted replay: check `failedReason`, `attemptsMade`, `traceId`, tenant identifiers
+and provider response in Railway logs; confirm Redis, Postgres and the provider are healthy and the
+root cause is fixed; record the evidence it is safe to rerun; replay **one** job and watch
+`/health/queues`, the durable row and provider activity before any batch. Retry without changing the
+job's identity (production `REDIS_URL` in the shell; this does not read `apps/gateway/.env`):
 
 ```bash
 cd apps/gateway
-QUEUE_NAME='gmail-sync' JOB_ID='the-failed-job-id' npx tsx -e "import { Queue } from 'bullmq'; import { createGatewayRedisClient } from './src/clients/redis-client.ts'; const replayable = new Set(['inbound-messages','ai-summary','gmail-sync','gmail-watch-maintenance','order-review']); const name = process.env.QUEUE_NAME ?? ''; const id = process.env.JOB_ID ?? ''; if (!replayable.has(name) || !id) throw new Error('QUEUE_NAME is not generically replayable or JOB_ID is missing'); const conn = createGatewayRedisClient(); const q = new Queue(name, { connection: conn }); const job = await q.getJob(id); if (!job) throw new Error('Job not found'); if (await job.getState() !== 'failed') throw new Error('Job is not failed'); await job.retry('failed'); console.log('Retried job', job.id, 'on', name); await q.close(); await conn.quit();"
+QUEUE_NAME='gmail-sync' JOB_ID='<failed-job-id>' npx tsx -e "import { getGatewayBullMqQueue, closeGatewayBullMqQueues } from './src/clients/gateway-queues.ts'; import { closeGatewayRedisConnections } from './src/clients/redis-client.ts'; (async () => { const replayable = new Set(['inbound-messages','ai-summary','gmail-sync','gmail-watch-maintenance','order-review']); const name = process.env.QUEUE_NAME ?? ''; const id = process.env.JOB_ID ?? ''; if (!replayable.has(name) || !id) throw new Error('QUEUE_NAME is not generically replayable or JOB_ID is missing'); const q = getGatewayBullMqQueue(name); try { const job = await q.getJob(id); if (!job) throw new Error('Job not found'); if (await job.getState() !== 'failed') throw new Error('Job is not failed'); await job.retry('failed'); console.log('Retried job', job.id, 'on', name); } finally { await closeGatewayBullMqQueues(); await closeGatewayRedisConnections(); } })().catch((e) => { console.error(e); process.exit(1); });"
 ```
 
-Removing a stale failed BullMQ record is housekeeping, not recovery. Capture its sanitized evidence first, verify the durable operation is terminal or superseded, then remove only that exact job through the authenticated internal queue endpoint. The endpoint re-checks that the job is still `failed` and refuses to remove waiting, active, delayed, or completed work. Never delete the related PostgreSQL ledger/message/event row.
+Removing a stale failed record is housekeeping, not recovery: capture its sanitized evidence, verify
+the durable operation is terminal or superseded, then remove only that job with
+`NODE_ENV=production npx tsx src/scripts/remove-failed-queue-job.ts <queue> <jobId>` (from `apps/gateway`) or
+`POST https://<gateway>/internal/queue/remove-failed` (`x-internal-secret`, body
+`{"queue":"…","jobId":"…"}`). Both re-check the job is still `failed` and refuse waiting, active,
+delayed or completed work. Never delete the related ledger, message or event row.
 
-## Sign-Off Evidence
+## Email
 
-Do not mark the deploy track done until you have all of the following:
+### Independent Gmail and forwarding integrations
 
-- `npm run db:migrate:deploy` completed successfully against production
-- dashboard `/api/health` returned `200`
-- gateway `/health/deep` returned `200`
-- gateway `/health/queues` showed a healthy worker heartbeat
-- ops-alert log routing is configured and one controlled alert per guardrail category has routed correctly
-- `npm run verify:production` passed against the live URLs
-- Better Stack checks are passing for dashboard health and gateway deep health
-- Neon production PITR is enabled and the retention window is recorded
-- at least one real inbound message completed the full path:
-  webhook accepted -> queue job created -> worker processed -> dashboard thread visible -> plan generated -> outbound reply sent
+A workspace may hold one Gmail and one forwarded (Postmark) integration at once; connecting,
+reconnecting or deleting one must not touch the other. Only one of them may *receive*.
+`assertNoDualInboundDelivery` refuses a forwarding connect while the Gmail watch is receiving, and
+a Gmail reconnect while forwarding is active. It does **not** refuse a workspace's *first* Gmail
+connect: the new row has no `inboundStatus` at upsert, so the check passes, and
+`scheduleGmailWatchRegistration` then turns the watch on beside an active forwarding row. Disconnect
+forwarding before a first Gmail connect, and run the strict `audit:email-inbound-transport` after
+every connect. A Gmail row with `metadata.inboundMode: 'postmark'` is send-only
+OAuth with the watch disabled; otherwise the inbound transport follows `Integration.emailProvider`.
+Postmark forwarding stays a supported path for forward-only merchants, so nobody has to wait for
+Google restricted-scope verification before their first ticket.
 
-Reliability evidence to record before updating [`checklist.md`](checklist.md):
+- **Inbound.** Gmail receives Pub/Sub push, syncs history through `gmail-sync`, and enqueues the same
+  `process-email` jobs as Postmark. Maintenance runs every 12 hours (one stable catch-up per active
+  integration) and renews healthy watches daily. An expired history checkpoint triggers a paginated
+  seven-day inbox recovery capped at 2,000 messages; a larger result stays degraded and alerts rather
+  than silently advancing. Postmark accepts only the generated organization recipient from
+  `OriginalRecipient` with an active Postmark integration; the visible `To` header is never a tenancy key.
+  Every transport enqueues through `enqueueInboundEmail` (`apps/gateway/src/inbound/enqueue-inbound-email.ts`,
+  enforced in `verify:pr` by `scripts/check-inbound-email-enqueue-surface.mjs`). The dedupe key is the
+  org-scoped `externalMessageId`: the RFC `Message-ID`; a Gmail message without one falls back to
+  `gmail:<id>`. Duplicates across the two rails are prevented by the one-receiver rule, not by IDs matching.
+- **Outbound.** `Integration.emailProvider` is authoritative. Replies and auto-acks use
+  `Thread.replyIntegrationId` from the newest distinct inbound email, falling back to the workspace
+  default if it was deleted; proactive email always uses `Organization.defaultEmailIntegrationId`. The
+  resolved integration is snapshotted on the message and job. `From` is `Integration.fromEmail`
+  (fallback `externalAccountId`); the OAuth account email is used for `replyTo` and token refresh.
+- **Missing default.** One provider connected: it self-repairs. Both connected: a configuration error
+  to fix from Integrations — never pick an unordered row.
 
-- Ops alert `queue_health`: log timestamp, routed owner, validation time
-- Ops alert `webhook_signature`: log timestamp, routed owner, validation time
-- Ops alert `provider_send`: log timestamp, routed owner, validation time
-- Ops alert `agent_failure`: log timestamp, routed owner, validation time
-- Ops alert `gmail_inbound`: log timestamp, routed owner, validation time
-- Better Stack dashboard monitor: monitor id, monitor URL, escalation policy or owner, required keyword, first passing check time
-- Better Stack gateway deep monitor: monitor id, monitor URL, escalation policy or owner, required keyword, first passing check time
-- Neon PITR: recorded 2026-07-31 — branch `production`, enabled, 7 days; restore tested 2026-08-01, counts matched and tokens decrypted (see "Neon PITR")
+### Outbound email delivery mode
+
+`OUTBOUND_EMAIL_ASYNC=true` (exactly `true`) on the dashboard selects the async path: the outbound
+`Message` is created first, enqueued with its ID as the stable job ID, and claimed once by the
+gateway worker. Unset/`false` keeps the synchronous path, the rollback rail.
+`npm run audit:outbound-email-mode` reports only the env it runs in (local env files fill anything
+the shell lacks) and also counts `1`/`yes` as on, so confirm the value set on Vercel Production instead.
+
+The flag is global: it moves Postmark and Gmail sends together, so roll out by *verifying* one
+provider at a time, not by enabling one. Record the baseline (every blocker list empty) and enable.
+Then send one ordinary reply through Postmark: the UI moves `pending → processing → sent`, exactly
+one message arrives, and a provider message ID is recorded. Require fresh traffic with
+`--require-provider=postmark`, then do the same for Gmail:
+
+```bash
+railway run --service shopkeeper --environment production -- \
+  npm run audit:outbound-email -- --hours=24 --strict
+railway run --service shopkeeper --environment production -- \
+  npm run audit:outbound-email -- --hours=1 --strict --require-provider=postmark   # then gmail
+```
+
+Review logs for ownership mismatches, lost claims, provider ambiguity, sweep alerts or permanently
+failed jobs. For Gmail, the self-addressed canary proves queue/provider behavior without the dashboard
+flag — one labeled message to the account's own plus-address, staged ticket closed, nothing sensitive printed:
+
+```bash
+railway run --service shopkeeper --environment production -- \
+  env NODE_ENV=production GATEWAY_URL='https://<gateway>' \
+  npm run canary:outbound-gmail -w apps/gateway -- \
+    --integration-id='<gmail-integration-uuid>' \
+    --acknowledge-self-email \
+    --execute
+```
+
+Require `sendStatus=sent`, `hasProviderMessageId=true`, `deduplicated=true`, then the strict
+`--require-provider=gmail` audit. Attachment modes (mutually exclusive — opposite assertions):
+`--attach` / `--attach-file=<path>` sends a real file (also require `attachment: "sent"` and open it
+in the mailbox; Gmail and Postmark build attachments differently, so one passing proves nothing about
+the other); `--attach-missing` stages a never-written ref and requires `sendStatus=failed`,
+`providerWasAttempted=false` and a non-empty `sendError` — **`unknown` is the regression it catches**,
+and `sent` is worse (the reply went out without the file).
+
+Rollback: `OUTBOUND_EMAIL_ASYNC=false` and redeploy the dashboard. Leave pending, processing, failed
+and unknown rows as recovery evidence; never delete or blindly enqueue them.
+
+### Failed or unknown outbound-email recovery
+
+A `failed` row is retryable only when the failure is known to precede provider submission. An
+`unknown` row may already have been accepted and is never retried until provider activity proves no delivery.
+
+1. Run `railway run --service shopkeeper --environment production -- npm run audit:outbound-email -- --hours=24 --strict`
+   and take message, organization, thread, integration, provider, claim/attempt times, status and
+   error (bodies, addresses and raw provider IDs are omitted).
+2. Search Gmail/Postmark activity by the stored provider ID and the RFC `Message-ID`
+   `<message-{messageId}@{INBOUND_EMAIL_DOMAIN}>`; check the recipient mailbox if inconclusive.
+3. No submission proven → leave/move the row to `failed` and let an authorized merchant retry once.
+   Delivery proven → record only the missing delivery identity/state; never send again. Ambiguous →
+   keep `unknown`, record the incident, escalate.
+4. `outbound-send-sweep` turns a stale unattempted claim into `failed` and a stale claim with
+   `sendAttemptedAt` into `unknown`. Check sweep/worker health before any manual state change.
+
+### Gmail native inbound
+
+**One inbound transport per mailbox.** Gmail OAuth workspaces receive via Gmail sync only; Postmark
+forwarding is for forward-only workspaces. Never run both on the same INBOX or replay one message
+through both rails.
+
+Roll back per integration; there is no paused lifecycle state. Either:
+
+1. set that Gmail row's `metadata.inboundMode` to `"postmark"` in the database (send-only: Gmail
+   sync and watch maintenance skip it, but it can still send), then connect forwarding. A later
+   Gmail reconnect strips the key and is refused while forwarding is active; or
+2. disconnect Gmail and connect forwarding.
+
+Either way the merchant must forward to `<organization UUID>@<INBOUND_EMAIL_DOMAIN>`.
+`EMAIL_INBOUND_MODE=postmark` is not a rollback: it stops Gmail sync for every workspace, and a
+Gmail-only workspace then receives nothing. `GMAIL_NATIVE_INBOUND` and `EMAIL_INBOUND_MODE=hybrid`
+are retired (`verify:production:env` warns if the former is still set). Run the strict audit, with
+production env, after any email integration change:
+
+```bash
+railway run --service shopkeeper --environment production -- \
+  npm run audit:email-inbound-transport
+railway run --service shopkeeper --environment production -- \
+  npm run audit:email-inbound-transport -- --strict   # fails when dual-delivery risk > 0
+```
+
+New Gmail connects register a watch automatically when inbox scopes are granted. Until restricted-scope
+verification passes only Google OAuth test users can connect —
+[google-gmail-verification-packet.md](google-gmail-verification-packet.md).
+
+**Pub/Sub provisioning.** Authenticate `gcloud` as an admin of the project that owns the Gmail OAuth
+client (Pub/Sub Admin plus service-account IAM, including `iam.serviceAccounts.actAs` on the push
+account), then run the idempotent setup; it creates the topic, Gmail publisher grant, push service
+account with OIDC permission, and the authenticated push subscription. Copy the three printed
+`GMAIL_PUBSUB_*` values into Vercel and Railway.
+
+```bash
+GCP_PROJECT_ID='shopkeeper-prod' \
+GMAIL_PUBSUB_PUSH_ENDPOINT='https://<gateway>/webhooks/gmail/push' \
+GMAIL_PUBSUB_AUDIENCE='https://<gateway>/webhooks/gmail/push' \
+npm run configure:gmail-pubsub
+```
+
+**Health after a Gmail-path deploy**, once a full 12-hour maintenance interval has passed:
+`gmail-watch-maintenance` completed; one `source=maintenance` job per active integration completed on
+`gmail-sync` (job ID `gmail-sync-maintenance-<integration>-<12-hour-bucket>`); `lastSyncedAt`
+advanced even for idle mailboxes; a watch with `watchLastRenewedAt` ≥ 24 hours old renewed without
+replacing its checkpoint; no integration has `lastError=sync_recovery_truncated`.
+
+**Truncated recovery.** Never force a `sync_recovery_truncated` integration active or replace its
+checkpoint. Inspect the mailbox window with an operator-controlled broader recovery (inspect-only by
+default), then execute with a stable incident ID so repeats deduplicate:
+
+```bash
+railway run --service shopkeeper --environment production -- \
+  env NODE_ENV=production npm run recover:gmail-history -- \
+  --integration-id='<integration-uuid>' \
+  --max-messages=10000 \
+  --query='newer_than:30d in:inbox'
+
+railway run --service shopkeeper --environment production -- \
+  env NODE_ENV=production npm run recover:gmail-history -- \
+  --integration-id='<integration-uuid>' \
+  --max-messages=10000 \
+  --query='newer_than:30d in:inbox' \
+  --recovery-id='<incident-id>' \
+  --execute
+```
+
+The worker accepts it only while the integration is degraded for exactly `sync_recovery_truncated`,
+caps it at 50,000 messages, and keeps the same checkpoint/idempotency rules.
+
+### Gmail support address (send-as alias)
+
+Integrations → Gmail → *Address customers email* sets `Integration.fromEmail`. Replies then send as
+that address, and Gmail sync ingests only mail addressed to it — so an unverified alias breaks
+outbound and drops inbound for that workspace. Prove it in Gmail first:
+
+1. With Gmail admin access and an independent external mailbox, configure delivery for the address,
+   add and verify it as a Gmail **Send mail as** address, and prove inbound and alias sending inside Gmail.
+2. Only then save it in Shopkeeper.
+3. From the external mailbox send one plain-text and one HTML-with-attachment message, and reply from
+   the dashboard. Require one ticket, the attachment persisted, the alias as sender, Gmail threading
+   on one continuing thread, and no duplicate jobs.
+4. If anything fails, restore the original address immediately. Read logs for identifiers only.
+
+### Postmark and DNS
+
+| Item | Value |
+| --- | --- |
+| Postmark server | `Shopkeeper-production` (ID 20167846), Platform plan — Basic has no inbound |
+| Inbound domain | `inbound.useshopkeeper.com`, MX `inbound.postmarkapp.com` priority 10; merchants forward to `<organization UUID>@<INBOUND_EMAIL_DOMAIN>` |
+| Inbound webhook | `POST https://<gateway>/webhooks/email/inbound`, basic auth `POSTMARK_INBOUND_USERNAME` / `POSTMARK_INBOUND_PASSWORD` |
+| Bounce webhook (outbound stream) | `POST https://<gateway>/webhooks/email/bounce`, same basic auth, triggers Bounce and SpamComplaint only |
+| Apex mail | `hello@useshopkeeper.com` via ImprovMX (`mx1`/`mx2.improvmx.com`, SPF `include:spf.improvmx.com`), independent of the inbound subdomain |
+
+- Generate the basic-auth credentials as hex; base64's `/` and `+` break URL userinfo.
+- Verify the bounce webhook with `GET https://api.postmarkapp.com/webhooks` (server token); the
+  legacy `BounceHookUrl` on `GET /server` stays empty. Bounces attribute by Postmark `MessageID`, so
+  only mail sent through this server matches.
+- `useshopkeeper.com` needs no SPF/DKIM for outbound, because replies send as the merchant's own
+  address. Revisit only if Shopkeeper starts sending mail as itself.
+- **Forward-only merchant, before their first reply:** replies send as `fromEmail` (fallback
+  `externalAccountId`), so verify their sending domain (DKIM + Return-Path) or a sender signature on
+  the Postmark server, or Postmark rejects or junk-folders them. Gmail-connected merchants send
+  through the Gmail API and need nothing.
+- **Credential canary.** Before restoring a forwarding integration, prove the dashboard's
+  `POSTMARK_API_KEY` sends from `hello@useshopkeeper.com` to a recipient *off* `useshopkeeper.com`
+  (a same-domain recipient proves nothing):
+
+  ```bash
+  curl -sS https://api.postmarkapp.com/email \
+    -H "X-Postmark-Server-Token: $POSTMARK_API_KEY" -H 'Content-Type: application/json' \
+    -d '{"From":"hello@useshopkeeper.com","To":"<off-domain address>","Subject":"Postmark canary","TextBody":"canary"}'
+  ```
+
+  `"ErrorCode":0` → recreate the forwarding integration from the dashboard (refused while the
+  workspace's Gmail row is receiving — see the one-receiver rule above) and send one reply with an
+  attachment. Failure → keep Gmail as the default and reconnect
+  Postmark through the dashboard; never write a live-looking row that cannot send.
+
+## Channel Smoke Tests and Recovery
+
+Health checks are necessary, not sufficient: run at least one real flow per channel in scope.
+
+**Email.** Send a real email to the production inbound address (or a connected Gmail inbox); confirm
+the inbound job is processed, a thread appears with an AI summary and cached plan, and an approved
+response sends.
+
+**Shopify.** Complete a live OAuth connect and confirm the integration row. The order, uninstall and
+compliance subscriptions are app-level: they are the `uri`s in `shopify.app.toml` and ship with the
+active app version (`npx shopify app versions list --json`). `npm run audit:shopify-webhooks` does
+not confirm them. It inventories per-shop leftovers, and `matching=0` is the clean result. Never run
+`restore` to "fix" that: a per-shop duplicate delivers each event again under its own
+`X-Shopify-Webhook-Id`, which dedupe keys on. Trigger one supported order event with customer
+identity attached, and confirm a message whose `external_message_id` is `shopify:<shop>:<webhookId>`
+([shopify-app-config-reference.md](shopify-app-config-reference.md)) and, where applicable, its
+appearance in the dashboard.
+
+**Clerk lifecycle.** Point a Clerk webhook at `https://<dashboard>/api/webhooks/clerk`, subscribed to
+`organization.deleted`, `user.deleted` and `organizationMembership.deleted`; store its secret as
+`CLERK_WEBHOOK_SECRET`; confirm a `200` from Clerk's testing tab or a staging org deletion. An org
+deletion starts the workspace-deletion ledger (finished by the gateway sweep); a user deletion removes
+that user's `org_members`; a membership deletion removes only that org's member row. Detail:
+[data-deletion.md](data-deletion.md).
+
+### Live testing on the dev store
+
+- Use a fresh Instagram DM for each run: Instagram refuses business replies more than 24 hours
+  after the customer's last message.
+- Read orders back with `/api/orders?limit=50` from page JS; the route caps `limit` at 50.
+- Pick a clean paid order. A cancelled order that still reads `paid` with no refund (dev-store #1032)
+  makes the planner escalate any refund on it.
+- In the ticket composer, start an `@shopkeeper` instruction with the action verb (`refund`,
+  `cancel`, `send`, …) and avoid ask words (`draft`, `write`, `explain`, `should I`, `why`), or
+  `shouldUsePrivateComposerAsk` routes it to read-only Q&A.
+
+### Instagram via SocialAPI
+
+SocialAPI carries `ig_dm` for new connections. Contract, launch envelope and rollback rules:
+[socialapi-transport-plan.md](../socialapi-transport-plan.md). SocialAPI keys are infrastructure
+secrets — never on `Integration`, in logs, jobs or client responses.
+
+| Where | Env |
+| --- | --- |
+| Dashboard (Vercel) | `SOCIALAPI_API_KEY` (connect and replies — without it outbound refuses), `SOCIALAPI_ENABLED`, `SOCIALAPI_BRAND_ASSIGNMENTS`, `SOCIALAPI_MAX_ACTIVE_ORGS` (1–8, default 8); `SOCIALAPI_BASE_URL` is ignored in production |
+| Gateway (Railway) | `SOCIALAPI_WEBHOOK_SECRET`; `SOCIALAPI_API_KEY` for display names only (ingest works without it) |
+
+**Registering the webhook.** SocialAPI verifies a new endpoint with an unsigned `webhook.test`
+before it reveals the secret, and the gateway accepts that ping only while
+`SOCIALAPI_WEBHOOK_SECRET` is unset (real deliveries meanwhile get `500`). So: leave or clear the
+secret, register `https://<gateway>/webhooks/socialapi`, set the returned secret on both gateway
+services and redeploy. From then on every delivery, test deliveries included, must pass the V2
+signature (`x-socialapi-signature-v2` over `<timestamp>.<raw body>`); only `dm.received` creates work.
+
+**Admitting a workspace.** Connect is closed until all of this is in place:
+
+1. Provision a brand for the workspace in SocialAPI (an operator step; callbacks never create brands).
+2. On Vercel set `SOCIALAPI_ENABLED=true`, `SOCIALAPI_API_KEY`, and add `<clerk_org_id>:<brand_id>`
+   to the comma-separated `SOCIALAPI_BRAND_ASSIGNMENTS` — one brand per workspace. A map larger than
+   `SOCIALAPI_MAX_ACTIVE_ORGS` closes connect for **everyone** (`[SocialAPI] SOCIALAPI_BRAND_ASSIGNMENTS
+   exceeds the assigned-slot cap — connect is closed`); a malformed entry or a workspace given two
+   brands throws. Redeploy the dashboard.
+3. The merchant uses the normal Connect Instagram action; `resolveInstagramConnectTransport` sends an
+   assigned workspace through SocialAPI. Outbound follows the row's `metadata.instagram.transport`,
+   so nothing else needs flipping.
+4. Verify the next DM to that account becomes a ticket in that workspace (`[Webhook] SocialAPI DM
+   queued`). `[Webhook] SocialAPI account maps to no active SocialAPI integration — ignoring` means no
+   active row carries that account in `providerAccountId`.
+
+Rolling back admission (remove the assignment, or `SOCIALAPI_ENABLED=false`) stops **new**
+connects only; ingress and replies for connected rows keep working.
+
+**Operator commands.** Until disconnect and recovery are in the product,
+`npm run spike:socialapi -- <inspect|connect|exchange|send|disconnect|pin> [--execute]` is the tool.
+It reads the git-ignored `.env.socialapi.local` (`SOCIALAPI_API_KEY`, `SOCIALAPI_BRAND_ID`, optional
+`SOCIALAPI_ACCOUNT_ID`, `SOCIALAPI_CONVERSATION_ID`) and prints fingerprints, never raw IDs or text.
+Probe flags: transport plan, *Controlled-account probe*.
+
+- `inspect` — read-only: the brand's accounts (status, reconnect required) and webhook endpoints.
+- `pin --execute` — with `SHOPKEEPER_ORGANIZATION_ID` (the DB organization) and database env, plus
+  `SOCIALAPI_ACCOUNT_ID` or `--use-sole-account`: creates or re-points that organization's controlled
+  `ig_dm` row, active, with the account in `providerAccountId`. Ingress resolves webhook
+  `data.account_id` through that column, active rows only.
+- `disconnect --execute --confirm-controlled-account` — deletes the remote account
+  `SOCIALAPI_ACCOUNT_ID` at SocialAPI. Dashboard disconnect does not revoke it yet.
+
+### Instagram via direct Meta
+
+Direct Meta stays implemented but closed to new connections (Standard Access only: a merchant would
+hear nothing from customers who never messaged the app). To exercise it for a test workspace, first
+require a clean ownership/auth-model audit:
+
+```bash
+railway run --service shopkeeper --environment production -- npm run audit:instagram-rollout -- --strict
+```
+
+Then set `INSTAGRAM_INTEGRATION_ENABLED=true` and add the workspace's Clerk org ID to
+`INSTAGRAM_BETA_ORG_IDS`; use a workspace that is not in `SOCIALAPI_BRAND_ASSIGNMENTS` and holds no
+Instagram row (`resolveInstagramConnectTransport` prefers SocialAPI, and
+`integrations_instagram_organization_unique` allows one `ig_dm` row per organization); complete OAuth and confirm `/subscribed_apps` contains `messages`; confirm
+the `GET /webhooks/meta` handshake; send two quick DMs (one with an attachment) and confirm each
+appears once with provider timestamps and the private attachment; approve a reply and confirm its
+provider message ID; reconnect and confirm routing holds; disconnect and confirm later DMs create no tickets.
+
+### Telegram operator channel
+
+Register the bot webhook, and re-register after any change to `TELEGRAM_BOT_TOKEN`,
+`TELEGRAM_WEBHOOK_SECRET` (registered with Telegram as `secret_token`; a mismatch rejects every
+update) or the gateway host:
+
+```bash
+cd apps/gateway && NODE_ENV=production npx tsx src/scripts/set-telegram-webhook.ts https://<gateway>/webhooks/telegram
+```
+
+Smoke: from a bound member's chat send a message and confirm the operator turn runs; confirm a plan
+notification reaches bound members for a new ticket; reply `yes` / `no` / free-form and confirm the
+agent acts or skips. Each member may bind at most 3 Telegram devices.
+
+**Renaming or replacing the bot.** Dashboard `TELEGRAM_BOT_USERNAME` (redeploy after changing;
+leave it unset in Production, see [Dashboard](#dashboard)) builds the `t.me/<bot>?start=<token>` connect link. First check
+whether BotFather can change the existing bot's @username in place — the token and every
+`OrgMemberTelegramChat` binding survive that. A `/newbot` replacement cannot message anyone who has
+not started it, so every binding goes silent: put its `TELEGRAM_BOT_TOKEN` on Railway and keep the
+old bot alive until every merchant re-links. Either way, re-register the webhook (it is bound to the
+token and the host), then connect from the dashboard, send `help` and confirm a reply. Repeat for the
+staging bot.
+
+### Durable operator events
+
+Every Telegram and iMessage operator message is persisted and enqueued before the webhook is
+acknowledged; the `operator-event` worker claims it once and runs the turn. There is no synchronous
+fallback. Never delete or blindly re-enqueue `OperatorEvent` rows.
+
+```bash
+railway run --service shopkeeper --environment production -- \
+  npm run audit:operator-events -- --hours=24 --strict
+railway run --service shopkeeper --environment production -- \
+  npm run audit:operator-events -- --hours=24 --strict --require-channel=telegram
+railway run --service shopkeeper --environment production -- \
+  npm run audit:operator-events -- --hours=24 --strict --require-channel=imessage
+```
+
+Expect committed events with delivered replies and no failed, unknown, stale, undelivered or
+repeated-claim records. **Failed or unknown events** may have partially acted; neither is safe to replay:
+
+1. Take event ID, organization, channel, claim/process times, error and correlated action summaries
+   from the strict audit (it omits bodies, replies, chat IDs and provider message IDs).
+2. Inspect `agent_actions` where `turn_id = <operator-event-id>`; for a keyword pending-plan decision,
+   also that org's plan executions and actions in the claim-time window.
+3. Establish provider truth (Shopify transaction/order state, outbound provider activity, dashboard
+   action timeline). Never infer "nothing happened" from a missing operator reply.
+4. No side effect → ask the merchant for a fresh instruction. Commit proven → send only the missing
+   confirmation or a compensating follow-up. Ambiguous → leave it terminal, record the incident,
+   escalate; never mutate it back to `pending`.
+5. `operator-event-sweep` (every 15 minutes) resends a committed event's stored confirmation but never
+   reruns the turn. If `last_error` says the reply may have reached the provider, the sweep skips it:
+   check Telegram/Photon activity and the device, and never resend without positive no-delivery
+   evidence. A committed-undelivered row stays a strict-audit blocker until reconciled.
+
+### iMessage operator channel
+
+One platform-wide Photon Spectrum line serves all orgs; merchants bind their iPhone by texting a
+connect code, and customers never use it.
+
+**Setup.** (1) Confirm or create a Spectrum project with an iMessage line (`photon login`,
+`photon projects show`, `photon spectrum lines list`, or the [Photon dashboard](https://app.photon.codes)).
+(2) In app.photon.codes → **Webhooks**, register `https://<gateway>/webhooks/photon` and copy its
+signing secret into `SPECTRUM_WEBHOOK_SECRET` on every gateway service. (3) Gateway:
+`SPECTRUM_PROJECT_ID`, `SPECTRUM_PROJECT_SECRET`, `SPECTRUM_WEBHOOK_SECRET`; dashboard:
+`IMESSAGE_LINE_HANDLE` matching the line. (4) `GATEWAY_RUNTIME_ROLE` must include `server` on the
+service receiving the webhook.
+
+```bash
+# Must not return 503 (= Spectrum creds missing); 400/401 are fine for an unsigned probe
+curl -sS -o /dev/null -w "%{http_code}\n" -X POST \
+  https://<gateway>/webhooks/photon -H "Content-Type: application/json" -d '{}'
+curl -sS https://<gateway>/health/deep | jq '.checks.imessage'   # {"configured": true}
+```
+
+A signed inbound logs `[Webhook] Photon delivery processed` with `status: 200`; Integrations shows
+iMessage Connect enabled when `IMESSAGE_LINE_HANDLE` is set.
+
+#### iMessage down triage
+
+When merchants report missing plan pushes, bind replies or digests:
+
+1. **Configured?** `/health/deep` `.checks.imessage.configured` must be `true`. A `503` on
+   `POST /webhooks/photon` with `[Webhook] Photon webhook received but iMessage is not configured`
+   means missing gateway creds.
+2. **Ingress.** The Photon webhook URL must be `https://<gateway>/webhooks/photon` and
+   `SPECTRUM_WEBHOOK_SECRET` its endpoint secret; a mismatch returns `401` and emits `category=webhook_signature`.
+3. **Rotation.** After rotating any `SPECTRUM_*` value, redeploy the gateway and re-run a bind smoke.
+4. **Stale `spaceId`.** Proactive sends use `OrgMemberImessageBinding.spaceId`, refreshed on each
+   inbound merchant message; if Photon re-provisioned the space, have the merchant text the line once.
+   Logs: `[Spectrum] iMessage send failed` / `[Spectrum] iMessage space load failed` with `spaceId`;
+   repeats emit `category=provider_send`, `provider=imessage`, `channel=operator_notify`.
+5. **Devices.** No iMessage device cap; unlink stale handles from Integrations after a phone change.
+6. **Dedupe.** Retries use per-channel Redis idempotency keys (1-hour TTL), so a partial fan-out
+   failure does not re-text channels that already got it (`[OperatorNotify] Duplicate delivery skipped`).
+   Failures log `[OperatorNotify] Send failed`; no bound members logs
+   `[Worker] No bound operator members — skipping plan notification`.
+7. **No delivery receipts.** Success means Spectrum `space.send()` resolved, not that it was read.
+8. **Bind path.** Search `[iMessage] Bind succeeded`, `Bind rejected`, `Bind failed`; unbound senders
+   should get connect instructions, never agent runs or tickets.
+9. **Photon stops forwarding to an active receiver.** Symptom: the merchant texts and gets no reply;
+   `.checks.imessage.configured` is `true`; there is no `OperatorEvent` row and no
+   `[Webhook] Photon delivery processed` line, yet Photon's authenticated catch-up API returns the
+   inbound message — the registration looks active and correct but forwards nothing. Fix:
+   (1) register a **new** receiver in app.photon.codes → Webhooks for
+   `https://<gateway>/webhooks/photon` (a distinguishing query string such as
+   `?receiver=production-<date>` is fine); (2) set its signing secret as `SPECTRUM_WEBHOOK_SECRET` on
+   both gateway services and redeploy both; (3) send a real iMessage and confirm an `OperatorEvent`,
+   its request and task, and a delivered reply; (4) only then delete the old receiver. Keep the
+   Photon project, phone binding and project secret. A message missed meanwhile may be read from the
+   catch-up API and delivered **once** with its original message id: events are unique on
+   `(channel, providerMessageId)` (`imessage:<id>`), so a repeat creates nothing.
+
+#### iMessage bind support
+
+Each handle (`senderId`) binds to **one member globally** (unique `org_member_imessage_bindings.sender_id`):
+texting a code from org B moves it there and org A stops getting notifications until someone re-binds.
+Codes are single-use with a 24-hour TTL (`ORG_MEMBER_BIND_TOKEN_TTL_SECONDS`), minted only by
+`POST /api/integrations/imessage/bind` (billing-write gated). Bind logs carry `senderId`, `spaceId`,
+`orgId` and `outcome` only — never the token or body.
+
+- **Wrong-org bind:** find the owner (Integrations → iMessage, or `org_member_imessage_bindings` by
+  `sender_id`); unlink from the current org, or mint a code from the intended org and text it.
+- **Lost operator access:** confirm iMessage is configured on `/health/deep` and
+  `IMESSAGE_LINE_HANDLE` matches the line; the merchant unlinks, mints a new code and texts it; if
+  inbound works but proactive sends fail, have them text the line once; escalate to engineering if
+  bind succeeds but sends still fail (`provider_send` alerts).
+
+## Product Analytics
+
+Both apps require an explicit `PRODUCT_ANALYTICS_ENABLED` in production. Ship new instrumentation
+with capture off (`PRODUCT_ANALYTICS_ENABLED=false`, `POSTHOG_PROJECT_TOKEN=<project-token>`,
+`POSTHOG_HOST=https://us.i.posthog.com`), using the environment-specific project's token. Analytics
+is server-only and organization-scoped: no browser PostHog key, autocapture, session replay, cookies
+or person profiles.
+
+Before enabling production capture: the privacy policy is deployed; every event was enabled and
+reviewed in staging; raw payloads hold no names, addresses, message content, prompts, provider
+identifiers, credentials or provider payloads; deterministic retries keep one unique event; the
+reports in [posthog-reports.md](posthog-reports.md) are saved (`npm run provision:posthog-reports`);
+someone owns analytics-delivery warnings for the first week. Afterwards, run one controlled workspace
+journey and check raw events and reports. Never backfill pre-deployment events.
+
+## Content Security Policy
+
+The dashboard CSP is **enforced**, built per request by Clerk's middleware option in
+`apps/dashboard/src/proxy.ts` (fresh nonce, `'strict-dynamic'`) with directives in
+`apps/dashboard/src/proxy/content-security-policy.ts` — check a real response, not a static header.
+
+- Violations post to `POST /api/security/csp-report` (16 KiB cap, no authenticated action), logged
+  as normalized directive, status and URL origins only under `[CSP] Browser policy violation`.
+- The surviving `'unsafe-inline'` is Clerk's CSP2 fallback, ignored by CSP3 browsers under
+  `'strict-dynamic'` — do not remove it. `unsafe-eval` is dev-only.
+- Every integration connect is a form POST that 303s to the provider's authorize page, and Chrome
+  checks each hop against `form-action`. A new provider or authorize host goes into
+  `providerAuthorizeOrigins`, with a real connect re-verified, or the OAuth popup dies on its spinner.
+- Emergency rollback is a code change: `reportOnly: true` in `proxy.ts`, redeploy, keep the collector on.

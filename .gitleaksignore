@@ -1,0 +1,4 @@
+# generic-api-key false positives on prose in docs/socialapi-transport-plan.md (reworded)
+# and on the first version of this file, which quoted that prose.
+6881e22e8fb6d5d198e5a538b909aee73f44d1e1:docs/socialapi-transport-plan.md:generic-api-key:168
+5ff177325ee730f139c71294b4f5957ec6ca845a:.gitleaksignore:generic-api-key:1
