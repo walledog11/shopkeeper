@@ -609,8 +609,13 @@ export async function executeCurrentCachedHomePlan(params: {
     validateExpectedIdentity({ ...current, plan: current.plan }, params.expectedIdentity);
   }
 
+  // A merchant approving without editing approves the bundle the card shows,
+  // reads included, which is what `readParkedProposalForThread` parks and the
+  // proposal hash binds. The verdict's executable subset never matches it.
   const requestedToolCalls = params.approvedToolCalls
-    ?? ("toolCalls" in verdict ? verdict.toolCalls : []);
+    ?? (params.executionIntent === "merchant_approved"
+      ? current.plan.rawToolCalls
+      : "toolCalls" in verdict ? verdict.toolCalls : []);
   validateApprovedToolCalls(current.plan, requestedToolCalls);
   validateCustomerFacingApprovalSet(verdict, requestedToolCalls);
   validateApprovedCommunication(current.plan, requestedToolCalls, thread);
