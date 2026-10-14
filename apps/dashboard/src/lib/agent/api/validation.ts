@@ -115,9 +115,7 @@ export function parseAgentQuickApproveBody(body: unknown) {
   const candidate = requireObject(body);
   return {
     threadId: requireNonEmptyString(candidate.threadId, "threadId"),
-    planId: candidate.planId == null
-      ? undefined
-      : requireNonEmptyString(candidate.planId, "planId"),
+    planId: requireNonEmptyString(candidate.planId, "planId"),
   };
 }
 

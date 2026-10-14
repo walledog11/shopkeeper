@@ -47,7 +47,7 @@ export const POST = withOrgRoute(
       settings,
       executionIntent: "merchant_approved",
       failureRoute: "/api/agent/quick-approve",
-      ...(planId ? { expectedIdentity: { planId } } : {}),
+      expectedIdentity: { planId },
       ...(approver ? { approver } : {}),
     });
     const instructionHash = executed.instruction ? hashInstructionForLog(executed.instruction) : null;
