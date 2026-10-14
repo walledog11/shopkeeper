@@ -43,11 +43,14 @@ npm ci
 cp apps/dashboard/.env.example apps/dashboard/.env.local   # fill in values
 cp apps/gateway/.env.example apps/gateway/.env             # fill in values
 npm run dev                          # builds packages, then runs both apps
-npm run dev:tunnel -w apps/gateway   # gateway with an ngrok tunnel for webhooks
 ```
 
-The dashboard runs on port 3000 and the gateway on 8080 (`GATEWAY_PORT` overrides it).
-Set `NGROK_DOMAIN` for a reserved tunnel domain.
+The dashboard runs on port 3000 and the gateway on 8080 (`PORT` in `apps/gateway/.env`).
+To receive provider webhooks locally, run the gateway with
+`npm run dev:tunnel -w apps/gateway` *instead of* the gateway half of `npm run dev` — it
+starts the same server and worker plus ngrok, on the same port. ngrok forwards to
+`GATEWAY_PORT` from the shell (default 8080), so set both if you change the port; set
+`NGROK_DOMAIN` for a reserved domain.
 
 Useful commands:
 
@@ -57,7 +60,7 @@ npm run lint
 npm run test:unit                 # no services needed
 npm run test:services:up          # local Postgres + Redis for integration tests
 npm run test:integration
-npm run verify:pr                 # what CI runs
+npm run verify:pr                 # CI's test and build stages
 npm run clean                     # remove build/test artifacts (--dry-run to preview)
 ```
 

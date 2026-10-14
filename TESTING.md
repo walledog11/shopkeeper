@@ -25,7 +25,7 @@ misleading check.
 | `npm run test:e2e:smoke` | Playwright smoke with `E2E_AUTH_BYPASS=true` | services |
 | `npm run test:e2e:browser` | Playwright with real dev Clerk credentials | services, Clerk |
 | `npm run test:coverage` | unit + integration under V8 coverage (reported, never enforced) | services |
-| `npm run verify:pr` | everything CI runs (`--stage=static\|unit\|coverage\|build\|e2e`) | services |
+| `npm run verify:pr` | CI's test and build stages (`--stage=static\|unit\|coverage\|build\|e2e`); gitleaks, the dependency audit, the eval preflight and the Clerk browser contract run only in CI | services |
 
 During a change, typecheck and run the targeted tests for what you touched. Leave
 `verify:pr` to CI unless something justifies a full local run.
@@ -37,7 +37,8 @@ rejects a file no suite owns:
   is integration.
 - `packages/agent`: `*.integration.test.ts` is integration; any other `*.test.ts` is
   unit.
-- Other packages: unit.
+- `packages/db`: integration only — every test is `*.integration.test.ts`.
+- Other packages (`analytics`, `email`, `integrations`, `shared`): unit.
 
 Unit tests must not need Postgres, Redis, Playwright, provider credentials or network.
 
@@ -45,9 +46,10 @@ Unit tests must not need Postgres, Redis, Playwright, provider credentials or ne
 
 - `npm run test:services:up` starts Postgres and Redis from `docker-compose.test.yml`;
   `test:integration` and `test:coverage` bootstrap the DB package and run migrations.
-- Vitest setup installs a fetch guard: localhost is allowed, real provider hosts are
-  blocked. Mock providers in-process (`vi.stubGlobal('fetch', …)`, SDK mocks, injected
-  dependencies). For a fixture host, use `allowTestNetworkHosts` from
+- In `apps/dashboard` and `apps/gateway`, Vitest setup installs a fetch guard: localhost
+  and the configured local service URLs are allowed, every other host is blocked.
+  Package tests run without it, so mock fetch there yourself (`vi.stubGlobal('fetch', …)`,
+  SDK mocks, injected dependencies). For a fixture host, use `allowTestNetworkHosts` from
   `scripts/test-network-guard.mjs`; don't add env flags to bypass the guard.
 - `test-setup.ts` defaults `E2E_TEST_RUN=true` because the rate limiter fails closed
   without Upstash; a wall of 429s means that flag got unset.
@@ -64,7 +66,9 @@ Unit tests must not need Postgres, Redis, Playwright, provider credentials or ne
 The live-model harness is `apps/dashboard/src/lib/agent/__evals__`: JSON fixtures, a
 committed `baseline.json`, and a judge. Eval test files are swept into integration runs
 but skip unless `EVAL_RUN=1` or `REQUIRE_MODEL_EVALS=1`, so ordinary runs never bill.
-Pull requests run only a free deterministic preflight.
+Pull requests run only a free deterministic preflight. A second paid suite, the order-ops
+eval (`apps/gateway/src/order-ops.eval.test.ts`, `npm run test:evals -w apps/gateway`),
+follows the same skip and ceiling rules.
 
 Every paid command refuses to start without both ceilings, `EVAL_MAX_USD` and
 `EVAL_MAX_MODEL_CALLS`; the call cap is the strict backstop.
@@ -73,7 +77,7 @@ Every paid command refuses to start without both ceilings, `EVAL_MAX_USD` and
 # one fixture, for diagnosis
 EVAL_MAX_USD=0.10 EVAL_MAX_MODEL_CALLS=20 EVAL_FIXTURE=refund-partial \
   npm run test:evals:fixture -w apps/dashboard
-# full suite (~84 fixtures); the refusal message prints the ceilings to pass
+# every fixture in fixtures/ (core and extended); the refusal message prints ceilings
 EVAL_CONFIRM=1 EVAL_MAX_USD=0.76 EVAL_MAX_MODEL_CALLS=149 npm run test:evals -w apps/dashboard
 # 3-repeat baseline comparison; test:evals:baseline:overwrite rewrites baseline.json
 EVAL_CONFIRM=1 EVAL_MAX_USD=2.58 EVAL_MAX_MODEL_CALLS=446 npm run test:evals:baseline -w apps/dashboard

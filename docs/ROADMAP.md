@@ -13,15 +13,25 @@ Last updated: 2026-10-13.
 
 1. **Safety bugs found during the docs consolidation.** Small, fix first:
    - `POST /api/agent/quick-approve` treats `planId` as optional
-     (`parseAgentQuickApproveBody`), so a request without one approves whichever plan
-     is current — possibly one the merchant never saw. Closes when a request without the
-     exact `planId` is refused and every caller sends it.
-   - `create_exchange`'s `replacement_price_higher` guard compares current catalog
-     prices (`packages/agent/src/shopify/exchanges.ts`), not what the customer paid.
-     Closes when it decides on the paid line price or Shopify's `returnCalculate`.
-   - Inbound attachment filtering is a denylist (`isBlockedAttachment`) that lets
-     `text/html` and `image/svg+xml` from untrusted email through. Closes with a MIME
-     allowlist.
+     (`parseAgentQuickApproveBody`). Without it `validateExpectedIdentity` checks nothing
+     and the route executes whatever plan is cached on the thread now — possibly one the
+     merchant never saw. Its callers (`quickApproveCachedPlan`, `useNeedsYouActions`) pass a `planId`
+     typed optional, and a route test pins the no-`planId` success.
+     Closes when a missing `planId` is refused, every caller sends the plan it rendered,
+     and that test flips.
+   - **The gateway may run without `NODE_ENV=production`** (it did at the 2026-09-08
+     release; check `railway variables`). That switches off the production boot checks in
+     `validateGatewayEnv`, lets `loadKey` fall back to a dev encryption key, lets
+     `hasValidPostmarkAuth` accept unauthenticated posts when its credentials are unset,
+     and makes rate limiting fail open. Setting it broke the build because `npm install`
+     then skips devDependencies. Closes when both Railway services run
+     `NODE_ENV=production` and deploy (likely `npm install --include=dev` in
+     `nixpacks.toml`).
+   - **Integration-test bootstrap can migrate production.** `getTestEnv`
+     (`scripts/with-test-env.mjs`) keeps an exported `DIRECT_DATABASE_URL`, and
+     `assertTestDatabase` checks only `DATABASE_URL`, so `test:integration` run inside
+     `railway run` applies pending migrations to production. Closes when the direct URL
+     is derived from the test URL (or asserted too).
 2. **Scripts and tooling.** Delete audit/canary scripts for finished migrations and the
    one-off gateway scripts nothing runs; drop their `package.json` entries; make paid
    evals one manual command and remove the leftover runtime-version switch in
@@ -44,8 +54,10 @@ Last updated: 2026-10-13.
      `AgentChatMessage.tsx` — whose chips print an ID as a count — and
      `AgentPrivateTurns.tsx`).
    - The ticket composer stops routing instructions by regex
-     (`shouldUsePrivateComposerAsk` in `useConversationAgentFlow.ts`); the agent decides,
-     as it already does for dashboard navigation.
+     (`shouldUsePrivateComposerAsk` in `useConversationAgentFlow.ts`): anything not opening
+     with a listed verb, or containing "write"/"why", goes to the read-only ask, so "Issue
+     a refund" never becomes a plan. The planning path should decide, as
+     `navigate_dashboard` already does for navigation.
    - Split `task-ledger.ts` by concern.
    - One money formatter (copies in `sales-pulse.ts`, `conversation-attribution.ts`,
      `lib/format/currency.ts`, `publicMoney`, the context-panel formatters).
@@ -97,9 +109,13 @@ In order. This is the product's critical path.
   `escalate_to_human` reason instead of the grounded handoff; the ticket plan card can
   go stale after a new customer message (unreproduced); a status question naming the
   customer uses the full order read; the briefing has no "waiting on a photo" line.
-- **Concurrency-safe LLM allowances.** Reserve before each provider call and reconcile
-  after; keep merchant cap, service allowance and platform stop separate; extend
-  `llm_daily_spend` rather than adding a ledger.
+- **Concurrency-safe LLM allowances.** Parallel calls can spend the same remainder, and a
+  usage write that fails (or names an unpriced model) is logged by `recordSpend` and
+  dropped. Reserve before each provider call and reconcile after; keep unknown
+  reservations across process loss; keep merchant cap, service allowance and platform
+  stop separate; extend `llm_daily_spend` rather than adding a ledger. Closes when
+  concurrent calls cannot overspend by more than one in-flight call and a failed usage
+  write stays recoverable.
 - **Cost envelope, billable unit and entitlements**, before charging anyone. Decide
   whether an unknown price id should stay unbounded (`packages/db/plan-limits.ts`).
 - **Prior conversations in planner context**: at most ~3 summaries of the same verified
@@ -112,10 +128,12 @@ In order. This is the product's critical path.
   anything external should notice a dead worker or a database outage.
 - **Compliance webhooks:** exercise `customers/data_request` and `shop/redact` once
   ([data-deletion](production/data-deletion.md)).
-- **Production leftovers:** `audit:agent-runtime-retirement -- --strict` clean (taskless
-  cached plans regenerated, open unknown actions reconciled), then drop
-  `AGENT_RUNTIME_VERSION` from Railway; retire the identity-less operator queue reader
-  once `audit:operator-context-compatibility -- --strict` reports none.
+- **Production leftovers:** get `audit:agent-runtime-retirement -- --strict` clean
+  (taskless cached plans regenerated, open unknown actions reconciled). Drop
+  `AGENT_RUNTIME_VERSION` from Railway only once no pre-#165 revision can be a rollback
+  target ([agent-runtime](agent-runtime.md), *Deployment and rollback*). Retire the
+  identity-less operator queue reader once `audit:operator-context-compatibility --
+  --strict` reports none.
 - **Gmail restricted-scope verification** — submit
   ([packet](production/google-gmail-verification-packet.md)).
 - **Postmark:** credential canary to an off-domain recipient, then restore the
@@ -126,11 +144,25 @@ In order. This is the product's critical path.
   Decide whether a verified shopper may start a mutation that goes to merchant approval.
 - **PostHog:** the privacy policy already discloses it — review staging payloads, then
   set `PRODUCT_ANALYTICS_ENABLED=true`.
+- **Email and onboarding bugs:** a workspace's *first* Gmail connect is not refused while
+  forwarding is active (`assertNoDualInboundDelivery` sees no `inboundStatus` on the new
+  row), so the watch turns on beside forwarding and mail arrives twice; onboarding offers
+  Telegram (`StepConnect`) whenever `TELEGRAM_BOT_USERNAME` is set, against
+  [product-truth](product-truth.md) — keep it unset in production until it doesn't.
+- **Deletion gaps:** a merchant whose only workspace it is gets account deletion, which
+  removes only their membership — confirm whether Clerk deletes the org (and so the
+  workspace and any Stripe subscription); `failWorkspaceDeletion` has no caller, so a
+  revoked Gmail/Instagram grant makes the sweep retry every minute forever; a non-Shopify
+  erasure request has no path to the full `redactCustomerData` erase.
 - **Console residue:** Clerk application name (and delete the unused dev app), Shopify
-  Partner app name and privacy URL, Postmark sender branding.
+  Partner app name and privacy URL, Postmark sender branding, the Telegram bot rename to
+  `@useshopkeeperbot`, and Stripe product names, statement descriptor and receipts —
+  those land on merchants' card statements, so check them before charging anyone.
 - **Collapse `vercel.json`'s build command** to `prisma generate` plus a turbo filter.
 - **Paid pilot:** decide the SocialAPI admission unit and contracted capacity, instrument
-  outcomes and per-org cost, benchmark 1x/10x pilot load, then recruit 5–10 owner-run
+  outcomes and per-org cost, benchmark 1x/10x pilot load on isolated data with stubbed
+  providers (warm list/detail p95 ≤ 500 ms, provider-independent failures < 1%, routine
+  plans ready ≤ 30 s p95, a 10x burst drained within 5 minutes), then recruit 5–10 owner-run
   brands in one segment. Success: ≥5 paying and ≥3 renewing, ≥2 hours/week saved for ≥3,
   ≥80% of routine plans approved unedited, no unresolved money or wrong-recipient
   incident. Stripe prices only when the pilot tests renewal.
@@ -153,7 +185,7 @@ In order. This is the product's critical path.
 | A few weeks of real merchant traffic | Baseline outcomes from `agent_actions`/`agent_tasks`/`agent_turn_usage` |
 | Attributed chat sales look too low | Anonymous-shopper attribution via cart attributes |
 | Classifier spend matters | Classify a two-message email burst once |
-| Tool-schema cost justifies a re-proof | Consolidate `get_shopify_orders`/`get_order_by_name`; `get_order_tracking` stays separate |
+| Tool-schema cost justifies a re-proof | Consolidate `get_shopify_orders`/`get_order_by_name` into one `orders.json` read; `get_order_tracking` stays separate. Those two are the whole verified-storefront set (`VERIFIED_ORDER_TOOL_NAMES`), so a by-customer lookup must reach neither storefront state, and the guest/verified matrix is re-proved |
 | SocialAPI fails diligence or the cohort nears 100 | Revisit direct Meta (Meta console branding, native-ID mapping) |
 | Anything touches the gateway host | Move it to a `useshopkeeper.com` subdomain and re-point every webhook together |
 | Google requests a CASA assessment | Backup/log retention checks, a dynamic scan, the unverified requirements |
@@ -173,7 +205,8 @@ In order. This is the product's critical path.
   `SOCIALAPI_BRAND_ASSIGNMENTS`, capped by `SOCIALAPI_MAX_ACTIVE_ORGS` (max 8). (2026-09-09)
 - **Gmail working never proves Instagram ready.** Instagram is the core customer
   channel, iMessage the control surface, Telegram internal only. (2026-09-07)
-- **Damage claims need a photo before any compensation.** A missing photo escalates; a
+- **Damage claims need a photo before any compensation** (`damageEvidence:
+  "photo_required"`, the default; `off` disables it). A missing photo escalates; a
   photographed claim always goes to the merchant; the agent never judges a photo.
   (2026-10-07)
 - **Never relax financial approval to cut notifications**; batch, dedupe and use duty
@@ -187,7 +220,12 @@ In order. This is the product's critical path.
   exercised and an async-only date is set.
 - **Don't rename persisted enums or BullMQ queue/job names** for aesthetics — live
   repeatable schedulers depend on them. Retire a compatibility path one per PR, after its
-  audit shows no production use.
+  audit shows no production use. Kept until then: the `whatsapp-digest` queue and jobs and
+  the `outbound-email-sweep` names (`apps/gateway/src/constants.ts`;
+  `audit:bullmq-compatibility-names`), the synchronous email rail
+  (`audit:outbound-email-mode`) and the identity-less operator queue reader
+  (`audit:operator-context-compatibility`). Their audits are not finished-migration
+  scripts for the cleanup in *Now*.
 - **Episode memory stays deferred** (person identity, obligations, prior-episode
   retrieval): it is a ranking problem with no traffic to rank. (2026-08-12)
 - **Evals can't see the Shopify layer** — every Shopify tool result is simulated, so the

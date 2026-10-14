@@ -1,8 +1,9 @@
 # Storefront chat — findings and standing constraints
 
 The findings that apply beyond this channel, the invariants to read before
-changing anything inside it, and the deferred M2 sketch. The verification
-chronology these came from is in git history.
+changing anything inside it, how to enable and verify it on a store, and the
+deferred M2 sketch. The verification chronology these came from is in git
+history.
 
 ## Durable findings
 
@@ -122,6 +123,53 @@ Read these before changing anything on this channel.
   [ROADMAP.md](../ROADMAP.md).
 - **The merchant must disable Shopify Inbox** to avoid duplicate launchers. There
   is no coexistence story.
+
+---
+
+## Running it on a store
+
+**Enable for a merchant.** Two switches, both off by default: the platform kill
+switch `STOREFRONT_CHAT_ENABLED=true` on the dashboard (without it the merchant's
+toggle reads "not available for your workspace yet"), and the merchant's own
+toggle. The merchant then does three things, and ops edits no metadata:
+
+1. Turn on storefront chat from the Shopify integration card.
+2. Activate the **Shopkeeper Chat** theme app embed (the card links to the theme
+   editor) and save the theme.
+3. Remove the Shopify Inbox chat bubble.
+
+The widget a store shows is the one the last `shopify app deploy` released (see
+the first finding above).
+
+**Browser matrix**, on the dev store: Online Store 2.0 and a vintage theme ×
+desktop and mobile × embed on and off × Shopify Inbox bubble present and removed.
+
+**Router-materialized escalation.** When routing escalates on structural
+evidence, `applyEscalationRouting` replaces the plan's escalation with one whose
+id is `tu_route_escalate` and, on storefront, keeps the drafted `send_reply`
+(`keepReply`). A model-elected `escalate_to_human` keeps the model's own id and
+never reaches that branch, so firing it takes a message the model believes it can
+answer while routing escalates anyway.
+`apps/gateway/src/scripts/inspect-escalation-routing.ts` lists recent cached plans
+and marks each escalation router-materialized or model-elected, and whether the
+reply was kept.
+
+**Episode boundary.** Widget, dashboard, operator notification and the
+reply/approval paths together across a rollover; boundaries are
+`CHANNEL_EPISODE_POLICY` in
+`apps/gateway/src/message-handlers/inbound/resolve-inbound-episode.ts`. Closing the
+thread from the dashboard does not test it, because a closed thread takes the
+plain no-open-thread branch. `apps/gateway/src/scripts/backdate-episode-clock.ts`
+moves one thread's conversational clock back so the next message crosses the
+idle boundary; it is a dry run unless `CONFIRM=1`, and `HOURS=-25` undoes
+`HOURS=25`.
+
+**A `chat_assisted` order.** Talk to the widget, verify an email, buy something,
+then confirm a `conversation_attributions` row with `kind = 'chat_assisted'` and
+the attribution line in the next briefing (`loadAttributionLine`). Attribution
+reaches only shoppers the order can be tied to (`match_basis` is
+`verified_email`, `customer_platform_id` or `shopify_customer`); a wholly anonymous
+shopper is not counted.
 
 ---
 

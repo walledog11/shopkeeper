@@ -24,11 +24,12 @@ Meta, migration, or any cross-provider handoff needs a future dated decision.
 1. **SocialAPI is the selected transport through the first 100 users.** Existing direct integrations stay direct and no automatic migration is performed. A future dated decision reopens direct Meta.
 2. **SocialAPI is selected server-side per organization.** Merchants do not choose a provider. An audited, fixed set of organization-to-brand assignments (`SOCIALAPI_BRAND_ASSIGNMENTS`) controls admission; merchants still complete OAuth themselves.
 3. **One integration uses one transport at a time.** An Instagram account is never intentionally active through both transports except during a bounded, observed migration handoff.
-4. **There is no automatic send failover.** A SocialAPI-connected merchant has not authorized Shopkeeper's Meta app. A failed SocialAPI send is never retried through direct Meta.
+4. **There is no automatic send failover.** A SocialAPI-connected merchant has not authorized Shopkeeper's Meta app. A failed SocialAPI send is never retried through direct Meta, and it alerts as `provider=socialapi` so it cannot read as a Meta outage.
 5. **The existing Shopkeeper workflow remains authoritative.** Both transports normalize into the current durable `InstagramInboundJobData`, ticket, planning, approval, attachment, and outbound-recording paths.
-6. **Verified Instagram identity remains canonical.** `Integration.externalAccountId` and `Customer.platformId` keep their direct-Meta identity semantics; SocialAPI brand, account, and conversation IDs are routing metadata. The worker keys on two job fields: `instagramAccountId` selects the integration through `loadActiveInstagramIntegration`, and `senderIgsid` becomes `Customer.platformId`, half of the `(organizationId, platformId)` unique key. SocialAPI's webhook `platform_id` matches its stored inbox row, so no mapping is needed within SocialAPI. Instagram-scoped sender IDs are per Meta app, so a direct-Meta handoff should expect different sender IDs and needs an explicit sender mapping rather than an in-place swap.
+6. **Customer identity is per transport.** SocialAPI brand, account, and conversation IDs are routing metadata. The worker keys on two job fields: `instagramAccountId` selects the integration through `loadActiveInstagramIntegration`, and `senderIgsid` becomes `Customer.platformId`, half of the `(organizationId, platformId)` unique key. For a SocialAPI job `senderIgsid` is SocialAPI's author ID (`data.author.id`, raw `sender.id` fallback). Instagram-scoped sender IDs are per Meta app, so it is not interchangeable with a direct-Meta IGSID for the same shopper. Customer rows are never merged or migrated between transports; a future direct-Meta handoff needs an explicit sender mapping, not an in-place swap. `Integration.externalAccountId` is meant to hold the native Instagram account ID; the provider-ID stopgap is under Target architecture.
 7. **SocialAPI credentials are infrastructure secrets.** Never store the workspace API key in `Integration`, logs, jobs, or client-visible responses.
 8. **Capacity is enforced in code, and expansion is staged.** Admission is bounded by the vendor tier actually contracted, not by convention, and does not expand merely because the first canaries work. The bound is a capacity contract to renegotiate as the cohort grows, not a deadline to migrate away.
+9. **A SocialAPI send result proves acceptance only.** Its message ID matched neither the outgoing inbox row's SocialAPI `id` nor its `platform_id`, so it is not delivery or correlation evidence until the `dm.sent` join is established.
 
 ## Launch envelope (first stage)
 
@@ -82,7 +83,7 @@ The columns are authoritative; do not duplicate account IDs in metadata. One sha
 
 The normalized inbound job carries optional `provider` and `providerConversationId` today; `providerAccountId` and `connectionGeneration` are still to add. They are optional only for compatibility with queued direct jobs: new SocialAPI jobs require all routing fields. A missing provider means legacy direct Meta and is never inferred as SocialAPI from the integration's current state.
 
-`externalMessageId` uses the native Meta message ID (`data.platform_id`, falling back to raw `message.mid`), never the provider interaction ID. External onboarding requires proven webhook/poll deduplication, and any future handoff requires a tested cross-provider deduplication or mapping strategy.
+`externalMessageId` uses the native Meta message ID (`data.platform_id`, falling back to raw `message.mid`), which matches SocialAPI's stored inbox row, never the provider interaction ID (`data.id`), which matched neither inbox identifier. External onboarding requires proven webhook/poll deduplication, and any future handoff requires a tested cross-provider deduplication or mapping strategy.
 
 ## Remaining work
 
@@ -92,7 +93,7 @@ Build the shortest path that exercises the real flow, then harden what actually 
 
 `npm run spike:socialapi -- inspect` reads `SOCIALAPI_API_KEY` and `SOCIALAPI_BRAND_ID` (plus optional `SOCIALAPI_ACCOUNT_ID` and `SOCIALAPI_CONVERSATION_ID`) from the git-ignored `.env.socialapi.local`. It fingerprints identifiers and records only structural facts; keep credentials, OAuth state/code, participant details, message text, and media URLs out of anything tracked. `--use-sole-account` allows conversation inventory when the brand has exactly one account; `--use-newest-conversation` reads the newest conversation only after a fresh controlled inbound message. `connect`, `exchange`, `send`, and `disconnect` require `--execute`; `send` also requires a controlled marker and, without configured IDs, both selection flags and a conversation active within 15 minutes; `disconnect` requires `--confirm-controlled-account`.
 
-Still to establish with the controlled account: `dm.sent` correlation (the webhook interaction ID matched neither inbox-row ID), webhook/stored-ID convergence and missed-delivery recovery, every required attachment/event shape with URL lifetime and deletion behavior (a view-once image arrives `ephemeral` with no URL), and reconnect. Unresolved identity or exit semantics block external onboarding.
+Still to establish with the controlled account: `dm.sent` correlation (invariant 9: capture a signed `dm.sent` and compare the send-result ID, the event's interaction and native IDs, and the outgoing inbox row), webhook/stored-ID convergence and missed-delivery recovery, every required attachment/event shape with URL lifetime and deletion behavior (a view-once image arrives `ephemeral` with no URL), and reconnect. Unresolved identity or exit semantics block external onboarding.
 
 ### S0. Vendor and data-processing gate
 
@@ -133,7 +134,7 @@ Built in `apps/gateway/src/routes/webhooks-socialapi.ts`: `POST /webhooks/social
 - [ ] Match connection generation once S1 adds it.
 - [ ] Preserve existing body limits, no-content logging, trace IDs, bulk queue behavior, and signature-failure alerts tagged `provider=socialapi`.
 - [ ] Make retries idempotent using the organization-scoped external-message uniqueness guarantee, and use stable delivery IDs for delivery correlation where present. Delivery IDs do not replace canonical message IDs; retry timestamps describe the delivery attempt, not the customer's message time.
-- [ ] The vendor's separately triggered signed synthetic test has an event header/body mismatch and returns `400`; real deliveries pass. Confirm with the vendor or accept.
+- [ ] The vendor's separately triggered signed synthetic test has an event header/body mismatch and returns `400`; real signed deliveries pass. Do not weaken the header/body match to accept it; ask the vendor about the test delivery.
 
 Done when valid events are durably admitted, replays persist once, invalid signatures never reach the queue, unmapped accounts alert safely, and direct Meta ingress is unchanged. Exactly-once persistence is the guarantee; queue redelivery is allowed.
 
