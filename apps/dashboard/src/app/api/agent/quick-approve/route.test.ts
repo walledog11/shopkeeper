@@ -76,9 +76,13 @@ afterEach(async () => {
 
 async function createThreadWithCachedPlan(
   plan: AgentPlan,
-  instruction = "Handle this",
-  orgSettings?: Partial<OrgSettings>,
+  { orgSettings, parkProposal = true }: {
+    orgSettings?: Partial<OrgSettings>;
+    /** Production parks one only for a plan awaiting review (`readParkedProposalForThread`). */
+    parkProposal?: boolean;
+  } = {},
 ) {
+  const instruction = "Handle this";
   if (orgSettings) {
     await db.organization.update({
       where: { id: org.id },
@@ -110,6 +114,8 @@ async function createThreadWithCachedPlan(
     },
   });
 
+  if (!parkProposal) return { thread, message, planId: cachedPlan.planId };
+
   const { request, task } = await acceptCustomerAgentRequest({
     organizationId: org.id, threadId: thread.id, sourceMessageId: message.id, objective: instruction,
     budget: { runtimeVersion: 2, modelCallLimit: 20, activeTimeMsLimit: 120000, spendNanoUsdLimit: BigInt(1000000000) },
@@ -125,7 +131,7 @@ async function createThreadWithCachedPlan(
     },
   });
 
-  return { thread, message };
+  return { thread, message, planId: cachedPlan.planId };
 }
 
 describe("POST /api/agent/quick-approve", () => {
@@ -137,12 +143,12 @@ describe("POST /api/agent/quick-approve", () => {
         issues: [{ code: "ungrounded_customer_reply", message: "The reply contains an unsupported claim." }],
       },
     };
-    const { thread } = await createThreadWithCachedPlan(invalidPlan);
+    const { thread, planId } = await createThreadWithCachedPlan(invalidPlan, { parkProposal: false });
 
     const res = await POST(new Request("http://localhost:3000/api/agent/quick-approve", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ threadId: thread.id }),
+      body: JSON.stringify({ threadId: thread.id, planId }),
     }));
 
     expect(res.status).toBe(400);
@@ -150,12 +156,12 @@ describe("POST /api/agent/quick-approve", () => {
   });
 
   it("executes the current quick reply using only the send_reply tool call", async () => {
-    const { thread } = await createThreadWithCachedPlan(quickReplyPlan);
+    const { thread, planId } = await createThreadWithCachedPlan(quickReplyPlan);
 
     const res = await POST(new Request("http://localhost:3000/api/agent/quick-approve", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ threadId: thread.id }),
+      body: JSON.stringify({ threadId: thread.id, planId }),
     }));
 
     expect(res.status).toBe(200);
@@ -171,7 +177,7 @@ describe("POST /api/agent/quick-approve", () => {
   });
 
   it("rejects a stale cached plan", async () => {
-    const { thread } = await createThreadWithCachedPlan(quickReplyPlan);
+    const { thread, planId } = await createThreadWithCachedPlan(quickReplyPlan);
     const newerMessage = await createTestMessage(thread.id, "Actually, what about Canada?");
     await db.message.update({
       where: { id: newerMessage.id },
@@ -181,10 +187,10 @@ describe("POST /api/agent/quick-approve", () => {
     const res = await POST(new Request("http://localhost:3000/api/agent/quick-approve", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ threadId: thread.id }),
+      body: JSON.stringify({ threadId: thread.id, planId }),
     }));
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(409);
     expect(mockExecuteAgentTurn).not.toHaveBeenCalled();
   });
 
@@ -205,12 +211,12 @@ describe("POST /api/agent/quick-approve", () => {
         input: { order_id: "gid://shopify/Order/1", amount: "20.00" },
       }],
     };
-    const { thread } = await createThreadWithCachedPlan(actionPlan);
+    const { thread, planId } = await createThreadWithCachedPlan(actionPlan);
 
     const res = await POST(new Request("http://localhost:3000/api/agent/quick-approve", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ threadId: thread.id }),
+      body: JSON.stringify({ threadId: thread.id, planId }),
     }));
 
     expect(res.status).toBe(200);
@@ -248,16 +254,18 @@ describe("POST /api/agent/quick-approve", () => {
         { id: "send_1", name: "send_reply", input: { text: "I've issued the $20 refund." } },
       ],
     };
-    const { thread } = await createThreadWithCachedPlan(plan, "Handle this", {
-      autonomyTier: "trusted",
-      autoExecuteMode: "live",
-      maxRefundAmount: 100,
+    const { thread, planId } = await createThreadWithCachedPlan(plan, {
+      orgSettings: {
+        autonomyTier: "trusted",
+        autoExecuteMode: "live",
+        maxRefundAmount: 100,
+      },
     });
 
     const res = await POST(new Request("http://localhost:3000/api/agent/quick-approve", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ threadId: thread.id }),
+      body: JSON.stringify({ threadId: thread.id, planId }),
     }));
 
     expect(res.status).toBe(200);
@@ -269,7 +277,7 @@ describe("POST /api/agent/quick-approve", () => {
   });
 
   it("rejects tampered cached plans", async () => {
-    const { thread, message } = await createThreadWithCachedPlan(quickReplyPlan);
+    const { thread, message, planId } = await createThreadWithCachedPlan(quickReplyPlan, { parkProposal: false });
 
     await db.thread.update({
       where: { id: thread.id },
@@ -288,7 +296,7 @@ describe("POST /api/agent/quick-approve", () => {
     const res = await POST(new Request("http://localhost:3000/api/agent/quick-approve", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ threadId: thread.id }),
+      body: JSON.stringify({ threadId: thread.id, planId }),
     }));
 
     expect(res.status).toBe(400);
@@ -296,7 +304,7 @@ describe("POST /api/agent/quick-approve", () => {
   });
 
   it("rejects quick approve for questionable senders", async () => {
-    const { thread } = await createThreadWithCachedPlan(quickReplyPlan);
+    const { thread, planId } = await createThreadWithCachedPlan(quickReplyPlan);
 
     await db.thread.update({
       where: { id: thread.id },
@@ -306,25 +314,12 @@ describe("POST /api/agent/quick-approve", () => {
     const res = await POST(new Request("http://localhost:3000/api/agent/quick-approve", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ threadId: thread.id }),
+      body: JSON.stringify({ threadId: thread.id, planId }),
     }));
 
     expect(res.status).toBe(400);
     expect(mockExecuteAgentTurn).not.toHaveBeenCalled();
   });
-
-  // The card sends the planId of the proposal it rendered. Without it the route
-  // executes whatever is cached on the thread now, which is the stale-plan race
-  // this identity check exists to close.
-  async function storedPlanId(threadId: string): Promise<string> {
-    const row = await db.thread.findUnique({
-      where: { id: threadId },
-      select: { cachedPlan: true },
-    });
-    const planId = (row?.cachedPlan as { planId?: string } | null)?.planId;
-    if (!planId) throw new Error("cached plan carries no planId");
-    return planId;
-  }
 
   it("rejects a planId that is not the current plan", async () => {
     const { thread } = await createThreadWithCachedPlan(quickReplyPlan);
@@ -340,12 +335,12 @@ describe("POST /api/agent/quick-approve", () => {
   });
 
   it("executes when the planId matches the current plan", async () => {
-    const { thread } = await createThreadWithCachedPlan(quickReplyPlan);
+    const { thread, planId } = await createThreadWithCachedPlan(quickReplyPlan);
 
     const res = await POST(new Request("http://localhost:3000/api/agent/quick-approve", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ threadId: thread.id, planId: await storedPlanId(thread.id) }),
+      body: JSON.stringify({ threadId: thread.id, planId }),
     }));
 
     expect(res.status).toBe(200);
@@ -355,7 +350,9 @@ describe("POST /api/agent/quick-approve", () => {
     );
   });
 
-  it("executes without a planId, leaving the identity check unarmed", async () => {
+  // Without the planId of the card the merchant saw, the route would execute
+  // whatever is cached on the thread now — possibly a plan they never saw.
+  it("rejects a missing planId before execution", async () => {
     const { thread } = await createThreadWithCachedPlan(quickReplyPlan);
 
     const res = await POST(new Request("http://localhost:3000/api/agent/quick-approve", {
@@ -364,10 +361,8 @@ describe("POST /api/agent/quick-approve", () => {
       body: JSON.stringify({ threadId: thread.id }),
     }));
 
-    // Deliberate: planId is optional at every layer, so an omitting caller still
-    // executes. Asserted so that making it required is a visible test change.
-    expect(res.status).toBe(200);
-    expect(mockExecuteAgentTurn).toHaveBeenCalled();
+    expect(res.status).toBe(400);
+    expect(mockExecuteAgentTurn).not.toHaveBeenCalled();
   });
 
   it("rejects a non-string planId before execution", async () => {

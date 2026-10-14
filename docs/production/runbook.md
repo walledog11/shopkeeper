@@ -77,11 +77,12 @@ npx turbo run build --filter=shopkeeper-gateway
   `GATEWAY_WORKER_HEARTBEAT_STALE_MS=600000`. Their defaults (`parseGatewayProductionConfig`) depend
   on `NODE_ENV`; when the two services disagree about it, the web service judges a healthy worker
   stale and `/health/deep` fails.
-- **Check `NODE_ENV` on both gateway services** (`railway variables --service <name> --environment production`).
-  Setting `NODE_ENV=production` makes Railway's plain `npm install` skip devDependencies, including
-  the `typescript` and `@types/*` packages the `tsc` build needs, so the deploy fails; the code fix
-  is tracked in [../ROADMAP.md](../ROADMAP.md). A service running without it logs pino-pretty text
-  instead of JSON and has every gateway guard keyed on `NODE_ENV` switched off:
+- **Check `NODE_ENV` on both gateway services.** Nixpacks writes `NODE_ENV=production` into every
+  Node image (with `NPM_CONFIG_PRODUCTION=false`, so devDependencies still install), so a service
+  runs with it unless a Railway variable overrides it
+  (`railway variables --service <name> --environment production`); JSON logs mean it is set. A
+  service running without it logs pino-pretty text instead of JSON and has every gateway guard
+  keyed on `NODE_ENV` switched off:
   - the production boot checks in `validateGatewayEnv` (`TOKEN_ENCRYPTION_KEY`, `DIRECT_DATABASE_URL`,
     `PLAN_EXECUTION_LEDGER_MODE`, `DASHBOARD_URL`, Postmark inbound credentials);
   - `loadKey` in `packages/db/crypto.ts` falls back to an insecure dev key instead of throwing when
@@ -340,14 +341,8 @@ The datasource declares `url = env("DATABASE_URL")` (pooled) and `directUrl = en
 |---------|----------------|-----------------------|-----------|
 | Production migration run (your machine) | pooled Neon host + `?pgbouncer=true` | direct host + `?sslmode=require` | **Yes — the only path that migrates production** |
 | Vercel / Railway | pooled Neon host | direct Neon host | No |
-| Local tests | injected by `scripts/with-test-env.mjs` (`TEST_DATABASE_URL` or the default below) | an already-exported `DIRECT_DATABASE_URL` if set, else the same value | Yes — `scripts/test-bootstrap.mjs` |
+| Local tests | injected by `scripts/with-test-env.mjs` (`TEST_DATABASE_URL` or the default below) | the same value; an exported `DIRECT_DATABASE_URL` is ignored | Yes — `scripts/test-bootstrap.mjs` |
 | CI | same as local tests | same value | Yes — same bootstrap, CI service container |
-
-**Never run `test:integration`, `test:coverage` or `scripts/test-bootstrap.mjs` in a shell that
-holds a production `DIRECT_DATABASE_URL`** (an export, or inside `railway run`). `getTestEnv` keeps
-an exported `DIRECT_DATABASE_URL`, and `prisma migrate deploy` travels over `directUrl`, so the
-bootstrap would apply pending migrations to production. Its safety check (`assertTestDatabase`)
-inspects only `DATABASE_URL`.
 
 The test database defaults to `postgresql://postgres:postgres@127.0.0.1:55432/clerk_test?schema=public`
 (override with `TEST_DATABASE_URL`); pass both URLs inline when targeting it by hand.

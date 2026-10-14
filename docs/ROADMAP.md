@@ -7,31 +7,18 @@ Technical contracts and settled engineering decisions live with the code they go
 ([agent-runtime](agent-runtime.md), [runbook](production/runbook.md),
 [transport plan](socialapi-transport-plan.md)), not here.
 
-Last updated: 2026-10-13.
+Last updated: 2026-10-14.
 
 ## Now — finish the cleanup
 
-1. **Safety bugs found during the docs consolidation.** Small, fix first:
-   - `POST /api/agent/quick-approve` treats `planId` as optional
-     (`parseAgentQuickApproveBody`). Without it `validateExpectedIdentity` checks nothing
-     and the route executes whatever plan is cached on the thread now — possibly one the
-     merchant never saw. Its callers (`quickApproveCachedPlan`, `useNeedsYouActions`) pass a `planId`
-     typed optional, and a route test pins the no-`planId` success.
-     Closes when a missing `planId` is refused, every caller sends the plan it rendered,
-     and that test flips.
-   - **The gateway may run without `NODE_ENV=production`** (it did at the 2026-09-08
-     release; check `railway variables`). That switches off the production boot checks in
-     `validateGatewayEnv`, lets `loadKey` fall back to a dev encryption key, lets
-     `hasValidPostmarkAuth` accept unauthenticated posts when its credentials are unset,
-     and makes rate limiting fail open. Setting it broke the build because `npm install`
-     then skips devDependencies. Closes when both Railway services run
-     `NODE_ENV=production` and deploy (likely `npm install --include=dev` in
-     `nixpacks.toml`).
-   - **Integration-test bootstrap can migrate production.** `getTestEnv`
-     (`scripts/with-test-env.mjs`) keeps an exported `DIRECT_DATABASE_URL`, and
-     `assertTestDatabase` checks only `DATABASE_URL`, so `test:integration` run inside
-     `railway run` applies pending migrations to production. Closes when the direct URL
-     is derived from the test URL (or asserted too).
+1. **Confirm the gateway runs with `NODE_ENV=production`.** Without it `validateGatewayEnv`
+   skips its production boot checks, `loadKey` can fall back to a dev encryption key,
+   `hasValidPostmarkAuth` accepts unauthenticated posts when its credentials are unset, and
+   rate limiting fails open. Nixpacks writes `NODE_ENV=production` into every Node image, so
+   both services have it unless a Railway variable overrides it. It also sets
+   `NPM_CONFIG_PRODUCTION=false`, so the earlier note that setting it broke the build by
+   skipping devDependencies is not the cause. Closes when both services' logs are JSON
+   (runbook: *Railway*).
 2. **Scripts and tooling.** Delete audit/canary scripts for finished migrations and the
    one-off gateway scripts nothing runs; drop their `package.json` entries; make paid
    evals one manual command and remove the leftover runtime-version switch in

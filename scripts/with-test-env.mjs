@@ -40,12 +40,16 @@ export function getTestEnv(baseEnv = process.env) {
     ...envFiles,
     ...baseEnv,
   };
+  const databaseUrl = baseEnv.TEST_DATABASE_URL || DEFAULT_DATABASE_URL;
 
   return {
     ...env,
     NODE_ENV: 'test',
-    DATABASE_URL: baseEnv.TEST_DATABASE_URL || DEFAULT_DATABASE_URL,
-    DIRECT_DATABASE_URL: baseEnv.DIRECT_DATABASE_URL || baseEnv.TEST_DATABASE_URL || DEFAULT_DATABASE_URL,
+    DATABASE_URL: databaseUrl,
+    // Never an inherited DIRECT_DATABASE_URL: `prisma migrate deploy` travels
+    // over directUrl, so an exported production value (or `railway run`) would
+    // migrate production.
+    DIRECT_DATABASE_URL: databaseUrl,
     REDIS_URL: baseEnv.TEST_REDIS_URL || DEFAULT_REDIS_URL,
     NEON_SERVERLESS_HTTP: 'false',
     APP_URL: baseEnv.APP_URL || 'http://127.0.0.1:3100',
