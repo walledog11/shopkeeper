@@ -1,7 +1,8 @@
 // Live-model eval runs are the dominant line on the API bill: 74% of spend over
 // 2026-08-16..19, and only a quarter of the runs left any log behind. Both the
 // full suite and a baseline capture are gated so the cost is stated before it is
-// spent. CI bypasses; single-fixture probes (test:evals:fixture) are never gated.
+// spent. CI bypasses; single-fixture probes (test:evals:fixture) skip this
+// confirmation but still require both ceilings.
 
 import { recordEvalInvocation } from './record-eval-run.mjs';
 
@@ -27,11 +28,10 @@ process.stderr.write(
     `Refusing to run ${label} locally.`,
     '',
     `  ~${runs} fixture runs / ~${calls} live model calls, ~$${cost}. Prefer CI:`,
-    '    gh workflow run evals.yml -f mode=baseline   # full 3-repeat capture',
-    '    (a PR touching packages/agent/** runs the core gate automatically)',
+    `    gh workflow run evals.yml -f mode=baseline -f max_usd=${cost} -f max_model_calls=${calls}`,
     '',
     '  Cheaper locally:',
-    '    npm run test:evals:fixture -w apps/dashboard -- -t "<fixture-name>"',
+    '    EVAL_MAX_USD=0.10 EVAL_MAX_MODEL_CALLS=20 EVAL_FIXTURE=<fixture-id> npm run test:evals:fixture -w apps/dashboard',
     '',
     '  To run it here anyway:',
     `    EVAL_CONFIRM=1 EVAL_MAX_USD=${cost} EVAL_MAX_MODEL_CALLS=${calls} npm run ${label} -w apps/dashboard`,

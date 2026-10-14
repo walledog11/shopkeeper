@@ -8,8 +8,9 @@ The product is built around four layers.
 
 Where customers ask for help:
 
-- Instagram DMs/comments: core V1 social support channel.
-- TikTok/TikTok Shop: strategically important, but API feasibility must be verified.
+- Instagram DMs (`ig_dm`, via SocialAPI): core V1 social support channel. Comments are not ingested.
+- Storefront chat (theme app extension `shopkeeper-chat`, `shopify_chat` threads): on-site shopper chat. Off by default: a store takes chats only when `STOREFRONT_CHAT_ENABLED` is on and the merchant has turned it on for that store.
+- TikTok Shop: wired end to end but off (`TIKTOK_SHOP_ENABLED=false`); enable or cut when a merchant asks.
 - Gmail: simple customer email fallback.
 - Postmark/email forwarding: advanced fallback for custom-domain support teams.
 

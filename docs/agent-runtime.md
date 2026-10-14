@@ -90,6 +90,13 @@ authorized registry within the same bounded loop; no full-registry retry exists.
 Merchant instructions and operator/storefront contexts retain their own
 authorized tool sets. Discovery grants no additional authority.
 
+The default support turn holds reads and controls only. Gift cards, exchanges,
+replacement orders, fulfillment, outbound email and analytics are reached
+through discovery or a merchant instruction, and promotions and repricing are
+operator-only module tools that a support turn never holds. A gift card is
+merchant-directed only, never inferred from a customer complaint. Simplifying
+support never justifies deleting a working operator feature.
+
 Support request refusal checks use classifier intents and `requestFacts` aligned
 to the latest customer message, rather than English words in instructions or
 conversation history. Cancellation, address-change and refund checks resolve
@@ -274,7 +281,11 @@ for merchant requests, and enforced against the persisted task row.
   authorized set. It never falls back to the full registry, and repeated
   fruitless discovery hits the shared budget. A model-selected label is a
   relevance hint, never authorization. Discovery cannot turn support into
-  merchant mode or supply a missing verification credential.
+  merchant mode or supply a missing verification credential. Per-turn tool
+  selection is likewise an efficiency aid, never the authorization boundary:
+  execution policy, grants and approval decide. Keep tools individual rather
+  than folding them into a generic `manage_shop` tool, which only moves the
+  same complexity into its arguments.
 - **Evidence.** Evidence records carry source kind, organization, entity,
   observation time and source identity. User claims and summaries never become
   provider evidence by being copied. Freshness is per operation: each write
@@ -411,6 +422,41 @@ letter (F) is not reused.
   merchant wants to handle payment. `create_shopify_order` leaves the full total
   pending and cannot make it free. The tool schema requires `payment` for new
   model inputs (optional for persisted inputs); static policy refuses `"free"`.
+- **N. A damage claim needs a customer photo before any compensation.** With
+  `damageEvidence: "photo_required"` (the default), a `damaged` or `defective`
+  claim (`requestFacts.reason`) is never compensated by a tool flagged
+  `policy.damageEvidence` (`create_refund`, `create_partial_refund`,
+  `create_gift_card`, `create_exchange`, `create_shopify_order`) without a
+  photo. `damageEvidenceState` is the one owner of where a claim stands. The
+  agent asks once, and only on a channel that can carry a photo
+  (`shouldHydrateAgentMessageImages`: Instagram, email, TikTok), which is the
+  only time `await_customer_photo` is offered. Compensation proposed without a
+  photo, a reply to the ask that has none, or a channel that cannot carry one
+  raises the structural `damage_photo_missing` escalation, never an approvable
+  card: a refund on the customer's word alone never reaches approval. With a
+  photo, `damage_photo_attached` is blocking whenever the plan compensates, so
+  the merchant always approves; the agent never judges whether a photo is
+  genuine. The rule gates customer-originated planning only. A merchant
+  instruction, answer or revision is already the human the escalation would
+  reach.
+- **O. Merchants never approve an escalation-only plan.** A plan that only
+  escalates, with optional reads (`isEscalationOnlyPlan`), runs automatically
+  through the execution claim and never enters an approval wait or phone queue;
+  approving one is refused. Its outcome is one merchant handoff
+  (`composeOperatorHandoff`): the model supplies a request statement and a
+  blocker statement, each with an exact evidence substring from its source.
+  Code appends the neutral "How would you like me to respond to them?" and the
+  ticket link, rejects invalid output as a whole in favour of the fixed
+  `formatEscalationMessage` template, and persists the handoff before fan-out
+  (`pushOperatorEscalation`) so retries resend the same text. Approving an
+  escalation would run a no-op and confirm "Approved.", and a model-written
+  question invents refund or return remedies the store never offered.
+- **P. No forced knowledge-base lookup.** A customer reply drafted without a
+  `search_kb` call is not forced through one: exact-draft review and the card's
+  line saying what is left to the merchant (decision K) are judged sufficient.
+  Reopen this only on a new observed failure. `search_kb` itself
+  returns and cites only the candidates `selectAnsweringKbArticles` judges to
+  answer the query, and not_found when none do or the check cannot decide.
 
 ## Verification scope
 
@@ -428,8 +474,8 @@ decision L; open defects and still-unverified behavior are in
    `npm run lint:structure`. For code, typecheck the affected workspace and use
    targeted existing tests or a build where they help verify the change.
 3. Exercise the affected flow in the dashboard, dev store or phone, using
-   existing authorized test destinations. Check actual provider state and
-   delivery as applicable.
+   the authorized test destinations under *Manual verification on the dev
+   store*. Check actual provider state and delivery as applicable.
 4. If something is still broken or unverified, put it in
    [ROADMAP.md](ROADMAP.md); remove the item when it closes. No evidence log and
    no test-count narrative.
@@ -442,7 +488,14 @@ the specific broken check. Do not start a suite-wide audit or add tests to
 satisfy coverage. A required check cannot be silently bypassed or called passed.
 CI runs the free eval preflight on pull requests and pushes to master; paid
 evals, new fixtures and fixture expansion happen only when the owner asks, reuse
-the existing harnesses, and never tune against held-out inputs.
+the existing harnesses, and never tune against held-out inputs. When the owner
+does ask, dispatch `evals.yml` on the exact commit with `max_usd` and
+`max_model_calls`: `release` mode for a release check, `targeted` for named
+fixtures, `drift` for the three-repeat measurement. Diagnose with a
+single-fixture, one-repeat probe, and do not tune and rerun. Paid eval files
+skip unless `EVAL_RUN=1` or `REQUIRE_MODEL_EVALS=1`, so a bare
+`test:integration` or `verify:pr` never bills. Local commands and ceilings are
+in [TESTING.md](../TESTING.md).
 
 Deliver the affected flow in its existing owner. Reuse the registry, task ledger,
 workers, approvals, providers and existing functions for tenant checks, policy,
@@ -455,14 +508,38 @@ lack of usage data does not establish that a capability is unused.
 
 Diagnose from code, stored data or a dev-store reproduction. Fix the owning
 contract rather than compensating for missing claims, receipts or tool selection
-with prompt patches or prose-matcher exceptions. Land agent-path work through
-PRs. Keep model/provider changes distinct when needed to isolate a runtime
-regression. Preserve the deployed behavior and compatibility of existing callers.
+with prompt patches or prose-matcher exceptions. A behavior that applies only
+to a narrow case gets a conditional section in the support prompt's volatile
+half and, if it needs one, a tool offered only when the case applies (decision
+N's photo rule is the pattern), never a new `SUPPORT_INSTRUCTIONS` bullet;
+every other turn then keeps a byte-identical tool list and prompt cache. Land
+agent-path work through PRs. Ship tool retirement, an execution rewrite and a
+model or provider change in separate releases, so a regression can be
+attributed. Preserve the deployed behavior and compatibility of existing callers.
 
-New automated tests are an exception: check existing coverage first, and add a
-case only for a concrete defect or change-specific failure that manual checks
-cannot safely or reliably reproduce. Fix or remove a particular misleading check
-only when it blocks the current change. See [TESTING.md](../TESTING.md).
+New automated tests follow [TESTING.md](../TESTING.md), *When a test is worth
+writing*.
+
+### Adding a structural escalation code
+
+A new escalating `PlanRoutingEvidenceCode` goes in four places in
+`packages/agent/src`:
+
+1. the `PlanRoutingEvidenceCode` union (`types.ts`);
+2. `ESCALATION_EVIDENCE` (`autonomy.ts`), which makes `decideAutonomy` escalate
+   on it;
+3. `ESCALATION_REASONS` (`planner-evidence.ts`), its fixed merchant-facing
+   reason;
+4. `PLAN_ROUTING_EVIDENCE_CODES` (`plan-cache-shape.ts`).
+
+TypeScript checks only `ESCALATION_REASONS`, a `Record` over the union.
+`ESCALATION_EVIDENCE` is a deliberately partial set: left out, the code silently
+stops escalating. `PLAN_ROUTING_EVIDENCE_CODES` is a plain array: left out, any
+cached plan carrying the code fails `isPlanRoutingEvidence` and
+`readAgentPlanCacheRecordShape` rejects it. A code derived from the plan's
+writes also needs a position in `requestedWriteEscalationCode`, which keeps only
+the first match, so a specific code goes before the generic
+`compensation_exception`.
 
 ### Deterministic failure and race cases
 
@@ -484,6 +561,22 @@ changed decision.
   authoritative through waits, continuations and runtime routing changes.
 
 Do not manufacture an actual uncertain write for a manual demonstration.
+
+### Manual verification on the dev store
+
+Claude runs merchant-side writes itself from the dashboard agent chat, in plain
+merchant wording; the owner's part is limited to approvals that need the phone.
+Never script the customer's side. Read outcomes from `/api/agent/actions` and
+provider state through the dashboard's live routes (`/api/orders`,
+`/api/shopify/customer`), because the Shopify admin needs a separate sign-in.
+
+The controlled workspace is `Organization.id`
+`9b81d9c8-9205-48da-90d1-66732f0f5dbd`, a Shopify development store in USD. The
+test customer is Chain Market (`thechainmarket@gmail.com`); support mail arrives
+at the connected Gmail `rscoding11@gmail.com`. Many test orders are already
+cancelled, refunded or returned, and some are unpaid leftovers, so read an
+order's current state before choosing it as a target, and never repeat a
+mutation on an already-mutated order.
 
 Manual sessions assess investigation, clarification, reference resolution,
 instruction adherence, outcomes, delivery and natural communication. An
