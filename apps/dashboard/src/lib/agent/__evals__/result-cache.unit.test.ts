@@ -47,7 +47,6 @@ let directory: string | null = null
 
 afterEach(() => {
   delete process.env.EVAL_RESULT_CACHE_DIR
-  delete process.env.EVAL_AGENT_RUNTIME_VERSION
   if (directory) rmSync(directory, { recursive: true, force: true })
   directory = null
 })
@@ -66,16 +65,5 @@ describe("exact-SHA eval result cache", () => {
     process.env.EVAL_RESULT_CACHE_DIR = directory
     writePassingSummary(fixture, 1, { ...passing, passes: 0, passRate: 0 })
     expect(readCachedPassingSummary(fixture, 1)).toBeNull()
-  })
-
-  it("uses one current-runtime cache and refuses the retired runtime", () => {
-    directory = mkdtempSync(join(tmpdir(), "shopkeeper-eval-cache-"))
-    process.env.EVAL_RESULT_CACHE_DIR = directory
-    process.env.EVAL_AGENT_RUNTIME_VERSION = "2"
-    writePassingSummary(fixture, 1, passing)
-    process.env.EVAL_AGENT_RUNTIME_VERSION = "current"
-    expect(readCachedPassingSummary(fixture, 1)).toEqual(passing)
-    process.env.EVAL_AGENT_RUNTIME_VERSION = "1"
-    expect(() => readCachedPassingSummary(fixture, 1)).toThrow(/EVAL_AGENT_RUNTIME_VERSION/)
   })
 })

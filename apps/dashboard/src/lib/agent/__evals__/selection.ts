@@ -1,7 +1,6 @@
 import type { Fixture } from "./types"
 
 export type EvalSuite = "core" | "full"
-export type EvalAgentRuntimeVersion = 1 | 2
 
 export function requestedEvalSuite(value: string | undefined = process.env.EVAL_SUITE): EvalSuite {
   const normalized = value?.trim().toLowerCase() ?? "full"
@@ -9,21 +8,6 @@ export function requestedEvalSuite(value: string | undefined = process.env.EVAL_
     throw new Error(`Invalid EVAL_SUITE ${JSON.stringify(normalized)}`)
   }
   return normalized
-}
-
-/**
- * Pins evals to the sole executable runtime. Historical v1 comparisons belong
- * to the deployment revision that still implements v1.
- */
-export function requestedEvalAgentRuntimeVersion(
-  value: string | undefined = process.env.EVAL_AGENT_RUNTIME_VERSION,
-): 2 {
-  const normalized = value?.trim().toLowerCase()
-  if (normalized === undefined || normalized === "" || normalized === "current") {
-    return 2
-  }
-  if (normalized === "2") return 2
-  throw new Error(`Invalid EVAL_AGENT_RUNTIME_VERSION ${JSON.stringify(normalized)}`)
 }
 
 /**
@@ -54,16 +38,10 @@ export function selectFixtures(
   fixtures: readonly Fixture[],
   suite: EvalSuite,
   requested: ReadonlySet<string> | null,
-  runtimeVersion: 2 = requestedEvalAgentRuntimeVersion(),
 ): Fixture[] {
-  // A fixture for behavior only one runtime has, such as a receipt placeholder
-  // in an exact draft, runs only when that runtime is pinned.
-  const onRuntime = fixtures.filter(fixture => (
-    fixture.runtimeVersion === undefined || fixture.runtimeVersion === runtimeVersion
-  ))
   const inSuite = suite === "core"
-    ? onRuntime.filter(fixture => fixture.suite === "core")
-    : onRuntime
+    ? fixtures.filter(fixture => fixture.suite === "core")
+    : [...fixtures]
   if (!requested) return inSuite
 
   // Rerunning a held-out case by name to see whether a change fixed it is how

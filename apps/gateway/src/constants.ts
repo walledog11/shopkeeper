@@ -69,7 +69,6 @@ export const JOB = {
   RETURN_LIFECYCLE_SCAN: 'scan-return-lifecycle',
   RETURN_LIFECYCLE_ID: 'return-lifecycle-monitor-hourly',
   ORDER_REVIEW: 'process-order-review',
-  CONTROLLED_QUEUE_RECOVERY: 'controlled-queue-recovery',
   SEND_EMAIL: 'send-email',
   GMAIL_SYNC: 'sync-gmail-mailbox',
   GMAIL_WATCH_MAINTENANCE: 'maintain-gmail-watches',
@@ -90,8 +89,6 @@ export const JOB = {
   PLAN_RECOVERY: 'recover-missing-plans',
   PLAN_RECOVERY_ID: 'plan-recovery-hourly',
 } as const;
-export const CONTROLLED_QUEUE_RECOVERY_FAILURE =
-  'Controlled queue recovery canary: first attempt must fail';
 // 7-day failed retention keeps post-mortems possible; 1-day completed retention bounds Redis.
 export const PROCESSING_QUEUE_DEFAULTS = {
   attempts: 3,

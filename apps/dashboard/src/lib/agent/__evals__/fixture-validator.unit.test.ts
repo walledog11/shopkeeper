@@ -59,11 +59,6 @@ describe("validateFixtures", () => {
     expect(() => validateFixtures([fixture({ holdout: "C05", suite: "extended" })])).toThrow(/hard core fixture/)
   })
 
-  it("allows the withheld-message follow-up only on runtime v2", () => {
-    expect(() => validateFixtures([fixture({ withheldMessageFollowUp: true })])).toThrow(/runtime v2/)
-    expect(() => validateFixtures([fixture({ withheldMessageFollowUp: true, runtimeVersion: 2 })])).not.toThrow()
-  })
-
   it("rejects missing required setup fields and invalid enums", () => {
     const invalid = fixture({
       setup: { channelType: "fax", messages: undefined } as never,

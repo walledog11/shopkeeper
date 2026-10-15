@@ -19,19 +19,13 @@ Last updated: 2026-10-14.
    `NPM_CONFIG_PRODUCTION=false`, so the earlier note that setting it broke the build by
    skipping devDependencies is not the cause. Closes when both services' logs are JSON
    (runbook: *Railway*).
-2. **Scripts and tooling.** Delete audit/canary scripts for finished migrations and the
-   one-off gateway scripts nothing runs; drop their `package.json` entries; make paid
-   evals one manual command and remove the leftover runtime-version switch in
-   `__evals__/selection.ts`; fix or delete `verify-production.mjs`'s inbound-email smoke
-   (it sends no Postmark auth, so production answers 401). Closes when every remaining
-   script is referenced by `package.json` or the runbook.
-3. **Test suite structure.** One naming rule everywhere (`*.integration.test.ts` needs
+2. **Test suite structure.** One naming rule everywhere (`*.integration.test.ts` needs
    services, any other `*.test.ts` doesn't); move DB-free "integration" files to unit and
    agent-package tests out of the gateway; replace the Clerk-mock patching in the
    dashboard `test-setup.ts` with one `mockClerkSession()` helper; split scenario files
    over ~600 lines; turn lint-style tests into ESLint rules. No new tests. Closes when
    `npm run test:unit` covers every test that needs no database and runs without Docker.
-4. **Agent-core debt**, one PR each:
+3. **Agent-core debt**, one PR each:
    - Completion copy for replies without an approved draft comes from structured fields;
      the English-verb regexes in `plan-grounding.ts` (`renderReplyCompletionClaims`,
      `unsupportedReplyCompletionClaims`) stop deciding anything. Required before

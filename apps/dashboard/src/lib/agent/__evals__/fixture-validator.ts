@@ -306,9 +306,6 @@ export function validateFixtures(fixtures: readonly unknown[], filenames?: reado
       if (!ACTION_STATUSES.has(action.status)) local.push(`expectedPlan.expectedAgentActions[${actionIndex}].status is invalid`)
       if (!ACTION_MODES.has(action.mode)) local.push(`expectedPlan.expectedAgentActions[${actionIndex}].mode is invalid`)
     }
-    if (fixture.runtimeVersion !== undefined && fixture.runtimeVersion !== 2) {
-      local.push("runtimeVersion may only be 2")
-    }
     if (fixture.holdout !== undefined) {
       if (!(HOLDOUT_CASES as readonly string[]).includes(fixture.holdout)) {
         local.push(`holdout must name a model-scored manifest case (${HOLDOUT_CASES.join(", ")})`)
@@ -318,9 +315,6 @@ export function validateFixtures(fixtures: readonly unknown[], filenames?: reado
       if (fixture.suite !== "core" || fixture.advisory === true) {
         local.push("a held-out fixture must be a hard core fixture")
       }
-    }
-    if (fixture.withheldMessageFollowUp !== undefined && fixture.runtimeVersion !== 2) {
-      local.push("withheldMessageFollowUp exists only on runtime v2; set runtimeVersion 2")
     }
     for (const [resultIndex, result] of (fixture.setup.simulateToolResults ?? []).entries()) {
       assertToolName(result.tool, `setup.simulateToolResults[${resultIndex}].tool`, local)

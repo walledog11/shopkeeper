@@ -10,7 +10,7 @@ import type { OrgDigest, SendScheduledDigestsOptions } from './types.js';
 import { claimDigestWindow, releaseDigestWindow } from './window-claim.js';
 
 /** Deliver the briefing as a single operator-channel message. */
-export async function deliverOrgDigest(
+async function deliverOrgDigest(
   organizationId: string,
   member: OperatorBinding,
   digest: OrgDigest,

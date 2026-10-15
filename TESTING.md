@@ -70,21 +70,24 @@ Pull requests run only a free deterministic preflight. A second paid suite, the 
 eval (`apps/gateway/src/order-ops.eval.test.ts`, `npm run test:evals -w apps/gateway`),
 follows the same skip and ceiling rules.
 
-Every paid command refuses to start without both ceilings, `EVAL_MAX_USD` and
-`EVAL_MAX_MODEL_CALLS`; the call cap is the strict backstop.
+Each suite has one paid command, `test:evals`, and it refuses to start without both
+ceilings, `EVAL_MAX_USD` and `EVAL_MAX_MODEL_CALLS`; the call cap is the strict backstop.
+The canonical paid run is a manual dispatch of `evals.yml` (modes `release`, `targeted`,
+`drift`, `baseline`), which sizes both suites' ceilings before any model call:
 
 ```sh
-# one fixture, for diagnosis
-EVAL_MAX_USD=0.10 EVAL_MAX_MODEL_CALLS=20 EVAL_FIXTURE=refund-partial \
-  npm run test:evals:fixture -w apps/dashboard
-# every fixture in fixtures/ (core and extended); the refusal message prints ceilings
-EVAL_CONFIRM=1 EVAL_MAX_USD=0.76 EVAL_MAX_MODEL_CALLS=149 npm run test:evals -w apps/dashboard
-# 3-repeat baseline comparison; test:evals:baseline:overwrite rewrites baseline.json
-EVAL_CONFIRM=1 EVAL_MAX_USD=2.58 EVAL_MAX_MODEL_CALLS=446 npm run test:evals:baseline -w apps/dashboard
+gh workflow run evals.yml -f mode=release -f max_usd=0.90 -f max_model_calls=120
 ```
 
-In CI, paid modes are a manual `workflow_dispatch` of `evals.yml` with `max_usd` and
-`max_model_calls`.
+Locally, run one fixture for diagnosis:
+
+```sh
+EVAL_MAX_USD=0.10 EVAL_MAX_MODEL_CALLS=20 EVAL_FIXTURE=refund-partial \
+  npm run test:evals -w apps/dashboard
+```
+
+Scope comes from env: `EVAL_FIXTURE`, `EVAL_SUITE` (`core`/`full`), `EVAL_REPEATS`,
+`RUN_JUDGE_EVALS=1`, and `UPDATE_EVAL_BASELINE=1` to rewrite `baseline.json`.
 
 The test database must be up: with Postgres down every fixture fails before any model
 call (`calls=0`). Evals cannot see the Shopify layer — every Shopify tool result is
