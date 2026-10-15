@@ -270,43 +270,6 @@ async function verifyGatewayQueues(baseUrl) {
   console.log(`[verify-production] Gateway queue health OK: ${url}`);
 }
 
-async function verifyInboundEmailWebhook(baseUrl) {
-  const to = process.env.VERIFY_INBOUND_EMAIL_TO;
-  if (!to) {
-    console.log('[verify-production] Skipping inbound email smoke check: VERIFY_INBOUND_EMAIL_TO not set');
-    return;
-  }
-
-  const from = process.env.VERIFY_INBOUND_EMAIL_FROM ?? 'shopkeeper-smoke@example.com';
-  const subject = process.env.VERIFY_INBOUND_EMAIL_SUBJECT ?? `Shopkeeper production smoke ${new Date().toISOString()}`;
-  const textBody = process.env.VERIFY_INBOUND_EMAIL_BODY ?? 'Production smoke test message';
-
-  const form = new URLSearchParams({
-    From: from,
-    To: to,
-    Subject: subject,
-    TextBody: textBody,
-  });
-
-  const url = buildUrl(baseUrl, '/webhooks/email/inbound');
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/x-www-form-urlencoded',
-      'user-agent': 'shopkeeper-production-verify/1.0',
-    },
-    body: form,
-  });
-
-  const body = await response.text();
-  if (!response.ok || body !== 'OK') {
-    throw new Error(`[verify-production] Inbound email smoke check failed: ${response.status} ${body}`);
-  }
-
-  console.log(`[verify-production] Inbound email webhook accepted: ${url}`);
-  console.log('[verify-production] Track 4.6 follow-up: confirm ai-summary -> in-process auto-plan -> auto-execute -> io-send-internal delivery in the dashboard');
-}
-
 async function main() {
   const dashboardUrl = requireAbsoluteUrlEnv('DASHBOARD_URL');
   const gatewayUrl = requireAbsoluteUrlEnv('GATEWAY_URL');
@@ -317,7 +280,6 @@ async function main() {
   await verifyGateway(gatewayUrl);
   await verifyGatewayQueues(gatewayUrl);
   await verifyPhotonWebhookInfrastructure(gatewayUrl);
-  await verifyInboundEmailWebhook(gatewayUrl);
 
   console.log('[verify-production] Production verification passed');
 }

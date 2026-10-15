@@ -24,26 +24,6 @@ test('release budget reserves the bounded gateway cost without starving dashboar
   assert.match(result.stdout, /calls=87\/120/);
 });
 
-test('current preflight includes v2 fixtures and rejects the retired runtime', () => {
-  const run = runtimeVersion => spawnSync(process.execPath, [
-    'scripts/eval-budget-preflight.mjs',
-    '--mode', 'release',
-    '--runtime-version', runtimeVersion,
-    '--repeats', '1',
-    '--judges', 'off',
-    '--max-usd', '0.75',
-    '--max-calls', '120',
-  ], {
-    cwd: process.cwd(),
-    encoding: 'utf8',
-  });
-
-  assert.notEqual(run('1').status, 0);
-  assert.match(run('1').stderr, /runtime 1 is retired/);
-  assert.match(run('current').stdout, /mode=release fixtures=37 /);
-  assert.match(run('2').stdout, /mode=release fixtures=37 /);
-});
-
 test('release preflight rejects the call ceiling exhausted by the observed suite', () => {
   const result = spawnSync(process.execPath, [
     'scripts/eval-budget-preflight.mjs',

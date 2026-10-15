@@ -181,10 +181,6 @@ export interface Fixture {
   // `core` is the paid release profile and is always hard-gated. `extended`
   // belongs to the complete drift profile and may be hard or advisory.
   suite: "core" | "extended";
-  // Set only for behavior a single runtime has (receipt placeholders exist only
-  // on runtime v2). Such a fixture runs only when EVAL_AGENT_RUNTIME_VERSION
-  // names that runtime, so a v1/v2 comparison never counts it against v1.
-  runtimeVersion?: 2;
   // A held-out variant of a model-scored case in the Package 0 evaluation
   // manifest. It measures behavior on input nobody tuned against, so it runs
   // only in whole-suite comparisons and cannot be selected by name.

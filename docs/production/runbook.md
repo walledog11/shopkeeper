@@ -245,10 +245,9 @@ GATEWAY_URL='https://clerk-production-e37f.up.railway.app' \
 npm run verify:production
 ```
 
-   Leave `VERIFY_INBOUND_EMAIL_TO` unset: its inbound-email smoke sends no Postmark basic auth, so
-   production answers `401`. It also fails on any job left in a queue's `failed` set (`Queue
-   failures detected`). Triage each one per [BullMQ Failed Jobs](#bullmq-failed-jobs); never clear
-   them just to pass the smoke. `VERIFY_IMESSAGE=false` skips the iMessage checks.
+   It fails on any job left in a queue's `failed` set (`Queue failures detected`). Triage each one
+   per [BullMQ Failed Jobs](#bullmq-failed-jobs); never clear them just to pass the smoke.
+   `VERIFY_IMESSAGE=false` skips the iMessage checks.
 7. Run at least one real flow from [Channel Smoke Tests](#channel-smoke-tests-and-recovery), and
    `migrate status` if the release carried a migration ([Verify](#verify-what-is-actually-applied)).
 8. **Confirm every surface runs what you meant** — a surface left behind fails silently. There are

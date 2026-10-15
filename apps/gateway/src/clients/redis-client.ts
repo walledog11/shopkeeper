@@ -42,10 +42,6 @@ function createGatewayBullMqConnection(options?: RedisOptions): GatewayBullMqCon
   return createGatewayRedisClient(options) as GatewayBullMqConnection;
 }
 
-export function toGatewayBullMqConnection(redis: IORedis): GatewayBullMqConnection {
-  return redis as GatewayBullMqConnection;
-}
-
 export function getGatewayRedis(): IORedis {
   if (!sharedRedis) {
     sharedRedis = createGatewayRedisClient();

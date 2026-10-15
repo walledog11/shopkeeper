@@ -23,11 +23,7 @@
     "test:watch": "node ../../scripts/with-test-env.mjs vitest --config vitest.integration.config.ts",
     "test:evals": "node ../../scripts/record-eval-run.mjs gateway:test:evals && EVAL_RUN=1 node ../../scripts/with-test-env.mjs vitest run --config vitest.integration.config.ts src/order-ops.eval.test.ts",
     "test:coverage": "node ../../scripts/with-test-env.mjs vitest run --coverage --config vitest.config.ts",
-    "rebuild-summaries": "tsx src/scripts/rebuild-bad-summaries.ts",
-    "backfill-titles": "tsx src/scripts/backfill-thread-titles.ts",
-    "canary:outbound-gmail": "tsx src/scripts/canary-outbound-gmail.ts",
-    "recovery:queue": "tsx src/scripts/exercise-queue-recovery.ts",
-    "realtime:smoke": "tsx src/scripts/realtime-smoke.ts"
+    "canary:outbound-gmail": "tsx src/scripts/canary-outbound-gmail.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.104.1",

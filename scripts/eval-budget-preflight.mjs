@@ -35,21 +35,11 @@ const repeats = positiveInteger('repeats');
 const judges = required('judges');
 if (!['on', 'off'].includes(judges)) throw new Error('--judges must be on or off');
 
-// The runtime the run pins, as EVAL_AGENT_RUNTIME_VERSION does. A fixture for
-// one runtime's behavior only runs on that runtime (selectFixtures in the eval
-// harness), so it only counts toward that runtime's budget.
-const runtimeArg = args.get('runtime-version')?.trim() || 'current';
-if (!['current', '2'].includes(runtimeArg)) {
-  throw new Error('--runtime-version must be current or 2; runtime 1 is retired');
-}
-const runtimeVersion = 2;
-
 const fixtureDirectory = resolve('apps/dashboard/src/lib/agent/__evals__/fixtures');
 const allFixtures = readdirSync(fixtureDirectory)
   .filter(file => file.endsWith('.json'))
   .sort()
-  .map(file => JSON.parse(readFileSync(resolve(fixtureDirectory, file), 'utf8')))
-  .filter(fixture => fixture.runtimeVersion === undefined || fixture.runtimeVersion === runtimeVersion);
+  .map(file => JSON.parse(readFileSync(resolve(fixtureDirectory, file), 'utf8')));
 
 const requestedIds = new Set(
   (args.get('fixtures') ?? '').split(',').map(value => value.trim()).filter(Boolean),

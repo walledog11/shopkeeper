@@ -31,7 +31,6 @@ import type {
   PhaseUsage,
   SimulatedToolResult,
 } from "./types"
-import { requestedEvalAgentRuntimeVersion } from "./selection"
 
 export {
   compareToBaseline,
@@ -301,12 +300,9 @@ async function runFixture(
     simulatedToolResults.current = simulated.size > 0 ? simulated : null
     restoreShopifyRest = installSimulatedShopifyRest(fixture)
     const resolvedSettings = resolveAgentSettings(fixture.setup.orgSettings ?? null)
-    const runtimeVersion = requestedEvalAgentRuntimeVersion()
     currentPhase = usage.plannerUsage
     const plan = await planAgent(environment.ctx, fixture.instruction, resolvedSettings, {
       merchantInstruction: fixture.merchantInstruction === true,
-      ...(runtimeVersion !== undefined ? { runtimeVersion } : {}),
-
       ...(fixture.withheldMessageFollowUp ? { withheldMessageFollowUp: true } : {}),
     })
     currentPhase = null

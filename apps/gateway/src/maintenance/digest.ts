@@ -1,8 +1,6 @@
 export {
   bucketDigestThreads,
-  buildDigestOpener,
   buildOrgDigest,
-  deliverOrgDigest,
   digestWindowKey,
   registerDigestMaintenanceJob,
   sendScheduledDigests,

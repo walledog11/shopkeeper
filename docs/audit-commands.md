@@ -38,9 +38,7 @@ audit that gates a channel retirement must cast to text the same way.
 | Command | Run when |
 | --- | --- |
 | `npm run audit:plan-executions` | During agent execution or ledger rollouts. |
-| `npm run audit:conversational-overhaul-p0` | Historical cached-plan / pending-card compatibility and execution/delivery inventory. |
 | `npm run audit:agent-runtime-retirement -- --strict` | Before removing a retained runtime-compatibility reader. Read-only aggregate inventory of task versions, proposals, unknown operations, and current taskless caches; refuses actionable non-v2 state. |
-| `npm run audit:classification-alignment` | After classifier contract or routing changes. |
 
 ## Repo hygiene
 

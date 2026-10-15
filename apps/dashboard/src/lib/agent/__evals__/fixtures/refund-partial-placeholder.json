@@ -2,7 +2,6 @@
   "id": "refund-partial-placeholder",
   "description": "On a multi-item order, the customer wants money back for one damaged item and asks how much will go back on their card. Shopify prices the refund, so on runtime v2 the draft names the amount with the {{refund_amount}} placeholder, filled from the refund receipt after the write succeeds.",
   "whyModelNeeded": "The model must name a value it cannot know before the write by using the receipt placeholder, rather than calculating the figure itself or leaving the amount out.",
-  "runtimeVersion": 2,
   "setup": {
     "classifierIntents": {
       "mutative_request": true

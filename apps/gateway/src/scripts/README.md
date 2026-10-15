@@ -1,60 +1,36 @@
 # Gateway operational scripts
 
-One-off and production-adjacent utilities for the Railway gateway service. They are
-**not** imported by the running server. Repo-wide audit gates live under
-`scripts/` at the repository root — see
-[docs/audit-commands.md](../../../../docs/audit-commands.md).
+Production-adjacent utilities for the Railway gateway service. They are **not**
+imported by the running server. Repo-wide audit gates live under `scripts/` at the
+repository root — see [docs/audit-commands.md](../../../../docs/audit-commands.md).
 
 Run with production credentials only when the script header or runbook says so.
 Prefer `railway run` (or the env file noted in each file) over copying secrets locally.
 
 ## npm wrappers (preferred entry points)
 
-These are wired in the root `package.json` and are the supported way to invoke
-the matching script:
-
 | npm script | Script |
 | --- | --- |
 | `npm run audit:shopify-webhooks` | `inspect-shopify-webhooks.ts` |
-| `npm run audit:classification-recovery` | `audit-classification-recovery.ts` |
-| `npm run canary:agent-rollout` | `canary-agent-rollout.ts` |
-| `npm run canary:agent-briefings` | `canary-agent-briefing.ts` |
-| `npm run canary:classification` | `canary-classification-write.ts` |
-| `npm run canary:lock-renewal` | `canary-lock-renewal.ts` |
+| `npm run canary:outbound-gmail -w apps/gateway` | `canary-outbound-gmail.ts` |
 
-## Categories
+## Scripts and what uses them
 
-**Canaries** — bounded production checks with dry-run defaults where possible.
-Examples: `canary-*`, `verify-briefing-reply.ts`, `verify-digest-ordinal.ts`,
-`verify-digest-copy.ts`, `realtime-smoke.ts`, `exercise-queue-recovery.ts`.
-
-**Staging / fixtures** — seed or stage state for a manual exercise. Examples:
-`stage-pending-plan.ts`, `stage-digest.ts`, `stage-order-flag-notification.ts`,
-`episode-run-preflight.ts`.
-
-**Inspect / diagnose** — read-only dumps of threads, plans, queues, or usage.
-Examples: `inspect-*`, `peek-operator-state.ts`, `diagnose-operator-thread.ts`,
-`find-operator-org.ts`, `measure-agent-prompt.ts`.
-
-**Backfills** — data migrations with explicit `CONFIRM=1` or similar guards.
-Examples: `backfill-thread-titles.ts`, `backfill-operator-keys.ts`,
-`rebuild-bad-summaries.ts`, `backdate-episode-clock.ts`.
-
-**Probes** — narrow live experiments (typing, complex tickets, iMessage).
-Examples: `probe-complex-ticket.ts`, `probe-imessage-typing.ts`.
-
-**Queue maintenance** — failed job inspection and removal.
-Examples: `inspect-failed-queue-jobs.ts`, `remove-failed-queue-job.ts`.
-
-**Integrations** — `set-telegram-webhook.ts`, `canary-outbound-gmail.ts`.
-
-**Cleanup** — dev or livetest data only unless documented otherwise.
-Example: `cleanup-livetest-data.ts`.
+| Script | Used by |
+| --- | --- |
+| `canary-dashboard-send-reply-hop.ts` | `e2e/internal-send-hop.spec.ts` (`test:e2e:smoke`) |
+| `canary-outbound-gmail.ts` | Runbook *Outbound email delivery mode* |
+| `inspect-failed-queue-jobs.ts`, `remove-failed-queue-job.ts` | Runbook *BullMQ Failed Jobs* |
+| `set-telegram-webhook.ts` | Runbook *Telegram operator channel* |
+| `inspect-shopify-webhooks.ts` | Runbook *Webhook Routing* and *Channel Smoke Tests and Recovery* |
+| `inspect-turn-usage.ts` | [docs/audit-commands.md](../../../../docs/audit-commands.md) |
+| `measure-agent-prompt.ts` | Per-section prompt token counts (`count_tokens`, no spend) before changing tool schemas |
+| `inspect-flash-sales.ts` | The only live-store check of the `end_flash_sale` discount query |
+| `backdate-episode-clock.ts`, `inspect-escalation-routing.ts` | [Storefront chat verification](../../../../docs/production/storefront-chat-verification-2026-08.md) |
 
 ## Adding a script
 
-Pick a prefix (`canary-`, `inspect-`, `stage-`, `backfill-`, `probe-`) that matches
-the lifecycle. Document required env vars in the file header. If operators will run
-it repeatedly, add an `npm run` alias in the root `package.json` and a row in
+Document required env vars in the file header. If operators will run it repeatedly,
+add an `npm run` alias in the root `package.json` and a row in
 [docs/audit-commands.md](../../../../docs/audit-commands.md) when it is a retirement
-or rollout gate.
+or rollout gate. List it in the table above.
