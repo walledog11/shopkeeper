@@ -12,8 +12,6 @@ export const merchantCautionInkClass = "bg-[#fff4e5] text-[#1a1a1a]" as const
 export const merchantContactPillClass =
   "h-9 max-w-full gap-1.5 px-3 text-xs font-medium text-[#6b5d4f] bg-[#f5ebe0] hover:bg-[#efe4d6]" as const
 
-export const merchantOrderPillClass = merchantSandInkClass
-
 export type MerchantMetaStatusTone = "send" | "caution" | "neutral" | "danger"
 
 export const merchantMetaStatusPillClass: Record<MerchantMetaStatusTone, string> = {

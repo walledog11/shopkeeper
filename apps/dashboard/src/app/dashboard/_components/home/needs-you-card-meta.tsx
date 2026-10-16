@@ -11,7 +11,7 @@ import {
   merchantInkClass,
   merchantMetaStatusPillClass,
   merchantMutedClass,
-  merchantOrderPillClass,
+  merchantSandInkClass,
   type MerchantMetaStatusTone,
 } from "@/lib/ui/merchant-palette"
 import { needsYouMetaPillShellClassName } from "./needs-you-card-styles"
@@ -68,7 +68,7 @@ function categoryLabelFromMeta(meta: TicketCardMeta): string | null {
   return topicLabelFromTag(meta.tag ?? null)
 }
 
-const ORDER_PILL_CLASS_NAME = merchantOrderPillClass
+const ORDER_PILL_CLASS_NAME = merchantSandInkClass
 
 const META_PILL_HEIGHT_CLASS = "h-9 sm:h-10"
 const META_CHANNEL_PILL_CLASS = "h-9 w-9 shrink-0 sm:h-10 sm:w-10"
