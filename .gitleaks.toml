@@ -1,0 +1,17 @@
+[extend]
+useDefault = true
+
+# These are the public list and segment IDs used in Loops form/audience settings.
+# Keep every default detection rule and limit this exception to the exact IDs
+# in this one manifest, including when GitHub creates a squash-merge commit.
+[[rules]]
+id = "generic-api-key"
+
+[[rules.allowlists]]
+description = "Public Loops audience identifiers"
+condition = "AND"
+paths = ['''^docs/waitlist/loops-resources\.json$''']
+regexes = [
+  '''^cmva5usem0df50jzzfgs88oyz$''',
+  '''^cmv9w7mkt01s90j2e561n5ha3$''',
+]
