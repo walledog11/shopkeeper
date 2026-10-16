@@ -94,7 +94,7 @@ export function ProductDetailTemplate({
             {lede}
           </p>
           <div className="mt-9 flex flex-wrap justify-center gap-3">
-            <ButtonLink href="/signup" variant="primary" size="lg">
+            <ButtonLink href="/#waitlist" variant="primary" size="lg">
               {PRIMARY_CTA_LABEL}
             </ButtonLink>
             <ButtonLink href={jumpHref} variant="outline" size="lg">

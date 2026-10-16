@@ -11,6 +11,46 @@ datasource db {
   directUrl = env("DIRECT_DATABASE_URL")
 }
 
+// Prelaunch interest, separate from authenticated merchant accounts.
+model WaitlistEntry {
+  id             String   @id @default(uuid()) @db.Uuid
+  email          String   @unique @db.VarChar(254)
+  source         String   @db.VarChar(20)
+  attribution    Json     @db.JsonB
+  consentVersion String   @default("early-access-v1") @map("consent_version") @db.VarChar(40)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  newsletterOptIn Boolean @default(false) @map("newsletter_opt_in")
+  newsletterConsentAt DateTime? @map("newsletter_consent_at") @db.Timestamptz
+  stage String @default("waiting") @db.VarChar(20)
+  invitedAt DateTime? @map("invited_at") @db.Timestamptz
+  signedUpAt DateTime? @map("signed_up_at") @db.Timestamptz
+  emailStatus String @default("pending") @map("email_status") @db.VarChar(20)
+  launchSubscribed Boolean @default(false) @map("launch_subscribed")
+  updatesSubscribed Boolean @default(false) @map("updates_subscribed")
+  loopsContactId String? @map("loops_contact_id") @db.VarChar(128)
+  loopsSubmittedAt DateTime? @map("loops_submitted_at") @db.Timestamptz
+  loopsSyncedAt DateTime? @map("loops_synced_at") @db.Timestamptz
+  syncAfter DateTime? @default(now()) @map("sync_after") @db.Timestamptz
+  syncAttempts Int @default(0) @map("sync_attempts")
+  syncRevision Int @default(1) @map("sync_revision")
+  syncLeaseToken String? @map("sync_lease_token") @db.Uuid
+  syncLeaseUntil DateTime? @map("sync_lease_until") @db.Timestamptz
+  lastSyncError String? @map("last_sync_error") @db.VarChar(80)
+
+  @@index([createdAt])
+  @@index([syncAfter])
+  @@map("waitlist_entries")
+}
+
+// Deduplicates signed Loops deliveries without retaining email addresses/payloads.
+model WaitlistWebhookReceipt {
+  id String @id @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([createdAt])
+  @@map("waitlist_webhook_receipts")
+}
+
 // --- ENUMS ---
 enum ChannelType {
   ig_dm

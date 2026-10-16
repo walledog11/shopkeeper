@@ -19,13 +19,21 @@ export default function PrivacyPage() {
   return (
     <LegalPage
       title="Privacy Policy"
-      effectiveDate="August 30, 2026"
+      effectiveDate="October 15, 2026"
       intro={privacyIntro}
       sections={[
         {
           title: 'Information We Collect',
           body: (
             <>
+              <p>
+                If you join our early-access waitlist, we collect your email address, signup time, and campaign tags
+                to contact you about early access and understand how people find Shopkeeper. If you choose to receive
+                product updates, we also record that preference. We use Loops to manage subscriptions, confirm your
+                email address, and send these emails. You can unsubscribe using the link in an email. Joining does not
+                create an account or connect your store. To request deletion, email{' '}
+                <a href={`mailto:${CONTACT_EMAIL}`} className="underline underline-offset-4">{CONTACT_EMAIL}</a>.
+              </p>
               <p>
                 We collect account and workspace information, including names, email addresses, organization names,
                 team membership, authentication identifiers, billing status, and settings chosen by a merchant.

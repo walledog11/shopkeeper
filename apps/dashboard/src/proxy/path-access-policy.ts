@@ -16,6 +16,7 @@ export const publicRoutePatterns = [
   "/login(.*)",
   "/signup(.*)",
   "/api/health(.*)",
+  "/api/waitlist",
   "/api/security/csp-report",
   "/api/billing/webhook(.*)",
   "/api/webhooks(.*)",

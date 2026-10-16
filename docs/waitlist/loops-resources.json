@@ -1,0 +1,39 @@
+{
+  "properties": {
+    "waitlistStage": "string",
+    "waitlistJoinedAt": "date",
+    "waitlistConsentVersion": "string",
+    "waitlistSource": "string",
+    "newsletterOptIn": "boolean",
+    "utmSource": "string",
+    "utmMedium": "string",
+    "utmCampaign": "string"
+  },
+  "lists": {
+    "Early access": "cmva5usem0df50jzzfgs88oyz",
+    "Product updates": "cmva5utnj0dca0jz29o213hvk"
+  },
+  "segments": {
+    "Shopkeeper — waiting for early access": "cmv9w7mkt01s90j2e561n5ha3",
+    "Shopkeeper — product updates": "cmv9w8lvk003y0k020wba4evh",
+    "Shopkeeper — signed up": "cmv9w8m2c01sf0kzsy2ec75w1"
+  },
+  "themeId": "cmv9w8un001ti0j16dshg1lgv",
+  "campaigns": {
+    "product-update": {
+      "id": "cmv9w8v2001tt0jzqlcewncl7",
+      "emailMessageId": "cmv9w8v2501tu0jzqeft1lk7p",
+      "url": "https://app.loops.so/campaigns/cmv9w8v2001tt0jzqlcewncl7"
+    },
+    "launch": {
+      "id": "cmv9w8vqz01t20j3d5gkp167e",
+      "emailMessageId": "cmv9w8vrp01t30j3d38d4bec2",
+      "url": "https://app.loops.so/campaigns/cmv9w8vqz01t20j3d5gkp167e"
+    }
+  },
+  "welcome": {
+    "id": "cmv9w8wlt01s70j1mewmfe8ed",
+    "url": "https://app.loops.so/workflows/cmv9w8wlt01s70j1mewmfe8ed",
+    "emailMessageId": "cmv9w9nl201rk0j1dnwc2zvw9"
+  }
+}

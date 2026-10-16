@@ -327,7 +327,7 @@ export function MobileNav() {
         )}
       </nav>
 
-      <Link href="/signup" className="m-btn m-btn-primary m-btn-lg m-nav-sheet-cta" onClick={close}>
+      <Link href="/#waitlist" className="m-btn m-btn-primary m-btn-lg m-nav-sheet-cta" onClick={close}>
         {PRIMARY_CTA_LABEL}
       </Link>
     </dialog>
