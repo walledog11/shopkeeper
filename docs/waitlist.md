@@ -101,9 +101,9 @@ were left untouched. Real inbox delivery still needs the confirmation test above
 Pushing `master` deploys the Vercel dashboard and both Railway gateway services.
 Prepare the database and deployment secrets before that push or merge.
 The two waitlist migrations have been applied to production, and the matching
-Loops configuration is installed on Vercel and both Railway services. The steps
-below document the deployment process; the Loops webhook secret still needs the
-dashboard-only webhook setup.
+Loops configuration is installed on Vercel and both Railway services. The Loops
+webhook has been created and its signing secret is installed on Vercel. The steps
+below document the deployment process for future environments.
 
 1. Apply the additive migrations `20261014120000_add_waitlist` and
    `20261015190000_waitlist_loops` through the normal production migration process.
