@@ -1,6 +1,6 @@
 import { ButtonLink } from "./ButtonLink";
 import { Reveal } from "./Reveal";
-import { PRIMARY_CTA_LABEL } from "@/lib/brand";
+import { WaitlistForm } from "./WaitlistForm";
 
 /* Concentric line art rising from the bottom edge, drawn in the chapter's own
    line token so it stays quiet. */
@@ -36,14 +36,12 @@ export function CTA() {
           Give your shop a shopkeeper.
         </h2>
         <p className="m-lede mx-auto mb-9 max-w-[46ch]">
-          Connect Shopify, add your store’s instructions, and give it a first job:
-          a stock check, an order change, or the customer inbox.
+          Shopkeeper is in development. Join the waitlist and be first to hear
+          when early access opens.
         </p>
-        <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <ButtonLink href="/signup" variant="light" size="lg">
-            {PRIMARY_CTA_LABEL}
-          </ButtonLink>
-          <ButtonLink href="/#workflow" variant="ghost" size="lg">
+        <div className="flex flex-col items-center justify-center gap-3 sm:flex-row sm:items-start">
+          <WaitlistForm source="footer" dark />
+          <ButtonLink href="/#workflow" variant="ghost" size="lg" className="sm:mt-1">
             See what you can ask
           </ButtonLink>
         </div>

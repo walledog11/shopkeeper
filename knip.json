@@ -4,7 +4,7 @@
     "scripts/lib/production-config-schema.d.mts",
     "scripts/with-test-env.d.mts"
   ],
-  "ignoreBinaries": ["docker-compose", "ngrok"],
+  "ignoreBinaries": ["docker-compose", "ngrok", "loops"],
   "ignoreDependencies": ["@shopify/cli"],
   "rules": {
     "files": "error",

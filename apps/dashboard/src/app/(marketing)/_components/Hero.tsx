@@ -1,8 +1,8 @@
 import { ButtonLink } from "./ButtonLink";
-import { PRIMARY_CTA_LABEL } from "@/lib/brand";
+import { WaitlistForm } from "./WaitlistForm";
 import { Check, MessageSquareText } from "lucide-react";
 
-const heroProofPoints = ["Free for 14 days", "Connects to Shopify"] as const;
+const heroProofPoints = ["Free to join", "Connects to Shopify"] as const;
 
 function rise(delayMs: number) {
   return {
@@ -113,12 +113,10 @@ export function Hero() {
         approve anything that matters from iMessage or the dashboard.
       </p>
 
-      <div style={rise(160)}>
-        <div className="flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
-          <ButtonLink href="/signup" variant="primary" size="lg">
-            {PRIMARY_CTA_LABEL}
-          </ButtonLink>
-          <ButtonLink href="#workflow" variant="outline" size="lg">
+      <div id="waitlist" className="scroll-mt-24" style={rise(160)}>
+        <div className="mx-auto flex max-w-3xl flex-col items-center justify-center gap-3 sm:flex-row sm:items-start">
+          <WaitlistForm source="hero" />
+          <ButtonLink href="#workflow" variant="outline" size="lg" className="sm:mt-1">
             <MessageSquareText aria-hidden className="size-4" />
             See what you can ask
           </ButtonLink>

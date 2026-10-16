@@ -22,6 +22,7 @@ import {
 import { registerTokenHealthMaintenanceJob } from './token-health.js';
 import { registerVoiceSynthesisMaintenanceJob } from './voice-synthesis.js';
 import { registerPlanRecoveryMaintenanceJob } from './plan-recovery.js';
+import { registerWaitlistSyncMaintenanceJob } from './waitlist-sync.js';
 
 const maintenanceJobRegistrations: MaintenanceJobRegistration[] = [
   registerInboundProcessingMaintenanceJob,
@@ -41,6 +42,7 @@ const maintenanceJobRegistrations: MaintenanceJobRegistration[] = [
   registerAgentTaskSweepMaintenanceJob,
   registerUnknownOutcomeSweepMaintenanceJob,
   registerQueueHealthMaintenanceJob,
+  registerWaitlistSyncMaintenanceJob,
 ];
 
 export async function createMaintenanceWorkers(

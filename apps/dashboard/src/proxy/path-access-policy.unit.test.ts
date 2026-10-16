@@ -21,6 +21,8 @@ describe("proxy path access policy", () => {
     expect(isPublicPath("/sitemap.xml")).toBe(true);
     expect(isPublicPath("/login")).toBe(true);
     expect(isPublicPath("/signup")).toBe(true);
+    expect(isPublicPath("/api/waitlist")).toBe(true);
+    expect(isPublicPath("/api/waitlist/export")).toBe(false);
   });
 
   it("keeps inbound machine endpoints public", () => {

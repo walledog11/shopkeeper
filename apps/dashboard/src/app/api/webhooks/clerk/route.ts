@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { beginWorkspaceDeletion, db } from '@shopkeeper/db'
 import { verifyWebhook, type WebhookEvent } from '@clerk/nextjs/webhooks'
 import logger from '@/lib/server/logger'
+import { markWaitlistSignedUp } from '@shopkeeper/email/waitlist'
 
 function hasSvixHeaders(headers: Headers) {
   return Boolean(
@@ -31,6 +32,13 @@ export async function POST(request: NextRequest) {
   }
 
   switch (event.type) {
+    case 'user.created':
+    case 'user.updated': {
+      const primary = event.data.email_addresses.find(address => address.id === event.data.primary_email_address_id)
+      if (primary?.verification?.status === 'verified') await markWaitlistSignedUp(primary.email_address)
+      return NextResponse.json({ received: true })
+    }
+
     case 'organization.deleted': {
       const clerkOrgId = event.data.id
       if (!clerkOrgId) {

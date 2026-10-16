@@ -10,6 +10,7 @@ const CLERK_WEBHOOK_SECRET = WEBHOOK_SIGNING_BYTES.toString('base64')
 const WEBHOOK_URL = 'http://localhost:3000/api/webhooks/clerk'
 
 let org: Awaited<ReturnType<typeof createTestOrg>> | null
+let waitlistId: string | null
 
 async function createOrg() {
   org = await createTestOrg()
@@ -38,16 +39,38 @@ function createSignedRequest(event: Record<string, unknown>) {
 
 beforeEach(() => {
   org = null
+  waitlistId = null
   vi.stubEnv('CLERK_WEBHOOK_SECRET', CLERK_WEBHOOK_SECRET)
 })
 
 afterEach(async () => {
+  if (waitlistId) await db.waitlistEntry.deleteMany({ where: { id: waitlistId } })
   await cleanupTestData(org?.id)
   org = null
   vi.unstubAllEnvs()
 })
 
 describe('POST /api/webhooks/clerk', () => {
+  it('marks a waitlist signup converted only after Clerk verifies the primary email', async () => {
+    const email = `clerk-waitlist-${randomUUID()}@example.com`
+    const entry = await db.waitlistEntry.create({ data: { email, source: 'hero', attribution: {} } })
+    waitlistId = entry.id
+    const event = (type: string, status: string) => ({
+      object: 'event', type,
+      data: { object: 'user', id: 'user_waitlist', primary_email_address_id: 'email_primary',
+        email_addresses: [{ id: 'email_primary', email_address: email, verification: { status } }],
+      },
+    })
+    expect((await POST(createSignedRequest(event('user.created', 'unverified')))).status).toBe(200)
+    expect((await db.waitlistEntry.findUniqueOrThrow({ where: { id: entry.id } })).stage).toBe('waiting')
+    expect((await POST(createSignedRequest(event('user.updated', 'verified')))).status).toBe(200)
+    const converted = await db.waitlistEntry.findUniqueOrThrow({ where: { id: entry.id } })
+    expect(converted.stage).toBe('signed_up')
+    expect(converted.signedUpAt).not.toBeNull()
+    await POST(createSignedRequest(event('user.updated', 'verified')))
+    expect((await db.waitlistEntry.findUniqueOrThrow({ where: { id: entry.id } })).signedUpAt).toEqual(converted.signedUpAt)
+  })
+
   it('retains billing and credentials until cleanup after Clerk deletes an organization', async () => {
     const testOrg = await createOrg()
     await db.organization.update({ where: { id: testOrg.id }, data: { stripeSubscriptionId: 'sub_cleanup' } })

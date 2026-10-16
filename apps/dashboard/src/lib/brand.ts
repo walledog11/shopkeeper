@@ -2,7 +2,7 @@
 export const PRODUCT_NAME = 'Shopkeeper';
 
 /** Primary marketing CTA — keep identical on hero, navbar, and product pages. */
-export const PRIMARY_CTA_LABEL = 'Get early access';
+export const PRIMARY_CTA_LABEL = 'Join the waitlist';
 
 /**
  * Public contact address for marketing and legal pages.

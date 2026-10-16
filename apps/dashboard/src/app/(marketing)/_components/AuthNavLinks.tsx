@@ -87,7 +87,7 @@ export function AuthNavLinks() {
         <Link href="/login" className={quietLinkClass}>
           Log in
         </Link>
-        <Link href="/signup" className={primaryLinkClass}>
+        <Link href="/#waitlist" className={primaryLinkClass}>
           {PRIMARY_CTA_LABEL}
         </Link>
       </>

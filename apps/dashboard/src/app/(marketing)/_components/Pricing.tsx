@@ -2,6 +2,7 @@ import { Check } from "lucide-react";
 import { ButtonLink } from "./ButtonLink";
 import { Reveal } from "./Reveal";
 import { SectionLabel } from "./SectionLabel";
+import { PRIMARY_CTA_LABEL } from "@/lib/brand";
 
 // Both plans run the whole product. `PLAN_LIMITS` in `packages/db/plan-limits.ts`
 // sells volume and seats and gates no tool or capability, so a $19 subscriber
@@ -22,8 +23,8 @@ const tiers = [
       "500 customer conversations a month",
       "One seat",
     ],
-    cta: "Start free trial",
-    href: "/signup",
+    cta: PRIMARY_CTA_LABEL,
+    href: "/#waitlist",
     featured: false,
   },
   {
@@ -36,8 +37,8 @@ const tiers = [
       "No conversation limit",
       "Two seats",
     ],
-    cta: "Start free trial",
-    href: "/signup",
+    cta: PRIMARY_CTA_LABEL,
+    href: "/#waitlist",
     featured: true,
   },
 ];
@@ -51,7 +52,7 @@ export function Pricing() {
           The whole product, <span className="m-tail">on either plan.</span>
         </h2>
         <p className="m-lede mx-auto mb-8 max-w-[48ch]">
-          Try it free for 14 days.
+          Join the waitlist to hear when early access opens.
         </p>
 
         <p className="mx-auto mb-12 max-w-[62ch] rounded-2xl border border-[color:var(--m-line)] bg-[color:var(--m-bg-alt)] px-5 py-4 text-[15px] leading-relaxed text-[color:var(--m-ink-2)]">

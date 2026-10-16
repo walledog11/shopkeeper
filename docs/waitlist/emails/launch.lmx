@@ -1,0 +1,10 @@
+<Style themeId="{{themeId}}" />
+<Paragraph><Strong>shopkeeper</Strong></Paragraph>
+<H1>Your shopkeeper is ready to meet you.</H1>
+<Paragraph>You joined the waitlist. Today, we're opening early access to Shopkeeper.</Paragraph>
+<Paragraph>Shopkeeper helps solo Shopify store owners answer customers and handle the work behind their orders, with approvals for the decisions that matter.</Paragraph>
+<Paragraph>Create your account to get started. You'll be guided through connecting your store and setting up how your shopkeeper works.</Paragraph>
+<Button href="https://app.useshopkeeper.com/signup?utm_source=loops&amp;utm_medium=email&amp;utm_campaign=early-access-launch">Get early access</Button>
+<Paragraph>Thanks for following along while we built this. If you have questions as you get started, reply to this email.</Paragraph>
+<Paragraph>Rajbir, founder of Shopkeeper</Paragraph>
+<Divider />

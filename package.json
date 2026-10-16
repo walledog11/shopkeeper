@@ -12,6 +12,9 @@
   "scripts": {
     "predev": "npm run db:generate -w packages/db && npx turbo run build --filter=\"./packages/*\"",
     "dev": "npx turbo run dev",
+    "waitlist:export": "node scripts/export-waitlist.mjs",
+    "waitlist:provision": "node scripts/provision-waitlist-loops.mjs",
+    "waitlist:configure-local": "node scripts/configure-waitlist-loops-local.mjs",
     "build": "npx turbo run build",
     "clean": "node ./scripts/clean.mjs artifacts",
     "clean:deps": "node ./scripts/clean.mjs deps",

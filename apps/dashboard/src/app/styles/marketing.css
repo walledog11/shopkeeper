@@ -1070,6 +1070,70 @@ html:has(.m-page) {
   background: rgba(255, 255, 255, 0.08);
 }
 
+/* Waitlist — the same pill buttons, hairlines, and chapter colors as the page. */
+.m-waitlist {
+  width: 100%;
+  max-width: 460px;
+  min-width: 0;
+  text-align: left;
+}
+
+.m-waitlist-fields {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--m-line-strong);
+  border-radius: 9999px;
+  background: var(--m-bg);
+}
+
+.m-waitlist-fields > input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 3rem;
+  padding: 0.75rem 0.5rem 0.75rem 1.125rem;
+  border: 0;
+  border-radius: 9999px;
+  background: transparent;
+  color: var(--m-ink);
+  font: inherit;
+  font-size: 16px;
+}
+
+.m-waitlist-fields > input::placeholder { color: var(--m-ink-3); }
+.m-waitlist-fields > input:focus-visible { outline: 2px solid var(--m-focus); outline-offset: -2px; }
+.m-waitlist-fields > button { flex-shrink: 0; }
+.m-waitlist-fields > button:disabled { opacity: 0.65; cursor: wait; }
+.m-waitlist--dark .m-waitlist-fields { background: rgb(255 255 255 / 0.04); }
+
+.m-waitlist-note {
+  margin-top: 10px;
+  color: var(--m-ink-3);
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.m-waitlist-note a { text-decoration: underline; text-underline-offset: 3px; }
+.m-waitlist-opt-in { display: flex; align-items: flex-start; justify-content: center; gap: 8px; margin-top: 12px; color: var(--m-ink-2); font-size: 12px; line-height: 1.6; cursor: pointer; }
+.m-waitlist-opt-in input { width: 14px; height: 14px; margin-top: 3px; accent-color: var(--m-ink); flex-shrink: 0; }
+.m-waitlist-opt-in input:focus-visible { outline: 2px solid var(--m-focus); outline-offset: 3px; }
+.m-waitlist-error { margin-top: 10px; color: #b33424; font-size: 13px; line-height: 1.6; text-align: center; }
+.m-waitlist--dark .m-waitlist-error { color: #ffb4a4; }
+.m-waitlist-trap { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.m-waitlist-success { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 58px; padding: 13px 20px; border: 1px solid var(--m-line-strong); border-radius: 24px; color: var(--m-ink); }
+.m-waitlist-success > svg { flex-shrink: 0; color: var(--m-good); }
+.m-waitlist--dark .m-waitlist-success > svg { color: #a6c9aa; }
+.m-waitlist-success strong { font-size: 15px; font-weight: 500; }
+.m-waitlist-success p { margin-top: 3px; font-size: 12px; line-height: 1.6; color: var(--m-ink-2); }
+
+@media (max-width: 420px) {
+  .m-waitlist-fields { flex-direction: column; padding: 5px; border-radius: 24px; }
+  .m-waitlist-fields > input { text-align: center; }
+  .m-waitlist-fields > button { width: 100%; }
+}
+
 /* Marketing navbar — a flat 56px bar: logo | links | actions, hairline below,
    frosted white so chapters slide under it. Mobile collapses to logo + CTA +
    menu button and must fit at 320px. */
