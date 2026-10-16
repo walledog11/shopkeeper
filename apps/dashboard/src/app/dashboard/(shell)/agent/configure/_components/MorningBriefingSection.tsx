@@ -1,7 +1,7 @@
 "use client"
 
 import { Switch } from "@/components/ui/switch"
-import { NumberInput } from "./settings-form-fields"
+import { NumberInput } from "@/components/settings-form/fields"
 import { SolidSettingsTile as SettingsTile } from "@/app/dashboard/(shell)/settings/_components/SettingsTile"
 import type { AgentTabController } from "./useAgentTabState"
 

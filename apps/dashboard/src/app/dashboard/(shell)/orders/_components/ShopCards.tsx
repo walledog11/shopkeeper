@@ -8,7 +8,7 @@ import {
 import type { OrderRow } from "@/lib/orders/order-contract"
 import { lineItemsSummary } from "./orders-board-model"
 import type { OrderAttentionFinding } from "./order-requests"
-import { ShopCardMetaRow } from "./shop-card-ui"
+import { TicketCardMetaRow } from "@/app/dashboard/_components/home/needs-you-card-meta"
 import { customerLabel, orderStatusMeta } from "./shop-page-utils"
 
 export function ShopOrderCard({
@@ -30,7 +30,7 @@ export function ShopOrderCard({
             onClick={onOpen}
             className="flex w-full min-w-0 cursor-pointer border-0 bg-transparent p-0 text-left [font-family:inherit]"
           >
-            <ShopCardMetaRow
+            <TicketCardMetaRow
               meta={{
                 customerName: customerLabel(order),
                 orderRef: order.name,
@@ -80,7 +80,7 @@ export function ShopFindingCard({
             disabled={isOpening}
             className="flex w-full min-w-0 cursor-pointer border-0 bg-transparent p-0 text-left [font-family:inherit] disabled:opacity-60"
           >
-            <ShopCardMetaRow
+            <TicketCardMetaRow
               meta={{
                 customerName: null,
                 orderRef: finding.orderName,

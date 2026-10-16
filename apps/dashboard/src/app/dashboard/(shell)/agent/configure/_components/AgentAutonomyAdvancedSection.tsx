@@ -8,7 +8,7 @@ import {
   tierDefaultForPath,
   type AutonomyOverridePath,
 } from "./agent-tab-helpers"
-import { MoneyInput } from "./settings-form-fields"
+import { MoneyInput } from "@/components/settings-form/fields"
 import { Switch } from "@/components/ui/switch"
 import { SolidSettingsTile as SettingsTile } from "@/app/dashboard/(shell)/settings/_components/SettingsTile"
 import type { AgentTabController } from "./useAgentTabState"

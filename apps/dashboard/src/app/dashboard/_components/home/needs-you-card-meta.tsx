@@ -7,6 +7,13 @@ import { getChannelInfoByName } from "@/lib/messaging/channels"
 import { timeAgoCard } from "@/lib/messaging/customer-display"
 import { getTagStyle } from "@/app/dashboard/_lib/ticket-tags"
 import type { HomeNeedsAttentionItem } from "@/lib/home/summary-contract"
+import {
+  merchantInkClass,
+  merchantMetaStatusPillClass,
+  merchantMutedClass,
+  merchantOrderPillClass,
+  type MerchantMetaStatusTone,
+} from "@/lib/ui/merchant-palette"
 import { needsYouMetaPillShellClassName } from "./needs-you-card-styles"
 
 function MetaPill({ className, children }: { className?: string; children: ReactNode }) {
@@ -30,13 +37,14 @@ const KIND_TOPIC_LABELS: Record<HomeNeedsAttentionItem["kind"], string> = {
   invalid: "Fix draft",
 }
 
-export type TicketCardMetaStatusTone = "send" | "caution" | "neutral" | "danger"
+export type TicketCardMetaStatusTone = MerchantMetaStatusTone
 
 export interface TicketCardMeta {
-  channelName: string
+  /** Omit for order-only cards (shop page). */
+  channelName?: string
   customerName: string | null
   lastMessageAt: string
-  tag: string | null
+  tag?: string | null
   orderRef?: string | null
   isVip?: boolean
   topicLabel?: string | null
@@ -45,12 +53,7 @@ export interface TicketCardMeta {
   statusTone?: TicketCardMetaStatusTone
 }
 
-const META_STATUS_PILL_CLASS: Record<TicketCardMetaStatusTone, string> = {
-  send: "bg-[#f5ebe0] text-[#1a1a1a]",
-  caution: "bg-[#fff4e5] text-[#1a1a1a]",
-  neutral: "bg-white text-[#6b5d4f]",
-  danger: "bg-[#fff4e5] text-red-800",
-}
+const META_STATUS_PILL_CLASS = merchantMetaStatusPillClass
 
 function topicLabelFromTag(tag: string | null, fallback: string | null = null): string | null {
   if (!tag || tag === "General") return fallback
@@ -65,7 +68,7 @@ function categoryLabelFromMeta(meta: TicketCardMeta): string | null {
   return topicLabelFromTag(meta.tag ?? null)
 }
 
-const ORDER_PILL_CLASS_NAME = "bg-[#f5ebe0] text-[#1a1a1a]"
+const ORDER_PILL_CLASS_NAME = merchantOrderPillClass
 
 const META_PILL_HEIGHT_CLASS = "h-9 sm:h-10"
 const META_CHANNEL_PILL_CLASS = "h-9 w-9 shrink-0 sm:h-10 sm:w-10"
@@ -83,7 +86,7 @@ export function TicketCardMetaRow({
   trailing?: ReactNode
   onCustomerClick?: () => void
 }) {
-  const channel = getChannelInfoByName(meta.channelName)
+  const showChannel = Boolean(meta.channelName?.trim())
   const orderRef = meta.orderRef?.trim() || null
   const categoryLabel = categoryLabelFromMeta(meta)
   const customerLabel = meta.customerName?.trim() || null
@@ -99,6 +102,91 @@ export function TicketCardMetaRow({
   const localPart = customerLabel && isEmail ? customerLabel.slice(0, emailAt) : customerLabel
   const emailDomain = customerLabel && isEmail ? customerLabel.slice(emailAt + 1) : null
 
+  if (!showChannel) {
+    const statusLabel = meta.statusLabel?.trim() ?? ""
+    const statusTone = meta.statusTone ?? "neutral"
+
+    const customerPill = customerLabel ? (
+      <MetaPill className={cn("min-w-0 flex-1 gap-1.5 px-2.5 sm:px-3", META_PILL_HEIGHT_CLASS)}>
+        {isEmail ? (
+          <span className={cn("min-w-0 truncate text-xs font-semibold leading-tight sm:text-sm", merchantInkClass)}>
+            <span>{localPart}</span>
+            <span className={cn("font-medium", merchantMutedClass)}>@{emailDomain}</span>
+          </span>
+        ) : (
+          <span className={cn("truncate text-xs font-semibold leading-tight sm:text-sm", merchantInkClass)}>
+            {customerLabel}
+          </span>
+        )}
+      </MetaPill>
+    ) : null
+
+    const orderPill = orderRef ? (
+      <MetaPill
+        className={cn(
+          "shrink-0 px-2.5 sm:px-3",
+          META_PILL_HEIGHT_CLASS,
+          ORDER_PILL_CLASS_NAME,
+          !customerPill && "min-w-0 flex-1",
+        )}
+      >
+        <span className="truncate text-[11px] font-bold leading-none tabular-nums sm:text-xs">{orderRef}</span>
+      </MetaPill>
+    ) : null
+
+    const statusPill = statusLabel ? (
+      <MetaPill
+        className={cn(
+          "shrink-0 px-2.5 sm:px-3",
+          META_PILL_HEIGHT_CLASS,
+          META_STATUS_PILL_CLASS[statusTone],
+        )}
+      >
+        <span className="whitespace-nowrap text-[11px] font-bold leading-none sm:text-xs">{statusLabel}</span>
+      </MetaPill>
+    ) : null
+
+    const datePill = (
+      <MetaPill className={cn("shrink-0 px-2.5 sm:px-3", META_PILL_HEIGHT_CLASS)}>
+        <time
+          dateTime={meta.lastMessageAt}
+          className={cn(
+            "text-[11px] font-semibold tabular-nums tracking-tight sm:text-xs",
+            merchantInkClass,
+          )}
+        >
+          {dateLabel}
+        </time>
+      </MetaPill>
+    )
+
+    return (
+      <>
+        <div className="hidden w-full min-w-0 items-center gap-2 sm:flex">
+          {leading}
+          {customerPill}
+          {orderPill}
+          {statusPill}
+          {datePill}
+          {trailing}
+        </div>
+        <div className="flex w-full min-w-0 flex-col gap-2 sm:hidden">
+          <div className="flex min-w-0 items-center gap-2">
+            {leading}
+            {customerPill ?? orderPill}
+            {datePill}
+            {trailing}
+          </div>
+          <div className="flex min-w-0 items-center gap-2">
+            {customerPill ? orderPill : null}
+            {statusPill}
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  const channel = getChannelInfoByName(meta.channelName!)
   const channelPill = (
     <div className={cn(needsYouMetaPillShellClassName, META_PILL_HEIGHT_CLASS, META_CHANNEL_PILL_CLASS, channel.badgeClassName)}>
       <Image
@@ -181,7 +269,7 @@ export function TicketCardMetaRow({
   ) : null
 
   const renderTopicPill = (fill = false) => !meta.statusLabel && categoryLabel ? (
-    <MetaPill className={cn(fill ? META_FILL_PILL_CLASS : META_HUG_PILL_CLASS, META_PILL_HEIGHT_CLASS, getTagStyle(meta.tag).className)}>
+    <MetaPill className={cn(fill ? META_FILL_PILL_CLASS : META_HUG_PILL_CLASS, META_PILL_HEIGHT_CLASS, getTagStyle(meta.tag ?? null).className)}>
       <span className={tailLabelClass(fill)}>
         {categoryLabel}
       </span>

@@ -5,6 +5,7 @@ import { useClerk, useUser } from "@clerk/nextjs";
 import { LayoutDashboard, LogOut } from "lucide-react";
 import { OrgAvatar } from "@/components/OrgAvatar";
 import { PRIMARY_CTA_LABEL } from "@/lib/brand";
+import { marketingButtonClass } from "./ButtonLink";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,7 +15,7 @@ import {
 
 const quietLinkClass = "m-nav-login";
 
-const primaryLinkClass = "m-btn m-btn-primary m-nav-cta";
+const primaryLinkClass = marketingButtonClass({ variant: "primary", className: "m-nav-cta" });
 
 function AuthNavLoading() {
   return (

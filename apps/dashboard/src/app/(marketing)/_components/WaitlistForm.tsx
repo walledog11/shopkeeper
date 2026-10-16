@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useId, useRef, useState, type FormEvent } from "react";
 import { Check, LoaderCircle } from "lucide-react";
 import { PRIMARY_CTA_LABEL } from "@/lib/brand";
+import { marketingButtonClass } from "./ButtonLink";
 
 export function WaitlistForm({ source, dark = false }: { source: "hero" | "footer"; dark?: boolean }) {
   const id = useId();
@@ -63,7 +64,11 @@ export function WaitlistForm({ source, dark = false }: { source: "hero" | "foote
               placeholder="Your email address" required maxLength={254} disabled={state === "saving"}
               aria-invalid={Boolean(error)} aria-describedby={error ? `${id}-error` : `${id}-note`}
             />
-            <button type="submit" className={`m-btn m-btn-lg ${dark ? "m-btn-light" : "m-btn-primary"}`} disabled={state === "saving"}>
+            <button
+              type="submit"
+              className={marketingButtonClass({ size: "lg", variant: dark ? "light" : "primary" })}
+              disabled={state === "saving"}
+            >
               {state === "saving" ? <><LoaderCircle size={16} className="animate-spin motion-reduce:animate-none" aria-hidden="true" /> Joining…</> : PRIMARY_CTA_LABEL}
             </button>
           </div>

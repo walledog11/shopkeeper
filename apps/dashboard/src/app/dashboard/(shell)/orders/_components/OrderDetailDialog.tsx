@@ -12,7 +12,7 @@ import { formatCurrency } from "@/lib/format/currency"
 import { cn } from "@/lib/ui/cn"
 import type { OrderRow } from "@/lib/orders/order-contract"
 import { orderItemCount } from "./orders-board-model"
-import { ShopCardMetaRow } from "./shop-card-ui"
+import { TicketCardMetaRow } from "@/app/dashboard/_components/home/needs-you-card-meta"
 import { customerLabel, orderStatusMeta, shopifyAdminOrderHref } from "./shop-page-utils"
 
 function OrderDetail({ order, shop }: { order: OrderRow; shop: string | null }) {
@@ -23,7 +23,7 @@ function OrderDetail({ order, shop }: { order: OrderRow; shop: string | null }) 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <NeedsYouCardHeader className="pr-12">
-        <ShopCardMetaRow
+        <TicketCardMetaRow
           meta={{
             customerName: customerLabel(order),
             orderRef: order.name,

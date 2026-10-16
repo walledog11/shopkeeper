@@ -3,7 +3,7 @@
 import { Check, Loader2, Sparkles, Trash2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SolidSettingsTile as SettingsTile, settingsTextareaClassName } from "@/app/dashboard/(shell)/settings/_components/SettingsTile"
-import { CharacterCountTextarea, SelectField } from "./settings-form-fields"
+import { CharacterCountTextarea, SelectField } from "@/components/settings-form/fields"
 import { GLASS_SETTINGS_ACTION } from "@/lib/ui/glass-card-styles"
 import type { MerchantPreferencesController } from "./useMerchantPreferencesState"
 
