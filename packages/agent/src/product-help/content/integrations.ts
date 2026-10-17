@@ -108,7 +108,7 @@ export const integrations: Category = {
         },
         {
           tips: [
-            "Reply yes to approve a plan, no to dismiss, or skip 1 to skip the first step on multi-step plans.",
+            "Reply yes to approve a plan or no to dismiss it. To change a step, say what to change and Shopkeeper redrafts the plan.",
             "Text SUMMARY anytime for an open-ticket digest.",
             "Tap the Open link in plan notifications to review or edit the ticket in the dashboard.",
           ],

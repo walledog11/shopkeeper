@@ -7,7 +7,11 @@ import {
   installProductAnalytics,
 } from '@shopkeeper/analytics';
 import { createTestOrg, cleanupTestData } from '@shopkeeper/db/test-helpers';
-import { handleImessageOperatorMessage } from './message-handler.js';
+import {
+  resolveImessageOperatorBinding,
+  runImessageOperatorTurn,
+  type ImessageOperatorInbound,
+} from './message-handler.js';
 import { HELP_TEXT } from '../telegram/format.js';
 import type { OperatorReply } from '../operator-message.js';
 
@@ -16,6 +20,14 @@ const executeFreeFormInstructionSpy = vi.hoisted(() => vi.fn().mockResolvedValue
 vi.mock('../telegram/agent-execution.js', () => ({
   executeFreeFormInstruction: executeFreeFormInstructionSpy,
 }));
+
+// Binding maintenance, then the turn: the two halves the webhook and the
+// operator-event worker run.
+async function handleImessageOperatorMessage(message: ImessageOperatorInbound): Promise<void> {
+  const bound = await resolveImessageOperatorBinding(message);
+  if (!bound) return;
+  await runImessageOperatorTurn({ ...bound, senderId: message.senderId, body: message.body, reply: message.reply, spaceId: message.spaceId });
+}
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
 let member!: Awaited<ReturnType<typeof db.orgMember.create>>;

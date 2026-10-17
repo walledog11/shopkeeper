@@ -1,4 +1,4 @@
-import { defineTool, stringArg, toolError, toolOk, toolUnknown, type AgentToolDefinition } from '@shopkeeper/agent/tools';
+import { defineTool, stringArg, toolError, toolOk, toolUnknown, type AgentToolDefinition, type ToolResult } from '@shopkeeper/agent/tools';
 import { ConflictError } from '@shopkeeper/shared/errors';
 import type { BaseAgentContext, SupportContext } from '@shopkeeper/agent/context';
 import logger from '../../logger.js';
@@ -18,6 +18,9 @@ import { runApprovedPendingPlan, clearPendingPlan } from './pending-plan-actions
 // this the model answers a failed approval by doing the thing itself: on
 // 2026-09-10 it attempted a real refund with no plan, no execution claim and no
 // approver, and only a Shopify currency guard stopped it.
+const NOTHING_RAN = "the merchant's approval did not run a plan, so nothing in this turn is approved. Tell them why and wait for their next instruction.";
+const DID_NOT_COMPLETE = "the plan the merchant approved did not complete, so nothing else in this turn is approved. Report its outcome and do not retry any part of it yourself.";
+
 function withdrawActionAuthority(ctx: unknown, message: string): void {
   const context = ctx as Partial<BaseAgentContext> | undefined;
   if (!context) return;
@@ -87,16 +90,25 @@ export function buildOperatorSessionTools(
     planStepLabel: 'Approve pending plan',
     policy: { categoryPermission: false },
     execute: async (input: PlanRefInput, ctx) => {
+      // The merchant's decision authorized one drafted plan. Whenever that plan
+      // does not run to completion, nothing else in this turn is approved either,
+      // or the model answers the failed approval by doing the work itself.
+      const notApproved = (message: string, result: ToolResult): ToolResult => {
+        withdrawActionAuthority(ctx, message);
+        return result;
+      };
       const selected = selectPendingPlan(context.pendingPlans, input.plan_ref, context.pendingDigest);
       if ('error' in selected) {
-        if (selected.code === 'none_pending') {
-          withdrawActionAuthority(ctx, 'the merchant approved a plan that is no longer queued, so nothing in this turn is approved. Tell them the draft is gone and ask them to reopen the conversation.');
-        }
-        return toolError(selected.error);
+        return notApproved(
+          selected.code === 'none_pending'
+            ? 'the merchant approved a plan that is no longer queued, so nothing in this turn is approved. Tell them the draft is gone and ask them to reopen the conversation.'
+            : NOTHING_RAN,
+          toolError(selected.error),
+        );
       }
       const pendingPlan = selected.plan;
       if (isPendingPlanInvalid(pendingPlan)) {
-        return toolError('Error: this draft failed validation and cannot be approved. Revise it, dismiss it, or take over in the dashboard.');
+        return notApproved(NOTHING_RAN, toolError('Error: this draft failed validation and cannot be approved. Revise it, dismiss it, or take over in the dashboard.'));
       }
 
       // The operator turn holds the operator thread's lock; approval runs on the
@@ -104,7 +116,7 @@ export function buildOperatorSessionTools(
       // impossible same-thread case rather than deadlock on it.
       const currentThreadId = (ctx as Partial<SupportContext>).thread?.id;
       if (currentThreadId && pendingPlan.threadId === currentThreadId) {
-        return toolError('Error: the pending plan targets the current thread and cannot be approved from here.');
+        return notApproved(NOTHING_RAN, toolError('Error: the pending plan targets the current thread and cannot be approved from here.'));
       }
 
       let execution: Awaited<ReturnType<typeof runApprovedPendingPlan>>;
@@ -121,14 +133,14 @@ export function buildOperatorSessionTools(
         });
       } catch (err) {
         logger.error({ err, organizationId, threadId: pendingPlan.threadId }, '[Operator] approve_pending_plan failed');
-        return toolError('Error: something went wrong running the plan. Please try again.');
+        return notApproved(DID_NOT_COMPLETE, toolError('Error: something went wrong running the plan. Please try again.'));
       }
 
       if (execution.outcome === 'unknown') {
-        return toolUnknown(execution.summary);
+        return notApproved(DID_NOT_COMPLETE, toolUnknown(execution.summary));
       }
       if (execution.outcome !== 'committed') {
-        return toolError(execution.summary);
+        return notApproved(DID_NOT_COMPLETE, toolError(execution.summary));
       }
 
       return toolOk(execution.summary);
