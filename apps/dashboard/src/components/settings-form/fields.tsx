@@ -2,8 +2,7 @@ import type { ComponentProps } from "react"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/ui/cn"
-import { settingsFieldClassName } from "@/app/dashboard/(shell)/settings/_components/SettingsTile"
-import { settingsSelectClassName } from "./settings-form-styles"
+import { settingsFieldClassName, settingsSelectClassName } from "./class-names"
 
 function FieldLabel({ label, hint }: { label: string; hint?: string }) {
   return (
@@ -11,35 +10,6 @@ function FieldLabel({ label, hint }: { label: string; hint?: string }) {
       {label}
       {hint && <span className="ml-1.5 font-normal text-faint">· {hint}</span>}
     </span>
-  )
-}
-
-type LabeledTextInputProps = Omit<ComponentProps<"input">, "className"> & {
-  label: string
-  hint?: string
-  description?: string
-  wrapperClassName?: string
-  inputClassName?: string
-  inputWidthClassName?: string
-}
-
-export function LabeledTextInput({
-  label,
-  hint,
-  description,
-  wrapperClassName,
-  inputClassName,
-  inputWidthClassName,
-  ...inputProps
-}: LabeledTextInputProps) {
-  return (
-    <div className={cn("space-y-1.5", wrapperClassName)}>
-      <FieldLabel label={label} hint={hint} />
-      <div className={inputWidthClassName}>
-        <Input {...inputProps} className={cn(settingsFieldClassName, inputClassName)} />
-      </div>
-      {description && <p className="text-xs text-faint">{description}</p>}
-    </div>
   )
 }
 

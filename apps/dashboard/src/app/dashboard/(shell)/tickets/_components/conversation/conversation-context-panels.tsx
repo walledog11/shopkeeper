@@ -6,6 +6,7 @@ import {
   needsYouMetaPillClassName,
   needsYouSoftShadowClassName,
 } from "@/app/dashboard/_components/home/needs-you-card-styles"
+import { merchantContactPillClass } from "@/lib/ui/merchant-palette"
 import { getCustomerName } from "@/lib/messaging/customer-name"
 import { shopifyName } from "@/lib/format/shopify"
 import type { ShopifyAddress } from "@/types/shopify"
@@ -17,10 +18,7 @@ import type { ShopifyCustomerState } from "../context-panel/useShopifyCustomer"
 
 export type ConversationContextSection = "orders" | "customer" | "past"
 
-const contactPillClassName = cn(
-  needsYouMetaPillClassName,
-  "h-9 max-w-full gap-1.5 px-3 text-xs font-medium text-[#6b5d4f] bg-[#f5ebe0] hover:bg-[#efe4d6]",
-)
+const contactPillClassName = cn(needsYouMetaPillClassName, merchantContactPillClass)
 
 export function ConversationContextDropdown({
   children,

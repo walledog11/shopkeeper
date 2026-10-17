@@ -12,6 +12,7 @@ import {
   type TicketCardMeta,
 } from "@/app/dashboard/_components/home/needs-you-card-meta"
 import { needsYouMetaPillShellClassName } from "@/app/dashboard/_components/home/needs-you-card-styles"
+import { merchantSandInkHoverClass } from "@/lib/ui/merchant-palette"
 import type { TicketCocoAction } from "../../_lib/resolve-ticket-coco-action"
 
 interface Props {
@@ -29,9 +30,9 @@ interface Props {
 
 const COCO_ACTION_CLASS: Record<NonNullable<TicketCocoAction>["variant"], string> = {
   send: "bg-emerald-700 text-white hover:bg-emerald-700/90 hover:text-white",
-  draft: "bg-[#f5ebe0] text-[#1a1a1a] hover:bg-[#efe4d6] hover:text-[#1a1a1a]",
+  draft: merchantSandInkHoverClass,
   caution: "bg-amber-600 text-white hover:bg-amber-600/90 hover:text-white",
-  neutral: "bg-[#f5ebe0] text-[#1a1a1a] hover:bg-[#efe4d6] hover:text-[#1a1a1a]",
+  neutral: merchantSandInkHoverClass,
   loading: "bg-white text-muted-foreground hover:bg-white hover:text-muted-foreground",
 }
 

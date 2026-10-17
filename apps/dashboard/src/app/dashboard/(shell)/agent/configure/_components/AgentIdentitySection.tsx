@@ -3,7 +3,7 @@
 import { Check, Loader2, Sparkles, X } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { CharacterCountTextarea } from "./settings-form-fields"
+import { CharacterCountTextarea } from "@/components/settings-form/fields"
 import {
   SolidSettingsTile as SettingsTile,
   settingsFieldClassName,

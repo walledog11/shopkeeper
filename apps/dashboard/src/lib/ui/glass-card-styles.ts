@@ -24,9 +24,6 @@ export const SOLID_CARD_SURFACE = cn(
   GLASS_CARD_SHADOW_HOVER,
 )
 
-/** Settings tiles — same frost and depth as integration / memory cards. */
-export const GLASS_SETTINGS_TILE = cn("rounded-2xl px-5 py-5", GLASS_CARD_SURFACE)
-
 /** Opaque white settings tiles — same depth as workspace glass tiles. */
 export const SOLID_SETTINGS_TILE = cn("rounded-2xl px-5 py-5", SOLID_CARD_SURFACE)
 

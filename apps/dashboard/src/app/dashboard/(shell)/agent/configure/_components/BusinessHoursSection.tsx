@@ -4,8 +4,8 @@ import { DAY_OPTIONS } from "./agent-tab-helpers"
 import {
   CharacterCountTextarea,
   SelectField,
-} from "./settings-form-fields"
-import { settingsSelectClassName } from "./settings-form-styles"
+} from "@/components/settings-form/fields"
+import { settingsSelectClassName } from "@/components/settings-form/class-names"
 import { settingsTextareaClassName } from "@/app/dashboard/(shell)/settings/_components/SettingsTile"
 import { TimezoneSelect } from "./TimezoneSelect"
 import type { AgentTabController } from "./useAgentTabState"

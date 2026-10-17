@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { PRIMARY_CTA_LABEL, PRODUCT_NAME } from "@/lib/brand";
 import { cn } from "@/lib/ui/cn";
+import { ButtonLink } from "./ButtonLink";
 import { NavPreview } from "./NavPreviews";
 import { productCards } from "./nav-config";
 
@@ -327,9 +328,9 @@ export function MobileNav() {
         )}
       </nav>
 
-      <Link href="/#waitlist" className="m-btn m-btn-primary m-btn-lg m-nav-sheet-cta" onClick={close}>
+      <ButtonLink href="/#waitlist" variant="primary" size="lg" className="m-nav-sheet-cta" onClick={close}>
         {PRIMARY_CTA_LABEL}
-      </Link>
+      </ButtonLink>
     </dialog>
   );
 
