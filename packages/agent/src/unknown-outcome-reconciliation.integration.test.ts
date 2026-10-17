@@ -612,7 +612,9 @@ describe("unknown outcome reconciliation", () => {
       });
   });
 
-  it("releases stale reserved goodwill reservations", async () => {
+  // Its action was already marked submitted, so the refund may have committed;
+  // releasing it gave the daily cap back for money that may have moved.
+  it("holds a stale reserved goodwill reservation as unknown until it is probed", async () => {
     const org = await createTestOrg();
     orgId = org.id;
     const reserved = await reserveDailyRefundSpend({
@@ -639,7 +641,8 @@ describe("unknown outcome reconciliation", () => {
     const updated = await db.refundSpendReservation.findUniqueOrThrow({
       where: { id: reserved.reservation.id },
     });
-    expect(updated.status).toBe("released");
+    expect(updated.status).toBe("unknown");
+    expect(updated.resolvedAt).toBeNull();
     expect(updated.lastError).toBe(STALE_RESERVED_SPEND_ERROR);
   });
 

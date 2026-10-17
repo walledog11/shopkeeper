@@ -7,17 +7,16 @@ Technical contracts and settled engineering decisions live with the code they go
 ([agent-runtime](agent-runtime.md), [runbook](production/runbook.md),
 [transport plan](socialapi-transport-plan.md)), not here.
 
-Last updated: 2026-10-14.
+Last updated: 2026-10-17.
 
 ## Now — finish the cleanup
 
-1. **Confirm the gateway runs with `NODE_ENV=production`.** Without it `validateGatewayEnv`
-   skips its production boot checks, `loadKey` can fall back to a dev encryption key,
-   `hasValidPostmarkAuth` accepts unauthenticated posts when its credentials are unset, and
-   rate limiting fails open. Nixpacks writes `NODE_ENV=production` into every Node image, so
-   both services have it unless a Railway variable overrides it. It also sets
-   `NPM_CONFIG_PRODUCTION=false`, so the earlier note that setting it broke the build by
-   skipping devDependencies is not the cause. Closes when both services' logs are JSON
+1. **Confirm the `Gateway Worker` runs with `NODE_ENV=production`.** The `shopkeeper` web
+   service does: its Express error page carries no stack trace (2026-10-15). Without it
+   `validateGatewayEnv` skips its production boot checks, `loadKey` can fall back to a dev
+   encryption key, `hasValidPostmarkAuth` accepts unauthenticated posts when its
+   credentials are unset, and rate limiting fails open. Nixpacks writes it into every Node
+   image unless a Railway variable overrides it. Closes when the worker's logs are JSON
    (runbook: *Railway*).
 2. **Test suite structure.** One naming rule everywhere (`*.integration.test.ts` needs
    services, any other `*.test.ts` doesn't); move DB-free "integration" files to unit and
@@ -26,10 +25,12 @@ Last updated: 2026-10-14.
    over ~600 lines; turn lint-style tests into ESLint rules. No new tests. Closes when
    `npm run test:unit` covers every test that needs no database and runs without Docker.
 3. **Agent-core debt**, one PR each:
-   - Completion copy for replies without an approved draft comes from structured fields;
-     the English-verb regexes in `plan-grounding.ts` (`renderReplyCompletionClaims`,
-     `unsupportedReplyCompletionClaims`) stop deciding anything. Required before
-     `autoExecuteMode: live` for any real merchant.
+   - Delete the execution-time reply renderer (`renderReplyCompletionClaims` and its
+     helpers) and the dead `completionEvidence` plumbing; keep
+     `unsupportedReplyCompletionClaims` as a refusal. Its only live caller is operator
+     `send_email`, where it drops an ungrounded claim, deletes greetings and prints
+     Shopify's internal id as an order number. Approved and auto-executed plans already
+     send exact drafts, so this does not gate `autoExecuteMode: live`.
    - Typed tool status, error code and data flow end to end; nothing branches on
      `Error:`/`Unknown:` prefixes (`message-dispatch.ts`, `tool-action-display.ts`,
      `AgentChatMessage.tsx` — whose chips print an ID as a count — and
@@ -42,6 +43,37 @@ Last updated: 2026-10-14.
    - Split `task-ledger.ts` by concern.
    - One money formatter (copies in `sales-pulse.ts`, `conversation-attribution.ts`,
      `lib/format/currency.ts`, `publicMoney`, the context-panel formatters).
+4. **Architecture-audit fixes (2026-10-17)**, one PR each, in this order. Most defects were
+   traced in code, not seen in production:
+   - A planning attempt that dispatched nothing is recoverable: an expired one fails
+     instead of parking in `reconciling`, a failed one requeues for the same message, and
+     `recoverMissingPlans` classifies an unclassified follow-up and skips operator threads.
+     Today one planner error leaves the customer message unplanned for good.
+   - Delete the gateway's own `AgentPlan` and `toGatewayAgentPlan`; notification builders
+     take the package plan. Closes Next #3 and keeps new plan fields on phone cards.
+   - Dashboard answers re-plan on the gateway (`applyOperatorAnswerReplan`), so they park
+     and notify every channel; `io-send-internal` reports a post-acceptance throw as
+     unknown; the gateway sink uses `composeThreadSink`; the briefing and the queue share
+     one liveness predicate.
+   - Autonomy: `allowsAutomaticExecution` covers escalation-only plans in
+     `plan-failure-replan`; `validateCustomerFacingApprovalSet` compares the executable
+     plan; one exhaustive table per code list replaces the four-place escalation ritual.
+   - Remove partial approval (`toggleStep`, Telegram plan-skip remnants) and require
+     `planId` on `/api/agent`.
+   - Delete the parallel planning mode in `ai-summary-flow.ts`, so new email threads plan
+     from `requestSummary`, not the raw unwrapped body.
+   - One open support task per thread: delete the ledger's customer wait and continuity
+     matching; reconcile only on unsettled dispatches. Check production `waiting_input`
+     customer waits first.
+   - Operator-written customer emails become reviewed exact drafts: requests record the
+     latest message of any sender at acceptance and execution refuses anything newer, which
+     also lets `draft_ticket_reply` work on an answered ticket. Then execution refuses
+     every customer message without an approved draft, and the refusal above goes.
+   - Retire `AutonomyShadowDecision` and cache version 6; make the retirement audits
+     measure what they license; decide whether `RequestEpisodeOutcome` earns its keep.
+   - Trim the test meta-layer: record the two failing core fixtures, drop the holdout
+     mechanism, stale baseline and duplicate preflight job, and run integration through
+     turbo with `--concurrency=1`.
 
 ## Next — the first real merchant
 
@@ -58,8 +90,9 @@ In order. This is the product's critical path.
    confirm the SocialAPI gallery photo is stored on the ticket.
 2. **Find why a parked card was discarded before the merchant replied.** Each drop logs a
    `PendingPlanStaleReason` (`apps/gateway/src/operator-context/persistence.ts`); the
-   suspect is `plan_replaced` after a re-plan. Closes when the cause is named and a
-   re-plan re-parks and re-notifies instead of orphaning a card the merchant is reading.
+   suspect is `plan_replaced` after a re-plan, or a second task overwriting the thread's
+   single cache slot. Closes when the cause is named and a re-plan re-parks and re-notifies
+   instead of orphaning a card the merchant is reading.
 3. **Phone approval cards show damage photos.** Dashboard cards do; the iMessage card
    shows neither the photos nor `damage_photo_attached`, so a photographed refund can be
    approved from the phone without seeing the evidence.

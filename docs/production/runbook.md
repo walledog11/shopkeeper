@@ -476,7 +476,7 @@ breaks routing. Categories (`OPS_ALERT_CATEGORIES` in `packages/agent/src/observ
 - **Log drains are not configured** (Vercel → Better Stack, plus a forwarder for Railway, which has
   no native drain). Until they are, a raw `logger.*({ opsAlert: true, … })` line that bypasses
   `emitOpsAlert` reaches **only** the Railway/Vercel log viewer — among them `[OutboundSendSweep]`,
-  `[UnknownOutcomeSweep]`, `[OperatorEventSweep]`, `[AgentTaskSweep]`, `[WorkspaceDeletion] Cleanup
+  `[OperatorEventSweep]`, `[AgentTaskSweep]`, `[WorkspaceDeletion] Cleanup
   needs retry`, Shopify `customers/data_request` (a 30-day duty), `[EmailBounce] Outbound email
   bounced`, `[StorefrontChat] Shop daily message budget exhausted`, `[WithheldMessageFollowUp]`,
   `[OutboundEmail]` claim loss, ownership mismatch and unknown provider outcome, `[Worker] Org over
@@ -556,7 +556,10 @@ ordinary logs flow, then unset it.
   pages; confirm no successful outbound message was persisted for a failed send. `provider=imessage`:
   [iMessage down triage](#imessage-down-triage).
 - **`agent_failure`** — group by tool and org; inspect `AgentAction` rows and logs; if write actions
-  put customers at risk, disable the affected tool categories in org settings.
+  put customers at risk, disable the affected tool categories in org settings. With
+  `source=unknown_outcome_sweep`, the sweep converted stale work to `unknown` or could not resolve it
+  by probing: run `audit:unknown-outcomes` ([Plan-execution ledger](#plan-execution-ledger)) and
+  establish provider truth; never reset or replay the rows.
 - **`gmail_inbound`** — see [Gmail native inbound](#gmail-native-inbound); never force a degraded
   integration active or replace its checkpoint by hand.
 - **`inbound_unclaimed`** — Postmark deliveries no active forwarding integration claims (`reason` =
