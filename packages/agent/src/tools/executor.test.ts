@@ -397,14 +397,16 @@ describe("receipt validation", () => {
   });
 });
 
-describe("actionAuthorityBlock", () => {
+describe("actionAuthority", () => {
   function blockedCtx(): BaseAgentContext {
     return {
       ...threadlessCtx(vi.fn()),
       shopify: { shop: "test.myshopify.com", accessToken: "shpat_test", grantedScopes: null },
-      actionAuthorityBlock: {
-        code: "adjudicated_item_missing",
-        message: "the merchant approved a plan that is no longer queued.",
+      actionAuthority: {
+        block: {
+          code: "adjudicated_item_missing",
+          message: "the merchant approved a plan that is no longer queued.",
+        },
       },
     } as BaseAgentContext;
   }

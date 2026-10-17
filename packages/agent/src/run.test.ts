@@ -3,7 +3,7 @@ import { AGENT_SETTINGS_DEFAULTS } from "./settings.js";
 import { resetAgentLoggerForTests } from "./logger.js";
 import { runAgent } from "./run.js";
 import { defineTool, stringArg } from "./tools/registry/schema.js";
-import type { AgentContext } from "./agent-context.js";
+import { withdrawActionAuthority, type AgentContext } from "./agent-context.js";
 
 const {
   mockCreate,
@@ -313,6 +313,35 @@ describe("runAgent moduleTools seam", () => {
       id: "action_1",
       operationId: "operation_1",
     });
+  });
+
+  // Each tool call runs on a copy of the turn's context, two copies deep with
+  // Shopify connected. A withdrawal written on the control tool's copy was lost,
+  // so the model's own refund later in the turn ran unapproved (2026-09-10).
+  it("keeps a control tool's withdrawn authority for the rest of the turn", async () => {
+    const fetchSpy = vi.fn(async () => { throw new Error("no provider call expected"); });
+    vi.stubGlobal("fetch", fetchSpy);
+    const controlTool = makeModuleTool(vi.fn(async (_input: unknown, ctx: AgentContext) => {
+      withdrawActionAuthority(ctx, { code: "adjudicated_item_missing", message: "the approved plan is no longer queued." });
+      return { status: "error", message: "Error: no plan is awaiting the merchant's approval." };
+    }));
+    mockCreate
+      .mockResolvedValueOnce(toolUse("test_control_tool", { guidance: "yes" }, "tu_1"))
+      .mockResolvedValueOnce(toolUse("create_refund", { order_id: "456", reason: "Damaged" }, "tu_2"))
+      .mockResolvedValueOnce(endTurn("Done."));
+
+    const result = await runAgent(
+      makeCtx({ shopify: { shop: "test.myshopify.com", accessToken: "test" } }),
+      "yes",
+      undefined,
+      undefined,
+      { moduleTools: { test_control_tool: controlTool } },
+    );
+
+    expect(result.actionsPerformed[1]).toMatchObject({ tool: "create_refund", status: "policy_block" });
+    expect(result.actionsPerformed[1]?.result).toContain("no longer queued");
+    expect(fetchSpy).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 
   it("does not offer module tools in read-only mode", async () => {

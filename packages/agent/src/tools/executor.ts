@@ -135,12 +135,13 @@ async function enforceToolPolicy(
   // surface, not improvisation: they are all category "action" too, so blocking
   // them would take out `answer_operator_question` — the correct recovery when a
   // bare "yes" turns out to answer a question rather than approve a plan.
+  const authorityBlock = ctx.actionAuthority?.block;
   if (
-    ctx.actionAuthorityBlock
+    authorityBlock
     && definition.category === "action"
     && getToolDefinition(definition.name)
   ) {
-    return formatPolicyError(ctx.actionAuthorityBlock.message);
+    return formatPolicyError(authorityBlock.message);
   }
 
   const s = resolveAgentSettings(settings);

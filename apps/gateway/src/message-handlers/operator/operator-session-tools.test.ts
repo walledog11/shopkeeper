@@ -168,7 +168,7 @@ describe('approve_pending_plan', () => {
     const result = await tools.approve_pending_plan.execute({}, ctx, settings, emptyDeps);
 
     expect(result.status).toBe('error');
-    expect(ctx.actionAuthorityBlock).toMatchObject({ code: 'adjudicated_item_missing' });
+    expect(ctx.actionAuthority?.block).toMatchObject({ code: 'adjudicated_item_missing' });
     expect(mockExecuteOperatorAgentTurn).not.toHaveBeenCalled();
   });
 
@@ -194,7 +194,7 @@ describe('approve_pending_plan', () => {
     const result = await tools.approve_pending_plan.execute(planRef ? { plan_ref: planRef } : {}, ctx, settings, emptyDeps);
 
     expect(result.status).toBe('error');
-    expect(ctx.actionAuthorityBlock).toMatchObject({ code: 'adjudicated_item_missing' });
+    expect(ctx.actionAuthority?.block).toMatchObject({ code: 'adjudicated_item_missing' });
     expect(mockExecuteOperatorAgentTurn).not.toHaveBeenCalled();
   });
 
