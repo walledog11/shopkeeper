@@ -146,10 +146,6 @@
       "types": "./dist/merchant-inbox-surfaces.d.ts",
       "default": "./dist/merchant-inbox-surfaces.js"
     },
-    "./planner-skip-reply": {
-      "types": "./dist/planner-skip-reply.d.ts",
-      "default": "./dist/planner-skip-reply.js"
-    },
     "./build-context": {
       "types": "./dist/context.d.ts",
       "default": "./dist/context.js"

@@ -337,6 +337,29 @@ describe("running an approved exact-draft proposal", () => {
     expect(mockCreate).not.toHaveBeenCalled();
     expect(events).not.toContain("io:send_reply");
   });
+
+  // Cancelling an order Shopify does not return changes nothing. It was recorded
+  // as a success, so the approved reply told the customer it was cancelled.
+  it("sends nothing when the approved write found nothing to act on", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      events.push("provider:read_order");
+      return jsonResponse({}, { headers: { "retry-after": "0" } });
+    }));
+
+    const result = await runAgent(
+      supportCtx(),
+      "Cancel the order.",
+      [
+        { id: "t2", name: "cancel_order", input: { order_id: "456" } },
+        { id: "t3", name: "send_reply", input: { text: "Your order has been cancelled." } },
+      ],
+      LIVE_SETTINGS,
+    );
+
+    expect(result.actionsPerformed).toHaveLength(1);
+    expect(result.actionsPerformed[0]).toMatchObject({ tool: "cancel_order", status: "error" });
+    expect(events).not.toContain("io:send_reply");
+  });
 });
 
 // Package 3, step 6: the compound case. Not a whole-order refund a fixture could

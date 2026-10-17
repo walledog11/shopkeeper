@@ -157,7 +157,7 @@ async function quoteModelFullRefund(
 ): Promise<{ call: AgentToolCall } | { refusal: ToolResult }> {
   // A turn without standing authorization is refused by the executor's policy
   // check, and has nothing to quote.
-  if (toolCall.name !== "create_refund" || !ctx.shopify || ctx.actionAuthorityBlock) return { call: toolCall };
+  if (toolCall.name !== "create_refund" || !ctx.shopify || ctx.actionAuthority?.block) return { call: toolCall };
   let parsed: CreateRefundInput;
   try {
     parsed = parseToolInput("create_refund", toolCall.input) as CreateRefundInput;
@@ -385,6 +385,8 @@ export async function executeAgentToolCall(
     operationScopeId,
   } = input;
   ctx.assertExecutionAllowed?.();
+  // Before any per-call copy of ctx is made, so every copy shares one holder.
+  ctx.actionAuthority ??= { block: null };
   const category = moduleTools?.[toolCall.name]?.category ?? TOOL_CATEGORIES[toolCall.name];
   const approvedMessage = input.approvedMessage && isCustomerMessage(toolCall.name)
     ? prepareApprovedMessage(toolCall, input.approvedMessage, actionsPerformed)

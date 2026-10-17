@@ -168,14 +168,19 @@ describe('approve_pending_plan', () => {
     const result = await tools.approve_pending_plan.execute({}, ctx, settings, emptyDeps);
 
     expect(result.status).toBe('error');
-    expect(ctx.actionAuthorityBlock).toMatchObject({ code: 'adjudicated_item_missing' });
+    expect(ctx.actionAuthority?.block).toMatchObject({ code: 'adjudicated_item_missing' });
     expect(mockExecuteOperatorAgentTurn).not.toHaveBeenCalled();
   });
 
-  // Several plans queued is a "say which one" problem, not an absent one: the
-  // merchant did name something real, so the turn keeps its authority.
-  it('keeps action authority when the reference is merely ambiguous', async () => {
-    const memberKey = 'member:ambiguous';
+  // A number that names no queued plan is the same 2026-09-10 shape as an empty
+  // queue, and it shared a code with plain ambiguity, so it kept the turn's
+  // authority. Asking which plan needs no action tool: the control tools stay
+  // available once authority is withdrawn.
+  it.each([
+    ['an ambiguous approval', undefined],
+    ['a number that names no queued plan', '9'],
+  ])('withdraws the turn\'s action authority on %s', async (_label, planRef) => {
+    const memberKey = `member:unmatched-${planRef ?? 'none'}`;
     for (const threadId of ['ticket_a', 'ticket_b']) {
       await appendPendingPlan(org.id, memberKey, {
         threadId,
@@ -186,10 +191,11 @@ describe('approve_pending_plan', () => {
     const tools = await buildTools(memberKey);
     const ctx = { ...baseCtx } as BaseAgentContext;
 
-    const result = await tools.approve_pending_plan.execute({}, ctx, settings, emptyDeps);
+    const result = await tools.approve_pending_plan.execute(planRef ? { plan_ref: planRef } : {}, ctx, settings, emptyDeps);
 
     expect(result.status).toBe('error');
-    expect(ctx.actionAuthorityBlock).toBeUndefined();
+    expect(ctx.actionAuthority?.block).toMatchObject({ code: 'adjudicated_item_missing' });
+    expect(mockExecuteOperatorAgentTurn).not.toHaveBeenCalled();
   });
 
   it('keeps an invalid draft parked and executes nothing', async () => {

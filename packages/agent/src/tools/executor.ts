@@ -135,12 +135,13 @@ async function enforceToolPolicy(
   // surface, not improvisation: they are all category "action" too, so blocking
   // them would take out `answer_operator_question` — the correct recovery when a
   // bare "yes" turns out to answer a question rather than approve a plan.
+  const authorityBlock = ctx.actionAuthority?.block;
   if (
-    ctx.actionAuthorityBlock
+    authorityBlock
     && definition.category === "action"
     && getToolDefinition(definition.name)
   ) {
-    return formatPolicyError(ctx.actionAuthorityBlock.message);
+    return formatPolicyError(authorityBlock.message);
   }
 
   const s = resolveAgentSettings(settings);
@@ -541,9 +542,13 @@ export async function executeToolWithStatus(
       ...(executed.result.receipt ? { receipt: executed.result.receipt } : {}),
     };
   }
+  // A read that finds nothing succeeded. A write or send that finds nothing to
+  // act on had no effect, which is a definite failure: recorded as success, it
+  // let an approved draft tell the customer the change was made.
+  const noEffect = executed.result.status === "not_found" && prepared.definition.category !== "read";
   return {
     result: executed.result.message,
-    status: TOOL_STATUS_TO_EXECUTE_STATUS[executed.result.status],
+    status: noEffect ? "error" : TOOL_STATUS_TO_EXECUTE_STATUS[executed.result.status],
     ...(executed.result.receipt ? { receipt: executed.result.receipt } : {}),
   };
 }
