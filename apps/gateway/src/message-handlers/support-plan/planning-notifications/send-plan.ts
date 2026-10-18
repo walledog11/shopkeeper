@@ -4,13 +4,14 @@ import { classifyPerson } from '@shopkeeper/agent/person-name';
 import { memberOperatorKey } from '@shopkeeper/agent/internal-thread';
 import { SENDER_TYPE } from '@shopkeeper/agent/thread-constants';
 import type { AgentPlan } from '@shopkeeper/agent/types';
+import { loadWorkspaceImages } from '@shopkeeper/agent/image-attachments';
 import logger from '../../../logger.js';
 import { getGatewayDashboardUrl } from '../../../config/env.js';
 import { getOperatorPlanQueueMax } from '../../../config/runtime-config.js';
 import {
   planNotificationIdempotencyKey,
 } from '../../../operator-notify-idempotency.js';
-import { listOperatorBindings } from '../../../operator-notify.js';
+import { listOperatorBindings, type OperatorNotifyOptions } from '../../../operator-notify.js';
 import { getContext, toPendingPlanToolCalls, type PendingPlan } from '../../../operator-context.js';
 import { listVerifiedOrderNames } from '../../../storefront-chat-verified-orders.js';
 import type { PlanIdentity } from '../planning-types.js';
@@ -51,6 +52,43 @@ async function loadRequestSourceText(
     select: { contentText: true },
   });
   return message?.contentText ?? null;
+}
+
+// A card carries at most this many of the customer's photos. A claim with more
+// is reviewed on the dashboard, which shows every one.
+const CARD_PHOTO_LIMITS = {
+  maxImages: 4,
+  maxImageBytes: 5 * 1024 * 1024,
+  maxTotalBytes: 20 * 1024 * 1024,
+};
+
+/**
+ * The customer's photos the plan was made on, sent with the card so the merchant
+ * judges the claim on the evidence the dashboard card shows. All of them or none:
+ * a card showing some would read as showing the claim.
+ */
+async function loadCardPhotos(
+  organizationId: string,
+  plan: AgentPlan,
+): Promise<{ count: number; images: NonNullable<OperatorNotifyOptions['images']> } | null> {
+  const references = plan.validation?.status === 'invalid' ? [] : plan.damagePhotos ?? [];
+  if (references.length === 0) return null;
+  const { images, unavailable } = await loadWorkspaceImages(organizationId, references, CARD_PHOTO_LIMITS);
+  if (unavailable > 0) {
+    logger.warn(
+      { organizationId, photos: references.length, unavailable },
+      '[Worker] Plan card photos unavailable',
+    );
+    return { count: references.length, images: [] };
+  }
+  return {
+    count: references.length,
+    images: images.map((image) => ({
+      data: image.data,
+      mediaType: image.mediaType,
+      name: image.reference.split('/').at(-1) ?? 'photo',
+    })),
+  };
 }
 
 export async function sendOperatorPlanNotification(
@@ -104,6 +142,8 @@ export async function sendOperatorPlanNotification(
       );
     }
   }
+  const photos = await loadCardPhotos(organizationId, plan);
+  const photosHidden = photos !== null && photos.images.length === 0;
   const dashboardUrl = getGatewayDashboardUrl();
   const idempotencyKey = planNotificationIdempotencyKey(
     organizationId,
@@ -129,7 +169,7 @@ export async function sendOperatorPlanNotification(
     ...(customerName ? { customerName } : {}),
     ...(actionLabel ? { actionLabel } : {}),
     ...(plan.validation ? { validation: plan.validation } : {}),
-    ...(requiresDashboardDraftReview(plan.communication) ? { needsThreadReview: true } : {}),
+    ...(requiresDashboardDraftReview(plan.communication) || photosHidden ? { needsThreadReview: true } : {}),
     requestDisplay,
   };
 
@@ -174,8 +214,10 @@ export async function sendOperatorPlanNotification(
           ...(plan.communication ? { communication: plan.communication } : {}),
           ...(queueNotice ? { queueNotice } : {}),
           ...(sourceMessageText ? { sourceMessageText } : {}),
+          ...(photos ? { damagePhotos: { count: photos.count, shown: !photosHidden } } : {}),
         }),
         contextPatch: {},
+        ...(photos?.images.length ? { images: photos.images } : {}),
         ...(escalationOnly ? {} : { appendPlan: { plan: parkPlan, maxDepth } }),
         idempotencyKey,
       };

@@ -29,6 +29,7 @@ export async function notifyCriticalToAllOperators(
     contextPatch: Parameters<typeof notifyOperator>[3];
     idempotencyKey: string;
     appendPlan?: OperatorNotifyOptions['appendPlan'];
+    images?: OperatorNotifyOptions['images'];
   }>,
   threadId: string,
   logLabel: string,
@@ -40,13 +41,14 @@ export async function notifyCriticalToAllOperators(
   for (const member of bindings) {
     if (shouldExcludeMember(member, exclude)) continue;
 
-    const { body, contextPatch, idempotencyKey, appendPlan } = await notify(member);
+    const { body, contextPatch, idempotencyKey, appendPlan, images } = await notify(member);
     try {
       const result = await notifyOperator(organizationId, member, body, contextPatch, {
         policy: 'critical',
         threadId,
         idempotencyKey,
         ...(appendPlan ? { appendPlan } : {}),
+        ...(images?.length ? { images } : {}),
       });
       if (result) {
         delivered += 1;

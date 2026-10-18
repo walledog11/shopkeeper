@@ -156,6 +156,59 @@ export async function sendMessage(
   }
 }
 
+/** Returns true when Telegram accepted the photo; false when skipped or HTTP-rejected. */
+export async function sendPhoto(
+  chatId: string,
+  photo: { data: Buffer; mediaType: string; name: string },
+  alertContext?: TelegramSendAlertContext,
+): Promise<boolean> {
+  const token = getToken();
+  if (!token) {
+    logger.warn('[Telegram] TELEGRAM_BOT_TOKEN not set — skipping sendPhoto');
+    return false;
+  }
+
+  const form = new FormData();
+  form.append('chat_id', chatId);
+  form.append('photo', new Blob([new Uint8Array(photo.data)], { type: photo.mediaType }), photo.name);
+  try {
+    const res = await fetchWithDeadline(`${TELEGRAM_API_BASE}/bot${token}/sendPhoto`, {
+      method: 'POST',
+      body: form,
+    }, {
+      provider: 'telegram',
+      operation: 'photo send',
+    });
+
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => '');
+      logger.warn(
+        { status: res.status, chatId, body: errBody.slice(0, 300) },
+        '[Telegram] sendPhoto failed',
+      );
+      recordProviderSendFailureInBackground('telegram', 'operator_notify', alertContext?.orgId ?? null, {
+        threadId: alertContext?.threadId ?? null,
+        detail: errBody.slice(0, 300) || `HTTP ${res.status}`,
+        extra: { chatId, status: res.status },
+      });
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    logger.warn(
+      { err: (error as Error).message, chatId },
+      '[Telegram] sendPhoto errored',
+    );
+    recordProviderSendFailureInBackground('telegram', 'operator_notify', alertContext?.orgId ?? null, {
+      threadId: alertContext?.threadId ?? null,
+      detail: (error as Error).message,
+      extra: { chatId },
+    });
+    throw error;
+  }
+}
+
 export async function setWebhook(url: string, secretToken: string): Promise<void> {
   const token = getToken();
   if (!token) throw new Error('TELEGRAM_BOT_TOKEN is not set');

@@ -17,8 +17,9 @@ const IMESSAGE_BINDING = {
   spaceId: 'space_2',
 };
 
-const { listOperatorBindingsSpy, mockLogger, notifyOperatorSpy } = vi.hoisted(() => ({
+const { listOperatorBindingsSpy, loadWorkspaceImagesSpy, mockLogger, notifyOperatorSpy } = vi.hoisted(() => ({
   listOperatorBindingsSpy: vi.fn(),
+  loadWorkspaceImagesSpy: vi.fn(),
   mockLogger: {
     debug: vi.fn(),
     error: vi.fn(),
@@ -40,6 +41,10 @@ vi.mock('../../operator-notify.js', () => ({
   OperatorNotifyError: class OperatorNotifyError extends Error {
     name = 'OperatorNotifyError';
   },
+}));
+
+vi.mock('@shopkeeper/agent/image-attachments', () => ({
+  loadWorkspaceImages: loadWorkspaceImagesSpy,
 }));
 
 vi.mock('../../config/env.js', () => ({
@@ -341,6 +346,49 @@ describe('sendOperatorPlanNotification', () => {
     expect(body).toContain("couldn't produce a safe executable draft");
     expect(body).not.toContain('Good to send?');
     expect(notifyOptions?.appendPlan?.plan?.validation).toEqual(invalidPlan.validation);
+  });
+
+  it('sends the damage photos the plan was made on above the card', async () => {
+    const org = await createTestOrg();
+    orgId = org.id;
+    listOperatorBindingsSpy.mockResolvedValue([IMESSAGE_BINDING]);
+    notifyOperatorSpy.mockResolvedValue({ channel: 'imessage', chatId: 'sender_2' });
+    const reference = `blob:attachments/${org.id}/message_1/crack.jpg`;
+    const data = Buffer.from('jpeg-bytes');
+    loadWorkspaceImagesSpy.mockResolvedValue({
+      images: [{ reference, data, mediaType: 'image/jpeg' }],
+      unavailable: 0,
+    });
+
+    await sendOperatorPlanNotification(
+      org.id, THREAD_ID, 'Jane Doe', ChannelType.ig_dm, 'Damaged mug',
+      { ...plan, damagePhotos: [reference] }, 'Refund the damaged mug',
+    );
+
+    const [, , body, , notifyOptions] = notifyOperatorSpy.mock.calls[0] ?? [];
+    expect(notifyOptions?.images).toEqual([{ data, mediaType: 'image/jpeg', name: 'crack.jpg' }]);
+    expect(body).toContain('Their photo of the damage is above.');
+  });
+
+  it('asks for the thread instead of an approval when the photos cannot be shown', async () => {
+    const org = await createTestOrg();
+    orgId = org.id;
+    listOperatorBindingsSpy.mockResolvedValue([IMESSAGE_BINDING]);
+    notifyOperatorSpy.mockResolvedValue({ channel: 'imessage', chatId: 'sender_2' });
+    loadWorkspaceImagesSpy.mockResolvedValue({ images: [], unavailable: 2 });
+
+    await sendOperatorPlanNotification(
+      org.id, THREAD_ID, 'Jane Doe', ChannelType.ig_dm, 'Damaged mug',
+      { ...plan, damagePhotos: ['blob:attachments/a.jpg', 'blob:attachments/b.jpg'] },
+      'Refund the damaged mug',
+    );
+
+    const [, , body, , notifyOptions] = notifyOperatorSpy.mock.calls[0] ?? [];
+    expect(notifyOptions?.images).toBeUndefined();
+    expect(body).toContain("They sent 2 photos of the damage that I can't show here.");
+    expect(body).toContain('Open the thread to see the photos before approving.');
+    expect(body).not.toContain('Good to send?');
+    expect(notifyOptions?.appendPlan?.plan?.needsThreadReview).toBe(true);
   });
 
   it('propagates critical notification failures so the worker job can retry', async () => {

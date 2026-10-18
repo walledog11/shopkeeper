@@ -140,6 +140,9 @@ export function formatOperatorPlanMessage(
     // The exact customer message this proposal binds. Shown whole, with where it
     // goes, because it is what the approval sends.
     communication?: ProposalCommunication;
+    // The customer's photos of a damage claim: sent above this card, or not
+    // shown at all.
+    damagePhotos?: { count: number; shown: boolean };
   },
 ): string {
   const stage = options?.stage ?? FRESH_STAGE;
@@ -217,6 +220,16 @@ export function formatOperatorPlanMessage(
   // them to audit an authentication scheme to answer a shipping question.
   if (verifiedOrders.length > 0) {
     lines.push(`They confirmed the email on ${verifiedOrders.join(', ')}.`);
+  }
+
+  // The evidence the plan was made on, beside the request it supports.
+  const photos = options?.damagePhotos;
+  const photosHidden = photos !== undefined && !photos.shown;
+  if (photos) {
+    const many = photos.count > 1;
+    lines.push(photos.shown
+      ? `Their ${many ? `${photos.count} photos` : 'photo'} of the damage ${many ? 'are' : 'is'} above.`
+      : `They sent ${many ? `${photos.count} photos` : 'a photo'} of the damage that I can't show here.`);
   }
 
   // Escalation is never something the merchant approves — it is the statement
@@ -305,6 +318,9 @@ export function formatOperatorPlanMessage(
     // The same rule as an unshowable request: the approval would send words the
     // merchant has not seen.
     lines.push('', "The message is too long to show here — open the thread to read it before approving.");
+  } else if (photosHidden) {
+    // The approval would judge a claim on evidence the merchant has not seen.
+    lines.push('', 'Open the thread to see the photos before approving.');
   } else if (!canShowRequest) {
     // Never ask someone to approve what cannot be shown. The card still names
     // the action, because the plan is real even when the request rendering is
