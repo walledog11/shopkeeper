@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@shopkeeper/db';
 import { cleanupTestData, createTestOrg } from '@shopkeeper/db/test-helpers';
 
-const { mockLogger, sendImessageToSpaceSpy, sendMessageSpy, updateContextSpy, wasDeliveredSpy, markDeliveredSpy } = vi.hoisted(() => ({
+const { mockLogger, sendImessageToSpaceSpy, sendMessageSpy, sendPhotoSpy, updateContextSpy, wasDeliveredSpy, markDeliveredSpy } = vi.hoisted(() => ({
   mockLogger: {
     debug: vi.fn(),
     error: vi.fn(),
@@ -11,6 +11,7 @@ const { mockLogger, sendImessageToSpaceSpy, sendMessageSpy, updateContextSpy, wa
   },
   sendImessageToSpaceSpy: vi.fn(),
   sendMessageSpy: vi.fn(),
+  sendPhotoSpy: vi.fn(),
   updateContextSpy: vi.fn(),
   wasDeliveredSpy: vi.fn(),
   markDeliveredSpy: vi.fn(),
@@ -23,6 +24,7 @@ vi.mock('./logger.js', () => ({
 vi.mock('./clients/telegram-client.js', () => ({
   isTelegramConfigured: vi.fn(() => true),
   sendMessage: sendMessageSpy,
+  sendPhoto: sendPhotoSpy,
 }));
 
 vi.mock('./clients/spectrum.js', () => ({
@@ -59,6 +61,7 @@ beforeEach(() => {
   vi.mocked(isTelegramConfigured).mockReturnValue(true);
   vi.mocked(isImessageConfigured).mockReturnValue(true);
   sendMessageSpy.mockReset();
+  sendPhotoSpy.mockReset();
   sendImessageToSpaceSpy.mockReset().mockResolvedValue(undefined);
   updateContextSpy.mockReset().mockResolvedValue(undefined);
   wasDeliveredSpy.mockReset().mockResolvedValue(false);
@@ -213,6 +216,27 @@ describe('notifyOperator (telegram)', () => {
     );
 
     expect(result).toBeNull();
+    expect(sendMessageSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('notifyOperator with images', () => {
+  const image = { data: Buffer.from('jpeg-bytes'), mediaType: 'image/jpeg', name: 'crack.jpg' };
+
+  it('sends the images ahead of the text, and fails a card whose photo did not send', async () => {
+    sendPhotoSpy.mockResolvedValue(true);
+    sendMessageSpy.mockResolvedValue(true);
+    await notifyOperator('org_1', IMESSAGE_MEMBER, 'Card', {}, { images: [image] });
+    await notifyOperator('org_1', TELEGRAM_MEMBER, 'Card', {}, { images: [image] });
+
+    expect(sendImessageToSpaceSpy).toHaveBeenCalledWith('space_1', 'Card', expect.anything(), [image]);
+    expect(sendPhotoSpy).toHaveBeenCalledWith('chat_1', image, expect.anything());
+    expect(sendPhotoSpy.mock.invocationCallOrder[0]).toBeLessThan(sendMessageSpy.mock.invocationCallOrder[0]!);
+
+    sendMessageSpy.mockClear();
+    sendPhotoSpy.mockResolvedValue(false);
+    await expect(notifyOperator('org_1', TELEGRAM_MEMBER, 'Card', {}, { policy: 'critical', images: [image] }))
+      .rejects.toThrow(OperatorNotifyError);
     expect(sendMessageSpy).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,6 @@
 import { isReadToolName } from '@shopkeeper/agent/tools';
 import type { DbThreadRequestDisposition } from '@shopkeeper/db';
-import type { AgentPlan } from '../../types.js';
+import type { AgentPlan } from '@shopkeeper/agent/types';
 
 // Whether this request is allowed to park a plan card or a question in front of
 // the merchant. A greeting and a "thanks, got it" are not work: they get the

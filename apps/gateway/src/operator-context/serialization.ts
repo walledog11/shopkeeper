@@ -10,6 +10,12 @@ export interface ToolCall {
   [key: string]: unknown;
 }
 
+export function toPendingPlanToolCalls(
+  rawToolCalls: ReadonlyArray<{ id: string; name: string; input?: unknown }>,
+): ToolCall[] {
+  return rawToolCalls.map((toolCall) => ({ ...toolCall }));
+}
+
 export interface PendingPlan {
   threadId: string;
   instruction: string;
@@ -29,7 +35,7 @@ export interface PendingPlan {
   validation?: PlanValidation;
   /** Immutable request copy used by every operator rendering surface. */
   requestDisplay?: RequestDisplay;
-  /** The complete draft could not be shown on the phone. */
+  /** The complete draft, or the photos it was made on, could not be shown on the phone. */
   needsThreadReview?: boolean;
 }
 

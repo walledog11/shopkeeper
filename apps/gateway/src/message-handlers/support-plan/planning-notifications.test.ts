@@ -17,8 +17,9 @@ const IMESSAGE_BINDING = {
   spaceId: 'space_2',
 };
 
-const { listOperatorBindingsSpy, mockLogger, notifyOperatorSpy } = vi.hoisted(() => ({
+const { listOperatorBindingsSpy, loadWorkspaceImagesSpy, mockLogger, notifyOperatorSpy } = vi.hoisted(() => ({
   listOperatorBindingsSpy: vi.fn(),
+  loadWorkspaceImagesSpy: vi.fn(),
   mockLogger: {
     debug: vi.fn(),
     error: vi.fn(),
@@ -42,6 +43,10 @@ vi.mock('../../operator-notify.js', () => ({
   },
 }));
 
+vi.mock('@shopkeeper/agent/image-attachments', () => ({
+  loadWorkspaceImages: loadWorkspaceImagesSpy,
+}));
+
 vi.mock('../../config/env.js', () => ({
   getGatewayDashboardUrl: () => 'https://dashboard.example.com',
 }));
@@ -54,25 +59,26 @@ import {
 } from './planning-notifications.js';
 import { OperatorNotifyError } from '../../operator-notify.js';
 import { appendPendingPlan, getContext } from '../../operator-context.js';
-import type { AgentPlan } from '../../types.js';
+import type { AgentPlan, PlanStep } from '@shopkeeper/agent/types';
 import type { RequestDisplay } from '../shared/request-display.js';
-import { toGatewayAgentPlan } from './agent-plan-adapter.js';
 
 // Send paths look up conversation stage by thread id, a uuid column in Postgres.
 const THREAD_ID = '00000000-0000-4000-8000-0000000000aa';
 const OTHER_THREAD_ID = '00000000-0000-4000-8000-0000000000bb';
 
 const plan: AgentPlan = {
+  instruction: 'Reply to the customer',
   steps: [
     {
-      category: 'write',
+      id: 'tc_1',
+      category: 'communication',
       tool: 'send_email',
       description: 'Reply to customer',
       label: 'Reply',
       enabled: true,
     },
   ],
-  rawToolCalls: [{ id: 'tc_1', name: 'send_email' }],
+  rawToolCalls: [{ id: 'tc_1', name: 'send_email', input: {} }],
 };
 
 function requestDisplay(topic: string): RequestDisplay {
@@ -115,18 +121,18 @@ describe('formatOperatorPlanMessage', () => {
         approval_line_items: [{ name: 'Linen Napkin - Special', quantity: 1, change: 'refund' }],
       },
     }];
-    const adapted = toGatewayAgentPlan({
+    const refundPlan: AgentPlan = {
       instruction: 'Refund the torn napkin',
       steps: [{ id: 'tc_refund', category: 'action', tool: 'create_partial_refund', description: 'Refund', label: 'Issue partial refund', enabled: true }],
       rawToolCalls,
-    })!;
+    };
     const message = formatOperatorPlanMessage(
       'Jane Doe',
       ChannelType.email,
       requestDisplay('Torn napkin'),
-      adapted.steps,
+      refundPlan.steps,
       {
-        rawToolCalls: adapted.rawToolCalls,
+        rawToolCalls: refundPlan.rawToolCalls,
       },
     );
 
@@ -138,9 +144,9 @@ describe('formatOperatorPlanMessage', () => {
 // Overhaul plan, Next work item 3: an exact-draft proposal's card shows the whole
 // message the approval sends, or declines to ask when it cannot.
 describe('formatOperatorPlanMessage with an exact draft', () => {
-  const addressSteps = [
-    { category: 'action', tool: 'update_shopify_order_address', description: 'Update the address', label: 'Update shipping address', enabled: true },
-    { category: 'communication', tool: 'send_reply', description: 'Tell the customer', label: 'Reply', enabled: true },
+  const addressSteps: PlanStep[] = [
+    { id: 'address', category: 'action', tool: 'update_shopify_order_address', description: 'Update the address', label: 'Update shipping address', enabled: true },
+    { id: 'reply', category: 'communication', tool: 'send_reply', description: 'Tell the customer', label: 'Reply', enabled: true },
   ];
   const longDraft = `Hi Jane, ${'your order is on its way. '.repeat(130)}`.trim();
   const exact = (draft: string) => ({
@@ -342,6 +348,79 @@ describe('sendOperatorPlanNotification', () => {
     expect(notifyOptions?.appendPlan?.plan?.validation).toEqual(invalidPlan.validation);
   });
 
+  it('sends the damage photos the plan was made on above the card', async () => {
+    const org = await createTestOrg();
+    orgId = org.id;
+    listOperatorBindingsSpy.mockResolvedValue([IMESSAGE_BINDING]);
+    notifyOperatorSpy.mockResolvedValue({ channel: 'imessage', chatId: 'sender_2' });
+    const reference = `blob:attachments/${org.id}/message_1/crack.jpg`;
+    const data = Buffer.from('jpeg-bytes');
+    loadWorkspaceImagesSpy.mockResolvedValue({
+      images: [{ reference, data, mediaType: 'image/jpeg' }],
+      unavailable: 0,
+    });
+
+    await sendOperatorPlanNotification(
+      org.id, THREAD_ID, 'Jane Doe', ChannelType.ig_dm, 'Damaged mug',
+      { ...plan, damagePhotos: [reference] }, 'Refund the damaged mug',
+    );
+
+    const [, , body, , notifyOptions] = notifyOperatorSpy.mock.calls[0] ?? [];
+    expect(notifyOptions?.images).toEqual([{ data, mediaType: 'image/jpeg', name: 'crack.jpg' }]);
+    expect(body).toContain('Their photo of the damage is above.');
+  });
+
+  it('sends the card that cannot show the photos when the photos fail to send', async () => {
+    const org = await createTestOrg();
+    orgId = org.id;
+    listOperatorBindingsSpy.mockResolvedValue([IMESSAGE_BINDING]);
+    notifyOperatorSpy
+      .mockRejectedValueOnce(new OperatorNotifyError('iMessage send failed'))
+      .mockResolvedValueOnce({ channel: 'imessage', chatId: 'sender_2' });
+    const reference = `blob:attachments/${org.id}/message_1/crack.gif`;
+    loadWorkspaceImagesSpy.mockResolvedValue({
+      images: [{ reference, data: Buffer.from('gif-bytes'), mediaType: 'image/gif' }],
+      unavailable: 0,
+    });
+
+    await sendOperatorPlanNotification(
+      org.id, THREAD_ID, 'Jane Doe', ChannelType.ig_dm, 'Damaged mug',
+      { ...plan, damagePhotos: [reference] }, 'Refund the damaged mug',
+    );
+
+    expect(notifyOperatorSpy).toHaveBeenCalledTimes(2);
+    const [, , firstBody, , firstOptions] = notifyOperatorSpy.mock.calls[0] ?? [];
+    const [, , body, , notifyOptions] = notifyOperatorSpy.mock.calls[1] ?? [];
+    expect(firstBody).toContain('Their photo of the damage is above.');
+    expect(notifyOptions?.images).toBeUndefined();
+    expect(body).toContain("They sent a photo of the damage that I can't show here.");
+    expect(body).not.toContain('Good to send?');
+    expect(notifyOptions?.appendPlan?.plan?.needsThreadReview).toBe(true);
+    // A later run that can show the photos is a different card, not a duplicate.
+    expect(notifyOptions?.idempotencyKey).not.toBe(firstOptions?.idempotencyKey);
+  });
+
+  it('asks for the thread instead of an approval when the photos cannot be shown', async () => {
+    const org = await createTestOrg();
+    orgId = org.id;
+    listOperatorBindingsSpy.mockResolvedValue([IMESSAGE_BINDING]);
+    notifyOperatorSpy.mockResolvedValue({ channel: 'imessage', chatId: 'sender_2' });
+    loadWorkspaceImagesSpy.mockResolvedValue({ images: [], unavailable: 2 });
+
+    await sendOperatorPlanNotification(
+      org.id, THREAD_ID, 'Jane Doe', ChannelType.ig_dm, 'Damaged mug',
+      { ...plan, damagePhotos: ['blob:attachments/a.jpg', 'blob:attachments/b.jpg'] },
+      'Refund the damaged mug',
+    );
+
+    const [, , body, , notifyOptions] = notifyOperatorSpy.mock.calls[0] ?? [];
+    expect(notifyOptions?.images).toBeUndefined();
+    expect(body).toContain("They sent 2 photos of the damage that I can't show here.");
+    expect(body).toContain('Open the thread to see the photos before approving.');
+    expect(body).not.toContain('Good to send?');
+    expect(notifyOptions?.appendPlan?.plan?.needsThreadReview).toBe(true);
+  });
+
   it('propagates critical notification failures so the worker job can retry', async () => {
     const org = await createTestOrg();
     orgId = org.id;
@@ -469,7 +548,9 @@ describe('sendOperatorAutoExecutionNotification', () => {
       'Refund order #1042',
       {
         plan: {
+          instruction: 'Refund order #1042',
           steps: [{
+            id: 'send_1',
             category: 'communication',
             tool: 'send_reply',
             description: 'Tell the customer what happened',

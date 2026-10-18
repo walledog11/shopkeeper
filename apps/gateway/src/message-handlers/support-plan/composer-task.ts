@@ -11,7 +11,6 @@ import { hashInstruction, hashPlan } from '@shopkeeper/agent/agent-actions';
 import type { TaskModelBudget } from '@shopkeeper/agent/context';
 import { gatewayThreadSink } from './agent-thread-sink.js';
 import { publishThreadEvent } from '../../realtime/publish.js';
-import { toGatewayAgentPlan } from './agent-plan-adapter.js';
 import { sendOperatorPlanNotification, sendOperatorQuestionNotification } from './planning-notifications.js';
 
 /** Planning stays on the ticket and never executes the proposed writes. The
@@ -92,8 +91,7 @@ export async function notifyCommittedComposerTask(input: Pick<TaskClaimIdentity,
     || task.thread.cachedPlanMessageId !== request.sourceMessageId
     || cache.instruction !== request.normalizedInstruction
     || (task.status === 'waiting_approval' && task.activeProposalId !== cache.planId)) return;
-  const notificationPlan = toGatewayAgentPlan(cache.plan);
-  if (!notificationPlan || cache.plan.steps.length === 0) return;
+  if (cache.plan.steps.length === 0) return;
   if (task.status === 'waiting_input') {
     if (!task.pendingQuestion || task.pendingAnswererKind !== 'member') return;
     await sendOperatorQuestionNotification(
@@ -104,7 +102,7 @@ export async function notifyCommittedComposerTask(input: Pick<TaskClaimIdentity,
   } else {
     await sendOperatorPlanNotification(
       input.organizationId, task.threadId, task.thread.customer.name, task.thread.channelType,
-      task.thread.requestSummary, notificationPlan, cache.instruction,
+      task.thread.requestSummary, cache.plan, cache.instruction,
       { identity: {
         planId: cache.planId, sourceMessageId: request.sourceMessageId,
         planHash: hashPlan(cache.plan), instructionHash: hashInstruction(cache.instruction),

@@ -41,7 +41,7 @@ export interface RecentMessageAttachmentRefs {
   attachmentRefs: readonly string[];
 }
 
-interface AgentImageLimits {
+export interface AgentImageLimits {
   maxImages: number;
   maxImageBytes: number;
   maxTotalBytes: number;
@@ -186,6 +186,39 @@ async function loadPrivateAgentImage(
   } catch {
     return { ok: false, reason: "blob_error" };
   }
+}
+
+export interface WorkspaceImage {
+  reference: string;
+  data: Buffer;
+  mediaType: AgentImageMediaType;
+}
+
+/**
+ * The workspace's own private image blobs named by these references, loaded
+ * under the same checks the model's images pass. `unavailable` counts every
+ * reference that was not loaded, so a caller showing a set of photos can tell
+ * whether it is showing all of them.
+ */
+export async function loadWorkspaceImages(
+  organizationId: string,
+  references: readonly string[],
+  limits: AgentImageLimits,
+): Promise<{ images: WorkspaceImage[]; unavailable: number }> {
+  const images: WorkspaceImage[] = [];
+  let loadedByteCount = 0;
+  for (const reference of references) {
+    const pathname = parseWorkspacePrivateImagePath(reference, organizationId);
+    if (!pathname || images.length >= limits.maxImages) continue;
+    const loaded = await loadPrivateAgentImage(
+      pathname,
+      Math.min(limits.maxImageBytes, limits.maxTotalBytes - loadedByteCount),
+    );
+    if (!loaded.ok) continue;
+    loadedByteCount += loaded.image.data.byteLength;
+    images.push({ reference, ...loaded.image });
+  }
+  return { images, unavailable: references.length - images.length };
 }
 
 /**
