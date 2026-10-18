@@ -1,3 +1,4 @@
+import type { AgentTaskStatus } from '@prisma/client';
 import { db } from '@shopkeeper/db';
 import { requireOrgThread, getLatestConversationMessage } from '@shopkeeper/agent/thread-auth';
 import { buildContext } from '@shopkeeper/agent/build-context';
@@ -250,7 +251,24 @@ export async function generateThreadPlan(
       claimToken: durableResult.claim.claimToken,
     } } : {}),
   };
-  if (durableResult.kind === 'not_owned') return readCurrentPlanWithoutWork(scope);
+  if (durableResult.kind === 'not_owned') {
+    // Accepting the message again already re-ran any failed attempt that could
+    // be. A task still failed here never will be, so the merchant hears it
+    // instead of the message going quiet; the flag also ends plan recovery.
+    if (durableResult.taskStatus === 'failed' && !thread.escalatedAt) {
+      const escalation = await gatewayThreadSink.escalateToHuman(
+        { reason: 'Planning a reply to this message failed and can\'t be retried. Answer the customer yourself.' },
+        { orgId: organizationId, orgName: org?.name ?? 'Workspace', threadId },
+      );
+      if (escalation.status === 'error') {
+        logger.error(
+          { organizationId, threadId, message: escalation.message },
+          '[gateway:auto-plan] Could not escalate a message whose planning cannot be retried',
+        );
+      }
+    }
+    return readCurrentPlanWithoutWork(scope);
+  }
   const durable = durableResult.claim;
   try {
     const generated = await runPlanAttempt(scope);
@@ -526,7 +544,10 @@ async function openDurableSupportTask(input: {
   runtimeVersion: number;
   continuity?: { ask: string; order: string | null; subject: string | null };
   continuityMode?: 'classified';
-}): Promise<{ kind: 'claimed'; claim: DurableSupportTask } | { kind: 'not_owned' }> {
+}): Promise<
+  | { kind: 'claimed'; claim: DurableSupportTask }
+  | { kind: 'not_owned'; taskStatus: AgentTaskStatus }
+> {
   const { request, task } = await acceptCustomerAgentRequest({
     ...input, budget: supportTaskBudget(input.runtimeVersion),
   });
@@ -541,7 +562,7 @@ async function openDurableSupportTask(input: {
       { organizationId: input.organizationId, threadId: input.threadId, taskId: task.id },
       '[gateway:auto-plan] Support task is already owned or settled',
     );
-    return { kind: 'not_owned' };
+    return { kind: 'not_owned', taskStatus: task.status };
   }
   return {
     kind: 'claimed',

@@ -349,6 +349,25 @@ describe('durable support task', () => {
     expect(await taskFor(seed.organizationId)).toMatchObject({ status: 'failed' });
   });
 
+  it('escalates a message whose planning failed and can no longer be retried', async () => {
+    const seed = await seedThread();
+    mockBuildContext.mockRejectedValueOnce(new Error('context load failed'));
+    await expect(generateThreadPlan(seed.organizationId, seed.threadId, false))
+      .rejects.toThrow('context load failed');
+    // Earlier attempts spent the task's model-call budget.
+    const failed = await taskFor(seed.organizationId);
+    await db.agentTask.update({
+      where: { id: failed.id }, data: { modelCallsUsed: failed.modelCallLimit },
+    });
+
+    await generateThreadPlan(seed.organizationId, seed.threadId, false);
+
+    expect(mockPlanAgent).not.toHaveBeenCalled();
+    const thread = await db.thread.findUniqueOrThrow({ where: { id: seed.threadId } });
+    expect(thread.escalatedAt).not.toBeNull();
+    expect(thread.tag).toBe('needs_human');
+  });
+
   it('leaves the second job for one message to report the same plan untracked', async () => {
     const seed = await seedThread();
     mockPlanAgent.mockResolvedValue(agentPlanFromRawToolCalls([refund, reply]));
