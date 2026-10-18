@@ -1,7 +1,13 @@
+import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@shopkeeper/db';
 import { createTestMessage } from '@shopkeeper/db/test-helpers';
-import { ANY_MEMBER_ACTOR_KEY } from '@shopkeeper/agent/task-ledger';
+import {
+  ANY_MEMBER_ACTOR_KEY,
+  acceptCustomerAgentRequest,
+  claimAgentTask,
+  reconcileExpiredAgentTaskClaims,
+} from '@shopkeeper/agent/task-ledger';
 import type { RawToolCall } from '@shopkeeper/agent/types';
 import {
   agentPlanFromRawToolCalls,
@@ -287,6 +293,60 @@ describe('durable support task', () => {
     expect(await taskFor(seed.organizationId)).toMatchObject({
       status: 'waiting_approval', failureCode: null, claimToken: null,
     });
+  });
+
+  it('plans the message again once the sweep releases a worker that died mid-attempt', async () => {
+    const seed = await seedThread();
+    // A worker claimed the message ten minutes ago and died with nothing
+    // dispatched; its five-minute lease has run out.
+    const { task } = await acceptCustomerAgentRequest({
+      organizationId: seed.organizationId, threadId: seed.threadId,
+      sourceMessageId: seed.messageId, objective: 'Can I get a refund?',
+      budget: {
+        runtimeVersion: 2, modelCallLimit: 20,
+        activeTimeMsLimit: 300_000, spendNanoUsdLimit: 1_000_000_000n,
+      },
+    });
+    await claimAgentTask({
+      organizationId: seed.organizationId, taskId: task.id, expectedRevision: task.revision,
+      now: new Date(Date.now() - 10 * 60 * 1000), leaseMs: 300_000,
+    });
+    await reconcileExpiredAgentTaskClaims();
+    // The planner reserves its model call against the task budget, as the
+    // agent loop does.
+    mockPlanAgent.mockImplementation(async (ctx: { taskBudget?: { reserveModelCall(): Promise<void> } }) => {
+      await ctx.taskBudget?.reserveModelCall();
+      return agentPlanFromRawToolCalls([refund, reply]);
+    });
+
+    const retried = await generateThreadPlan(seed.organizationId, seed.threadId, false);
+
+    expect(retried.plan).not.toBeNull();
+    expect(await taskFor(seed.organizationId)).toMatchObject({
+      id: task.id, status: 'waiting_approval', failureCode: null,
+    });
+  });
+
+  it('leaves a message whose automatic execution ended unknown to its escalation', async () => {
+    const seed = await seedThread();
+    mockPlanAgent.mockResolvedValue(agentPlanFromRawToolCalls([reply]));
+    // Automatic executions carry no task, only the message they ran against.
+    mockMaybeAutoExecute.mockImplementationOnce(async () => {
+      await db.planExecution.create({ data: {
+        organizationId: seed.organizationId, planId: randomUUID(), threadId: seed.threadId,
+        sourceMessageId: seed.messageId, planHash: 'a'.repeat(64),
+        instructionHash: 'b'.repeat(64), status: 'unknown',
+        claimToken: randomUUID(), claimedAt: new Date(), completedAt: new Date(),
+      } });
+      throw new Error('turn threw after claiming its execution');
+    });
+    await expect(generateThreadPlan(seed.organizationId, seed.threadId, true))
+      .rejects.toThrow('turn threw after claiming its execution');
+
+    await generateThreadPlan(seed.organizationId, seed.threadId, true);
+
+    expect(mockPlanAgent).toHaveBeenCalledOnce();
+    expect(await taskFor(seed.organizationId)).toMatchObject({ status: 'failed' });
   });
 
   it('leaves the second job for one message to report the same plan untracked', async () => {

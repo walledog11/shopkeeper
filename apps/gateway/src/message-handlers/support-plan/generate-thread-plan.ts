@@ -352,11 +352,18 @@ async function runPlanAttempt(scope: PlanAttemptScope): Promise<GeneratedThreadP
     plan,
   });
 
+  // Fenced by the claim: an attempt whose lease expired while it was still
+  // running must not publish over the attempt that re-ran its message.
   const committed = await commitThreadPlanCacheIfCurrent({
     orgId: organizationId,
     threadId,
     sourceMessageId: pendingCustomerMessageId,
     cache: cacheRecord,
+    ...(scope.durableTurn ? { taskClaim: {
+      taskId: scope.durableTurn.taskId,
+      expectedRevision: scope.durableTurn.expectedRevision,
+      claimToken: scope.durableTurn.claimToken,
+    } } : {}),
   });
   if (!committed) {
     logger.info(
