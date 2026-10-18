@@ -370,6 +370,36 @@ describe('sendOperatorPlanNotification', () => {
     expect(body).toContain('Their photo of the damage is above.');
   });
 
+  it('sends the card that cannot show the photos when the photos fail to send', async () => {
+    const org = await createTestOrg();
+    orgId = org.id;
+    listOperatorBindingsSpy.mockResolvedValue([IMESSAGE_BINDING]);
+    notifyOperatorSpy
+      .mockRejectedValueOnce(new OperatorNotifyError('iMessage send failed'))
+      .mockResolvedValueOnce({ channel: 'imessage', chatId: 'sender_2' });
+    const reference = `blob:attachments/${org.id}/message_1/crack.gif`;
+    loadWorkspaceImagesSpy.mockResolvedValue({
+      images: [{ reference, data: Buffer.from('gif-bytes'), mediaType: 'image/gif' }],
+      unavailable: 0,
+    });
+
+    await sendOperatorPlanNotification(
+      org.id, THREAD_ID, 'Jane Doe', ChannelType.ig_dm, 'Damaged mug',
+      { ...plan, damagePhotos: [reference] }, 'Refund the damaged mug',
+    );
+
+    expect(notifyOperatorSpy).toHaveBeenCalledTimes(2);
+    const [, , firstBody, , firstOptions] = notifyOperatorSpy.mock.calls[0] ?? [];
+    const [, , body, , notifyOptions] = notifyOperatorSpy.mock.calls[1] ?? [];
+    expect(firstBody).toContain('Their photo of the damage is above.');
+    expect(notifyOptions?.images).toBeUndefined();
+    expect(body).toContain("They sent a photo of the damage that I can't show here.");
+    expect(body).not.toContain('Good to send?');
+    expect(notifyOptions?.appendPlan?.plan?.needsThreadReview).toBe(true);
+    // A later run that can show the photos is a different card, not a duplicate.
+    expect(notifyOptions?.idempotencyKey).not.toBe(firstOptions?.idempotencyKey);
+  });
+
   it('asks for the thread instead of an approval when the photos cannot be shown', async () => {
     const org = await createTestOrg();
     orgId = org.id;

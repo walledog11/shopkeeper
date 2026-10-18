@@ -145,11 +145,12 @@ export async function sendOperatorPlanNotification(
   const photos = await loadCardPhotos(organizationId, plan);
   const photosHidden = photos !== null && photos.images.length === 0;
   const dashboardUrl = getGatewayDashboardUrl();
-  const idempotencyKey = planNotificationIdempotencyKey(
+  const idempotencyKey = (photoState?: 'shown' | 'hidden') => planNotificationIdempotencyKey(
     organizationId,
     threadId,
     plan.rawToolCalls,
     instruction,
+    photoState,
   );
   const actionLabel = parkedActionLabel(
     plan.steps,
@@ -161,7 +162,7 @@ export async function sendOperatorPlanNotification(
     }),
   );
   const maxDepth = getOperatorPlanQueueMax();
-  const parkPlan: PendingPlan = {
+  const parkPlan = (photosShown: boolean): PendingPlan => ({
     threadId,
     instruction,
     rawToolCalls: toPendingPlanToolCalls(plan.rawToolCalls),
@@ -169,9 +170,9 @@ export async function sendOperatorPlanNotification(
     ...(customerName ? { customerName } : {}),
     ...(actionLabel ? { actionLabel } : {}),
     ...(plan.validation ? { validation: plan.validation } : {}),
-    ...(requiresDashboardDraftReview(plan.communication) || photosHidden ? { needsThreadReview: true } : {}),
+    ...(requiresDashboardDraftReview(plan.communication) || (photos && !photosShown) ? { needsThreadReview: true } : {}),
     requestDisplay,
-  };
+  });
 
   await notifyCriticalToAllOperators(
     organizationId,
@@ -203,7 +204,7 @@ export async function sendOperatorPlanNotification(
         );
       }
 
-      return {
+      const card = (photosShown: boolean) => ({
         body: formatOperatorPlanMessage(customerName, channelType, requestDisplay, plan.steps, {
           threadId,
           dashboardUrl,
@@ -214,12 +215,18 @@ export async function sendOperatorPlanNotification(
           ...(plan.communication ? { communication: plan.communication } : {}),
           ...(queueNotice ? { queueNotice } : {}),
           ...(sourceMessageText ? { sourceMessageText } : {}),
-          ...(photos ? { damagePhotos: { count: photos.count, shown: !photosHidden } } : {}),
+          ...(photos ? { damagePhotos: { count: photos.count, shown: photosShown } } : {}),
         }),
+        idempotencyKey: idempotencyKey(photos ? (photosShown ? 'shown' : 'hidden') : undefined),
+        ...(escalationOnly ? {} : { appendPlan: { plan: parkPlan(photosShown), maxDepth } }),
+      });
+
+      if (!photos || photosHidden) return { ...card(false), contextPatch: {} };
+      return {
+        ...card(true),
         contextPatch: {},
-        ...(photos?.images.length ? { images: photos.images } : {}),
-        ...(escalationOnly ? {} : { appendPlan: { plan: parkPlan, maxDepth } }),
-        idempotencyKey,
+        images: photos.images,
+        withoutImages: card(false),
       };
     },
     threadId,

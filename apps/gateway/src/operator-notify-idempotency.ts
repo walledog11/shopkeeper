@@ -20,11 +20,15 @@ function hashOperatorNotifyContent(parts: string[]): string {
   return createHash('sha256').update(parts.join('\0')).digest('hex').slice(0, 32);
 }
 
+// `photos` names what a damage-claim card showed. A card that showed the photos
+// and one that said it could not are different notifications: deduping one
+// against the other would re-park the plan as the card the merchant never got.
 export function planNotificationIdempotencyKey(
   organizationId: string,
   threadId: string,
   rawToolCalls: unknown,
   instruction: string,
+  photos?: 'shown' | 'hidden',
 ): string {
   return hashOperatorNotifyContent([
     organizationId,
@@ -32,6 +36,7 @@ export function planNotificationIdempotencyKey(
     threadId,
     instruction,
     JSON.stringify(rawToolCalls),
+    ...(photos ? [`photos:${photos}`] : []),
   ]);
 }
 

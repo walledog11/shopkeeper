@@ -30,6 +30,12 @@ export async function notifyCriticalToAllOperators(
     idempotencyKey: string;
     appendPlan?: OperatorNotifyOptions['appendPlan'];
     images?: OperatorNotifyOptions['images'];
+    /** The card to send instead when the one carrying `images` fails. */
+    withoutImages?: {
+      body: string;
+      idempotencyKey: string;
+      appendPlan?: OperatorNotifyOptions['appendPlan'];
+    };
   }>,
   threadId: string,
   logLabel: string,
@@ -41,15 +47,34 @@ export async function notifyCriticalToAllOperators(
   for (const member of bindings) {
     if (shouldExcludeMember(member, exclude)) continue;
 
-    const { body, contextPatch, idempotencyKey, appendPlan, images } = await notify(member);
+    const { body, contextPatch, idempotencyKey, appendPlan, images, withoutImages } = await notify(member);
+    const send = (card: {
+      body: string;
+      idempotencyKey: string;
+      appendPlan?: OperatorNotifyOptions['appendPlan'];
+      images?: OperatorNotifyOptions['images'];
+    }) => notifyOperator(organizationId, member, card.body, contextPatch, {
+      policy: 'critical',
+      threadId,
+      idempotencyKey: card.idempotencyKey,
+      ...(card.appendPlan ? { appendPlan: card.appendPlan } : {}),
+      ...(card.images?.length ? { images: card.images } : {}),
+    });
     try {
-      const result = await notifyOperator(organizationId, member, body, contextPatch, {
-        policy: 'critical',
-        threadId,
-        idempotencyKey,
-        ...(appendPlan ? { appendPlan } : {}),
-        ...(images?.length ? { images } : {}),
-      });
+      let result;
+      try {
+        result = await send({ body, idempotencyKey, appendPlan, images });
+      } catch (error) {
+        // A provider can refuse a photo on every attempt, so a card that must
+        // carry photos would never arrive. Send the card that says it cannot
+        // show them, which also re-parks the plan behind the thread review.
+        if (!withoutImages) throw error;
+        logger.warn(
+          { err: (error as Error).message, organizationId, threadId, channel: member.channel },
+          `[Worker] ${logLabel} photos failed; sending it without them`,
+        );
+        result = await send(withoutImages);
+      }
       if (result) {
         delivered += 1;
         logger.info(
