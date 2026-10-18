@@ -272,6 +272,23 @@ describe('durable support task', () => {
     });
   });
 
+  it('plans the message when its job is retried after a failed attempt', async () => {
+    const seed = await seedThread();
+    mockBuildContext.mockRejectedValueOnce(new Error('context load failed'));
+    mockPlanAgent.mockResolvedValue(agentPlanFromRawToolCalls([refund, reply]));
+    await expect(generateThreadPlan(seed.organizationId, seed.threadId, false))
+      .rejects.toThrow('context load failed');
+
+    const retried = await generateThreadPlan(seed.organizationId, seed.threadId, false);
+
+    expect(retried.plan).not.toBeNull();
+    expect(mockPlanAgent).toHaveBeenCalledOnce();
+    expect(await db.agentTask.count({ where: { organizationId: seed.organizationId } })).toBe(1);
+    expect(await taskFor(seed.organizationId)).toMatchObject({
+      status: 'waiting_approval', failureCode: null, claimToken: null,
+    });
+  });
+
   it('leaves the second job for one message to report the same plan untracked', async () => {
     const seed = await seedThread();
     mockPlanAgent.mockResolvedValue(agentPlanFromRawToolCalls([refund, reply]));

@@ -639,6 +639,35 @@ function continuityMatches(current: TaskContinuityHint, prior: TaskContinuityHin
 }
 
 /**
+ * The task an already-accepted customer message is on, re-run when its planning
+ * failed before anything reached a provider. Accepting the message again is a
+ * job retry or plan recovery, and leaving the task failed would leave the
+ * message unplanned for good. A task that dispatched an action or ran a plan
+ * stays failed: that outcome is on the record and is not redone from the top.
+ * The spent budget carries over and still bounds the next attempt.
+ */
+async function requeueFailedAttempt(
+  tx: Pick<typeof db, "agentTask">,
+  input: { organizationId: string; taskId: string },
+) {
+  await tx.agentTask.updateMany({
+    where: {
+      id: input.taskId, organizationId: input.organizationId,
+      status: "failed", claimToken: null, cancelledAt: null,
+      actions: { none: { dispatchState: { in: DISPATCHED_STATES } } },
+      executions: { none: {} },
+    },
+    data: {
+      ...NO_SUSPENSION, status: "queued", failureCode: null,
+      revision: { increment: 1 }, lastProgressAt: new Date(),
+    },
+  });
+  return tx.agentTask.findFirstOrThrow({
+    where: { id: input.taskId, organizationId: input.organizationId },
+  });
+}
+
+/**
  * Accepts one inbound customer message as a request and puts it on the thread's
  * task, in one transaction, exactly as the member submission path does.
  *
@@ -692,8 +721,8 @@ export async function acceptCustomerAgentRequest(input: CustomerRequestInput) {
     if (request.taskId) {
       return {
         request,
-        task: await tx.agentTask.findFirstOrThrow({
-          where: { id: request.taskId, organizationId: input.organizationId },
+        task: await requeueFailedAttempt(tx, {
+          organizationId: input.organizationId, taskId: request.taskId,
         }),
         deduplicated: true,
       };
@@ -1609,20 +1638,27 @@ export async function findQueuedAgentTasks(limit = 100) {
   });
 }
 
-// A cancelled attempt is only definitely over when nothing reached the
-// provider. Anything dispatched still owes reconciliation, exactly as the
+// An expired attempt is only definitely over when nothing reached the provider:
+// no action dispatched and no execution claimed, committed or unknown, the test
+// `claimAgentTask` applies before work runs from the top. It then failed, or was
+// cancelled if a stop was recorded; `requeueFailedAttempt` decides whether its
+// message re-runs it. Anything else still owes reconciliation, exactly as the
 // worker-side settle and fail paths decide it.
 export async function reconcileExpiredAgentTaskClaims(now = new Date()) {
-  const dispatched = Prisma.sql`EXISTS (
+  const dispatched = Prisma.sql`(EXISTS (
     SELECT 1 FROM agent_actions a
     WHERE a.task_id = agent_tasks.id AND a.organization_id = agent_tasks.organization_id
     AND a.dispatch_state IN ('dispatch_authorized', 'submitted', 'unknown', 'settled')
-  )`;
+  ) OR EXISTS (
+    SELECT 1 FROM plan_executions e
+    WHERE e.task_id = agent_tasks.id AND e.organization_id = agent_tasks.organization_id
+    AND e.status IN ('claimed', 'committed', 'unknown')
+  ))`;
   return db.$executeRaw(Prisma.sql`
     UPDATE agent_tasks
-    SET status = CASE WHEN cancelled_at IS NOT NULL AND NOT ${dispatched}
-                      THEN 'cancelled'::"AgentTaskStatus"
-                      ELSE 'reconciling'::"AgentTaskStatus" END,
+    SET status = CASE WHEN ${dispatched} THEN 'reconciling'::"AgentTaskStatus"
+                      WHEN cancelled_at IS NOT NULL THEN 'cancelled'::"AgentTaskStatus"
+                      ELSE 'failed'::"AgentTaskStatus" END,
         failure_code = CASE
           WHEN cancelled_at IS NULL THEN 'interrupted_attempt'
           WHEN ${dispatched} THEN 'cancelled_after_dispatch'
