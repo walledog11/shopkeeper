@@ -273,6 +273,17 @@ describe("decideAutonomy", () => {
     expect(fallback.kind).toBe("needs_review");
   });
 
+  // A photo request is a clarifying question: the merchant hears about the claim
+  // once the photo arrives, not before. Its bookkeeping step must not cost an
+  // approval, and it has to run beside the reply or the next message is not read
+  // against the request.
+  it("sends a damage-photo request without the merchant", () => {
+    const ask: RawToolCall = { id: "ask", name: "await_customer_photo", input: {} };
+    const askReply: RawToolCall = { id: "reply", name: "send_reply", input: { text: "Could you send a photo of it?" } };
+    const verdict = decideAutonomy(plan([ask, askReply]), resolveAgentSettings({}));
+    expect(verdict).toMatchObject({ kind: "quick_reply", toolCalls: [ask, askReply] });
+  });
+
   // The shipping read an unverified sender is answered from. It discloses
   // nothing about the person on the order, so it leaves the unresolved-customer
   // signal advisory — and it has to be a recognized quick-reply read too, or the

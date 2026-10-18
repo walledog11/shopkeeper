@@ -82,25 +82,30 @@ In order. This is the product's critical path.
    action rows and a named approver, the refund commits in the charged currency, and the
    reply shows in the customer's app. Run a photographed damage claim the same way, and
    confirm the SocialAPI gallery photo is stored on the ticket.
-2. **Find why a parked card was discarded before the merchant replied.** Each drop logs a
+2. **Instagram and TikTok senders verify an order before the agent discusses it.** The
+   agent asks for the order's email or shipping zip; code, not the model, matches it
+   against Shopify and records the order as verified on the thread, as storefront chat
+   does. Closes when a verified sender's damage claim reaches the merchant as one card:
+   verification, photos and the proposed resolution.
+3. **Find why a parked card was discarded before the merchant replied.** Each drop logs a
    `PendingPlanStaleReason` (`apps/gateway/src/operator-context/persistence.ts`); the
    suspect is `plan_replaced` after a re-plan, or a second task overwriting the thread's
    single cache slot. Closes when the cause is named and a re-plan re-parks and re-notifies
    instead of orphaning a card the merchant is reading.
-3. **Close SocialAPI vendor diligence** before any external merchant's data flows: DPA,
+4. **Close SocialAPI vendor diligence** before any external merchant's data flows: DPA,
    written retention/deletion answers, the terms §11.4 contradiction, a "Powered by
    SocialAPI" notice before the vendor redirect, and `/privacy` naming SocialAPI as a
    processor. Gates are in [socialapi-s0-diligence](production/socialapi-s0-diligence-2026-09-07.md).
-4. **First live SocialAPI merchant connect** (runbook: *Instagram via SocialAPI*), with
+5. **First live SocialAPI merchant connect** (runbook: *Instagram via SocialAPI*), with
    the `SOCIALAPI_*` vars added to `scripts/check-production-env.mjs`. Closes when a
    workspace connects from the dashboard and its next DM routes to it.
-5. **Disconnect and deletion revoke the SocialAPI account.** `disconnectInstagramAccount`
+6. **Disconnect and deletion revoke the SocialAPI account.** `disconnectInstagramAccount`
    has no caller. Closes when disconnect revokes the remote account (or records why not)
    and a disconnect → reconnect keeps routing and customer identity.
-6. **Rotate `SHOPIFY_APP_SECRET`** (exposed 2026-08-30; steps in the runbook).
-7. **Install the Shopify app on a real, non-dev store.** Closes when the install grants
+7. **Rotate `SHOPIFY_APP_SECRET`** (exposed 2026-08-30; steps in the runbook).
+8. **Install the Shopify app on a real, non-dev store.** Closes when the install grants
    every `SHOPIFY_OAUTH_SCOPES` scope and a missing scope shows the reconnect path.
-8. **Two supervised external merchants** complete real approved loops with no
+9. **Two supervised external merchants** complete real approved loops with no
    wrong-recipient, unauthorized-money, duplicate-action or lost-message incident.
 
 ## Later

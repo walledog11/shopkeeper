@@ -8,7 +8,7 @@ import { merchantGapQuestion } from "./plan-preview.js";
 import { planSignals } from "./plan-signals.js";
 import { planCommunication } from "./proposal-communication.js";
 import { checkStaticToolPolicy } from "./tools/static-policy.js";
-import { TOOL_CATEGORIES } from "./tools/registry/index.js";
+import { AWAIT_CUSTOMER_PHOTO_TOOL, TOOL_CATEGORIES } from "./tools/registry/index.js";
 import type {
   AgentPlan,
   ClassifierAlignmentState,
@@ -115,6 +115,11 @@ const QUICK_REPLY_READ_TOOLS = new Set([
   "get_order_fulfillment_status",
   "get_order_tracking",
 ]);
+
+// Steps a clarifying reply may carry that only record what the reply asks the
+// customer for. They reach neither the customer nor Shopify, so they leave the
+// reply in the quick-reply lane and run beside it.
+const QUICK_REPLY_COMPANION_TOOLS = new Set([AWAIT_CUSTOMER_PHOTO_TOOL]);
 
 const EXECUTABLE_CATEGORIES = new Set(["action", "communication", "internal"]);
 
@@ -323,20 +328,25 @@ export function decideAutonomy(
     };
   }
 
-  if (plan.steps.length === 1 && plan.steps[0]?.tool === "send_reply") {
+  const replySteps = plan.steps.filter((step) => !QUICK_REPLY_COMPANION_TOOLS.has(step.tool));
+  if (replySteps.length === 1 && replySteps[0]?.tool === "send_reply") {
     const sendReplyCalls = plan.rawToolCalls.filter((call) => call.name === "send_reply");
     const sendReplyToolCall = sendReplyCalls[0] ?? null;
     const safeShape = sendReplyCalls.length === 1
-      && sendReplyToolCall?.id === plan.steps[0].id
+      && sendReplyToolCall?.id === replySteps[0].id
       && plan.rawToolCalls.every((call) => (
-        call.id === sendReplyToolCall.id ? call.name === "send_reply" : QUICK_REPLY_READ_TOOLS.has(call.name)
+        call.id === sendReplyToolCall.id
+          ? call.name === "send_reply"
+          : QUICK_REPLY_READ_TOOLS.has(call.name) || QUICK_REPLY_COMPANION_TOOLS.has(call.name)
       ));
     const text = replyText(sendReplyToolCall);
     if (safeShape && text && resolved.autonomyTier !== "watch" && resolved.toolsEnabled.communication !== false) {
       return {
         kind: "quick_reply",
         reasons: ["safe_quick_reply"],
-        toolCalls: [sendReplyToolCall],
+        toolCalls: plan.rawToolCalls.filter((call) => (
+          call.id === sendReplyToolCall.id || QUICK_REPLY_COMPANION_TOOLS.has(call.name)
+        )),
         replyText: text,
         sendReplyToolCall,
       };
