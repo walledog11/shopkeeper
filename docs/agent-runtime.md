@@ -192,8 +192,10 @@ Use a task-specific state set: `queued`, `running`, `waiting_input`, `waiting_ap
 | queued/running/waiting_* | Authorized stop | cancelled if no uncertain submitted write; otherwise reconciling with cancellation recorded |
 | waiting_input/waiting_approval | Conversation closed, unless its proposal is already approved (decision C) | Authorized stop, in the transaction that closes the conversation; the pending proposal is superseded |
 | running | Definite unrecoverable failure or exhausted budget | failed with reason and resumable facts; uncertainty still takes precedence as reconciling |
+| running | Lease expired; no action dispatched and no execution claimed, committed or unknown | failed (`interrupted_attempt`), or cancelled if a stop was recorded; otherwise reconciling |
+| failed | Its customer message is accepted again (job retry, plan recovery); no action dispatched and no execution at all | queued, revision incremented; spent budget carries over |
 
-Completed/cancelled/failed tasks are not reset by a duplicate request. A deliberate new instruction can create a new task referencing prior work. A known partial result remains visible even when the overall task fails or is cancelled.
+Completed and cancelled tasks are not reset by a duplicate request, and a failed one only by the row above. A deliberate new instruction can create a new task referencing prior work. A known partial result remains visible even when the overall task fails or is cancelled.
 
 Concurrency implementation rules:
 

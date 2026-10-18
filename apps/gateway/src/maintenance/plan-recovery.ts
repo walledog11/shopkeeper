@@ -3,7 +3,7 @@ import { db, ThreadFilterStatus } from '@shopkeeper/db';
 import { decideAutonomy } from '@shopkeeper/agent/autonomy';
 import { getCurrentPlanForThread } from '@shopkeeper/agent/plan-cache-shape';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
-import { SENDER_TYPE } from '@shopkeeper/agent/thread-constants';
+import { CHANNEL_TYPE, SENDER_TYPE } from '@shopkeeper/agent/thread-constants';
 import { JOB, PROCESSING_QUEUE_DEFAULTS, QUEUE } from '../constants.js';
 import logger from '../logger.js';
 import type { AiSummaryJobData } from '../types.js';
@@ -37,6 +37,7 @@ export async function recoverMissingPlans(
       where: {
         ...(cursor ? { id: { gt: cursor } } : {}),
         status: 'open',
+        channelType: { notIn: [CHANNEL_TYPE.OPERATOR] },
         filterStatus: ThreadFilterStatus.genuine,
         escalatedAt: null,
         archivedAt: null,
@@ -53,6 +54,7 @@ export async function recoverMissingPlans(
         cachedPlan: true,
         cachedPlanMessageId: true,
         filterDecidedAt: true,
+        requestSourceMessageId: true,
         customer: { select: { name: true } },
         organization: { select: { settings: true } },
         messages: {
@@ -87,7 +89,12 @@ export async function recoverMissingPlans(
         customerName: thread.customer.name,
         channelType: thread.channelType,
         traceId: `plan-recovery:${thread.id}`,
-        ...(thread.filterDecidedAt ? { skipSummary: true } : {}),
+        // Classification is skipped only when its verdict is for this message.
+        // A follow-up the classifier never reached would otherwise be read
+        // against the earlier request and dropped again.
+        ...(thread.filterDecidedAt && thread.requestSourceMessageId === latest.id
+          ? { skipSummary: true }
+          : {}),
       });
       enqueued += 1;
     }

@@ -31,6 +31,7 @@ function candidate(overrides: Record<string, unknown> = {}) {
     cachedPlan: null,
     cachedPlanMessageId: null,
     filterDecidedAt: new Date('2026-08-13T15:00:00.000Z'),
+    requestSourceMessageId: CUSTOMER_MESSAGE_ID,
     customer: { name: null },
     organization: { settings: {} },
     messages: [{ id: CUSTOMER_MESSAGE_ID, senderType: 'customer' }],

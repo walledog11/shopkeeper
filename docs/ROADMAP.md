@@ -7,7 +7,7 @@ Technical contracts and settled engineering decisions live with the code they go
 ([agent-runtime](agent-runtime.md), [runbook](production/runbook.md),
 [transport plan](socialapi-transport-plan.md)), not here.
 
-Last updated: 2026-10-17.
+Last updated: 2026-10-18.
 
 ## Now — finish the cleanup
 
@@ -45,10 +45,6 @@ Last updated: 2026-10-17.
      `lib/format/currency.ts`, `publicMoney`, the context-panel formatters).
 4. **Architecture-audit fixes (2026-10-17)**, one PR each, in this order. Most defects were
    traced in code, not seen in production:
-   - A planning attempt that dispatched nothing is recoverable: an expired one fails
-     instead of parking in `reconciling`, a failed one requeues for the same message, and
-     `recoverMissingPlans` classifies an unclassified follow-up and skips operator threads.
-     Today one planner error leaves the customer message unplanned for good.
    - Delete the gateway's own `AgentPlan` and `toGatewayAgentPlan`; notification builders
      take the package plan. Closes Next #3 and keeps new plan fields on phone cards.
    - Dashboard answers re-plan on the gateway (`applyOperatorAnswerReplan`), so they park
