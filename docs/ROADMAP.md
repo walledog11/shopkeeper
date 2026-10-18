@@ -45,6 +45,9 @@ Last updated: 2026-10-18.
      `lib/format/currency.ts`, `publicMoney`, the context-panel formatters).
 4. **Architecture-audit fixes (2026-10-17)**, one PR each, in this order. Most defects were
    traced in code, not seen in production:
+   - A support message whose planning can't re-run (its task budget is spent, or a plan
+     already ran against it) goes silent: recovery gets `not_owned` every hour. Escalate it
+     so the merchant hears "you handle this".
    - Delete the gateway's own `AgentPlan` and `toGatewayAgentPlan`; notification builders
      take the package plan. Closes Next #3 and keeps new plan fields on phone cards.
    - Dashboard answers re-plan on the gateway (`applyOperatorAnswerReplan`), so they park

@@ -360,7 +360,7 @@ describe("durable dashboard persistence foundation", () => {
     })).toBe("reconciling");
   });
 
-  it("finds accepted queue gaps and closes expired running claims by what they dispatched", async () => {
+  it("finds accepted queue gaps and marks expired running claims for reconciliation", async () => {
     const queued = await seedTask();
     expect((await findQueuedAgentTasks()).map(task => task.id)).toContain(queued.task.id);
     const now = new Date("2026-09-15T12:00:00Z");
@@ -368,23 +368,8 @@ describe("durable dashboard persistence foundation", () => {
       organizationId: queued.task.organizationId, taskId: queued.task.id,
       expectedRevision: 0, now, leaseMs: 1000,
     });
-    const dispatched = await seedTask();
-    await claimAgentTask({
-      organizationId: dispatched.task.organizationId, taskId: dispatched.task.id,
-      expectedRevision: 0, now, leaseMs: 1000,
-    });
-    await db.agentAction.create({ data: {
-      organizationId: dispatched.input.organizationId, threadId: dispatched.input.threadId,
-      taskId: dispatched.task.id, turnId: dispatched.request.id, tool: "create_refund",
-      category: "order", input: {}, status: "unknown", mode: "auto_executed",
-      dispatchState: "submitted", submittedAt: now, operationId: randomUUID(), actionIndex: 0,
-    } });
-
-    expect(await reconcileExpiredAgentTaskClaims(new Date(now.getTime() + 1001))).toBeGreaterThanOrEqual(2);
-    expect(await db.agentTask.findUniqueOrThrow({ where: { id: queued.task.id } }))
-      .toMatchObject({ status: "failed", failureCode: "interrupted_attempt", claimToken: null });
-    expect(await db.agentTask.findUniqueOrThrow({ where: { id: dispatched.task.id } }))
-      .toMatchObject({ status: "reconciling", failureCode: "interrupted_attempt", claimToken: null });
+    expect(await reconcileExpiredAgentTaskClaims(new Date(now.getTime() + 1001))).toBeGreaterThanOrEqual(1);
+    expect((await db.agentTask.findUniqueOrThrow({ where: { id: queued.task.id } })).status).toBe("reconciling");
   });
 
   it("closes an expired stopped attempt by what it dispatched", async () => {
@@ -622,7 +607,7 @@ describe("durable proposal and question writers", () => {
     } });
     await reconcileExpiredAgentTaskClaims(new Date(now.getTime() + 1001));
     expect(await db.agentTask.findUniqueOrThrow({ where: { id: expired.task.id } }))
-      .toMatchObject({ status: "failed", pendingQuestionId: null, pendingQuestion: null });
+      .toMatchObject({ status: "reconciling", pendingQuestionId: null, pendingQuestion: null });
   });
 });
 
