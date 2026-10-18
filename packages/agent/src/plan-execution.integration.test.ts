@@ -1801,4 +1801,36 @@ describe("bounded failure replan", () => {
     expect(updated.escalatedAt).not.toBeNull();
     expect(updated.cachedPlan).toBeNull();
   });
+
+  // The request-outcome write ran ahead of this escalation, uncaught, so a
+  // failing analytics UPDATE left an unknown write unescalated.
+  it("escalates an unknown outcome when its request-outcome record cannot be written", async () => {
+    const settings = resolveAgentSettings({ autonomyTier: "trusted", autoExecuteMode: "live" });
+    const { org, thread, execution } = await seedExecutablePlan({ automatic: true, plan: threeStepPlan(), settings });
+    const runAgent = vi.fn(async (): Promise<AgentResult> => ({
+      summary: "Unknown refund outcome",
+      actionsPerformed: [{ tool: "create_refund", result: "Unknown", status: "unknown" }],
+    }));
+    const outcomeWrite = vi.spyOn(db.requestEpisodeOutcome, "updateMany")
+      .mockRejectedValue(new Error("request outcome table unavailable"));
+
+    try {
+      const executed = await executeCurrentCachedHomePlan({
+        orgId: org.id,
+        threadId: thread.id,
+        settings,
+        executionIntent: "automatic",
+        failureRoute: "test",
+        ...execution,
+        allowMutativeAutoExecute: true,
+      }, makeDeps({ runAgent, planAgent: vi.fn(async () => quickReplyPlan()) }));
+
+      expect(outcomeWrite).toHaveBeenCalled();
+      expect(executed.execution.status).toBe("unknown");
+      const updated = await db.thread.findUniqueOrThrow({ where: { id: thread.id } });
+      expect(updated.escalatedAt).not.toBeNull();
+    } finally {
+      outcomeWrite.mockRestore();
+    }
+  });
 });
