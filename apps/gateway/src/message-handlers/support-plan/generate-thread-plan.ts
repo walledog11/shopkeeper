@@ -34,8 +34,6 @@ import { CHANNEL_TYPE } from '@shopkeeper/agent/thread-constants';
 import type { AgentPlan as PackageAgentPlan, OrgSettings } from '@shopkeeper/agent/types';
 import { parseClassifierSignals } from '@shopkeeper/agent/classifier-signals';
 import { getEmailProvider } from '@shopkeeper/email/providers';
-import type { AgentPlan } from '../../types.js';
-import { toGatewayAgentPlan } from './agent-plan-adapter.js';
 import { gatewayThreadSink } from './agent-thread-sink.js';
 import { buildGatewayPlanExecutionDeps } from '../operator/agent-turn-deps.js';
 import type { AgentActionResult, PlanIdentity } from './planning-types.js';
@@ -105,7 +103,7 @@ function merchantQuestionFor(plan: PackageAgentPlan | null, settings: OrgSetting
 }
 
 export interface GeneratedThreadPlan {
-  plan: AgentPlan | null;
+  plan: PackageAgentPlan | null;
   instruction: string;
   identity?: PlanIdentity;
   merchantQuestion?: string | null;
@@ -289,7 +287,7 @@ function readCurrentPlanWithoutWork(scope: PlanAttemptScope): GeneratedThreadPla
     settings: scope.settings,
   })) return { plan: null, instruction: scope.instruction };
   return {
-    plan: toGatewayAgentPlan(cached?.plan ?? null),
+    plan: cached?.plan ?? null,
     instruction: scope.instruction,
     ...(cached?.plan ? {
       identity: planIdentity({
@@ -432,7 +430,7 @@ async function runPlanAttempt(scope: PlanAttemptScope): Promise<GeneratedThreadP
     : {};
 
   return {
-    plan: toGatewayAgentPlan(plan),
+    plan,
     instruction,
     identity: planIdentity({
       planId: cacheRecord.planId,
@@ -492,7 +490,7 @@ async function buildAutoExecutionResult(
       failureReplanFailureReason: awaitingApproval.context.failureReason,
       // The child is the thread's current plan now, so the card the merchant
       // approves must be the child's, not the parent's that just failed.
-      plan: toGatewayAgentPlan(awaitingApproval.plan),
+      plan: awaitingApproval.plan,
       identity: planIdentity({
         planId: awaitingApproval.planId,
         sourceMessageId: awaitingApproval.sourceMessageId,

@@ -3,6 +3,7 @@ import { isEscalationOnlyPlan } from '@shopkeeper/agent/autonomy';
 import { classifyPerson } from '@shopkeeper/agent/person-name';
 import { memberOperatorKey } from '@shopkeeper/agent/internal-thread';
 import { SENDER_TYPE } from '@shopkeeper/agent/thread-constants';
+import type { AgentPlan } from '@shopkeeper/agent/types';
 import logger from '../../../logger.js';
 import { getGatewayDashboardUrl } from '../../../config/env.js';
 import { getOperatorPlanQueueMax } from '../../../config/runtime-config.js';
@@ -10,9 +11,8 @@ import {
   planNotificationIdempotencyKey,
 } from '../../../operator-notify-idempotency.js';
 import { listOperatorBindings } from '../../../operator-notify.js';
-import { getContext, type PendingPlan } from '../../../operator-context.js';
+import { getContext, toPendingPlanToolCalls, type PendingPlan } from '../../../operator-context.js';
 import { listVerifiedOrderNames } from '../../../storefront-chat-verified-orders.js';
-import type { AgentPlan } from '../../../types.js';
 import type { PlanIdentity } from '../planning-types.js';
 import {
   buildRequestDisplaySnapshot,
@@ -124,7 +124,7 @@ export async function sendOperatorPlanNotification(
   const parkPlan: PendingPlan = {
     threadId,
     instruction,
-    rawToolCalls: plan.rawToolCalls,
+    rawToolCalls: toPendingPlanToolCalls(plan.rawToolCalls),
     ...(options?.identity ?? {}),
     ...(customerName ? { customerName } : {}),
     ...(actionLabel ? { actionLabel } : {}),

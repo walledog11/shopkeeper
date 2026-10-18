@@ -54,25 +54,26 @@ import {
 } from './planning-notifications.js';
 import { OperatorNotifyError } from '../../operator-notify.js';
 import { appendPendingPlan, getContext } from '../../operator-context.js';
-import type { AgentPlan } from '../../types.js';
+import type { AgentPlan, PlanStep } from '@shopkeeper/agent/types';
 import type { RequestDisplay } from '../shared/request-display.js';
-import { toGatewayAgentPlan } from './agent-plan-adapter.js';
 
 // Send paths look up conversation stage by thread id, a uuid column in Postgres.
 const THREAD_ID = '00000000-0000-4000-8000-0000000000aa';
 const OTHER_THREAD_ID = '00000000-0000-4000-8000-0000000000bb';
 
 const plan: AgentPlan = {
+  instruction: 'Reply to the customer',
   steps: [
     {
-      category: 'write',
+      id: 'tc_1',
+      category: 'communication',
       tool: 'send_email',
       description: 'Reply to customer',
       label: 'Reply',
       enabled: true,
     },
   ],
-  rawToolCalls: [{ id: 'tc_1', name: 'send_email' }],
+  rawToolCalls: [{ id: 'tc_1', name: 'send_email', input: {} }],
 };
 
 function requestDisplay(topic: string): RequestDisplay {
@@ -115,18 +116,18 @@ describe('formatOperatorPlanMessage', () => {
         approval_line_items: [{ name: 'Linen Napkin - Special', quantity: 1, change: 'refund' }],
       },
     }];
-    const adapted = toGatewayAgentPlan({
+    const refundPlan: AgentPlan = {
       instruction: 'Refund the torn napkin',
       steps: [{ id: 'tc_refund', category: 'action', tool: 'create_partial_refund', description: 'Refund', label: 'Issue partial refund', enabled: true }],
       rawToolCalls,
-    })!;
+    };
     const message = formatOperatorPlanMessage(
       'Jane Doe',
       ChannelType.email,
       requestDisplay('Torn napkin'),
-      adapted.steps,
+      refundPlan.steps,
       {
-        rawToolCalls: adapted.rawToolCalls,
+        rawToolCalls: refundPlan.rawToolCalls,
       },
     );
 
@@ -138,9 +139,9 @@ describe('formatOperatorPlanMessage', () => {
 // Overhaul plan, Next work item 3: an exact-draft proposal's card shows the whole
 // message the approval sends, or declines to ask when it cannot.
 describe('formatOperatorPlanMessage with an exact draft', () => {
-  const addressSteps = [
-    { category: 'action', tool: 'update_shopify_order_address', description: 'Update the address', label: 'Update shipping address', enabled: true },
-    { category: 'communication', tool: 'send_reply', description: 'Tell the customer', label: 'Reply', enabled: true },
+  const addressSteps: PlanStep[] = [
+    { id: 'address', category: 'action', tool: 'update_shopify_order_address', description: 'Update the address', label: 'Update shipping address', enabled: true },
+    { id: 'reply', category: 'communication', tool: 'send_reply', description: 'Tell the customer', label: 'Reply', enabled: true },
   ];
   const longDraft = `Hi Jane, ${'your order is on its way. '.repeat(130)}`.trim();
   const exact = (draft: string) => ({
@@ -469,7 +470,9 @@ describe('sendOperatorAutoExecutionNotification', () => {
       'Refund order #1042',
       {
         plan: {
+          instruction: 'Refund order #1042',
           steps: [{
+            id: 'send_1',
             category: 'communication',
             tool: 'send_reply',
             description: 'Tell the customer what happened',

@@ -22,23 +22,16 @@ import type { AgentPlan, OrgSettings } from '@shopkeeper/agent/types';
 import { classifyPerson } from '@shopkeeper/agent/person-name';
 import logger from '../../logger.js';
 import { gatewayThreadSink } from '../support-plan/agent-thread-sink.js';
-import { toGatewayAgentPlan } from '../support-plan/agent-plan-adapter.js';
 import {
   requiresDashboardDraftReview,
   parkedActionLabel,
   sendOperatorPlanNotification,
   sendOperatorQuestionNotification,
 } from '../support-plan/planning-notifications.js';
-import { appendPendingPlan, type PendingPlan, type ToolCall } from '../../operator-context.js';
+import { appendPendingPlan, toPendingPlanToolCalls, type PendingPlan } from '../../operator-context.js';
 import { getOperatorPlanQueueMax } from '../../config/runtime-config.js';
 import { captureObservedMerchantPreferenceProposal } from '@shopkeeper/agent/merchant-preference-capture';
 import { buildRequestDisplaySnapshot } from '../shared/request-display.js';
-
-function toPendingPlanToolCalls(
-  rawToolCalls: Array<{ id: string; name: string; input?: unknown }>,
-): ToolCall[] {
-  return rawToolCalls.map((toolCall) => ({ ...toolCall }));
-}
 
 export interface OperatorAnswerReplanParams {
   organizationId: string;
@@ -302,21 +295,12 @@ async function runAnswerReplan(
     };
   }
 
-  const notifyPlan = toGatewayAgentPlan(plan);
-  if (!notifyPlan) {
-    logger.error({ organizationId, threadId }, '[Operator] Answer re-plan produced no notify plan');
-    return {
-      message: "Saved your answer, but I couldn't draft the reply. Open the ticket to regenerate the proposal.",
-      status: 'failed',
-    };
-  }
-
   const customerName = meta?.customer?.name ?? null;
   const requestDisplay = await buildRequestDisplaySnapshot({
     organizationId,
     threadId,
     sourceMessageId: cacheRecord.lastCustomerMessageId,
-    rawToolCalls: notifyPlan.rawToolCalls,
+    rawToolCalls: plan.rawToolCalls,
   });
   const verdict = decideAutonomy(plan, settings);
   if (verdict.kind === 'needs_merchant_input') {
@@ -331,13 +315,13 @@ async function runAnswerReplan(
   // The desk's answering member may have no phone binding, so park their copy
   // as well as the copies the shared notification path publishes below.
   const actionLabel = parkedActionLabel(
-    notifyPlan.steps,
+    plan.steps,
     classifyPerson({ customerName, channelType: meta?.channelType ?? thread.channelType }),
   );
   const pendingPlan: PendingPlan = {
     threadId,
     instruction: baseInstruction,
-    rawToolCalls: toPendingPlanToolCalls(notifyPlan.rawToolCalls),
+    rawToolCalls: toPendingPlanToolCalls(plan.rawToolCalls),
     ...(cacheRecord.planId && cacheRecord.lastCustomerMessageId ? {
       planId: cacheRecord.planId,
       sourceMessageId: cacheRecord.lastCustomerMessageId,
@@ -346,8 +330,8 @@ async function runAnswerReplan(
     } : {}),
     ...(customerName ? { customerName } : {}),
     ...(actionLabel ? { actionLabel } : {}),
-    ...(notifyPlan.validation ? { validation: notifyPlan.validation } : {}),
-    ...(requiresDashboardDraftReview(notifyPlan.communication) ? { needsThreadReview: true } : {}),
+    ...(plan.validation ? { validation: plan.validation } : {}),
+    ...(requiresDashboardDraftReview(plan.communication) ? { needsThreadReview: true } : {}),
     requestDisplay,
   };
 
@@ -364,7 +348,7 @@ async function runAnswerReplan(
       meta?.customer?.name ?? null,
       meta?.channelType ?? thread.channelType,
       thread.requestSummary,
-      notifyPlan,
+      plan,
       baseInstruction,
       {
         requestDisplay,

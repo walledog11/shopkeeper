@@ -19,7 +19,6 @@ import type { OrgSettings } from '@shopkeeper/agent/types';
 import { STATUS } from '../../constants.js';
 import logger from '../../logger.js';
 import { publishThreadEvent } from '../../realtime/publish.js';
-import { toGatewayAgentPlan } from './agent-plan-adapter.js';
 import { gatewayThreadSink } from './agent-thread-sink.js';
 import {
   sendOperatorPlanNotification,
@@ -156,8 +155,6 @@ export async function runWithheldMessageFollowUp(
     }
 
     await publishThreadEvent(organizationId, threadId);
-    const notifyPlan = toGatewayAgentPlan(plan);
-    if (!notifyPlan) return;
     const identity = {
       planId: cache.planId,
       sourceMessageId,
@@ -184,7 +181,7 @@ export async function runWithheldMessageFollowUp(
       customerName,
       thread.channelType,
       thread.requestSummary,
-      notifyPlan,
+      plan,
       instruction,
       { identity },
     );

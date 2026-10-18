@@ -1,6 +1,6 @@
 import type { DbChannelType } from '@shopkeeper/db';
 import { customerFirstName } from '@shopkeeper/agent/person-name';
-import type { AgentPlan } from '../../../types.js';
+import type { AgentPlan } from '@shopkeeper/agent/types';
 import type { PrecomputedPlanResult } from '../planning-types.js';
 import { channelNoun, endSentence } from './headers.js';
 

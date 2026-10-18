@@ -8,14 +8,13 @@ import {
 } from '@shopkeeper/agent/person-name';
 import { lowerFirst } from '../../../lib/sentence-case.js';
 import { formatBlockedTicketLine } from '../../../maintenance/digest-briefing/ticket-lines.js';
-import type { ProposalCommunication } from '@shopkeeper/agent/types';
+import type { AgentPlan, PlanStep, ProposalCommunication } from '@shopkeeper/agent/types';
 import { displayApprovedDraft } from '@shopkeeper/agent/reply-placeholders';
 import { lineItemWriteSentence } from '@shopkeeper/agent/line-item-display';
 import {
   merchantFollowUpBeforeApproval,
   outstandingMerchantFollowUps,
 } from '@shopkeeper/agent/merchant-follow-up';
-import type { AgentPlan, PlanStep } from '../../../types.js';
 import { firstDraftExcerpt } from '../../operator/operator-ledger.js';
 import { requestDisplayHasContext, type RequestDisplay } from '../../shared/request-display.js';
 import { FRESH_STAGE } from './conversation-stage.js';

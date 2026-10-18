@@ -9,7 +9,7 @@ import {
   listOperatorBindings,
   notifyOperator,
 } from '../../../operator-notify.js';
-import { resolvePendingPlanContexts } from '../../../operator-context.js';
+import { resolvePendingPlanContexts, toPendingPlanToolCalls } from '../../../operator-context.js';
 import { shouldNotifyAutoExecution, type PrecomputedPlanResult } from '../planning-types.js';
 import { formatAutoExecutionMessage } from './format-auto-execution.js';
 
@@ -46,7 +46,7 @@ export async function sendOperatorAutoExecutionNotification(
         {
           threadId,
           instruction: result.instruction,
-          rawToolCalls: result.plan.rawToolCalls,
+          rawToolCalls: toPendingPlanToolCalls(result.plan.rawToolCalls),
           ...result.identity,
         },
       );

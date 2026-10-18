@@ -10,6 +10,12 @@ export interface ToolCall {
   [key: string]: unknown;
 }
 
+export function toPendingPlanToolCalls(
+  rawToolCalls: ReadonlyArray<{ id: string; name: string; input?: unknown }>,
+): ToolCall[] {
+  return rawToolCalls.map((toolCall) => ({ ...toolCall }));
+}
+
 export interface PendingPlan {
   threadId: string;
   instruction: string;
