@@ -10,6 +10,9 @@ import type {
   UpdateThreadTagInput,
 } from "./types.js";
 
+/** The internal step that records a photo request. */
+export const AWAIT_CUSTOMER_PHOTO_TOOL = "await_customer_photo";
+
 export const THREAD_TOOL_DEFINITIONS = [
   defineTool({
     name: "add_internal_note",
@@ -63,7 +66,7 @@ export const THREAD_TOOL_DEFINITIONS = [
   // Offered only by the planner, and only on a damage claim that still needs
   // its photo (`damageEvidenceState`); no other tool set includes it.
   defineTool({
-    name: "await_customer_photo",
+    name: AWAIT_CUSTOMER_PHOTO_TOOL,
     description:
       "Record that your reply asks the customer for a photo of the damaged or defective item, so their next message is read against that request. Call it beside the send_reply that asks for the photo. It sends nothing to the customer.",
     fields: {},

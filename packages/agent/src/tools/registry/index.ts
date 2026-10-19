@@ -13,6 +13,8 @@ import { ToolInputValidationError } from "./schema.js";
 import { modelToolDescription } from "./model-contract.js";
 import { STATS_TOOL_DEFINITIONS } from "./stats.js";
 import { THREAD_TOOL_DEFINITIONS } from "./thread.js";
+
+export { AWAIT_CUSTOMER_PHOTO_TOOL } from "./thread.js";
 import type { AgentToolDefinition, ToolCapability, ToolGroup } from "./types.js";
 
 export type {
