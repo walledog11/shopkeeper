@@ -127,6 +127,8 @@ export async function awaitCustomerPhotoMutation(
   return toolOk("Waiting for the customer's photo of the damage.");
 }
 
+const ORDER_NAME_SHAPE = /^#[A-Z0-9-]{1,32}$/;
+
 // Records that the reply asks this sender to confirm an order. Keyed to the
 // sender and the order, so a later episode resumes the same attempt count rather
 // than starting a fresh one. It writes no attempt and no outcome: gateway code
@@ -136,8 +138,10 @@ export async function awaitOrderVerificationMutation(
   ctx: ThreadSinkContext,
   after?: ThreadMutationHook,
 ): Promise<ToolResult> {
+  // Stored, then written into later prompts and the merchant's card, so only
+  // an order number's shape is kept: the model took it from customer text.
   const orderName = normalizeOrderName(String(input.order_name ?? ""));
-  if (orderName === "#") return toolError("Error: name the order to confirm.");
+  if (!ORDER_NAME_SHAPE.test(orderName)) return toolError("Error: order_name must be an order number, e.g. #1043.");
   const thread = await db.thread.findFirst({
     where: { id: ctx.threadId, organizationId: ctx.orgId },
     select: { customerId: true, channelType: true, classifierSignals: true },
