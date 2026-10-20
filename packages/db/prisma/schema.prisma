@@ -310,6 +310,7 @@ model Organization {
   storefrontChatDailyUsage StorefrontChatDailyUsage[]
   storefrontChatVerifications StorefrontChatVerification[]
   storefrontChatSessionEpisodes StorefrontChatSessionEpisode[]
+  orderVerifications     OrderVerification[]
   conversationAttributions ConversationAttribution[]
   requestEpisodeOutcomes RequestEpisodeOutcome[]
   merchantPreferences    MerchantPreference[]
@@ -568,6 +569,7 @@ model Customer {
   storefrontChatSessions StorefrontChatSession[]
   conversationAttributions ConversationAttribution[]
   requestEpisodeOutcomes RequestEpisodeOutcome[]
+  orderVerifications     OrderVerification[]
 
   // platformId is unique per org, not globally — two orgs can share the same customer email
   @@unique([organizationId, platformId])
@@ -642,6 +644,7 @@ model Thread {
   storefrontChatEpisodes StorefrontChatSessionEpisode[]
   conversationAttributions ConversationAttribution[]
   requestEpisodeOutcomes RequestEpisodeOutcome[]
+  orderVerifications OrderVerification[]
 
   @@unique([organizationId, operatorKey])
   @@unique([organizationId, id], map: "threads_organization_id_id_key")
@@ -1288,6 +1291,54 @@ model StorefrontChatVerification {
   @@index([organizationId, createdAt])
   @@index([expiresAt])
   @@map("storefront_chat_verifications")
+}
+
+enum OrderVerificationMethod {
+  email
+  zip
+}
+
+// What a direct-message sender (Instagram, TikTok) has shown about one order:
+// that they know its email or shipping zip. Gateway code compares the customer's
+// own message with Shopify; the model only records that it asked. Keyed to the
+// sender and the order, so it survives an episode rollover and never widens to
+// the sender's other orders. Knowledge, not possession: it unlocks reading this
+// order for this sender, never a write.
+model OrderVerification {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  customerId     String    @map("customer_id") @db.Uuid
+  // The thread whose agent asked last.
+  threadId       String?   @map("thread_id") @db.Uuid
+  // Normalized with order-reference's normalizeOrderName, the function the read
+  // scope check compares with.
+  orderName      String    @map("order_name") @db.VarChar(64)
+  // Shopify's numeric id, written when the order is verified.
+  orderId        String?   @map("order_id") @db.VarChar(64)
+  method         OrderVerificationMethod?
+  requestedAt    DateTime  @map("requested_at") @db.Timestamptz
+  // Customer messages compared: one for each that carried an email or zip.
+  attempts       Int       @default(0)
+  // The newest customer message already compared, so a redelivered job never
+  // charges or matches the same message twice.
+  evaluatedThrough DateTime? @map("evaluated_through") @db.Timestamptz
+  // The newest customer message that carried an email or zip and was compared,
+  // so the turn it lands on resumes this order whatever the classifier read in it.
+  answeredMessageId String? @map("answered_message_id") @db.Uuid
+  verifiedAt     DateTime? @map("verified_at") @db.Timestamptz
+  // The request the agent asked about, so the turn the answer lands on resumes it
+  // rather than reading "94107" as the whole request.
+  requestFacts   Json?     @map("request_facts")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  thread       Thread?      @relation(fields: [threadId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, customerId, orderName])
+  @@index([organizationId, threadId])
+  @@map("order_verifications")
 }
 
 // One row per order the shop receives, classified by whether a conversation

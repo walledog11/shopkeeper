@@ -1,5 +1,39 @@
 import { db } from '@shopkeeper/db';
+import { ORDER_VERIFICATION_CHANNELS } from '@shopkeeper/agent/order-verification';
 import { CHANNEL } from './constants.js';
+
+export interface ConfirmedOrder {
+  orderName: string;
+  /** What the sender showed they know: the email on the order, or its shipping zip. */
+  method: 'email' | 'zip';
+}
+
+/**
+ * The orders this conversation's sender has shown are theirs, for the operator
+ * card. A storefront shopper entered a code mailed to the order's email; an
+ * Instagram or TikTok sender sent the order's email or shipping zip, which
+ * buildContext reads from the same rows.
+ */
+export async function listConfirmedOrders(
+  organizationId: string,
+  threadId: string,
+  channelType: string,
+): Promise<ConfirmedOrder[]> {
+  if (ORDER_VERIFICATION_CHANNELS.has(channelType)) {
+    const rows = await db.orderVerification.findMany({
+      where: {
+        organizationId,
+        verifiedAt: { not: null },
+        customer: { threads: { some: { id: threadId, organizationId } } },
+      },
+      orderBy: { verifiedAt: 'asc' },
+      select: { orderName: true, method: true },
+    });
+    return rows.flatMap(row => (row.method ? [{ orderName: row.orderName, method: row.method }] : []));
+  }
+  const names = await listVerifiedOrderNames(organizationId, threadId, channelType);
+  return names.map(orderName => ({ orderName, method: 'email' as const }));
+}
 
 // The same predicate buildContext uses to promote a storefront session out of
 // guest (packages/agent/src/context.ts): a verified row on a session that has

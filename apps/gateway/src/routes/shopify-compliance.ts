@@ -286,6 +286,17 @@ async function deleteSelectedCustomerData(
     await tx.storefrontChatVerification.deleteMany({
       where: { organizationId, orderId: { in: customerOrderIds } },
     });
+    // A direct-message sender who confirmed one of this customer's orders is a
+    // different Customer row, so its confirmation is found by the order.
+    await tx.orderVerification.deleteMany({
+      where: {
+        organizationId,
+        OR: [
+          { orderId: { in: customerOrderIds } },
+          { threadId: { in: selection.threadIds } },
+        ],
+      },
+    });
     await tx.returnWatch.deleteMany({ where: watchWhere });
     await tx.voiceEdit.deleteMany({ where: threadWhere });
     await tx.kbCitation.deleteMany({ where: threadWhere });

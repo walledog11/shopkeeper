@@ -459,6 +459,25 @@ letter (F) is not reused.
   Reopen this only on a new observed failure. `search_kb` itself
   returns and cites only the candidates `selectAnsweringKbArticles` judges to
   answer the query, and not_found when none do or the check cannot decide.
+- **Q. An Instagram or TikTok sender confirms an order by its email or shipping
+  zip.** When the sender has no linked Shopify customer and asks to change an
+  order or reports a damaged, defective or wrong item
+  (`requestNeedsOrderVerification`), the agent asks for the order number and
+  then the email or zip on it, recording the ask with `await_order_verification`
+  (a quick-reply companion, so the ask can auto-send). The model never passes or
+  judges the answer: before planning, gateway code
+  (`evaluateOrderVerificationAnswers`) compares each later customer message with
+  the order in Shopify and writes the `OrderVerification` row. A message that
+  carries neither costs nothing; one that carries a wrong value, several values,
+  or names an order Shopify does not have is the same miss, so nothing reveals
+  which detail was wrong or whether the order exists. Five misses lock the order,
+  and a locked sender's later order requests escalate as `order_unconfirmed`.
+  `orderVerificationState` is the one owner of where the sender stands. A
+  confirmed order is knowledge, not possession: it makes reading that order
+  advisory for `shopify_customer_unresolved` and authorizes no write, so a
+  refund or any other change still goes to the merchant, and the card says how
+  they confirmed it. Storefront chat keeps its emailed code (`authState`), which
+  this does not touch.
 
 ## Verification scope
 

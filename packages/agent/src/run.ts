@@ -12,6 +12,7 @@ import { buildCachedSystemPrompt, buildSplitCachedSystemPrompt } from "./ai/anth
 import { pickModel } from "./ai/index.js";
 import type { OrgSettings, ProposalCommunication, RawToolCall } from "./types.js";
 import {
+  AWAIT_ORDER_VERIFICATION_TOOL,
   selectAgentTools,
   TOOL_CATEGORIES,
   type AgentToolDefinition,
@@ -306,9 +307,10 @@ export async function runAgent(
       : selectAgentTools(settings, storefrontTools, grantedScopes).filter((tool) => (
           (guestOnlyReachable || !isGuestOnlyTool(tool.name))
           && (!gatewayOperatorMode || !OPERATOR_HIDDEN_TOOL_NAMES.has(tool.name))
-          // Only the support planner offers it, on a damage claim; an approved
-          // plan that contains it still executes it.
+          // Only the support planner offers these, while their request is
+          // outstanding; an approved plan that contains one still executes it.
           && tool.name !== AWAIT_CUSTOMER_PHOTO_TOOL
+          && tool.name !== AWAIT_ORDER_VERIFICATION_TOOL
         ));
     const tools = readOnly
       ? selectedCoreTools

@@ -11,6 +11,7 @@ import { CHANNEL } from '../../constants.js';
 import logger from '../../logger.js';
 import { getConversationBurst } from './conversation-burst.js';
 import { generateThreadIntelligence } from './intelligence.js';
+import { evaluateOrderVerificationAnswers } from './order-verification-answers.js';
 import {
   precomputeThreadPlan,
   sendAutoAck,
@@ -81,6 +82,7 @@ async function resolvePublishDecision(
   threadId: string,
   identity: { planId: string; sourceMessageId: string } | undefined,
   skipSummary?: boolean,
+  answeredOrderVerification?: boolean,
 ): Promise<PublishDecision> {
   if (!identity) return { publish: true, requestSummary: null };
   const [thread, latest, burst] = await Promise.all([
@@ -103,7 +105,7 @@ async function resolvePublishDecision(
   const verdictIsForThisRequest = thread.requestSourceMessageId === identity.sourceMessageId;
   if (
     verdictIsForThisRequest
-    && shouldSkipRequestWork(thread, burst, identity.sourceMessageId, skipSummary)
+    && shouldSkipRequestWork(thread, burst, identity.sourceMessageId, skipSummary, answeredOrderVerification)
   ) {
     return { publish: false, reason: 'parks_no_work' };
   }
@@ -158,6 +160,16 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
   }
 
   const parallelPlan = canParallelizeThreadPlanning(threadSnapshot, sourceMessageId);
+  // Compared before planning, so the turn reads the stored outcome. A failure
+  // leaves the ask pending and the turn planned as if nothing was answered.
+  const answeredOrderVerification = await evaluateOrderVerificationAnswers(organizationId, threadId)
+    .catch((err: unknown) => {
+      logger.warn(
+        { err: err instanceof Error ? err.message : String(err), threadId, organizationId },
+        '[AISummary] Order confirmation check failed',
+      );
+      return false;
+    });
 
   if (
     parallelPlan
@@ -198,6 +210,7 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
         instruction: parallelInstruction,
         sourceMessageId,
         skipSummary,
+        answeredOrderVerification,
       })
     : null;
 
@@ -221,6 +234,7 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
           allowAutoExecute: false,
           sourceMessageId,
           skipSummary,
+          answeredOrderVerification,
         });
     if (planResult?.autoExecuted) {
       // Routine answers and clarification questions are useful immediately and
@@ -240,7 +254,7 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
       if (!autoExecutionOnlyHandedOff(planResult)) return;
     }
     const burst = await getConversationBurst(threadId);
-    if (shouldSkipRequestWork(updatedThread, burst, sourceMessageId, skipSummary)) {
+    if (shouldSkipRequestWork(updatedThread, burst, sourceMessageId, skipSummary, answeredOrderVerification)) {
       logger.info({ threadId, organizationId }, '[AISummary] Outside business hours — skipping auto-ack');
       return;
     }
@@ -255,6 +269,7 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
         allowAutoExecute: true,
         sourceMessageId,
         skipSummary,
+        answeredOrderVerification,
       });
 
   if (!planResult) {
@@ -301,6 +316,7 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
     threadId,
     planResult.identity,
     skipSummary,
+    answeredOrderVerification,
   );
   if (!decision.publish) {
     if (decision.reason === 'parks_no_work') {

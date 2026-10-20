@@ -5,6 +5,7 @@ import type {
   AddInternalNoteInput,
   AskOperatorInput,
   AwaitCustomerPhotoInput,
+  AwaitOrderVerificationInput,
   EscalateToHumanInput,
   UpdateThreadStatusInput,
   UpdateThreadTagInput,
@@ -12,6 +13,9 @@ import type {
 
 /** The internal step that records a photo request. */
 export const AWAIT_CUSTOMER_PHOTO_TOOL = "await_customer_photo";
+
+/** The internal step that records an order the agent asked a sender to confirm. */
+export const AWAIT_ORDER_VERIFICATION_TOOL = "await_order_verification";
 
 export const THREAD_TOOL_DEFINITIONS = [
   defineTool({
@@ -79,6 +83,27 @@ export const THREAD_TOOL_DEFINITIONS = [
       const io = ctx.io;
       if (!io?.awaitCustomerPhoto) return noThread;
       return ctx.execution ? io.awaitCustomerPhoto(input, ctx.execution) : io.awaitCustomerPhoto(input);
+    },
+  }),
+  // Offered only by the planner, on a direct-message thread whose sender has not
+  // shown the order is theirs (`orderVerificationState`). The answer is compared
+  // by gateway code, never by the model.
+  defineTool({
+    name: AWAIT_ORDER_VERIFICATION_TOOL,
+    description:
+      "Record that your reply asks the customer to confirm an order is theirs by sending the email address or the shipping zip/postal code on it, so their next message is checked against the order. Call it beside the send_reply that asks. It sends nothing to the customer, and you never pass or judge the email or zip yourself.",
+    fields: {
+      order_name: stringArg("The order number they named, e.g. #1043.", { required: true }),
+    },
+    category: "internal",
+    group: "thread",
+    capabilities: ["thread-io"],
+    label: "Waiting for the customer to confirm the order",
+    planStepLabel: "Ask them to confirm the order",
+    execute: async (input: AwaitOrderVerificationInput, ctx) => {
+      const io = ctx.io;
+      if (!io?.awaitOrderVerification) return noThread;
+      return ctx.execution ? io.awaitOrderVerification(input, ctx.execution) : io.awaitOrderVerification(input);
     },
   }),
   defineTool({

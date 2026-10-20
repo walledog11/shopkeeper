@@ -1,5 +1,8 @@
 import { createHash } from "node:crypto";
-import { createMessage, db, SenderType } from "@shopkeeper/db";
+import { createMessage, db, Prisma, SenderType } from "@shopkeeper/db";
+import { parseClassifierSignals } from "../classifier-signals.js";
+import { normalizeOrderName } from "../order-reference.js";
+import { ORDER_VERIFICATION_CHANNELS } from "../order-verification.js";
 import { stopWaitingTasksOnClosedThreads } from "../task-ledger.js";
 import { AGENT_NOTE_PREFIX, THREAD_STATUS } from "../thread-constants.js";
 import { toolEscalated, toolError, toolNotFound, toolOk, type ToolResult } from "../tools/result.js";
@@ -7,6 +10,7 @@ import type {
   AddInternalNoteInput,
   AskOperatorInput,
   AwaitCustomerPhotoInput,
+  AwaitOrderVerificationInput,
   EscalateToHumanInput,
   UpdateThreadStatusInput,
   UpdateThreadTagInput,
@@ -121,6 +125,51 @@ export async function awaitCustomerPhotoMutation(
   if (updated.count !== 1) return toolNotFound("Error: thread not found.");
   await runHook(after, ctx);
   return toolOk("Waiting for the customer's photo of the damage.");
+}
+
+// Records that the reply asks this sender to confirm an order. Keyed to the
+// sender and the order, so a later episode resumes the same attempt count rather
+// than starting a fresh one. It writes no attempt and no outcome: gateway code
+// compares the answer (order-verification-answer).
+export async function awaitOrderVerificationMutation(
+  input: AwaitOrderVerificationInput,
+  ctx: ThreadSinkContext,
+  after?: ThreadMutationHook,
+): Promise<ToolResult> {
+  const orderName = normalizeOrderName(String(input.order_name ?? ""));
+  if (orderName === "#") return toolError("Error: name the order to confirm.");
+  const thread = await db.thread.findFirst({
+    where: { id: ctx.threadId, organizationId: ctx.orgId },
+    select: { customerId: true, channelType: true, classifierSignals: true },
+  });
+  if (!thread) return toolNotFound("Error: thread not found.");
+  if (!ORDER_VERIFICATION_CHANNELS.has(thread.channelType)) {
+    return toolError("Error: order confirmation applies to Instagram and TikTok conversations only.");
+  }
+  const key = {
+    organizationId_customerId_orderName: {
+      organizationId: ctx.orgId, customerId: thread.customerId, orderName,
+    },
+  };
+  const existing = await db.orderVerification.findUnique({ where: key, select: { requestFacts: true } });
+  const requestFacts = parseClassifierSignals(thread.classifierSignals)?.requestFacts ?? null;
+  const now = new Date();
+  await db.orderVerification.upsert({
+    where: key,
+    create: {
+      organizationId: ctx.orgId, customerId: thread.customerId, threadId: ctx.threadId,
+      orderName, requestedAt: now,
+      requestFacts: requestFacts ?? Prisma.DbNull,
+    },
+    // The request is kept from the first ask: by a re-ask the current message is
+    // usually the answer that did not match, not the request it answers.
+    update: {
+      threadId: ctx.threadId, requestedAt: now,
+      ...(existing?.requestFacts == null && requestFacts ? { requestFacts } : {}),
+    },
+  });
+  await runHook(after, ctx);
+  return toolOk(`Waiting for the customer to confirm ${orderName}.`);
 }
 
 export async function escalateToHumanMutation(

@@ -163,6 +163,11 @@ export interface UpdateThreadTagInput {
 /** Takes no input: the runtime records which thread is waiting and since when. */
 export type AwaitCustomerPhotoInput = Record<string, never>;
 
+/** Names the order only. The email or zip is never an input: code reads it from the customer's message. */
+export interface AwaitOrderVerificationInput {
+  order_name: string;
+}
+
 export interface EscalateToHumanInput {
   reason: string;
 }

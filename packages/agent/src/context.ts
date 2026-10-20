@@ -1,5 +1,6 @@
 import { db, Prisma } from "@shopkeeper/db";
-import { parseClassifierSignals } from "./classifier-signals.js";
+import { parseClassifierSignals, parseRequestFacts } from "./classifier-signals.js";
+import { ORDER_VERIFICATION_CHANNELS } from "./order-verification.js";
 import { requireDurableAgentRuntime } from "./runtime-modes.js";
 import { selectCustomerBurst } from "./message-history.js";
 import { shopifyRestJson, type ShopifyContext } from "./shopify/client.js";
@@ -31,6 +32,7 @@ import type {
   AgentExecutionIdentity,
   AgentRecentMessage,
   BaseAgentContext,
+  OrderVerificationRecord,
   ShopifyOrderSummary,
 } from "./agent-context.js";
 
@@ -335,6 +337,24 @@ export async function buildContext(
         return messages.flatMap((message) => message.attachments.filter(looksLikeImageReference));
       })
     : Promise.resolve({ value: [] as string[], failed: false });
+  // What this direct-message sender has done to confirm their orders. A failed
+  // load reads as nothing confirmed, which leaves every order read waiting for
+  // the merchant exactly as before verification existed.
+  const orderVerificationsPromise = ORDER_VERIFICATION_CHANNELS.has(thread.channelType)
+    ? loadNonFatalContext<OrderVerificationRecord[]>("order_verifications", scope, [], async () => {
+        const rows = await db.orderVerification.findMany({
+          where: { organizationId: orgId, customerId: thread.customer.id },
+          select: {
+            orderName: true, orderId: true, method: true, threadId: true,
+            requestedAt: true, attempts: true, answeredMessageId: true, verifiedAt: true, requestFacts: true,
+          },
+        });
+        return rows.map(({ requestFacts, ...row }) => ({
+          ...row,
+          requestFacts: requestFacts ? parseRequestFacts(requestFacts) : null,
+        }));
+      })
+    : Promise.resolve({ value: [] as OrderVerificationRecord[], failed: false });
   const historyTaskIds = [...new Set(thread.messages.flatMap((message) => message.agentTaskId ? [message.agentTaskId] : []))];
   const historyTasks = historyTaskIds.length > 0
     ? await db.agentTask.findMany({
@@ -460,6 +480,7 @@ export async function buildContext(
   }
 
   const openThreadCount = (await openThreadCountPromise).value;
+  const orderVerifications = (await orderVerificationsPromise).value;
   const requestEvidence = {
     customerImages: (await customerImagesPromise).value,
     photoRequestedAt: photoRequestedAt?.toISOString() ?? null,
@@ -550,6 +571,7 @@ export async function buildContext(
       updateThreadStatus: (input, execution?: AgentExecutionIdentity) => sink.updateThreadStatus(input, { ...threadIo, ...execution }),
       updateThreadTag: (input, execution?: AgentExecutionIdentity) => sink.updateThreadTag(input, { ...threadIo, ...execution }),
       awaitCustomerPhoto: (input, execution?: AgentExecutionIdentity) => sink.awaitCustomerPhoto(input, { ...threadIo, ...execution }),
+      awaitOrderVerification: (input, execution?: AgentExecutionIdentity) => sink.awaitOrderVerification(input, { ...threadIo, ...execution }),
     },
   };
 
@@ -584,6 +606,7 @@ export async function buildContext(
     ...(scopesCustomerRequest ? { currentCustomerMessageIds } : {}),
     classifierSignals,
     ...(isOperator ? {} : { requestEvidence }),
+    ...(orderVerifications.length > 0 ? { orderVerifications } : {}),
     ...(options?.operatorLedger
       ? {
           operatorLedger: truncateContextText(

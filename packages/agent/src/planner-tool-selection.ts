@@ -79,8 +79,9 @@ interface SelectPlanningToolsInput {
   withheldMessageFollowUp?: boolean;
 }
 
-// `await_customer_photo` is listed so a narrowed set keeps it, but the planner
-// makes it available only while a damage claim still needs its photo.
+// `await_customer_photo` and `await_order_verification` are listed so a narrowed
+// set keeps them, but the planner makes each available only while its request
+// is outstanding.
 const CONTROL_TOOL_NAMES = [
   "add_internal_note",
   "update_thread_status",
@@ -89,6 +90,7 @@ const CONTROL_TOOL_NAMES = [
   "ask_operator",
   "send_reply",
   "await_customer_photo",
+  "await_order_verification",
 ] as const;
 
 const ORDER_READ_TOOL_NAMES = [

@@ -1,4 +1,8 @@
-import type { BaseAgentContext } from "./agent-context.js";
+import type { BaseAgentContext, VerifiedOrderRef } from "./agent-context.js";
+// Deliberately order-reference's normalizer, not storefront-verification's: this
+// module reaches the client bundle through static-policy and plan-preview, and
+// storefront-verification imports node:crypto.
+import { normalizeOrderName } from "./order-reference.js";
 
 // What an anonymous storefront shopper is allowed to reach. An allowlist, not a
 // denylist: a tool added to the registry tomorrow is unavailable to guests until
@@ -121,6 +125,28 @@ export function isVerifiedAllowedTool(name: string): boolean {
 
 export function isOrderScopedTool(name: string): boolean {
   return ORDER_SCOPED_TOOL_SET.has(name);
+}
+
+/**
+ * Whether this read names one of these verified orders: get_order_by_name by
+ * normalized name, get_order_tracking by exact id. Storefront scope enforcement
+ * and the direct-message review signal both ask it, so they cannot disagree about
+ * which reads are "that order". False for every other tool.
+ */
+export function readsVerifiedOrder(
+  name: string,
+  input: unknown,
+  verified: readonly VerifiedOrderRef[],
+): boolean {
+  if (name === "get_order_by_name") {
+    const requested = normalizeOrderName(String((input as { order_name?: unknown } | null)?.order_name ?? ""));
+    return verified.some((order) => normalizeOrderName(order.orderName) === requested);
+  }
+  if (name === "get_order_tracking") {
+    const requested = String((input as { order_id?: unknown } | null)?.order_id ?? "").trim();
+    return requested !== "" && verified.some((order) => order.orderId === requested);
+  }
+  return false;
 }
 
 export function guestToolBlockReason(name: string): string {
