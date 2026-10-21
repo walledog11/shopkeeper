@@ -12,6 +12,7 @@ import { emailsMatch } from "./storefront-verification.js";
 const MAX_VALUES_PER_MESSAGE = 2;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const ORDER_REF_RE = /^#?[A-Z]{0,4}-?\d{3,}$/i;
 // Prices, decimals, times, dates and ordinals carry digits and are never a code.
 const NOT_POSTAL_RE = /[$€£¥₹/:]|\d[.,]\d|^\d+(?:st|nd|rd|th|am|pm)$/i;
 
@@ -56,10 +57,12 @@ function messageValues(text: string, orderName: string): MessageValues {
       emails.add(token.toLowerCase());
       return null;
     }
-    const previous = (tokens[index - 1] ?? "").toLowerCase().replace(/[^a-z#]/g, "");
-    if (token.startsWith("#") || previous === "order" || previous === "#") {
-      const named = normalizeOrderName(token);
-      if (named !== "#") orders.push(named);
+    // An order number: "#2001", "order 2001", "order # 2001". Only a token
+    // shaped like one, so the words around it ("order is 94107") stay readable.
+    const previous = (tokens[index - 1] ?? "").toLowerCase();
+    const orderShaped = ORDER_REF_RE.test(token);
+    if (orderShaped && (token.startsWith("#") || previous === "order" || previous === "#")) {
+      orders.push(normalizeOrderName(token));
       return null;
     }
     if (token.includes("@") || NOT_POSTAL_RE.test(token)) return null;

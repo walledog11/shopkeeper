@@ -160,11 +160,13 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
   }
 
   const parallelPlan = canParallelizeThreadPlanning(threadSnapshot, sourceMessageId);
-  // Compared before planning, so the turn reads the stored outcome. A Shopify
-  // lookup that failed retries the job, since its answer is still uncompared;
-  // any other failure leaves the ask pending and the turn planned as if
-  // nothing was answered, so a missing table never stops planning.
-  const answeredOrderVerification = await evaluateOrderVerificationAnswers(organizationId, threadId)
+  // Compared after this burst is classified and before it is planned, so the
+  // turn reads the stored outcome and a message asking something else is not
+  // read as an answer. A Shopify lookup that failed retries the job, since its
+  // answer is still uncompared; any other failure leaves the ask pending and the
+  // turn planned as if nothing was answered, so a missing table never stops
+  // planning.
+  const checkOrderVerificationAnswers = () => evaluateOrderVerificationAnswers(organizationId, threadId)
     .catch((err: unknown) => {
       if (err instanceof OrderVerificationLookupError) throw err;
       logger.warn(
@@ -206,6 +208,8 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
     );
   }
 
+  // The parallel path plans a burst the classifier has already read.
+  const parallelAnswered = parallelPlan ? await checkOrderVerificationAnswers() : false;
   const intelligencePromise = generateThreadIntelligence(threadId, { skipSummary });
   const planPromise = parallelPlan
     ? precomputeThreadPlan(organizationId, threadId, settings, {
@@ -213,7 +217,7 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
         instruction: parallelInstruction,
         sourceMessageId,
         skipSummary,
-        answeredOrderVerification,
+        answeredOrderVerification: parallelAnswered,
       })
     : null;
 
@@ -229,6 +233,8 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
     );
     return;
   }
+
+  const answeredOrderVerification = parallelPlan ? parallelAnswered : await checkOrderVerificationAnswers();
 
   if (!withinBusinessHours) {
     const planResult = parallelPlan

@@ -1,6 +1,8 @@
 import { db } from '@shopkeeper/db';
 import { ShopifyRequestError, shopifyRestJson } from '@shopkeeper/agent/shopify';
+import { parseClassifierSignals } from '@shopkeeper/agent/classifier-signals';
 import {
+  continuesOrderVerificationAsk,
   ORDER_VERIFICATION_CHANNELS,
   orderVerificationAttemptsLeft,
 } from '@shopkeeper/agent/order-verification';
@@ -79,7 +81,7 @@ export async function evaluateOrderVerificationAnswers(
 ): Promise<boolean> {
   const thread = await db.thread.findFirst({
     where: { id: threadId, organizationId },
-    select: { customerId: true, channelType: true },
+    select: { customerId: true, channelType: true, classifierSignals: true, requestSourceMessageId: true },
   });
   if (!thread || !ORDER_VERIFICATION_CHANNELS.has(thread.channelType)) return false;
 
@@ -97,12 +99,30 @@ export async function evaluateOrderVerificationAnswers(
       requestedAt: { gt: new Date(Date.now() - ANSWER_WINDOW_MS) },
     },
     orderBy: { requestedAt: 'desc' },
-    select: { id: true, orderName: true, createdAt: true, verifiedAt: true },
+    select: { id: true, orderName: true, threadId: true, requestedAt: true, createdAt: true, verifiedAt: true },
   });
   if (!asked?.orderName) return false;
   const orderName = asked.orderName;
 
   const burst = await getConversationBurst(threadId);
+  // Where the sender answers: the thread that asked, or the conversation that
+  // opened right after it when the ask went unanswered there (an Instagram
+  // episode rollover). A number in some later, unrelated conversation is not one.
+  const onAskingThread = asked.threadId === threadId;
+  const opensAfterAsk = !onAskingThread && !burst.isFollowUp && asked.threadId !== null
+    && await db.message.count({
+      where: {
+        threadId: asked.threadId, organizationId, senderType: 'customer', deletedAt: null,
+        sentAt: { gt: asked.requestedAt },
+      },
+    }) === 0;
+  // Nor is one in a message that asks something else, when the classifier has
+  // read this burst.
+  const latestId = burst.messages.at(-1)?.id ?? null;
+  const facts = latestId !== null && thread.requestSourceMessageId === latestId
+    ? parseClassifierSignals(thread.classifierSignals)?.requestFacts ?? null
+    : null;
+  const answering = (onAskingThread || opensAfterAsk) && continuesOrderVerificationAsk(facts);
   const messages = await db.message.findMany({
     where: {
       id: { in: burst.messages.map(message => message.id) },
@@ -119,7 +139,7 @@ export async function evaluateOrderVerificationAnswers(
     select: { messageId: true },
   })).map(answer => answer.messageId));
   const spent = await db.orderVerification.findMany({ where: sender, select: { attempts: true, verifiedAt: true } });
-  const answers = asked.verifiedAt || orderVerificationAttemptsLeft(spent) === 0
+  const answers = !answering || asked.verifiedAt || orderVerificationAttemptsLeft(spent) === 0
     ? []
     : messages.filter(message => (
       !compared.has(message.id) && carriesOrderVerificationAnswer(message.contentText ?? '', orderName)
@@ -176,6 +196,8 @@ export async function evaluateOrderVerificationAnswers(
         await tx.orderVerification.update({
           where: { id: row.id },
           data: {
+            // The conversation the answer came in, after a rollover too.
+            threadId,
             attempts: { increment: answer.charged },
             answeredMessageId: message.id,
             ...(answer.outcome === 'matched' && order

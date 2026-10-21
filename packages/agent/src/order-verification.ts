@@ -103,11 +103,18 @@ function stateOfUnnamed(
     : { kind: "ask", orderName: null };
 }
 
-// A reply that is part of answering ("hold on", "I don't have it") reads as no
-// request of its own; one that asks something else leaves the ask behind.
-function continuesAsk(facts: RequestFacts | null): boolean {
+/**
+ * Whether a message still belongs to an open ask: an answer ("94107", "hold on",
+ * "I don't have it") reads as no request of its own, or as one that needs the
+ * order confirmed. One that asks something else leaves the ask behind, and a
+ * number in it is not an answer. Null facts (no aligned classification) cannot
+ * say otherwise.
+ */
+export function continuesOrderVerificationAsk(facts: RequestFacts | null): boolean {
   return !facts || facts.ask === "none" || facts.ask === "other" || requestNeedsOrderVerification(facts);
 }
+
+const continuesAsk = continuesOrderVerificationAsk;
 
 function newest<T extends OrderVerificationRecord>(records: readonly T[]): T | null {
   return records.reduce<T | null>(
@@ -133,13 +140,15 @@ export function orderVerificationState(ctx: AgentContext): OrderVerificationStat
 
   const records = ctx.orderVerifications ?? [];
   const named = records.filter(isNamed);
+  const facts = currentRequestSignals(ctx)?.requestFacts ?? null;
   const current = new Set(ctx.currentCustomerMessageIds ?? []);
   const answered = newest(named.filter(record => (
     record.answeredMessageId !== null && current.has(record.answeredMessageId)
   )));
-  if (answered) return stateOf(answered, records, true);
+  // The gateway compares only a message that continues the ask, so this holds
+  // whenever an answer was recorded; it keeps the two from disagreeing.
+  if (answered && continuesAsk(facts)) return stateOf(answered, records, true);
 
-  const facts = currentRequestSignals(ctx)?.requestFacts ?? null;
   const requestedOrder = facts?.order ? normalizeOrderName(facts.order) : null;
 
   // An order already asked about, when this message is still about confirming
