@@ -1,8 +1,9 @@
 export const RETURN_TO = "/onboarding";
-export const STORAGE_KEY = "concierge-onboarding-v2";
-export type StepId = "intro" | "shopify" | "email" | "connect" | "plan";
+export const STORAGE_KEY = "shopkeeper-onboarding-v3";
+export type StepId = "shopify" | "email" | "connect" | "plan";
 
 export interface OnboardingData {
+  shopDomain: string;
   forwardingEmail: string;
   storeName: string;
   founderName: string;
@@ -30,6 +31,7 @@ export type KbSyncState =
 export type KbSyncViewModel = KbSyncState & { retry: () => void };
 
 export const DEFAULT_DATA: OnboardingData = {
+  shopDomain: "",
   forwardingEmail: "",
   storeName: "",
   founderName: "",
@@ -37,10 +39,9 @@ export const DEFAULT_DATA: OnboardingData = {
   primaryEmail: "",
 };
 
-export const STEPS: ReadonlyArray<{ id: StepId }> = [
-  { id: "intro" },
-  { id: "shopify" },
-  { id: "email" },
-  { id: "connect" },
-  { id: "plan" },
+export const STEPS: ReadonlyArray<{ id: StepId; label: string }> = [
+  { id: "shopify", label: "Your store" },
+  { id: "email", label: "Customer messages" },
+  { id: "connect", label: "Your approvals" },
+  { id: "plan", label: "Your first draft" },
 ];

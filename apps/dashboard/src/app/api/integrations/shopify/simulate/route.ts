@@ -4,7 +4,6 @@ import { NotFoundError } from "@/lib/api/errors";
 import { withOrgRoute } from "@/lib/api/route";
 import {
   isShopifySimulatorEnabled,
-  SHOPIFY_SIMULATOR_DOMAIN,
   SHOPIFY_SIMULATOR_TOKEN,
 } from "@/lib/integrations/shopify-simulator";
 
@@ -31,7 +30,7 @@ export const POST = withOrgRoute(
         data: {
           organizationId: org.id,
           platform: ChannelType.shopify,
-          externalAccountId: SHOPIFY_SIMULATOR_DOMAIN,
+          externalAccountId: `demo-${org.id}.shopkeeper.test`,
           accessToken: SHOPIFY_SIMULATOR_TOKEN,
           metadata: {
             simulated: true,

@@ -1,10 +1,7 @@
-import { useState } from "react";
 import { Check, ChevronRight, FlaskConical, Loader2, ShoppingBag, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ShopifyStorefrontChatSection } from "@/components/integrations/ShopifyStorefrontChatSection";
 import { cn } from "@/lib/ui/cn";
-import { isStorefrontChatEnabledForIntegration } from "@/lib/storefront-chat/enabled";
 import type { Integration } from "@/types";
 import { Headline, Lede } from "./primitives";
 import type { KbSyncViewModel, OnboardingData } from "../_lib/onboarding-model";
@@ -12,55 +9,41 @@ import type { LaunchOnboardingOAuth } from "../_hooks/useOnboardingFlow";
 
 export function StepShopify({
   data,
+  update,
+  disabled,
   connected,
   shopifyRow,
   kbSync,
   onOAuth,
   onSimulate,
-  onUpdateStorefrontChat,
   simulatorEnabled,
-  storefrontChatGloballyEnabled,
-  shopifyClientId,
   simulating,
   oauthPending,
 }: {
   data: OnboardingData;
+  update: (patch: Partial<OnboardingData>) => void;
+  disabled: boolean;
   connected: boolean;
   shopifyRow: Integration | undefined;
   kbSync: KbSyncViewModel;
   onOAuth: LaunchOnboardingOAuth;
   onSimulate: () => Promise<boolean>;
-  onUpdateStorefrontChat: (enabled: boolean) => Promise<boolean>;
   simulatorEnabled: boolean;
-  storefrontChatGloballyEnabled: boolean;
-  shopifyClientId: string | null;
   simulating: boolean;
   oauthPending: boolean;
 }) {
-  const [shop, setShop] = useState("");
-  const [simulatorError, setSimulatorError] = useState(false);
+  const shop = data.shopDomain;
   const suggestion = (data.storeName || "your-store").toLowerCase().replace(/\s+/g, "");
   const simulated = isSimulated(shopifyRow?.metadata);
-  const showStorefrontChat = connected
-    && shopifyRow
-    && !simulated
-    && (storefrontChatGloballyEnabled || isStorefrontChatEnabledForIntegration(shopifyRow.metadata));
-
   function launch() {
     const trimmed = shop.trim();
-    if (!trimmed) return;
+    if (!trimmed || disabled) return;
     onOAuth("shopify", { shop: trimmed });
-  }
-
-  async function simulate() {
-    setSimulatorError(false);
-    const ok = await onSimulate();
-    if (!ok) setSimulatorError(true);
   }
 
   return (
     <div className="flex flex-col items-center">
-      <Headline>Connect Shopify.</Headline>
+      <Headline>{connected ? "Your store is connected." : "Connect Shopify."}</Headline>
       <Lede>Shopkeeper reads orders, products, and policies from this store.</Lede>
 
       <div className={cn(
@@ -97,38 +80,33 @@ export function StepShopify({
             <div className="flex flex-col gap-2 sm:flex-row">
               <Input
                 id="shopify-store"
-                autoFocus
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                disabled={disabled}
                 value={shop}
-                onChange={e => setShop(e.target.value)}
+                onChange={e => update({ shopDomain: e.target.value })}
                 onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); launch(); } }}
                 placeholder={`${suggestion}.myshopify.com`}
                 className="h-11 border-foreground/12 bg-transparent text-[14px] text-foreground placeholder:text-foreground/30 focus-visible:border-foreground/30 focus-visible:ring-foreground/15"
               />
               <Button
                 onClick={launch}
-                disabled={!shop.trim() || oauthPending}
+                disabled={!shop.trim() || disabled || oauthPending}
                 className="h-11 shrink-0 gap-1 rounded-full bg-foreground px-5 text-[14px] font-semibold text-background hover:bg-foreground/85"
               >
                 {oauthPending ? <Loader2 className="size-4 animate-spin" /> : <>Connect <ChevronRight className="size-4" /></>}
               </Button>
             </div>
             <p className="mt-1.5 text-[12.5px] text-foreground/45">
-              Find your <span className="font-medium text-foreground/60">.myshopify.com</span> address in your Shopify admin URL.
+              Find your <span className="font-medium text-foreground/60">.myshopify.com</span> address in Shopify → Settings → Domains.
             </p>
             <details className="mt-3">
               <summary className="cursor-pointer text-[12.5px] font-medium text-foreground/55 hover:text-foreground/75">
                 Can&apos;t find your store URL?
               </summary>
               <ul className="mt-2 space-y-1.5 text-[12.5px] leading-relaxed text-foreground/50">
-                <li>
-                  Your admin address bar reads{" "}
-                  <span className="font-mono text-foreground/65">admin.shopify.com/store/{suggestion}</span> —
-                  the last part plus <span className="font-mono text-foreground/65">.myshopify.com</span> is what goes above.
-                </li>
-                <li>
-                  Or open <span className="font-medium text-foreground/65">Settings → Domains</span> in Shopify; it&apos;s
-                  listed there as your <span className="font-mono text-foreground/65">.myshopify.com</span> domain.
-                </li>
+                <li>Open Settings → Domains in Shopify and copy the address ending in .myshopify.com.</li>
                 <li>
                   Signed in as staff rather than the owner? Installing apps needs that permission — ask
                   whoever owns the store to run this step.
@@ -136,13 +114,14 @@ export function StepShopify({
               </ul>
             </details>
             {simulatorEnabled && (
-              <div className="mt-4 border-t border-foreground/[0.08] pt-4">
+              <details className="mt-4 border-t border-foreground/[0.08] pt-4">
+                <summary className="mb-3 cursor-pointer text-[12.5px] text-foreground/55">Developer tools</summary>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => { void simulate(); }}
-                    disabled={simulating || oauthPending}
+                    onClick={() => { void onSimulate(); }}
+                    disabled={disabled || simulating || oauthPending}
                     className="h-10 gap-2 rounded-full border-foreground/15 bg-transparent px-3.5 text-[13px] font-semibold text-foreground hover:bg-foreground/[0.05]"
                   >
                     {simulating ? <Loader2 className="size-4 animate-spin" /> : <FlaskConical className="size-4" />}
@@ -150,10 +129,7 @@ export function StepShopify({
                   </Button>
                   <span className="text-[12px] text-foreground/45">Development only · simulated connection</span>
                 </div>
-                {simulatorError && (
-                  <p className="mt-2 text-[12.5px] text-destructive">Couldn&apos;t connect the demo store. Try again.</p>
-                )}
-              </div>
+              </details>
             )}
           </div>
         )}
@@ -172,18 +148,6 @@ export function StepShopify({
           </div>
         </details>
       </div>
-
-      {showStorefrontChat && shopifyRow && (
-        <div className="mt-4 w-full max-w-[520px] text-left">
-          <ShopifyStorefrontChatSection
-            integration={shopifyRow}
-            shopifyClientId={shopifyClientId}
-            storefrontChatGloballyEnabled={storefrontChatGloballyEnabled}
-            canManageWorkspace
-            onUpdateEnabled={onUpdateStorefrontChat}
-          />
-        </div>
-      )}
 
       {connected && kbSync.status !== "idle" && (
         <div className="mt-4 flex w-full max-w-[520px] items-start gap-3 rounded-xl border border-foreground/10 bg-foreground/[0.03] px-4 py-3.5 text-left">

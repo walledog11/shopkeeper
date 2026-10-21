@@ -1,24 +1,23 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState, type KeyboardEvent } from "react";
 import { AnimatePresence, LazyMotion, domAnimation, m } from "motion/react";
-import { SectionLabel } from "./SectionLabel";
 
 const STORE = "Linen & Loom";
 
 const tasks = [
   {
     label: "Run a sale",
-    headline: "Run a sale without opening admin.",
+    headline: "Run a flash sale in one text message.",
     about:
       "Text the discount and end date. Shopkeeper creates the automatic discount in Shopify and tells you when it’s live.",
-    prompt: "Put the store on sale until Sunday.",
+    prompt: "Take 15% off the whole store through Sunday night.",
     response: "Done — 15% off the whole store through Sunday night.",
     gradient: "/marketing/bento/bento-1-gradient.svg",
   },
   {
     label: "Check stock",
-    headline: "Get a count in the words you already use.",
+    headline: "Track and update inventory without ever navigating a dashboard.",
     about:
       "Ask the way you’d ask someone on the floor. Shopkeeper reads your inventory and answers in the thread.",
     prompt: "How many sand linen jumpsuits do we have in Small?",
@@ -27,7 +26,7 @@ const tasks = [
   },
   {
     label: "Change an order",
-    headline: "Fix an order before it ships.",
+    headline: "Edit orders in a matter of seconds.",
     about:
       "Give a customer name or order number and say what to change. Shopkeeper updates the order in Shopify and confirms what changed.",
     prompt: "On Maya’s order #3102, swap the Medium jumpsuit for a Small.",
@@ -36,7 +35,7 @@ const tasks = [
   },
   {
     label: "Work the inbox",
-    headline: "Your queue, in one ask.",
+    headline: "Support tickets consolidated and simplified.",
     about:
       "Shopkeeper lists what needs your approval, what it can answer on its own, and what only you can handle. Then it waits for your call.",
     prompt: "What’s waiting on me?",
@@ -46,7 +45,7 @@ const tasks = [
   },
   {
     label: "Email a customer",
-    headline: "Start the conversation yourself.",
+    headline: "Proactively reach out to customers effortlessly.",
     about:
       "Tell Shopkeeper who to email and what to say. It sends the message and keeps a record.",
     prompt: "Email jamie@example.com — their replacement ships tomorrow.",
@@ -129,92 +128,57 @@ function MerchantCopy({ headline, about }: { headline: string; about: string }) 
   );
 }
 
-/** Pin height: one viewport segment per task so page scroll scrubs the active tab. */
-const SCROLL_SEGMENT_VH = 72;
-
 export function MerchantTasks() {
   const [active, setActive] = useState(0);
-  const [scrollScrub, setScrollScrub] = useState(false);
-  const pinRef = useRef<HTMLDivElement>(null);
+  const [verticalTabs, setVerticalTabs] = useState(false);
   const task = tasks[active];
 
-  // Pin-and-scrub only where the panel fits under the sticky navbar: desktop-size
-  // screens with motion allowed. On a phone the panel is taller than the screen, so
-  // it would stay pinned with its bottom cut off for several screens of scrolling;
-  // there the tabs are simply tapped.
   useEffect(() => {
-    const media = window.matchMedia("(min-width: 1024px) and (prefers-reduced-motion: no-preference)");
-    const sync = () => setScrollScrub(media.matches);
+    const media = window.matchMedia("(min-width: 640px)");
+    const sync = () => setVerticalTabs(media.matches);
     sync();
     media.addEventListener("change", sync);
     return () => media.removeEventListener("change", sync);
   }, []);
 
-  const updateActiveFromScroll = useCallback(() => {
-    if (!scrollScrub) return;
-    const pin = pinRef.current;
-    if (!pin || tasks.length <= 1) return;
+  function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    let next: number;
+    if (event.key === (verticalTabs ? "ArrowDown" : "ArrowRight")) {
+      next = (index + 1) % tasks.length;
+    } else if (event.key === (verticalTabs ? "ArrowUp" : "ArrowLeft")) {
+      next = (index - 1 + tasks.length) % tasks.length;
+    } else if (event.key === "Home") {
+      next = 0;
+    } else if (event.key === "End") {
+      next = tasks.length - 1;
+    } else {
+      return;
+    }
 
-    const rect = pin.getBoundingClientRect();
-    const pinTop = window.scrollY + rect.top;
-    const viewport = window.innerHeight;
-    const scrollRange = Math.max(pin.offsetHeight - viewport, 1);
-    const progress = Math.min(1, Math.max(0, (window.scrollY - pinTop) / scrollRange));
-    const index = Math.min(tasks.length - 1, Math.round(progress * (tasks.length - 1)));
-    setActive(index);
-  }, [scrollScrub]);
-
-  useEffect(() => {
-    if (!scrollScrub) return;
-    updateActiveFromScroll();
-    window.addEventListener("scroll", updateActiveFromScroll, { passive: true });
-    window.addEventListener("resize", updateActiveFromScroll, { passive: true });
-    return () => {
-      window.removeEventListener("scroll", updateActiveFromScroll);
-      window.removeEventListener("resize", updateActiveFromScroll);
-    };
-  }, [scrollScrub, updateActiveFromScroll]);
-
-  function goToTask(index: number) {
-    setActive(index);
-    if (!scrollScrub) return;
-    const pin = pinRef.current;
-    if (!pin || tasks.length <= 1) return;
-
-    const rect = pin.getBoundingClientRect();
-    const pinTop = window.scrollY + rect.top;
-    const scrollRange = Math.max(pin.offsetHeight - window.innerHeight, 1);
-    const progress = index / (tasks.length - 1);
-    const top = pinTop + progress * scrollRange;
-    window.scrollTo({ top, behavior: "smooth" });
+    event.preventDefault();
+    setActive(next);
+    event.currentTarget.parentElement
+      ?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
   }
-
-  const pinHeightVh =
-    tasks.length > 1 ? (tasks.length - 1) * SCROLL_SEGMENT_VH + 100 : 100;
 
   return (
     <LazyMotion features={domAnimation} strict>
-      <section id="workflow" aria-labelledby="merchant-tasks-heading" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-16 sm:px-6 sm:py-24">
+      <section id="workflow" aria-labelledby="merchant-tasks-heading" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-12 sm:px-6 sm:py-24">
         <m.header
-          className="mb-8 max-w-[min(720px,100%)] text-left sm:mb-10"
+          className="mb-6 max-w-[min(720px,100%)] text-left sm:mb-10"
           initial={{ opacity: 0, y: 22 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.5 }}
           transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
         >
-          <SectionLabel align="start">Text your shopkeeper</SectionLabel>
           <h2 id="merchant-tasks-heading" className="m-display m-h2">
-            “Put the store on sale until Sunday.”
+            “Take 15% off the whole store through Sunday night.”
           </h2>
         </m.header>
 
-        <div
-          ref={pinRef}
-          className="relative"
-          style={{ height: scrollScrub ? `${pinHeightVh}vh` : undefined }}
-        >
+        <div className="relative">
           <m.div
-            className={`m-merchant-panel overflow-hidden rounded-[1.5rem] ${scrollScrub ? "sticky top-[4.5rem] z-[1] sm:top-20" : ""}`}
+            className="m-merchant-panel overflow-hidden rounded-[1.5rem]"
             initial={{ opacity: 0, y: 28 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.2 }}
@@ -224,7 +188,7 @@ export function MerchantTasks() {
               <div
                 role="tablist"
                 aria-label="Example jobs"
-                aria-orientation="vertical"
+                aria-orientation={verticalTabs ? "vertical" : "horizontal"}
                 className="m-merchant-tabs m-merchant-tabs-vertical shrink-0 border-b border-[color:var(--m-line)] bg-white px-3 py-3 sm:w-[10.5rem] sm:border-b-0 sm:border-r sm:px-3 sm:py-5 lg:w-[11.25rem]"
               >
                 {tasks.map((item, index) => {
@@ -238,7 +202,8 @@ export function MerchantTasks() {
                       aria-selected={selected}
                       aria-controls="merchant-task-panel"
                       tabIndex={selected ? 0 : -1}
-                      onClick={() => goToTask(index)}
+                      onClick={() => setActive(index)}
+                      onKeyDown={(event) => handleTabKeyDown(event, index)}
                       className={`m-merchant-tab m-merchant-tab-vertical w-full ${selected ? "is-active" : ""}`}
                     >
                       {item.label}
@@ -251,6 +216,7 @@ export function MerchantTasks() {
                 id="merchant-task-panel"
                 role="tabpanel"
                 aria-labelledby={`merchant-task-tab-${active}`}
+                tabIndex={0}
                 className="min-w-0 flex-1"
               >
                 <AnimatePresence mode="wait">
@@ -262,10 +228,10 @@ export function MerchantTasks() {
                     exit="exit"
                     className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:min-h-[420px]"
                   >
-                    <div className="order-2 border-t border-[color:var(--m-line)] bg-white px-5 py-8 sm:px-8 sm:py-10 lg:order-1 lg:border-t-0 lg:border-r lg:py-12">
+                    <div className="order-2 border-t border-[color:var(--m-line)] bg-white px-5 py-6 sm:px-8 sm:py-10 lg:order-1 lg:border-t-0 lg:border-r lg:py-12">
                       <MerchantCopy headline={task.headline} about={task.about} />
                     </div>
-                    <div className="m-merchant-well relative order-1 flex items-center justify-center px-4 py-10 sm:px-8 sm:py-12 lg:order-2 lg:py-14">
+                    <div className="m-merchant-well relative order-1 flex items-center justify-center px-4 py-6 sm:px-8 sm:py-12 lg:order-2 lg:py-14">
                       <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
                         {/* eslint-disable-next-line @next/next/no-img-element -- decorative SVG glow, same as bento cards */}
                         <img src={task.gradient} alt="" className="size-full object-cover opacity-90" />

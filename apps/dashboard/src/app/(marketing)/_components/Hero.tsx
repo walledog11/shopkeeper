@@ -108,19 +108,26 @@ export function Hero() {
         The AI shopkeeper built for solo Shopify stores
       </h1>
 
-      <p className="m-lede mx-auto mb-8 max-w-[560px]" style={rise(80)}>
-        Shopkeeper answers your customers and does the work in Shopify. You
-        approve anything that matters from iMessage or the dashboard.
+      <p className="m-lede mx-auto mb-4 max-w-[640px]" style={rise(80)}>
+        Shopkeeper answers your customers and does the work in Shopify.
+        Give it instructions from iMessage or the dashboard.
+      </p>
+
+      <p className="mx-auto mb-8 max-w-[600px] text-[14px] leading-relaxed text-[color:var(--m-ink-2)]" style={rise(120)}>
+        By default, routine replies can send automatically. Order changes,
+        refunds, and exceptions wait for your approval.
       </p>
 
       <div id="waitlist" className="scroll-mt-24" style={rise(160)}>
-        <div className="mx-auto flex max-w-3xl flex-col items-center justify-center gap-3 sm:flex-row sm:items-start">
-          <WaitlistForm source="hero" />
-          <ButtonLink href="#workflow" variant="outline" size="lg" className="sm:mt-1">
-            <MessageSquareText aria-hidden className="size-4" />
-            See what you can ask
-          </ButtonLink>
-        </div>
+        <WaitlistForm
+          source="hero"
+          secondaryAction={
+            <ButtonLink href="#workflow" variant="outline" size="lg" className="sm:mt-1">
+              <MessageSquareText aria-hidden className="size-4" />
+              See what you can ask
+            </ButtonLink>
+          }
+        />
         <ul className="mt-5 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[13px] text-[color:var(--m-ink-3)]">
           {heroProofPoints.map((point) => (
             <li key={point} className="flex items-center gap-1.5">

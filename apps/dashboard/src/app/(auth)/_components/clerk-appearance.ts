@@ -1,7 +1,6 @@
 import { GLASS_SETTINGS_ACTION } from "@/lib/ui/glass-card-styles";
 
 type ClerkElementOverrides = Record<string, string | Record<string, string>>;
-type AuthClerkVariant = "paper" | "ink";
 
 const paperVariables = {
   colorPrimary: "#2b2118",
@@ -18,19 +17,16 @@ const paperVariables = {
   borderRadius: "0.75rem",
 };
 
-const inkVariables = {
-  colorPrimary: "#d6c4aa",
-  colorTextOnPrimaryBackground: "#1a120c",
-  colorDanger: "#fca5a5",
-  colorSuccess: "#86efac",
-  colorWarning: "#fcd34d",
-  colorNeutral: "#f6f2eb",
-  colorBackground: "transparent",
-  colorInputBackground: "rgba(255, 245, 235, 0.07)",
-  colorInputText: "#f6f2eb",
-  colorText: "#f6f2eb",
-  colorTextSecondary: "rgba(246, 242, 235, 0.55)",
-  borderRadius: "0.75rem",
+const authVariables = {
+  ...paperVariables,
+  colorPrimary: "#1b1a19",
+  colorTextOnPrimaryBackground: "#fcfaf8",
+  colorNeutral: "#1b1a19",
+  colorInputBackground: "#fff",
+  colorInputText: "#1b1a19",
+  colorText: "#1b1a19",
+  colorTextSecondary: "#57534e",
+  fontFamily: '"General Sans", system-ui, sans-serif',
 };
 
 const hiddenFooterElements: ClerkElementOverrides = {
@@ -73,47 +69,52 @@ const paperElements: ClerkElementOverrides = {
   ...hiddenFooterElements,
 };
 
-const inkElements: ClerkElementOverrides = {
-  rootBox: "w-full",
-  cardBox: "w-full shadow-none",
-  card: "w-full bg-transparent shadow-none border-0 p-0",
-  headerTitle: "text-[#f6f2eb] font-semibold tracking-tight",
-  headerSubtitle: "text-[#f6f2eb]/55",
+const authInputClassName =
+  "h-12 max-h-none rounded-xl border border-[color:var(--m-line-strong)] bg-white px-3.5 text-base text-[color:var(--m-ink)] shadow-none placeholder:text-[color:var(--m-ink-3)] focus:border-[color:var(--m-ink)] focus:ring-2 focus:ring-stone-900/10 aria-invalid:border-red-700";
+
+const authLinkClassName =
+  "font-medium text-[color:var(--m-ink)] underline underline-offset-4 hover:text-black focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[color:var(--m-focus)]";
+
+const authElements: ClerkElementOverrides = {
+  rootBox: "w-full max-w-full min-w-0",
+  cardBox: "w-full max-w-full min-w-0 overflow-visible rounded-none border-0 bg-transparent shadow-none",
+  card: "m-0 w-full max-w-full min-w-0 rounded-none border-0 bg-transparent p-0 shadow-none",
+  headerTitle: "text-[color:var(--m-ink)] font-medium",
+  headerSubtitle: "text-[color:var(--m-ink-2)]",
   socialButtonsBlockButton:
-    "h-11 rounded-full border border-foreground/14 bg-foreground/[0.05] text-[#f6f2eb] shadow-none hover:bg-foreground/[0.09]",
-  socialButtonsBlockButtonText: "font-medium text-[#f6f2eb]",
-  dividerLine: "bg-foreground/10",
-  dividerText: "text-xs font-medium text-[#f6f2eb]/45",
-  formFieldLabel: "text-sm font-medium text-[#f6f2eb]/75",
-  formFieldInput:
-    "h-11 rounded-xl border border-foreground/12 bg-foreground/[0.06] text-[#f6f2eb] shadow-none placeholder:text-[#f6f2eb]/30 focus:border-foreground/25 focus:ring-2 focus:ring-foreground/10",
-  formFieldHintText: "text-xs text-[#f6f2eb]/45",
+    "m-btn m-btn-outline h-12 w-full shadow-none",
+  socialButtonsBlockButtonText: "text-[15px] font-medium",
+  dividerLine: "bg-[color:var(--m-line)]",
+  dividerText: "text-xs font-normal text-[color:var(--m-ink-3)]",
+  formFieldLabel: "text-sm font-medium text-[color:var(--m-ink)]",
+  formFieldInput: authInputClassName,
+  formFieldHintText: "text-xs text-[color:var(--m-ink-2)]",
   formButtonPrimary:
-    "!bg-[#d6c4aa] !text-[#1a120c] h-11 rounded-full border border-foreground/20 font-semibold shadow-[inset_0_1px_0_rgba(255,245,235,0.5)] hover:!bg-[#e4d2b6]",
-  formButtonPrimaryIcon: "!text-[#1a120c]",
-  identityPreviewText: "text-[#f6f2eb]",
-  identityPreviewEditButtonIcon: "text-[#cdbfa3]",
-  alertText: "text-sm text-[#f6f2eb]",
-  formResendCodeLink: "font-medium text-[#cdbfa3] hover:text-[#f6f2eb]",
+    "m-btn m-btn-primary h-12 w-full bg-none shadow-none before:hidden after:hidden",
+  formButtonPrimaryText: "text-[15px] font-medium leading-none",
+  formButtonPrimaryIcon: "static m-0 shrink-0 text-current",
+  identityPreviewText: "text-[color:var(--m-ink)]",
+  identityPreviewEditButton: authLinkClassName,
+  identityPreviewEditButtonIcon: "text-[color:var(--m-ink)]",
+  alertText: "text-sm",
+  formResendCodeLink: authLinkClassName,
+  formFieldAction: authLinkClassName,
+  backLink: authLinkClassName,
   otpCodeFieldInput:
-    "rounded-xl border border-foreground/12 bg-foreground/[0.06] text-[#f6f2eb] shadow-none focus:border-foreground/25 focus:ring-2 focus:ring-foreground/10",
-  formFieldInputShowPasswordButton: "text-[#f6f2eb]/45 hover:text-[#f6f2eb]",
+    "h-12 max-h-none rounded-xl border border-[color:var(--m-line-strong)] bg-white text-base text-[color:var(--m-ink)] shadow-none focus:border-[color:var(--m-ink)] focus:ring-2 focus:ring-stone-900/10",
+  formFieldInputShowPasswordButton: "text-[color:var(--m-ink-3)] hover:text-[color:var(--m-ink)]",
   alternativeMethodsBlockButton:
-    "h-11 rounded-full border border-foreground/14 bg-foreground/[0.05] text-[#f6f2eb] shadow-none hover:bg-foreground/[0.09]",
+    "m-btn m-btn-outline min-h-12 w-full shadow-none",
   ...hiddenFooterElements,
 };
 
 export function getAuthClerkAppearance(
   overrides: ClerkElementOverrides = {},
-  variant: AuthClerkVariant = "paper",
 ) {
-  const variables = variant === "ink" ? inkVariables : paperVariables;
-  const elements = variant === "ink" ? inkElements : paperElements;
-
   return {
-    variables,
+    variables: authVariables,
     elements: {
-      ...elements,
+      ...authElements,
       ...overrides,
     },
   };

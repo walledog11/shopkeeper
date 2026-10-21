@@ -14,6 +14,7 @@ export function Providers({ children, nonce, publishableKey }: Props) {
     <ClerkProvider
       publishableKey={publishableKey}
       nonce={nonce}
+      appearance={{ cssLayerName: "clerk" }}
       signInUrl={process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL}
       signUpUrl={process.env.NEXT_PUBLIC_CLERK_SIGN_UP_URL}
     >

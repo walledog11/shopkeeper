@@ -33,6 +33,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await cleanupTestData(org?.id);
   vi.clearAllMocks();
+  vi.unstubAllEnvs();
 });
 
 async function connectShopify() {
@@ -85,6 +86,19 @@ describe('getIncompleteOnboardingRedirect', () => {
     await expect(getIncompleteOnboardingRedirect(org.id, org.settings, USER_ID)).resolves.toBe(
       '/onboarding?step=email',
     );
+  });
+
+  it('accepts Instagram as the customer channel', async () => {
+    await connectShopify();
+    await createTestIntegration(org.id, { platform: ChannelType.ig_dm, externalAccountId: 'instagram-onboarding', accessToken: 'test' });
+    await expect(getIncompleteOnboardingRedirect(org.id, org.settings, USER_ID)).resolves.toBe('/onboarding?step=connect');
+  });
+
+  it('accepts enabled storefront chat as the customer channel', async () => {
+    vi.stubEnv('STOREFRONT_CHAT_ENABLED', 'true');
+    const store = await connectShopify();
+    await db.integration.update({ where: { id: store.id }, data: { metadata: { storefrontChat: { enabled: true } } } });
+    await expect(getIncompleteOnboardingRedirect(org.id, org.settings, USER_ID)).resolves.toBe('/onboarding?step=connect');
   });
 
   it('sends a store-and-inbox org with no phone to the connect step', async () => {
