@@ -97,6 +97,20 @@ function joinsAsOneCode(first: string, second: string): boolean {
   return first.length >= 3 && first.length <= 5 && second.length >= 3 && second.length <= 4;
 }
 
+/**
+ * The orders a message names ("#2001", "order 2001"), normalized. In reply to
+ * "which order?" a bare order-shaped number ("1043") names one too.
+ */
+export function orderReferences(text: string, options: { bareNumbers?: boolean } = {}): string[] {
+  const named = messageValues(text, "").orders;
+  if (options.bareNumbers) {
+    for (const token of words(text)) {
+      if (ORDER_REF_RE.test(token)) named.push(normalizeOrderName(token));
+    }
+  }
+  return [...new Set(named)];
+}
+
 /** Whether a message names an order other than this one ("#2001", "order 2001"). */
 export function namesAnotherOrder(text: string, orderName: string): boolean {
   const asked = normalizeOrderName(orderName);

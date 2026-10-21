@@ -1,6 +1,6 @@
 import type { OrgSettings } from "./types.js";
 import { merchantLocalTime, resolveAgentSettings } from "./settings.js";
-import { isOperatorChannel } from "./thread-constants.js";
+import { isOperatorChannel, ORDER_VERIFICATION_CHANNELS } from "./thread-constants.js";
 import {
   hasUnresolvedShopifyCustomer,
   isStorefrontContext,
@@ -155,10 +155,11 @@ function buildOrderVerificationSection(state: OrderVerificationState | null | un
       break;
     case "verified": {
       const how = state.method === "zip" ? "shipping zip" : "email address";
-      const ask = state.resumedRequest ? RESUMED_ASK_LABELS[state.resumedRequest.ask] : undefined;
-      const reason = state.resumedRequest?.reason ? ` (reason: ${state.resumedRequest.reason.replace(/_/g, " ")})` : "";
-      const resumed = ask ? ` Their message just confirmed it; before that they wanted ${ask}${reason}, so carry on with that request.` : "";
-      body = `The sender confirmed order ${state.order.orderName} by its ${how}. You may read it with get_order_by_name (order_name ${state.order.orderName}) and discuss it with them; it is the only order they have shown is theirs. It shows they placed the order, not who they are, and authorizes no change by itself.${resumed}`;
+      const resumed = state.resumedRequest?.facts;
+      const ask = resumed ? RESUMED_ASK_LABELS[resumed.ask] : undefined;
+      const reason = resumed?.reason ? ` (reason: ${resumed.reason.replace(/_/g, " ")})` : "";
+      const carryOn = ask ? ` Their message just confirmed it; before that they wanted ${ask}${reason}, so carry on with that request.` : "";
+      body = `The sender confirmed order ${state.order.orderName} by its ${how}. You may read it with get_order_by_name (order_name ${state.order.orderName}) and discuss it with them; it is the only order they have shown is theirs. It shows they placed the order, not who they are, and authorizes no change by itself.${carryOn}`;
       break;
     }
   }
@@ -370,7 +371,7 @@ export function buildSystemPromptParts(
         // is the branch most Instagram threads take. Gated on the same predicate
         // as the tool set, so the read named here is a read the agent holds.
         : unresolvedCustomer
-          ? `No Shopify customer ID is pre-loaded for this thread, so nothing here establishes who the sender is. For a plain "where is my order" question, call get_order_fulfillment_status with the order number they gave - and the checkout email too, if they gave one - and answer from what it returns. Ask for the order number when you do not have one; do not guess at an order. The fuller order and customer reads still work, but they return the name, address, contact details and amounts on the order, which is not detail to hand an unverified sender: use them only when the question genuinely needs it, and expect the merchant to review that reply before it goes out. If you need to look up or act on a customer, call find_customer with by='query' first to resolve their ID.`
+          ? `No Shopify customer ID is pre-loaded for this thread, so nothing here establishes who the sender is. For a plain "where is my order" question, call get_order_fulfillment_status with the order number they gave${ORDER_VERIFICATION_CHANNELS.has(ctx.thread.channelType) ? "" : " - and the checkout email too, if they gave one -"} and answer from what it returns. Ask for the order number when you do not have one; do not guess at an order. The fuller order and customer reads still work, but they return the name, address, contact details and amounts on the order, which is not detail to hand an unverified sender: use them only when the question genuinely needs it, and expect the merchant to review that reply before it goes out. If you need to look up or act on a customer, call find_customer with by='query' first to resolve their ID.`
           : "No Shopify customer ID is pre-loaded for this thread. If you need to look up or act on a customer, call find_customer with by='query' first to resolve their ID.";
 
   if (isOperatorMode) {

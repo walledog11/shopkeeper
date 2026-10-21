@@ -347,6 +347,7 @@ export async function buildContext(
           select: {
             orderName: true, orderId: true, method: true, threadId: true, requestedAt: true,
             asks: true, attempts: true, answeredMessageId: true, verifiedAt: true, requestFacts: true,
+            compensationRequested: true,
           },
         });
         return rows.map(({ requestFacts, ...row }) => ({

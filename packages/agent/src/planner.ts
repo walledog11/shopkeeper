@@ -238,12 +238,13 @@ export async function planAgent(
   // Routing and review read the claim's photo state whatever the order's
   // confirmation, so compensation proposed for an unconfirmed damage claim still
   // escalates; the photo is only asked for once the order is confirmed.
+  const askedAbout = orderVerification?.kind === "verified"
+    ? orderVerification.resumedRequest
+    : orderVerification?.kind === "ask" || orderVerification?.kind === "asked"
+      ? orderVerification.pendingRequest
+      : null;
   const damageEvidence = customerOriginated
-    ? damageEvidenceState(
-      ctx,
-      resolvedSettings,
-      orderVerification?.kind === "verified" ? orderVerification.resumedRequest : null,
-    )
+    ? damageEvidenceState(ctx, resolvedSettings, askedAbout?.facts ?? null)
     : null;
   const damagePhotoAsk = orderUnconfirmed ? null : damageEvidence;
   const { stable, volatile } = buildSystemPromptParts(ctx, settings, {

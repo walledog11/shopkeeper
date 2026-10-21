@@ -1338,6 +1338,9 @@ model OrderVerification {
   // The request the agent asked about, so the turn the answer lands on resumes it
   // rather than reading "94107" as the whole request.
   requestFacts   Json?     @map("request_facts")
+  // Whether that request asked for compensation (store credit, a replacement),
+  // which its fields alone do not always say.
+  compensationRequested Boolean @default(false) @map("compensation_requested")
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 

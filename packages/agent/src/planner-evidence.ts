@@ -1,8 +1,8 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { AgentContext } from "./agent-context.js";
-import { classifierAlignmentState, type RequestFacts } from "./classifier-signals.js";
+import { classifierAlignmentState } from "./classifier-signals.js";
 import { AWAIT_CUSTOMER_PHOTO_TOOL, type DamageEvidenceState } from "./damage-evidence.js";
-import { asksToChangeOrder, type OrderVerificationState } from "./order-verification.js";
+import { asksToChangeOrder, type OrderVerificationRequest, type OrderVerificationState } from "./order-verification.js";
 import { DAMAGE_EVIDENCE_TOOLS } from "./plan-signals.js";
 import { currentRequestSignals } from "./planner-safety/request.js";
 import { outstandingMerchantFollowUps } from "./merchant-follow-up.js";
@@ -106,7 +106,7 @@ function damagePhotoMissing(input: BuildPlanRoutingEvidenceInput): boolean {
 // On the turn a sender's answer confirms their order, their message is the
 // email or zip and the request is the one they made before: it is still theirs
 // to route on, so a reply that only declines it goes to the merchant.
-function resumedRequest(input: Pick<BuildPlanRoutingEvidenceInput, "orderVerification">): RequestFacts | null {
+function resumedRequest(input: Pick<BuildPlanRoutingEvidenceInput, "orderVerification">): OrderVerificationRequest | null {
   return input.orderVerification?.kind === "verified" ? input.orderVerification.resumedRequest : null;
 }
 
@@ -131,7 +131,9 @@ function hasExplicitCompensationRequest(
   return Boolean(signals?.intents.compensation_request
     || (signals?.intents.mutative_request && !signals.intents.policy_question
       && (signals.requestFacts?.ask === "refund" || signals.requestFacts?.alternative === "refund"))
-    || resumed?.ask === "refund" || resumed?.alternative === "refund");
+    || Boolean(resumed && (
+      resumed.compensation || resumed.facts.ask === "refund" || resumed.facts.alternative === "refund"
+    )));
 }
 
 function requestedWriteEscalationCode(input: BuildPlanRoutingEvidenceInput): PlanRoutingEvidenceCode | null {
@@ -263,7 +265,8 @@ export function buildPlanRoutingEvidence(
       (state === "aligned" && (
         input.ctx.classifierSignals?.intents.mutative_request || input.ctx.classifierSignals?.intents.compensation_request
       ))
-      || asksToChangeOrder(resumedRequest(input))
+      || asksToChangeOrder(resumedRequest(input)?.facts)
+      || Boolean(resumedRequest(input)?.compensation)
     )
     && !shape.hasAction
     && !shape.hasEscalation

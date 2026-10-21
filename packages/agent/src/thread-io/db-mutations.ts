@@ -3,10 +3,11 @@ import { createMessage, db, Prisma, SenderType } from "@shopkeeper/db";
 import { parseClassifierSignals, parseRequestFacts } from "../classifier-signals.js";
 import { normalizeOrderName } from "../order-reference.js";
 import {
+  mergeOrderVerificationRequest,
+  ORDER_VERIFICATION_ANSWER_WINDOW_MS,
   ORDER_VERIFICATION_CHANNELS,
   ORDER_VERIFICATION_MAX_ASKS,
   orderVerificationAttemptsLeft,
-  requestNeedsOrderVerification,
 } from "../order-verification.js";
 import { stopWaitingTasksOnClosedThreads } from "../task-ledger.js";
 import { AGENT_NOTE_PREFIX, THREAD_STATUS } from "../thread-constants.js";
@@ -169,16 +170,29 @@ export async function awaitOrderVerificationMutation(
   const sender = { organizationId: ctx.orgId, customerId: thread.customerId, shopDomain: integration.externalAccountId };
   const records = await db.orderVerification.findMany({
     where: sender,
-    select: { id: true, orderName: true, asks: true, attempts: true, verifiedAt: true, requestFacts: true },
+    select: {
+      id: true, orderName: true, threadId: true, requestedAt: true, asks: true, attempts: true,
+      verifiedAt: true, requestFacts: true, compensationRequested: true,
+    },
   });
-  const existing = records.find(record => record.orderName === orderName);
+  const now = new Date();
+  // The "which order?" ask belongs to the conversation it was asked in, as the
+  // planner reads it: one left on another thread, or past the window, is over.
+  const unnamedRow = records.find(record => record.orderName === null);
+  const unnamedHere = unnamedRow
+    && unnamedRow.threadId === ctx.threadId
+    && now.getTime() - unnamedRow.requestedAt.getTime() < ORDER_VERIFICATION_ANSWER_WINDOW_MS
+    ? unnamedRow
+    : null;
+  const staleUnnamed = unnamedRow && !unnamedHere ? unnamedRow : null;
+  const existing = orderName === null ? unnamedHere : records.find(record => record.orderName === orderName);
   if (existing?.verifiedAt) return toolOk(`The customer already confirmed ${orderName}.`);
   if (orderVerificationAttemptsLeft(records) === 0 || (existing && existing.asks >= ORDER_VERIFICATION_MAX_ASKS)) {
     return toolError("Error: this sender cannot be asked again. Hand the conversation to the merchant.");
   }
 
   // The request this message makes, when it is one that needs the order
-  // confirmed. A reply that only answers an ask keeps the request it answers.
+  // confirmed; a reply that only names the order keeps the one it answers.
   const signals = parseClassifierSignals(thread.classifierSignals);
   const latestCustomerMessage = await db.message.findFirst({
     where: { threadId: ctx.threadId, organizationId: ctx.orgId, senderType: SenderType.customer, deletedAt: null },
@@ -187,26 +201,35 @@ export async function awaitOrderVerificationMutation(
   });
   const aligned = signals !== null && latestCustomerMessage !== null
     && thread.requestSourceMessageId === latestCustomerMessage.id;
-  const current = aligned && requestNeedsOrderVerification(signals.requestFacts) ? signals.requestFacts : null;
-  const unnamed = records.find(record => record.orderName === null);
-  const request = (orderName !== null && unnamed?.requestFacts ? parseRequestFacts(unnamed.requestFacts) : null)
-    ?? current;
+  const storedRequest = (record: { requestFacts: unknown; compensationRequested: boolean } | null | undefined) => (
+    record?.requestFacts ? { facts: parseRequestFacts(record.requestFacts), compensation: record.compensationRequested } : null
+  );
+  const request = mergeOrderVerificationRequest(
+    aligned ? { facts: signals.requestFacts, compensation: signals.intents.compensation_request } : null,
+    storedRequest(unnamedHere) ?? (orderName === null ? null : storedRequest(existing)),
+  );
 
-  const now = new Date();
-  const asked = {
-    threadId: ctx.threadId, requestedAt: now, asks: { increment: 1 },
-    ...(request ? { requestFacts: request } : {}),
-  };
+  const stored = request
+    ? { requestFacts: request.facts, compensationRequested: request.compensation }
+    : {};
   await db.$transaction(async (tx) => {
+    if (staleUnnamed) await tx.orderVerification.delete({ where: { id: staleUnnamed.id } });
     if (existing) {
-      await tx.orderVerification.update({ where: { id: existing.id }, data: asked });
+      await tx.orderVerification.update({
+        where: { id: existing.id },
+        data: { threadId: ctx.threadId, requestedAt: now, asks: { increment: 1 }, ...stored },
+      });
     } else {
       await tx.orderVerification.create({
-        data: { ...sender, threadId: ctx.threadId, orderName, requestedAt: now, requestFacts: request ?? Prisma.DbNull },
+        data: {
+          ...sender, threadId: ctx.threadId, orderName, requestedAt: now,
+          requestFacts: request?.facts ?? Prisma.DbNull,
+          compensationRequested: request?.compensation ?? false,
+        },
       });
     }
     // The order is named now, so the ask for which order is answered.
-    if (orderName !== null && unnamed) await tx.orderVerification.delete({ where: { id: unnamed.id } });
+    if (orderName !== null && unnamedHere) await tx.orderVerification.delete({ where: { id: unnamedHere.id } });
   });
   await runHook(after, ctx);
   return toolOk(orderName === null

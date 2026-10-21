@@ -238,6 +238,8 @@ export interface OrderVerificationRecord {
   verifiedAt: Date | null;
   /** The request the agent asked about, for the turn the answer lands on. */
   requestFacts: RequestFacts | null;
+  /** That request asked for compensation. */
+  compensationRequested: boolean;
 }
 
 // Support module context: the base plus the ticket, customer, Shopify linkage,

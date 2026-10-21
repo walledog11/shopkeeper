@@ -3,6 +3,7 @@ import type { RequestAsk, RequestFacts, RequestReason } from "./classifier-signa
 import { hasUnresolvedShopifyCustomer } from "./guest-policy.js";
 import { normalizeOrderName } from "./order-reference.js";
 import { currentRequestSignals } from "./planner-safety/request.js";
+import { ORDER_VERIFICATION_CHANNELS } from "./thread-constants.js";
 
 // Direct-message order verification (Instagram, TikTok). A sender with no
 // Shopify customer behind them shows an order is theirs by sending its email or
@@ -12,7 +13,7 @@ import { currentRequestSignals } from "./planner-safety/request.js";
 // that order for that sender and never a write: refunds and every other change
 // still wait for the merchant.
 
-export const ORDER_VERIFICATION_CHANNELS: ReadonlySet<string> = new Set(["ig_dm", "tiktok"]);
+export { ORDER_VERIFICATION_CHANNELS };
 
 /**
  * Wrong values a sender may send, across every order they ask about, before
@@ -55,18 +56,52 @@ export function orderVerificationAttemptsLeft(
   return Math.max(0, ORDER_VERIFICATION_MAX_ATTEMPTS - misses);
 }
 
+/** How long an ask stays open to an answer, and a "which order?" ask to the order. */
+export const ORDER_VERIFICATION_ANSWER_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** The request an ask was made about, as stored on its row. */
+export interface OrderVerificationRequest {
+  facts: RequestFacts;
+  /** The classifier read it as asking for compensation, which `facts` alone may not show. */
+  compensation: boolean;
+}
+
+/**
+ * The request to keep for an ask: what this message asks, when it asks for
+ * something that needs the order confirmed, with a reason an earlier ask on
+ * this conversation knew filled in; otherwise the earlier ask's request. A reply
+ * that only names the order ("it's 1043") keeps the request it answers.
+ */
+export function mergeOrderVerificationRequest(
+  current: OrderVerificationRequest | null,
+  earlier: OrderVerificationRequest | null,
+): OrderVerificationRequest | null {
+  if (current && requestNeedsOrderVerification(current.facts)) {
+    const reason = current.facts.reason ?? earlier?.facts.reason;
+    return {
+      facts: reason === undefined ? current.facts : { ...current.facts, reason },
+      compensation: current.compensation || Boolean(earlier?.compensation),
+    };
+  }
+  return earlier ?? null;
+}
+
+function requestOf(record: OrderVerificationRecord): OrderVerificationRequest | null {
+  return record.requestFacts ? { facts: record.requestFacts, compensation: record.compensationRequested } : null;
+}
+
 export type OrderVerificationState =
   /**
    * Confirmed: the sender may read and discuss this order. `resumedRequest` is
    * the request the agent asked about, set only on the turn the answer lands.
    */
-  | { kind: "verified"; order: VerifiedOrderRef; method: "email" | "zip"; resumedRequest: RequestFacts | null }
+  | { kind: "verified"; order: VerifiedOrderRef; method: "email" | "zip"; resumedRequest: OrderVerificationRequest | null }
   /** Out of attempts, or asked as often as it may be: the merchant takes it from here. */
   | { kind: "locked"; orderName: string | null }
-  /** Asked and not yet confirmed. */
-  | { kind: "asked"; orderName: string }
+  /** Asked and not yet confirmed. `pendingRequest` is what the ask was about. */
+  | { kind: "asked"; orderName: string; pendingRequest: OrderVerificationRequest | null }
   /** Needs confirming and nothing asked yet; `orderName` is null until they name one. */
-  | { kind: "ask"; orderName: string | null };
+  | { kind: "ask"; orderName: string | null; pendingRequest: OrderVerificationRequest | null };
 
 type NamedRecord = OrderVerificationRecord & { orderName: string };
 
@@ -77,30 +112,21 @@ function isNamed(record: OrderVerificationRecord): record is NamedRecord {
 function stateOf(
   record: NamedRecord,
   records: readonly OrderVerificationRecord[],
-  answeredNow: boolean,
+  options: { answeredNow: boolean; request?: OrderVerificationRequest | null },
 ): OrderVerificationState {
+  const request = options.request !== undefined ? options.request : requestOf(record);
   if (record.verifiedAt && record.orderId && record.method) {
     return {
       kind: "verified",
       order: { orderName: record.orderName, orderId: record.orderId },
       method: record.method,
-      resumedRequest: answeredNow ? record.requestFacts : null,
+      resumedRequest: options.answeredNow ? request : null,
     };
   }
   if (orderVerificationAttemptsLeft(records) === 0 || record.asks >= ORDER_VERIFICATION_MAX_ASKS) {
     return { kind: "locked", orderName: record.orderName };
   }
-  return { kind: "asked", orderName: record.orderName };
-}
-
-// The ask for which order, still open on this thread.
-function stateOfUnnamed(
-  record: OrderVerificationRecord,
-  records: readonly OrderVerificationRecord[],
-): OrderVerificationState {
-  return orderVerificationAttemptsLeft(records) === 0 || record.asks >= ORDER_VERIFICATION_MAX_ASKS
-    ? { kind: "locked", orderName: null }
-    : { kind: "ask", orderName: null };
+  return { kind: "asked", orderName: record.orderName, pendingRequest: request };
 }
 
 /**
@@ -115,6 +141,17 @@ export function continuesOrderVerificationAsk(facts: RequestFacts | null): boole
 }
 
 const continuesAsk = continuesOrderVerificationAsk;
+
+/**
+ * A different question about an order, answered by the guest-safe read or the
+ * store's information rather than by confirming the order. A reply to "which
+ * order?" that names one answers it unless it is one of these.
+ */
+export function asksAnotherQuestion(facts: RequestFacts | null): boolean {
+  return facts?.ask === "order_status" || facts?.ask === "product_question" || facts?.ask === "policy_question";
+}
+
+const asksSomethingElse = asksAnotherQuestion;
 
 function newest<T extends OrderVerificationRecord>(records: readonly T[]): T | null {
   return records.reduce<T | null>(
@@ -134,45 +171,70 @@ function newest<T extends OrderVerificationRecord>(records: readonly T[]): T | n
  * answer must resume the order that was asked about. The gateway clears that
  * mark when a later message in the burst names another order.
  */
-export function orderVerificationState(ctx: AgentContext): OrderVerificationState | null {
+export function orderVerificationState(ctx: AgentContext, now: Date = new Date()): OrderVerificationState | null {
   if (!ORDER_VERIFICATION_CHANNELS.has(ctx.thread.channelType)) return null;
   if (!hasUnresolvedShopifyCustomer(ctx, false)) return null;
 
   const records = ctx.orderVerifications ?? [];
   const named = records.filter(isNamed);
-  const facts = currentRequestSignals(ctx)?.requestFacts ?? null;
+  const signals = currentRequestSignals(ctx);
+  const facts = signals?.requestFacts ?? null;
+  const currentRequest = facts ? { facts, compensation: Boolean(signals?.intents.compensation_request) } : null;
   const current = new Set(ctx.currentCustomerMessageIds ?? []);
   const answered = newest(named.filter(record => (
     record.answeredMessageId !== null && current.has(record.answeredMessageId)
   )));
   // The gateway compares only a message that continues the ask, so this holds
   // whenever an answer was recorded; it keeps the two from disagreeing.
-  if (answered && continuesAsk(facts)) return stateOf(answered, records, true);
+  if (answered && continuesAsk(facts)) return stateOf(answered, records, { answeredNow: true });
 
   const requestedOrder = facts?.order ? normalizeOrderName(facts.order) : null;
+  const namedNow = requestedOrder ? named.find(record => record.orderName === requestedOrder) : undefined;
+
+  // The "which order?" ask open on this conversation, unless it was answered
+  // in an earlier burst. Its request carries over to the order the reply names.
+  const unnamed = records.find(record => (
+    record.orderName === null
+    && record.threadId === ctx.thread.id
+    && now.getTime() - record.requestedAt.getTime() < ORDER_VERIFICATION_ANSWER_WINDOW_MS
+    && (record.answeredMessageId === null || current.has(record.answeredMessageId))
+  ));
+  if (unnamed && requestedOrder && !asksSomethingElse(facts)) {
+    const request = mergeOrderVerificationRequest(currentRequest, requestOf(unnamed));
+    if (namedNow) return stateOf(namedNow, records, { answeredNow: true, request });
+    return orderVerificationAttemptsLeft(records) === 0
+      ? { kind: "locked", orderName: requestedOrder }
+      : { kind: "ask", orderName: requestedOrder, pendingRequest: request };
+  }
 
   // An order already asked about, when this message is still about confirming
   // or changing it. A plain status question about it keeps the guest-safe read.
-  const namedNow = requestedOrder ? named.find(record => record.orderName === requestedOrder) : undefined;
   if (namedNow && (namedNow.verifiedAt !== null || continuesAsk(facts))) {
-    return stateOf(namedNow, records, false);
+    return stateOf(namedNow, records, { answeredNow: false });
   }
 
   // The last ask on this thread, unless the sender has named another order or
   // moved on to something else. A verified order stays readable here.
-  const latestHere = newest(records.filter(record => record.threadId === ctx.thread.id));
+  const latestHere = newest([
+    ...named.filter(record => record.threadId === ctx.thread.id),
+    ...(unnamed ? [unnamed] : []),
+  ]);
   if (latestHere && !requestedOrder) {
     if (!isNamed(latestHere)) {
-      if (continuesAsk(facts)) return stateOfUnnamed(latestHere, records);
+      if (continuesAsk(facts)) {
+        return orderVerificationAttemptsLeft(records) === 0 || latestHere.asks >= ORDER_VERIFICATION_MAX_ASKS
+          ? { kind: "locked", orderName: null }
+          : { kind: "ask", orderName: null, pendingRequest: requestOf(latestHere) };
+      }
     } else if (latestHere.verifiedAt !== null || continuesAsk(facts)) {
-      return stateOf(latestHere, records, false);
+      return stateOf(latestHere, records, { answeredNow: false });
     }
   }
 
   if (!requestNeedsOrderVerification(facts)) return null;
   return orderVerificationAttemptsLeft(records) === 0
     ? { kind: "locked", orderName: requestedOrder }
-    : { kind: "ask", orderName: requestedOrder };
+    : { kind: "ask", orderName: requestedOrder, pendingRequest: null };
 }
 
 /** The orders this sender has confirmed, for scoping reads and the review signal. */

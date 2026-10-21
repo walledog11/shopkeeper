@@ -26,6 +26,7 @@ CREATE TABLE "order_verifications" (
   "answered_message_id" UUID,
   "verified_at" TIMESTAMPTZ,
   "request_facts" JSONB,
+  "compensation_requested" BOOLEAN NOT NULL DEFAULT false,
   "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updated_at" TIMESTAMPTZ NOT NULL,
 
