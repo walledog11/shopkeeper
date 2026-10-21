@@ -20,11 +20,13 @@ export function resolveOnboardingRedirectStep(args: {
   onboardingCompletedAt?: string
   hasShopify: boolean
   hasEmail: boolean
+  hasInstagram?: boolean
+  hasStorefrontChat?: boolean
   hasPhone: boolean
 }): OnboardingResumeStep | null {
   if (args.onboardingCompletedAt) return null
   if (!args.hasShopify) return "shopify"
-  if (!args.hasEmail) return "email"
+  if (!args.hasEmail && !args.hasInstagram && !args.hasStorefrontChat) return "email"
   if (!args.hasPhone) return "connect"
   return "plan"
 }

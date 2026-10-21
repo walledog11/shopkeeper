@@ -2,9 +2,7 @@
 
 import type { ReactNode } from "react";
 import { LazyMotion, domAnimation, m } from "motion/react";
-import { ActionLog, ChannelsOrbit, GuidanceVisual, ShopperChat } from "./BentoVisuals";
-import { SectionLabel } from "./SectionLabel";
-
+import { ActionLog, ChannelRoles, GuidanceVisual, ShopperChat } from "./BentoVisuals";
 type BentoGradientPosition = "br" | "bottom-left";
 
 const cardReveal = {
@@ -95,7 +93,6 @@ export function ConversationBento() {
           viewport={{ once: true, amount: 0.5 }}
           transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
         >
-          <SectionLabel align="start">Get to know Shopkeeper</SectionLabel>
           <h2 id="conversation-bento-heading" className="m-display m-h2">
             Built for stores where every conversation counts.{" "}
             <span className="m-tail">Shopkeeper handles the routine and brings you the rest.</span>
@@ -119,10 +116,10 @@ export function ConversationBento() {
             <BentoCard
               index={1}
               gradientSrc="/marketing/bento/bento-2-gradient.svg"
-              title="One conversation. Everywhere."
-              contentClassName="mt-auto min-h-0 flex-1"
+              title="Customers ask. You stay in control."
+              contentClassName="mt-6 min-h-0 flex-1"
             >
-              <ChannelsOrbit />
+              <ChannelRoles />
             </BentoCard>
           </div>
 

@@ -1,131 +1,36 @@
-import { Check, ChevronLeft, ChevronRight, Loader2, Mail, ShieldCheck, Smartphone } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Accent, Headline } from "./primitives";
-import type { OnboardingData } from "../_lib/onboarding-model";
+import { Check, Mail, ShieldCheck, Smartphone } from "lucide-react";
+import { Accent, Headline, Lede } from "./primitives";
+import { PracticeDraft } from "./practice-draft";
+import type { KbSyncViewModel, StepId } from "../_lib/onboarding-model";
 
-export function StepPlan({
-  data,
-  hasCustomerChannel,
-  hasEmail,
-  hasInstagram,
-  hasMessaging,
-  hasShopify,
-  onStart,
-  onBack,
-  saving,
-}: {
-  data: OnboardingData;
-  hasCustomerChannel: boolean;
-  hasEmail: boolean;
-  hasInstagram: boolean;
-  hasMessaging: boolean;
-  hasShopify: boolean;
-  onStart: () => void;
-  onBack: () => void;
-  saving: boolean;
+export function StepPlan({ hasCustomerChannel, hasEmail, hasForwarding, hasInstagram, hasMessaging, hasShopify, hasStorefrontChat, storeDomain, kbSync, onNavigate, saving }: {
+  hasCustomerChannel: boolean; hasEmail: boolean; hasForwarding: boolean; hasInstagram: boolean; hasMessaging: boolean; hasShopify: boolean; hasStorefrontChat: boolean;
+  storeDomain?: string; kbSync: KbSyncViewModel; onNavigate: (step: StepId) => void; saving: boolean;
 }) {
-  const storeName = data.storeName || "your store";
-  const firstName = data.founderName.trim();
-  const greeting = firstName ? `Good morning, ${firstName}.` : "Good morning.";
-  const customerChannels = customerChannelsSummary(hasEmail, hasInstagram, data.primaryEmail);
-
-  return (
-    <div className="flex flex-col items-center">
-      <Headline>
-        {hasCustomerChannel ? "You're all set." : `${storeName} is ready.`}
-        <Accent>
-          {hasCustomerChannel ? `Starting on ${storeName} tonight.` : "Connect a channel when you want messages."}
-        </Accent>
-      </Headline>
-      {!hasCustomerChannel && (
-        <p className="mx-auto mt-3 max-w-[520px] text-center text-[15px] leading-relaxed text-foreground/60">
-          Shopify is connected. Add email or Instagram from the previous step, or from Integrations later.
-        </p>
-      )}
-
-      <div className="mt-7 w-full max-w-[440px] rounded-2xl border border-foreground/10 bg-card p-4 text-left">
-        <div className="mb-2.5 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.08em] text-foreground/40">
-          {hasMessaging ? <Smartphone className="size-3.5" /> : <Mail className="size-3.5" />}
-          {hasMessaging ? "Tomorrow · 8:00am · your phone" : "Tomorrow morning · your dashboard"}
-        </div>
-        <div className="flex justify-end">
-          <div className="max-w-[92%] rounded-2xl rounded-br-md bg-green-600 px-3.5 py-2.5 text-[13.5px] leading-snug text-[#f6f2eb]">
-            {greeting} Quiet night — 2 new tickets, I drafted both replies. One needs your okay on a $40 refund.
-          </div>
-        </div>
-        <div className="mt-1.5 text-right text-[11px] text-foreground/35">Your first briefing</div>
-      </div>
-
-      <div className="mt-5 w-full max-w-[440px] space-y-2.5 text-left">
-        <SetupRow icon={ShieldCheck} label="Shopify" value={hasShopify ? "Orders and policies connected" : "Not connected"} ready={hasShopify} />
-        <SetupRow
-          icon={Mail}
-          label="Customer channels"
-          value={customerChannels}
-          ready={hasCustomerChannel}
-          optional={!hasCustomerChannel}
-        />
-        <SetupRow icon={Smartphone} label="Approvals" value={hasMessaging ? "On your phone" : "In the dashboard"} ready={hasMessaging} optional={!hasMessaging} />
-      </div>
-
-      <p className="mt-5 max-w-[440px] text-center text-[12.5px] leading-relaxed text-foreground/45">
-        You&apos;re in approval mode — nothing customer-facing sends without you. Refunds stay capped at $50 until you change
-        limits in Agent → Configure. TikTok Shop and other channels live in Integrations.
-      </p>
-
-      <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-center">
-        <Button
-          onClick={onStart}
-          disabled={!hasShopify || saving}
-          className="h-11 gap-2 rounded-full bg-foreground px-6 text-[14px] font-semibold text-background hover:bg-foreground/85"
-        >
-          {saving
-            ? <Loader2 className="size-4 animate-spin" />
-            : <>{hasCustomerChannel ? "Start working" : "Finish setup"} <ChevronRight className="size-4" /></>}
-        </Button>
-        <Button variant="ghost" size="sm" onClick={onBack} disabled={saving} className="text-foreground/55 hover:bg-foreground/[0.05] hover:text-foreground">
-          <ChevronLeft className="mr-1 size-4" /> Change something
-        </Button>
-      </div>
+  const channels = [hasEmail && "Gmail connected", hasForwarding && "Forwarding address saved", hasInstagram && "Instagram connected", hasStorefrontChat && "Storefront chat enabled"].filter(Boolean).join(" · ");
+  return <div className="flex flex-col items-center">
+    <Headline>{hasShopify ? <>See your shopkeeper at work.<Accent>You keep the final say.</Accent></> : "Let’s connect your store first."}</Headline>
+    <Lede>{hasShopify ? "Try a customer question using your store’s knowledge. Read the source, edit the draft, and practice giving the go-ahead." : "Your Shopify connection is missing. Connect it to use your policies and finish setting up your workspace."}</Lede>
+    <div className="mt-7 w-full max-w-[520px] text-left">
+      <PracticeDraft enabled={hasShopify} syncing={kbSync.status === "pending"} onRetrySync={kbSync.status === "failed" && kbSync.canRetry ? kbSync.retry : undefined} />
     </div>
-  );
+    <div className="mt-5 w-full max-w-[520px] space-y-2.5 text-left">
+      <SetupRow icon={ShieldCheck} label="Your store" value={hasShopify ? storeDomain || "Shopify connected" : "Not connected"} ready={hasShopify} onEdit={() => onNavigate("shopify")} disabled={saving} />
+      <SetupRow icon={Mail} label="Customer messages" value={channels || "No channel connected yet"} ready={hasCustomerChannel} onEdit={() => onNavigate("email")} disabled={saving} />
+      <SetupRow icon={Smartphone} label="Your approvals" value={hasMessaging ? "iMessage and dashboard" : "In the dashboard"} ready onEdit={() => onNavigate("connect")} disabled={saving} />
+    </div>
+    <p className="mt-5 max-w-[520px] text-center text-[12.5px] leading-relaxed text-foreground/45">You’ll start in approval mode. You review customer replies and store changes before they happen.</p>
+    {!hasCustomerChannel && <p className="mt-3 max-w-[520px] text-center text-[12.5px] leading-relaxed text-foreground/45">You can finish setting up your workspace now. Connect a customer channel before expecting messages.</p>}
+    {hasForwarding && <p className="mt-3 max-w-[520px] text-center text-[12.5px] leading-relaxed text-foreground/45">Forwarding still needs to be configured in your email provider and checked with a test message.</p>}
+    {hasShopify && <p className="mt-3 max-w-[520px] text-center text-[12.5px] leading-relaxed text-foreground/45">The practice draft is optional. You can finish setup whenever you’re ready.</p>}
+  </div>;
 }
 
-function customerChannelsSummary(hasEmail: boolean, hasInstagram: boolean, primaryEmail: string): string {
-  const parts: string[] = [];
-  if (hasEmail) parts.push(primaryEmail.trim() || "Email");
-  if (hasInstagram) parts.push("Instagram");
-  if (parts.length === 0) return "Add one later";
-  return parts.join(" · ");
-}
-
-function SetupRow({
-  icon: Icon,
-  label,
-  value,
-  ready,
-  optional = false,
-}: {
-  icon: typeof Mail;
-  label: string;
-  value: string;
-  ready: boolean;
-  optional?: boolean;
-}) {
-  return (
-    <div className="flex items-center gap-3 rounded-xl border border-foreground/10 bg-card px-4 py-3">
-      <Icon className="size-4 shrink-0 text-foreground/45" />
-      <div className="min-w-0 flex-1">
-        <div className="text-[13px] font-semibold text-foreground">{label}</div>
-        <div className="truncate text-[12px] text-foreground/50">{value}</div>
-      </div>
-      {ready ? (
-        <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
-          <Check className="size-3" />
-        </span>
-      ) : optional ? (
-        <span className="shrink-0 text-[10px] font-medium uppercase tracking-wider text-foreground/35">Optional</span>
-      ) : null}
-    </div>
-  );
+function SetupRow({ icon: Icon, label, value, ready, onEdit, disabled }: { icon: typeof Mail; label: string; value: string; ready: boolean; onEdit: () => void; disabled: boolean }) {
+  return <div className="flex items-center gap-3 rounded-xl border border-foreground/10 bg-card px-4 py-3">
+    <Icon className="size-4 shrink-0 text-foreground/45" />
+    <div className="min-w-0 flex-1"><div className="text-[13px] font-semibold text-foreground">{label}</div><p className="break-words text-[12px] text-foreground/50">{value}</p></div>
+    {ready && <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-foreground text-background"><Check className="size-3" /></span>}
+    <button className="rounded text-[12px] text-foreground/55 underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-4" onClick={onEdit} disabled={disabled} aria-label={`Edit ${label.toLowerCase()}`}>Edit</button>
+  </div>;
 }

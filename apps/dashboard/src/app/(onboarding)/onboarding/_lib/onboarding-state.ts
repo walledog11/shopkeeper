@@ -31,6 +31,7 @@ export function parseStoredOnboardingState(raw: string | null): StoredOnboarding
     return {
       data: {
         ...DEFAULT_DATA,
+        shopDomain: storedString(stored.shopDomain),
         forwardingEmail: storedString(stored.forwardingEmail),
         storeName: storedString(stored.storeName),
         founderName: storedString(stored.founderName),

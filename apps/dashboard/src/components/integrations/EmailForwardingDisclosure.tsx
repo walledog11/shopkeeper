@@ -41,9 +41,9 @@ export function EmailForwardingSetupPanel({
         <p className="text-xs leading-relaxed text-foreground/55">{connectBlockedReason}</p>
       ) : null}
       <div className="space-y-2">
-        <p className="text-[13px] font-semibold text-foreground/80">Inbound via forwarding</p>
+        <p className="text-[13px] font-semibold text-foreground/80">1. Forward customer emails</p>
         <p className="text-xs leading-relaxed text-foreground/50">
-          Forward your support inbox to this address in your email provider. Mutually exclusive with inbound via Gmail on the same mailbox.
+          In your email provider’s settings, forward customer messages to this address. If this inbox is already connected through Gmail, use that connection instead.
         </p>
         <div className="flex min-w-0 items-center gap-2 rounded-lg border border-foreground/[0.08] bg-foreground/[0.03] px-3 py-2.5">
           {inboundAddress ? (
@@ -58,7 +58,7 @@ export function EmailForwardingSetupPanel({
       </div>
 
       <div className="space-y-2">
-        <p className="text-[13px] font-semibold text-foreground/80">Support address</p>
+        <p className="text-[13px] font-semibold text-foreground/80">2. Save your support address</p>
         <p className="text-xs leading-relaxed text-foreground/50">
           The address customers email, like support@yourstore.com.
         </p>

@@ -1,7 +1,6 @@
 import { Check } from "lucide-react";
 import { ButtonLink } from "./ButtonLink";
 import { Reveal } from "./Reveal";
-import { SectionLabel } from "./SectionLabel";
 import { PRIMARY_CTA_LABEL } from "@/lib/brand";
 
 // Both plans run the whole product. `PLAN_LIMITS` in `packages/db/plan-limits.ts`
@@ -47,7 +46,6 @@ export function Pricing() {
   return (
     <section id="pricing" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-16 text-center sm:px-6 sm:py-24">
       <Reveal>
-        <SectionLabel>What it costs</SectionLabel>
         <h2 className="m-display m-h2 mx-auto mb-5 max-w-[20ch]">
           The whole product, <span className="m-tail">on either plan.</span>
         </h2>

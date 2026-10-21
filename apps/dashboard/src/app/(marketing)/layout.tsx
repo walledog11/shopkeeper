@@ -1,14 +1,8 @@
 import type { ReactNode } from "react";
-import { Newsreader, Red_Hat_Mono } from "next/font/google";
+import { Red_Hat_Mono } from "next/font/google";
+import { newsreader } from "@/lib/fonts";
 
 // Loaded here, not in the root layout, so the dashboard doesn't preload them.
-const newsreader = Newsreader({
-  subsets: ["latin"],
-  axes: ["opsz"],
-  display: "swap",
-  variable: "--font-newsreader",
-});
-
 const redHatMono = Red_Hat_Mono({
   subsets: ["latin"],
   weight: ["400", "500"],

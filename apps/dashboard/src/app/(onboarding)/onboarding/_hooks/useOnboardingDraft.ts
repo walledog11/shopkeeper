@@ -1,136 +1,82 @@
 "use client";
 
-import { useCallback, useEffect, useReducer, useRef } from "react";
-import {
-  DEFAULT_DATA,
-  STEPS,
-  STORAGE_KEY,
-  type OnboardingData,
-} from "../_lib/onboarding-model";
+import { useCallback, useEffect, useReducer } from "react";
+import { DEFAULT_DATA, STEPS, STORAGE_KEY, type OnboardingData } from "../_lib/onboarding-model";
 import { parseStoredOnboardingState } from "../_lib/onboarding-state";
 
-interface DraftState {
-  data: OnboardingData;
-  hydrated: boolean;
-  idx: number;
-  prefilledEmail: string | null;
-}
-
-type DraftAction =
-  | { type: "advance" }
-  | { type: "back" }
-  | { type: "hydrate"; data: OnboardingData; idx: number }
-  | { type: "hydrateSkipped" }
+interface DraftState { data: OnboardingData; idx: number; scope: string | null }
+type Action =
+  | { type: "hydrate"; scope: string; data: OnboardingData; idx: number }
   | { type: "patch"; patch: Partial<OnboardingData> }
-  | { type: "prefillEmail"; email: string };
+  | { type: "go"; idx: number };
 
-function createDraftState(pinnedStepIndex: number | null): DraftState {
-  return {
-    data: DEFAULT_DATA,
-    hydrated: false,
-    idx: pinnedStepIndex ?? 0,
-    prefilledEmail: null,
-  };
+function reducer(state: DraftState, action: Action): DraftState {
+  if (action.type === "hydrate") return { scope: action.scope, data: action.data, idx: action.idx };
+  if (action.type === "patch") return { ...state, data: { ...state.data, ...action.patch } };
+  return { ...state, idx: Math.max(0, Math.min(STEPS.length - 1, action.idx)) };
 }
 
-function draftReducer(state: DraftState, action: DraftAction): DraftState {
-  switch (action.type) {
-    case "advance":
-      return { ...state, idx: Math.min(STEPS.length - 1, state.idx + 1) };
-    case "back":
-      return { ...state, idx: Math.max(0, state.idx - 1) };
-    case "hydrate":
-      return { ...state, data: action.data, idx: action.idx, hydrated: true };
-    case "hydrateSkipped":
-      return state.hydrated ? state : { ...state, hydrated: true };
-    case "patch":
-      return { ...state, data: { ...state.data, ...action.patch } };
-    case "prefillEmail":
-      if (state.prefilledEmail === action.email) return state;
-      return {
-        ...state,
-        prefilledEmail: action.email,
-        data: state.data.primaryEmail.trim()
-          ? state.data
-          : { ...state.data, primaryEmail: action.email },
-      };
-  }
-}
-
-export function useOnboardingDraft({
-  founderName,
-  organizationName,
-  pinnedStepIndex,
-  savedEmail,
-}: {
+export function useOnboardingDraft({ userId, organizationId, clerkLoaded, founderName, organizationName, pinnedStepIndex, savedEmail }: {
+  userId: string | undefined;
+  organizationId: string | undefined;
+  clerkLoaded: boolean;
   founderName: string | null | undefined;
   organizationName: string | null | undefined;
   pinnedStepIndex: number | null;
   savedEmail: string | undefined;
 }) {
-  const [state, dispatch] = useReducer(draftReducer, pinnedStepIndex, createDraftState);
-  const founderPrefillApplied = useRef(false);
-  const storePrefillApplied = useRef(false);
-  const hydrationStarted = useRef(false);
+  const scope = userId ? `${STORAGE_KEY}:${userId}:${organizationId ?? "new"}` : null;
+  const [state, dispatch] = useReducer(reducer, { data: DEFAULT_DATA, idx: pinnedStepIndex ?? 0, scope: null });
 
   useEffect(() => {
-    if (hydrationStarted.current) return;
-    hydrationStarted.current = true;
+    if (!clerkLoaded || !scope || state.scope === scope) return;
     let stored = null;
+    try { stored = parseStoredOnboardingState(localStorage.getItem(scope)); } catch { /* Storage is optional. */ }
+    // Carry the draft into an organization just created by this user, never into another workspace.
+    const isNewWorkspace = state.scope === `${STORAGE_KEY}:${userId}:new`;
+    const data = stored?.data ?? (isNewWorkspace ? state.data : DEFAULT_DATA);
+    dispatch({ type: "hydrate", scope, idx: isNewWorkspace ? state.idx : pinnedStepIndex ?? stored?.idx ?? 0,
+      data: { ...data, storeName: organizationName || data.storeName, founderName: founderName || data.founderName } });
+  }, [clerkLoaded, founderName, organizationName, pinnedStepIndex, scope, state, userId]);
+
+  useEffect(() => {
+    if (savedEmail) dispatch({ type: "patch", patch: { primaryEmail: savedEmail } });
+  }, [savedEmail]);
+
+  useEffect(() => {
+    if (!scope || state.scope !== scope) return;
+    try { localStorage.setItem(scope, JSON.stringify({ ...state.data, idx: state.idx })); } catch { /* Storage is optional. */ }
+  }, [scope, state]);
+
+  const go = useCallback((idx: number) => {
+    const bounded = Math.max(0, Math.min(STEPS.length - 1, idx));
+    const url = new URL(window.location.href);
+    url.searchParams.set("step", STEPS[bounded].id);
+    for (const key of ["provider", "status", "error"]) url.searchParams.delete(key);
+    window.history.pushState(null, "", `${url.pathname}${url.search}`);
+    dispatch({ type: "go", idx: bounded });
+  }, []);
+
+  useEffect(() => {
+    const onPop = () => {
+      const step = new URL(window.location.href).searchParams.get("step");
+      const idx = STEPS.findIndex(candidate => candidate.id === step);
+      dispatch({ type: "go", idx: idx < 0 ? 0 : idx });
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  const clear = useCallback(() => {
     try {
-      stored = parseStoredOnboardingState(localStorage.getItem(STORAGE_KEY));
-    } catch {
-      // Storage can be unavailable in restricted browser contexts.
-    }
-    if (!stored) {
-      dispatch({ type: "hydrateSkipped" });
-      return;
-    }
-    dispatch({
-      type: "hydrate",
-      data: stored.data,
-      idx: pinnedStepIndex ?? stored.idx,
-    });
-  }, [pinnedStepIndex]);
-
-  useEffect(() => {
-    if (!state.hydrated || founderPrefillApplied.current || !founderName) return;
-    founderPrefillApplied.current = true;
-    if (!state.data.founderName.trim()) {
-      dispatch({ type: "patch", patch: { founderName } });
-    }
-  }, [founderName, state.data.founderName, state.hydrated]);
-
-  useEffect(() => {
-    if (!state.hydrated || storePrefillApplied.current || !organizationName) return;
-    storePrefillApplied.current = true;
-    if (!state.data.storeName.trim()) {
-      dispatch({ type: "patch", patch: { storeName: organizationName } });
-    }
-  }, [organizationName, state.data.storeName, state.hydrated]);
-
-  useEffect(() => {
-    if (savedEmail && state.prefilledEmail !== savedEmail) {
-      dispatch({ type: "prefillEmail", email: savedEmail });
-    }
-  }, [savedEmail, state.prefilledEmail]);
-
-  useEffect(() => {
-    if (!state.hydrated) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state.data, idx: state.idx }));
-    } catch {
-      // Losing resumability is preferable to interrupting onboarding.
-    }
-  }, [state.data, state.hydrated, state.idx]);
+      if (scope) localStorage.removeItem(scope);
+      if (userId) localStorage.removeItem(`${STORAGE_KEY}:${userId}:new`);
+    } catch { /* Storage is optional. */ }
+  }, [scope, userId]);
 
   return {
-    advance: useCallback(() => dispatch({ type: "advance" }), []),
-    back: useCallback(() => dispatch({ type: "back" }), []),
-    data: state.data,
-    idx: state.idx,
-    update: useCallback((patch: Partial<OnboardingData>) => {
-      dispatch({ type: "patch", patch });
-    }, []),
+    advance: () => go(state.idx + 1), back: () => go(state.idx - 1), go, clear,
+    hydrated: Boolean(scope && state.scope === scope), data: state.data, idx: state.idx,
+    update: useCallback((patch: Partial<OnboardingData>) => dispatch({ type: "patch", patch }), []),
   };
 }

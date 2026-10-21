@@ -1,29 +1,26 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Reveal } from "./Reveal";
-import { SectionLabel } from "./SectionLabel";
 import { marketingSectionTitleClass } from "./marketingUi";
 
 const STORE_URL = "linenandloom.com";
-const TYPE_START_MS = 850;
-const TYPE_MS_PER_CHAR = 175;
+const TYPE_START_MS = 250;
+const TYPE_MS_PER_CHAR = 55;
 
 const STEPS = [
   {
     id: "connect",
     title: "Connect Shopify",
-    desc: "Connect your store so Shopkeeper can read your products, policies, and orders. Add store notes and voice guidance to tell it how you work.",
+    desc: "Bring in your products, policies, and orders. Add store notes and guidance for your brand’s voice.",
     aria: "Connecting a Shopify store. Products, policies, orders, FAQs, and about your store sync one by one.",
-    duration: 10500,
   },
   {
     id: "channels",
     title: "Pick your channels",
-    desc: "Connect Instagram, email, or website chat for customer messages. Link iMessage to give Shopkeeper work and approve from your phone, or use the dashboard. Set your trust level and limits before you hand anything over.",
+    desc: "Customers use Instagram, email, or website chat. You use iMessage or the dashboard for instructions and approvals. Set approval rules and limits before going live.",
     aria: "Turning on Instagram, email, website chat, and iMessage.",
-    duration: 8000,
   },
 ] as const;
 
@@ -42,18 +39,12 @@ const CHANNELS = [
   { label: "iMessage", logo: "/logos/imessage.svg" },
 ] as const;
 
-/** Pin height: one viewport segment per step so page scroll scrubs the active tab. */
-const SCROLL_SEGMENT_VH = 72;
-
 export function Onboarding() {
   const stageRef = useRef<HTMLDivElement>(null);
-  const pinRef = useRef<HTMLDivElement>(null);
-  const [inView, setInView] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
   const [playId, setPlayId] = useState(0);
   const [staticPlay, setStaticPlay] = useState(false);
   const [started, setStarted] = useState(false);
-  const [scrollScrub, setScrollScrub] = useState(false);
 
   useEffect(() => {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -67,12 +58,9 @@ export function Onboarding() {
     if (!el) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (!entry.isIntersecting) {
-          setInView(false);
-          return;
-        }
-        setInView(true);
+        if (!entry.isIntersecting) return;
         setStarted(true);
+        observer.disconnect();
       },
       { threshold: 0.35 },
     );
@@ -80,98 +68,25 @@ export function Onboarding() {
     return () => observer.disconnect();
   }, []);
 
-  // Same rule as the merchant tabs: pin-and-scrub only at desktop sizes. Below
-  // that the stage would overflow the screen while pinned, so the steps just
-  // advance on a timer once the stage is in view.
-  useEffect(() => {
-    const media = window.matchMedia("(min-width: 1024px) and (prefers-reduced-motion: no-preference)");
-    const sync = () => setScrollScrub(media.matches);
-    sync();
-    media.addEventListener("change", sync);
-    return () => media.removeEventListener("change", sync);
-  }, []);
-
-  useEffect(() => {
-    if (!inView || staticPlay || scrollScrub) return;
-    const timer = window.setTimeout(() => {
-      setActiveStep((step) => (step + 1) % STEPS.length);
-      setPlayId((id) => id + 1);
-    }, STEPS[activeStep].duration);
-    return () => window.clearTimeout(timer);
-  }, [inView, staticPlay, activeStep, scrollScrub]);
-
-  const updateActiveFromScroll = useCallback(() => {
-    if (!scrollScrub) return;
-    const pin = pinRef.current;
-    if (!pin || STEPS.length <= 1) return;
-
-    const rect = pin.getBoundingClientRect();
-    const pinTop = window.scrollY + rect.top;
-    const viewport = window.innerHeight;
-    const scrollRange = Math.max(pin.offsetHeight - viewport, 1);
-    const progress = Math.min(1, Math.max(0, (window.scrollY - pinTop) / scrollRange));
-    const index = Math.min(STEPS.length - 1, Math.round(progress * (STEPS.length - 1)));
-
-    setActiveStep((prev) => {
-      if (prev === index) return prev;
-      setPlayId((id) => id + 1);
-      return index;
-    });
-  }, [scrollScrub]);
-
-  useEffect(() => {
-    if (!scrollScrub) return;
-    updateActiveFromScroll();
-    window.addEventListener("scroll", updateActiveFromScroll, { passive: true });
-    window.addEventListener("resize", updateActiveFromScroll, { passive: true });
-    return () => {
-      window.removeEventListener("scroll", updateActiveFromScroll);
-      window.removeEventListener("resize", updateActiveFromScroll);
-    };
-  }, [scrollScrub, updateActiveFromScroll]);
-
   function goToStep(index: number) {
     setActiveStep(index);
     setPlayId((id) => id + 1);
-    if (!scrollScrub) return;
-    const pin = pinRef.current;
-    if (!pin || STEPS.length <= 1) return;
-
-    const rect = pin.getBoundingClientRect();
-    const pinTop = window.scrollY + rect.top;
-    const scrollRange = Math.max(pin.offsetHeight - window.innerHeight, 1);
-    const progress = index / (STEPS.length - 1);
-    const top = pinTop + progress * scrollRange;
-    window.scrollTo({ top, behavior: "smooth" });
   }
 
   const step = STEPS[activeStep];
   const playing = started && !staticPlay;
-  const pinHeightVh =
-    STEPS.length > 1 ? (STEPS.length - 1) * SCROLL_SEGMENT_VH + 100 : 100;
 
   return (
-    <section id="onboarding" className="scroll-mt-24 py-16 sm:py-24">
+    <section id="onboarding" className="scroll-mt-24 py-12 sm:py-24">
       <div className="mx-auto max-w-6xl px-6">
         <Reveal className="text-center">
-          <SectionLabel>Day one</SectionLabel>
-          <h2 className={`${marketingSectionTitleClass} mb-10`}>
-            <span className="block">Your store.</span>
-            <span className="block">Your instructions.</span>
-            <span className="block">Your shopkeeper.</span>
+          <h2 className={`${marketingSectionTitleClass} mx-auto mb-10 max-w-[22ch]`}>
+            Connect your store. Set your rules.
           </h2>
         </Reveal>
 
-        <div
-          ref={pinRef}
-          className="relative"
-          style={{ height: scrollScrub ? `${pinHeightVh}vh` : undefined }}
-        >
-          <div
-            className={`grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16 ${
-              scrollScrub ? "sticky top-[4.5rem] z-[1] sm:top-20" : ""
-            }`}
-          >
+        <div className="relative">
+          <div className="grid items-center gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16">
             <Reveal delay={40}>
               <div
                 ref={stageRef}
@@ -196,7 +111,7 @@ export function Onboarding() {
             </Reveal>
 
             <Reveal delay={80}>
-              <div className="flex flex-col gap-2" role="group" aria-label="Setup steps">
+              <div className="flex flex-col gap-3" role="group" aria-label="Setup previews">
                 {STEPS.map((item, index) => {
                   const active = index === activeStep;
                   return (
@@ -204,23 +119,15 @@ export function Onboarding() {
                       key={item.id}
                       type="button"
                       onClick={() => goToStep(index)}
-                      aria-current={active ? "step" : undefined}
+                      aria-pressed={active}
                       className={`rounded-2xl border px-5 py-4 text-left transition-[border-color,background-color] duration-300 motion-reduce:transition-none ${
                         active
                           ? "border-[color:var(--m-line)] bg-white shadow-[0_18px_44px_-32px_rgba(27,26,25,0.35)]"
-                          : "border-transparent hover:bg-[color:var(--m-bg-alt)]"
+                          : "border-[color:var(--m-line)] hover:bg-[color:var(--m-bg-alt)]"
                       }`}
                     >
-                      <h3 className={`m-display m-h3 ${active ? "" : "m-tail"}`}>{item.title}</h3>
-                      <div
-                        className={`grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none ${
-                          active ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-                        }`}
-                      >
-                        <div className="overflow-hidden">
-                          <p className="m-lede mt-2 max-w-[42ch] text-[16px]">{item.desc}</p>
-                        </div>
-                      </div>
+                      <h3 className="m-display m-h3">{item.title}</h3>
+                      <p className="m-lede mt-2 max-w-[42ch] text-[16px]">{item.desc}</p>
                     </button>
                   );
                 })}

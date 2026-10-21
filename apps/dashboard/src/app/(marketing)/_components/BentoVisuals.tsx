@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { Check, MessageCircle, PackageCheck, Sparkles, Store, X } from "lucide-react";
+import { Check, LayoutDashboard, MessageCircle, PackageCheck, Sparkles, X } from "lucide-react";
 
 /* Card visuals for the landing bento, built as live components so the copy can
    be edited in place. Linen & Loom is the demo store. Each visual shows
@@ -87,38 +87,42 @@ export function GuidanceVisual() {
   );
 }
 
-const ORBIT_NODES = [
-  { label: "Instagram", logo: "/logos/instagram-outline.svg" },
-  { label: "Email", logo: "/logos/email.svg" },
-  { label: "Website chat", icon: MessageCircle },
-  { label: "iMessage", logo: "/logos/imessage.svg" },
-  { label: "Shopify", logo: "/logos/shopify.svg" },
-] as const;
-
-/** "One conversation. Everywhere.": the channels that are live, around the shop. Also the
- *  Integrations preview in the Product menu. */
-export function ChannelsOrbit() {
+/** Customer intake, merchant control, and Shopify work have distinct roles.
+ *  Shared with the Integrations preview in the Product menu. */
+export function ChannelRoles() {
   return (
-    <div aria-hidden className="m-bv m-bv-orbit">
-      <span className="m-bv-ring m-bv-ring-outer" />
-      <span className="m-bv-ring m-bv-ring-inner" />
-      <span className="m-bv-core">
-        <Store className="size-6" strokeWidth={1.75} />
-      </span>
-      <div className="m-bv-spin">
-        {ORBIT_NODES.map((node, index) => (
-          <span key={node.label} className="m-bv-node" style={{ "--a": `${index * (360 / ORBIT_NODES.length)}deg` } as CSSProperties}>
-            <span className="m-bv-node-chip">
-              {"icon" in node ? (
-                <node.icon className="size-5" strokeWidth={1.75} />
-              ) : (
-                <Image src={node.logo} alt="" width={22} height={22} className="size-[22px] object-contain" />
-              )}
-            </span>
+    <dl className="m-bv m-bv-channels">
+      <div className="m-bv-channel-group">
+        <dt>Customer messages</dt>
+        <dd>
+          <span className="m-bv-channel-icons" aria-hidden>
+            <Image src="/logos/instagram-outline.svg" alt="" width={20} height={20} />
+            <Image src="/logos/email.svg" alt="" width={20} height={20} />
+            <MessageCircle className="size-5" strokeWidth={1.75} />
           </span>
-        ))}
+          <span>Instagram, email, website chat</span>
+        </dd>
       </div>
-    </div>
+      <div className="m-bv-channel-group">
+        <dt>Your instructions &amp; approvals</dt>
+        <dd>
+          <span className="m-bv-channel-icons" aria-hidden>
+            <Image src="/logos/imessage.svg" alt="" width={20} height={20} />
+            <LayoutDashboard className="size-5" strokeWidth={1.75} />
+          </span>
+          <span>iMessage or the dashboard</span>
+        </dd>
+      </div>
+      <div className="m-bv-channel-group">
+        <dt>Work in Shopify</dt>
+        <dd>
+          <span className="m-bv-channel-icons" aria-hidden>
+            <Image src="/logos/shopify.svg" alt="" width={20} height={22} />
+          </span>
+          <span>Orders, stock, and approved changes</span>
+        </dd>
+      </div>
+    </dl>
   );
 }
 

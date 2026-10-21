@@ -3,8 +3,6 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { Reveal } from "./Reveal";
-import { SectionLabel } from "./SectionLabel";
-
 const faqs = [
   {
     q: "Can I ask it to do things, or does it only answer customers?",
@@ -62,13 +60,6 @@ function FaqItem({ q, a }: { q: string; a: string }) {
 export function FAQ() {
   return (
     <section id="faq" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-16 text-center sm:px-6 sm:py-24">
-      <Reveal>
-        <SectionLabel>FAQ</SectionLabel>
-        <h2 className="m-display m-h2 mx-auto mb-12 max-w-[20ch]">
-          Questions, <span className="m-tail">answered.</span>
-        </h2>
-      </Reveal>
-
       <Reveal delay={120} className="mx-auto max-w-[780px] text-left">
         <div className="m-card px-6 sm:px-8">
           {faqs.map((item) => (

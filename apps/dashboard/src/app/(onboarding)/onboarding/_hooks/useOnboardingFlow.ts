@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useClerk, useOrganizationList, useUser } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
+import { isApiRequestError } from "@/lib/api/fetcher";
 import { useIntegrations } from "@/hooks/useIntegrations";
 import { useOAuthLauncher } from "@/hooks/useOAuthLauncher";
 import { useOperatorChannels } from "@/hooks/useOperatorChannels";
+import { isStorefrontChatEnabledForIntegration } from "@/lib/storefront-chat/enabled";
 import {
   isOperationPending,
   operationError,
@@ -21,7 +23,7 @@ import { updateShopifyStorefrontChat } from "@/lib/integrations/requests";
 import { isShopifyIntegrationActive } from "@/lib/integrations/shopify-connection";
 import { captureClientProductEvent } from "@/lib/product-events";
 import type { Integration } from "@/types";
-import { RETURN_TO, STEPS, STORAGE_KEY, type OnboardingData } from "../_lib/onboarding-model";
+import { RETURN_TO, STEPS, type StepId, type OnboardingData } from "../_lib/onboarding-model";
 import { selectOnboardingIntegrations } from "../_lib/onboarding-integrations";
 import {
   createForwardingEmail,
@@ -53,10 +55,12 @@ function toOnboardingOAuthPending(
 }
 
 const SETTINGS_ERROR = "Couldn't save your onboarding settings. Try again.";
-const EMAIL_ERROR = "Couldn't save that support address. Try again.";
-function clearDraft() {
-  try { localStorage.removeItem(STORAGE_KEY); } catch {}
+function settingsError(error: unknown): string {
+  return isApiRequestError(error, 403)
+    ? "Only a workspace admin can finish setup. Ask your store owner to continue, or switch workspaces above."
+    : SETTINGS_ERROR;
 }
+const EMAIL_ERROR = "Couldn't save that support address. Try again.";
 
 function resolveBrowserTimezone(): string | undefined {
   try {
@@ -81,19 +85,10 @@ function settingsBody(data: OnboardingData, complete: boolean): OnboardingSettin
   };
 }
 
-async function updateFounderName(
-  user: { firstName: string | null; update: (params: { firstName: string }) => Promise<unknown> } | null | undefined,
-  founderName: string,
-) {
-  const firstName = founderName.trim();
-  if (user && firstName && firstName !== user.firstName) {
-    await user.update({ firstName });
-  }
-}
-
 export function useOnboardingFlow(
   pinnedStepIndex: number | null,
   oauthOutcome: OAuthOutcome | null = null,
+  storefrontChatGloballyEnabled = false,
 ) {
   const router = useRouter();
   const { user } = useUser();
@@ -113,36 +108,42 @@ export function useOnboardingFlow(
     refreshInterval: 3000,
   });
   const selected = useMemo(() => selectOnboardingIntegrations(integrationRows ?? []), [integrationRows]);
-  const { anyBound: hasMessaging } = useOperatorChannels(organizationReady);
+  const { imessageBound: hasMessaging } = useOperatorChannels(organizationReady);
   const hasShopify = isShopifyIntegrationActive(selected.shopify);
   const kbSync = useShopifyKbSync(hasShopify ? selected.shopify?.id : undefined);
 
   const savedEmail = (selected.preferredEmail?.fromEmail ?? selected.preferredEmail?.externalAccountId)?.trim();
-  const { advance, back: draftBack, data, idx, update } = useOnboardingDraft({
+  const { advance, back: draftBack, go, clear: clearDraft, hydrated, data, idx, update } = useOnboardingDraft({
+    userId: user?.id,
+    organizationId: organization?.id,
+    clerkLoaded,
     founderName: user?.firstName,
     organizationName: organization?.name,
     pinnedStepIndex,
     savedEmail,
   });
 
+  const importedStoreName = selected.shopify?.fromEmail?.trim();
+  useEffect(() => {
+    if (hydrated && importedStoreName && importedStoreName !== data.storeName) update({ storeName: importedStoreName });
+  }, [data.storeName, hydrated, importedStoreName, update]);
+
   const ensureOrgForDraft = useCallback(
-    () => ensureOrganization(data.storeName),
-    [data.storeName, ensureOrganization],
+    () => ensureOrganization(data.storeName || data.shopDomain.replace(/^https?:\/\//, "").split(".")[0] || "My store"),
+    [data.storeName, data.shopDomain, ensureOrganization],
   );
 
   const { run: runSettings, state: settingsState } = useSingleFlightOperation(async () => {
     if (!await ensureOrgForDraft()) return false;
     await persistOnboardingSettings(settingsBody(data, false));
-    await updateFounderName(user, data.founderName);
     return true;
-  }, SETTINGS_ERROR);
+  }, settingsError);
 
   const { run: runCompletion, state: completionState } = useSingleFlightOperation(async () => {
     if (!await ensureOrgForDraft()) return false;
     await persistOnboardingSettings(settingsBody(data, true));
-    await updateFounderName(user, data.founderName);
     return true;
-  }, SETTINGS_ERROR);
+  }, settingsError);
 
   const { run: runEmail, state: emailState } = useSingleFlightOperation(async (
     value: string,
@@ -209,7 +210,7 @@ export function useOnboardingFlow(
     void launch({
       definition,
       params,
-      readinessGuard: ensureOrgForDraft,
+      readinessGuard: async () => await runSettings().catch(() => false),
       returnTo: oauthReturnTo,
       onClosed: () => { void refreshIntegrations(); },
       onLaunchError: (error) => {
@@ -220,7 +221,7 @@ export function useOnboardingFlow(
         });
       },
     });
-  }, [ensureOrgForDraft, launch, oauthReturnTo, refreshIntegrations]);
+  }, [launch, oauthReturnTo, refreshIntegrations, runSettings]);
 
   const oauthState: OperationState = pendingProvider
     ? { status: "pending" }
@@ -259,7 +260,8 @@ export function useOnboardingFlow(
 
   const hasEmailReady = selected.emailReady;
   const hasInstagramReady = selected.instagramReady;
-  const hasCustomerChannel = hasEmailReady || hasInstagramReady;
+  const hasStorefrontChat = storefrontChatGloballyEnabled && hasShopify && isStorefrontChatEnabledForIntegration(selected.shopify?.metadata);
+  const hasCustomerChannel = hasEmailReady || hasInstagramReady || hasStorefrontChat;
 
   const updateStorefrontChat = useCallback(async (enabled: boolean) => {
     try {
@@ -272,18 +274,15 @@ export function useOnboardingFlow(
   }, [refreshIntegrations]);
 
   const canContinue = useMemo(() => {
-    if (stepId === "intro") {
-      return data.storeName.trim().length > 0 && data.founderName.trim().length > 0;
-    }
     if (stepId === "shopify") return hasShopify;
     return true;
-  }, [data.founderName, data.storeName, hasShopify, stepId]);
+  }, [hasShopify, stepId]);
 
   const { run: runNext, state: nextState } = useSingleFlightOperation(async () => {
     if (!canContinue) return false;
-    if (stepId === "intro" && !await runSettings().catch(() => false)) return false;
+    if (stepId === "shopify" && !await runSettings().catch(() => false)) return false;
 
-    const analyticsStep = stepId === "intro" ? "store" : stepId;
+    const analyticsStep = stepId;
     const completedOptionalStep = analyticsStep !== "email" || hasCustomerChannel;
     if (analyticsStep !== "plan" && analyticsStep !== "connect" && completedOptionalStep) {
       void captureClientProductEvent({ event: "onboarding_step_completed", step: analyticsStep });
@@ -303,7 +302,6 @@ export function useOnboardingFlow(
 
   const { run: runSimulation, state: simulationState } = useSingleFlightOperation(async () => {
     if (!await runShopifySimulation().catch(() => false)) return false;
-    advance();
     return true;
   }, "Couldn't connect the demo store. Try again.");
 
@@ -345,12 +343,10 @@ export function useOnboardingFlow(
     void ensureOrgForDraft();
   }, [ensureOrgForDraft, stepId]);
 
-  const relevantErrors = stepId === "intro"
-    ? [settingsState, organizationOperation, exitState]
-    : stepId === "shopify"
-      ? [oauthState, shopifySimulationState, organizationOperation, exitState]
+  const relevantErrors = stepId === "shopify"
+      ? [settingsState, oauthState, shopifySimulationState, organizationOperation, exitState]
       : stepId === "email"
-        ? [emailState, oauthState, organizationOperation, exitState]
+        ? [emailState, settingsState, oauthState, organizationOperation, exitState]
         : stepId === "plan"
           ? [completionState, organizationOperation, exitState]
           : [organizationOperation, exitState];
@@ -368,6 +364,7 @@ export function useOnboardingFlow(
     shopifyRow: selected.shopify as Integration | undefined,
     handlers: {
       back,
+      navigate: (id: StepId) => { if (!pending) go(STEPS.findIndex(step => step.id === id)); },
       ensureOrganization: ensureOrgForDraft,
       finish,
       launchOAuth,
@@ -378,6 +375,8 @@ export function useOnboardingFlow(
       updateStorefrontChat,
     },
     status: {
+      hydrated,
+      hasStorefrontChat,
       canContinue,
       controlsPending: pending,
       emailSaving: isOperationPending(emailState),
