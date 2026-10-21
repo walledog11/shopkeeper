@@ -11,8 +11,9 @@ export interface ConfirmedOrder {
 /**
  * The orders this conversation's sender has shown are theirs, for the operator
  * card. A storefront shopper entered a code mailed to the order's email; an
- * Instagram or TikTok sender sent the order's email or shipping zip, which
- * buildContext reads from the same rows.
+ * Instagram or TikTok sender sent the order's email or shipping zip, read from
+ * the rows buildContext reads: the connected store's only, so the card never
+ * vouches for a same-named order in another store.
  */
 export async function listConfirmedOrders(
   organizationId: string,
@@ -20,16 +21,24 @@ export async function listConfirmedOrders(
   channelType: string,
 ): Promise<ConfirmedOrder[]> {
   if (ORDER_VERIFICATION_CHANNELS.has(channelType)) {
+    const integration = await db.integration.findFirst({
+      where: { organizationId, platform: 'shopify', lifecycleStatus: 'active' },
+      select: { externalAccountId: true },
+    });
+    if (!integration) return [];
     const rows = await db.orderVerification.findMany({
       where: {
         organizationId,
+        shopDomain: integration.externalAccountId,
         verifiedAt: { not: null },
         customer: { threads: { some: { id: threadId, organizationId } } },
       },
       orderBy: { verifiedAt: 'asc' },
       select: { orderName: true, method: true },
     });
-    return rows.flatMap(row => (row.method ? [{ orderName: row.orderName, method: row.method }] : []));
+    return rows.flatMap(row => (
+      row.orderName && row.method ? [{ orderName: row.orderName, method: row.method }] : []
+    ));
   }
   const names = await listVerifiedOrderNames(organizationId, threadId, channelType);
   return names.map(orderName => ({ orderName, method: 'email' as const }));

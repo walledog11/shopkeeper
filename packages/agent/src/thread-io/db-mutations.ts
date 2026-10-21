@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { createMessage, db, Prisma, SenderType } from "@shopkeeper/db";
-import { parseClassifierSignals } from "../classifier-signals.js";
+import { parseClassifierSignals, parseRequestFacts } from "../classifier-signals.js";
 import { normalizeOrderName } from "../order-reference.js";
 import {
   ORDER_VERIFICATION_CHANNELS,
@@ -134,12 +134,12 @@ export async function awaitCustomerPhotoMutation(
 
 const ORDER_NAME_SHAPE = /^#[A-Z0-9-]{1,32}$/;
 
-// Records that the reply asks this sender to confirm an order, or, with no
-// order named, to say which order. Keyed to the sender and the order, so a later
-// episode resumes the same row rather than starting fresh. It writes no attempt
-// and no outcome: gateway code compares the answer (order-verification-answer).
-// The comparison starts at the first ask and a re-ask leaves it there, so an
-// answer that arrived before a re-ask is still compared.
+// Records that the reply asks this sender which order this is about, or to
+// confirm an order is theirs. Keyed to the sender, the store and the order, so
+// a later episode resumes the same row rather than starting fresh. It writes no
+// attempt and no outcome: gateway code compares the answer
+// (order-verification-answer). The ask for which order keeps the request it was
+// made about, and the ask that names the order carries it on.
 export async function awaitOrderVerificationMutation(
   input: AwaitOrderVerificationInput,
   ctx: ThreadSinkContext,
@@ -154,35 +154,31 @@ export async function awaitOrderVerificationMutation(
     return toolError("Error: order confirmation applies to Instagram and TikTok conversations only.");
   }
   const rawName = String(input.order_name ?? "").trim();
-  if (rawName === "") return toolOk("Waiting for the customer to say which order.");
   // Stored, then written into later prompts and the merchant's card, so only
   // an order number's shape is kept: the model took it from customer text.
-  const orderName = normalizeOrderName(rawName);
-  if (!ORDER_NAME_SHAPE.test(orderName)) return toolError("Error: order_name must be an order number, e.g. #1043.");
+  const orderName = rawName === "" ? null : normalizeOrderName(rawName);
+  if (orderName !== null && !ORDER_NAME_SHAPE.test(orderName)) {
+    return toolError("Error: order_name must be an order number, e.g. #1043.");
+  }
 
   const integration = await db.integration.findFirst({
     where: { organizationId: ctx.orgId, platform: "shopify", lifecycleStatus: "active" },
-    select: { id: true },
+    select: { externalAccountId: true },
   });
   if (!integration) return toolError("Error: no Shopify store is connected to check the order against.");
+  const sender = { organizationId: ctx.orgId, customerId: thread.customerId, shopDomain: integration.externalAccountId };
   const records = await db.orderVerification.findMany({
-    where: { organizationId: ctx.orgId, customerId: thread.customerId },
-    select: { orderName: true, integrationId: true, asks: true, attempts: true, verifiedAt: true },
+    where: sender,
+    select: { id: true, orderName: true, asks: true, attempts: true, verifiedAt: true, requestFacts: true },
   });
   const existing = records.find(record => record.orderName === orderName);
-  const sameStore = records.filter(record => record.integrationId === integration.id);
-  if (existing?.integrationId === integration.id && existing.verifiedAt) {
-    return toolOk(`The customer already confirmed ${orderName}.`);
-  }
-  if (
-    orderVerificationAttemptsLeft(sameStore) === 0
-    || (existing?.integrationId === integration.id && existing.asks >= ORDER_VERIFICATION_MAX_ASKS)
-  ) {
+  if (existing?.verifiedAt) return toolOk(`The customer already confirmed ${orderName}.`);
+  if (orderVerificationAttemptsLeft(records) === 0 || (existing && existing.asks >= ORDER_VERIFICATION_MAX_ASKS)) {
     return toolError("Error: this sender cannot be asked again. Hand the conversation to the merchant.");
   }
 
-  // The request this message makes, kept to resume once the order is confirmed.
-  // A reply that only answers the ask keeps the request it answers.
+  // The request this message makes, when it is one that needs the order
+  // confirmed. A reply that only answers an ask keeps the request it answers.
   const signals = parseClassifierSignals(thread.classifierSignals);
   const latestCustomerMessage = await db.message.findFirst({
     where: { threadId: ctx.threadId, organizationId: ctx.orgId, senderType: SenderType.customer, deletedAt: null },
@@ -191,34 +187,31 @@ export async function awaitOrderVerificationMutation(
   });
   const aligned = signals !== null && latestCustomerMessage !== null
     && thread.requestSourceMessageId === latestCustomerMessage.id;
-  const request = aligned && requestNeedsOrderVerification(signals.requestFacts) ? signals.requestFacts : null;
+  const current = aligned && requestNeedsOrderVerification(signals.requestFacts) ? signals.requestFacts : null;
+  const unnamed = records.find(record => record.orderName === null);
+  const request = (orderName !== null && unnamed?.requestFacts ? parseRequestFacts(unnamed.requestFacts) : null)
+    ?? current;
 
-  const key = {
-    organizationId_customerId_orderName: {
-      organizationId: ctx.orgId, customerId: thread.customerId, orderName,
-    },
-  };
   const now = new Date();
+  const asked = {
+    threadId: ctx.threadId, requestedAt: now, asks: { increment: 1 },
+    ...(request ? { requestFacts: request } : {}),
+  };
   await db.$transaction(async (tx) => {
-    // A row from a store since replaced describes another store's order.
-    if (existing && existing.integrationId !== integration.id) {
-      await tx.orderVerification.delete({ where: key });
+    if (existing) {
+      await tx.orderVerification.update({ where: { id: existing.id }, data: asked });
+    } else {
+      await tx.orderVerification.create({
+        data: { ...sender, threadId: ctx.threadId, orderName, requestedAt: now, requestFacts: request ?? Prisma.DbNull },
+      });
     }
-    await tx.orderVerification.upsert({
-      where: key,
-      create: {
-        organizationId: ctx.orgId, customerId: thread.customerId, integrationId: integration.id,
-        threadId: ctx.threadId, orderName, requestedAt: now, evaluatedThrough: now,
-        requestFacts: request ?? Prisma.DbNull,
-      },
-      update: {
-        threadId: ctx.threadId, requestedAt: now, asks: { increment: 1 },
-        ...(request ? { requestFacts: request } : {}),
-      },
-    });
+    // The order is named now, so the ask for which order is answered.
+    if (orderName !== null && unnamed) await tx.orderVerification.delete({ where: { id: unnamed.id } });
   });
   await runHook(after, ctx);
-  return toolOk(`Waiting for the customer to confirm ${orderName}.`);
+  return toolOk(orderName === null
+    ? "Waiting for the customer to say which order."
+    : `Waiting for the customer to confirm ${orderName}.`);
 }
 
 export async function escalateToHumanMutation(

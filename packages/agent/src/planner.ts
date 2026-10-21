@@ -85,6 +85,8 @@ export interface PlanAgentOptions {
    * It may only read and draft, and its plan always goes to the merchant.
    */
   withheldMessageFollowUp?: boolean;
+  /** Set by a monitor planning its own instruction on a customer thread (a return arriving). */
+  systemRequest?: boolean;
 }
 
 const KB_MISS_REPLY_REFUSAL =
@@ -228,19 +230,24 @@ export async function planAgent(
     && !options?.merchantContinuation
     && !options?.withheldMessageFollowUp;
   // A direct-message sender confirms the order before anything about it is
-  // discussed or proposed, a photo request included.
-  const orderVerification = customerOriginated ? orderVerificationState(ctx) : null;
+  // discussed or proposed, a photo request included. A monitor's plan is the
+  // merchant's business, not the sender's request.
+  const orderVerification = customerOriginated && !options?.systemRequest ? orderVerificationState(ctx) : null;
   const orderUnconfirmed = orderVerification !== null && orderVerification.kind !== "verified";
   const asksOrderVerification = orderVerification?.kind === "asked" || orderVerification?.kind === "ask";
-  const damageEvidence = customerOriginated && !orderUnconfirmed
+  // Routing and review read the claim's photo state whatever the order's
+  // confirmation, so compensation proposed for an unconfirmed damage claim still
+  // escalates; the photo is only asked for once the order is confirmed.
+  const damageEvidence = customerOriginated
     ? damageEvidenceState(
       ctx,
       resolvedSettings,
       orderVerification?.kind === "verified" ? orderVerification.resumedRequest : null,
     )
     : null;
+  const damagePhotoAsk = orderUnconfirmed ? null : damageEvidence;
   const { stable, volatile } = buildSystemPromptParts(ctx, settings, {
-    exactDraftProposal: true, damageEvidence, orderVerification,
+    exactDraftProposal: true, damageEvidence: damagePhotoAsk, orderVerification,
   });
   const systemPromptBlocks = buildSplitCachedSystemPrompt(stable, volatile);
 
@@ -271,7 +278,7 @@ export async function planAgent(
   // Offered only while a damage claim still needs its photo asked for, so every
   // other turn keeps a byte-identical tool list and prompt cache.
   availableTools = availableTools.filter(tool => (
-    (tool.name !== AWAIT_CUSTOMER_PHOTO_TOOL || damageEvidence?.kind === "ask")
+    (tool.name !== AWAIT_CUSTOMER_PHOTO_TOOL || damagePhotoAsk?.kind === "ask")
     && (tool.name !== AWAIT_ORDER_VERIFICATION_TOOL || asksOrderVerification)
   ));
   const toolSelection = selectPlanningTools({
@@ -347,7 +354,7 @@ export async function planAgent(
       return KB_MISS_REPLY_REFUSAL;
     }
     if (
-      damageEvidence?.kind === "ask"
+      damagePhotoAsk?.kind === "ask"
       && !proposal.rawToolCalls.some(call => call.name === AWAIT_CUSTOMER_PHOTO_TOOL)
     ) {
       return DAMAGE_PHOTO_ASK_REFUSAL;

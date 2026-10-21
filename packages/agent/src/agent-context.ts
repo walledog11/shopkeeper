@@ -221,8 +221,8 @@ export interface RequestEvidence {
  * or shipping zip on Shopify; nothing here is ever the model's judgement.
  */
 export interface OrderVerificationRecord {
-  /** Normalized with order-reference's `normalizeOrderName`. */
-  orderName: string;
+  /** Normalized with order-reference's `normalizeOrderName`; null while the agent asks which order. */
+  orderName: string | null;
   /** Shopify's numeric id once verified, else null. */
   orderId: string | null;
   method: "email" | "zip" | null;

@@ -343,7 +343,7 @@ export async function buildContext(
   const orderVerificationsPromise = ORDER_VERIFICATION_CHANNELS.has(thread.channelType) && shopifyIntegration
     ? loadNonFatalContext<OrderVerificationRecord[]>("order_verifications", scope, [], async () => {
         const rows = await db.orderVerification.findMany({
-          where: { organizationId: orgId, customerId: thread.customer.id, integrationId: shopifyIntegration.id },
+          where: { organizationId: orgId, customerId: thread.customer.id, shopDomain: shopifyIntegration.externalAccountId },
           select: {
             orderName: true, orderId: true, method: true, threadId: true, requestedAt: true,
             asks: true, attempts: true, answeredMessageId: true, verifiedAt: true, requestFacts: true,

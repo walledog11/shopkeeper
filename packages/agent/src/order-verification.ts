@@ -68,8 +68,14 @@ export type OrderVerificationState =
   /** Needs confirming and nothing asked yet; `orderName` is null until they name one. */
   | { kind: "ask"; orderName: string | null };
 
+type NamedRecord = OrderVerificationRecord & { orderName: string };
+
+function isNamed(record: OrderVerificationRecord): record is NamedRecord {
+  return record.orderName !== null;
+}
+
 function stateOf(
-  record: OrderVerificationRecord,
+  record: NamedRecord,
   records: readonly OrderVerificationRecord[],
   answeredNow: boolean,
 ): OrderVerificationState {
@@ -87,14 +93,24 @@ function stateOf(
   return { kind: "asked", orderName: record.orderName };
 }
 
+// The ask for which order, still open on this thread.
+function stateOfUnnamed(
+  record: OrderVerificationRecord,
+  records: readonly OrderVerificationRecord[],
+): OrderVerificationState {
+  return orderVerificationAttemptsLeft(records) === 0 || record.asks >= ORDER_VERIFICATION_MAX_ASKS
+    ? { kind: "locked", orderName: null }
+    : { kind: "ask", orderName: null };
+}
+
 // A reply that is part of answering ("hold on", "I don't have it") reads as no
 // request of its own; one that asks something else leaves the ask behind.
 function continuesAsk(facts: RequestFacts | null): boolean {
   return !facts || facts.ask === "none" || facts.ask === "other" || requestNeedsOrderVerification(facts);
 }
 
-function newest(records: readonly OrderVerificationRecord[]): OrderVerificationRecord | null {
-  return records.reduce<OrderVerificationRecord | null>(
+function newest<T extends OrderVerificationRecord>(records: readonly T[]): T | null {
+  return records.reduce<T | null>(
     (latest, record) => (!latest || record.requestedAt > latest.requestedAt ? record : latest),
     null,
   );
@@ -106,36 +122,42 @@ function newest(records: readonly OrderVerificationRecord[]): OrderVerificationR
  * the review signal all read it, so they cannot disagree. Null on every thread
  * this does not apply to, which leaves that turn exactly as it was.
  *
- * A message that answered an ask decides the order before the classifier does
- * when it is the latest one: a bare "94107" can be classified as order #94107,
- * and the answer must resume the order that was asked about. An answer earlier
- * in the burst gives way to an order named after it.
+ * A message in this burst that answered an ask decides the order before the
+ * classifier does: a bare "94107" can be classified as order #94107, and the
+ * answer must resume the order that was asked about. The gateway clears that
+ * mark when a later message in the burst names another order.
  */
 export function orderVerificationState(ctx: AgentContext): OrderVerificationState | null {
   if (!ORDER_VERIFICATION_CHANNELS.has(ctx.thread.channelType)) return null;
   if (!hasUnresolvedShopifyCustomer(ctx, false)) return null;
 
   const records = ctx.orderVerifications ?? [];
+  const named = records.filter(isNamed);
   const current = new Set(ctx.currentCustomerMessageIds ?? []);
-  const answered = newest(records.filter(record => (
+  const answered = newest(named.filter(record => (
     record.answeredMessageId !== null && current.has(record.answeredMessageId)
   )));
-  if (answered && answered.answeredMessageId === ctx.thread.latestCustomerMessageId) {
-    return stateOf(answered, records, true);
-  }
+  if (answered) return stateOf(answered, records, true);
 
   const facts = currentRequestSignals(ctx)?.requestFacts ?? null;
   const requestedOrder = facts?.order ? normalizeOrderName(facts.order) : null;
 
-  const named = requestedOrder ? records.find(record => record.orderName === requestedOrder) : undefined;
-  if (named) return stateOf(named, records, named === answered);
-  if (answered && !requestedOrder) return stateOf(answered, records, true);
+  // An order already asked about, when this message is still about confirming
+  // or changing it. A plain status question about it keeps the guest-safe read.
+  const namedNow = requestedOrder ? named.find(record => record.orderName === requestedOrder) : undefined;
+  if (namedNow && (namedNow.verifiedAt !== null || continuesAsk(facts))) {
+    return stateOf(namedNow, records, false);
+  }
 
-  // The order this thread last asked about, unless the sender has named another
-  // or moved on to something else. A verified one stays readable here.
+  // The last ask on this thread, unless the sender has named another order or
+  // moved on to something else. A verified order stays readable here.
   const latestHere = newest(records.filter(record => record.threadId === ctx.thread.id));
-  if (latestHere && !requestedOrder && (latestHere.verifiedAt !== null || continuesAsk(facts))) {
-    return stateOf(latestHere, records, false);
+  if (latestHere && !requestedOrder) {
+    if (!isNamed(latestHere)) {
+      if (continuesAsk(facts)) return stateOfUnnamed(latestHere, records);
+    } else if (latestHere.verifiedAt !== null || continuesAsk(facts)) {
+      return stateOf(latestHere, records, false);
+    }
   }
 
   if (!requestNeedsOrderVerification(facts)) return null;
@@ -147,6 +169,8 @@ export function orderVerificationState(ctx: AgentContext): OrderVerificationStat
 /** The orders this sender has confirmed, for scoping reads and the review signal. */
 export function verifiedOrderRefs(ctx: Pick<AgentContext, "orderVerifications">): VerifiedOrderRef[] {
   return (ctx.orderVerifications ?? []).flatMap(record => (
-    record.verifiedAt && record.orderId ? [{ orderName: record.orderName, orderId: record.orderId }] : []
+    record.verifiedAt && record.orderId && record.orderName
+      ? [{ orderName: record.orderName, orderId: record.orderId }]
+      : []
   ));
 }

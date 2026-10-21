@@ -115,6 +115,7 @@ async function resolveShopifyOrganizationId(shopDomain: string): Promise<string 
 
 async function selectCustomerData(
   organizationId: string,
+  shopDomain: string,
   payload: ShopifyCompliancePayload,
 ): Promise<CustomerDataSelection> {
   const shopifyCustomerId = stringId(payload.customer?.id);
@@ -135,7 +136,9 @@ async function selectCustomerData(
         // A direct-message sender who confirmed one of these orders by its
         // email or zip: their conversation carries that customer's details.
         ...(customerOrderIds.length > 0
-          ? [{ orderVerifications: { some: { organizationId, verifiedAt: { not: null }, orderId: { in: customerOrderIds } } } }]
+          ? [{ orderVerifications: { some: {
+            organizationId, shopDomain, verifiedAt: { not: null }, orderId: { in: customerOrderIds },
+          } } }]
           : []),
       ],
     },
@@ -164,6 +167,7 @@ async function selectCustomerData(
 
 async function deleteSelectedCustomerData(
   organizationId: string,
+  shopDomain: string,
   selection: CustomerDataSelection,
   payload: ShopifyCompliancePayload,
 ): Promise<void> {
@@ -298,7 +302,7 @@ async function deleteSelectedCustomerData(
       where: {
         organizationId,
         OR: [
-          { orderId: { in: customerOrderIds } },
+          { shopDomain, orderId: { in: customerOrderIds } },
           { threadId: { in: selection.threadIds } },
         ],
       },
@@ -360,19 +364,26 @@ async function deleteSelectedCustomerData(
   });
 }
 
-async function selectShopData(organizationId: string): Promise<CustomerDataSelection> {
+async function selectShopData(organizationId: string, shopDomain: string): Promise<CustomerDataSelection> {
   const customers = await db.customer.findMany({
     where: {
       organizationId,
-      threads: {
-        some: {
-          organizationId,
-          OR: [
-            { channelType: { in: ['shopify', 'shopify_chat'] } },
-            { shopifyCustomerId: { not: null } },
-          ],
+      OR: [
+        {
+          threads: {
+            some: {
+              organizationId,
+              OR: [
+                { channelType: { in: ['shopify', 'shopify_chat'] } },
+                { shopifyCustomerId: { not: null } },
+              ],
+            },
+          },
         },
-      },
+        // Direct-message senders who confirmed one of this store's orders: their
+        // conversations carry its customers' details.
+        { orderVerifications: { some: { organizationId, shopDomain, verifiedAt: { not: null } } } },
+      ],
     },
     select: {
       id: true,
@@ -425,10 +436,11 @@ export async function preserveShopifyUninstallTombstone(shopDomain: string): Pro
 /** Erases a customer's threads, messages and agent records, as Shopify's customers/redact requires. */
 async function redactCustomerData(
   organizationId: string,
+  shopDomain: string,
   payload: ShopifyCompliancePayload,
 ): Promise<CustomerDataSelection> {
-  const selection = await selectCustomerData(organizationId, payload);
-  await deleteSelectedCustomerData(organizationId, selection, payload);
+  const selection = await selectCustomerData(organizationId, shopDomain, payload);
+  await deleteSelectedCustomerData(organizationId, shopDomain, selection, payload);
   return selection;
 }
 
@@ -445,7 +457,7 @@ export async function handleShopifyComplianceWebhook(
   }
 
   if (topic === 'customers/data_request') {
-    const selection = await selectCustomerData(organizationId, payload);
+    const selection = await selectCustomerData(organizationId, shopDomain, payload);
     const shopifyRequestId = stringId(payload.data_request?.id) ?? webhookId;
     if (!shopifyRequestId) {
       throw new Error('Shopify data request is missing both data_request.id and webhook id');
@@ -487,7 +499,7 @@ export async function handleShopifyComplianceWebhook(
   }
 
   if (topic === 'customers/redact') {
-    const selection = await redactCustomerData(organizationId, payload);
+    const selection = await redactCustomerData(organizationId, shopDomain, payload);
     logger.info(
       {
         organizationId,
@@ -501,9 +513,10 @@ export async function handleShopifyComplianceWebhook(
     return;
   }
 
-  const selection = await selectShopData(organizationId);
-  await deleteSelectedCustomerData(organizationId, selection, payload);
+  const selection = await selectShopData(organizationId, shopDomain);
+  await deleteSelectedCustomerData(organizationId, shopDomain, selection, payload);
   await db.$transaction([
+    db.orderVerification.deleteMany({ where: { organizationId, shopDomain } }),
     db.integration.deleteMany({
       where: { organizationId, platform: 'shopify', externalAccountId: shopDomain },
     }),

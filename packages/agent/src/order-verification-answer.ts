@@ -94,10 +94,16 @@ function joinsAsOneCode(first: string, second: string): boolean {
   return first.length >= 3 && first.length <= 5 && second.length >= 3 && second.length <= 4;
 }
 
+/** Whether a message names an order other than this one ("#2001", "order 2001"). */
+export function namesAnotherOrder(text: string, orderName: string): boolean {
+  const asked = normalizeOrderName(orderName);
+  return messageValues(text, orderName).orders.some(order => order !== asked);
+}
+
 /** Whether a message answers the ask for this order at all, whatever the order holds. */
 export function carriesOrderVerificationAnswer(text: string, orderName: string): boolean {
+  if (namesAnotherOrder(text, orderName)) return false;
   const values = messageValues(text, orderName);
-  if (values.orders.some(order => order !== normalizeOrderName(orderName))) return false;
   return values.emails.length + values.postal.length > 0;
 }
 

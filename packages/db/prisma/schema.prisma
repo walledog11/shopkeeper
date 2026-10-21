@@ -311,6 +311,7 @@ model Organization {
   storefrontChatVerifications StorefrontChatVerification[]
   storefrontChatSessionEpisodes StorefrontChatSessionEpisode[]
   orderVerifications     OrderVerification[]
+  orderVerificationAnswers OrderVerificationAnswer[]
   conversationAttributions ConversationAttribution[]
   requestEpisodeOutcomes RequestEpisodeOutcome[]
   merchantPreferences    MerchantPreference[]
@@ -481,7 +482,6 @@ model Integration {
   messages                Message[]
   storefrontChatSessions  StorefrontChatSession[]
   storefrontChatDailyUsage StorefrontChatDailyUsage[]
-  orderVerifications      OrderVerification[]
 
   @@unique([organizationId, emailProvider])
   // Supporting identity for database-level tenant-consistency foreign keys.
@@ -708,6 +708,7 @@ model Message {
   integration          Integration?    @relation(fields: [integrationId], references: [id], onDelete: SetNull)
   sourcePlanExecutions PlanExecution[] @relation("PlanExecutionSourceMessage")
   requestEpisodeOutcomes RequestEpisodeOutcome[]
+  orderVerificationAnswer OrderVerificationAnswer?
 
   @@unique([organizationId, id], map: "messages_organization_id_id_key")
   @@unique([organizationId, id, threadId], map: "messages_organization_id_id_thread_id_key")
@@ -1302,21 +1303,26 @@ enum OrderVerificationMethod {
 // What a direct-message sender (Instagram, TikTok) has shown about one order:
 // that they know its email or shipping zip. Gateway code compares the customer's
 // own message with Shopify; the model only records that it asked. Keyed to the
-// sender and the order, so it survives an episode rollover and never widens to
-// the sender's other orders. Knowledge, not possession: it unlocks reading this
-// order for this sender, never a write.
+// sender, the store and the order, so it survives an episode rollover and never
+// widens to the sender's other orders. Knowledge, not possession: it unlocks
+// reading this order for this sender, never a write.
+//
+// A row with no order is the ask for which order, keeping the request it was
+// made about. Raw SQL migration 20261020120000_add_order_verifications holds one
+// per sender and store with a partial unique index Prisma cannot express.
 model OrderVerification {
   id             String    @id @default(uuid()) @db.Uuid
   organizationId String    @map("organization_id") @db.Uuid
   customerId     String    @map("customer_id") @db.Uuid
-  // The Shopify store the order is in. Disconnecting it deletes the row, so a
-  // confirmation never carries over to a same-named order in another store.
-  integrationId  String    @map("integration_id") @db.Uuid
+  // The Shopify store the order is in (its myshopify domain). Reads take only
+  // the connected store's rows; a disconnected store's rows stay for erasure
+  // until its shop/redact, and come back if the same store reconnects.
+  shopDomain     String    @map("shop_domain") @db.VarChar(255)
   // The thread whose agent asked last.
   threadId       String?   @map("thread_id") @db.Uuid
   // Normalized with order-reference's normalizeOrderName, the function the read
-  // scope check compares with.
-  orderName      String    @map("order_name") @db.VarChar(64)
+  // scope check compares with. Null while the agent asks which order.
+  orderName      String?   @map("order_name") @db.VarChar(64)
   // Shopify's numeric id, written when the order is verified.
   orderId        String?   @map("order_id") @db.VarChar(64)
   method         OrderVerificationMethod?
@@ -1325,12 +1331,6 @@ model OrderVerification {
   asks           Int       @default(1)
   // Values compared: one for each email or zip a customer message carried.
   attempts       Int       @default(0)
-  // The newest customer message already compared, as (sentAt, id) in the order
-  // the evaluator reads them, so a redelivered job never charges or matches the
-  // same message twice and a same-second message is not skipped. Starts at the
-  // first ask, and a re-ask does not move it, so no answer goes uncompared.
-  evaluatedThrough DateTime? @map("evaluated_through") @db.Timestamptz
-  evaluatedThroughMessageId String? @map("evaluated_through_message_id") @db.Uuid
   // The newest customer message that carried an email or zip and was compared,
   // so the turn it lands on resumes this order whatever the classifier read in it.
   answeredMessageId String? @map("answered_message_id") @db.Uuid
@@ -1343,12 +1343,39 @@ model OrderVerification {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  integration  Integration  @relation(fields: [integrationId], references: [id], onDelete: Cascade)
   thread       Thread?      @relation(fields: [threadId], references: [id], onDelete: SetNull)
+  answers      OrderVerificationAnswer[]
 
-  @@unique([organizationId, customerId, orderName])
+  @@unique([organizationId, customerId, shopDomain, orderName], map: "order_verifications_sender_shop_order_key")
   @@index([organizationId, threadId])
   @@map("order_verifications")
+}
+
+enum OrderVerificationOutcome {
+  matched
+  mismatch
+  no_candidate
+  // Carried an answer, but the store refused the lookup, so nothing was compared.
+  unchecked
+}
+
+// One row per customer message compared for an order confirmation, so each
+// message is compared once, against one order, whenever it arrives.
+model OrderVerificationAnswer {
+  messageId           String                   @id @map("message_id") @db.Uuid
+  organizationId      String                   @map("organization_id") @db.Uuid
+  orderVerificationId String                   @map("order_verification_id") @db.Uuid
+  outcome             OrderVerificationOutcome
+  // Values this message spent from the sender's attempts.
+  charged             Int                      @default(0)
+  createdAt           DateTime                 @default(now()) @map("created_at") @db.Timestamptz
+
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  message           Message           @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  orderVerification OrderVerification @relation(fields: [orderVerificationId], references: [id], onDelete: Cascade)
+
+  @@index([orderVerificationId])
+  @@map("order_verification_answers")
 }
 
 // One row per order the shop receives, classified by whether a conversation

@@ -7,6 +7,7 @@ import {
 import {
   carriesOrderVerificationAnswer,
   matchOrderVerificationAnswer,
+  namesAnotherOrder,
 } from '@shopkeeper/agent/order-verification-answer';
 import logger from '../../logger.js';
 import { getConversationBurst } from './conversation-burst.js';
@@ -18,20 +19,9 @@ interface ShopifyOrderIdentity {
   shipping_address?: { zip?: string | null } | null;
 }
 
-interface Cursor {
-  sentAt: Date | null;
-  messageId: string | null;
-}
-
-// The order messages are read in: (sentAt, id), so two messages in the same
-// second are both compared, once each.
-function isAfter(message: { sentAt: Date; id: string }, cursor: Cursor): boolean {
-  if (!cursor.sentAt) return true;
-  if (message.sentAt.getTime() !== cursor.sentAt.getTime()) return message.sentAt > cursor.sentAt;
-  return cursor.messageId === null || message.id > cursor.messageId;
-}
-
-type Step = 'next' | 'skip' | 'stop';
+// An ask older than this is not answered by a message that happens to carry a
+// zip; the agent asks again if the sender comes back to it.
+const ANSWER_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** Shopify could not be asked, so an answer waits to be compared: retry the job. */
 export class OrderVerificationLookupError extends Error {
@@ -41,19 +31,47 @@ export class OrderVerificationLookupError extends Error {
   }
 }
 
+async function lookupOrder(
+  integration: { accessToken: string; externalAccountId: string },
+  orderName: string,
+): Promise<ShopifyOrderIdentity | null | 'refused'> {
+  try {
+    const data = await shopifyRestJson<{ orders?: ShopifyOrderIdentity[] }>(
+      { shop: integration.externalAccountId, accessToken: integration.accessToken },
+      'orders.json',
+      { query: { name: orderName, status: 'any', limit: 1, fields: 'id,name,email,shipping_address' } },
+    );
+    return data.orders?.[0] ?? null;
+  } catch (err) {
+    // A store that refuses the read (revoked, frozen, missing scope) will not
+    // answer a retry either.
+    const refused = err instanceof ShopifyRequestError
+      && err.status !== undefined && err.status >= 400 && err.status < 500 && err.status !== 429;
+    logger.warn(
+      { err: err instanceof Error ? err.message : String(err), refused },
+      '[OrderVerification] Shopify order lookup failed',
+    );
+    if (refused) return 'refused';
+    throw new OrderVerificationLookupError(err);
+  }
+}
+
 /**
  * Runs before the turn is planned, so the planner reads the outcome rather than
- * deciding it: the sender's messages since the agent first asked are compared
- * with the order in Shopify, and each email or zip compared is one attempt from
- * the sender's pooled budget. Each comparison holds a lock on every row of the
- * sender, so two jobs cannot both spend the last attempt, and is recorded with
- * the message as the row's cursor, so a redelivered job never compares it again.
+ * deciding it. The messages of the customer's current burst are compared with
+ * the order the sender was most recently asked about, on any of their threads,
+ * so an answer that arrives after an episode rollover still counts. Each value
+ * compared is one attempt from the sender's pooled budget, and each message is
+ * recorded once in the answer ledger, whenever it arrives, under a lock on all
+ * the sender's rows.
  *
- * Returns true when the customer's current burst answered the ask, matched or
- * not, so the turn is planned whatever the classifier made of a bare "94107".
- * It reads that from the stored `answeredMessageId`, the field the planner reads
- * too, so a retried job answers the same. A Shopify lookup that fails throws, so
- * the job retries rather than plan a turn whose answer was never compared.
+ * Returns true when the current burst answered the ask, matched or not, so the
+ * turn is planned whatever the classifier made of a bare "94107". It reads that
+ * from the stored `answeredMessageId`, the field the planner reads too, so a
+ * retried job answers the same. A later message in the burst that names another
+ * order clears it: the sender has moved on. A Shopify lookup that fails
+ * transiently throws, so the job retries rather than plan an uncompared answer;
+ * a store that refuses the read plans the turn uncompared.
  */
 export async function evaluateOrderVerificationAnswers(
   organizationId: string,
@@ -67,120 +85,127 @@ export async function evaluateOrderVerificationAnswers(
 
   const integration = await db.integration.findFirst({
     where: { organizationId, platform: 'shopify', lifecycleStatus: 'active' },
-    select: { id: true, accessToken: true, externalAccountId: true },
+    select: { accessToken: true, externalAccountId: true },
   });
   if (!integration?.accessToken || !integration.externalAccountId) return false;
+  const sender = { organizationId, customerId: thread.customerId, shopDomain: integration.externalAccountId };
 
   const asked = await db.orderVerification.findFirst({
-    where: { organizationId, customerId: thread.customerId, threadId, integrationId: integration.id },
-    orderBy: { requestedAt: 'desc' },
-    select: {
-      id: true, orderName: true, evaluatedThrough: true, evaluatedThroughMessageId: true,
-      answeredMessageId: true, verifiedAt: true,
+    where: {
+      ...sender,
+      orderName: { not: null },
+      requestedAt: { gt: new Date(Date.now() - ANSWER_WINDOW_MS) },
     },
+    orderBy: { requestedAt: 'desc' },
+    select: { id: true, orderName: true, createdAt: true, verifiedAt: true },
   });
-  if (!asked) return false;
+  if (!asked?.orderName) return false;
+  const orderName = asked.orderName;
 
-  const [messages, burst] = await Promise.all([
-    db.message.findMany({
-      where: {
-        threadId,
-        organizationId,
-        senderType: 'customer',
-        deletedAt: null,
-        ...(asked.evaluatedThrough ? { sentAt: { gte: asked.evaluatedThrough } } : {}),
-      },
-      orderBy: [{ sentAt: 'asc' }, { id: 'asc' }],
-      select: { id: true, contentText: true, sentAt: true },
-    }),
-    getConversationBurst(threadId),
-  ]);
-  const unevaluated = asked.verifiedAt
+  const burst = await getConversationBurst(threadId);
+  const messages = await db.message.findMany({
+    where: {
+      id: { in: burst.messages.map(message => message.id) },
+      organizationId,
+      senderType: 'customer',
+      deletedAt: null,
+      sentAt: { gte: asked.createdAt },
+    },
+    orderBy: [{ sentAt: 'asc' }, { id: 'asc' }],
+    select: { id: true, contentText: true },
+  });
+  const compared = new Set((await db.orderVerificationAnswer.findMany({
+    where: { organizationId, messageId: { in: messages.map(message => message.id) } },
+    select: { messageId: true },
+  })).map(answer => answer.messageId));
+  const spent = await db.orderVerification.findMany({ where: sender, select: { attempts: true, verifiedAt: true } });
+  const answers = asked.verifiedAt || orderVerificationAttemptsLeft(spent) === 0
     ? []
-    : messages.filter(message => isAfter(message, {
-      sentAt: asked.evaluatedThrough,
-      messageId: asked.evaluatedThroughMessageId,
-    }));
+    : messages.filter(message => (
+      !compared.has(message.id) && carriesOrderVerificationAnswer(message.contentText ?? '', orderName)
+    ));
 
-  let answeredMessageId = asked.answeredMessageId;
-  if (unevaluated.some(message => carriesOrderVerificationAnswer(message.contentText ?? '', asked.orderName))) {
-    let order: ShopifyOrderIdentity | null;
-    try {
-      const data = await shopifyRestJson<{ orders?: ShopifyOrderIdentity[] }>(
-        { shop: integration.externalAccountId, accessToken: integration.accessToken },
-        'orders.json',
-        { query: { name: asked.orderName, status: 'any', limit: 1, fields: 'id,name,email,shipping_address' } },
-      );
-      order = data.orders?.[0] ?? null;
-    } catch (err) {
-      // A store that refuses the read (revoked or missing scope) will not answer
-      // a retry either: the turn is planned uncompared, and the ask cap hands
-      // the sender to the merchant.
-      const refused = err instanceof ShopifyRequestError
-        && err.status !== undefined && err.status >= 400 && err.status < 500 && err.status !== 429;
-      logger.warn(
-        { err: err instanceof Error ? err.message : String(err), organizationId, threadId, refused },
-        '[OrderVerification] Shopify order lookup failed',
-      );
-      if (refused) return true;
-      throw new OrderVerificationLookupError(err);
+  if (answers.length > 0) {
+    const order = await lookupOrder(
+      { accessToken: integration.accessToken, externalAccountId: integration.externalAccountId },
+      orderName,
+    );
+    if (order === 'refused') {
+      await db.orderVerificationAnswer.createMany({
+        data: answers.map(message => ({
+          messageId: message.id, organizationId, orderVerificationId: asked.id, outcome: 'unchecked' as const,
+        })),
+        skipDuplicates: true,
+      });
+      return true;
     }
     const orderFacts = order
       ? { name: order.name ?? null, email: order.email ?? null, zip: order.shipping_address?.zip ?? null }
       : null;
 
-    for (const message of unevaluated) {
-      const step = await db.$transaction(async (tx): Promise<Step> => {
+    for (const message of answers) {
+      const matched = await db.$transaction(async (tx): Promise<boolean> => {
         await tx.$queryRaw`
           SELECT id FROM order_verifications
           WHERE organization_id = ${organizationId}::uuid AND customer_id = ${thread.customerId}::uuid
           FOR UPDATE`;
         const rows = await tx.orderVerification.findMany({
-          where: { organizationId, customerId: thread.customerId, integrationId: integration.id },
-          select: {
-            id: true, attempts: true, verifiedAt: true, evaluatedThrough: true, evaluatedThroughMessageId: true,
-          },
+          where: sender,
+          select: { id: true, attempts: true, verifiedAt: true },
         });
         const row = rows.find(candidate => candidate.id === asked.id);
-        if (!row || row.verifiedAt) return 'stop';
-        // Another job compared it first.
-        if (!isAfter(message, { sentAt: row.evaluatedThrough, messageId: row.evaluatedThroughMessageId })) {
-          return 'skip';
-        }
+        if (!row || row.verifiedAt) return true;
         const budget = orderVerificationAttemptsLeft(rows);
-        if (budget === 0) return 'stop';
+        if (budget === 0) return true;
         const answer = matchOrderVerificationAnswer({
           text: message.contentText ?? '',
-          orderName: asked.orderName,
+          orderName,
           order: orderFacts,
           budget,
         });
+        if (answer.outcome === 'no_candidate') return false;
+        // Another job compared it first.
+        const recorded = await tx.orderVerificationAnswer.createMany({
+          data: [{
+            messageId: message.id, organizationId, orderVerificationId: row.id,
+            outcome: answer.outcome, charged: answer.charged,
+          }],
+          skipDuplicates: true,
+        });
+        if (recorded.count === 0) return false;
         await tx.orderVerification.update({
           where: { id: row.id },
           data: {
-            evaluatedThrough: message.sentAt,
-            evaluatedThroughMessageId: message.id,
-            ...(answer.outcome === 'no_candidate'
-              ? {}
-              : { attempts: { increment: answer.charged }, answeredMessageId: message.id }),
+            attempts: { increment: answer.charged },
+            answeredMessageId: message.id,
             ...(answer.outcome === 'matched' && order
               ? { verifiedAt: new Date(), method: answer.method, orderId: String(order.id) }
               : {}),
           },
         });
-        if (answer.outcome !== 'no_candidate') {
-          logger.info({ organizationId, threadId, outcome: answer.outcome }, '[OrderVerification] Compared an answer');
-        }
-        return answer.outcome === 'matched' ? 'stop' : 'next';
+        logger.info({ organizationId, threadId, outcome: answer.outcome }, '[OrderVerification] Compared an answer');
+        return answer.outcome === 'matched';
       });
-      if (step === 'stop') break;
+      if (matched) break;
     }
-    const stored = await db.orderVerification.findUnique({
-      where: { id: asked.id },
-      select: { answeredMessageId: true },
-    });
-    answeredMessageId = stored?.answeredMessageId ?? answeredMessageId;
   }
 
-  return answeredMessageId !== null && burst.messages.some(message => message.id === answeredMessageId);
+  const stored = await db.orderVerification.findUnique({
+    where: { id: asked.id },
+    select: { answeredMessageId: true },
+  });
+  const answeredMessageId = stored?.answeredMessageId ?? null;
+  const answeredAt = burst.messages.findIndex(message => message.id === answeredMessageId);
+  if (answeredAt < 0) return false;
+  const movedOn = burst.messages
+    .slice(answeredAt + 1)
+    .some(message => namesAnotherOrder(message.contentText ?? '', orderName));
+  if (movedOn) {
+    await db.orderVerification.updateMany({
+      where: { id: asked.id, answeredMessageId },
+      data: { answeredMessageId: null },
+    });
+    return false;
+  }
+  return true;
 }
