@@ -481,6 +481,7 @@ model Integration {
   messages                Message[]
   storefrontChatSessions  StorefrontChatSession[]
   storefrontChatDailyUsage StorefrontChatDailyUsage[]
+  orderVerifications      OrderVerification[]
 
   @@unique([organizationId, emailProvider])
   // Supporting identity for database-level tenant-consistency foreign keys.
@@ -1308,6 +1309,9 @@ model OrderVerification {
   id             String    @id @default(uuid()) @db.Uuid
   organizationId String    @map("organization_id") @db.Uuid
   customerId     String    @map("customer_id") @db.Uuid
+  // The Shopify store the order is in. Disconnecting it deletes the row, so a
+  // confirmation never carries over to a same-named order in another store.
+  integrationId  String    @map("integration_id") @db.Uuid
   // The thread whose agent asked last.
   threadId       String?   @map("thread_id") @db.Uuid
   // Normalized with order-reference's normalizeOrderName, the function the read
@@ -1317,11 +1321,16 @@ model OrderVerification {
   orderId        String?   @map("order_id") @db.VarChar(64)
   method         OrderVerificationMethod?
   requestedAt    DateTime  @map("requested_at") @db.Timestamptz
-  // Customer messages compared: one for each that carried an email or zip.
+  // Times the agent has asked; past the cap the merchant takes over.
+  asks           Int       @default(1)
+  // Values compared: one for each email or zip a customer message carried.
   attempts       Int       @default(0)
-  // The newest customer message already compared, so a redelivered job never
-  // charges or matches the same message twice.
+  // The newest customer message already compared, as (sentAt, id) in the order
+  // the evaluator reads them, so a redelivered job never charges or matches the
+  // same message twice and a same-second message is not skipped. Starts at the
+  // first ask, and a re-ask does not move it, so no answer goes uncompared.
   evaluatedThrough DateTime? @map("evaluated_through") @db.Timestamptz
+  evaluatedThroughMessageId String? @map("evaluated_through_message_id") @db.Uuid
   // The newest customer message that carried an email or zip and was compared,
   // so the turn it lands on resumes this order whatever the classifier read in it.
   answeredMessageId String? @map("answered_message_id") @db.Uuid
@@ -1334,6 +1343,7 @@ model OrderVerification {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  integration  Integration  @relation(fields: [integrationId], references: [id], onDelete: Cascade)
   thread       Thread?      @relation(fields: [threadId], references: [id], onDelete: SetNull)
 
   @@unique([organizationId, customerId, orderName])

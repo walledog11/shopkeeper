@@ -165,7 +165,8 @@ export type AwaitCustomerPhotoInput = Record<string, never>;
 
 /** Names the order only. The email or zip is never an input: code reads it from the customer's message. */
 export interface AwaitOrderVerificationInput {
-  order_name: string;
+  /** Absent while the reply asks which order. */
+  order_name?: string;
 }
 
 export interface EscalateToHumanInput {

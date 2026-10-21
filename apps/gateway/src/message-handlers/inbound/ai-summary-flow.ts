@@ -11,7 +11,7 @@ import { CHANNEL } from '../../constants.js';
 import logger from '../../logger.js';
 import { getConversationBurst } from './conversation-burst.js';
 import { generateThreadIntelligence } from './intelligence.js';
-import { evaluateOrderVerificationAnswers } from './order-verification-answers.js';
+import { evaluateOrderVerificationAnswers, OrderVerificationLookupError } from './order-verification-answers.js';
 import {
   precomputeThreadPlan,
   sendAutoAck,
@@ -160,10 +160,13 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
   }
 
   const parallelPlan = canParallelizeThreadPlanning(threadSnapshot, sourceMessageId);
-  // Compared before planning, so the turn reads the stored outcome. A failure
-  // leaves the ask pending and the turn planned as if nothing was answered.
+  // Compared before planning, so the turn reads the stored outcome. A Shopify
+  // lookup that failed retries the job, since its answer is still uncompared;
+  // any other failure leaves the ask pending and the turn planned as if
+  // nothing was answered, so a missing table never stops planning.
   const answeredOrderVerification = await evaluateOrderVerificationAnswers(organizationId, threadId)
     .catch((err: unknown) => {
+      if (err instanceof OrderVerificationLookupError) throw err;
       logger.warn(
         { err: err instanceof Error ? err.message : String(err), threadId, organizationId },
         '[AISummary] Order confirmation check failed',

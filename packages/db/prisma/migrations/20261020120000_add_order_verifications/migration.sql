@@ -14,13 +14,16 @@ CREATE TABLE "order_verifications" (
   "id" UUID NOT NULL,
   "organization_id" UUID NOT NULL,
   "customer_id" UUID NOT NULL,
+  "integration_id" UUID NOT NULL,
   "thread_id" UUID,
   "order_name" VARCHAR(64) NOT NULL,
   "order_id" VARCHAR(64),
   "method" "OrderVerificationMethod",
   "requested_at" TIMESTAMPTZ NOT NULL,
+  "asks" INTEGER NOT NULL DEFAULT 1,
   "attempts" INTEGER NOT NULL DEFAULT 0,
   "evaluated_through" TIMESTAMPTZ,
+  "evaluated_through_message_id" UUID,
   "answered_message_id" UUID,
   "verified_at" TIMESTAMPTZ,
   "request_facts" JSONB,
@@ -43,6 +46,8 @@ CREATE INDEX "order_verifications_customer_id_organization_id_idx"
   ON "order_verifications"("customer_id", "organization_id");
 CREATE INDEX "order_verifications_thread_id_organization_id_idx"
   ON "order_verifications"("thread_id", "organization_id");
+CREATE INDEX "order_verifications_integration_id_organization_id_idx"
+  ON "order_verifications"("integration_id", "organization_id");
 
 ALTER TABLE "order_verifications"
   ADD CONSTRAINT "order_verifications_organization_id_fkey"
@@ -55,6 +60,11 @@ ALTER TABLE "order_verifications"
   ON DELETE CASCADE ON UPDATE CASCADE;
 
 ALTER TABLE "order_verifications"
+  ADD CONSTRAINT "order_verifications_integration_id_fkey"
+  FOREIGN KEY ("integration_id") REFERENCES "integrations"("id")
+  ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE "order_verifications"
   ADD CONSTRAINT "order_verifications_thread_id_fkey"
   FOREIGN KEY ("thread_id") REFERENCES "threads"("id")
   ON DELETE SET NULL ON UPDATE CASCADE;
@@ -64,6 +74,12 @@ ALTER TABLE "order_verifications"
   ADD CONSTRAINT "order_verifications_tenant_customer_fkey"
   FOREIGN KEY ("organization_id", "customer_id")
   REFERENCES "customers"("organization_id", "id")
+  ON DELETE CASCADE ON UPDATE NO ACTION;
+
+ALTER TABLE "order_verifications"
+  ADD CONSTRAINT "order_verifications_tenant_integration_fkey"
+  FOREIGN KEY ("organization_id", "integration_id")
+  REFERENCES "integrations"("organization_id", "id")
   ON DELETE CASCADE ON UPDATE NO ACTION;
 
 ALTER TABLE "order_verifications"

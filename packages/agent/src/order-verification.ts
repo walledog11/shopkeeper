@@ -14,8 +14,15 @@ import { currentRequestSignals } from "./planner-safety/request.js";
 
 export const ORDER_VERIFICATION_CHANNELS: ReadonlySet<string> = new Set(["ig_dm", "tiktok"]);
 
-/** Messages compared per order before it goes to the merchant instead. */
+/**
+ * Wrong values a sender may send, across every order they ask about, before
+ * every later ask goes to the merchant instead. Pooled so a sender cannot reset
+ * it by naming another order.
+ */
 export const ORDER_VERIFICATION_MAX_ATTEMPTS = 5;
+
+/** Times the agent asks about one order before handing it to the merchant. */
+export const ORDER_VERIFICATION_MAX_ASKS = 3;
 
 // Requests that act on an order or disclose it. A plain shipping-status question
 // stays on the guest-safe read, which shows no personal detail.
@@ -24,42 +31,60 @@ const VERIFICATION_ASKS: ReadonlySet<RequestAsk> = new Set([
 ]);
 const VERIFICATION_REASONS: ReadonlySet<RequestReason> = new Set(["damaged", "defective", "wrong_item"]);
 
-export function requestNeedsOrderVerification(facts: RequestFacts | null | undefined): boolean {
+/** Whether the request asks for something done to an order: a refund, a change, a return. */
+export function asksToChangeOrder(facts: RequestFacts | null | undefined): boolean {
   if (!facts) return false;
   return VERIFICATION_ASKS.has(facts.ask)
-    || (facts.alternative !== null && VERIFICATION_ASKS.has(facts.alternative))
+    || (facts.alternative !== null && VERIFICATION_ASKS.has(facts.alternative));
+}
+
+export function requestNeedsOrderVerification(facts: RequestFacts | null | undefined): boolean {
+  if (!facts) return false;
+  return asksToChangeOrder(facts)
     || (facts.reason !== undefined && VERIFICATION_REASONS.has(facts.reason));
 }
 
+/** Values the sender may still have compared. A confirmed order spent one on its match. */
+export function orderVerificationAttemptsLeft(
+  records: ReadonlyArray<Pick<OrderVerificationRecord, "attempts" | "verifiedAt">>,
+): number {
+  const misses = records.reduce(
+    (total, record) => total + Math.max(0, record.attempts - (record.verifiedAt ? 1 : 0)),
+    0,
+  );
+  return Math.max(0, ORDER_VERIFICATION_MAX_ATTEMPTS - misses);
+}
+
 export type OrderVerificationState =
-  /** Confirmed: the sender may read and discuss this order. */
-  | { kind: "verified"; order: VerifiedOrderRef; method: "email" | "zip"; requestFacts: RequestFacts | null }
-  /** Asked too many times without a match: the merchant takes it from here. */
-  | { kind: "locked"; orderName: string }
-  /** Asked on this thread and not yet confirmed. */
-  | { kind: "asked"; orderName: string; attemptsRemaining: number }
+  /**
+   * Confirmed: the sender may read and discuss this order. `resumedRequest` is
+   * the request the agent asked about, set only on the turn the answer lands.
+   */
+  | { kind: "verified"; order: VerifiedOrderRef; method: "email" | "zip"; resumedRequest: RequestFacts | null }
+  /** Out of attempts, or asked as often as it may be: the merchant takes it from here. */
+  | { kind: "locked"; orderName: string | null }
+  /** Asked and not yet confirmed. */
+  | { kind: "asked"; orderName: string }
   /** Needs confirming and nothing asked yet; `orderName` is null until they name one. */
   | { kind: "ask"; orderName: string | null };
 
-function isLocked(record: OrderVerificationRecord): boolean {
-  return record.verifiedAt === null && record.attempts >= ORDER_VERIFICATION_MAX_ATTEMPTS;
-}
-
-function stateOf(record: OrderVerificationRecord): OrderVerificationState {
+function stateOf(
+  record: OrderVerificationRecord,
+  records: readonly OrderVerificationRecord[],
+  answeredNow: boolean,
+): OrderVerificationState {
   if (record.verifiedAt && record.orderId && record.method) {
     return {
       kind: "verified",
       order: { orderName: record.orderName, orderId: record.orderId },
       method: record.method,
-      requestFacts: record.requestFacts,
+      resumedRequest: answeredNow ? record.requestFacts : null,
     };
   }
-  if (isLocked(record)) return { kind: "locked", orderName: record.orderName };
-  return {
-    kind: "asked",
-    orderName: record.orderName,
-    attemptsRemaining: ORDER_VERIFICATION_MAX_ATTEMPTS - record.attempts,
-  };
+  if (orderVerificationAttemptsLeft(records) === 0 || record.asks >= ORDER_VERIFICATION_MAX_ASKS) {
+    return { kind: "locked", orderName: record.orderName };
+  }
+  return { kind: "asked", orderName: record.orderName };
 }
 
 // A reply that is part of answering ("hold on", "I don't have it") reads as no
@@ -81,9 +106,10 @@ function newest(records: readonly OrderVerificationRecord[]): OrderVerificationR
  * the review signal all read it, so they cannot disagree. Null on every thread
  * this does not apply to, which leaves that turn exactly as it was.
  *
- * A message that answered an ask decides the order before the classifier does:
- * a bare "94107" can be classified as order #94107, and the answer must resume
- * the order that was asked about.
+ * A message that answered an ask decides the order before the classifier does
+ * when it is the latest one: a bare "94107" can be classified as order #94107,
+ * and the answer must resume the order that was asked about. An answer earlier
+ * in the burst gives way to an order named after it.
  */
 export function orderVerificationState(ctx: AgentContext): OrderVerificationState | null {
   if (!ORDER_VERIFICATION_CHANNELS.has(ctx.thread.channelType)) return null;
@@ -94,27 +120,28 @@ export function orderVerificationState(ctx: AgentContext): OrderVerificationStat
   const answered = newest(records.filter(record => (
     record.answeredMessageId !== null && current.has(record.answeredMessageId)
   )));
-  if (answered) return stateOf(answered);
+  if (answered && answered.answeredMessageId === ctx.thread.latestCustomerMessageId) {
+    return stateOf(answered, records, true);
+  }
 
   const facts = currentRequestSignals(ctx)?.requestFacts ?? null;
   const requestedOrder = facts?.order ? normalizeOrderName(facts.order) : null;
 
   const named = requestedOrder ? records.find(record => record.orderName === requestedOrder) : undefined;
-  if (named) return stateOf(named);
+  if (named) return stateOf(named, records, named === answered);
+  if (answered && !requestedOrder) return stateOf(answered, records, true);
 
-  // Still answering the last ask on this thread, or locked out of it. Naming
-  // another order moves on to that one.
-  const askedHere = newest(records.filter(record => record.threadId === ctx.thread.id && !record.verifiedAt));
-  if (askedHere && !requestedOrder && continuesAsk(facts)) return stateOf(askedHere);
-
-  const verified = newest(records.filter(record => record.verifiedAt !== null));
-  if (verified && !requestedOrder) return stateOf(verified);
+  // The order this thread last asked about, unless the sender has named another
+  // or moved on to something else. A verified one stays readable here.
+  const latestHere = newest(records.filter(record => record.threadId === ctx.thread.id));
+  if (latestHere && !requestedOrder && (latestHere.verifiedAt !== null || continuesAsk(facts))) {
+    return stateOf(latestHere, records, false);
+  }
 
   if (!requestNeedsOrderVerification(facts)) return null;
-  // Locked out of one order, the sender's next one goes to the merchant too, so
-  // the attempt cap bounds the sender rather than each order number they try.
-  const lockedOut = newest(records.filter(isLocked));
-  return lockedOut ? stateOf(lockedOut) : { kind: "ask", orderName: requestedOrder };
+  return orderVerificationAttemptsLeft(records) === 0
+    ? { kind: "locked", orderName: requestedOrder }
+    : { kind: "ask", orderName: requestedOrder };
 }
 
 /** The orders this sender has confirmed, for scoping reads and the review signal. */

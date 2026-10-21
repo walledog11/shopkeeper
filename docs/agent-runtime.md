@@ -462,22 +462,28 @@ letter (F) is not reused.
 - **Q. An Instagram or TikTok sender confirms an order by its email or shipping
   zip.** When the sender has no linked Shopify customer and asks to change an
   order or reports a damaged, defective or wrong item
-  (`requestNeedsOrderVerification`), the agent asks for the order number and
-  then the email or zip on it, recording the ask with `await_order_verification`
-  (a quick-reply companion, so the ask can auto-send). The model never passes or
+  (`requestNeedsOrderVerification`), the agent asks which order, then for the
+  email or zip on it, recording each ask with `await_order_verification` (a
+  quick-reply companion, so the ask can auto-send). The model never passes or
   judges the answer: before planning, gateway code
   (`evaluateOrderVerificationAnswers`) compares each later customer message with
-  the order in Shopify and writes the `OrderVerification` row. A message that
-  carries neither costs nothing; one that carries a wrong value, several values,
-  or names an order Shopify does not have is the same miss, so nothing reveals
-  which detail was wrong or whether the order exists. Five misses lock the order,
-  and a locked sender's later order requests escalate as `order_unconfirmed`.
-  `orderVerificationState` is the one owner of where the sender stands. A
-  confirmed order is knowledge, not possession: it makes reading that order
-  advisory for `shopify_customer_unresolved` and authorizes no write, so a
-  refund or any other change still goes to the merchant, and the card says how
-  they confirmed it. Storefront chat keeps its emailed code (`authState`), which
-  this does not touch.
+  the order in Shopify and writes the `OrderVerification` row, which belongs to
+  the connected store and goes when it is disconnected. Only postal-shaped values
+  and emails count; an order number, price or time is not an answer, and a
+  message about another order costs nothing. Each value compared is one attempt
+  from five per sender across all their orders; a wrong value and an order
+  Shopify does not have are the same miss, so nothing reveals which detail was
+  wrong or whether the order exists. Out of attempts, or asked three times about
+  one order, the sender's asks escalate as `order_unconfirmed`.
+  `orderVerificationState` is the one owner of where the sender stands. The
+  request made before the ask resumes only on the turn the answer lands, and
+  counts there as the customer's request for routing. A confirmed order is
+  knowledge, not possession: a reply that reads only that order is advisory for
+  `shopify_customer_unresolved`, any write beside it keeps the signal blocking,
+  so a refund or any other change still goes to the merchant, and the card says
+  how they confirmed it. A customers/redact for an order's customer also removes
+  the conversation of the sender who confirmed it. Storefront chat keeps its
+  emailed code (`authState`), which this does not touch.
 
 ## Verification scope
 

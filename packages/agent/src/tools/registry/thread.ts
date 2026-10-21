@@ -91,9 +91,9 @@ export const THREAD_TOOL_DEFINITIONS = [
   defineTool({
     name: AWAIT_ORDER_VERIFICATION_TOOL,
     description:
-      "Record that your reply asks the customer to confirm an order is theirs by sending the email address or the shipping zip/postal code on it, so their next message is checked against the order. Call it beside the send_reply that asks. It sends nothing to the customer, and you never pass or judge the email or zip yourself.",
+      "Record that your reply asks the customer which order this is about, or to confirm an order is theirs by sending the email address or the shipping zip/postal code on it, so their next message is checked against the order. Call it beside the send_reply that asks. It sends nothing to the customer, and you never pass or judge the email or zip yourself.",
     fields: {
-      order_name: stringArg("The order number they named, e.g. #1043.", { required: true }),
+      order_name: stringArg("The order number they named, e.g. #1043. Leave it out while you are asking which order."),
     },
     category: "internal",
     group: "thread",

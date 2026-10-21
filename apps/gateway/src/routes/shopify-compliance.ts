@@ -119,7 +119,8 @@ async function selectCustomerData(
 ): Promise<CustomerDataSelection> {
   const shopifyCustomerId = stringId(payload.customer?.id);
   const email = customerEmail(payload);
-  if (!shopifyCustomerId && !email) {
+  const customerOrderIds = orderIds(payload);
+  if (!shopifyCustomerId && !email && customerOrderIds.length === 0) {
     return { customerIds: [], threadIds: [], attachmentRefs: [], messageCount: 0 };
   }
 
@@ -130,6 +131,11 @@ async function selectCustomerData(
         ...(email ? [{ platformId: { equals: email, mode: 'insensitive' as const } }] : []),
         ...(shopifyCustomerId
           ? [{ threads: { some: { organizationId, shopifyCustomerId } } }]
+          : []),
+        // A direct-message sender who confirmed one of these orders by its
+        // email or zip: their conversation carries that customer's details.
+        ...(customerOrderIds.length > 0
+          ? [{ orderVerifications: { some: { organizationId, verifiedAt: { not: null }, orderId: { in: customerOrderIds } } } }]
           : []),
       ],
     },
@@ -286,8 +292,8 @@ async function deleteSelectedCustomerData(
     await tx.storefrontChatVerification.deleteMany({
       where: { organizationId, orderId: { in: customerOrderIds } },
     });
-    // A direct-message sender who confirmed one of this customer's orders is a
-    // different Customer row, so its confirmation is found by the order.
+    // Confirmations of these orders, named directly; the selected senders' other
+    // rows also go with their Customer below.
     await tx.orderVerification.deleteMany({
       where: {
         organizationId,

@@ -1,7 +1,7 @@
 import type { AgentPlan, PlanSignal, PlanSignalSeverity, ProducedPlanSignalCode, RawToolCall } from "./types.js"
 import type { VerifiedOrderRef } from "./agent-context.js"
 import { isGuestOnlyTool, readsVerifiedOrder } from "./guest-policy.js"
-import { TOOL_DEFINITION_REGISTRY } from "./tools/registry/index.js"
+import { TOOL_CATEGORIES, TOOL_DEFINITION_REGISTRY } from "./tools/registry/index.js"
 
 // The one place a plan signal's English lives. Producers push a code, consumers
 // branch on that code and render this text without ever reading it, so
@@ -103,16 +103,18 @@ function severityFor(
     case "kb_no_match":
       return "advisory"
     // Plan-dependent: a reply written without touching customer or order data is
-    // unaffected by the link being absent, and neither is one that reads only an
+    // unaffected by the link being absent, and so is a reply that reads only an
     // order the sender verified (order-verification). Any other customer or order
-    // read still waits for the merchant.
-    case "shopify_customer_unresolved":
-      return rawToolCalls.some(toolCall => (
-        CUSTOMER_OR_ORDER_READ_TOOLS.has(toolCall.name)
-        && !readsVerifiedOrder(toolCall.name, toolCall.input, verifiedOrders)
-      ))
+    // read, and any write beside a read, still waits for the merchant: a verified
+    // order is read-only knowledge.
+    case "shopify_customer_unresolved": {
+      const reads = rawToolCalls.filter(toolCall => CUSTOMER_OR_ORDER_READ_TOOLS.has(toolCall.name))
+      if (reads.length === 0) return "advisory"
+      const writes = rawToolCalls.some(toolCall => TOOL_CATEGORIES[toolCall.name] === "action")
+      return writes || reads.some(toolCall => !readsVerifiedOrder(toolCall.name, toolCall.input, verifiedOrders))
         ? "blocking"
         : "advisory"
+    }
     // The agent never judges whether a photo is genuine, so compensation on a
     // damage claim always waits for the merchant. A reply alone does not.
     case "damage_photo_attached":

@@ -7,94 +7,135 @@ import { emailsMatch } from "./storefront-verification.js";
 // may be read all follow from the outcome it records. The model never sees what
 // it found, so it cannot relay which detail was wrong.
 
-// A real answer names one email or one postal code. A message carrying more is
-// a guess at several, so it is compared as a miss rather than at every value.
-const MAX_EMAILS = 1;
-const MAX_POSTAL_CANDIDATES = 2;
+// A real answer names one email or one postal code, perhaps both. A message
+// carrying more is a guess at several, so it is a miss without being compared.
+const MAX_VALUES_PER_MESSAGE = 2;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Prices, decimals, times, dates and ordinals carry digits and are never a code.
+const NOT_POSTAL_RE = /[$€£¥₹/:]|\d[.,]\d|^\d+(?:st|nd|rd|th|am|pm)$/i;
 
 /** Uppercase with spacing and punctuation removed; a ZIP+4 compares on its ZIP. */
 export function normalizePostalCode(value: string | null | undefined): string {
-  const compact = (value ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const compact = compactCode(value ?? "");
   return /^\d{9}$/.test(compact) ? compact.slice(0, 5) : compact;
+}
+
+function compactCode(value: string): string {
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
 function words(text: string): string[] {
   return text
     .split(/[\s,;]+/)
-    .map(word => word.replace(/^[("'[<]+|[)"'\].,!?:>]+$/g, ""))
+    .map(word => word.replace(/^[("'[<]+|[)"'\].,!?>]+$/g, ""))
     .filter(Boolean);
 }
 
+interface MessageValues {
+  emails: string[];
+  postal: string[];
+  /** Orders the message names, normalized. */
+  orders: string[];
+}
+
 /**
- * Postal codes in the message, each as the values it could be read as. A code
- * written in two parts ("SW1A 1AA", "H2Y 1Z5") is one candidate, not three.
- * The order's own number and anything in a link are never candidates.
+ * What a message offers as an answer. A postal code is a run of 3–10 digits,
+ * a letter-and-digit code of 5–7 characters, or one written in two parts
+ * ("94107 1234", "SW1A 1AA", "H2Y 1Z5"), which is one value. An order number
+ * ("#2001", "order 2001") is never one, nor is the asked order's own number.
  */
-function postalCandidates(tokens: readonly string[], orderDigits: string): string[][] {
-  const postal = tokens.map((token) => {
-    if (token.includes("@") || token.includes("/")) return null;
-    const compact = normalizePostalCode(token);
+function messageValues(text: string, orderName: string): MessageValues {
+  const asked = normalizeOrderName(orderName);
+  const askedDigits = compactCode(asked);
+  const tokens = words(text);
+  const emails = new Set<string>();
+  const orders: string[] = [];
+  const parts: Array<string | null> = tokens.map((token, index) => {
+    if (EMAIL_RE.test(token)) {
+      emails.add(token.toLowerCase());
+      return null;
+    }
+    const previous = (tokens[index - 1] ?? "").toLowerCase().replace(/[^a-z#]/g, "");
+    if (token.startsWith("#") || previous === "order" || previous === "#") {
+      const named = normalizeOrderName(token);
+      if (named !== "#") orders.push(named);
+      return null;
+    }
+    if (token.includes("@") || NOT_POSTAL_RE.test(token)) return null;
+    const compact = compactCode(token);
     if (!/\d/.test(compact) || compact.length < 2 || compact.length > 10) return null;
-    if (compact === orderDigits) return null;
+    if (compact === askedDigits) return null;
     return compact;
   });
-  const candidates: string[][] = [];
-  for (let index = 0; index < postal.length; index += 1) {
-    const part = postal[index];
+
+  const postal = new Set<string>();
+  for (let index = 0; index < parts.length; index += 1) {
+    const part = parts[index];
     if (!part) continue;
-    const next = postal[index + 1];
-    const joined = next ? `${part}${next}` : null;
-    if (joined && /[A-Z]/.test(joined) && joined.length <= 10) {
-      candidates.push([joined, part, next!]);
+    const next = parts[index + 1];
+    if (next && joinsAsOneCode(part, next)) {
+      postal.add(normalizePostalCode(`${part}${next}`));
       index += 1;
       continue;
     }
-    if (part.length >= 3) candidates.push([part]);
+    const lettered = /[A-Z]/.test(part);
+    if (lettered ? part.length >= 5 && part.length <= 7 : part.length >= 3) postal.add(normalizePostalCode(part));
   }
-  return candidates;
+  return { emails: [...emails], postal: [...postal], orders };
 }
 
-/** Whether a message carries an email or postal code at all, whatever the order holds. */
+function joinsAsOneCode(first: string, second: string): boolean {
+  if (/[A-Z]/.test(first) || /[A-Z]/.test(second)) {
+    const length = first.length + second.length;
+    return first.length >= 2 && first.length <= 4 && second.length >= 2 && second.length <= 4
+      && length >= 5 && length <= 7;
+  }
+  return first.length >= 3 && first.length <= 5 && second.length >= 3 && second.length <= 4;
+}
+
+/** Whether a message answers the ask for this order at all, whatever the order holds. */
 export function carriesOrderVerificationAnswer(text: string, orderName: string): boolean {
-  return matchOrderVerificationAnswer({ text, orderName, order: null }).outcome !== "no_candidate";
+  const values = messageValues(text, orderName);
+  if (values.orders.some(order => order !== normalizeOrderName(orderName))) return false;
+  return values.emails.length + values.postal.length > 0;
 }
 
 export type OrderVerificationAnswer =
-  | { outcome: "matched"; method: "email" | "zip" }
+  /** `charged` values were compared, one of which confirmed the order. */
+  | { outcome: "matched"; method: "email" | "zip"; charged: number }
   /** Carried an email or postal code that did not confirm the order. */
-  | { outcome: "mismatch" }
-  /** Carried neither, so it is not an answer and costs no attempt. */
+  | { outcome: "mismatch"; charged: number }
+  /** Carried neither, or is about another order, so it costs nothing. */
   | { outcome: "no_candidate" };
 
 /**
  * Compares one customer message with the order asked about. `order` is Shopify's
  * answer to a lookup by that name: null, or an order under another name, reads
- * exactly like a wrong answer.
+ * exactly like a wrong answer. `budget` is how many values the sender may still
+ * have compared; each value compared costs one, so a message never tests more
+ * values than the sender has left.
  */
 export function matchOrderVerificationAnswer(input: {
   text: string;
   orderName: string;
   order: { name: string | null; email: string | null; zip: string | null } | null;
+  budget: number;
 }): OrderVerificationAnswer {
-  const tokens = words(input.text);
-  const orderName = normalizeOrderName(input.orderName);
-  const orderDigits = orderName.replace(/[^A-Z0-9]/g, "");
-  const emails = tokens.filter(token => EMAIL_RE.test(token));
-  const postal = postalCandidates(tokens.filter(token => !EMAIL_RE.test(token)), orderDigits);
-  if (emails.length === 0 && postal.length === 0) return { outcome: "no_candidate" };
-  const order = input.order && normalizeOrderName(input.order.name ?? "") === orderName ? input.order : null;
-  if (emails.length > MAX_EMAILS || postal.length > MAX_POSTAL_CANDIDATES || !order) {
-    return { outcome: "mismatch" };
+  if (!carriesOrderVerificationAnswer(input.text, input.orderName)) return { outcome: "no_candidate" };
+  const { emails, postal } = messageValues(input.text, input.orderName);
+  const offered = emails.length + postal.length;
+  const budget = Math.max(0, input.budget);
+  if (offered > Math.min(MAX_VALUES_PER_MESSAGE, budget)) {
+    return { outcome: "mismatch", charged: Math.min(offered, budget) };
   }
-
+  const orderName = normalizeOrderName(input.orderName);
+  const order = input.order && normalizeOrderName(input.order.name ?? "") === orderName ? input.order : null;
+  if (!order) return { outcome: "mismatch", charged: offered };
   if (emails.some(email => emailsMatch(email, order.email))) {
-    return { outcome: "matched", method: "email" };
+    return { outcome: "matched", method: "email", charged: offered };
   }
   const zip = normalizePostalCode(order.zip);
-  if (zip && postal.some(values => values.includes(zip))) {
-    return { outcome: "matched", method: "zip" };
-  }
-  return { outcome: "mismatch" };
+  if (zip && postal.includes(zip)) return { outcome: "matched", method: "zip", charged: offered };
+  return { outcome: "mismatch", charged: offered };
 }

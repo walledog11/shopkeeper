@@ -145,19 +145,19 @@ function buildOrderVerificationSection(state: OrderVerificationState | null | un
     case "ask":
       body = state.orderName
         ? `Nothing here shows the sender placed order ${state.orderName}. Before you discuss it or propose anything for it, call await_order_verification with order_name ${state.orderName}, then send_reply asking for the email address or the shipping zip/postal code on that order. Do not read the order yet: their answer is checked for you.`
-        : "The sender is asking for help with an order but has not said which one, and nothing here shows they placed it. Ask for the order number, and do not read, discuss or propose anything for any order yet.";
+        : "The sender is asking for help with an order but has not said which one, and nothing here shows they placed it. Call await_order_verification with no order_name, then send_reply asking for the order number. Do not read, discuss or propose anything for any order yet.";
       break;
     case "asked":
-      body = `You asked the sender to confirm order ${state.orderName} with its email address or shipping zip, and nothing they have sent confirms it. Call await_order_verification with order_name ${state.orderName} again, then send_reply asking once more, briefly, for the email or shipping zip on that order. If they sent one, say only that you could not confirm the order with it: never say which detail was wrong or whether the order exists. Do not discuss the order.`;
+      body = `You asked the sender to confirm order ${state.orderName} with its email address or shipping zip, and nothing they have sent confirms it. Call await_order_verification with order_name ${state.orderName} again, then send_reply asking once more, briefly, for the email or shipping zip on that order. If they sent one, say only that you could not confirm the order with it: never say which detail was wrong or whether the order exists. If they say they cannot give either, do not ask again: call escalate_to_human. Do not discuss the order.`;
       break;
     case "locked":
-      body = `The sender could not confirm order ${state.orderName} after several tries. Do not ask again and do not discuss the order. Call escalate_to_human.`;
+      body = `The sender could not confirm ${state.orderName ? `order ${state.orderName}` : "an order"} is theirs, and may not be asked again. Do not ask, and do not discuss any order. Call escalate_to_human.`;
       break;
     case "verified": {
       const how = state.method === "zip" ? "shipping zip" : "email address";
-      const ask = state.requestFacts ? RESUMED_ASK_LABELS[state.requestFacts.ask] : undefined;
-      const reason = state.requestFacts?.reason ? ` (reason: ${state.requestFacts.reason.replace(/_/g, " ")})` : "";
-      const resumed = ask ? ` When you asked them to confirm it, they wanted ${ask}${reason}; carry on with that request.` : "";
+      const ask = state.resumedRequest ? RESUMED_ASK_LABELS[state.resumedRequest.ask] : undefined;
+      const reason = state.resumedRequest?.reason ? ` (reason: ${state.resumedRequest.reason.replace(/_/g, " ")})` : "";
+      const resumed = ask ? ` Their message just confirmed it; before that they wanted ${ask}${reason}, so carry on with that request.` : "";
       body = `The sender confirmed order ${state.order.orderName} by its ${how}. You may read it with get_order_by_name (order_name ${state.order.orderName}) and discuss it with them; it is the only order they have shown is theirs. It shows they placed the order, not who they are, and authorizes no change by itself.${resumed}`;
       break;
     }

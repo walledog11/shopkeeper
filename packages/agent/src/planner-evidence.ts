@@ -1,8 +1,8 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { AgentContext } from "./agent-context.js";
-import { classifierAlignmentState } from "./classifier-signals.js";
+import { classifierAlignmentState, type RequestFacts } from "./classifier-signals.js";
 import { AWAIT_CUSTOMER_PHOTO_TOOL, type DamageEvidenceState } from "./damage-evidence.js";
-import type { OrderVerificationState } from "./order-verification.js";
+import { asksToChangeOrder, type OrderVerificationState } from "./order-verification.js";
 import { DAMAGE_EVIDENCE_TOOLS } from "./plan-signals.js";
 import { currentRequestSignals } from "./planner-safety/request.js";
 import { outstandingMerchantFollowUps } from "./merchant-follow-up.js";
@@ -103,10 +103,11 @@ function damagePhotoMissing(input: BuildPlanRoutingEvidenceInput): boolean {
   return true;
 }
 
-// Nothing about an order is proposed until the sender shows it is theirs, so a
-// reply asking which order, or asking them to confirm it, is the whole plan.
-function awaitsOrderConfirmation(input: Pick<BuildPlanRoutingEvidenceInput, "orderVerification">): boolean {
-  return input.orderVerification?.kind === "ask" || input.orderVerification?.kind === "asked";
+// On the turn a sender's answer confirms their order, their message is the
+// email or zip and the request is the one they made before: it is still theirs
+// to route on, so a reply that only declines it goes to the merchant.
+function resumedRequest(input: Pick<BuildPlanRoutingEvidenceInput, "orderVerification">): RequestFacts | null {
+  return input.orderVerification?.kind === "verified" ? input.orderVerification.resumedRequest : null;
 }
 
 function planExceedsCompensationCap(
@@ -122,11 +123,15 @@ function planExceedsCompensationCap(
   });
 }
 
-function hasExplicitCompensationRequest(ctx: AgentContext): boolean {
-  const signals = currentRequestSignals(ctx);
+function hasExplicitCompensationRequest(
+  input: Pick<BuildPlanRoutingEvidenceInput, "ctx" | "orderVerification">,
+): boolean {
+  const signals = currentRequestSignals(input.ctx);
+  const resumed = resumedRequest(input);
   return Boolean(signals?.intents.compensation_request
     || (signals?.intents.mutative_request && !signals.intents.policy_question
-      && (signals.requestFacts?.ask === "refund" || signals.requestFacts?.alternative === "refund")));
+      && (signals.requestFacts?.ask === "refund" || signals.requestFacts?.alternative === "refund"))
+    || resumed?.ask === "refund" || resumed?.alternative === "refund");
 }
 
 function requestedWriteEscalationCode(input: BuildPlanRoutingEvidenceInput): PlanRoutingEvidenceCode | null {
@@ -139,10 +144,7 @@ function requestedWriteEscalationCode(input: BuildPlanRoutingEvidenceInput): Pla
   if (damagePhotoMissing(input)) return "damage_photo_missing";
   if (input.orderVerification?.kind === "locked") return "order_unconfirmed";
   const shape = planShape(rawToolCalls);
-  if (
-    !shape.hasAction && !shape.hasEscalation && !shape.hasEvidenceRequest
-    && !awaitsOrderConfirmation(input) && hasExplicitCompensationRequest(ctx)
-  ) {
+  if (!shape.hasAction && !shape.hasEscalation && !shape.hasEvidenceRequest && hasExplicitCompensationRequest(input)) {
     return "compensation_exception";
   }
   return null;
@@ -257,12 +259,15 @@ export function buildPlanRoutingEvidence(
 
   const shape = planShape(input.rawToolCalls);
   if (
-    state === "aligned"
-    && (input.ctx.classifierSignals?.intents.mutative_request || input.ctx.classifierSignals?.intents.compensation_request)
+    (
+      (state === "aligned" && (
+        input.ctx.classifierSignals?.intents.mutative_request || input.ctx.classifierSignals?.intents.compensation_request
+      ))
+      || asksToChangeOrder(resumedRequest(input))
+    )
     && !shape.hasAction
     && !shape.hasEscalation
     && !shape.hasEvidenceRequest
-    && !awaitsOrderConfirmation(input)
   ) {
     signalCodes.push("mutative_intent_no_action");
   }

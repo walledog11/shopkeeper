@@ -94,7 +94,7 @@ const DAMAGE_PHOTO_ASK_REFUSAL =
   "Not sent. The customer reports a damaged or defective item and has not sent a photo. Call await_customer_photo with the reply that asks for one, and propose no compensation.";
 
 const ORDER_VERIFICATION_ASK_REFUSAL =
-  "Not sent. The sender has not confirmed this order is theirs. Call await_order_verification with the order number beside the reply that asks for the email address or shipping zip on the order, and propose nothing for the order yet.";
+  "Not sent. The sender has not confirmed an order is theirs. Call await_order_verification beside the reply that asks: with order_name when asking for the email address or shipping zip on that order, without it when asking which order. Propose nothing for the order yet, or call escalate_to_human if they cannot give either.";
 
 const TERSE_REFERENT = /^(?:yes|yeah|yep|yup|ok(?:ay)?|sure|go ahead|do it|that one|it)[.!?\s]*$/i;
 
@@ -231,13 +231,12 @@ export async function planAgent(
   // discussed or proposed, a photo request included.
   const orderVerification = customerOriginated ? orderVerificationState(ctx) : null;
   const orderUnconfirmed = orderVerification !== null && orderVerification.kind !== "verified";
-  const asksOrderVerification = orderVerification?.kind === "asked"
-    || (orderVerification?.kind === "ask" && orderVerification.orderName !== null);
+  const asksOrderVerification = orderVerification?.kind === "asked" || orderVerification?.kind === "ask";
   const damageEvidence = customerOriginated && !orderUnconfirmed
     ? damageEvidenceState(
       ctx,
       resolvedSettings,
-      orderVerification?.kind === "verified" ? orderVerification.requestFacts : null,
+      orderVerification?.kind === "verified" ? orderVerification.resumedRequest : null,
     )
     : null;
   const { stable, volatile } = buildSystemPromptParts(ctx, settings, {
@@ -355,7 +354,9 @@ export async function planAgent(
     }
     if (
       asksOrderVerification
-      && !proposal.rawToolCalls.some(call => call.name === AWAIT_ORDER_VERIFICATION_TOOL)
+      && !proposal.rawToolCalls.some(call => (
+        call.name === AWAIT_ORDER_VERIFICATION_TOOL || call.name === "escalate_to_human"
+      ))
     ) {
       return ORDER_VERIFICATION_ASK_REFUSAL;
     }

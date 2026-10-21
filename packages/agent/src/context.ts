@@ -340,13 +340,13 @@ export async function buildContext(
   // What this direct-message sender has done to confirm their orders. A failed
   // load reads as nothing confirmed, which leaves every order read waiting for
   // the merchant exactly as before verification existed.
-  const orderVerificationsPromise = ORDER_VERIFICATION_CHANNELS.has(thread.channelType)
+  const orderVerificationsPromise = ORDER_VERIFICATION_CHANNELS.has(thread.channelType) && shopifyIntegration
     ? loadNonFatalContext<OrderVerificationRecord[]>("order_verifications", scope, [], async () => {
         const rows = await db.orderVerification.findMany({
-          where: { organizationId: orgId, customerId: thread.customer.id },
+          where: { organizationId: orgId, customerId: thread.customer.id, integrationId: shopifyIntegration.id },
           select: {
-            orderName: true, orderId: true, method: true, threadId: true,
-            requestedAt: true, attempts: true, answeredMessageId: true, verifiedAt: true, requestFacts: true,
+            orderName: true, orderId: true, method: true, threadId: true, requestedAt: true,
+            asks: true, attempts: true, answeredMessageId: true, verifiedAt: true, requestFacts: true,
           },
         });
         return rows.map(({ requestFacts, ...row }) => ({

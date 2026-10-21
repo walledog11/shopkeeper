@@ -229,6 +229,9 @@ export interface OrderVerificationRecord {
   /** The thread whose agent asked last. */
   threadId: string | null;
   requestedAt: Date;
+  /** Times the agent has asked about this order. */
+  asks: number;
+  /** Values compared for this order: one per email or zip a message carried. */
   attempts: number;
   /** The newest customer message that carried an email or zip and was compared. */
   answeredMessageId: string | null;
