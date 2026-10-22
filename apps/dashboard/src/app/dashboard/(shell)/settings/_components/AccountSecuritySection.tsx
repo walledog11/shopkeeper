@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { appPrimaryButtonClassName } from "@/lib/ui/app-button-styles"
 import { Switch } from "@/components/ui/switch"
 import {
   GLASS_SETTINGS_ACTION,
@@ -29,7 +30,7 @@ import {
 import { SettingsTile, settingsFieldClassName } from "./SettingsTile"
 
 const passwordFieldClassName =
-  "h-11 rounded-xl border border-stone-900/12 bg-[#f6f2eb] text-[#2b2118] shadow-none placeholder:text-stone-400 focus-visible:border-[#2b2118]/25 focus-visible:ring-2 focus-visible:ring-[#2b2118]/8"
+  "h-11 rounded-xl border border-stone-900/12 bg-white text-foreground shadow-none placeholder:text-stone-400 focus-visible:border-foreground/25 focus-visible:ring-2 focus-visible:ring-foreground/8"
 
 type RemoteSession = {
   id: string
@@ -344,7 +345,7 @@ function PasswordEditor({
           <Button
             type="submit"
             disabled={busy || !canSubmit}
-            className="bg-[#2b2118] text-[#f6f2eb] hover:bg-[#1a120c]"
+            className={appPrimaryButtonClassName}
           >
             {busy ? <Loader2 className="size-4 animate-spin" /> : "Save password"}
           </Button>

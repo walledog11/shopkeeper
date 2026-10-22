@@ -2,6 +2,7 @@ import { fulfillmentLabel, formatMoney, formatShortDate } from "./formatters"
 import { ProductImage } from "./ProductImage"
 import { SectionHeader } from "./SectionHeader"
 import { cn } from "@/lib/ui/cn"
+import { merchantSandInkHoverClass, merchantSandSurfaceClass } from "@/lib/ui/merchant-palette"
 import { needsYouMetaPillClassName } from "@/app/dashboard/_components/home/needs-you-card-styles"
 import type { ShopifyOrder } from "@/types/shopify"
 
@@ -52,7 +53,7 @@ export function OrderList({
         </div>
       )}
 
-      <div className="rounded-2xl bg-[#f5ebe0] p-3">
+      <div className={cn("rounded-md p-3", merchantSandSurfaceClass)}>
         <div className="space-y-2">
           {order.line_items.map((item, index) => {
             const skuParts = [
@@ -111,7 +112,8 @@ export function OrderList({
             const label = orderLabel(item.name)
             const pillClass = cn(
               needsYouMetaPillClassName,
-              "h-9 shrink-0 px-3 text-xs font-semibold text-[#1a1a1a] bg-[#f5ebe0] hover:bg-[#efe4d6]",
+              "h-9 shrink-0 px-3 text-xs font-semibold",
+              merchantSandInkHoverClass,
             )
             return href ? (
               <a

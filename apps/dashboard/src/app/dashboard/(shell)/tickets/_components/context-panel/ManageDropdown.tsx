@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { MoreHorizontal } from "lucide-react"
 import type { ReactNode } from "react"
 import { cn } from "@/lib/ui/cn"
+import { merchantSandInkClass } from "@/lib/ui/merchant-palette"
 import {
   contextIconButtonClassName,
   contextMenuClassName,
@@ -47,7 +48,7 @@ export function ManageDropdown({ items }: ManageDropdownProps) {
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className={cn(contextIconButtonClassName, open && "bg-[#f5ebe0] text-[#1a1a1a]")}
+        className={cn(contextIconButtonClassName, open && merchantSandInkClass)}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="Manage customer"

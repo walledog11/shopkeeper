@@ -18,7 +18,7 @@ const headerSearchShellBase = cn("rounded-xl", GLASS_PILL_SURFACE)
 
 const headerSearchExpandedShellClass = cn(
   headerSearchShellBase,
-  "shadow-[0_16px_48px_rgba(43,33,24,0.18)]",
+  "shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_8px_24px_-4px_rgba(27,26,25,0.12),0_24px_56px_-12px_rgba(27,26,25,0.18)]",
 )
 
 interface HeaderSearchProps {

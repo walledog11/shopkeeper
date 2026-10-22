@@ -3,6 +3,7 @@ import { needsYouSoftShadowClassName } from "@/app/dashboard/_components/home/ne
 import {
   merchantInkClass,
   merchantMutedClass,
+  merchantSandHoverClass,
   merchantSandSurfaceClass,
 } from "@/lib/ui/merchant-palette"
 
@@ -24,12 +25,13 @@ export const contextGhostButtonClassName = cn(
 )
 
 export const contextPrimaryButtonClassName = cn(
-  "inline-flex h-9 items-center justify-center gap-1.5 rounded-2xl bg-[#1a1a1a] px-3",
+  "inline-flex h-9 items-center justify-center gap-1.5 rounded-2xl bg-primary px-3",
   "text-xs font-semibold text-white transition-colors hover:bg-[#1a1a1a]/90 disabled:opacity-40",
 )
 
 export const contextIconButtonClassName = cn(
-  "flex size-9 items-center justify-center rounded-2xl transition-colors hover:bg-[#f5ebe0] hover:text-[#1a1a1a]",
+  "flex size-9 items-center justify-center rounded-2xl transition-colors",
+  merchantSandHoverClass,
   merchantMutedClass,
 )
 
@@ -41,8 +43,7 @@ export const contextMenuClassName = cn(
 export const contextMenuItemClassName = cn(
   "flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium transition-colors",
   merchantInkClass,
-  merchantSandSurfaceClass,
-  "hover:bg-[#f5ebe0]",
+  "hover:bg-[#ebeae6]",
 )
 
 export const contextMenuDangerClassName = cn(

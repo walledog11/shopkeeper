@@ -5,6 +5,7 @@ import useSWR from "swr"
 import { fetcher } from "@/lib/api/fetcher"
 import { locationString } from "@/lib/format/shopify"
 import { cn } from "@/lib/ui/cn"
+import { merchantSandInkClass } from "@/lib/ui/merchant-palette"
 import { needsYouMetaPillClassName } from "@/app/dashboard/_components/home/needs-you-card-styles"
 import type { Thread } from "@/types"
 import { useShopifyCustomer } from "../context-panel/useShopifyCustomer"
@@ -157,7 +158,7 @@ export default function ConversationContextBar({
               className={cn(
                 needsYouMetaPillClassName,
                 "h-9 min-w-0 flex-1 justify-center gap-1 px-2 transition-colors hover:bg-white/90 sm:h-10 sm:flex-none sm:gap-1.5 sm:px-3",
-                isOpen ? "bg-[#f5ebe0] text-[#1a1a1a]" : PILL_TONE[fact.tone],
+                isOpen ? merchantSandInkClass : PILL_TONE[fact.tone],
               )}
             >
               <Icon className="size-3.5 shrink-0 opacity-70" />

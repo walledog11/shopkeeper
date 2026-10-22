@@ -16,6 +16,8 @@ type MarketingAuthShellProps = AuthShellBaseProps & {
   title: string;
   description: string;
   prompt: "signIn" | "signUp";
+  /** When false, hides the sign-in / sign-up cross-link under the form. */
+  showAlternateAccountLink?: boolean;
 };
 
 type AppAuthShellProps = AuthShellBaseProps & {
@@ -32,6 +34,7 @@ function MarketingAuthShell({
   children,
   contentClassName,
   prompt,
+  showAlternateAccountLink = true,
 }: MarketingAuthShellProps) {
   const isSignInPrompt = prompt === "signIn";
 
@@ -52,15 +55,17 @@ function MarketingAuthShell({
 
           <div className={cn("auth-clerk-root w-full min-w-0", contentClassName)}>{children}</div>
 
-          <p className="mt-7 text-center text-sm text-[color:var(--m-ink-2)]">
-            {isSignInPrompt ? "Already have an account?" : "Don't have an account?"}{" "}
-            <Link
-              href={isSignInPrompt ? "/login" : "/signup"}
-              className="rounded-sm font-medium text-[color:var(--m-ink)] underline decoration-[color:var(--m-line-strong)] underline-offset-4 transition-colors hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[color:var(--m-focus)]"
-            >
-              {isSignInPrompt ? "Sign in" : "Sign up"}
-            </Link>
-          </p>
+          {showAlternateAccountLink ? (
+            <p className="mt-7 text-center text-sm text-[color:var(--m-ink-2)]">
+              {isSignInPrompt ? "Already have an account?" : "Don't have an account?"}{" "}
+              <Link
+                href={isSignInPrompt ? "/login" : "/signup"}
+                className="rounded-sm font-medium text-[color:var(--m-ink)] underline decoration-[color:var(--m-line-strong)] underline-offset-4 transition-colors hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[color:var(--m-focus)]"
+              >
+                {isSignInPrompt ? "Sign in" : "Sign up"}
+              </Link>
+            </p>
+          ) : null}
         </div>
       </main>
     </div>
@@ -74,7 +79,7 @@ function AppAuthShell({
   contentClassName,
 }: AppAuthShellProps) {
   return (
-    <div className="dashboard-shell m-grain flex min-h-screen flex-col bg-[#f6f2eb] font-sans text-[#2b2118]">
+    <div className="dashboard-shell flex min-h-screen flex-col bg-background font-sans text-foreground">
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-5 py-8 sm:px-6">
         <AuthLogo className="mb-10" />
 
@@ -82,7 +87,7 @@ function AppAuthShell({
           {(title || description) && (
             <div className="mb-5 space-y-1">
               {title ? (
-                <h1 className="text-lg font-semibold tracking-tight text-[#2b2118]">{title}</h1>
+                <h1 className="text-lg font-semibold tracking-tight text-foreground">{title}</h1>
               ) : null}
               {description ? (
                 <p className="text-sm text-stone-500">{description}</p>

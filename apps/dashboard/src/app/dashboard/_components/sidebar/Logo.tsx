@@ -19,7 +19,7 @@ export function Logo({
       aria-label="Shopkeeper"
       onClick={onClick}
       className={cn(
-        "flex items-center shrink-0 text-[#2b2118] transition-colors hover:text-[#2b2118]/75",
+        "flex items-center shrink-0 text-foreground transition-colors hover:text-foreground/75",
         iconOnly
           ? cn("justify-center", inPill ? "p-0" : "p-1 mr-2")
           : "gap-2",
