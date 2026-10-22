@@ -1,6 +1,5 @@
 import { HeroMedia } from "./HeroMedia";
 import { MarketingHandoffLink } from "./MarketingHandoffLink";
-import { SectionLabel } from "./SectionLabel";
 import { marketingSectionBodyClass, marketingSectionTitleClass } from "./marketingUi";
 
 export function CustomerSupportShowcase() {
@@ -12,7 +11,6 @@ export function CustomerSupportShowcase() {
     >
       <div className="relative mx-auto max-w-6xl scroll-mt-28">
         <div className="mb-10 text-center sm:mb-12">
-          <SectionLabel>Customer messages</SectionLabel>
           <h2
             id="customer-support-showcase-heading"
             className={`${marketingSectionTitleClass} mx-auto max-w-[22ch]`}

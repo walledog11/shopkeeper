@@ -39,12 +39,15 @@ export function CTA() {
           Shopkeeper is in development. Join the waitlist and be first to hear
           when early access opens.
         </p>
-        <div className="flex flex-col items-center justify-center gap-3 sm:flex-row sm:items-start">
-          <WaitlistForm source="footer" dark />
-          <ButtonLink href="/#workflow" variant="ghost" size="lg" className="sm:mt-1">
-            See what you can ask
-          </ButtonLink>
-        </div>
+        <WaitlistForm
+          source="footer"
+          dark
+          secondaryAction={
+            <ButtonLink href="/#workflow" variant="ghost" size="lg" className="sm:mt-1">
+              See what you can ask
+            </ButtonLink>
+          }
+        />
       </Reveal>
     </section>
   );

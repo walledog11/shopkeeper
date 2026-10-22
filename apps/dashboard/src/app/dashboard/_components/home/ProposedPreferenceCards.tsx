@@ -13,6 +13,7 @@ import {
   NeedsYouCardShell,
 } from "./needs-you-card-ui"
 import { needsYouSecondaryButtonClassName } from "./needs-you-card-styles"
+import { appPrimaryButtonClassName } from "@/lib/ui/app-button-styles"
 
 export function ProposedPreferenceCards({
   items,
@@ -84,7 +85,7 @@ export function ProposedPreferenceCards({
               type="button"
               onClick={() => void resolvePreference(item.id, "confirm")}
               disabled={busyId !== null}
-              className="w-full bg-[#2b2118] text-[#f6f2eb] hover:bg-[#1a120c] sm:w-auto"
+              className={appPrimaryButtonClassName}
             >
               {busyId === item.id ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
               Use this preference

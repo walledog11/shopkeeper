@@ -1,15 +1,15 @@
 body:has(.dashboard-shell),
 body:has(.dashboard-shell) * {
-  scrollbar-color: rgba(43, 33, 24, 0.22) transparent;
+  scrollbar-color: rgba(27, 26, 25, 0.22) transparent;
 }
 body:has(.dashboard-shell) ::-webkit-scrollbar-thumb {
-  background: rgba(43, 33, 24, 0.22);
+  background: rgba(27, 26, 25, 0.22);
 }
 body:has(.dashboard-shell) ::-webkit-scrollbar-thumb:hover {
-  background: rgba(43, 33, 24, 0.34);
+  background: rgba(27, 26, 25, 0.34);
 }
 body:has(.dashboard-shell) .custom-scrollbar.is-scrolling {
-  scrollbar-color: rgba(43, 33, 24, 0.22) transparent;
+  scrollbar-color: rgba(27, 26, 25, 0.22) transparent;
 }
 
 html,
@@ -68,22 +68,9 @@ body:has(.dashboard-shell) [role="button"]:not([data-slot="button"]):focus-visib
   to { background-position: 200% 0; }
 }
 
-/* Frosted nav pills — explicit blur + opacity so they never collapse to solid white. */
+/* Nav/search pills — solid fill; frosted translucency vanished on white `--background`. */
 .dashboard-glass-pill {
-  background: rgba(255, 255, 255, 0.88);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
-  backdrop-filter: blur(28px) saturate(180%);
-}
-
-@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
-  .dashboard-glass-pill {
-    background: rgba(255, 255, 255, 0.78);
-  }
-
-  .dashboard-glass-pill:hover,
-  .dashboard-glass-pill:focus-within {
-    background: rgba(255, 255, 255, 0.88);
-  }
+  background: #ffffff;
 }
 
 /* Custom Scrollbar */
@@ -105,9 +92,9 @@ body:has(.dashboard-shell) [role="button"]:not([data-slot="button"]):focus-visib
 .needs-you-shimmer {
   background-image: linear-gradient(
     90deg,
-    rgba(43, 33, 24, 0.04) 0%,
-    rgba(43, 33, 24, 0.1) 50%,
-    rgba(43, 33, 24, 0.04) 100%
+    rgba(27, 26, 25, 0.04) 0%,
+    rgba(27, 26, 25, 0.1) 50%,
+    rgba(27, 26, 25, 0.04) 100%
   );
   background-size: 200% 100%;
   animation: needs-you-shimmer 1.8s ease-in-out infinite;

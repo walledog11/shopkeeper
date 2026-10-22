@@ -10,15 +10,7 @@ import { getAuthClerkAppearance } from "../../_components/clerk-appearance";
 export function LoginPageClient() {
   const { isLoaded, isSignedIn } = useUser();
 
-  if (!isLoaded) {
-    return (
-      <AuthShell variant="app">
-        <AuthLoadingCard />
-      </AuthShell>
-    );
-  }
-
-  if (isSignedIn) {
+  if (isLoaded && isSignedIn) {
     return (
       <AuthShell variant="app">
         <AccountActionsCard backHref="/dashboard" backLabel="Back to dashboard" />
@@ -28,22 +20,24 @@ export function LoginPageClient() {
 
   return (
     <AuthShell
-      panel="simple"
-      backHref="/"
-      backLabel="Back to home"
-      title="Sign in"
-      description="Enter your email to access your workspace."
+      prompt="signUp"
+      title="Welcome back"
+      description="Sign in to your Shopkeeper workspace."
     >
-      <SignIn
-        routing="hash"
-        signUpUrl="/signup"
-        fallbackRedirectUrl="/dashboard"
-        appearance={getAuthClerkAppearance({
-          header: "hidden",
-          headerTitle: "hidden",
-          headerSubtitle: "hidden",
-        })}
-      />
+      {!isLoaded ? (
+        <AuthLoadingCard variant="form" />
+      ) : (
+        <SignIn
+          routing="hash"
+          signUpUrl="/signup"
+          fallbackRedirectUrl="/dashboard"
+          appearance={getAuthClerkAppearance({
+            header: "hidden",
+            headerTitle: "hidden",
+            headerSubtitle: "hidden",
+          })}
+        />
+      )}
     </AuthShell>
   );
 }

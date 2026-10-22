@@ -10,6 +10,7 @@ import { CreditCard, Loader2, ExternalLink, CheckCircle2, AlertTriangle, XCircle
 import { Pulse } from "@/app/dashboard/_components/skeletons/Pulse"
 import { GLASS_SETTINGS_ACTION, SOLID_SETTINGS_TILE } from "@/lib/ui/glass-card-styles"
 import { cn } from "@/lib/ui/cn"
+import { appPrimaryButtonClassName } from "@/lib/ui/app-button-styles"
 import { SettingsTile } from "./SettingsTile"
 
 interface BillingInfo {
@@ -56,8 +57,7 @@ const PLANS = [
   { tier: "pro", name: "Pro", price: "$49", blurb: "For higher conversation volume and a second seat." },
 ] as const
 
-const settingsPrimaryButtonClass =
-  "w-full bg-[#2b2118] text-[#f6f2eb] hover:bg-[#1a120c] sm:w-auto"
+const settingsPrimaryButtonClass = appPrimaryButtonClassName
 
 function PlanPicker() {
   const [tier, setTier] = useState<(typeof PLANS)[number]["tier"]>("pro")

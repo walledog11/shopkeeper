@@ -1078,6 +1078,36 @@ html:has(.m-page) {
   text-align: left;
 }
 
+.m-waitlist--with-secondary {
+  max-width: 48rem;
+  margin-inline: auto;
+  text-align: center;
+}
+
+.m-waitlist-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+@media (min-width: 640px) {
+  .m-waitlist-top {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: center;
+  }
+}
+
+.m-waitlist--with-secondary .m-waitlist-fields {
+  width: 100%;
+  max-width: 460px;
+}
+
+.m-waitlist-secondary {
+  flex-shrink: 0;
+}
+
 .m-waitlist-fields {
   display: flex;
   align-items: center;
@@ -1116,7 +1146,7 @@ html:has(.m-page) {
   line-height: 1.6;
 }
 .m-waitlist-note a { text-decoration: underline; text-underline-offset: 3px; }
-.m-waitlist-opt-in { display: flex; align-items: flex-start; justify-content: center; gap: 8px; margin-top: 12px; color: var(--m-ink-2); font-size: 12px; line-height: 1.6; cursor: pointer; }
+.m-waitlist-opt-in { display: flex; align-items: flex-start; justify-content: center; gap: 8px; width: 100%; margin-top: 12px; color: var(--m-ink-2); font-size: 12px; line-height: 1.6; cursor: pointer; }
 .m-waitlist-opt-in input { width: 14px; height: 14px; margin-top: 3px; accent-color: var(--m-ink); flex-shrink: 0; }
 .m-waitlist-opt-in input:focus-visible { outline: 2px solid var(--m-focus); outline-offset: 3px; }
 .m-waitlist-error { margin-top: 10px; color: #b33424; font-size: 13px; line-height: 1.6; text-align: center; }
@@ -1727,6 +1757,7 @@ html:has(.m-page) {
 
 /* ── Onboarding sync mock (Zipchat-style coded UI loop) ── */
 .m-onboard-stage {
+  --m-onboard-row-height: 58px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1737,6 +1768,14 @@ html:has(.m-page) {
     radial-gradient(75% 55% at 50% 108%, rgba(253, 222, 208, 0.7) 0%, transparent 70%),
     #fff;
   border: 1px solid var(--m-line);
+}
+
+@media (max-width: 639px) {
+  .m-onboard-stage {
+    --m-onboard-row-height: 42px;
+    min-height: 350px;
+    padding: 24px 18px;
+  }
 }
 
 .m-onboard {
@@ -1754,7 +1793,7 @@ html:has(.m-page) {
 .m-onboard-tile {
   display: flex;
   align-items: center;
-  height: 58px;
+  height: var(--m-onboard-row-height);
   padding: 0 18px;
   background: #fff;
   border: 1px solid rgba(22, 20, 19, 0.08);
@@ -1764,8 +1803,8 @@ html:has(.m-page) {
 }
 
 .m-onboard-pill {
-  width: 58px;
-  height: 58px;
+  width: var(--m-onboard-row-height);
+  height: var(--m-onboard-row-height);
   padding: 0;
   justify-content: center;
   overflow: hidden;
@@ -1826,7 +1865,7 @@ html:has(.m-page) {
 }
 
 .m-onboard.is-connect.is-playing .m-onboard-tile {
-  animation-delay: calc(3.85s + (var(--i) * 0.52s));
+  animation-delay: calc(1.25s + (var(--i) * 0.16s));
 }
 
 .m-onboard.is-channels.is-playing .m-onboard-tile {
@@ -1887,7 +1926,7 @@ html:has(.m-page) {
 }
 
 .m-onboard.is-connect.is-playing .m-onboard-loader {
-  animation-delay: 0s, calc(4.05s + (var(--i) * 0.52s));
+  animation-delay: 0s, calc(1.45s + (var(--i) * 0.16s));
 }
 
 .m-onboard.is-channels.is-playing .m-onboard-loader {
@@ -1961,7 +2000,7 @@ html:has(.m-page) {
 
 .m-onboard.is-connect.is-playing .m-onboard-check {
   animation: m-onboard-check 0.35s cubic-bezier(0.22, 1.4, 0.36, 1) forwards;
-  animation-delay: calc(4.7s + (var(--i) * 0.52s));
+  animation-delay: calc(2.1s + (var(--i) * 0.16s));
 }
 
 .m-onboard-check svg {
@@ -1971,7 +2010,7 @@ html:has(.m-page) {
 
 .m-onboard.is-static .m-onboard-pill {
   width: 100%;
-  height: 58px;
+  height: var(--m-onboard-row-height);
   padding: 0 18px;
   justify-content: flex-start;
   gap: 12px;
@@ -1983,7 +2022,7 @@ html:has(.m-page) {
 }
 
 .m-onboard.is-static .m-onboard-tile {
-  height: 58px;
+  height: var(--m-onboard-row-height);
   margin-top: 10px;
   padding: 0 18px;
   opacity: 1;
@@ -2011,7 +2050,7 @@ html:has(.m-page) {
 
 @keyframes m-onboard-expand {
   from {
-    width: 58px;
+    width: var(--m-onboard-row-height);
     padding: 0;
     justify-content: center;
     gap: 0;
@@ -2041,7 +2080,7 @@ html:has(.m-page) {
 
 @keyframes m-onboard-tile {
   to {
-    height: 58px;
+    height: var(--m-onboard-row-height);
     margin-top: 10px;
     padding-top: 0;
     padding-bottom: 0;
@@ -2101,7 +2140,7 @@ html:has(.m-page) {
   }
 
   .m-onboard.is-playing .m-onboard-tile {
-    height: 58px;
+    height: var(--m-onboard-row-height);
     margin-top: 10px;
     opacity: 1;
     transform: none;
@@ -2380,82 +2419,40 @@ html:has(.m-page) {
   }
 }
 
-/* Channel orbit: live channels around the shop, drifting slowly. */
-.m-bv-orbit {
-  container-type: inline-size;
-  width: min(100%, 21rem);
-  aspect-ratio: 1;
-  margin: auto;
-}
-
-.m-bv-ring {
-  position: absolute;
-  border: 1px dashed var(--m-line-strong);
-  border-radius: 9999px;
-}
-
-.m-bv-ring-outer {
-  inset: 8%;
-}
-
-.m-bv-ring-inner {
-  inset: 27%;
-}
-
-.m-bv-core {
-  position: absolute;
-  top: 50%;
-  left: 50%;
+/* Keep customer intake, merchant control, and Shopify work visibly separate. */
+.m-bv-channels {
   display: grid;
-  place-items: center;
-  width: 3.5rem;
-  height: 3.5rem;
-  margin: -1.75rem 0 0 -1.75rem;
+  gap: 0.75rem;
+  width: 100%;
+  margin-block: auto;
+}
+
+.m-bv-channel-group {
   border: 1px solid var(--m-line);
-  border-radius: 9999px;
-  background: #fff;
-  color: var(--m-ink);
-  box-shadow: 0 10px 30px -16px rgba(236, 107, 79, 0.55);
+  border-radius: 1rem;
+  padding: 0.875rem;
+  background: rgba(255, 255, 255, 0.9);
 }
 
-.m-bv-spin {
-  position: absolute;
-  inset: 0;
-  animation: m-bv-spin 90s linear infinite;
+.m-bv-channel-group dt {
+  font-size: 0.8125rem;
+  font-weight: 600;
 }
 
-.m-bv-node {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 0;
-  height: 0;
-  transform: rotate(var(--a)) translateY(-42cqw);
+.m-bv-channel-group dd {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.625rem;
+  font-size: 0.8125rem;
+  color: var(--m-ink-2);
 }
 
-.m-bv-node-chip {
-  position: absolute;
-  top: -1.4rem;
-  left: -1.4rem;
-  display: grid;
-  place-items: center;
-  width: 2.8rem;
-  height: 2.8rem;
-  border: 1px solid var(--m-line);
-  border-radius: 9999px;
-  background: #fff;
-  box-shadow: 0 8px 22px -12px rgba(27, 26, 25, 0.35);
-  transform: rotate(calc(-1 * var(--a)));
-  animation: m-bv-unspin 90s linear infinite;
-}
-
-@keyframes m-bv-spin {
-  to { transform: rotate(360deg); }
-}
-
-@keyframes m-bv-unspin {
-  from { transform: rotate(calc(-1 * var(--a))); }
-  to   { transform: rotate(calc(-1 * var(--a) - 360deg)); }
+.m-bv-channel-icons {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-height: 22px;
 }
 
 /* Action log */
@@ -2598,11 +2595,6 @@ html:has(.m-page) {
   .m-bv-think {
     display: none;
   }
-
-  .m-bv-spin,
-  .m-bv-node-chip {
-    animation: none;
-  }
 }
 
 /* ── Merchant workflow — iMessage thread + Shopify receipt ── */
@@ -2636,16 +2628,11 @@ html:has(.m-page) {
   border-radius: 0.75rem;
 }
 
-/* Below sm the five jobs are a swipeable row of chips instead of a tall list. */
+/* Keep every example visible on phones without requiring a sideways swipe. */
 @media (max-width: 639px) {
   .m-merchant-tabs-vertical {
     flex-direction: row;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .m-merchant-tabs-vertical::-webkit-scrollbar {
-    display: none;
+    flex-wrap: wrap;
   }
 
   .m-merchant-tab-vertical {
@@ -2714,6 +2701,17 @@ html:has(.m-page) {
   border: 1px solid rgba(22, 20, 19, 0.06);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+}
+
+@media (max-width: 639px) {
+  .m-merchant-phone {
+    min-height: 300px;
+  }
+
+  .m-merchant-tab {
+    padding-inline: 0.65rem;
+    font-size: 0.8125rem;
+  }
 }
 
 .m-merchant-phone-header {

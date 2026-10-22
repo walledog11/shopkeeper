@@ -31,7 +31,7 @@ export default function GlobalError({
           <Link
             href="/dashboard"
             aria-label="Shopkeeper"
-            className="absolute left-1/2 top-6 flex -translate-x-1/2 items-center gap-2 text-[#2b2118] transition-colors hover:text-[#2b2118]/75"
+            className="absolute left-1/2 top-6 flex -translate-x-1/2 items-center gap-2 text-foreground transition-colors hover:text-foreground/75"
           >
             <Store className="size-6" strokeWidth={1.75} />
             <span className="text-2xl font-bold leading-none [font-family:var(--m-caveat)]">shopkeeper</span>

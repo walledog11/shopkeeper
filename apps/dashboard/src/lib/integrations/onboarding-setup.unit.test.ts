@@ -29,6 +29,10 @@ describe("isEmailIntegrationConfigured", () => {
 })
 
 describe("resolveOnboardingRedirectStep", () => {
+  it.each([{ hasInstagram: true }, { hasStorefrontChat: true }])("accepts a non-email customer channel", channel => {
+    expect(resolveOnboardingRedirectStep({ hasShopify: true, hasEmail: false, hasPhone: false, ...channel })).toBe("connect")
+  })
+
   it("returns null when onboarding is complete", () => {
     expect(resolveOnboardingRedirectStep({
       onboardingCompletedAt: "2026-06-16T00:00:00.000Z",

@@ -4,6 +4,9 @@ import { AlertCircle, Check, ChevronDown, Loader2, Mail } from "lucide-react";
 import { cn } from "@/lib/ui/cn";
 import { EmailForwardingSetupPanel } from "@/components/integrations/EmailForwardingDisclosure";
 import { GmailSupportAddressPanel } from "@/components/integrations/GmailSupportAddressPanel";
+import { ShopifyStorefrontChatSection } from "@/components/integrations/ShopifyStorefrontChatSection";
+import { isSimulatedShopifyIntegration } from "@/lib/integrations/shopify-simulator";
+import { isStorefrontChatEnabledForIntegration } from "@/lib/storefront-chat/enabled";
 import { Headline, Lede } from "./primitives";
 import type { Integration } from "@/types";
 import type { OnboardingData } from "../_lib/onboarding-model";
@@ -12,7 +15,7 @@ import type { LaunchOnboardingOAuth, OnboardingOAuthProvider } from "../_hooks/u
 export function StepEmail({
   data,
   update,
-  emailConnected,
+  shopifyRow, storefrontChatGloballyEnabled, shopifyClientId, onUpdateStorefrontChat, disabled,
   instagramConnected,
   instagramConnectAvailable,
   forwardingIntegration,
@@ -30,7 +33,11 @@ export function StepEmail({
 }: {
   data: OnboardingData;
   update: (p: Partial<OnboardingData>) => void;
-  emailConnected: boolean;
+  shopifyRow: Integration | undefined;
+  storefrontChatGloballyEnabled: boolean;
+  shopifyClientId: string | null;
+  onUpdateStorefrontChat: (enabled: boolean) => Promise<boolean>;
+  disabled: boolean;
   instagramConnected: boolean;
   instagramConnectAvailable: boolean;
   forwardingIntegration: Integration | undefined;
@@ -47,7 +54,9 @@ export function StepEmail({
   onOAuth: LaunchOnboardingOAuth;
 }) {
   const [forwardingOpen, setForwardingOpen] = useState(false);
-  const showInstagram = instagramConnectAvailable || instagramConnected;
+  const emailConnected = Boolean(gmailIntegration);
+  const showStorefrontChat = shopifyRow && !isSimulatedShopifyIntegration(shopifyRow.metadata)
+    && (storefrontChatGloballyEnabled || isStorefrontChatEnabledForIntegration(shopifyRow.metadata));
   const connectedEmail = data.primaryEmail
     || gmailIntegration?.fromEmail
     || gmailIntegration?.externalAccountId
@@ -66,7 +75,7 @@ export function StepEmail({
   return (
     <div className="flex flex-col items-center">
       <Headline>Connect customer channels</Headline>
-      <Lede>Email and Instagram DMs show up in Shopkeeper.</Lede>
+      <Lede>Start with one channel. Shopkeeper prepares replies for you to review.</Lede>
 
       {(emailConnected || instagramConnected) && (
         <div className="mt-6 w-full max-w-[560px] space-y-2 text-left">
@@ -108,16 +117,6 @@ export function StepEmail({
       )}
 
       <div className="mt-6 grid w-full max-w-[560px] gap-3 text-left sm:grid-cols-2">
-        <ChannelCard
-          name="Gmail"
-          logo="/logos/gmail.png"
-          description="Use your existing Gmail or Google Workspace address."
-          connected={Boolean(gmailIntegration)}
-          actionLabel="Connect Gmail"
-          onConnect={() => onOAuth("gmail", {})}
-          pending={oauthPendingProvider === "gmail"}
-        />
-        {showInstagram && (
           <ChannelCard
             name="Instagram"
             logo="/logos/instagram-logo.png"
@@ -126,10 +125,20 @@ export function StepEmail({
             actionLabel="Connect Instagram"
             onConnect={() => onOAuth("instagram", {})}
             pending={oauthPendingProvider === "instagram"}
+            disabled={disabled}
             unavailable={!instagramConnectAvailable && !instagramConnected}
-            unavailableLabel="Coming soon"
+            unavailableLabel="Currently unavailable"
           />
-        )}
+        <ChannelCard
+          name="Gmail"
+          logo="/logos/gmail.png"
+          description="Use your existing Gmail or Google Workspace address."
+          connected={Boolean(gmailIntegration)}
+          actionLabel="Connect Gmail"
+          onConnect={() => onOAuth("gmail", {})}
+          pending={oauthPendingProvider === "gmail"}
+          disabled={disabled}
+        />
       </div>
 
       <div className="mt-3 w-full max-w-[560px] overflow-hidden rounded-xl border border-foreground/10 bg-card text-left">
@@ -146,7 +155,7 @@ export function StepEmail({
               Forward another inbox
               {forwardingIntegration && (
                 <span className="rounded-full bg-foreground/[0.08] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-foreground/60">
-                  Connected
+                  Address saved
                 </span>
               )}
             </span>
@@ -188,12 +197,15 @@ export function StepEmail({
                 email={forwardingEmail}
                 setEmail={value => update({ forwardingEmail: value })}
                 loading={emailSaving}
+                disabled={disabled}
                 onSave={() => onSaveForwarding(forwardingEmail)}
               />
             )}
+            {forwardingIntegration && <p className="px-4 pb-4 text-[12.5px] leading-relaxed text-foreground/55">Your address is saved. Finish forwarding in your email provider, then send a test message and check that it appears in your dashboard.</p>}
           </div>
         )}
       </div>
+      {showStorefrontChat && <div className="mt-4 w-full max-w-[560px] text-left"><ShopifyStorefrontChatSection integration={shopifyRow} shopifyClientId={shopifyClientId} storefrontChatGloballyEnabled={storefrontChatGloballyEnabled} canManageWorkspace onUpdateEnabled={onUpdateStorefrontChat} /></div>}
     </div>
   );
 }
@@ -217,6 +229,7 @@ function ChannelCard({
   actionLabel,
   onConnect,
   pending,
+  disabled,
   unavailable = false,
   unavailableLabel = "Unavailable",
 }: {
@@ -227,6 +240,7 @@ function ChannelCard({
   actionLabel: string;
   onConnect: () => void;
   pending: boolean;
+  disabled: boolean;
   unavailable?: boolean;
   unavailableLabel?: string;
 }) {
@@ -247,7 +261,7 @@ function ChannelCard({
       <button
         type="button"
         onClick={onConnect}
-        disabled={pending || unavailable}
+        disabled={disabled || pending || unavailable}
         className="mt-4 inline-flex h-9 items-center justify-center gap-2 rounded-full bg-foreground px-4 text-[13px] font-semibold text-background transition-colors hover:bg-foreground/85 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {pending ? <Loader2 className="size-4 animate-spin" /> : unavailable ? unavailableLabel : connected ? `Reconnect ${name}` : actionLabel}

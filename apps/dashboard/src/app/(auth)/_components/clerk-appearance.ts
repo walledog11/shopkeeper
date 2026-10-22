@@ -1,36 +1,26 @@
 import { GLASS_SETTINGS_ACTION } from "@/lib/ui/glass-card-styles";
+import { clerkPrimaryButtonClassName } from "@/lib/ui/app-button-styles";
 
 type ClerkElementOverrides = Record<string, string | Record<string, string>>;
-type AuthClerkVariant = "paper" | "ink";
 
 const paperVariables = {
-  colorPrimary: "#2b2118",
-  colorTextOnPrimaryBackground: "#f6f2eb",
+  colorPrimary: "#1b1a19",
+  colorTextOnPrimaryBackground: "#fcfaf8",
   colorDanger: "#b91c1c",
   colorSuccess: "#2f7a4a",
   colorWarning: "#d97706",
-  colorNeutral: "#2b2118",
+  colorNeutral: "#1b1a19",
   colorBackground: "transparent",
-  colorInputBackground: "#f6f2eb",
-  colorInputText: "#2b2118",
-  colorText: "#2b2118",
-  colorTextSecondary: "rgba(43, 33, 24, 0.55)",
+  colorInputBackground: "#ffffff",
+  colorInputText: "#1b1a19",
+  colorText: "#1b1a19",
+  colorTextSecondary: "#57534e",
   borderRadius: "0.75rem",
 };
 
-const inkVariables = {
-  colorPrimary: "#d6c4aa",
-  colorTextOnPrimaryBackground: "#1a120c",
-  colorDanger: "#fca5a5",
-  colorSuccess: "#86efac",
-  colorWarning: "#fcd34d",
-  colorNeutral: "#f6f2eb",
-  colorBackground: "transparent",
-  colorInputBackground: "rgba(255, 245, 235, 0.07)",
-  colorInputText: "#f6f2eb",
-  colorText: "#f6f2eb",
-  colorTextSecondary: "rgba(246, 242, 235, 0.55)",
-  borderRadius: "0.75rem",
+const authVariables = {
+  ...paperVariables,
+  fontFamily: '"General Sans", system-ui, sans-serif',
 };
 
 const hiddenFooterElements: ClerkElementOverrides = {
@@ -42,78 +32,87 @@ const hiddenFooterElements: ClerkElementOverrides = {
   badge: "hidden",
 };
 
+const paperInputClassName =
+  "h-11 rounded-xl border border-stone-900/12 bg-white text-foreground shadow-none placeholder:text-stone-400 focus:border-foreground/25 focus:ring-2 focus:ring-foreground/8";
+
 const paperElements: ClerkElementOverrides = {
   rootBox: "w-full max-w-full min-w-0",
   cardBox: "w-full max-w-full min-w-0 shadow-none",
   card: "w-full max-w-full min-w-0 bg-transparent shadow-none border-0 p-0",
-  headerTitle: "text-[#2b2118] font-semibold tracking-tight",
-  headerSubtitle: "text-stone-500",
+  headerTitle: "text-foreground font-semibold tracking-tight",
+  headerSubtitle: "text-muted-foreground",
   socialButtonsBlockButton:
-    "h-11 rounded-full border border-stone-900/12 bg-foreground text-[#2b2118] shadow-none hover:bg-stone-50",
+    "h-11 rounded-full border border-stone-900/12 bg-white text-foreground shadow-none hover:bg-stone-50",
   socialButtonsBlockButtonText: "font-medium",
   dividerLine: "bg-stone-900/10",
   dividerText: "text-xs font-medium text-stone-400",
-  formFieldLabel: "text-sm font-medium text-[#2b2118]",
-  formFieldInput:
-    "h-11 rounded-xl border border-stone-900/12 bg-[#f6f2eb] text-[#2b2118] shadow-none placeholder:text-stone-400 focus:border-[#2b2118]/25 focus:ring-2 focus:ring-[#2b2118]/8",
+  formFieldLabel: "text-sm font-medium text-foreground",
+  formFieldInput: paperInputClassName,
   formFieldHintText: "text-xs text-stone-500",
-  formButtonPrimary:
-    "!bg-[#2b2118] !text-[#f6f2eb] inline-flex h-11 items-center justify-center gap-1.5 rounded-full font-semibold leading-none shadow-[inset_0_1px_0_rgba(255,245,235,0.14),0_8px_24px_-8px_rgba(12,8,5,0.4)] hover:!bg-[#1a120c]",
+  formButtonPrimary: cnClerkPrimary(clerkPrimaryButtonClassName, "h-11 gap-1.5 font-semibold leading-none"),
   formButtonPrimaryText: "leading-none",
-  formButtonPrimaryIcon: "!text-[#f6f2eb] !relative !m-0 !static shrink-0",
-  identityPreviewText: "text-[#2b2118]",
+  formButtonPrimaryIcon: "!text-primary-foreground !relative !m-0 !static shrink-0",
+  identityPreviewText: "text-foreground",
   identityPreviewEditButtonIcon: "text-[#2f7a4a]",
   alertText: "text-sm",
   formResendCodeLink: "font-medium text-[#2f7a4a] hover:text-[#166534]",
-  otpCodeFieldInput:
-    "rounded-xl border border-stone-900/12 bg-[#f6f2eb] text-[#2b2118] shadow-none focus:border-[#2b2118]/25 focus:ring-2 focus:ring-[#2b2118]/8",
-  formFieldInputShowPasswordButton: "text-stone-500 hover:text-[#2b2118]",
+  otpCodeFieldInput: paperInputClassName,
+  formFieldInputShowPasswordButton: "text-stone-500 hover:text-foreground",
   alternativeMethodsBlockButton:
-    "h-11 rounded-full border border-stone-900/12 bg-foreground text-[#2b2118] shadow-none hover:bg-stone-50",
+    "h-11 rounded-full border border-stone-900/12 bg-white text-foreground shadow-none hover:bg-stone-50",
   ...hiddenFooterElements,
 };
 
-const inkElements: ClerkElementOverrides = {
-  rootBox: "w-full",
-  cardBox: "w-full shadow-none",
-  card: "w-full bg-transparent shadow-none border-0 p-0",
-  headerTitle: "text-[#f6f2eb] font-semibold tracking-tight",
-  headerSubtitle: "text-[#f6f2eb]/55",
+function cnClerkPrimary(base: string, extra: string) {
+  return `!shadow-none ${base} ${extra}`.replace(/\s+/g, " ").trim();
+}
+
+const authInputClassName =
+  "h-12 max-h-none rounded-xl border border-[color:var(--m-line-strong)] bg-white px-3.5 text-base text-[color:var(--m-ink)] shadow-none placeholder:text-[color:var(--m-ink-3)] focus:border-[color:var(--m-ink)] focus:ring-2 focus:ring-stone-900/10 aria-invalid:border-red-700";
+
+const authLinkClassName =
+  "font-medium text-[color:var(--m-ink)] underline underline-offset-4 hover:text-black focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[color:var(--m-focus)]";
+
+const authElements: ClerkElementOverrides = {
+  rootBox: "w-full max-w-full min-w-0",
+  cardBox: "w-full max-w-full min-w-0 overflow-visible rounded-none border-0 bg-transparent shadow-none",
+  card: "m-0 w-full max-w-full min-w-0 rounded-none border-0 bg-transparent p-0 shadow-none",
+  headerTitle: "text-[color:var(--m-ink)] font-medium",
+  headerSubtitle: "text-[color:var(--m-ink-2)]",
   socialButtonsBlockButton:
-    "h-11 rounded-full border border-foreground/14 bg-foreground/[0.05] text-[#f6f2eb] shadow-none hover:bg-foreground/[0.09]",
-  socialButtonsBlockButtonText: "font-medium text-[#f6f2eb]",
-  dividerLine: "bg-foreground/10",
-  dividerText: "text-xs font-medium text-[#f6f2eb]/45",
-  formFieldLabel: "text-sm font-medium text-[#f6f2eb]/75",
-  formFieldInput:
-    "h-11 rounded-xl border border-foreground/12 bg-foreground/[0.06] text-[#f6f2eb] shadow-none placeholder:text-[#f6f2eb]/30 focus:border-foreground/25 focus:ring-2 focus:ring-foreground/10",
-  formFieldHintText: "text-xs text-[#f6f2eb]/45",
+    "m-btn m-btn-outline h-12 w-full shadow-none",
+  socialButtonsBlockButtonText: "text-[15px] font-medium",
+  dividerLine: "bg-[color:var(--m-line)]",
+  dividerText: "text-xs font-normal text-[color:var(--m-ink-3)]",
+  formFieldLabel: "text-sm font-medium text-[color:var(--m-ink)]",
+  formFieldInput: authInputClassName,
+  formFieldHintText: "text-xs text-[color:var(--m-ink-2)]",
   formButtonPrimary:
-    "!bg-[#d6c4aa] !text-[#1a120c] h-11 rounded-full border border-foreground/20 font-semibold shadow-[inset_0_1px_0_rgba(255,245,235,0.5)] hover:!bg-[#e4d2b6]",
-  formButtonPrimaryIcon: "!text-[#1a120c]",
-  identityPreviewText: "text-[#f6f2eb]",
-  identityPreviewEditButtonIcon: "text-[#cdbfa3]",
-  alertText: "text-sm text-[#f6f2eb]",
-  formResendCodeLink: "font-medium text-[#cdbfa3] hover:text-[#f6f2eb]",
+    "m-btn m-btn-primary h-12 w-full bg-none shadow-none before:hidden after:hidden",
+  formButtonPrimaryText: "text-[15px] font-medium leading-none",
+  formButtonPrimaryIcon: "static m-0 shrink-0 text-current",
+  identityPreviewText: "text-[color:var(--m-ink)]",
+  identityPreviewEditButton: authLinkClassName,
+  identityPreviewEditButtonIcon: "text-[color:var(--m-ink)]",
+  alertText: "text-sm",
+  formResendCodeLink: authLinkClassName,
+  formFieldAction: authLinkClassName,
+  backLink: authLinkClassName,
   otpCodeFieldInput:
-    "rounded-xl border border-foreground/12 bg-foreground/[0.06] text-[#f6f2eb] shadow-none focus:border-foreground/25 focus:ring-2 focus:ring-foreground/10",
-  formFieldInputShowPasswordButton: "text-[#f6f2eb]/45 hover:text-[#f6f2eb]",
+    "h-12 max-h-none rounded-xl border border-[color:var(--m-line-strong)] bg-white text-base text-[color:var(--m-ink)] shadow-none focus:border-[color:var(--m-ink)] focus:ring-2 focus:ring-stone-900/10",
+  formFieldInputShowPasswordButton: "text-[color:var(--m-ink-3)] hover:text-[color:var(--m-ink)]",
   alternativeMethodsBlockButton:
-    "h-11 rounded-full border border-foreground/14 bg-foreground/[0.05] text-[#f6f2eb] shadow-none hover:bg-foreground/[0.09]",
+    "m-btn m-btn-outline min-h-12 w-full shadow-none",
   ...hiddenFooterElements,
 };
 
 export function getAuthClerkAppearance(
   overrides: ClerkElementOverrides = {},
-  variant: AuthClerkVariant = "paper",
 ) {
-  const variables = variant === "ink" ? inkVariables : paperVariables;
-  const elements = variant === "ink" ? inkElements : paperElements;
-
   return {
-    variables,
+    variables: authVariables,
     elements: {
-      ...elements,
+      ...authElements,
       ...overrides,
     },
   };
@@ -157,8 +156,7 @@ export function getUserProfileClerkAppearance(): {
       userPreviewMainIdentifierText: "overflow-visible whitespace-normal",
       actionCard: "rounded-none border-0 bg-transparent p-0 shadow-none",
       accordionTriggerButton: "text-sm font-medium text-strong",
-      formButtonPrimary:
-        "!bg-[#2b2118] !text-[#f6f2eb] inline-flex h-9 items-center justify-center gap-1.5 rounded-full text-sm font-semibold leading-none shadow-[inset_0_1px_0_rgba(255,245,235,0.14),0_8px_24px_-8px_rgba(12,8,5,0.4)] hover:!bg-[#1a120c]",
+      formButtonPrimary: cnClerkPrimary(clerkPrimaryButtonClassName, "h-9 gap-1.5 text-sm font-semibold leading-none"),
     },
   };
 }

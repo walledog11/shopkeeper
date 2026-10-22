@@ -49,14 +49,15 @@
 /* ── Paper — the single active theme.
 
    Every surface that consumes these tokens (dashboard, onboarding, auth,
-   not-found, global-error) is cream/ink. The marketing site does not use them
-   at all; it lives in its own --m-* namespace in marketing.css.
+   not-found, global-error) is white/ink, aligned with marketing --m-bg /
+   --m-bg-alt. The marketing site does not use these tokens at all; it lives in
+   its own --m-* namespace in marketing.css.
 
    There is deliberately no dark theme and no --color-white/--color-black
    inversion: utilities mean what they say, so `text-white` is white and
    `text-amber-700` is amber-700. Reach for the semantic tokens below
    (foreground/muted-foreground/strong/faint/card/border) rather than raw
-   palette shades, and use shades that are legible on cream — roughly 600–800
+   palette shades, and use shades that are legible on white — roughly 600–800
    for text and 100–200 for chip fills. ── */
 :root {
   --radius: 0.5rem;
@@ -66,34 +67,29 @@
      back to a system font. */
   --font-general-sans: "General Sans";
 
-  --background: #f6f2eb;
-  --foreground: #2b2118;
-  --card: #fbf8f1;
-  --card-foreground: #2b2118;
-  --popover: #faf6ef;
-  --popover-foreground: #2b2118;
-  --primary: #2b2118;
-  --primary-foreground: #f6f2eb;
-  --secondary: rgba(43, 33, 24, 0.06);
-  --secondary-foreground: rgba(43, 33, 24, 0.85);
-  --muted: rgba(43, 33, 24, 0.05);
-  --muted-foreground: rgba(43, 33, 24, 0.55);
+  --background: #ffffff;
+  --foreground: #1b1a19;
+  --card: #ffffff;
+  --card-foreground: #1b1a19;
+  --popover: #ffffff;
+  --popover-foreground: #1b1a19;
+  --primary: #1b1a19;
+  --primary-foreground: #fcfaf8;
+  --secondary: rgba(27, 26, 25, 0.06);
+  --secondary-foreground: rgba(27, 26, 25, 0.85);
+  --muted: rgba(27, 26, 25, 0.05);
+  --muted-foreground: #57534e;
 
-  /* Text emphasis ramp — the canonical secondary-text scale for the dashboard.
-     Collapses the legacy spread of raw text-foreground/NN onto three steps:
-       /70–/90  → text-strong            (emphasized labels, section titles)
-       /45–/65  → text-muted-foreground  (body secondary, captions, descriptions)
-       /15–/40  → text-faint             (placeholders, timestamps, hints)
-     Primary content and page titles stay on text-foreground (100%). */
-  --text-strong: rgba(43, 33, 24, 0.80);
-  --text-faint: rgba(43, 33, 24, 0.35);
+  /* Text emphasis ramp — aligned with marketing --m-ink / --m-ink-2 / --m-ink-3. */
+  --text-strong: rgba(27, 26, 25, 0.88);
+  --text-faint: #6f6b65;
 
-  --accent: rgba(43, 33, 24, 0.06);
-  --accent-foreground: #2b2118;
+  --accent: rgba(27, 26, 25, 0.06);
+  --accent-foreground: #1b1a19;
   --destructive: #b91c1c;
-  --border: rgba(43, 33, 24, 0.10);
-  --input: rgba(43, 33, 24, 0.12);
-  --ring: rgba(43, 33, 24, 0.30);
+  --border: rgba(27, 26, 25, 0.1);
+  --input: rgba(27, 26, 25, 0.12);
+  --ring: rgba(27, 26, 25, 0.3);
 
   /* Charts */
   --chart-1: oklch(0.646 0.222 41.116);
@@ -102,19 +98,18 @@
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
 
-  /* Sidebar — the recessed paper tone */
-  --sidebar: #efe9df;
-  --sidebar-foreground: #2b2118;
-  --sidebar-primary: #2b2118;
-  --sidebar-primary-foreground: #f6f2eb;
-  --sidebar-accent: rgba(43, 33, 24, 0.06);
-  --sidebar-accent-foreground: #2b2118;
-  --sidebar-border: rgba(43, 33, 24, 0.08);
-  --sidebar-ring: rgba(43, 33, 24, 0.25);
+  /* Sidebar — warm grey strip (marketing --m-bg-alt) */
+  --sidebar: #f5f4f2;
+  --sidebar-foreground: #1b1a19;
+  --sidebar-primary: #1b1a19;
+  --sidebar-primary-foreground: #fcfaf8;
+  --sidebar-accent: rgba(27, 26, 25, 0.06);
+  --sidebar-accent-foreground: #1b1a19;
+  --sidebar-border: rgba(27, 26, 25, 0.08);
+  --sidebar-ring: rgba(27, 26, 25, 0.25);
 }
 
-/* Paper grain over the whole shell, dialogs included */
-body:has(.dashboard-shell)::after,
+/* Paper grain over onboarding (dashboard stays flat white like marketing chapters) */
 body:has(.onboarding-shell)::after {
   content: "";
   position: fixed;

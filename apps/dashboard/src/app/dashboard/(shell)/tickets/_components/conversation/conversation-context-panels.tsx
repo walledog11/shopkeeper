@@ -6,7 +6,11 @@ import {
   needsYouMetaPillClassName,
   needsYouSoftShadowClassName,
 } from "@/app/dashboard/_components/home/needs-you-card-styles"
-import { merchantContactPillClass } from "@/lib/ui/merchant-palette"
+import {
+  merchantContactPillClass,
+  merchantSandHoverClass,
+  merchantSandSurfaceClass,
+} from "@/lib/ui/merchant-palette"
 import { getCustomerName } from "@/lib/messaging/customer-name"
 import { shopifyName } from "@/lib/format/shopify"
 import type { ShopifyAddress } from "@/types/shopify"
@@ -106,7 +110,7 @@ export function CustomerContextPanel({
   )
 
   const address = lines.length > 0 ? (
-    <div className="rounded-2xl bg-[#f5ebe0] px-3.5 py-3">
+    <div className={cn("rounded-2xl px-3.5 py-3", merchantSandSurfaceClass)}>
       {lines.map(line => (
         <p key={line} className="text-xs leading-5 text-[#1a1a1a]">
           {line}
@@ -163,7 +167,10 @@ export function PastConversationsContextPanel({
           <NextLink
             key={item.id}
             href={`?thread=${item.id}`}
-            className="flex items-start justify-between gap-3 rounded-2xl bg-[#f5ebe0]/70 px-3.5 py-2.5 transition-colors hover:bg-[#f5ebe0]"
+            className={cn(
+              "flex items-start justify-between gap-3 rounded-2xl bg-[#f5f4f2]/70 px-3.5 py-2.5 transition-colors",
+              merchantSandHoverClass,
+            )}
           >
             <span className="min-w-0">
               <span className="block truncate text-xs font-semibold leading-4 text-[#1a1a1a]">

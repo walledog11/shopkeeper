@@ -351,7 +351,7 @@ function NeedsYouTicketMetaPill({ item }: { item: HomeNeedsAttentionItem }) {
     : at.toLocaleDateString("en-US", { month: "short", day: "numeric" })
   const topicLabel = orderRef ?? oneWordTicketTopicLabel(item)
   const topicPillClassName = orderRef
-    ? "bg-[#f5ebe0] text-[#1a1a1a]"
+    ? merchantSandInkClass
     : getTagStyle(item.tag).className
 
   const emailAt = customerLabel?.indexOf("@") ?? -1

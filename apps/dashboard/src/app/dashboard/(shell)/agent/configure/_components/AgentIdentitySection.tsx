@@ -10,6 +10,7 @@ import {
   settingsTextareaClassName,
 } from "@/app/dashboard/(shell)/settings/_components/SettingsTile"
 import { GLASS_SETTINGS_ACTION } from "@/lib/ui/glass-card-styles"
+import { appPrimaryButtonClassName } from "@/lib/ui/app-button-styles"
 import type { AgentTabController } from "./useAgentTabState"
 
 export function AgentIdentitySection({ controller }: { controller: AgentTabController }) {
@@ -94,7 +95,7 @@ function VoiceProposalCard({
   return (
     <div className="space-y-3 rounded-xl border border-violet-700/30 bg-violet-700/[0.06] p-4">
       <div className="flex items-start gap-2.5">
-        <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-violet-700/15">
+        <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-xl bg-violet-700/15">
           <Sparkles className="size-3.5 text-violet-700" />
         </div>
         <div className="min-w-0">
@@ -117,7 +118,7 @@ function VoiceProposalCard({
           type="button"
           onClick={() => onResolve("approve")}
           disabled={busy !== null}
-          className="w-full bg-[#2b2118] text-[#f6f2eb] hover:bg-[#1a120c] sm:w-auto"
+          className={appPrimaryButtonClassName}
         >
           {busy === "approve" ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
           Use this voice

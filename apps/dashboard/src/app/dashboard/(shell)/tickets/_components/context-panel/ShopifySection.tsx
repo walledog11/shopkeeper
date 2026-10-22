@@ -22,6 +22,7 @@ import {
   contextTanPanelClassName,
 } from "./context-panel-styles"
 import { cn } from "@/lib/ui/cn"
+import { merchantSandHoverClass } from "@/lib/ui/merchant-palette"
 
 type ShopifyMode = 'view' | 'search' | 'create'
 
@@ -262,7 +263,7 @@ function ShopifySectionContent({
     <button
       type="button"
       onClick={exitSearch}
-      className={cn(contextGhostButtonClassName, "hover:bg-[#f5ebe0]")}
+      className={cn(contextGhostButtonClassName, merchantSandHoverClass)}
     >
       Cancel
     </button>

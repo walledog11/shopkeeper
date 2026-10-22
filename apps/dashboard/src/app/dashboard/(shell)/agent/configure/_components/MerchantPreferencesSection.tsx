@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { SolidSettingsTile as SettingsTile, settingsTextareaClassName } from "@/app/dashboard/(shell)/settings/_components/SettingsTile"
 import { CharacterCountTextarea, SelectField } from "@/components/settings-form/fields"
 import { GLASS_SETTINGS_ACTION } from "@/lib/ui/glass-card-styles"
+import { appPrimaryButtonClassName } from "@/lib/ui/app-button-styles"
 import type { MerchantPreferencesController } from "./useMerchantPreferencesState"
 
 export function MerchantPreferencesSection({
@@ -118,7 +119,7 @@ export function MerchantPreferencesSection({
               type="button"
               onClick={() => void createPreference()}
               disabled={busy !== null || !guidance.trim()}
-              className="w-full bg-[#2b2118] text-[#f6f2eb] hover:bg-[#1a120c] sm:w-auto"
+              className={appPrimaryButtonClassName}
             >
               {busy === "create" ? <Loader2 className="size-4 animate-spin" /> : null}
               Save preference
@@ -146,7 +147,7 @@ function ProposedPreferenceCard({
   return (
     <div className="space-y-3 rounded-xl border border-violet-700/30 bg-violet-700/[0.06] p-4">
       <div className="flex items-start gap-2.5">
-        <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-violet-700/15">
+        <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-xl bg-violet-700/15">
           <Sparkles className="size-3.5 text-violet-700" />
         </div>
         <div className="min-w-0">
@@ -171,7 +172,7 @@ function ProposedPreferenceCard({
             type="button"
             onClick={() => onResolve(preference.id, "confirm")}
             disabled={busy}
-            className="w-full bg-[#2b2118] text-[#f6f2eb] hover:bg-[#1a120c] sm:w-auto"
+            className={appPrimaryButtonClassName}
           >
             {busy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
             Use this preference

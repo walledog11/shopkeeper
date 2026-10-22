@@ -15,6 +15,8 @@ import {
 import { AccountIdentity } from "./AccountIdentity";
 import { AuthBackLink } from "./AuthBackLink";
 import { authCardClassName } from "./auth-styles";
+import { appPrimaryButtonClassName } from "@/lib/ui/app-button-styles";
+import { cn } from "@/lib/ui/cn";
 
 interface AccountActionsCardProps {
   backHref?: string;
@@ -48,7 +50,7 @@ export function AccountActionsCard({
           <Button
             asChild
             size="lg"
-            className="w-full gap-2 rounded-full bg-[#2b2118] text-[#f6f2eb] hover:bg-[#1a120c]"
+            className={cn("w-full gap-2", appPrimaryButtonClassName)}
           >
             <Link href="/dashboard">
               Continue to dashboard

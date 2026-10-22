@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Check, RefreshCw } from "lucide-react"
 import { cn } from "@/lib/ui/cn"
+import { merchantSandSurfaceClass } from "@/lib/ui/merchant-palette"
 import { formatMoney, formatMonthYear } from "./formatters"
 import type { ShopifyCustomer } from "@/types/shopify"
 import {
@@ -76,7 +77,7 @@ export function CustomerInfo({ customer, isEditing, onEditingChange, onSaved, sh
       {stats.map(stat => (
         <div
           key={stat.label}
-          className="min-w-0 rounded-2xl bg-[#f5ebe0] px-2 py-2.5 text-center"
+          className={cn("min-w-0 rounded-md px-2 py-2.5 text-center", merchantSandSurfaceClass)}
         >
           <span className="block truncate text-[13px] font-semibold leading-4 text-[#1a1a1a] tabular-nums">{stat.value}</span>
           <span className="mt-1 block text-[10px] font-semibold uppercase tracking-[0.12em] text-[#6b5d4f]">{stat.label}</span>

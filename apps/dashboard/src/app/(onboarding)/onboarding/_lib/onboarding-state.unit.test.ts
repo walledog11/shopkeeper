@@ -12,6 +12,7 @@ describe("parseStoredOnboardingState", () => {
       ignored: "value",
     }))).toEqual({
       data: {
+        shopDomain: "",
         forwardingEmail: "",
         storeName: "Acme",
         founderName: "Ari",

@@ -6,7 +6,6 @@ import {
   createTestOrg,
 } from "@shopkeeper/db/test-helpers";
 import {
-  SHOPIFY_SIMULATOR_DOMAIN,
   SHOPIFY_SIMULATOR_TOKEN,
 } from "@/lib/integrations/shopify-simulator";
 
@@ -47,7 +46,7 @@ describe("POST /api/integrations/shopify/simulate", () => {
 
     expect(response.status).toBe(201);
     expect(await response.json()).toMatchObject({
-      externalAccountId: SHOPIFY_SIMULATOR_DOMAIN,
+      externalAccountId: `demo-${org!.id}.shopkeeper.test`,
       metadata: { simulated: true },
       connectionState: "active",
     });
@@ -60,10 +59,22 @@ describe("POST /api/integrations/shopify/simulate", () => {
     });
     expect(integrations).toHaveLength(1);
     expect(integrations[0]).toMatchObject({
-      externalAccountId: SHOPIFY_SIMULATOR_DOMAIN,
+      externalAccountId: `demo-${org!.id}.shopkeeper.test`,
       accessToken: SHOPIFY_SIMULATOR_TOKEN,
       metadata: { simulated: true },
     });
+  });
+
+  it("allows two workspaces to connect independent demo integrations", async () => {
+    const other = await createTestOrg();
+    try {
+      expect((await POST()).status).toBe(201);
+      vi.mocked(auth).mockResolvedValue({ userId: "usr_other_simulator", orgId: other.clerkOrgId } as Awaited<ReturnType<typeof auth>>);
+      expect((await POST()).status).toBe(201);
+      const rows = await db.integration.findMany({ where: { organizationId: { in: [org!.id, other.id] }, platform: ChannelType.shopify } });
+      expect(rows).toHaveLength(2);
+      expect(new Set(rows.map(row => row.externalAccountId)).size).toBe(2);
+    } finally { await cleanupTestData(other.id); }
   });
 
   it("is unavailable in production even when the flag is set", async () => {
