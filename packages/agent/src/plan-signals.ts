@@ -1,6 +1,7 @@
 import type { AgentPlan, PlanSignal, PlanSignalSeverity, ProducedPlanSignalCode, RawToolCall } from "./types.js"
-import { isGuestOnlyTool } from "./guest-policy.js"
-import { TOOL_DEFINITION_REGISTRY } from "./tools/registry/index.js"
+import type { VerifiedOrderRef } from "./agent-context.js"
+import { isGuestOnlyTool, readsVerifiedOrder } from "./guest-policy.js"
+import { TOOL_CATEGORIES, TOOL_DEFINITION_REGISTRY } from "./tools/registry/index.js"
 
 // The one place a plan signal's English lives. Producers push a code, consumers
 // branch on that code and render this text without ever reading it, so
@@ -90,19 +91,30 @@ export const DAMAGE_EVIDENCE_TOOLS: ReadonlySet<string> = new Set(
   )),
 )
 
-function severityFor(code: ProducedPlanSignalCode, rawToolCalls: RawToolCall[]): PlanSignalSeverity {
+function severityFor(
+  code: ProducedPlanSignalCode,
+  rawToolCalls: RawToolCall[],
+  verifiedOrders: readonly VerifiedOrderRef[],
+): PlanSignalSeverity {
   switch (code) {
     // Fires whenever the store has no matching article, which is routine for a
     // KB-light store. A grounding note for the merchant, not an action risk —
     // it must not force an otherwise-clean plan to review.
     case "kb_no_match":
       return "advisory"
-    // The one plan-dependent severity: a reply written without touching customer
-    // or order data is unaffected by the link being absent.
-    case "shopify_customer_unresolved":
-      return rawToolCalls.some(toolCall => CUSTOMER_OR_ORDER_READ_TOOLS.has(toolCall.name))
+    // Plan-dependent: a reply written without touching customer or order data is
+    // unaffected by the link being absent, and so is a reply that reads only an
+    // order the sender verified (order-verification). Any other customer or order
+    // read, and any write beside a read, still waits for the merchant: a verified
+    // order is read-only knowledge.
+    case "shopify_customer_unresolved": {
+      const reads = rawToolCalls.filter(toolCall => CUSTOMER_OR_ORDER_READ_TOOLS.has(toolCall.name))
+      if (reads.length === 0) return "advisory"
+      const writes = rawToolCalls.some(toolCall => TOOL_CATEGORIES[toolCall.name] === "action")
+      return writes || reads.some(toolCall => !readsVerifiedOrder(toolCall.name, toolCall.input, verifiedOrders))
         ? "blocking"
         : "advisory"
+    }
     // The agent never judges whether a photo is genuine, so compensation on a
     // damage claim always waits for the merchant. A reply alone does not.
     case "damage_photo_attached":
@@ -120,13 +132,14 @@ function severityFor(code: ProducedPlanSignalCode, rawToolCalls: RawToolCall[]):
 export function buildPlanSignals(
   codes: ProducedPlanSignalCode[],
   rawToolCalls: RawToolCall[],
+  verifiedOrders: readonly VerifiedOrderRef[] = [],
 ): PlanSignal[] {
   const seen = new Set<ProducedPlanSignalCode>()
   const signals: PlanSignal[] = []
   for (const code of codes) {
     if (seen.has(code)) continue
     seen.add(code)
-    signals.push({ code, severity: severityFor(code, rawToolCalls), message: PLAN_SIGNAL_MESSAGES[code] })
+    signals.push({ code, severity: severityFor(code, rawToolCalls, verifiedOrders), message: PLAN_SIGNAL_MESSAGES[code] })
   }
   return signals
 }

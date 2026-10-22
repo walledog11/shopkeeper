@@ -20,6 +20,7 @@ import {
 } from "./planner-read-tools.js";
 import { applyEscalationRouting } from "./escalation-materialization.js";
 import { AWAIT_CUSTOMER_PHOTO_TOOL, damageEvidenceState } from "./damage-evidence.js";
+import { orderVerificationState, verifiedOrderRefs } from "./order-verification.js";
 import { buildPlanRoutingEvidence, completesAtMerchantFollowUp, kbMissNeedsMerchant } from "./planner-evidence.js";
 import { decideAutonomy } from "./autonomy.js";
 import { recordMerchantPreferenceUsage } from "./merchant-preferences.js";
@@ -45,6 +46,7 @@ import { enforceSpendCap } from "./spend.js";
 import {
   parseToolInput,
   selectAgentTools,
+  AWAIT_ORDER_VERIFICATION_TOOL,
   ToolInputValidationError,
   type CancelOrderInput,
   type CreateExchangeInput,
@@ -83,6 +85,8 @@ export interface PlanAgentOptions {
    * It may only read and draft, and its plan always goes to the merchant.
    */
   withheldMessageFollowUp?: boolean;
+  /** Set by a monitor planning its own instruction on a customer thread (a return arriving). */
+  systemRequest?: boolean;
 }
 
 const KB_MISS_REPLY_REFUSAL =
@@ -90,6 +94,9 @@ const KB_MISS_REPLY_REFUSAL =
 
 const DAMAGE_PHOTO_ASK_REFUSAL =
   "Not sent. The customer reports a damaged or defective item and has not sent a photo. Call await_customer_photo with the reply that asks for one, and propose no compensation.";
+
+const ORDER_VERIFICATION_ASK_REFUSAL =
+  "Not sent. The sender has not confirmed an order is theirs. Call await_order_verification beside the reply that asks: with order_name when asking for the email address or shipping zip on that order, without it when asking which order. Propose nothing for the order yet, or call escalate_to_human if they cannot give either.";
 
 const TERSE_REFERENT = /^(?:yes|yeah|yep|yup|ok(?:ay)?|sure|go ahead|do it|that one|it)[.!?\s]*$/i;
 
@@ -218,13 +225,31 @@ export async function planAgent(
   // Customer-originated planning only. A merchant who instructs, answers or
   // revises is already the person a missing photo would hand the claim to, and
   // a withheld-message follow-up proposes no compensation at all.
-  const damageEvidence = operatorMode
-    || options?.merchantInstruction
-    || options?.merchantContinuation
-    || options?.withheldMessageFollowUp
-    ? null
-    : damageEvidenceState(ctx, resolvedSettings);
-  const { stable, volatile } = buildSystemPromptParts(ctx, settings, { exactDraftProposal: true, damageEvidence });
+  const customerOriginated = !operatorMode
+    && !options?.merchantInstruction
+    && !options?.merchantContinuation
+    && !options?.withheldMessageFollowUp;
+  // A direct-message sender confirms the order before anything about it is
+  // discussed or proposed, a photo request included. A monitor's plan is the
+  // merchant's business, not the sender's request.
+  const orderVerification = customerOriginated && !options?.systemRequest ? orderVerificationState(ctx) : null;
+  const orderUnconfirmed = orderVerification !== null && orderVerification.kind !== "verified";
+  const asksOrderVerification = orderVerification?.kind === "asked" || orderVerification?.kind === "ask";
+  // Routing and review read the claim's photo state whatever the order's
+  // confirmation, so compensation proposed for an unconfirmed damage claim still
+  // escalates; the photo is only asked for once the order is confirmed.
+  const askedAbout = orderVerification?.kind === "verified"
+    ? orderVerification.resumedRequest
+    : orderVerification?.kind === "ask" || orderVerification?.kind === "asked"
+      ? orderVerification.pendingRequest
+      : null;
+  const damageEvidence = customerOriginated
+    ? damageEvidenceState(ctx, resolvedSettings, askedAbout?.facts ?? null)
+    : null;
+  const damagePhotoAsk = orderUnconfirmed ? null : damageEvidence;
+  const { stable, volatile } = buildSystemPromptParts(ctx, settings, {
+    exactDraftProposal: true, damageEvidence: damagePhotoAsk, orderVerification,
+  });
   const systemPromptBlocks = buildSplitCachedSystemPrompt(stable, volatile);
 
   // A merchant-answer replan must reply to the customer with the supplied answer,
@@ -254,7 +279,8 @@ export async function planAgent(
   // Offered only while a damage claim still needs its photo asked for, so every
   // other turn keeps a byte-identical tool list and prompt cache.
   availableTools = availableTools.filter(tool => (
-    tool.name !== AWAIT_CUSTOMER_PHOTO_TOOL || damageEvidence?.kind === "ask"
+    (tool.name !== AWAIT_CUSTOMER_PHOTO_TOOL || damagePhotoAsk?.kind === "ask")
+    && (tool.name !== AWAIT_ORDER_VERIFICATION_TOOL || asksOrderVerification)
   ));
   const toolSelection = selectPlanningTools({
     availableTools,
@@ -329,10 +355,18 @@ export async function planAgent(
       return KB_MISS_REPLY_REFUSAL;
     }
     if (
-      damageEvidence?.kind === "ask"
+      damagePhotoAsk?.kind === "ask"
       && !proposal.rawToolCalls.some(call => call.name === AWAIT_CUSTOMER_PHOTO_TOOL)
     ) {
       return DAMAGE_PHOTO_ASK_REFUSAL;
+    }
+    if (
+      asksOrderVerification
+      && !proposal.rawToolCalls.some(call => (
+        call.name === AWAIT_ORDER_VERIFICATION_TOOL || call.name === "escalate_to_human"
+      ))
+    ) {
+      return ORDER_VERIFICATION_ASK_REFUSAL;
     }
     return null;
   };
@@ -473,11 +507,12 @@ export async function planAgent(
       withheldMessageFollowUp: options?.withheldMessageFollowUp === true,
       merchantContinuation: options?.merchantContinuation,
       damageEvidence,
+      orderVerification,
     });
     routingEvidence = built.evidence;
     signalCodes.push(...built.signalCodes);
     const originalSteps = buildPlanSteps(rawToolCalls);
-    const originalSignals = buildPlanSignals(signalCodes, rawToolCalls);
+    const originalSignals = buildPlanSignals(signalCodes, rawToolCalls, verifiedOrderRefs(ctx));
     const verdict = decideAutonomy({
       instruction,
       steps: originalSteps,
@@ -527,7 +562,7 @@ export async function planAgent(
   if (!operatorMode && replyPromisesUnownedFollowUp(rawToolCalls)) {
     signalCodes.push("reply_promises_follow_up");
   }
-  const signals = buildPlanSignals(signalCodes, rawToolCalls);
+  const signals = buildPlanSignals(signalCodes, rawToolCalls, verifiedOrderRefs(ctx));
   const validationIssueCounts = validation.issues.reduce<Record<string, number>>((counts, issue) => {
     counts[issue.code] = (counts[issue.code] ?? 0) + 1;
     return counts;
@@ -543,6 +578,7 @@ export async function planAgent(
     routingDecision,
     routingEvidenceCodes: routingEvidence.codes,
     damageEvidence: damageEvidence?.kind ?? null,
+    orderVerification: orderVerification?.kind ?? null,
     classifierState: routingEvidence.classifierState,
     modelCalls: usageTotals.modelCalls,
     usageTotals,

@@ -2,6 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import type { AgentContext } from "./agent-context.js";
 import { classifierAlignmentState } from "./classifier-signals.js";
 import { AWAIT_CUSTOMER_PHOTO_TOOL, type DamageEvidenceState } from "./damage-evidence.js";
+import { asksToChangeOrder, type OrderVerificationRequest, type OrderVerificationState } from "./order-verification.js";
 import { DAMAGE_EVIDENCE_TOOLS } from "./plan-signals.js";
 import { currentRequestSignals } from "./planner-safety/request.js";
 import { outstandingMerchantFollowUps } from "./merchant-follow-up.js";
@@ -17,7 +18,7 @@ import {
   refundTargetsAlreadyFullyRefunded,
   refundTargetsNonPaidOrder,
 } from "./planner-safety/refunds.js";
-import { getToolDefinition, TOOL_CATEGORIES } from "./tools/registry/index.js";
+import { AWAIT_ORDER_VERIFICATION_TOOL, getToolDefinition, TOOL_CATEGORIES } from "./tools/registry/index.js";
 import type { ToolStatus } from "./tools/result.js";
 import { shopMoneyAmountOf } from "./tools/static-policy.js";
 import type {
@@ -41,6 +42,8 @@ export interface BuildPlanRoutingEvidenceInput {
   merchantContinuation?: MerchantContinuationKind;
   /** The planner's `damageEvidenceState`; null or absent when no photo rule applies. */
   damageEvidence?: DamageEvidenceState | null;
+  /** The planner's `orderVerificationState`; null or absent off direct-message threads. */
+  orderVerification?: OrderVerificationState | null;
 }
 
 export interface BuiltPlanRoutingEvidence {
@@ -64,6 +67,7 @@ const ESCALATION_REASONS: Record<PlanRoutingEvidenceCode, string | undefined> = 
   critical_planning_read_failure: "Order or customer lookup failed — could not verify details to act safely.",
   compensation_over_cap: "Compensation above the workspace limit was planned — needs human review.",
   damage_photo_missing: "Customer reports a damaged or defective item without a photo — over to you.",
+  order_unconfirmed: "The sender could not confirm the order is theirs — over to you.",
   policy_gap: undefined,
   kb_gap: undefined,
   circular_channel_deflection: undefined,
@@ -81,9 +85,11 @@ function planShape(rawToolCalls: readonly RawToolCall[]) {
     hasAction: rawToolCalls.some((call) => TOOL_CATEGORIES[call.name] === "action"),
     hasSendReply: rawToolCalls.some((call) => call.name === "send_reply"),
     hasAskOperator: rawToolCalls.some((call) => call.name === "ask_operator"),
-    // Asking for the photo answers a compensation request on a damage claim:
-    // the customer's next message decides what happens.
-    hasEvidenceRequest: rawToolCalls.some((call) => call.name === AWAIT_CUSTOMER_PHOTO_TOOL),
+    // Asking for the photo, or for the order to be confirmed, answers a
+    // compensation request: the customer's next message decides what happens.
+    hasEvidenceRequest: rawToolCalls.some((call) => (
+      call.name === AWAIT_CUSTOMER_PHOTO_TOOL || call.name === AWAIT_ORDER_VERIFICATION_TOOL
+    )),
   };
 }
 
@@ -95,6 +101,13 @@ function damagePhotoMissing(input: BuildPlanRoutingEvidenceInput): boolean {
   if (!state || state.kind === "photos") return false;
   if (state.kind === "ask") return input.rawToolCalls.some((call) => DAMAGE_EVIDENCE_TOOLS.has(call.name));
   return true;
+}
+
+// On the turn a sender's answer confirms their order, their message is the
+// email or zip and the request is the one they made before: it is still theirs
+// to route on, so a reply that only declines it goes to the merchant.
+function resumedRequest(input: Pick<BuildPlanRoutingEvidenceInput, "orderVerification">): OrderVerificationRequest | null {
+  return input.orderVerification?.kind === "verified" ? input.orderVerification.resumedRequest : null;
 }
 
 function planExceedsCompensationCap(
@@ -110,11 +123,17 @@ function planExceedsCompensationCap(
   });
 }
 
-function hasExplicitCompensationRequest(ctx: AgentContext): boolean {
-  const signals = currentRequestSignals(ctx);
+function hasExplicitCompensationRequest(
+  input: Pick<BuildPlanRoutingEvidenceInput, "ctx" | "orderVerification">,
+): boolean {
+  const signals = currentRequestSignals(input.ctx);
+  const resumed = resumedRequest(input);
   return Boolean(signals?.intents.compensation_request
     || (signals?.intents.mutative_request && !signals.intents.policy_question
-      && (signals.requestFacts?.ask === "refund" || signals.requestFacts?.alternative === "refund")));
+      && (signals.requestFacts?.ask === "refund" || signals.requestFacts?.alternative === "refund"))
+    || Boolean(resumed && (
+      resumed.compensation || resumed.facts.ask === "refund" || resumed.facts.alternative === "refund"
+    )));
 }
 
 function requestedWriteEscalationCode(input: BuildPlanRoutingEvidenceInput): PlanRoutingEvidenceCode | null {
@@ -125,8 +144,9 @@ function requestedWriteEscalationCode(input: BuildPlanRoutingEvidenceInput): Pla
   if (refundTargetsNonPaidOrder(ctx, rawToolCalls)) return "non_paid_refund_request";
   if (planExceedsCompensationCap(rawToolCalls, input.settings)) return "compensation_over_cap";
   if (damagePhotoMissing(input)) return "damage_photo_missing";
+  if (input.orderVerification?.kind === "locked") return "order_unconfirmed";
   const shape = planShape(rawToolCalls);
-  if (!shape.hasAction && !shape.hasEscalation && !shape.hasEvidenceRequest && hasExplicitCompensationRequest(ctx)) {
+  if (!shape.hasAction && !shape.hasEscalation && !shape.hasEvidenceRequest && hasExplicitCompensationRequest(input)) {
     return "compensation_exception";
   }
   return null;
@@ -241,8 +261,13 @@ export function buildPlanRoutingEvidence(
 
   const shape = planShape(input.rawToolCalls);
   if (
-    state === "aligned"
-    && (input.ctx.classifierSignals?.intents.mutative_request || input.ctx.classifierSignals?.intents.compensation_request)
+    (
+      (state === "aligned" && (
+        input.ctx.classifierSignals?.intents.mutative_request || input.ctx.classifierSignals?.intents.compensation_request
+      ))
+      || asksToChangeOrder(resumedRequest(input)?.facts)
+      || Boolean(resumedRequest(input)?.compensation)
+    )
     && !shape.hasAction
     && !shape.hasEscalation
     && !shape.hasEvidenceRequest

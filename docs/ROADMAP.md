@@ -82,11 +82,11 @@ In order. This is the product's critical path.
    action rows and a named approver, the refund commits in the charged currency, and the
    reply shows in the customer's app. Run a photographed damage claim the same way, and
    confirm the SocialAPI gallery photo is stored on the ticket.
-2. **Instagram and TikTok senders verify an order before the agent discusses it.** The
-   agent asks for the order's email or shipping zip; code, not the model, matches it
-   against Shopify and records the order as verified on the thread, as storefront chat
-   does. Closes when a verified sender's damage claim reaches the merchant as one card:
-   verification, photos and the proposed resolution.
+2. **Run an unlinked Instagram sender's damage claim through order confirmation** (built:
+   decision Q in agent-runtime). Apply `20261020120000_add_order_verifications` first.
+   Closes when the agent asks for the order, then its email or zip, the reply confirms
+   it, the photo ask follows, and the merchant gets one card: the confirmation line,
+   photos and the proposed resolution.
 3. **Find why a parked card was discarded before the merchant replied.** Each drop logs a
    `PendingPlanStaleReason` (`apps/gateway/src/operator-context/persistence.ts`); the
    suspect is `plan_replaced` after a re-plan, or a second task overwriting the thread's

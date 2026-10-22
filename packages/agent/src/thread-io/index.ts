@@ -11,6 +11,7 @@ export {
   addInternalNoteMutation,
   askOperatorMutation,
   awaitCustomerPhotoMutation,
+  awaitOrderVerificationMutation,
   escalateToHumanMutation,
   updateThreadStatusMutation,
   updateThreadTagMutation,

@@ -127,6 +127,7 @@ export type PlanRoutingEvidenceCode =
   | 'critical_planning_read_failure'
   | 'compensation_over_cap'
   | 'damage_photo_missing'
+  | 'order_unconfirmed'
   | 'policy_gap'
   | 'kb_gap'
   | 'circular_channel_deflection'

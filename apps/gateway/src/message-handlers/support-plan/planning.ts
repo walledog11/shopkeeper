@@ -16,12 +16,16 @@ export function shouldSkipRequestWork(
   burst: ConversationBurst,
   sourceMessageId?: string,
   skipSummary?: boolean,
+  answeredOrderVerification = false,
 ): boolean {
   if (!sourceMessageId) return false;
+  if (burst.messages.at(-1)?.id !== sourceMessageId) return true;
+  // The customer answered the order confirmation the agent asked for. A bare
+  // "94107" is no request to the classifier, and the turn must still go on.
+  if (answeredOrderVerification) return false;
   const dispositionCoversBurst = skipSummary !== true
     || burst.messages[0]?.id === sourceMessageId;
   return thread?.requestSourceMessageId !== sourceMessageId
-    || burst.messages.at(-1)?.id !== sourceMessageId
     || (dispositionCoversBurst && !mayParkMerchantWork(thread.requestDisposition));
 }
 
@@ -29,7 +33,13 @@ export async function precomputeThreadPlan(
   organizationId: string,
   threadId: string,
   settings: Pick<OrgSettings, 'autoPlanOnOpen'>,
-  options: { allowAutoExecute?: boolean; instruction?: string; sourceMessageId?: string; skipSummary?: boolean } = {},
+  options: {
+    allowAutoExecute?: boolean;
+    instruction?: string;
+    sourceMessageId?: string;
+    skipSummary?: boolean;
+    answeredOrderVerification?: boolean;
+  } = {},
 ): Promise<PrecomputedPlanResult | null> {
   if (settings.autoPlanOnOpen === false) {
     logger.warn({ threadId, organizationId }, '[Worker] autoPlanOnOpen disabled — no plan will be generated for this thread');
@@ -45,7 +55,13 @@ export async function precomputeThreadPlan(
       return null;
     }
     const burst = await getConversationBurst(threadId);
-    if (shouldSkipRequestWork(thread, burst, options.sourceMessageId, options.skipSummary)) {
+    if (shouldSkipRequestWork(
+      thread,
+      burst,
+      options.sourceMessageId,
+      options.skipSummary,
+      options.answeredOrderVerification,
+    )) {
       return null;
     }
 

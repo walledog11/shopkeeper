@@ -5,20 +5,14 @@ import {
   isOrderScopedTool,
   isVerifiedAllowedTool,
   orderScopeBlockReason,
+  readsVerifiedOrder,
   verifiedToolBlockReason,
 } from "../guest-policy.js";
-// Deliberately order-reference's normalizer, not storefront-verification's:
-// this module reaches the client bundle through plan-preview, and
-// storefront-verification imports node:crypto. Both sides of the comparison go
-// through this one function, so consistency is what matters, not which.
-import { normalizeOrderName } from "../order-reference.js";
 import type { OrgSettings } from "../types.js";
 import type {
   AgentToolDefinition,
   CreateRefundInput,
   CreateShopifyOrderInput,
-  GetOrderByNameInput,
-  GetOrderTrackingInput,
 } from "./registry/index.js";
 import { formatToolInputValidationError, getToolDefinition } from "./registry/index.js";
 
@@ -66,16 +60,10 @@ function checkVerifiedOrderScope(
     return { blocked: true, reason: orderScopeBlockReason(definition.name) };
   }
 
-  if (definition.name === "get_order_by_name") {
-    const requested = normalizeOrderName((input as GetOrderByNameInput).order_name ?? "");
-    const allowed = verified.some((o) => normalizeOrderName(o.orderName) === requested);
-    return allowed ? null : { blocked: true, reason: orderScopeBlockReason(definition.name) };
-  }
-
-  if (definition.name === "get_order_tracking") {
-    const requested = String((input as GetOrderTrackingInput).order_id ?? "").trim();
-    const allowed = verified.some((o) => o.orderId === requested);
-    return allowed ? null : { blocked: true, reason: orderScopeBlockReason(definition.name) };
+  if (definition.name === "get_order_by_name" || definition.name === "get_order_tracking") {
+    return readsVerifiedOrder(definition.name, input, verified)
+      ? null
+      : { blocked: true, reason: orderScopeBlockReason(definition.name) };
   }
 
   // An order-scoped tool with no scope rule written for it is refused rather

@@ -51,6 +51,8 @@ const FORBIDDEN_FOR_GUESTS = [
   "get_support_stats",
   // A photo request; storefront chat cannot carry the photo.
   "await_customer_photo",
+  // Direct-message order confirmation; storefront chat verifies by emailed code.
+  "await_order_verification",
 ] as const;
 
 describe("guest state", () => {

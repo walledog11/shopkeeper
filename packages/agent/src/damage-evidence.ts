@@ -2,6 +2,7 @@ import type { AgentContext } from "./agent-context.js";
 import { shouldHydrateAgentMessageImages } from "./image-attachments.js";
 import { currentRequestSignals } from "./planner-safety/request.js";
 import { isOperatorChannel } from "./thread-constants.js";
+import type { RequestFacts } from "./classifier-signals.js";
 import type { OrgSettings } from "./types.js";
 
 export { AWAIT_CUSTOMER_PHOTO_TOOL } from "./tools/registry/index.js";
@@ -22,15 +23,20 @@ export type DamageEvidenceState =
   /** Photos are on the thread: compensation may be proposed, for the merchant to review. */
   | { kind: "photos"; photos: string[] };
 
-/** Null unless this is a customer's damage claim and the store requires a photo. */
+/**
+ * Null unless this is a customer's damage claim and the store requires a photo.
+ * `resumedRequest` is a request the conversation is returning to after the
+ * customer confirmed their order: the message that confirmed it is not the claim.
+ */
 export function damageEvidenceState(
   ctx: AgentContext,
   settings: Pick<OrgSettings, "damageEvidence">,
+  resumedRequest?: RequestFacts | null,
 ): DamageEvidenceState | null {
   if (settings.damageEvidence !== "photo_required") return null;
   if (isOperatorChannel(ctx.thread.channelType)) return null;
   const evidence = ctx.requestEvidence ?? { customerImages: [], photoRequestedAt: null };
-  const reason = currentRequestSignals(ctx)?.requestFacts?.reason;
+  const reason = currentRequestSignals(ctx)?.requestFacts?.reason ?? resumedRequest?.reason;
   // A reply that is only the photo may not read as a damage claim by itself, so
   // a pending request keeps the conversation one.
   if (reason !== "damaged" && reason !== "defective" && evidence.photoRequestedAt === null) return null;

@@ -20,6 +20,10 @@ export function isOperatorChannel(channelType: string | null | undefined): boole
   return OPERATOR_CHANNEL_TYPES.has(channelType);
 }
 
+// Direct-message channels where a sender with no linked Shopify customer
+// confirms an order by its email or zip (order-verification).
+export const ORDER_VERIFICATION_CHANNELS: ReadonlySet<string> = new Set([CHANNEL_TYPE.IG_DM, CHANNEL_TYPE.TIKTOK]);
+
 // What a channel is called in front of a person — badges, KB provenance, digest
 // copy. One map, because it had drifted into two that disagreed.
 //

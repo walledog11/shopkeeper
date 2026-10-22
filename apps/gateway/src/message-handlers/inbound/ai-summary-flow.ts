@@ -11,6 +11,7 @@ import { CHANNEL } from '../../constants.js';
 import logger from '../../logger.js';
 import { getConversationBurst } from './conversation-burst.js';
 import { generateThreadIntelligence } from './intelligence.js';
+import { evaluateOrderVerificationAnswers, OrderVerificationLookupError } from './order-verification-answers.js';
 import {
   precomputeThreadPlan,
   sendAutoAck,
@@ -81,6 +82,7 @@ async function resolvePublishDecision(
   threadId: string,
   identity: { planId: string; sourceMessageId: string } | undefined,
   skipSummary?: boolean,
+  answeredOrderVerification?: boolean,
 ): Promise<PublishDecision> {
   if (!identity) return { publish: true, requestSummary: null };
   const [thread, latest, burst] = await Promise.all([
@@ -103,7 +105,7 @@ async function resolvePublishDecision(
   const verdictIsForThisRequest = thread.requestSourceMessageId === identity.sourceMessageId;
   if (
     verdictIsForThisRequest
-    && shouldSkipRequestWork(thread, burst, identity.sourceMessageId, skipSummary)
+    && shouldSkipRequestWork(thread, burst, identity.sourceMessageId, skipSummary, answeredOrderVerification)
   ) {
     return { publish: false, reason: 'parks_no_work' };
   }
@@ -158,6 +160,21 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
   }
 
   const parallelPlan = canParallelizeThreadPlanning(threadSnapshot, sourceMessageId);
+  // Compared after this burst is classified and before it is planned, so the
+  // turn reads the stored outcome and a message asking something else is not
+  // read as an answer. A Shopify lookup that failed retries the job, since its
+  // answer is still uncompared; any other failure leaves the ask pending and the
+  // turn planned as if nothing was answered, so a missing table never stops
+  // planning.
+  const checkOrderVerificationAnswers = () => evaluateOrderVerificationAnswers(organizationId, threadId)
+    .catch((err: unknown) => {
+      if (err instanceof OrderVerificationLookupError) throw err;
+      logger.warn(
+        { err: err instanceof Error ? err.message : String(err), threadId, organizationId },
+        '[AISummary] Order confirmation check failed',
+      );
+      return false;
+    });
 
   if (
     parallelPlan
@@ -191,6 +208,8 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
     );
   }
 
+  // The parallel path plans a burst the classifier has already read.
+  const parallelAnswered = parallelPlan ? await checkOrderVerificationAnswers() : false;
   const intelligencePromise = generateThreadIntelligence(threadId, { skipSummary });
   const planPromise = parallelPlan
     ? precomputeThreadPlan(organizationId, threadId, settings, {
@@ -198,6 +217,7 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
         instruction: parallelInstruction,
         sourceMessageId,
         skipSummary,
+        answeredOrderVerification: parallelAnswered,
       })
     : null;
 
@@ -214,6 +234,8 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
     return;
   }
 
+  const answeredOrderVerification = parallelPlan ? parallelAnswered : await checkOrderVerificationAnswers();
+
   if (!withinBusinessHours) {
     const planResult = parallelPlan
       ? await planPromise
@@ -221,6 +243,7 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
           allowAutoExecute: false,
           sourceMessageId,
           skipSummary,
+          answeredOrderVerification,
         });
     if (planResult?.autoExecuted) {
       // Routine answers and clarification questions are useful immediately and
@@ -240,7 +263,7 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
       if (!autoExecutionOnlyHandedOff(planResult)) return;
     }
     const burst = await getConversationBurst(threadId);
-    if (shouldSkipRequestWork(updatedThread, burst, sourceMessageId, skipSummary)) {
+    if (shouldSkipRequestWork(updatedThread, burst, sourceMessageId, skipSummary, answeredOrderVerification)) {
       logger.info({ threadId, organizationId }, '[AISummary] Outside business hours — skipping auto-ack');
       return;
     }
@@ -255,6 +278,7 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
         allowAutoExecute: true,
         sourceMessageId,
         skipSummary,
+        answeredOrderVerification,
       });
 
   if (!planResult) {
@@ -301,6 +325,7 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
     threadId,
     planResult.identity,
     skipSummary,
+    answeredOrderVerification,
   );
   if (!decision.publish) {
     if (decision.reason === 'parks_no_work') {

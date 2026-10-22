@@ -1,6 +1,8 @@
 import { noShopify, cancelReasons, requireShopify, returnReasons, maybeRecordReturnWatch } from "./helpers.js";
 import { arrayArg, booleanArg, defineTool, numberArg, stringArg } from "./schema.js";
 import { toolPolicyBlock } from "../result.js";
+import type { SupportContext } from "../../agent-context.js";
+import { ORDER_VERIFICATION_CHANNELS } from "../../thread-constants.js";
 import { EXCHANGE_EFFECT_DESCRIPTION, EXCHANGE_REPLY_GUIDANCE, EXCHANGE_FINANCIAL_GUIDANCE } from "../../shopify/exchange-contract.js";
 import type {
   AttachReturnLabelInput,
@@ -112,7 +114,18 @@ export const ORDER_TOOL_DEFINITIONS = [
     planStepLabel: "Check shipping status",
     execute: async (input: GetOrderFulfillmentStatusInput, ctx, _settings, deps) => {
       const shopify = requireShopify(ctx);
-      return shopify ? deps.getOrderFulfillmentStatus(input, shopify) : noShopify;
+      if (!shopify) return noShopify;
+      // An email confirms an Instagram or TikTok sender's order and unlocks
+      // reading it (order-verification), so here it is only ever compared where
+      // each guess is counted: this read takes the order number alone.
+      const channelType = (ctx as Partial<SupportContext>).thread?.channelType;
+      if (channelType && ORDER_VERIFICATION_CHANNELS.has(channelType)) {
+        if (!input.order_number?.trim()) {
+          return toolPolicyBlock("Ask the sender for the order number; this check takes the order number only here.");
+        }
+        return deps.getOrderFulfillmentStatus({ order_number: input.order_number }, shopify);
+      }
+      return deps.getOrderFulfillmentStatus(input, shopify);
     },
   }),
   defineTool({

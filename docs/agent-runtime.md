@@ -459,6 +459,42 @@ letter (F) is not reused.
   Reopen this only on a new observed failure. `search_kb` itself
   returns and cites only the candidates `selectAnsweringKbArticles` judges to
   answer the query, and not_found when none do or the check cannot decide.
+- **Q. An Instagram or TikTok sender confirms an order by its email or shipping
+  zip.** When the sender has no linked Shopify customer and asks to change an
+  order or reports a damaged, defective or wrong item
+  (`requestNeedsOrderVerification`), the agent asks which order, then for the
+  email or zip on it, recording each ask with `await_order_verification` (a
+  quick-reply companion, so the ask can auto-send). The ask for which order keeps
+  the request on its conversation, damage reason and compensation intent
+  included; the reply naming the order carries it on, though a request the reply
+  makes itself comes first. The model never passes or judges the answer: after
+  the burst is classified and before it is planned, gateway code
+  (`evaluateOrderVerificationAnswers`) compares it with the sender's latest ask,
+  where they can answer it (the asking thread, or the conversation that opens
+  right after an unanswered ask), and records each message once in
+  `order_verification_answers`. A message that asks something else is not an
+  answer. Rows belong to the store's domain: reads take only the connected
+  store's, and they stay for erasure after a disconnect until that store's
+  shop/redact. Only postal-shaped values and emails count; an order number, price
+  or time is not an answer, and a message about another order costs nothing.
+  Each value compared is one attempt from five per sender across all their
+  orders; a wrong value and an order Shopify does not have are the same miss, so
+  nothing reveals which detail was wrong or whether the order exists. On these
+  channels the guest-safe status read takes the order number only, so it never
+  checks an email outside that count. Out of attempts, or asked three times about
+  one order, the sender's asks escalate as `order_unconfirmed`.
+  `orderVerificationState` is the one owner of where the sender stands; a plain
+  status question about an asked order keeps the guest-safe read. The request
+  made before the ask resumes only on the turn the answer lands, and counts there
+  as the customer's request for routing. The damage-photo rule (decision N)
+  routes on the request asked about while the order is unconfirmed; the photo is
+  asked for once it is confirmed. A confirmed order is knowledge, not possession:
+  a reply that reads only that order is advisory for `shopify_customer_unresolved`,
+  any write beside it keeps the signal blocking, so a refund or any other change
+  still goes to the merchant, and the card says how they confirmed it. A
+  customers/redact or data request for an order's customer also covers the
+  conversation of the sender who confirmed it. Storefront chat keeps its emailed
+  code (`authState`), which this does not touch.
 
 ## Verification scope
 

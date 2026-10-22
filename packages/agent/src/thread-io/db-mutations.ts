@@ -1,5 +1,14 @@
 import { createHash } from "node:crypto";
-import { createMessage, db, SenderType } from "@shopkeeper/db";
+import { createMessage, db, Prisma, SenderType } from "@shopkeeper/db";
+import { parseClassifierSignals, parseRequestFacts } from "../classifier-signals.js";
+import { normalizeOrderName } from "../order-reference.js";
+import {
+  mergeOrderVerificationRequest,
+  ORDER_VERIFICATION_ANSWER_WINDOW_MS,
+  ORDER_VERIFICATION_CHANNELS,
+  ORDER_VERIFICATION_MAX_ASKS,
+  orderVerificationAttemptsLeft,
+} from "../order-verification.js";
 import { stopWaitingTasksOnClosedThreads } from "../task-ledger.js";
 import { AGENT_NOTE_PREFIX, THREAD_STATUS } from "../thread-constants.js";
 import { toolEscalated, toolError, toolNotFound, toolOk, type ToolResult } from "../tools/result.js";
@@ -7,6 +16,7 @@ import type {
   AddInternalNoteInput,
   AskOperatorInput,
   AwaitCustomerPhotoInput,
+  AwaitOrderVerificationInput,
   EscalateToHumanInput,
   UpdateThreadStatusInput,
   UpdateThreadTagInput,
@@ -121,6 +131,110 @@ export async function awaitCustomerPhotoMutation(
   if (updated.count !== 1) return toolNotFound("Error: thread not found.");
   await runHook(after, ctx);
   return toolOk("Waiting for the customer's photo of the damage.");
+}
+
+const ORDER_NAME_SHAPE = /^#[A-Z0-9-]{1,32}$/;
+
+// Records that the reply asks this sender which order this is about, or to
+// confirm an order is theirs. Keyed to the sender, the store and the order, so
+// a later episode resumes the same row rather than starting fresh. It writes no
+// attempt and no outcome: gateway code compares the answer
+// (order-verification-answer). The ask for which order keeps the request it was
+// made about, and the ask that names the order carries it on.
+export async function awaitOrderVerificationMutation(
+  input: AwaitOrderVerificationInput,
+  ctx: ThreadSinkContext,
+  after?: ThreadMutationHook,
+): Promise<ToolResult> {
+  const thread = await db.thread.findFirst({
+    where: { id: ctx.threadId, organizationId: ctx.orgId },
+    select: { customerId: true, channelType: true, classifierSignals: true, requestSourceMessageId: true },
+  });
+  if (!thread) return toolNotFound("Error: thread not found.");
+  if (!ORDER_VERIFICATION_CHANNELS.has(thread.channelType)) {
+    return toolError("Error: order confirmation applies to Instagram and TikTok conversations only.");
+  }
+  const rawName = String(input.order_name ?? "").trim();
+  // Stored, then written into later prompts and the merchant's card, so only
+  // an order number's shape is kept: the model took it from customer text.
+  const orderName = rawName === "" ? null : normalizeOrderName(rawName);
+  if (orderName !== null && !ORDER_NAME_SHAPE.test(orderName)) {
+    return toolError("Error: order_name must be an order number, e.g. #1043.");
+  }
+
+  const integration = await db.integration.findFirst({
+    where: { organizationId: ctx.orgId, platform: "shopify", lifecycleStatus: "active" },
+    select: { externalAccountId: true },
+  });
+  if (!integration) return toolError("Error: no Shopify store is connected to check the order against.");
+  const sender = { organizationId: ctx.orgId, customerId: thread.customerId, shopDomain: integration.externalAccountId };
+  const records = await db.orderVerification.findMany({
+    where: sender,
+    select: {
+      id: true, orderName: true, threadId: true, requestedAt: true, asks: true, attempts: true,
+      verifiedAt: true, requestFacts: true, compensationRequested: true,
+    },
+  });
+  const now = new Date();
+  // The "which order?" ask belongs to the conversation it was asked in, as the
+  // planner reads it: one left on another thread, or past the window, is over.
+  const unnamedRow = records.find(record => record.orderName === null);
+  const unnamedHere = unnamedRow
+    && unnamedRow.threadId === ctx.threadId
+    && now.getTime() - unnamedRow.requestedAt.getTime() < ORDER_VERIFICATION_ANSWER_WINDOW_MS
+    ? unnamedRow
+    : null;
+  const staleUnnamed = unnamedRow && !unnamedHere ? unnamedRow : null;
+  const existing = orderName === null ? unnamedHere : records.find(record => record.orderName === orderName);
+  if (existing?.verifiedAt) return toolOk(`The customer already confirmed ${orderName}.`);
+  if (orderVerificationAttemptsLeft(records) === 0 || (existing && existing.asks >= ORDER_VERIFICATION_MAX_ASKS)) {
+    return toolError("Error: this sender cannot be asked again. Hand the conversation to the merchant.");
+  }
+
+  // The request this message makes, when it is one that needs the order
+  // confirmed; a reply that only names the order keeps the one it answers.
+  const signals = parseClassifierSignals(thread.classifierSignals);
+  const latestCustomerMessage = await db.message.findFirst({
+    where: { threadId: ctx.threadId, organizationId: ctx.orgId, senderType: SenderType.customer, deletedAt: null },
+    orderBy: [{ sentAt: "desc" }, { id: "desc" }],
+    select: { id: true },
+  });
+  const aligned = signals !== null && latestCustomerMessage !== null
+    && thread.requestSourceMessageId === latestCustomerMessage.id;
+  const storedRequest = (record: { requestFacts: unknown; compensationRequested: boolean } | null | undefined) => (
+    record?.requestFacts ? { facts: parseRequestFacts(record.requestFacts), compensation: record.compensationRequested } : null
+  );
+  const request = mergeOrderVerificationRequest(
+    aligned ? { facts: signals.requestFacts, compensation: signals.intents.compensation_request } : null,
+    storedRequest(unnamedHere) ?? (orderName === null ? null : storedRequest(existing)),
+  );
+
+  const stored = request
+    ? { requestFacts: request.facts, compensationRequested: request.compensation }
+    : {};
+  await db.$transaction(async (tx) => {
+    if (staleUnnamed) await tx.orderVerification.delete({ where: { id: staleUnnamed.id } });
+    if (existing) {
+      await tx.orderVerification.update({
+        where: { id: existing.id },
+        data: { threadId: ctx.threadId, requestedAt: now, asks: { increment: 1 }, ...stored },
+      });
+    } else {
+      await tx.orderVerification.create({
+        data: {
+          ...sender, threadId: ctx.threadId, orderName, requestedAt: now,
+          requestFacts: request?.facts ?? Prisma.DbNull,
+          compensationRequested: request?.compensation ?? false,
+        },
+      });
+    }
+    // The order is named now, so the ask for which order is answered.
+    if (orderName !== null && unnamedHere) await tx.orderVerification.delete({ where: { id: unnamedHere.id } });
+  });
+  await runHook(after, ctx);
+  return toolOk(orderName === null
+    ? "Waiting for the customer to say which order."
+    : `Waiting for the customer to confirm ${orderName}.`);
 }
 
 export async function escalateToHumanMutation(

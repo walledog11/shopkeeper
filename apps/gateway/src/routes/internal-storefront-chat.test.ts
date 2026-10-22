@@ -547,6 +547,7 @@ describe('POST /internal/storefront-chat/message', () => {
       updateThreadStatus: async () => ({ status: 'ok', message: 'ok' }),
       updateThreadTag: async () => ({ status: 'ok', message: 'ok' }),
       awaitCustomerPhoto: async () => ({ status: 'ok', message: 'ok' }),
+      awaitOrderVerification: async () => ({ status: 'ok', message: 'ok' }),
     };
 
     // A resolved refund conversation on an open thread, gone quiet `idleMs` ago,

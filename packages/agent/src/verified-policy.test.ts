@@ -53,6 +53,8 @@ const FORBIDDEN_WHEN_VERIFIED = [
   "get_inventory_status",
   // A photo request; storefront chat cannot carry the photo.
   "await_customer_photo",
+  // Direct-message order confirmation; storefront chat verifies by emailed code.
+  "await_order_verification",
 ] as const;
 
 const TIERS: AutonomyTier[] = ["watch", "guarded", "trusted", "broad", "full"];

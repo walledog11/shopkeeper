@@ -78,6 +78,7 @@ export async function pushReturnArrivalApprovalPlan(
   const generated = await generateThreadPlan(organizationId, watch.threadId, false, {
     instruction,
     sourceMessageId,
+    systemRequest: true,
   });
   const plan = generated.plan;
   if (!plan?.steps?.length || !generated.identity) {

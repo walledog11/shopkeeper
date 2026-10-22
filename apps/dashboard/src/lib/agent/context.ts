@@ -7,6 +7,7 @@ import {
   escalateToHuman,
   askOperator,
   awaitCustomerPhoto,
+  awaitOrderVerification,
   addInternalNote,
   sendReply,
   sendEmail,
@@ -29,6 +30,7 @@ export function buildContext(
     updateThreadStatus,
     updateThreadTag,
     awaitCustomerPhoto,
+    awaitOrderVerification,
   }, options);
 }
 

@@ -8,6 +8,7 @@ import {
 } from '@shopkeeper/agent/person-name';
 import { lowerFirst } from '../../../lib/sentence-case.js';
 import { formatBlockedTicketLine } from '../../../maintenance/digest-briefing/ticket-lines.js';
+import type { ConfirmedOrder } from '../../../storefront-chat-verified-orders.js';
 import type { AgentPlan, PlanStep, ProposalCommunication } from '@shopkeeper/agent/types';
 import { displayApprovedDraft } from '@shopkeeper/agent/reply-placeholders';
 import { lineItemWriteSentence } from '@shopkeeper/agent/line-item-display';
@@ -129,10 +130,10 @@ export function formatOperatorPlanMessage(
     // `evicts` (cap>1: the queue is full so the oldest waiting plan is trimmed),
     // or `stacked` (cap>1: it joins the queue, nothing dropped).
     queueNotice?: QueueNotice;
-    // Orders this storefront shopper proved control of. Without it the card
-    // describes an anonymous visitor above a draft that quotes their address,
-    // and the merchant has no way to tell a correct disclosure from a leak.
-    verifiedOrders?: readonly string[];
+    // Orders this sender showed are theirs. Without it the card describes an
+    // anonymous visitor above a draft that quotes their address, and the
+    // merchant has no way to tell a correct disclosure from a leak.
+    verifiedOrders?: readonly ConfirmedOrder[];
     validation?: AgentPlan['validation'];
     // The customer's own words, for the threads whose structured request did not
     // survive. Only read when `requestDisplay` cannot ground the card itself.
@@ -147,7 +148,8 @@ export function formatOperatorPlanMessage(
 ): string {
   const stage = options?.stage ?? FRESH_STAGE;
   const now = options?.now ?? new Date();
-  const verifiedOrders = options?.verifiedOrders ?? [];
+  const confirmedOrders = options?.verifiedOrders ?? [];
+  const verifiedOrders = confirmedOrders.map(order => order.orderName);
   // The card states the verified orders on their own line below, so the name
   // does not repeat them: a verified shopper is "the customer" here, not "the
   // customer on #1024 … They confirmed the email on #1024".
@@ -218,9 +220,13 @@ export function formatOperatorPlanMessage(
   // judge what it is worth, but in the register a colleague would use. The
   // earlier "Verified: entered a code emailed to the address on #1024." asked
   // them to audit an authentication scheme to answer a shipping question.
-  if (verifiedOrders.length > 0) {
-    lines.push(`They confirmed the email on ${verifiedOrders.join(', ')}.`);
-  }
+  const confirmedBy = (method: ConfirmedOrder['method']) => confirmedOrders
+    .filter(order => order.method === method)
+    .map(order => order.orderName);
+  const byEmail = confirmedBy('email');
+  const byZip = confirmedBy('zip');
+  if (byEmail.length > 0) lines.push(`They confirmed the email on ${byEmail.join(', ')}.`);
+  if (byZip.length > 0) lines.push(`They confirmed the shipping zip on ${byZip.join(', ')}.`);
 
   // The evidence the plan was made on, beside the request it supports.
   const photos = options?.damagePhotos;
