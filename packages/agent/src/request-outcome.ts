@@ -11,6 +11,7 @@ import type { Prisma } from "@prisma/client";
 import { Prisma as PrismaRuntime, db } from "@shopkeeper/db";
 import { hashInstruction, hashPlan } from "./agent-actions.js";
 import { decideAutonomy, type AutonomyKind } from "./autonomy.js";
+import logger from "./logger.js";
 import { parseClassifierSignals } from "./classifier-signals.js";
 import type { OrgSettings } from "./types.js";
 import type { AgentPlan } from "./types.js";
@@ -41,6 +42,18 @@ const RESOLVED_EPISODE_TERMINALS: RequestEpisodeTerminalResolution[] = [
   "merchant_input",
   "escalated",
 ];
+
+// Request outcomes are analytics about work, never part of it. Each writer
+// swallows its own failure: an uncaught write once sat ahead of the
+// unknown-outcome escalation, and could also drop a card push, lose an answer
+// note or roll back a dismissal it was only describing.
+async function bestEffort(write: string, orgId: string, run: () => Promise<void>): Promise<void> {
+  try {
+    await run();
+  } catch (err) {
+    logger.error({ err, orgId, write }, "[request-outcome] write failed; the work it describes is unaffected");
+  }
+}
 
 export interface CaptureCommittedPlanOutcomeParams {
   orgId: string;
@@ -153,22 +166,24 @@ function terminalForExecution(params: RecordRequestEpisodeExecutionParams): {
 export async function captureCommittedPlanOutcome(
   params: CaptureCommittedPlanOutcomeParams,
 ): Promise<void> {
-  const classifierSignals = parseClassifierSignals(params.thread.classifierSignals);
-  const verdict = decideAutonomy(params.plan, params.settings, {
-    filterStatus: params.thread.filterStatus,
-    threadEscalated: Boolean(params.thread.escalatedAt),
-    allowMutativeAutoExecute: params.allowMutativeAutoExecute,
-  });
-  await recordRequestEpisodePlanned({
-    orgId: params.orgId,
-    thread: params.thread,
-    sourceMessageId: params.sourceMessageId,
-    planId: params.planId,
-    instruction: params.instruction,
-    plan: params.plan,
-    planVerdict: verdict.kind,
-    classifierSignals,
-    namespaceMiss: params.namespaceMiss ?? params.plan.namespaceMiss ?? false,
+  return bestEffort("captureCommittedPlanOutcome", params.orgId, async () => {
+    const classifierSignals = parseClassifierSignals(params.thread.classifierSignals);
+    const verdict = decideAutonomy(params.plan, params.settings, {
+      filterStatus: params.thread.filterStatus,
+      threadEscalated: Boolean(params.thread.escalatedAt),
+      allowMutativeAutoExecute: params.allowMutativeAutoExecute,
+    });
+    await recordRequestEpisodePlanned({
+      orgId: params.orgId,
+      thread: params.thread,
+      sourceMessageId: params.sourceMessageId,
+      planId: params.planId,
+      instruction: params.instruction,
+      plan: params.plan,
+      planVerdict: verdict.kind,
+      classifierSignals,
+      namespaceMiss: params.namespaceMiss ?? params.plan.namespaceMiss ?? false,
+    });
   });
 }
 
@@ -236,37 +251,39 @@ export async function recordRequestEpisodePlanned(params: {
 export async function recordRequestEpisodeExecution(
   params: RecordRequestEpisodeExecutionParams,
 ): Promise<void> {
-  const terminal = terminalForExecution(params);
-  if (terminal.terminalResolution === "unresolved") {
+  return bestEffort("recordRequestEpisodeExecution", params.orgId, async () => {
+    const terminal = terminalForExecution(params);
+    if (terminal.terminalResolution === "unresolved") {
+      await db.requestEpisodeOutcome.updateMany({
+        where: {
+          organizationId: params.orgId,
+          planId: params.planId,
+        },
+        data: {
+          planExecutionId: params.planExecutionId ?? null,
+          executionStatus: params.executionStatus,
+        },
+      });
+      return;
+    }
+
+    const now = new Date();
     await db.requestEpisodeOutcome.updateMany({
       where: {
         organizationId: params.orgId,
         planId: params.planId,
+        terminalResolution: "unresolved",
       },
       data: {
         planExecutionId: params.planExecutionId ?? null,
         executionStatus: params.executionStatus,
+        replyProvenance: terminal.replyProvenance,
+        merchantTouched: terminal.merchantTouched,
+        approvalGrantedAt: terminal.approvalGrantedAt,
+        terminalResolution: terminal.terminalResolution,
+        terminalAt: now,
       },
     });
-    return;
-  }
-
-  const now = new Date();
-  await db.requestEpisodeOutcome.updateMany({
-    where: {
-      organizationId: params.orgId,
-      planId: params.planId,
-      terminalResolution: "unresolved",
-    },
-    data: {
-      planExecutionId: params.planExecutionId ?? null,
-      executionStatus: params.executionStatus,
-      replyProvenance: terminal.replyProvenance,
-      merchantTouched: terminal.merchantTouched,
-      approvalGrantedAt: terminal.approvalGrantedAt,
-      terminalResolution: terminal.terminalResolution,
-      terminalAt: now,
-    },
   });
 }
 
@@ -274,17 +291,19 @@ export async function recordRequestEpisodeDismissed(params: {
   orgId: string;
   planId: string;
 }): Promise<void> {
-  const now = new Date();
-  await db.requestEpisodeOutcome.updateMany({
-    where: {
-      organizationId: params.orgId,
-      planId: params.planId,
-      terminalResolution: "unresolved",
-    },
-    data: {
-      terminalResolution: "dismissed",
-      terminalAt: now,
-    },
+  return bestEffort("recordRequestEpisodeDismissed", params.orgId, async () => {
+    const now = new Date();
+    await db.requestEpisodeOutcome.updateMany({
+      where: {
+        organizationId: params.orgId,
+        planId: params.planId,
+        terminalResolution: "unresolved",
+      },
+      data: {
+        terminalResolution: "dismissed",
+        terminalAt: now,
+      },
+    });
   });
 }
 
@@ -293,16 +312,18 @@ export async function recordRequestEpisodeMerchantInputAnswered(params: {
   planId: string;
   answeredAt?: Date;
 }): Promise<void> {
-  const answeredAt = params.answeredAt ?? new Date();
-  await db.requestEpisodeOutcome.updateMany({
-    where: {
-      organizationId: params.orgId,
-      planId: params.planId,
-    },
-    data: {
-      merchantInputAnsweredAt: answeredAt,
-      merchantTouched: true,
-    },
+  return bestEffort("recordRequestEpisodeMerchantInputAnswered", params.orgId, async () => {
+    const answeredAt = params.answeredAt ?? new Date();
+    await db.requestEpisodeOutcome.updateMany({
+      where: {
+        organizationId: params.orgId,
+        planId: params.planId,
+      },
+      data: {
+        merchantInputAnsweredAt: answeredAt,
+        merchantTouched: true,
+      },
+    });
   });
 }
 
@@ -396,66 +417,68 @@ export async function recordRequestEpisodeManualReply(params: {
   sourceMessageId: string;
   repliedAt?: Date;
 }): Promise<void> {
-  const now = params.repliedAt ?? new Date();
-  const classifierSignals = parseClassifierSignals(params.thread.classifierSignals);
+  return bestEffort("recordRequestEpisodeManualReply", params.orgId, async () => {
+    const now = params.repliedAt ?? new Date();
+    const classifierSignals = parseClassifierSignals(params.thread.classifierSignals);
 
-  const updated = await db.requestEpisodeOutcome.updateMany({
-    where: {
-      organizationId: params.orgId,
-      sourceMessageId: params.sourceMessageId,
-      terminalResolution: "unresolved",
-    },
-    data: {
-      replyProvenance: "manual",
-      merchantTouched: true,
-      terminalResolution: "merchant_approved",
-      terminalAt: now,
-    },
-  });
-  if (updated.count > 0) return;
-
-  const alreadyResolved = await db.requestEpisodeOutcome.findFirst({
-    where: {
-      organizationId: params.orgId,
-      sourceMessageId: params.sourceMessageId,
-      OR: [
-        { terminalResolution: { in: RESOLVED_EPISODE_TERMINALS } },
-        { replyProvenance: "manual" },
-      ],
-    },
-    select: { id: true },
-  });
-  if (alreadyResolved) return;
-
-  const planId = randomUUID();
-  try {
-    await db.requestEpisodeOutcome.create({
-      data: {
-        id: randomUUID(),
+    const updated = await db.requestEpisodeOutcome.updateMany({
+      where: {
         organizationId: params.orgId,
-        threadId: params.thread.id,
-        customerId: params.thread.customerId,
         sourceMessageId: params.sourceMessageId,
-        planId,
-        channelType: params.thread.channelType,
-        classifierVersion: classifierSignals?.version ?? null,
-        requestTag: params.thread.tag,
-        requestDisposition: params.thread.requestDisposition,
-        requestAsk: classifierSignals?.requestFacts.ask ?? null,
-        classifierIntents: classifierIntentsSnapshot(classifierSignals) ?? PrismaRuntime.DbNull,
-        planVerdict: "manual",
-        planHash: hashPlan(MANUAL_REPLY_PLAN_SNAPSHOT),
-        instructionHash: hashInstruction(""),
-        namespaceMiss: false,
+        terminalResolution: "unresolved",
+      },
+      data: {
         replyProvenance: "manual",
         merchantTouched: true,
         terminalResolution: "merchant_approved",
         terminalAt: now,
       },
     });
-  } catch (error) {
-    if (!isUniqueConflict(error)) throw error;
-  }
+    if (updated.count > 0) return;
+
+    const alreadyResolved = await db.requestEpisodeOutcome.findFirst({
+      where: {
+        organizationId: params.orgId,
+        sourceMessageId: params.sourceMessageId,
+        OR: [
+          { terminalResolution: { in: RESOLVED_EPISODE_TERMINALS } },
+          { replyProvenance: "manual" },
+        ],
+      },
+      select: { id: true },
+    });
+    if (alreadyResolved) return;
+
+    const planId = randomUUID();
+    try {
+      await db.requestEpisodeOutcome.create({
+        data: {
+          id: randomUUID(),
+          organizationId: params.orgId,
+          threadId: params.thread.id,
+          customerId: params.thread.customerId,
+          sourceMessageId: params.sourceMessageId,
+          planId,
+          channelType: params.thread.channelType,
+          classifierVersion: classifierSignals?.version ?? null,
+          requestTag: params.thread.tag,
+          requestDisposition: params.thread.requestDisposition,
+          requestAsk: classifierSignals?.requestFacts.ask ?? null,
+          classifierIntents: classifierIntentsSnapshot(classifierSignals) ?? PrismaRuntime.DbNull,
+          planVerdict: "manual",
+          planHash: hashPlan(MANUAL_REPLY_PLAN_SNAPSHOT),
+          instructionHash: hashInstruction(""),
+          namespaceMiss: false,
+          replyProvenance: "manual",
+          merchantTouched: true,
+          terminalResolution: "merchant_approved",
+          terminalAt: now,
+        },
+      });
+    } catch (error) {
+      if (!isUniqueConflict(error)) throw error;
+    }
+  });
 }
 
 export async function recordManualMerchantReplyForThread(params: {

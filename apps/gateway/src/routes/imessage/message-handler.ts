@@ -36,9 +36,8 @@ export interface BoundImessageMember {
 // Resolve the sender's binding and perform the synchronous binding maintenance
 // (connect-code binding/re-bind, unbound reply, and space/label refresh). Returns
 // the bound member when there is an operator turn left to run, or null when the
-// message was a binding interaction fully handled here. Both the synchronous
-// handler and the durable webhook ingestion path share this so binding behavior
-// stays identical; only where the turn runs differs.
+// message was a binding interaction fully handled here. The webhook runs it
+// before enqueueing the turn as a durable operator event.
 export async function resolveImessageOperatorBinding(
   message: ImessageOperatorInbound,
 ): Promise<BoundImessageMember | null> {
@@ -178,21 +177,4 @@ export async function runImessageOperatorTurn(params: ImessageOperatorTurnParams
   // pending-state ledger and drives approve/reject/revise/answer via control tools,
   // or handles a fresh instruction normally.
   return executeFreeFormInstruction(organizationId, clerkUserId, baseMessage);
-}
-
-// Synchronous operator-channel iMessage dispatch — the iMessage equivalent of
-// handleTelegramMessage, and the edge-case path when a provider message has no
-// off for iMessage. Resolves/maintains the binding, then runs the turn inline.
-export async function handleImessageOperatorMessage(message: ImessageOperatorInbound): Promise<void> {
-  const member = await resolveImessageOperatorBinding(message);
-  if (!member) return;
-
-  await runImessageOperatorTurn({
-    organizationId: member.organizationId,
-    clerkUserId: member.clerkUserId,
-    senderId: message.senderId,
-    body: message.body,
-    reply: message.reply,
-    spaceId: message.spaceId,
-  });
 }

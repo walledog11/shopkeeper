@@ -19,7 +19,7 @@ export const STALE_UNKNOWN_RECONCILIATION_MS = 10 * 60 * 1000;
 export const STALE_CLAIMED_EXECUTION_ERROR =
   "Plan execution did not finish; claim reconciled to unknown for review. It is never auto-replayed.";
 export const STALE_RESERVED_SPEND_ERROR =
-  "Goodwill reservation did not reach a provider outcome; capacity released after the reservation window expired.";
+  "Goodwill reservation did not reach a provider outcome before the reservation window expired; held as unknown until the provider is probed.";
 export const STALE_ACTION_DISPATCH_ERROR =
   "Agent action crossed dispatch authorization without a recorded outcome; it is unknown and must be reconciled, never replayed.";
 export const RECONCILED_ACTION_PREFIX = "Reconciled after provider ambiguity review.";
@@ -27,7 +27,7 @@ export const RECONCILED_ACTION_PREFIX = "Reconciled after provider ambiguity rev
 export interface UnknownOutcomeSweepCounts {
   staleClaimedExecutions: number;
   staleActionDispatches: number;
-  staleReleasedReservations: number;
+  staleUnknownReservations: number;
   resolvedStandaloneActions: number;
   stillUnknownStandaloneActions: number;
   resolvedExecutions: number;
@@ -138,6 +138,10 @@ export async function reconcileUnknownRefundSpendReservation(
   return (await applyReservationProbeResult(reservation, probe)) ? "resolved" : "still_unknown";
 }
 
+// A reservation is taken after its action is marked submitted, so one still
+// `reserved` after its process died may have reached Shopify. Releasing it gave
+// the daily cap back for a refund that may have gone through; as `unknown` it
+// stays held until the probe below commits or releases it by operation key.
 export async function reconcileStaleReservedRefundSpendReservations(
   staleBefore: Date,
   reason: string,
@@ -148,8 +152,7 @@ export async function reconcileStaleReservedRefundSpendReservations(
       updatedAt: { lt: staleBefore },
     },
     data: {
-      status: "released",
-      resolvedAt: new Date(),
+      status: "unknown",
       lastError: reason,
     },
   });
@@ -374,7 +377,7 @@ export async function runUnknownOutcomeReconciliation(params: {
     staleBefore,
     STALE_ACTION_DISPATCH_ERROR,
   );
-  const staleReleasedReservations = await reconcileStaleReservedRefundSpendReservations(
+  const staleUnknownReservations = await reconcileStaleReservedRefundSpendReservations(
     staleBefore,
     STALE_RESERVED_SPEND_ERROR,
   );
@@ -407,7 +410,7 @@ export async function runUnknownOutcomeReconciliation(params: {
   const totals: UnknownOutcomeSweepCounts = {
     staleClaimedExecutions,
     staleActionDispatches,
-    staleReleasedReservations,
+    staleUnknownReservations,
     resolvedStandaloneActions: 0,
     stillUnknownStandaloneActions: 0,
     resolvedExecutions: 0,

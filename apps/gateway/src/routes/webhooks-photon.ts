@@ -8,10 +8,7 @@ import { stripMarkdown } from '../message-handlers/shared/strip-markdown.js';
 import { ingestAndEnqueueOperatorEvent } from '../operator-event-ingest.js';
 import { webhookJsonParser } from './body-parsers.js';
 import { getRateLimitRedis } from './webhooks-shared.js';
-import {
-  handleImessageOperatorMessage,
-  resolveImessageOperatorBinding,
-} from './imessage/message-handler.js';
+import { resolveImessageOperatorBinding } from './imessage/message-handler.js';
 import type { OperatorReply } from './operator-message.js';
 import {
   buildWebhookSignatureRequestMetadata,
@@ -142,18 +139,13 @@ async function ingestInboundImessageMessage(
 
   const providerMessageId = safeTrim(message.id);
   if (!providerMessageId) {
-    // No stable provider id → can't dedupe a redelivery durably, so returning a
-    // 500 would risk double-processing. Handle synchronously and swallow like the
-    // sync path instead of propagating.
-    logger.info(
+    // Phone instructions run only as durable operator events (decision E), and an
+    // event with no provider id cannot be deduped on redelivery. Running it inline
+    // instead skipped the claim, the window and persist-before-send.
+    logger.warn(
       { senderId, externalSpaceId, traceId },
-      '[Webhook] iMessage message missing provider id — processing synchronously',
+      '[Webhook] iMessage message missing provider id — dropped',
     );
-    try {
-      await handleImessageOperatorMessage({ senderId, spaceId: externalSpaceId, body, displayName: null, reply });
-    } catch (error) {
-      logger.error({ err: error, traceId }, '[Webhook] iMessage operator dispatch failed');
-    }
     return;
   }
 

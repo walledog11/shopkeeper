@@ -785,6 +785,13 @@ export async function executeCurrentCachedHomePlan(params: {
         error: executionError(error),
       }).catch(() => undefined);
     }
+    // The merchant hears about the unknown outcome before anything is recorded
+    // about it.
+    await escalateThreadForUnknownPlanExecution({
+      orgId: params.orgId,
+      threadId: params.threadId,
+      reason: executionError(error),
+    });
     if (current.planId) {
       await recordRequestEpisodeExecution({
         orgId: params.orgId,
@@ -795,11 +802,6 @@ export async function executeCurrentCachedHomePlan(params: {
         planVerdict: current.verdict.kind,
       });
     }
-    await escalateThreadForUnknownPlanExecution({
-      orgId: params.orgId,
-      threadId: params.threadId,
-      reason: executionError(error),
-    });
     throw error;
   } finally {
     await consumeThreadCachedPlan({

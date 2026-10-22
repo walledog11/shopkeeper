@@ -68,7 +68,7 @@ function cnClerkPrimary(base: string, extra: string) {
 }
 
 const authInputClassName =
-  "h-12 max-h-none rounded-md border border-[color:var(--m-line-strong)] bg-white px-3.5 text-base text-[color:var(--m-ink)] shadow-none placeholder:text-[color:var(--m-ink-3)] focus:border-[color:var(--m-ink)] focus:ring-2 focus:ring-stone-900/10 aria-invalid:border-red-700";
+  "h-12 max-h-none rounded-xl border border-[color:var(--m-line-strong)] bg-white px-3.5 text-base text-[color:var(--m-ink)] shadow-none placeholder:text-[color:var(--m-ink-3)] focus:border-[color:var(--m-ink)] focus:ring-2 focus:ring-stone-900/10 aria-invalid:border-red-700";
 
 const authLinkClassName =
   "font-medium text-[color:var(--m-ink)] underline underline-offset-4 hover:text-black focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[color:var(--m-focus)]";
@@ -99,7 +99,7 @@ const authElements: ClerkElementOverrides = {
   formFieldAction: authLinkClassName,
   backLink: authLinkClassName,
   otpCodeFieldInput:
-    "h-12 max-h-none rounded-md border border-[color:var(--m-line-strong)] bg-white text-base text-[color:var(--m-ink)] shadow-none focus:border-[color:var(--m-ink)] focus:ring-2 focus:ring-stone-900/10",
+    "h-12 max-h-none rounded-xl border border-[color:var(--m-line-strong)] bg-white text-base text-[color:var(--m-ink)] shadow-none focus:border-[color:var(--m-ink)] focus:ring-2 focus:ring-stone-900/10",
   formFieldInputShowPasswordButton: "text-[color:var(--m-ink-3)] hover:text-[color:var(--m-ink)]",
   alternativeMethodsBlockButton:
     "m-btn m-btn-outline min-h-12 w-full shadow-none",
@@ -146,7 +146,7 @@ export function getUserProfileClerkAppearance(): {
       headerTitle: "text-lg font-semibold tracking-tight text-strong",
       headerSubtitle: "text-sm text-muted-foreground",
       profilePageContent: "p-0",
-      profileSection: "w-full rounded-md",
+      profileSection: "w-full rounded-2xl",
       profileSectionHeader: "w-full text-left",
       profileSectionTitleText: "text-left text-sm font-semibold text-strong",
       profileSectionContent: "min-w-0 w-full text-sm text-muted-foreground",

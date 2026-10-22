@@ -127,9 +127,11 @@ function deriveCategory(entry: ActionEntry): string {
   return entry.category ?? TOOL_CATEGORIES[entry.tool] ?? "unknown";
 }
 
+// Only writes and sends carry receipts, so a not_found receipt is an action that
+// found nothing to act on: no effect, a definite failure (executeToolWithStatus).
 const RECEIPT_ACTION_STATUS: Record<ReceiptV1["outcome"], AgentActionStatus> = {
   succeeded: "success",
-  not_found: "success",
+  not_found: "error",
   rejected: "policy_block",
   failed: "error",
   unknown: "unknown",

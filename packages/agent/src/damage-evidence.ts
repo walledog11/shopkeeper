@@ -4,8 +4,7 @@ import { currentRequestSignals } from "./planner-safety/request.js";
 import { isOperatorChannel } from "./thread-constants.js";
 import type { OrgSettings } from "./types.js";
 
-/** The internal step that records a photo request (registry `thread.ts`). */
-export const AWAIT_CUSTOMER_PHOTO_TOOL = "await_customer_photo";
+export { AWAIT_CUSTOMER_PHOTO_TOOL } from "./tools/registry/index.js";
 
 /**
  * Where a damage claim stands on the photo the store requires before any

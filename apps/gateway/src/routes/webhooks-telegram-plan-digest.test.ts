@@ -266,61 +266,31 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
     expect((await getContext(org.id, memberKey)).pendingPlans.at(-1)?.threadId).toBe(threadId);
   });
 
-  it('"skip 1" drops the first actionable tool call', async () => {
-    const chatId = '5555002';
+  // "skip 0" and "skip 9" named no step, so they fell through to running the
+  // whole plan, refund included, as an approval.
+  it.each(['skip 0', 'skip 1', 'skip 9'])('"%s" runs nothing and keeps the plan parked', async (command) => {
+    const chatId = `555502${command.slice(-1)}`;
     const memberKey = await bindMember(chatId);
     const { threadId } = await parkCurrentPlan({
       memberKey,
-      instruction: 'do things',
+      instruction: 'refund and reply',
       rawToolCalls: [
-        { id: 'r1', name: 'get_shopify_orders', input: {} }, // read, retained
-        { id: 'r2', name: 'get_order_tracking', input: {} }, // canonical read, retained
-        { id: 'a1', name: 'refund_order', input: {} }, // actionable[0] → skipped
-        { id: 'a2', name: 'cancel_order', input: {} }, // actionable[1] → retained
+        { id: 'r1', name: 'get_shopify_orders', input: {} },
+        { id: 'a1', name: 'create_refund', input: { order_id: '1001' } },
+        { id: 's1', name: 'send_reply', input: { text: 'Your refund is on its way.' } },
       ],
     });
 
     await request(app)
       .post('/webhooks/telegram')
       .set('x-telegram-bot-api-secret-token', SECRET)
-      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'skip 1' } });
-
-    await processPendingOperatorEvents(org.id);
-    await waitForReplies(1);
-    expect(setMessageReactionSpy).toHaveBeenCalledWith(chatId, 1, '👀');
-    expect(sendChatActionSpy).toHaveBeenCalledWith(chatId, 'typing');
-    const call = executeOperatorAgentTurnSpy.mock.calls[0]?.[0] as {
-      approvedToolCalls: Array<{ id: string }>;
-    };
-    const ids = call.approvedToolCalls.map((tc) => tc.id);
-    expect(ids).toEqual(['r1', 'r2', 'a2']);
-  });
-
-  it('"skip 1" requires revision when a terminal send would change', async () => {
-    const chatId = '5555004';
-    const memberKey = await bindMember(chatId);
-    const { threadId } = await parkCurrentPlan({
-      memberKey,
-      instruction: 'update address',
-      rawToolCalls: [
-        { id: 'a1', name: 'edit_shopify_order', input: { quantity: 1 } },
-        { id: 'a2', name: 'update_shopify_order_address', input: { address1: '1 Main St' } },
-        { id: 's1', name: 'send_reply', input: { text: 'Added item and updated address.' } },
-      ],
-    });
-
-    await request(app)
-      .post('/webhooks/telegram')
-      .set('x-telegram-bot-api-secret-token', SECRET)
-      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'skip 1' } });
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: command } });
 
     await processPendingOperatorEvents(org.id);
     await waitForReplies(1);
     expect(executeOperatorAgentTurnSpy).not.toHaveBeenCalled();
     expect(lastReplyText()).toContain("I've run nothing");
-
-    const context = await getContext(org.id, memberKey);
-    expect(context.pendingPlans.at(-1)?.threadId).toBe(threadId);
+    expect((await getContext(org.id, memberKey)).pendingPlans.at(-1)?.threadId).toBe(threadId);
   });
 
   // Older parked plans have no actionLabel — the fast path must still answer.

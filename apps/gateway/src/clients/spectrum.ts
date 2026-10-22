@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { Spectrum, type SpectrumInstance } from 'spectrum-ts';
+import { attachment, Spectrum, type ContentInput, type SpectrumInstance } from 'spectrum-ts';
 import { imessage } from 'spectrum-ts/providers/imessage';
 import { getSpectrumConfig, type SpectrumConfig } from '../config/runtime-config.js';
 import logger from '../logger.js';
@@ -14,7 +14,13 @@ export type ImessageSpectrumApp = SpectrumInstance<[ImessageProviderConfig]>;
 
 export interface ImessageSendTarget {
   id: string;
-  send: (text: string) => Promise<unknown>;
+  send: (...content: ContentInput[]) => Promise<unknown>;
+}
+
+export interface ImessageImage {
+  data: Buffer;
+  mediaType: string;
+  name: string;
 }
 
 export interface ImessageSendAlertContext {
@@ -128,15 +134,22 @@ export async function sendImessageOnSpace(
   space: ImessageSendTarget,
   text: string,
   alertContext?: ImessageSendAlertContext,
+  images: readonly ImessageImage[] = [],
 ): Promise<void> {
   const contextWithSpace: ImessageSendAlertContext = {
     ...alertContext,
     spaceId: alertContext?.spaceId ?? space.id,
   };
+  // Images first, so the text — which ends with the question — is the last
+  // bubble the merchant reads.
+  const content: ContentInput[] = [
+    ...images.map((image) => attachment(image.data, { mimeType: image.mediaType, name: image.name })),
+    text,
+  ];
 
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      await space.send(text);
+      await space.send(...content);
       return;
     } catch (error) {
       if (attempt === 0 && isSpectrumTransportError(error)) {
@@ -226,6 +239,7 @@ export async function sendImessageToSpace(
   spaceId: string,
   text: string,
   alertContext?: ImessageSendAlertContext,
+  images: readonly ImessageImage[] = [],
 ): Promise<void> {
   const contextWithSpace: ImessageSendAlertContext = { ...alertContext, spaceId };
   let space: ImessageSendTarget;
@@ -243,5 +257,5 @@ export async function sendImessageToSpace(
     recordImessageSendFailure(error, contextWithSpace);
     throw error;
   }
-  await sendImessageOnSpace(space, text, contextWithSpace);
+  await sendImessageOnSpace(space, text, contextWithSpace, images);
 }

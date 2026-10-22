@@ -12,12 +12,7 @@ export function LoginPageClient() {
 
   if (isLoaded && isSignedIn) {
     return (
-      <AuthShell
-        prompt="signIn"
-        title="You're signed in"
-        description="Continue to your workspace or switch accounts."
-        showAlternateAccountLink={false}
-      >
+      <AuthShell variant="app">
         <AccountActionsCard backHref="/dashboard" backLabel="Back to dashboard" />
       </AuthShell>
     );

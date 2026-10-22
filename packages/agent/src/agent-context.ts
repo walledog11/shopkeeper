@@ -123,6 +123,23 @@ export interface ActionAuthorityBlock {
   message: string;
 }
 
+// The turn's standing to run action-category tools, as an object rather than a
+// field: every tool call runs on a shallow copy of the turn's context, and a
+// field written on a copy is gone when the call returns. Every copy shares this
+// one by reference, so a withdrawal reaches the rest of the turn.
+export interface TurnActionAuthority {
+  block: ActionAuthorityBlock | null;
+}
+
+// Turn-scoped and one-way: the first withdrawal stands, and nothing clears it,
+// because nothing later in a turn can retroactively authorize what the merchant
+// never saw. executeAgentToolCall creates the holder on the turn's context
+// before any tool runs; creating it here covers a context no turn owns.
+export function withdrawActionAuthority(ctx: BaseAgentContext, block: ActionAuthorityBlock): void {
+  ctx.actionAuthority ??= { block: null };
+  ctx.actionAuthority.block ??= block;
+}
+
 // Module-agnostic agent context: the org identity and the conversation any
 // module's agent loop operates on. Future modules compose their own context on
 // top of this base.
@@ -139,10 +156,9 @@ export interface BaseAgentContext {
   assertExecutionAllowed?: () => void;
   // Absent for hosts with no durable task; their budgets stay turn-scoped.
   taskBudget?: TaskModelBudget;
-  // Turn-scoped and one-way: once set, no action-category tool runs again in
-  // this turn. Nothing clears it, because nothing that happens later in a turn
-  // can retroactively authorize what the merchant never saw.
-  actionAuthorityBlock?: ActionAuthorityBlock | null;
+  // Once its block is set, no action-category tool runs again in this turn
+  // (withdrawActionAuthority).
+  actionAuthority?: TurnActionAuthority;
   /** Runtime-owned identity for the current non-read operation, including non-provider writes. */
   execution?: AgentExecutionIdentity;
   /** Runtime-owned durable identities; never accepted from model input. */

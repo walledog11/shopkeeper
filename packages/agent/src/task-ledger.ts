@@ -639,6 +639,52 @@ function continuityMatches(current: TaskContinuityHint, prior: TaskContinuityHin
 }
 
 /**
+ * The task an already-accepted customer message is on, re-run when planning it
+ * failed before anything reached a provider. Accepting the message again is a
+ * job retry or plan recovery, and leaving the task failed would leave the
+ * message unplanned for good.
+ *
+ * Only planning work re-runs: a task holding the merchant's regenerate or a
+ * withheld-message follow-up belongs to that work's own worker. A message that
+ * already had a plan executed against it stays failed whatever the outcome, so
+ * an unknown one stays escalated rather than replanned. Automatic executions
+ * are not linked to their task, so the message is what finds them. The spent
+ * budget carries over, and a task with none left stays failed.
+ */
+async function requeueFailedAttempt(
+  tx: Pick<typeof db, "agentTask" | "planExecution">,
+  input: { organizationId: string; taskId: string; threadId: string; sourceMessageId: string },
+) {
+  const executed = await tx.planExecution.count({
+    where: {
+      organizationId: input.organizationId,
+      threadId: input.threadId, sourceMessageId: input.sourceMessageId,
+    },
+  });
+  if (executed === 0) {
+    await tx.agentTask.updateMany({
+      where: {
+        id: input.taskId, organizationId: input.organizationId,
+        status: "failed", claimToken: null, cancelledAt: null,
+        checkpoint: { path: ["nextWork"], equals: "investigate" },
+        modelCallsUsed: { lt: db.agentTask.fields.modelCallLimit },
+        activeTimeMsUsed: { lt: db.agentTask.fields.activeTimeMsLimit },
+        spentNanoUsd: { lt: db.agentTask.fields.spendNanoUsdLimit },
+        actions: { none: { dispatchState: { in: DISPATCHED_STATES } } },
+        executions: { none: {} },
+      },
+      data: {
+        ...NO_SUSPENSION, status: "queued", failureCode: null,
+        revision: { increment: 1 }, lastProgressAt: new Date(),
+      },
+    });
+  }
+  return tx.agentTask.findFirstOrThrow({
+    where: { id: input.taskId, organizationId: input.organizationId },
+  });
+}
+
+/**
  * Accepts one inbound customer message as a request and puts it on the thread's
  * task, in one transaction, exactly as the member submission path does.
  *
@@ -692,8 +738,9 @@ export async function acceptCustomerAgentRequest(input: CustomerRequestInput) {
     if (request.taskId) {
       return {
         request,
-        task: await tx.agentTask.findFirstOrThrow({
-          where: { id: request.taskId, organizationId: input.organizationId },
+        task: await requeueFailedAttempt(tx, {
+          organizationId: input.organizationId, taskId: request.taskId,
+          threadId: input.threadId, sourceMessageId: input.sourceMessageId,
         }),
         deduplicated: true,
       };
@@ -1609,38 +1656,66 @@ export async function findQueuedAgentTasks(limit = 100) {
   });
 }
 
-// A cancelled attempt is only definitely over when nothing reached the
-// provider. Anything dispatched still owes reconciliation, exactly as the
-// worker-side settle and fail paths decide it.
+// An expired attempt is only definitely over when nothing reached the provider:
+// no action dispatched and no execution claimed, committed or unknown, the test
+// `claimAgentTask` applies before work runs from the top. A customer support
+// attempt that ends that way failed, and `requeueFailedAttempt` decides whether
+// its message re-runs it. It is charged no time past its last checkpoint: a dead
+// worker did no work there, and a support lease is as long as the task's time
+// limit, so charging it would leave the re-run nothing. A member turn can act on
+// other threads' proposals, so its own rows prove nothing and it reconciles.
+// Anything else still owes reconciliation, exactly as the worker-side settle and
+// fail paths decide it.
+//
+// The rows are locked before the update reads them, so a dispatch authorized
+// just before a lease ran out is seen rather than missed by a stale snapshot.
 export async function reconcileExpiredAgentTaskClaims(now = new Date()) {
-  const dispatched = Prisma.sql`EXISTS (
+  const dispatched = Prisma.sql`(EXISTS (
     SELECT 1 FROM agent_actions a
     WHERE a.task_id = agent_tasks.id AND a.organization_id = agent_tasks.organization_id
     AND a.dispatch_state IN ('dispatch_authorized', 'submitted', 'unknown', 'settled')
-  )`;
-  return db.$executeRaw(Prisma.sql`
-    UPDATE agent_tasks
-    SET status = CASE WHEN cancelled_at IS NOT NULL AND NOT ${dispatched}
-                      THEN 'cancelled'::"AgentTaskStatus"
-                      ELSE 'reconciling'::"AgentTaskStatus" END,
-        failure_code = CASE
-          WHEN cancelled_at IS NULL THEN 'interrupted_attempt'
-          WHEN ${dispatched} THEN 'cancelled_after_dispatch'
-          ELSE NULL END,
-        active_time_ms_used = LEAST(2147483647,
-          active_time_ms_used + GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
-            (${now}::timestamptz - active_checkpoint_at)) * 1000)::integer)),
-        claim_token = NULL,
-        lease_expires_at = NULL,
-        active_checkpoint_at = NULL,
-        active_proposal_id = NULL,
-        pending_question_id = NULL,
-        pending_question = NULL,
-        pending_answerer_kind = NULL,
-        pending_answerer_key = NULL,
-        last_progress_at = ${now}
-    WHERE status = 'running' AND lease_expires_at <= ${now}
-  `);
+  ) OR EXISTS (
+    SELECT 1 FROM plan_executions e
+    WHERE e.task_id = agent_tasks.id AND e.organization_id = agent_tasks.organization_id
+    AND e.status IN ('claimed', 'committed', 'unknown')
+  ))`;
+  const interrupted = Prisma.sql`(cancelled_at IS NULL
+    AND initiating_actor_kind = 'customer' AND NOT ${dispatched})`;
+  return db.$transaction(async (tx) => {
+    const expired = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT id FROM agent_tasks
+      WHERE status = 'running' AND lease_expires_at <= ${now}
+      ORDER BY id
+      FOR UPDATE
+    `);
+    if (expired.length === 0) return 0;
+    return tx.$executeRaw(Prisma.sql`
+      UPDATE agent_tasks
+      SET status = CASE WHEN ${interrupted} THEN 'failed'::"AgentTaskStatus"
+                        WHEN cancelled_at IS NOT NULL AND NOT ${dispatched}
+                        THEN 'cancelled'::"AgentTaskStatus"
+                        ELSE 'reconciling'::"AgentTaskStatus" END,
+          failure_code = CASE
+            WHEN cancelled_at IS NULL THEN 'interrupted_attempt'
+            WHEN ${dispatched} THEN 'cancelled_after_dispatch'
+            ELSE NULL END,
+          active_time_ms_used = CASE WHEN ${interrupted} THEN active_time_ms_used
+            ELSE LEAST(2147483647,
+              active_time_ms_used + GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
+                (${now}::timestamptz - active_checkpoint_at)) * 1000)::integer)) END,
+          claim_token = NULL,
+          lease_expires_at = NULL,
+          active_checkpoint_at = NULL,
+          active_proposal_id = NULL,
+          pending_question_id = NULL,
+          pending_question = NULL,
+          pending_answerer_kind = NULL,
+          pending_answerer_key = NULL,
+          last_progress_at = ${now}
+      WHERE id IN (${Prisma.join(expired.map(({ id }) => Prisma.sql`${id}::uuid`))})
+        AND status = 'running' AND lease_expires_at <= ${now}
+    `);
+  });
 }
 
 /**

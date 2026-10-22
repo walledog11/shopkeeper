@@ -38,6 +38,10 @@
       "types": "./dist/attachment-ref.d.ts",
       "default": "./dist/attachment-ref.js"
     },
+    "./image-attachments": {
+      "types": "./dist/image-attachments.d.ts",
+      "default": "./dist/image-attachments.js"
+    },
     "./thread-constants": {
       "types": "./dist/thread-constants.d.ts",
       "default": "./dist/thread-constants.js"
@@ -145,10 +149,6 @@
     "./merchant-inbox-surfaces": {
       "types": "./dist/merchant-inbox-surfaces.d.ts",
       "default": "./dist/merchant-inbox-surfaces.js"
-    },
-    "./planner-skip-reply": {
-      "types": "./dist/planner-skip-reply.d.ts",
-      "default": "./dist/planner-skip-reply.js"
     },
     "./build-context": {
       "types": "./dist/context.d.ts",

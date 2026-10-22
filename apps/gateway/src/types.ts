@@ -1,28 +1,9 @@
 import type { DbChannelType } from '@shopkeeper/db';
-import type { PlanSignal, PlanValidation, ProposalCommunication } from '@shopkeeper/agent/types';
 
 declare module 'http' {
   interface IncomingMessage {
     rawBody?: Buffer;
   }
-}
-
-export interface PlanStep {
-  /** The tool call this step shows, matching `rawToolCalls[].id`. */
-  id?: string;
-  label: string;
-  description: string;
-  category: string;
-  tool?: string;
-  enabled: boolean;
-}
-
-export interface AgentPlan {
-  steps: PlanStep[];
-  rawToolCalls: Array<{ id: string; name: string; [key: string]: unknown }>;
-  signals?: PlanSignal[];
-  validation?: PlanValidation;
-  communication?: ProposalCommunication;
 }
 
 export interface ShopifyOrderPayload {

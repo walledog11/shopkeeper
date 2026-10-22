@@ -1,3 +1,4 @@
+import type { AgentTaskStatus } from '@prisma/client';
 import { db } from '@shopkeeper/db';
 import { requireOrgThread, getLatestConversationMessage } from '@shopkeeper/agent/thread-auth';
 import { buildContext } from '@shopkeeper/agent/build-context';
@@ -33,8 +34,6 @@ import { CHANNEL_TYPE } from '@shopkeeper/agent/thread-constants';
 import type { AgentPlan as PackageAgentPlan, OrgSettings } from '@shopkeeper/agent/types';
 import { parseClassifierSignals } from '@shopkeeper/agent/classifier-signals';
 import { getEmailProvider } from '@shopkeeper/email/providers';
-import type { AgentPlan } from '../../types.js';
-import { toGatewayAgentPlan } from './agent-plan-adapter.js';
 import { gatewayThreadSink } from './agent-thread-sink.js';
 import { buildGatewayPlanExecutionDeps } from '../operator/agent-turn-deps.js';
 import type { AgentActionResult, PlanIdentity } from './planning-types.js';
@@ -104,7 +103,7 @@ function merchantQuestionFor(plan: PackageAgentPlan | null, settings: OrgSetting
 }
 
 export interface GeneratedThreadPlan {
-  plan: AgentPlan | null;
+  plan: PackageAgentPlan | null;
   instruction: string;
   identity?: PlanIdentity;
   merchantQuestion?: string | null;
@@ -250,7 +249,24 @@ export async function generateThreadPlan(
       claimToken: durableResult.claim.claimToken,
     } } : {}),
   };
-  if (durableResult.kind === 'not_owned') return readCurrentPlanWithoutWork(scope);
+  if (durableResult.kind === 'not_owned') {
+    // Accepting the message again already re-ran any failed attempt that could
+    // be. A task still failed here never will be, so the merchant hears it
+    // instead of the message going quiet; the flag also ends plan recovery.
+    if (durableResult.taskStatus === 'failed' && !thread.escalatedAt) {
+      const escalation = await gatewayThreadSink.escalateToHuman(
+        { reason: 'Planning a reply to this message failed and can\'t be retried. Answer the customer yourself.' },
+        { orgId: organizationId, orgName: org?.name ?? 'Workspace', threadId },
+      );
+      if (escalation.status === 'error') {
+        logger.error(
+          { organizationId, threadId, message: escalation.message },
+          '[gateway:auto-plan] Could not escalate a message whose planning cannot be retried',
+        );
+      }
+    }
+    return readCurrentPlanWithoutWork(scope);
+  }
   const durable = durableResult.claim;
   try {
     const generated = await runPlanAttempt(scope);
@@ -271,7 +287,7 @@ function readCurrentPlanWithoutWork(scope: PlanAttemptScope): GeneratedThreadPla
     settings: scope.settings,
   })) return { plan: null, instruction: scope.instruction };
   return {
-    plan: toGatewayAgentPlan(cached?.plan ?? null),
+    plan: cached?.plan ?? null,
     instruction: scope.instruction,
     ...(cached?.plan ? {
       identity: planIdentity({
@@ -352,11 +368,18 @@ async function runPlanAttempt(scope: PlanAttemptScope): Promise<GeneratedThreadP
     plan,
   });
 
+  // Fenced by the claim: an attempt whose lease expired while it was still
+  // running must not publish over the attempt that re-ran its message.
   const committed = await commitThreadPlanCacheIfCurrent({
     orgId: organizationId,
     threadId,
     sourceMessageId: pendingCustomerMessageId,
     cache: cacheRecord,
+    ...(scope.durableTurn ? { taskClaim: {
+      taskId: scope.durableTurn.taskId,
+      expectedRevision: scope.durableTurn.expectedRevision,
+      claimToken: scope.durableTurn.claimToken,
+    } } : {}),
   });
   if (!committed) {
     logger.info(
@@ -407,7 +430,7 @@ async function runPlanAttempt(scope: PlanAttemptScope): Promise<GeneratedThreadP
     : {};
 
   return {
-    plan: toGatewayAgentPlan(plan),
+    plan,
     instruction,
     identity: planIdentity({
       planId: cacheRecord.planId,
@@ -467,7 +490,7 @@ async function buildAutoExecutionResult(
       failureReplanFailureReason: awaitingApproval.context.failureReason,
       // The child is the thread's current plan now, so the card the merchant
       // approves must be the child's, not the parent's that just failed.
-      plan: toGatewayAgentPlan(awaitingApproval.plan),
+      plan: awaitingApproval.plan,
       identity: planIdentity({
         planId: awaitingApproval.planId,
         sourceMessageId: awaitingApproval.sourceMessageId,
@@ -519,7 +542,10 @@ async function openDurableSupportTask(input: {
   runtimeVersion: number;
   continuity?: { ask: string; order: string | null; subject: string | null };
   continuityMode?: 'classified';
-}): Promise<{ kind: 'claimed'; claim: DurableSupportTask } | { kind: 'not_owned' }> {
+}): Promise<
+  | { kind: 'claimed'; claim: DurableSupportTask }
+  | { kind: 'not_owned'; taskStatus: AgentTaskStatus }
+> {
   const { request, task } = await acceptCustomerAgentRequest({
     ...input, budget: supportTaskBudget(input.runtimeVersion),
   });
@@ -534,7 +560,7 @@ async function openDurableSupportTask(input: {
       { organizationId: input.organizationId, threadId: input.threadId, taskId: task.id },
       '[gateway:auto-plan] Support task is already owned or settled',
     );
-    return { kind: 'not_owned' };
+    return { kind: 'not_owned', taskStatus: task.status };
   }
   return {
     kind: 'claimed',

@@ -1,8 +1,12 @@
 import { db } from '@shopkeeper/db';
-import { runUnknownOutcomeReconciliation } from '@shopkeeper/agent/unknown-outcome-reconciliation';
+import {
+  runUnknownOutcomeReconciliation,
+  type UnknownOutcomeSweepCounts,
+} from '@shopkeeper/agent/unknown-outcome-reconciliation';
 import type { ShopifyContext } from '@shopkeeper/agent/shopify';
 import { JOB, QUEUE } from '../constants.js';
 import logger from '../logger.js';
+import { emitOpsAlert, incrementOpsAlertWindow, type OpsAlertCounterClient } from '../ops-alerts.js';
 import {
   createMaintenanceQueue,
   createMaintenanceWorker,
@@ -11,10 +15,14 @@ import {
 } from './registration.js';
 
 // Backstop for ambiguous Shopify mutations and goodwill reservations left in
-// `unknown`, plus stale `claimed` plan executions and stale `reserved` spend
-// rows that never reached a provider. This sweep only performs read probes and
-// terminal ledger updates; it never replays an approved plan or mutates Shopify.
+// `unknown`, plus stale `claimed` plan executions, dispatches and `reserved`
+// spend rows, which it converts to `unknown` for the probes. This sweep only
+// performs read probes and terminal ledger updates; it never replays an
+// approved plan or mutates Shopify.
 const SWEEP_INTERVAL_MS = 15 * 60 * 1000;
+// What stays unknown after probing repeats on every sweep; the founder hears
+// about each distinct set of counts once a day, not every 15 minutes.
+const STILL_UNKNOWN_ALERT_WINDOW_SECS = 24 * 60 * 60;
 
 async function loadShopifyContext(organizationId: string): Promise<ShopifyContext | null> {
   const integration = await db.integration.findFirst({
@@ -25,26 +33,57 @@ async function loadShopifyContext(organizationId: string): Promise<ShopifyContex
   return { shop: integration.externalAccountId, accessToken: integration.accessToken };
 }
 
-async function runUnknownOutcomeSweep(): Promise<void> {
-  const result = await runUnknownOutcomeReconciliation({ loadShopifyContext });
+async function alertUnresolvedOutcomes(
+  result: UnknownOutcomeSweepCounts,
+  counterClient: OpsAlertCounterClient,
+): Promise<void> {
+  // Rows this run converted to unknown are newly stuck by definition.
+  const newlyStuck = result.staleClaimedExecutions
+    + result.staleActionDispatches
+    + result.staleUnknownReservations;
+  const stillUnknown = result.stillUnknownExecutions
+    + result.stillUnknownStandaloneActions
+    + result.stillUnknownReservations;
+  if (newlyStuck === 0 && stillUnknown === 0) return;
 
-  const needsAttention = result.staleClaimedExecutions > 0
-    || result.staleActionDispatches > 0
-    || result.stillUnknownExecutions > 0
-    || result.stillUnknownStandaloneActions > 0
-    || result.stillUnknownReservations > 0;
-
-  if (needsAttention) {
-    logger.error(
-      { opsAlert: true, ...result },
-      '[UnknownOutcomeSweep] Reconciled ambiguous provider outcomes',
-    );
-    return;
+  if (newlyStuck === 0) {
+    // A counter failure alerts anyway: a repeat beats silence about stuck money.
+    const window = await incrementOpsAlertWindow(counterClient, {
+      keyParts: [
+        'unknown_outcome_sweep',
+        result.stillUnknownExecutions,
+        result.stillUnknownStandaloneActions,
+        result.stillUnknownReservations,
+      ],
+      threshold: 1,
+      windowSecs: STILL_UNKNOWN_ALERT_WINDOW_SECS,
+    }).catch((err: unknown) => {
+      logger.warn({ err }, '[UnknownOutcomeSweep] Alert window unavailable; alerting without dedupe');
+      return null;
+    });
+    if (window && !window.thresholdCrossed) {
+      logger.warn({ ...result }, '[UnknownOutcomeSweep] Provider outcomes still unknown');
+      return;
+    }
   }
 
+  emitOpsAlert({
+    category: 'agent_failure',
+    level: 'error',
+    message: `Unknown provider outcomes need attention: ${newlyStuck} newly stuck, ${stillUnknown} still unknown after probing. Establish provider truth before any fresh instruction.`,
+    tags: { source: 'unknown_outcome_sweep' },
+    fingerprint: ['ops-alert', 'agent_failure', 'gateway', 'source:unknown_outcome_sweep'],
+    extra: { ...result },
+  });
+}
+
+async function runUnknownOutcomeSweep(counterClient: OpsAlertCounterClient): Promise<void> {
+  const result = await runUnknownOutcomeReconciliation({ loadShopifyContext });
+
+  await alertUnresolvedOutcomes(result, counterClient);
+
   if (
-    result.staleReleasedReservations > 0
-    || result.resolvedExecutions > 0
+    result.resolvedExecutions > 0
     || result.resolvedStandaloneActions > 0
     || result.resolvedReservations > 0
   ) {
@@ -61,7 +100,7 @@ export const registerUnknownOutcomeSweepMaintenanceJob: MaintenanceJobRegistrati
     SWEEP_INTERVAL_MS,
   );
 
-  const worker = createMaintenanceWorker(context, QUEUE.UNKNOWN_OUTCOME_SWEEP, runUnknownOutcomeSweep, {
+  const worker = createMaintenanceWorker(context, QUEUE.UNKNOWN_OUTCOME_SWEEP, () => runUnknownOutcomeSweep(context.producerConn), {
     label: 'UnknownOutcomeSweep',
     failureQueue: 'unknown-outcome-sweep',
   });

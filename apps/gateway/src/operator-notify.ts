@@ -23,8 +23,8 @@
 
 import { db } from '@shopkeeper/db';
 import logger from './logger.js';
-import { isTelegramConfigured, sendMessage as telegramSend } from './clients/telegram-client.js';
-import { isImessageConfigured, sendImessageToSpace } from './clients/spectrum.js';
+import { isTelegramConfigured, sendMessage as telegramSend, sendPhoto as telegramSendPhoto } from './clients/telegram-client.js';
+import { isImessageConfigured, sendImessageToSpace, type ImessageImage } from './clients/spectrum.js';
 import { stripMarkdown } from './message-handlers/shared/strip-markdown.js';
 import { memberOperatorKey } from '@shopkeeper/agent/internal-thread';
 import { appendPendingPlan, updateContext, type OperatorContext, type PendingPlan } from './operator-context.js';
@@ -59,6 +59,8 @@ export interface OperatorNotifyOptions {
    * plan-card fan-out so a second plan stacks instead of overwriting the first.
    */
   appendPlan?: { plan: PendingPlan; maxDepth: number } | null;
+  /** Sent ahead of `body`, in order. Part of the notification: failing to send one fails it. */
+  images?: readonly ImessageImage[];
 }
 
 export interface OperatorNotifyResult {
@@ -119,17 +121,19 @@ async function sendToBinding(
   body: string,
   options: OperatorNotifyOptions,
 ): Promise<boolean> {
+  const images = options.images ?? [];
   if (member.channel === 'telegram') {
-    return telegramSend(member.chatId, body, {
-      orgId: organizationId,
-      threadId: options.threadId ?? null,
-    });
+    const alertContext = { orgId: organizationId, threadId: options.threadId ?? null };
+    for (const image of images) {
+      if (!await telegramSendPhoto(member.chatId, image, alertContext)) return false;
+    }
+    return telegramSend(member.chatId, body, alertContext);
   }
   await sendImessageToSpace(member.spaceId, stripMarkdown(body), {
     orgId: organizationId,
     threadId: options.threadId ?? null,
     spaceId: member.spaceId,
-  });
+  }, ...(images.length > 0 ? [images] : []));
   return true;
 }
 
