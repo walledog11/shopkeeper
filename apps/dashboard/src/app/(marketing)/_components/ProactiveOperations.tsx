@@ -1,21 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { MarketingHandoffLink } from "./MarketingHandoffLink";
-
-function SectionHeading({
-  title,
-  body,
-}: {
-  title: string;
-  body: string;
-}) {
-  return (
-    <div className="mb-10 text-center">
-      <h2 className="m-display m-h2 mx-auto mb-4 max-w-[20ch]">{title}</h2>
-      <p className="m-lede mx-auto max-w-[58ch]">{body}</p>
-    </div>
-  );
-}
+import { MarketingSectionHeader } from "./MarketingSectionHeader";
 
 function SectionHandoff({ href, label }: { href: string; label: string }) {
   return (
@@ -53,7 +39,8 @@ const briefingOptions = [
 export function ProactiveOperations() {
   return (
     <section id="proactive" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-16 sm:px-6 sm:py-24">
-      <SectionHeading
+      <MarketingSectionHeader
+        className="mb-10"
         title="Sales, stock, and the decisions waiting for you."
         body="Get a text each morning with what Shopkeeper did and what needs you. Add sales and low-stock updates if you want them, then reply to ask a question or settle a decision."
       />
@@ -104,7 +91,8 @@ export function TrustSection() {
 
   return (
     <section id="trust" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-16 sm:px-6 sm:py-24">
-      <SectionHeading
+      <MarketingSectionHeader
+        className="mb-10"
         title="Your data stays yours. Even if you leave."
         body="Your Shopify login is encrypted before it’s stored. Your customers’ addresses never touch another merchant’s account. You can download all of it."
       />

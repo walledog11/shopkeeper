@@ -43,7 +43,7 @@ export function CTA() {
           source="footer"
           dark
           secondaryAction={
-            <ButtonLink href="/#workflow" variant="ghost" size="lg" className="sm:mt-1">
+            <ButtonLink href="/#workflow" variant="ghost" size="lg">
               See what you can ask
             </ButtonLink>
           }
