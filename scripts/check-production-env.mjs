@@ -241,6 +241,12 @@ export function validateProductionEnv(target, options = {}) {
   }
 
   if (target === 'dashboard') {
+    if (readEnv(env, 'STOREFRONT_CHAT_ENABLED') === 'true') {
+      const signingSecret = readEnv(env, 'STOREFRONT_CHAT_SIGNING_SECRET');
+      if (!signingSecret || signingSecret.length < 32) {
+        errors.push('STOREFRONT_CHAT_SIGNING_SECRET must contain at least 32 characters when STOREFRONT_CHAT_ENABLED=true');
+      }
+    }
     const oauthAttemptSecret = readEnv(env, 'OAUTH_ATTEMPT_SECRET');
     if (oauthAttemptSecret && oauthAttemptSecret.length < 32) {
       errors.push('OAUTH_ATTEMPT_SECRET must contain at least 32 characters');

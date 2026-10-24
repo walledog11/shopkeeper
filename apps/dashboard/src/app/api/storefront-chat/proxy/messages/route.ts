@@ -26,10 +26,11 @@ export async function GET(request: Request) {
         organizationId: session.orgId,
         deletedAt: null,
         senderType: { in: ["customer", "agent", "ai"] },
+        OR: [{ sendStatus: null }, { sendStatus: "sent" }],
       },
       orderBy: [{ sentAt: 'desc' }, { id: 'desc' }],
       take: 100,
-      select: { id: true, contentText: true, senderType: true, sentAt: true },
+      select: { id: true, contentText: true, senderType: true, sentAt: true, externalMessageId: true },
     }),
     // A shopper whose question was handed to a human sees nothing happen —
     // escalation is invisible from their side, and on this channel it is the
@@ -49,6 +50,9 @@ export async function GET(request: Request) {
       text: m.contentText ?? "",
       from: m.senderType === "customer" ? "customer" : "agent",
       at: m.sentAt.toISOString(),
+      clientMessageId: m.externalMessageId?.startsWith(`shopify_chat:${session.sessionId}:`)
+        ? m.externalMessageId.slice(`shopify_chat:${session.sessionId}:`.length)
+        : null,
     })),
   });
 }
@@ -94,6 +98,7 @@ export async function POST(request: Request) {
   // in the gateway's inbound pipeline. Forwarding keeps storefront messages on
   // exactly the same path as email and Instagram rather than a parallel one.
   const response = await fetch(`${gatewayUrl}/internal/storefront-chat/message`, {
+    signal: AbortSignal.timeout(10_000),
     method: "POST",
     headers: { "Content-Type": "application/json", "x-internal-secret": secret },
     body: JSON.stringify({
@@ -126,6 +131,7 @@ export async function POST(request: Request) {
   }
 
   if (!response.ok) {
+    if (response.status === 404) return NextResponse.json({ error: "session not found" }, { status: 404 });
     return NextResponse.json({ error: "could not deliver message" }, { status: 502 });
   }
 

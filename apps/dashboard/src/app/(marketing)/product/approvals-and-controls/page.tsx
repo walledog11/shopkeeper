@@ -1,34 +1,29 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import {
   ArrowRight,
   Check,
 } from "lucide-react";
+import { MarketingDarkShowcase } from "../../_components/MarketingDarkShowcase";
+import { createProductPageMetadata } from "../../_components/marketing-metadata";
+import { MarketingSectionHeader } from "../../_components/MarketingSectionHeader";
 import { ProductDetailTemplate } from "../../_components/ProductDetailTemplate";
-import { SectionLabel } from "../../_components/SectionLabel";
 
 const title = "Approvals and controls — Shopkeeper";
 const description =
   "See how Shopkeeper uses autonomy modes, action limits, merchant approval, and an audit trail to keep consequential Shopify work under control.";
 
-export const metadata: Metadata = {
+export const metadata = createProductPageMetadata({
   title,
   description,
-  alternates: { canonical: "/product/approvals-and-controls" },
-  openGraph: {
-    title,
-    description,
-    url: "/product/approvals-and-controls",
-  },
-  twitter: { title, description },
-};
+  path: "/product/approvals-and-controls",
+});
 
 const modes = [
   {
     label: "Draft only",
     eyebrow: "Nothing sends or changes",
     body: "Shopkeeper prepares work for review but does not send customer replies or mutate Shopify.",
-    tone: "border-stone-900/10 bg-white/55",
+    tone: "border-[color:var(--m-line)] bg-white/55",
   },
   {
     label: "Ask first",
@@ -94,10 +89,11 @@ const faqs = [
 
 function ControlModel() {
   return (
-    <div
+    <MarketingDarkShowcase
+      as="div"
       role="img"
       aria-label="Control model: a size-swap proposal pauses for merchant approval, then completes in Shopify and records the approver in the action history"
-      className="rounded-3xl border border-stone-900/10 m-chapter--dark p-5 shadow-[0_35px_70px_-42px_rgba(22,20,19,0.9)] sm:p-8"
+      className="overflow-visible"
     >
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-5">
         <div>
@@ -127,25 +123,26 @@ function ControlModel() {
           <p className="mt-1 text-xs leading-relaxed text-[#fcfaf8]/55">Human approved · Shopify updated</p>
         </div>
       </div>
-    </div>
+    </MarketingDarkShowcase>
   );
 }
 
 function AutonomyModes() {
   return (
     <section aria-labelledby="modes-heading" className="mx-auto max-w-6xl px-6 py-14">
-      <div className="mb-9 text-center">
-        <SectionLabel>autonomy modes</SectionLabel>
-        <h2 id="modes-heading" className="m-display m-h2 mx-auto max-w-[19ch]">
-          Start cautious. Change the mode deliberately.
-        </h2>
-      </div>
+      <MarketingSectionHeader
+        className="mb-9"
+        id="modes-heading"
+        eyebrow="autonomy modes"
+        title="Start cautious. Change the mode deliberately."
+        titleClassName="max-w-[19ch]"
+      />
       <div className="grid gap-4 md:grid-cols-3">
         {modes.map((mode) => (
           <div key={mode.label} className={`rounded-2xl border p-6 ${mode.tone}`}>
-            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-stone-500">{mode.eyebrow}</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[color:var(--m-ink-3)]">{mode.eyebrow}</p>
             <h3 className="mt-3 text-[30px] m-display">{mode.label}</h3>
-            <p className="mt-4 text-sm leading-relaxed text-stone-600">{mode.body}</p>
+            <p className="mt-4 text-sm leading-relaxed text-[color:var(--m-ink-2)]">{mode.body}</p>
           </div>
         ))}
       </div>
@@ -167,11 +164,7 @@ export default function ApprovalsAndControlsPage() {
       capabilitiesLabel="the boundary has layers"
       capabilitiesTitle="A mode is the start, not the whole control system."
       capabilitiesBody="Action limits, merchant judgment, and reviewable outcomes stack on top of the selected autonomy mode."
-      capabilities={boundaries.map(({ title, body }) => ({
-        title,
-        body,
-        details: [],
-      }))}
+      capabilities={boundaries}
       workflowLabel="decision states"
       workflowTitle="Three outcomes, stated before execution."
       workflowSteps={[
@@ -190,7 +183,7 @@ export default function ApprovalsAndControlsPage() {
       requirementsFooter={
         <Link
           href="/product/order-operations"
-          className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-stone-800 underline decoration-stone-300 underline-offset-4 hover:text-stone-950"
+          className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-[color:var(--m-ink)] underline decoration-[color:var(--m-line-strong)] underline-offset-4 hover:text-[color:var(--m-ink)]"
         >
           See the supported Shopify work
           <ArrowRight className="size-4" aria-hidden />

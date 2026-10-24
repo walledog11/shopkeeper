@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { authorizeStorefrontRequest } from "@/lib/storefront-chat/authorize";
+import { authorizeStorefrontRequest, shopperAddress } from "@/lib/storefront-chat/authorize";
 import { requestVerification, submitVerificationCode } from "@/lib/storefront-chat/verification";
 
 const MAX_FIELD_LENGTH = 320;
@@ -30,6 +30,7 @@ export async function POST(request: Request) {
       integrationId: session.integrationId,
       orderName,
       email,
+      shopperIp: shopperAddress(request),
     });
     return NextResponse.json(result);
   }

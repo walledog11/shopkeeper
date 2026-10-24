@@ -286,7 +286,10 @@ describe('POST /internal/storefront-chat/message', () => {
     ]);
   });
 
-  it('dedupes a retry with the same clientMessageId', async () => {
+  it('dedupes retries without charging any budget, even at the ceiling', async () => {
+    vi.stubEnv('STOREFRONT_CHAT_MAX_MESSAGES_PER_SESSION', '1');
+    vi.stubEnv('STOREFRONT_CHAT_MAX_MESSAGES_PER_SHOP_DAY', '1');
+    vi.stubEnv('STOREFRONT_CHAT_BURST_PER_SESSION', '1');
     const body = {
       organizationId: org.id,
       sessionId: session.id,
@@ -304,6 +307,9 @@ describe('POST /internal/storefront-chat/message', () => {
     expect(second.status).toBe(200);
     expect(second.body).toEqual({ deduped: true });
     expect(queueAddSpy).not.toHaveBeenCalled();
+    expect((await postMessage(body)).status).toBe(200);
+    expect(await db.storefrontChatSession.findUnique({ where: { id: session.id } })).toMatchObject({ messageCount: 1 });
+    expect(await db.storefrontChatDailyUsage.findFirst({ where: { integrationId: integration.id } })).toMatchObject({ messageCount: 1 });
   });
 
   it('re-binds the session when a closed thread rollover opens a new one', async () => {
@@ -319,7 +325,6 @@ describe('POST /internal/storefront-chat/message', () => {
     });
 
     const newThread = await createTestThread(org.id, customer.id, ChannelType.shopify_chat);
-    vi.mocked(processInboundMessage).mockResolvedValueOnce({ thread: newThread, isNew: true, rolledOverFromThreadId: null });
 
     const response = await postMessage({
       organizationId: org.id,
@@ -334,7 +339,7 @@ describe('POST /internal/storefront-chat/message', () => {
     expect(bound.threadId).toBe(newThread.id);
   });
 
-  it('skips session re-bind when the thread is already linked', async () => {
+  it('keeps the same thread and refreshes activity when it is already linked', async () => {
     const customer = await createTestCustomer(org.id, `${CHANNEL.SHOPIFY_CHAT}:${session.id}`);
     const thread = await createTestThread(org.id, customer.id, ChannelType.shopify_chat);
     await db.storefrontChatSession.update({
@@ -343,7 +348,6 @@ describe('POST /internal/storefront-chat/message', () => {
     });
     const before = await db.storefrontChatSession.findUniqueOrThrow({ where: { id: session.id } });
 
-    vi.mocked(processInboundMessage).mockResolvedValueOnce({ thread, isNew: false, rolledOverFromThreadId: null });
 
     const response = await postMessage({
       organizationId: org.id,
@@ -355,7 +359,7 @@ describe('POST /internal/storefront-chat/message', () => {
     expect(response.body).toEqual({ threadId: thread.id, isNewThread: false });
 
     const after = await db.storefrontChatSession.findUniqueOrThrow({ where: { id: session.id } });
-    expect(after.lastSeenAt.getTime()).toBe(before.lastSeenAt.getTime());
+    expect(after.lastSeenAt.getTime()).toBeGreaterThanOrEqual(before.lastSeenAt.getTime());
   });
 
   describe('storefront budget', () => {
@@ -385,9 +389,7 @@ describe('POST /internal/storefront-chat/message', () => {
       expect(refused.status).toBe(429);
       expect(refused.body.denial).toBe('session_budget');
       expect(refused.body.shopperMessage).toEqual(expect.any(String));
-      // The whole point of gating here: nothing downstream ran, so the refusal
-      // cost the merchant nothing.
-      expect(processInboundMessage).not.toHaveBeenCalled();
+      expect(await db.message.count({ where: { organizationId: org.id, contentText: 'one too many' } })).toBe(0);
       expect(queueAddSpy).not.toHaveBeenCalled();
     });
 
@@ -421,7 +423,7 @@ describe('POST /internal/storefront-chat/message', () => {
       expect(orgSpend).toEqual([]);
     });
 
-    it('tells the merchant once when the ceiling is crossed, not once per refusal', async () => {
+    it('requests an idempotent merchant notice when the shop budget is exhausted', async () => {
       vi.stubEnv('STOREFRONT_CHAT_MAX_MESSAGES_PER_SHOP_DAY', '1');
 
       await postMessage({
@@ -446,18 +448,6 @@ describe('POST /internal/storefront-chat/message', () => {
         limit: 1,
       });
 
-      // A shop under sustained load would otherwise turn one closed widget into
-      // hundreds of notifications.
-      for (const [index, id] of ['alert-3', 'alert-4', 'alert-5'].entries()) {
-        const again = await postMessage({
-          organizationId: org.id,
-          sessionId: (await createSession()).id,
-          text: `refusal ${index}`,
-          clientMessageId: id,
-        });
-        expect(again.status).toBe(429);
-      }
-      expect(exhaustionAlertSpy).toHaveBeenCalledTimes(1);
     });
 
     it('counts only admitted messages against the session budget', async () => {
@@ -481,6 +471,19 @@ describe('POST /internal/storefront-chat/message', () => {
 
       const after = await db.storefrontChatSession.findUniqueOrThrow({ where: { id: session.id } });
       expect(after.messageCount).toBe(1);
+      expect(await db.storefrontChatDailyUsage.findFirst({ where: { integrationId: integration.id } })).toMatchObject({ messageCount: 1 });
+      expect(await db.message.count({ where: { organizationId: org.id, senderType: 'customer' } })).toBe(1);
+    });
+
+    it('admits only one concurrent message into the last session allowance', async () => {
+      vi.stubEnv('STOREFRONT_CHAT_MAX_MESSAGES_PER_SESSION', '1');
+      const results = await Promise.all(['a', 'b', 'c'].map(id => postMessage({
+        organizationId: org.id, sessionId: session.id, text: id, clientMessageId: id,
+      })));
+      expect(results.map(result => result.status).sort()).toEqual([202, 429, 429]);
+      expect(await db.message.count({ where: { organizationId: org.id, senderType: 'customer' } })).toBe(1);
+      expect(await db.storefrontChatSession.findUnique({ where: { id: session.id } })).toMatchObject({ messageCount: 1 });
+      expect(await db.storefrontChatDailyUsage.findFirst({ where: { integrationId: integration.id } })).toMatchObject({ messageCount: 1 });
     });
 
     it('refuses a burst on one session and reports when to retry', async () => {

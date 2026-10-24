@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   }
 
   const appSecret = process.env.SHOPIFY_APP_SECRET;
-  if (!appSecret) {
+  if (!appSecret || !process.env.STOREFRONT_CHAT_SIGNING_SECRET) {
     return NextResponse.json({ error: "not configured" }, { status: 503 });
   }
 
@@ -105,10 +105,11 @@ export async function POST(request: Request) {
           organizationId: integration.organizationId,
           deletedAt: null,
           senderType: { in: ["customer", "agent", "ai"] },
+          OR: [{ sendStatus: null }, { sendStatus: "sent" }],
         },
         orderBy: [{ sentAt: 'desc' }, { id: 'desc' }],
         take: 50,
-        select: { id: true, contentText: true, senderType: true, sentAt: true },
+        select: { id: true, contentText: true, senderType: true, sentAt: true, externalMessageId: true },
       })
     : [];
 
@@ -136,6 +137,9 @@ export async function POST(request: Request) {
       text: m.contentText ?? "",
       from: m.senderType === "customer" ? "customer" : "agent",
       at: m.sentAt.toISOString(),
+      clientMessageId: m.externalMessageId?.startsWith(`shopify_chat:${session.id}:`)
+        ? m.externalMessageId.slice(`shopify_chat:${session.id}:`.length)
+        : null,
     })),
   });
 }

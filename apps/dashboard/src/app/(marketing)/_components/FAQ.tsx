@@ -1,8 +1,7 @@
-"use client";
-
-import { useState } from "react";
-import { Plus } from "lucide-react";
+import { MarketingFaq } from "./MarketingFaq";
+import { MarketingSection } from "./MarketingSection";
 import { Reveal } from "./Reveal";
+
 const faqs = [
   {
     q: "Can I ask it to do things, or does it only answer customers?",
@@ -26,47 +25,12 @@ const faqs = [
   },
 ];
 
-function FaqItem({ q, a }: { q: string; a: string }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="border-t border-[color:var(--m-line)] first:border-t-0">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        aria-expanded={open}
-        className="flex w-full cursor-pointer items-center justify-between gap-6 border-0 bg-transparent py-6 text-left"
-      >
-        <span className="text-[clamp(17px,2.2vw,20px)] font-medium tracking-[-0.01em] text-[color:var(--m-ink)]">{q}</span>
-        <span
-          aria-hidden
-          className="grid size-8 shrink-0 place-items-center rounded-full border border-[color:var(--m-line-strong)] text-[color:var(--m-ink)]"
-        >
-          <Plus className={`size-4 transition-transform duration-200 motion-reduce:transition-none ${open ? "rotate-45" : ""}`} />
-        </span>
-      </button>
-      <div
-        className={`grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none ${
-          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-        }`}
-      >
-        <div className="overflow-hidden">
-          <p className="pb-6 pr-14 text-[15px] leading-[1.65] text-[color:var(--m-ink-2)]">{a}</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function FAQ() {
   return (
-    <section id="faq" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-16 text-center sm:px-6 sm:py-24">
+    <MarketingSection id="faq" className="text-center">
       <Reveal delay={120} className="mx-auto max-w-[780px] text-left">
-        <div className="m-card px-6 sm:px-8">
-          {faqs.map((item) => (
-            <FaqItem key={item.q} {...item} />
-          ))}
-        </div>
+        <MarketingFaq items={faqs} variant="accordion" />
       </Reveal>
-    </section>
+    </MarketingSection>
   );
 }

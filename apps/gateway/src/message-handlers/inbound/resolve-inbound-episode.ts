@@ -7,7 +7,7 @@ import { CHANNEL } from '../../constants.js';
 // Derived from the app's own client rather than `Prisma.TransactionClient`: the
 // exported `db` is `$extends`ed (transparent token encryption), and the base
 // Prisma transaction type is not assignable to the extended one.
-type EpisodeTransactionClient = Omit<
+export type EpisodeTransactionClient = Omit<
   typeof db,
   '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'
 >;

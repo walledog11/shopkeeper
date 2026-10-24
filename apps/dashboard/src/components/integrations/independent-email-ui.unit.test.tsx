@@ -106,7 +106,7 @@ describe('independent email integration UI', () => {
       />,
     );
 
-    expect(html).toContain('Inbound via forwarding');
+    expect(html).toContain('Forward customer emails');
     expect(html).not.toContain('Connected');
   });
 

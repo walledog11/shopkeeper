@@ -1,9 +1,11 @@
+@import "../../../../../extensions/shopkeeper-chat/assets/shopkeeper-tokens.css";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-general-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-sans: var(--sk-font-sans);
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", monospace;
   --font-handwriting: "Segoe Print", "Bradley Hand", cursive;
   --color-sidebar-ring: var(--sidebar-ring);
@@ -60,36 +62,35 @@
    palette shades, and use shades that are legible on white — roughly 600–800
    for text and 100–200 for chip fills. ── */
 :root {
-  --radius: 0.5rem;
+  --radius: var(--sk-radius);
 
-  /* Maps the @import'd General Sans variable face onto --font-sans (Tailwind's
-     `font-sans`). Without this the var is undefined and the whole app falls
-     back to a system font. */
+  /* Retained for components that reference the face directly. The dashboard
+     and widget's shared font stack is defined in shopkeeper-tokens.css. */
   --font-general-sans: "General Sans";
 
-  --background: #ffffff;
-  --foreground: #1b1a19;
-  --card: #ffffff;
-  --card-foreground: #1b1a19;
-  --popover: #ffffff;
-  --popover-foreground: #1b1a19;
-  --primary: #1b1a19;
-  --primary-foreground: #fcfaf8;
+  --background: var(--sk-surface);
+  --foreground: var(--sk-ink);
+  --card: var(--sk-surface);
+  --card-foreground: var(--sk-ink);
+  --popover: var(--sk-surface);
+  --popover-foreground: var(--sk-ink);
+  --primary: var(--sk-ink);
+  --primary-foreground: var(--sk-inverse);
   --secondary: rgba(27, 26, 25, 0.06);
   --secondary-foreground: rgba(27, 26, 25, 0.85);
   --muted: rgba(27, 26, 25, 0.05);
-  --muted-foreground: #57534e;
+  --muted-foreground: var(--sk-muted-text);
 
   /* Text emphasis ramp — aligned with marketing --m-ink / --m-ink-2 / --m-ink-3. */
   --text-strong: rgba(27, 26, 25, 0.88);
-  --text-faint: #6f6b65;
+  --text-faint: var(--sk-faint-text);
 
   --accent: rgba(27, 26, 25, 0.06);
   --accent-foreground: #1b1a19;
-  --destructive: #b91c1c;
-  --border: rgba(27, 26, 25, 0.1);
-  --input: rgba(27, 26, 25, 0.12);
-  --ring: rgba(27, 26, 25, 0.3);
+  --destructive: var(--sk-danger);
+  --border: var(--sk-border);
+  --input: var(--sk-input-border);
+  --ring: var(--sk-focus);
 
   /* Charts */
   --chart-1: oklch(0.646 0.222 41.116);
@@ -99,7 +100,7 @@
   --chart-5: oklch(0.769 0.188 70.08);
 
   /* Sidebar — warm grey strip (marketing --m-bg-alt) */
-  --sidebar: #f5f4f2;
+  --sidebar: var(--sk-subtle-surface);
   --sidebar-foreground: #1b1a19;
   --sidebar-primary: #1b1a19;
   --sidebar-primary-foreground: #fcfaf8;

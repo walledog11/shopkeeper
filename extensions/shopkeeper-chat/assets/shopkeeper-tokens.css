@@ -1,0 +1,15 @@
+/* Shared Paper primitives. Imported by the dashboard and the isolated widget. */
+:root, :host {
+  --sk-font-sans: "General Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --sk-radius: 8px;
+  --sk-surface: #ffffff;
+  --sk-ink: #1b1a19;
+  --sk-inverse: #fcfaf8;
+  --sk-subtle-surface: #f5f4f2;
+  --sk-muted-text: #57534e;
+  --sk-faint-text: #6f6b65;
+  --sk-border: rgba(27, 26, 25, 0.1);
+  --sk-input-border: rgba(27, 26, 25, 0.12);
+  --sk-focus: rgba(27, 26, 25, 0.3);
+  --sk-danger: #b91c1c;
+}

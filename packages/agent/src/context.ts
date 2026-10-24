@@ -385,7 +385,7 @@ export async function buildContext(
         where: {
           organizationId: orgId,
           verifiedAt: { not: null },
-          session: { revokedAt: null, episodes: { some: { threadId: thread.id } } },
+          session: { revokedAt: null, expiresAt: { gt: new Date() }, episodes: { some: { threadId: thread.id } } },
         },
         select: { orderName: true, orderId: true },
       }))

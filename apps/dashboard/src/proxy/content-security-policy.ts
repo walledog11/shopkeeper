@@ -83,7 +83,7 @@ export const cspDirectives: CspDirectives = {
     "https://*.ingest.us.sentry.io",
     ...gatewayEventsOrigin(),
   ],
-  "frame-src": ["https://*.clerk.com", "https://challenges.cloudflare.com"],
+  "frame-src": ["'self'", "https://*.clerk.com", "https://challenges.cloudflare.com"],
   "worker-src": ["'self'", "blob:"],
   "object-src": ["'none'"],
   "base-uri": ["'self'"],

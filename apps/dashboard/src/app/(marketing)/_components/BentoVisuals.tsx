@@ -1,35 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { type CSSProperties } from "react";
+import { useMarketingInViewOnce } from "./useMarketingInView";
 import { Check, LayoutDashboard, MessageCircle, PackageCheck, Sparkles, X } from "lucide-react";
 
 /* Card visuals for the landing bento, built as live components so the copy can
    be edited in place. Linen & Loom is the demo store. Each visual shows
    something the product does, so none of them carries a metric or a quote. */
-
-/** True once the element has scrolled into view; the CSS sequences key off it. */
-function useInViewOnce<T extends HTMLElement>() {
-  const ref = useRef<T>(null);
-  const [seen, setSeen] = useState(false);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry.isIntersecting) return;
-        setSeen(true);
-        observer.disconnect();
-      },
-      { threshold: 0.3 },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
-  return [ref, seen] as const;
-}
 
 function delay(seconds: number) {
   return { "--d": `${seconds}s` } as CSSProperties;
@@ -37,7 +15,7 @@ function delay(seconds: number) {
 
 /** "Writes in your voice, by your rules": store notes next to a chat that follows them. */
 export function GuidanceVisual() {
-  const [ref, seen] = useInViewOnce<HTMLDivElement>();
+  const { ref, inView: seen } = useMarketingInViewOnce<HTMLDivElement>();
 
   return (
     <div ref={ref} aria-hidden className={`m-bv m-bv-guidance${seen ? " is-playing" : ""}`}>
@@ -134,7 +112,7 @@ const LOG = [
 
 /** "Every action on the record.": the trail one approved change leaves behind. */
 export function ActionLog() {
-  const [ref, seen] = useInViewOnce<HTMLDivElement>();
+  const { ref, inView: seen } = useMarketingInViewOnce<HTMLDivElement>();
 
   return (
     <div ref={ref} aria-hidden className={`m-bv m-bv-log${seen ? " is-playing" : ""}`}>
@@ -158,7 +136,7 @@ export function ActionLog() {
 
 /** "Answers shoppers on your site.": a shopper asks where an order is, the agent looks it up. */
 export function ShopperChat() {
-  const [ref, seen] = useInViewOnce<HTMLDivElement>();
+  const { ref, inView: seen } = useMarketingInViewOnce<HTMLDivElement>();
 
   return (
     <div ref={ref} aria-hidden className={`m-bv m-bv-convert${seen ? " is-playing" : ""}`}>

@@ -1,13 +1,14 @@
 import { HeroMedia } from "./HeroMedia";
-import { MarketingHandoffLink } from "./MarketingHandoffLink";
+import { MarketingHandoff } from "./MarketingHandoff";
 import { MarketingSectionHeader } from "./MarketingSectionHeader";
+import { MarketingSection } from "./MarketingSection";
 
 export function CustomerSupportShowcase() {
   return (
-    <section
+    <MarketingSection
       id="customers"
       aria-labelledby="customer-support-showcase-heading"
-      className="relative isolate px-5 py-16 sm:px-6 sm:py-24"
+      className="relative isolate"
     >
       <div className="relative mx-auto max-w-6xl scroll-mt-28">
         <MarketingSectionHeader
@@ -28,11 +29,13 @@ export function CustomerSupportShowcase() {
           </div>
         </div>
 
-        <div className="mt-8 flex flex-col items-center gap-4 sm:flex-row sm:justify-center sm:gap-8">
-          <MarketingHandoffLink href="/product/order-operations" label="How order changes work" />
-          <MarketingHandoffLink href="/product/customer-support" label="How replies use your store’s knowledge" />
-        </div>
+        <MarketingHandoff
+          links={[
+            { href: "/product/order-operations", label: "How order changes work" },
+            { href: "/product/customer-support", label: "How replies use your store’s knowledge" },
+          ]}
+        />
       </div>
-    </section>
+    </MarketingSection>
   );
 }

@@ -332,7 +332,7 @@ export interface ShopifyToolContext {
 }
 
 export interface ToolExecutionDeps {
-  searchShopifyProducts(input: SearchShopifyProductsInput, ctx: ShopifyToolContext): Promise<ToolResult>;
+  searchShopifyProducts(input: SearchShopifyProductsInput, ctx: ShopifyToolContext, storefront?: boolean): Promise<ToolResult>;
   getInventoryStatus(input: GetInventoryStatusInput, ctx: ShopifyToolContext): Promise<ToolResult>;
   findCustomer(input: FindCustomerInput, ctx: ShopifyToolContext): Promise<ToolResult>;
   updateShopifyCustomerInfo(input: UpdateShopifyCustomerInfoInput, ctx: ShopifyToolContext): Promise<ToolResult>;

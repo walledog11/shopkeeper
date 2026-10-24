@@ -6,18 +6,16 @@ import { ButtonLink } from "./ButtonLink";
 import { CTA } from "./CTA";
 import { Footer } from "./Footer";
 import { Navbar } from "./Navbar";
+import { MarketingCard } from "./MarketingCard";
+import { MarketingFaq, type FaqItem } from "./MarketingFaq";
+import { MarketingSectionHeader } from "./MarketingSectionHeader";
 import { RelatedLinks, type ProductLink } from "./RelatedLinks";
 import { SectionLabel } from "./SectionLabel";
 
 type Capability = {
   title: string;
   body: string;
-  details: readonly string[];
-};
-
-type FAQ = {
-  q: string;
-  a: string;
+  details?: readonly string[];
 };
 
 export function ProductDetailTemplate({
@@ -71,7 +69,7 @@ export function ProductDetailTemplate({
   relatedLinks: readonly ProductLink[];
   faqLabel: string;
   faqTitle?: string;
-  faqs: readonly FAQ[];
+  faqs: readonly FaqItem[];
 }) {
   return (
     <main className="relative">
@@ -113,39 +111,44 @@ export function ProductDetailTemplate({
         {afterVisual}
 
         <section aria-labelledby="capabilities-heading" className="mx-auto max-w-6xl px-6 py-14">
-          <div className="mb-9 text-center">
-            <SectionLabel>{capabilitiesLabel}</SectionLabel>
-            <h2 id="capabilities-heading" className="m-display m-h2 mx-auto max-w-[20ch]">
-              {capabilitiesTitle}
-            </h2>
-            <p className="m-lede mx-auto mt-5 max-w-[62ch] text-[15px]">
-              {capabilitiesBody}
-            </p>
-          </div>
+          <MarketingSectionHeader
+            className="mb-9"
+            id="capabilities-heading"
+            eyebrow={capabilitiesLabel}
+            title={capabilitiesTitle}
+            body={capabilitiesBody}
+            titleClassName="max-w-[20ch]"
+            bodyClassName="mt-5 max-w-[62ch] text-[15px]"
+          />
           <div className="grid gap-4 md:grid-cols-3">
             {capabilities.map((capability) => (
-              <div key={capability.title} className="m-card p-6">
+              <MarketingCard key={capability.title} className="p-6">
                 <h3 className="m-display text-[1.5rem]">{capability.title}</h3>
                 <p className="mt-4 text-sm leading-relaxed text-[color:var(--m-ink-2)]">{capability.body}</p>
-                <ul className="mt-5 space-y-3 text-[13px] text-[color:var(--m-ink-2)]">
-                  {capability.details.map((detail) => (
-                    <li key={detail} className="flex items-start gap-2.5">
-                      <Check className="mt-0.5 size-3.5 shrink-0 text-[color:var(--m-good)]" aria-hidden />
-                      {detail}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+                {capability.details && capability.details.length > 0 ? (
+                  <ul className="mt-5 space-y-3 text-[13px] text-[color:var(--m-ink-2)]">
+                    {capability.details.map((detail) => (
+                      <li key={detail} className="flex items-start gap-2.5">
+                        <Check className="mt-0.5 size-3.5 shrink-0 text-[color:var(--m-good)]" aria-hidden />
+                        {detail}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </MarketingCard>
             ))}
           </div>
         </section>
 
         <div className="m-chapter m-chapter--alt">
           <section aria-labelledby="workflow-detail-heading" className="mx-auto max-w-6xl px-6 py-16">
-            <SectionLabel align="start">{workflowLabel}</SectionLabel>
-            <h2 id="workflow-detail-heading" className="m-display m-h2 max-w-[20ch]">
-              {workflowTitle}
-            </h2>
+            <MarketingSectionHeader
+              align="start"
+              id="workflow-detail-heading"
+              eyebrow={workflowLabel}
+              title={workflowTitle}
+              titleClassName="max-w-[20ch]"
+            />
             <ol className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {workflowSteps.map(([stepTitle, body], index) => (
                 <li key={stepTitle} className="m-card p-5">
@@ -160,11 +163,14 @@ export function ProductDetailTemplate({
 
         <section aria-labelledby="requirements-heading" className="mx-auto max-w-4xl px-6 py-14">
           <div className="m-card p-6 sm:p-9">
-            <SectionLabel align="start">setup and limits</SectionLabel>
-            <h2 id="requirements-heading" className="m-display m-h2">
-              {requirementsTitle}
-            </h2>
-            <p className="m-lede mt-5 text-[15px]">{requirementsBody}</p>
+            <MarketingSectionHeader
+              align="start"
+              id="requirements-heading"
+              eyebrow="setup and limits"
+              title={requirementsTitle}
+              body={requirementsBody}
+              bodyClassName="mt-5 text-[15px]"
+            />
             <ul className="mt-6 grid gap-3 sm:grid-cols-2">
               {requirements.map((requirement) => (
                 <li key={requirement} className="flex items-start gap-2.5 rounded-xl bg-[color:var(--m-bg-alt)] p-4 text-[13px] leading-relaxed text-[color:var(--m-ink-2)]">
@@ -182,20 +188,13 @@ export function ProductDetailTemplate({
         </div>
 
         <section aria-labelledby="product-faq-heading" className="mx-auto max-w-4xl px-6 py-14">
-          <div className="mb-9 text-center">
-            <SectionLabel>{faqLabel}</SectionLabel>
-            <h2 id="product-faq-heading" className="m-display m-h2">
-              {faqTitle}
-            </h2>
-          </div>
-          <dl className="m-card divide-y divide-[color:var(--m-line)] px-6 sm:px-8">
-            {faqs.map((item) => (
-              <div key={item.q} className="py-6">
-                <dt className="text-lg font-medium text-[color:var(--m-ink)]">{item.q}</dt>
-                <dd className="mt-2 text-sm leading-relaxed text-[color:var(--m-ink-2)]">{item.a}</dd>
-              </div>
-            ))}
-          </dl>
+          <MarketingSectionHeader
+            className="mb-9"
+            id="product-faq-heading"
+            eyebrow={faqLabel}
+            title={faqTitle}
+          />
+          <MarketingFaq items={faqs} variant="static" />
         </section>
       </article>
 

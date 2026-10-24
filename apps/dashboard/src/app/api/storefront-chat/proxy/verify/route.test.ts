@@ -123,13 +123,20 @@ describe('storefront chat order verification', () => {
   // order numbers learns which ones exist.
   it('answers identically for a match, an email mismatch, and a nonexistent order', async () => {
     const match = await requestCode('#1025', OWNER_EMAIL);
+    const matchAttempt = await (await submitCode('#1025', 'invalid')).json();
     const mismatch = await requestCode('#1025', 'attacker@example.com');
+    const mismatchAttempt = await (await submitCode('#1025', 'invalid')).json();
     const missing = await requestCode('#9999', 'attacker@example.com');
+    const missingAttempt = await (await submitCode('#9999', 'invalid')).json();
 
     expect(match.status).toBe(200);
     await expect(match.json()).resolves.toEqual({ status: 'sent' });
     await expect(mismatch.json()).resolves.toEqual({ status: 'sent' });
     await expect(missing.json()).resolves.toEqual({ status: 'sent' });
+    expect([matchAttempt.status, mismatchAttempt.status, missingAttempt.status]).toEqual(['wrong_code', 'wrong_code', 'wrong_code']);
+    // Resending cannot replenish guesses, including when a matching request
+    // is followed by a mismatch.
+    expect(mismatchAttempt.attemptsRemaining).toBe(matchAttempt.attemptsRemaining - 1);
   });
 
   it('mails the code to the address on the order, never the one supplied', async () => {
@@ -182,7 +189,8 @@ describe('storefront chat order verification', () => {
 
     expect(send).not.toHaveBeenCalled();
     const rows = await db.storefrontChatVerification.count({ where: { sessionId: session.id } });
-    expect(rows).toBe(0);
+    expect(rows).toBe(1);
+    expect(await db.storefrontChatVerification.findFirst({ where: { sessionId: session.id } })).toMatchObject({ orderId: '', candidateEmailHash: null });
   });
 
   it('verifies with the right code and records it against that order', async () => {
@@ -202,27 +210,36 @@ describe('storefront chat order verification', () => {
     await requestCode('#1025', OWNER_EMAIL);
 
     for (let i = 4; i >= 0; i--) {
-      const response = await submitCode('#1025', '000000');
+      const response = await submitCode('#1025', 'invalid');
       const body = await response.json();
       expect(body).toEqual({ status: 'wrong_code', attemptsRemaining: i });
     }
 
-    await expect(submitCode('#1025', '000000').then((r) => r.json())).resolves.toEqual({
+    await expect(submitCode('#1025', 'invalid').then((r) => r.json())).resolves.toEqual({
       status: 'locked',
     });
+  });
+
+  it('serializes concurrent guesses at the last remaining attempt', async () => {
+    await requestCode('#1025', OWNER_EMAIL);
+    await db.storefrontChatVerification.updateMany({ where: { sessionId: session.id }, data: { attempts: 4 } });
+    const results = await Promise.all(Array.from({ length: 6 }, async () => (await submitCode('#1025', 'invalid')).json()));
+    expect(results.filter(result => result.status === 'wrong_code')).toHaveLength(1);
+    expect(results.filter(result => result.status === 'locked')).toHaveLength(5);
+    expect(await db.storefrontChatVerification.findFirst({ where: { sessionId: session.id } })).toMatchObject({ attempts: 5, verifiedAt: null });
   });
 
   // Reporting `expired` here would invite a fresh code request, which is exactly
   // the way out of the attempt ceiling the pure module refuses to offer.
   it('keeps a locked pair locked across a new code request', async () => {
     await requestCode('#1025', OWNER_EMAIL);
-    for (let i = 0; i < 5; i++) await submitCode('#1025', '000000');
+    for (let i = 0; i < 5; i++) await submitCode('#1025', 'invalid');
 
     const reRequest = await requestCode('#1025', OWNER_EMAIL);
     await expect(reRequest.json()).resolves.toEqual({ status: 'sent' });
     // Identical response, but no second code went out and the lock stands.
     expect(send).toHaveBeenCalledTimes(1);
-    await expect(submitCode('#1025', '000000').then((r) => r.json())).resolves.toEqual({
+    await expect(submitCode('#1025', 'invalid').then((r) => r.json())).resolves.toEqual({
       status: 'locked',
     });
   });
@@ -268,6 +285,17 @@ describe('storefront chat order verification', () => {
     const refused = await requestCode('#1025', OWNER_EMAIL);
 
     await expect(refused.json()).resolves.toEqual({ status: 'send_limit' });
+    expect(send).toHaveBeenCalledTimes(5);
+  });
+
+  it('keeps the email and order send limit when a shopper replaces their session', async () => {
+    for (let i = 0; i < 5; i++) await requestCode('#1025', OWNER_EMAIL);
+    session = await db.storefrontChatSession.create({ data: {
+      organizationId: org.id, integrationId: integration.id, storefrontHost: integration.externalAccountId,
+      resumeSecretHash: createResumeSecret().hash, expiresAt: new Date(Date.now() + 60_000),
+    } });
+    token = mintSessionToken({ sessionId: session.id, orgId: org.id, integrationId: integration.id, shop: integration.externalAccountId });
+    await expect(requestCode('#1025', OWNER_EMAIL).then(r => r.json())).resolves.toEqual({ status: 'send_limit' });
     expect(send).toHaveBeenCalledTimes(5);
   });
 
@@ -346,7 +374,7 @@ describe('storefront chat order verification', () => {
     it('leaves the session anonymous when the code is wrong', async () => {
       await requestCode('#1025', OWNER_EMAIL);
 
-      await expect(submitCode('#1025', '000000').then((r) => r.json())).resolves.toMatchObject({
+      await expect(submitCode('#1025', 'invalid').then((r) => r.json())).resolves.toMatchObject({
         status: 'wrong_code',
       });
 

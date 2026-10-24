@@ -1,6 +1,7 @@
 const ROUTE_TITLES: { prefix: string; title: string }[] = [
   { prefix: "/dashboard/tickets", title: "Inbox" },
   { prefix: "/dashboard/orders", title: "Shop" },
+  { prefix: "/dashboard/chat", title: "Website chat" },
   { prefix: "/dashboard/review", title: "Review" },
   { prefix: "/dashboard/agent/configure", title: "Configure" },
   { prefix: "/dashboard/account", title: "Account" },

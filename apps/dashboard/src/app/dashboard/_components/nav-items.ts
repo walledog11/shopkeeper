@@ -1,4 +1,4 @@
-import { Inbox, Settings2, Box, Cable, BrainCircuit, IdCardLanyard, Home, ScanEye, SlidersHorizontal, User } from "lucide-react";
+import { Inbox, Settings2, Box, Cable, BrainCircuit, IdCardLanyard, Home, ScanEye, SlidersHorizontal, User, MessageCircle } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export interface NavItem {
@@ -57,6 +57,14 @@ export const shopNavItem: NavItem = {
 
 export const topBarShopItems: NavItem[] = [shopNavItem];
 
+export const chatNavItem: NavItem = {
+  name: "Chat",
+  mobileName: "Website chat",
+  href: "/dashboard/chat",
+  icon: MessageCircle,
+  description: "Customize the chat on your website",
+};
+
 export const accountSettingsNavItem: NavItem = {
   name: "Account",
   mobileName: "Account settings",
@@ -101,7 +109,7 @@ export const topBarDropdowns = [
 /** Mobile nav sections (logo links home). */
 export const mobileNavSections: NavSection[] = [
   { heading: "Today", items: [inboxNavItem] },
-  { heading: "Shop", items: [shopNavItem] },
+  { heading: "Shop", items: [shopNavItem, chatNavItem] },
   {
     heading: "Shopkeeper",
     items: [

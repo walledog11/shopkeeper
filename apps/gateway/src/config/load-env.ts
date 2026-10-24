@@ -3,6 +3,8 @@ import { dirname, resolve } from 'path';
 import dotenv from 'dotenv';
 
 export function loadGatewayEnv(): void {
+  // Both local apps already received the same resolved environment from the dev wrapper.
+  if (process.env.NODE_ENV === 'development' && process.env.SHOPKEEPER_LOCAL_DEV === 'true') return;
   dotenv.config({
     path: resolve(dirname(fileURLToPath(import.meta.url)), '../../.env'),
     override: process.env.NODE_ENV !== 'production' && process.env.E2E_TEST_RUN !== 'true',
