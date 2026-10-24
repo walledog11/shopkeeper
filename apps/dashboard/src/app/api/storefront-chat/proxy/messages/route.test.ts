@@ -11,6 +11,7 @@ import {
 import { appProxyCanonicalString } from '@/lib/shopify/app-proxy';
 import { createResumeSecret, mintSessionToken } from '@/lib/storefront-chat/session-token';
 import { GET, POST } from './route';
+import { POST as bootstrap } from '../bootstrap/route';
 
 const APP_SECRET = 'storefront-messages-gate-secret';
 
@@ -101,6 +102,29 @@ afterEach(async () => {
 });
 
 describe('storefront chat messages gating', () => {
+  it('hides unsent replies in polling and resume, and identifies customer echoes', async () => {
+    const customer = await createTestCustomer(org.id, 'delivery@example.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.shopify_chat);
+    const resume = createResumeSecret();
+    await db.storefrontChatSession.update({ where: { id: session.id }, data: { threadId: thread.id, resumeSecretHash: resume.hash } });
+    await db.message.createMany({ data: [null, 'sent', 'pending', 'failed', 'unknown'].map(sendStatus => ({
+      organizationId: org.id, threadId: thread.id, senderType: 'agent', contentText: sendStatus ?? 'legacy', sendStatus,
+    })) });
+    await db.message.create({ data: {
+      organizationId: org.id, threadId: thread.id, senderType: 'customer', contentText: 'hello',
+      externalMessageId: `shopify_chat:${session.id}:widget-1`,
+    } });
+    const resumed = new Request(signedGetRequest().url.replace('/messages?', '/bootstrap?'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: session.id, resumeToken: resume.secret }),
+    });
+    for (const response of [await GET(signedGetRequest()), await bootstrap(resumed)]) {
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body.messages.map((m: { text: string }) => m.text).sort()).toEqual(['hello', 'legacy', 'sent']);
+      expect(body.messages.find((m: { text: string }) => m.text === 'hello').clientMessageId).toBe('widget-1');
+    }
+  });
   it('keeps the newest message visible once a transcript exceeds the page limit', async () => {
     const customer = await createTestCustomer(org.id, 'long-chat@example.com');
     const thread = await createTestThread(org.id, customer.id, ChannelType.shopify_chat);

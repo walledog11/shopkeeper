@@ -2,6 +2,9 @@
 
 import { useEffect, useState, type KeyboardEvent } from "react";
 import { AnimatePresence, LazyMotion, domAnimation, m } from "motion/react";
+import { marketingMotionEase } from "./marketingMotion";
+import { MarketingSection } from "./MarketingSection";
+import { MarketingSectionHeader } from "./MarketingSectionHeader";
 
 const STORE = "Linen & Loom";
 
@@ -59,7 +62,7 @@ const panelReveal = {
   visible: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] as const },
+    transition: { duration: 0.45, ease: marketingMotionEase },
   },
   exit: { opacity: 0, y: -10, transition: { duration: 0.22 } },
 };
@@ -163,17 +166,19 @@ export function MerchantTasks() {
 
   return (
     <LazyMotion features={domAnimation} strict>
-      <section id="workflow" aria-labelledby="merchant-tasks-heading" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-12 sm:px-6 sm:py-24">
+      <MarketingSection id="workflow" aria-labelledby="merchant-tasks-heading" className="py-12 sm:py-24">
         <m.header
-          className="mb-6 max-w-[min(720px,100%)] text-left sm:mb-10"
+          className="mb-6 max-w-[min(720px,100%)] sm:mb-10"
           initial={{ opacity: 0, y: 22 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.5 }}
-          transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.7, ease: marketingMotionEase }}
         >
-          <h2 id="merchant-tasks-heading" className="m-display m-h2">
-            “Take 15% off the whole store through Sunday night.”
-          </h2>
+          <MarketingSectionHeader
+            align="start"
+            id="merchant-tasks-heading"
+            title="“Take 15% off the whole store through Sunday night.”"
+          />
         </m.header>
 
         <div className="relative">
@@ -182,7 +187,7 @@ export function MerchantTasks() {
             initial={{ opacity: 0, y: 28 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.2 }}
-            transition={{ duration: 0.75, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.75, ease: marketingMotionEase }}
           >
             <div className="m-merchant-panel-body flex min-h-0 flex-col sm:min-h-[420px] sm:flex-row lg:min-h-[440px]">
               <div
@@ -250,7 +255,7 @@ export function MerchantTasks() {
             </div>
           </m.div>
         </div>
-      </section>
+      </MarketingSection>
     </LazyMotion>
   );
 }

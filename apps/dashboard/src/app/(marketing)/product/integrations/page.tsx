@@ -1,25 +1,21 @@
-import type { Metadata } from "next";
 import { ArrowDown, Mail, MessageCircle, MonitorCheck, ShoppingBag, Smartphone } from "lucide-react";
+import { MarketingDarkShowcase } from "../../_components/MarketingDarkShowcase";
+import { createProductPageMetadata } from "../../_components/marketing-metadata";
 import { ProductDetailTemplate } from "../../_components/ProductDetailTemplate";
 
 const title = "Integrations — Shopkeeper";
 const description =
   "See how Shopkeeper separates customer support intake, merchant control, Shopify execution, and dashboard review.";
 
-export const metadata: Metadata = {
+export const metadata = createProductPageMetadata({
   title,
   description,
-  alternates: { canonical: "/product/integrations" },
-  openGraph: { title, description, url: "/product/integrations" },
-  twitter: { title, description },
-};
+  path: "/product/integrations",
+});
 
 function IntegrationsMap() {
   return (
-    <figure
-      aria-labelledby="integrations-map-caption"
-      className="overflow-hidden rounded-3xl border border-stone-900/10 m-chapter--dark p-5 shadow-[0_35px_70px_-42px_rgba(22,20,19,0.9)] sm:p-8"
-    >
+    <MarketingDarkShowcase aria-labelledby="integrations-map-caption">
       <figcaption id="integrations-map-caption" className="sr-only">
         Integration map showing Instagram and email as customer intake, Shopkeeper as the planning
         layer, iMessage as merchant control, Shopify as execution, and the dashboard as review and audit.
@@ -66,7 +62,7 @@ function IntegrationsMap() {
           <p className="mt-1 text-[11px] leading-relaxed text-[#fcfaf8]/45">Connect services, set policies and limits, inspect conversations, and review action history without making the dashboard the only place a merchant can work.</p>
         </div>
       </div>
-    </figure>
+    </MarketingDarkShowcase>
   );
 }
 

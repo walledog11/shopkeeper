@@ -8,8 +8,8 @@
   },
   "scripts": {
     "tunnel": "node ../../scripts/start-ngrok.mjs",
-    "dev": "concurrently --kill-others-on-fail --names \"server,worker\" --prefix-colors \"bgBlue.bold,bgMagenta.bold\" \"tsx watch src/index.ts\" \"tsx watch src/worker.ts\"",
-    "dev:tunnel": "concurrently --kill-others-on-fail --names \"server,worker,tunnel\" --prefix-colors \"bgBlue.bold,bgMagenta.bold,bgGreen.bold\" \"tsx watch src/index.ts\" \"tsx watch src/worker.ts\" \"npm run tunnel\"",
+    "dev": "node ../../scripts/with-dev-env.mjs --gateway concurrently --kill-others-on-fail --names \"server,worker\" --prefix-colors \"bgBlue.bold,bgMagenta.bold\" \"tsx watch src/index.ts\" \"tsx watch src/worker.ts\"",
+    "dev:tunnel": "node ../../scripts/with-dev-env.mjs --gateway concurrently --kill-others-on-fail --names \"server,worker,tunnel\" --prefix-colors \"bgBlue.bold,bgMagenta.bold,bgGreen.bold\" \"tsx watch src/index.ts\" \"tsx watch src/worker.ts\" \"npm run tunnel\"",
     "dev:e2e": "concurrently --kill-others-on-fail --names \"server,worker\" --prefix-colors \"bgBlue.bold,bgMagenta.bold\" \"tsx src/index.ts\" \"tsx src/worker.ts\"",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit --pretty false",
@@ -28,11 +28,11 @@
   "dependencies": {
     "@anthropic-ai/sdk": "0.104.1",
     "@shopkeeper/agent": "*",
-    "@shopkeeper/shared": "*",
     "@shopkeeper/analytics": "*",
     "@shopkeeper/db": "*",
     "@shopkeeper/email": "*",
     "@shopkeeper/integrations": "*",
+    "@shopkeeper/shared": "*",
     "@vercel/blob": "2.3.3",
     "bullmq": "5.76.6",
     "dotenv": "^16.4.5",

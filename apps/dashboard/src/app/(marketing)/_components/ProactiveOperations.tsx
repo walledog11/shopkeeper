@@ -1,39 +1,8 @@
-import type { ReactNode } from "react";
 import Link from "next/link";
-import { MarketingHandoffLink } from "./MarketingHandoffLink";
-
-function SectionHeading({
-  title,
-  body,
-}: {
-  title: string;
-  body: string;
-}) {
-  return (
-    <div className="mb-10 text-center">
-      <h2 className="m-display m-h2 mx-auto mb-4 max-w-[20ch]">{title}</h2>
-      <p className="m-lede mx-auto max-w-[58ch]">{body}</p>
-    </div>
-  );
-}
-
-function SectionHandoff({ href, label }: { href: string; label: string }) {
-  return (
-    <div className="mt-6">
-      <MarketingHandoffLink href={href} label={label} />
-    </div>
-  );
-}
-
-function PaperCard({
-  children,
-  className = "",
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return <div className={`m-card p-5 sm:p-6 ${className}`}>{children}</div>;
-}
+import { MarketingCard } from "./MarketingCard";
+import { MarketingHandoff } from "./MarketingHandoff";
+import { MarketingSection } from "./MarketingSection";
+import { MarketingSectionHeader } from "./MarketingSectionHeader";
 
 const briefingOptions = [
   {
@@ -52,14 +21,15 @@ const briefingOptions = [
 
 export function ProactiveOperations() {
   return (
-    <section id="proactive" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-16 sm:px-6 sm:py-24">
-      <SectionHeading
+    <MarketingSection id="proactive">
+      <MarketingSectionHeader
+        className="mb-10"
         title="Sales, stock, and the decisions waiting for you."
         body="Get a text each morning with what Shopkeeper did and what needs you. Add sales and low-stock updates if you want them, then reply to ask a question or settle a decision."
       />
 
       <div className="grid gap-5 lg:grid-cols-[1.3fr_0.9fr]">
-        <PaperCard className="!bg-white/[0.06]">
+        <MarketingCard className="!bg-white/[0.06]">
           <div className="mb-5 flex items-center justify-between gap-3 text-xs text-[color:var(--m-ink-3)]">
             <span>Morning briefing · iMessage</span>
             <span>7:00 AM</span>
@@ -79,18 +49,18 @@ export function ProactiveOperations() {
             <p>Sales: 8 orders, $624 in revenue.</p>
             <p>Low stock: Linen Pant, Oat / M, 3 left.</p>
           </div>
-        </PaperCard>
+        </MarketingCard>
 
         <div className="grid content-start gap-4">
           {briefingOptions.map((option) => (
-            <PaperCard key={option.title}>
+            <MarketingCard key={option.title}>
               <h3 className="m-display text-[1.375rem]">{option.title}</h3>
               <p className="mt-3 text-sm leading-relaxed text-[color:var(--m-ink-2)]">{option.body}</p>
-            </PaperCard>
+            </MarketingCard>
           ))}
         </div>
       </div>
-    </section>
+    </MarketingSection>
   );
 }
 
@@ -103,17 +73,18 @@ export function TrustSection() {
   ] as const;
 
   return (
-    <section id="trust" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-16 sm:px-6 sm:py-24">
-      <SectionHeading
+    <MarketingSection id="trust">
+      <MarketingSectionHeader
+        className="mb-10"
         title="Your data stays yours. Even if you leave."
         body="Your Shopify login is encrypted before it’s stored. Your customers’ addresses never touch another merchant’s account. You can download all of it."
       />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {trustFacts.map(([title, body]) => (
-          <PaperCard key={title}>
+          <MarketingCard key={title}>
             <h3 className="m-display text-[1.375rem]">{title}</h3>
             <p className="mt-3 text-[13px] leading-relaxed text-[color:var(--m-ink-2)]">{body}</p>
-          </PaperCard>
+          </MarketingCard>
         ))}
       </div>
       <p className="mt-5 text-center text-sm text-[color:var(--m-ink-2)]">
@@ -123,7 +94,7 @@ export function TrustSection() {
         </Link>
         .
       </p>
-      <SectionHandoff href="/product/security" label="See the security model" />
-    </section>
+      <MarketingHandoff links={[{ href: "/product/security", label: "See the security model" }]} />
+    </MarketingSection>
   );
 }

@@ -39,24 +39,73 @@ Node 22.x and npm 10.x (`nvm use` reads `.nvmrc`).
 ## Run it locally
 
 ```sh
+nvm use
 npm ci
-cp apps/dashboard/.env.example apps/dashboard/.env.local   # fill in values
-cp apps/gateway/.env.example apps/gateway/.env             # fill in values
-npm run dev                          # builds packages, then runs both apps
+npm run dev:setup                     # Docker Desktop must be running
+# Fill in development provider credentials in the generated app env files.
+npm run dev:doctor
+npm run dev                          # package watchers, dashboard, gateway + worker
 ```
 
-The dashboard runs on port 3000 and the gateway on 8080 (`PORT` in `apps/gateway/.env`).
-To receive provider webhooks locally, run the gateway with
-`npm run dev:tunnel -w apps/gateway` *instead of* the gateway half of `npm run dev` — it
-starts the same server and worker plus ngrok, on the same port. ngrok forwards to
-`GATEWAY_PORT` from the shell (default 8080), so set both if you change the port; set
-`NGROK_DOMAIN` for a reserved domain.
+Open **http://localhost:3000** for everyday development. The gateway runs on 8080.
+`dev:setup` creates missing env files without replacing existing ones, starts the
+Postgres/Redis containers, creates `shopkeeper_dev` if needed, applies committed
+migrations, and builds shared packages. Re-run it after pulling schema changes;
+it preserves development data. It never resets or seeds the test database.
+
+Both apps use the gitignored root `.env.development.local` for shared service URLs
+and secrets. It overrides legacy app env settings; shell variables take precedence.
+The dev commands enforce local database/backend targets and development mode.
+Scheduled maintenance workers and product analytics start disabled.
+
+| Service | Development | Automated tests |
+| --- | --- | --- |
+| PostgreSQL | `127.0.0.1:55432/shopkeeper_dev` | `127.0.0.1:55432/clerk_test` |
+| Gateway Redis | `127.0.0.1:56379/1` | `127.0.0.1:56379/0` |
+| Dashboard / gateway | `3000` / `8080` | `3100` / `8180` |
+
+Development and tests share the Docker containers but use separate databases.
+`test:services:down` stops those shared containers; `dev:setup` starts them again.
+Dashboard locks/caching still require a separate **development Upstash REST instance**;
+the gateway's TCP Redis does not supply the REST API. Use Clerk development keys in
+the dashboard env file and an Anthropic key for agent work. Provider calls with real
+credentials are live; use your development Shopify store and messaging accounts.
+
+Sign in, complete onboarding, and connect the built-in demo store, then run
+`npm run demo:seed` for sample customers, tickets and order-attention rows.
+`dev:doctor` checks configuration, database migrations, Redis and running app health
+without printing credentials. It can also run before either app is started.
+
+For provider webhooks, install/authenticate ngrok and use two terminals:
+
+```sh
+npm run dev -- --filter='!shopkeeper-gateway'
+npm run dev:tunnel -w apps/gateway
+```
+
+Use dedicated development webhook registrations. `NGROK_DOMAIN` selects a reserved
+domain; `GATEWAY_PORT` controls the tunnel target (default 8080) and must match `PORT`.
+For OAuth testing, set `APP_URL` and `NEXT_PUBLIC_APP_URL` to the registered public
+callback origin when needed; keep `DASHBOARD_URL` and internal URLs local.
+
+## From local development to a release
+
+Work on a feature branch, try the change locally, and run typecheck plus relevant tests.
+Push that branch for a Vercel preview and open a PR. Use a separate staging gateway,
+worker, database and provider accounts when checking backend changes, OAuth or messaging;
+a dashboard preview alone does not deploy the gateway. Configure preview/staging URLs
+and credentials in the hosting platforms, independently of local env files.
+
+Merge into `master` after CI and the relevant preview checks pass, then check the
+deployed feature. Keep production for releases. The repo's local setup command does
+not provision cloud staging or change the production deployment branch settings.
 
 Useful commands:
 
 ```sh
 npm run typecheck
 npm run lint
+npm run dev:doctor                # local configuration and service health
 npm run test:unit                 # no services needed
 npm run test:services:up          # local Postgres + Redis for integration tests
 npm run test:integration

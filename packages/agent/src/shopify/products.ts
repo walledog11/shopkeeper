@@ -11,17 +11,19 @@ import { clampLimit, requireNonEmptyString } from "./validation.js";
 // zero rows on a store selling four snowboards, and the model escalated instead
 // of answering. Found live 2026-08-20; the eval suite could not have caught it,
 // because fixtures inject tool output and never execute this file.
-export const PRODUCT_SEARCH_QUERY = `query productSearch($query: String!, $first: Int!) {
+export const PRODUCT_SEARCH_QUERY = `query productSearch($query: String!, $first: Int!, $storefront: Boolean! = false) {
   products(first: $first, query: $query) {
     nodes {
       id
       title
+      status @include(if: $storefront)
+      onlineStoreUrl @include(if: $storefront)
       variants(first: 10) {
         nodes {
           id
           title
           price
-          inventoryQuantity
+          inventoryQuantity @skip(if: $storefront)
         }
       }
     }
@@ -38,6 +40,8 @@ interface ProductSearchVariantNode {
 interface ProductSearchNode {
   id: string;
   title: string;
+  status?: string;
+  onlineStoreUrl?: string | null;
   variants?: { nodes?: (ProductSearchVariantNode | null)[] | null } | null;
 }
 
@@ -58,7 +62,7 @@ const SEARCH_OPERATORS = /[():"*\\]/g;
 
 function toSearchTerms(query: string): string {
   const stripped = query.replace(SEARCH_OPERATORS, " ").replace(/\s+/g, " ").trim();
-  return stripped.length > 0 ? stripped : query;
+  return stripped;
 }
 
 function numericId(gid: string): string {
@@ -68,20 +72,37 @@ function numericId(gid: string): string {
 
 export async function searchShopifyProducts(
   input: SearchShopifyProductsInput,
-  ctx: ShopifyContext
+  ctx: ShopifyContext,
+  storefront = false,
 ): Promise<ToolResult> {
   try {
     const query = requireNonEmptyString(input.query, "query");
     const limit = clampLimit(input.limit, 5, 10);
+    const terms = requireNonEmptyString(toSearchTerms(query), "query");
     const data = await shopifyGraphql<ProductSearchData>(ctx, PRODUCT_SEARCH_QUERY, {
-      query: toSearchTerms(query),
+      query: storefront ? `status:active AND published_status:published AND (${terms})` : terms,
       first: limit,
+      storefront,
     });
+
+    const nodes = (data.products?.nodes ?? []).filter((node): node is ProductSearchNode => node != null);
+    if (storefront) {
+      // Enforce publication again on the result; Shopify search must not turn a
+      // guest question into an Admin catalog or internal inventory disclosure.
+      const products = nodes.filter(node => node.status === "ACTIVE" && node.onlineStoreUrl).map(node => ({
+        product_id: numericId(node.id),
+        title: node.title,
+        url: node.onlineStoreUrl,
+        variants: (node.variants?.nodes ?? []).filter((variant): variant is ProductSearchVariantNode => variant != null).map(variant => ({
+          variant_id: numericId(variant.id), title: variant.title, price: variant.price,
+        })),
+      }));
+      return products.length ? toolOk(JSON.stringify(products)) : toolNotFound(`No products found matching "${query}".`);
+    }
 
     // Mapped back onto the REST shape so `serializeProduct` — and the tool
     // result the model has always seen — stay byte-identical.
-    const products: ShopifyProduct[] = (data.products?.nodes ?? [])
-      .filter((node): node is ProductSearchNode => node != null)
+    const products: ShopifyProduct[] = nodes
       .map((node) => ({
         id: numericId(node.id),
         title: node.title,

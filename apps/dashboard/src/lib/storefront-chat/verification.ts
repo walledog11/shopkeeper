@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { db } from "@shopkeeper/db";
 import { shopifyRestJson, type ShopifyContext } from "@shopkeeper/agent/shopify";
 import {
@@ -20,6 +21,7 @@ import { getEmailSender } from "@shopkeeper/email/senders";
 import { EmailNotConfiguredError } from "@shopkeeper/email/types";
 import logger from "@/lib/server/logger";
 import { emitOpsAlert } from "@/lib/server/ops-alerts";
+import { rateLimit } from "@/lib/server/rate-limit";
 
 // Deterministic identity verification for storefront chat. Deliberately not an
 // agent tool: the model never decides whether someone is verified, it only ever
@@ -49,6 +51,7 @@ export interface RequestVerificationInput {
   integrationId: string;
   orderName: string;
   email: string;
+  shopperIp?: string | null;
 }
 
 export async function requestVerification(
@@ -56,7 +59,7 @@ export async function requestVerification(
 ): Promise<VerificationRequestResult> {
   const orderName = normalizeOrderName(input.orderName);
   const suppliedEmail = input.email.trim();
-  if (!suppliedEmail || orderName === "#") return { status: "unavailable" };
+  if (!suppliedEmail || orderName === "#" || orderName.length > 64) return { status: "unavailable" };
 
   // Claimed before any lookup, and conditionally so the increment and the
   // ceiling check cannot interleave. Charging every request rather than only
@@ -68,11 +71,26 @@ export async function requestVerification(
       id: input.sessionId,
       organizationId: input.orgId,
       revokedAt: null,
+      expiresAt: { gt: new Date() },
       verificationSends: { lt: VERIFICATION_MAX_SENDS_PER_SESSION },
     },
     data: { verificationSends: { increment: 1 }, lastSeenAt: new Date() },
   });
   if (claimed.count === 0) return { status: "send_limit" };
+
+  // These counters survive a new browser session. Charge guesses too, before
+  // looking up the order, so a limit never reveals whether it matched.
+  const limits: [string, number, number][] = [
+    [`shop:${input.integrationId}`, 100, 86400],
+    [`email:${input.integrationId}:${hashVerifiedEmail(suppliedEmail)}`, 5, 3600],
+    [`order:${input.integrationId}:${hashVerifiedEmail(orderName)}`, 5, 3600],
+    ...(input.shopperIp ? [[`ip:${input.integrationId}:${hashVerifiedEmail(input.shopperIp)}`, 20, 3600] as [string, number, number]] : []),
+  ];
+  for (const [key, limit, window] of limits) {
+    if (!(await rateLimit(`storefront:verify:${key}`, limit, window, { forceForE2E: true })).success) {
+      return { status: "send_limit" };
+    }
+  }
 
   // Both dependencies are resolved before the order is looked up, so a
   // misconfigured store fails the same way for every order number. Resolving
@@ -98,16 +116,29 @@ export async function requestVerification(
     throw err;
   }
 
-  const existing = await db.storefrontChatVerification.findUnique({
-    where: { sessionId_orderName: { sessionId: input.sessionId, orderName } },
-    select: { attempts: true },
+  // Every request gets a challenge, including misses. Otherwise the next code
+  // submission distinguishes a matching email from a miss. A random hash with
+  // no corresponding code can never grant order access.
+  const pendingHash = randomBytes(32).toString("hex");
+  const challenge = await db.$transaction(async (tx) => {
+    const live = await tx.storefrontChatSession.updateMany({
+      where: { id: input.sessionId, organizationId: input.orgId, revokedAt: null, expiresAt: { gt: new Date() } },
+      data: { lastSeenAt: new Date() },
+    });
+    if (!live.count) return null;
+    const existing = await tx.storefrontChatVerification.findUnique({
+      where: { sessionId_orderName: { sessionId: input.sessionId, orderName } },
+    });
+    if (existing && (existing.attempts >= VERIFICATION_MAX_ATTEMPTS || existing.verifiedAt)) return null;
+    const data = { orderId: "", codeHash: pendingHash, candidateEmailHash: null, expiresAt: verificationExpiry() };
+    return tx.storefrontChatVerification.upsert({
+      where: { sessionId_orderName: { sessionId: input.sessionId, orderName } },
+      create: { organizationId: input.orgId, sessionId: input.sessionId, orderName, ...data },
+      // Resending changes the code, not the remaining guess allowance.
+      update: data,
+    });
   });
-  // A locked pair stays locked. The pure module reports `locked` rather than
-  // `expired` precisely so a fresh code request is not an obvious way out of
-  // the attempt ceiling; replacing the row here would hand that back.
-  if (existing && existing.attempts >= VERIFICATION_MAX_ATTEMPTS) {
-    return { status: "sent" };
-  }
+  if (!challenge) return { status: "sent" };
 
   const shopifyCtx: ShopifyContext = {
     shop: integration.externalAccountId,
@@ -134,34 +165,28 @@ export async function requestVerification(
     return { status: "sent" };
   }
 
-  if (!order || !emailsMatch(suppliedEmail, order.email)) {
+  if (!order || normalizeOrderName(order.name ?? "") !== orderName || !emailsMatch(suppliedEmail, order.email)) {
     return { status: "sent" };
   }
 
   const code = generateVerificationCode();
-  await db.storefrontChatVerification.upsert({
-    where: { sessionId_orderName: { sessionId: input.sessionId, orderName } },
-    create: {
-      organizationId: input.orgId,
-      sessionId: input.sessionId,
-      orderName,
-      orderId: String(order.id),
-      codeHash: hashVerificationCode(code),
-      // The address ON THE ORDER, which is where the code is going. Parked as a
-      // candidate: it is promoted onto the session only once a correct code
-      // proves the shopper controls it.
-      candidateEmailHash: hashVerifiedEmail(order.email!),
-      expiresAt: verificationExpiry(),
-    },
-    update: {
-      orderId: String(order.id),
-      codeHash: hashVerificationCode(code),
-      candidateEmailHash: hashVerifiedEmail(order.email!),
-      expiresAt: verificationExpiry(),
-      attempts: 0,
-      verifiedAt: null,
-    },
+  const matchedOrder = order;
+  const issued = await db.$transaction(async (tx) => {
+    const live = await tx.storefrontChatSession.updateMany({
+      where: { id: input.sessionId, organizationId: input.orgId, revokedAt: null, expiresAt: { gt: new Date() } },
+      data: { lastSeenAt: new Date() },
+    });
+    if (!live.count) return { count: 0 };
+    return tx.storefrontChatVerification.updateMany({
+      where: { id: challenge.id, codeHash: pendingHash, verifiedAt: null, attempts: { lt: VERIFICATION_MAX_ATTEMPTS } },
+      data: {
+        orderId: String(matchedOrder.id),
+        codeHash: hashVerificationCode(code),
+        candidateEmailHash: hashVerifiedEmail(matchedOrder.email!),
+      },
+    });
   });
+  if (!issued.count) return { status: "sent" };
 
   const org = await db.organization.findUnique({
     where: { id: input.orgId },
@@ -240,49 +265,60 @@ export async function submitVerificationCode(
   input: SubmitVerificationCodeInput,
 ): Promise<VerificationOutcome> {
   const orderName = normalizeOrderName(input.orderName);
-  const record = await db.storefrontChatVerification.findFirst({
-    where: { sessionId: input.sessionId, organizationId: input.orgId, orderName },
-    select: {
-      id: true,
-      codeHash: true,
-      expiresAt: true,
-      attempts: true,
-      verifiedAt: true,
-      candidateEmailHash: true,
-    },
-  });
-
-  const outcome = evaluateVerificationAttempt(record, input.code);
-
-  if (outcome.status === "verified") {
-    await db.storefrontChatVerification.update({
-      where: { id: record!.id },
-      data: { verifiedAt: new Date() },
+  return db.$transaction(async (tx) => {
+    // Serialize issuance, attempts and proof promotion on the browser session.
+    // A read followed by an unconditional increment admits concurrent guesses.
+    const live = await tx.storefrontChatSession.updateMany({
+      where: { id: input.sessionId, organizationId: input.orgId, revokedAt: null, expiresAt: { gt: new Date() } },
+      data: { lastSeenAt: new Date() },
     });
-    // Promote the candidate only now, when a correct code has proved the
-    // shopper controls the address. This is the only durable link between an
-    // anonymous browser session and a later order, so it is also the only place
-    // that link can be forged — hence "on success" and nowhere else. First
-    // verification wins: a session that later verifies a second order under a
-    // different address keeps the identity it originally proved.
-    if (record!.candidateEmailHash) {
-      await db.storefrontChatSession.updateMany({
-        where: {
-          id: input.sessionId,
-          organizationId: input.orgId,
-          verifiedEmailHash: null,
-        },
-        data: { verifiedEmailHash: record!.candidateEmailHash },
+    if (!live.count) return { status: "no_challenge" };
+    const record = await tx.storefrontChatVerification.findFirst({
+      where: { sessionId: input.sessionId, organizationId: input.orgId, orderName },
+      select: {
+        id: true,
+        codeHash: true,
+        expiresAt: true,
+        attempts: true,
+        verifiedAt: true,
+        candidateEmailHash: true,
+        orderId: true,
+      },
+    });
+
+    const outcome = evaluateVerificationAttempt(record, input.code);
+
+    if (outcome.status === "verified") {
+      if (!record!.orderId) return { status: "no_challenge" };
+      await tx.storefrontChatVerification.update({
+        where: { id: record!.id },
+        data: { verifiedAt: new Date() },
+      });
+      // Promote the candidate only now, when a correct code has proved the
+      // shopper controls the address. This is the only durable link between an
+      // anonymous browser session and a later order, so it is also the only place
+      // that link can be forged — hence "on success" and nowhere else. First
+      // verification wins: a session that later verifies a second order under a
+      // different address keeps the identity it originally proved.
+      if (record!.candidateEmailHash) {
+        await tx.storefrontChatSession.updateMany({
+          where: {
+            id: input.sessionId,
+            organizationId: input.orgId,
+            verifiedEmailHash: null,
+          },
+          data: { verifiedEmailHash: record!.candidateEmailHash },
+        });
+      }
+    } else if (outcome.status === "wrong_code") {
+      await tx.storefrontChatVerification.update({
+        where: { id: record!.id },
+        data: { attempts: { increment: 1 } },
       });
     }
-  } else if (outcome.status === "wrong_code") {
-    await db.storefrontChatVerification.update({
-      where: { id: record!.id },
-      data: { attempts: { increment: 1 } },
-    });
-  }
 
-  return outcome;
+    return outcome;
+  });
 }
 
 // The outstanding challenge a bare code in the chat should be tested against.
@@ -294,7 +330,8 @@ export async function findOutstandingChallenge(
 ): Promise<{ orderName: string } | null> {
   return db.storefrontChatVerification.findFirst({
     where: { sessionId, organizationId: orgId, verifiedAt: null },
-    orderBy: { createdAt: "desc" },
+    // Expiry moves when a code is requested again; attempts only move updatedAt.
+    orderBy: { expiresAt: "desc" },
     select: { orderName: true },
   });
 }

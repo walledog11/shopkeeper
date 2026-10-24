@@ -1,5 +1,7 @@
 import { Check } from "lucide-react";
 import { ButtonLink } from "./ButtonLink";
+import { MarketingSection } from "./MarketingSection";
+import { MarketingSectionHeader } from "./MarketingSectionHeader";
 import { Reveal } from "./Reveal";
 import { PRIMARY_CTA_LABEL } from "@/lib/brand";
 
@@ -44,14 +46,18 @@ const tiers = [
 
 export function Pricing() {
   return (
-    <section id="pricing" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-16 text-center sm:px-6 sm:py-24">
+    <MarketingSection id="pricing" className="text-center">
       <Reveal>
-        <h2 className="m-display m-h2 mx-auto mb-5 max-w-[20ch]">
-          The whole product, <span className="m-tail">on either plan.</span>
-        </h2>
-        <p className="m-lede mx-auto mb-8 max-w-[48ch]">
-          Join the waitlist to hear when early access opens.
-        </p>
+        <MarketingSectionHeader
+          title={
+            <>
+              The whole product, <span className="m-tail">on either plan.</span>
+            </>
+          }
+          body="Join the waitlist to hear when early access opens."
+          titleClassName="max-w-[20ch]"
+          bodyClassName="mb-8 max-w-[48ch]"
+        />
 
         <p className="mx-auto mb-12 max-w-[62ch] rounded-2xl border border-[color:var(--m-line)] bg-[color:var(--m-bg-alt)] px-5 py-4 text-[15px] leading-relaxed text-[color:var(--m-ink-2)]">
           Both plans include everything: the customer inbox, texting your shopkeeper
@@ -104,6 +110,6 @@ export function Pricing() {
         A conversation is a new customer thread opened in the calendar month, however long it runs. Your own
         messages to Shopkeeper don’t count.
       </p>
-    </section>
+    </MarketingSection>
   );
 }

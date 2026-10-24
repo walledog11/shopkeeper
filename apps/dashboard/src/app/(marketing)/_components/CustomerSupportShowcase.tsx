@@ -1,27 +1,23 @@
 import { HeroMedia } from "./HeroMedia";
-import { MarketingHandoffLink } from "./MarketingHandoffLink";
-import { marketingSectionBodyClass, marketingSectionTitleClass } from "./marketingUi";
+import { MarketingHandoff } from "./MarketingHandoff";
+import { MarketingSectionHeader } from "./MarketingSectionHeader";
+import { MarketingSection } from "./MarketingSection";
 
 export function CustomerSupportShowcase() {
   return (
-    <section
+    <MarketingSection
       id="customers"
       aria-labelledby="customer-support-showcase-heading"
-      className="relative isolate px-5 py-16 sm:px-6 sm:py-24"
+      className="relative isolate"
     >
       <div className="relative mx-auto max-w-6xl scroll-mt-28">
-        <div className="mb-10 text-center sm:mb-12">
-          <h2
-            id="customer-support-showcase-heading"
-            className={`${marketingSectionTitleClass} mx-auto max-w-[22ch]`}
-          >
-            When customers write in, the order comes with the message.
-          </h2>
-          <p className={marketingSectionBodyClass}>
-            Instagram, email, or chat on your store: Shopkeeper reads the thread,
-            checks Shopify, and sends you anything that needs a yes.
-          </p>
-        </div>
+        <MarketingSectionHeader
+          id="customer-support-showcase-heading"
+          className="mb-10 sm:mb-12"
+          titleClassName="max-w-[22ch]"
+          title="When customers write in, the order comes with the message."
+          body="Instagram, email, or chat on your store: Shopkeeper reads the thread, checks Shopify, and sends you anything that needs a yes."
+        />
 
         <div id="demo" className="relative mt-2 sm:mt-4">
           <div
@@ -33,11 +29,13 @@ export function CustomerSupportShowcase() {
           </div>
         </div>
 
-        <div className="mt-8 flex flex-col items-center gap-4 sm:flex-row sm:justify-center sm:gap-8">
-          <MarketingHandoffLink href="/product/order-operations" label="How order changes work" />
-          <MarketingHandoffLink href="/product/customer-support" label="How replies use your store’s knowledge" />
-        </div>
+        <MarketingHandoff
+          links={[
+            { href: "/product/order-operations", label: "How order changes work" },
+            { href: "/product/customer-support", label: "How replies use your store’s knowledge" },
+          ]}
+        />
       </div>
-    </section>
+    </MarketingSection>
   );
 }

@@ -79,6 +79,14 @@ describe("proxy path access policy", () => {
     });
   });
 
+  it("allows public chat pictures while keeping uploads and attachments private", () => {
+    const uuid = "aabbccdd-1234-5678-9abc-aabbccddeeff";
+    expect(isPublicPath(`/api/storefront-chat/images/${uuid}/${uuid}`)).toBe(true);
+    expect(isPublicPath("/api/storefront-chat/images/anything/invoice.pdf")).toBe(false);
+    expect(isPublicPath("/api/integrations/shopify/storefront-chat/image")).toBe(false);
+    expect(isPublicPath("/api/attachments")).toBe(false);
+  });
+
   it("matches route patterns consistently", () => {
     expect(matchesPathname("/api/webhooks/meta", publicRoutePatterns)).toBe(true);
     expect(matchesPathname("/marketing", publicRoutePatterns)).toBe(false);

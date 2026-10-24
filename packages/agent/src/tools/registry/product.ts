@@ -1,4 +1,5 @@
 import { noShopify, requireShopify } from "./helpers.js";
+import { isStorefrontContext } from "../../guest-policy.js";
 import { defineTool, numberArg, stringArg } from "./schema.js";
 import type { GetInventoryStatusInput, SearchShopifyProductsInput } from "./types.js";
 
@@ -19,7 +20,7 @@ export const PRODUCT_TOOL_DEFINITIONS = [
     planStepLabel: "Search Shopify products",
     execute: async (input: SearchShopifyProductsInput, ctx, _settings, deps) => {
       const shopify = requireShopify(ctx);
-      return shopify ? deps.searchShopifyProducts(input, shopify) : noShopify;
+      return shopify ? deps.searchShopifyProducts(input, shopify, isStorefrontContext(ctx)) : noShopify;
     },
   }),
   defineTool({

@@ -62,6 +62,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await cleanupTestData(org?.id);
   process.env.E2E_OUTBOUND_MODE = originalEnv.E2E_OUTBOUND_MODE;
   process.env.E2E_OUTBOUND_RECORD_PATH = originalEnv.E2E_OUTBOUND_RECORD_PATH;
@@ -269,6 +270,7 @@ describe('POST /api/messages', () => {
   });
 
   it('persists a merchant reply for the active storefront session without a provider call', async () => {
+    vi.stubEnv('STOREFRONT_CHAT_ENABLED', 'true');
     const shopDomain = `storefront-${org.id.slice(0, 8)}.myshopify.com`;
     const integration = await createTestIntegration(org.id, {
       platform: ChannelType.shopify,

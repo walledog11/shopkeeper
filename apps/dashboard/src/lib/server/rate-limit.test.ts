@@ -10,6 +10,13 @@ vi.mock('@/lib/server/redis', () => ({
   getRedis: vi.fn(),
 }));
 
+const { localRedis } = vi.hoisted(() => ({
+  localRedis: { incr: vi.fn(), expire: vi.fn(), on: vi.fn() },
+}));
+vi.mock('ioredis', () => ({
+  Redis: vi.fn(function () { return localRedis; }),
+}));
+
 let rateLimit: typeof RateLimitFn;
 let isE2ERateLimitBypassEnabled: typeof IsE2ERateLimitBypassEnabledFn;
 let isE2ERateLimitForceEnabled: typeof IsE2ERateLimitForceEnabledFn;
@@ -64,6 +71,30 @@ describe('server rateLimit', () => {
       testEnv({ NODE_ENV: 'test', E2E_TEST_RUN: 'true', E2E_RATE_LIMIT_TEST_MODE: 'force-header' }),
       { forceForE2E: true },
     )).toBe(false);
+  });
+
+  it.each(['test', 'production'])('enforces browser server limits through local Redis in %s mode', async (mode) => {
+    vi.stubEnv('NODE_ENV', mode);
+    vi.stubEnv('E2E_TEST_RUN', 'true');
+    vi.stubEnv('E2E_SERVER', 'true');
+    vi.stubEnv('REDIS_URL', 'redis://127.0.0.1:56379/0');
+    localRedis.incr.mockResolvedValueOnce(1).mockResolvedValueOnce(2);
+
+    expect((await rateLimit('browser-reply', 1, 60)).success).toBe(true);
+    expect((await rateLimit('browser-reply', 1, 60)).success).toBe(false);
+    expect(localRedis.expire).toHaveBeenCalled();
+    expect(mockedGetRedis).not.toHaveBeenCalled();
+  });
+
+  it('does not select local Redis without an explicit E2E test run', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('E2E_SERVER', 'true');
+    vi.stubEnv('E2E_TEST_RUN', 'false');
+    mockedGetRedis.mockImplementation(() => { throw new Error('Redis unavailable'); });
+
+    expect((await rateLimit('production-reply')).success).toBe(false);
+    expect(localRedis.incr).not.toHaveBeenCalled();
+    expect(mockedGetRedis).toHaveBeenCalled();
   });
 
   it('only forces E2E rate limits for the guarded test mode and explicit option', () => {

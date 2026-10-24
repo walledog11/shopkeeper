@@ -22,6 +22,10 @@ services:
   redis:
     image: mirror.gcr.io/library/redis:7
     container_name: clerk-test-redis
+    # Dev queues use DB 1; tests use DB 0. Keep dev jobs across container restarts.
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - clerk-local-redis-data:/data
     ports:
       - "56379:6379"
     healthcheck:
@@ -32,3 +36,4 @@ services:
 
 volumes:
   clerk-test-postgres-data:
+  clerk-local-redis-data:

@@ -15,6 +15,8 @@ const ENV_FILE_PATHS = [
   'apps/gateway/.env.local',
   'apps/dashboard/.env',
   'apps/dashboard/.env.local',
+  // Shared local service targets win over legacy app files. Shell overrides win last.
+  '.env.development.local',
 ];
 
 const CLERK_E2E_FALLBACK_PATHS = ['.env.e2e.local'];
@@ -37,9 +39,8 @@ const DEV_DEFAULTS = {
   NEXT_PUBLIC_CLERK_SIGN_IN_URL: '/login',
   NEXT_PUBLIC_CLERK_SIGN_UP_URL: '/signup',
   GATEWAY_INTERNAL_URL: 'http://localhost:8080',
-  // Local-only fallback when .env.local predates OAUTH_ATTEMPT_SECRET. Production
-  // must set a real secret; validateDashboardEnv enforces that at boot.
-  OAUTH_ATTEMPT_SECRET: 'local-dev-oauth-attempt-secret-at-least-32-chars',
+  GATEWAY_ENABLE_MAINTENANCE_WORKERS: 'false',
+  PRODUCT_ANALYTICS_ENABLED: 'false',
 };
 
 export function getDevEnv(baseEnv = process.env, options = {}) {
@@ -56,7 +57,44 @@ export function getDevEnv(baseEnv = process.env, options = {}) {
     ...clerkFallbackEnv,
     ...fileEnv,
     ...baseEnv,
+    NODE_ENV: 'development',
+    SHOPKEEPER_LOCAL_DEV: 'true',
   };
+}
+
+export function assertLocalDevEnv(env) {
+  for (const name of ['DATABASE_URL', 'DIRECT_DATABASE_URL', 'REDIS_URL']) {
+    let url;
+    try { url = new URL(env[name]); } catch {
+      throw new Error(`[dev] ${name} is missing or invalid. Run npm run dev:setup.`);
+    }
+    if (!['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) {
+      throw new Error(`[dev] ${name} must point to localhost. Use deployment tooling for remote environments.`);
+    }
+    if (name !== 'REDIS_URL' && (!['postgres:', 'postgresql:'].includes(url.protocol) || url.pathname !== '/shopkeeper_dev')) {
+      throw new Error(`[dev] ${name} must use the shopkeeper_dev PostgreSQL database, separate from clerk_test.`);
+    }
+    if (name === 'REDIS_URL' && (url.protocol !== 'redis:' || url.pathname !== '/1')) {
+      throw new Error('[dev] REDIS_URL must use local Redis database /1; integration tests use /0.');
+    }
+  }
+  const database = new URL(env.DATABASE_URL);
+  const direct = new URL(env.DIRECT_DATABASE_URL);
+  if (database.host !== direct.host || database.pathname !== direct.pathname) {
+    throw new Error('[dev] DATABASE_URL and DIRECT_DATABASE_URL must target the same local database.');
+  }
+  for (const name of ['DASHBOARD_URL', 'DASHBOARD_INTERNAL_URL', 'GATEWAY_INTERNAL_URL']) {
+    let url;
+    try { url = new URL(env[name]); } catch {
+      throw new Error(`[dev] ${name} is missing or invalid. Run npm run dev:setup.`);
+    }
+    if (!['http:', 'https:'].includes(url.protocol) || !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) {
+      throw new Error(`[dev] ${name} must point to a local app. Configure provider callbacks separately.`);
+    }
+  }
+  if (env.NEON_SERVERLESS_HTTP === 'true') {
+    throw new Error('[dev] NEON_SERVERLESS_HTTP must be false for local PostgreSQL.');
+  }
 }
 
 function loadEnvFiles(repoRoot, relativePaths) {
@@ -94,15 +132,18 @@ function missingDashboardDevEnv(env) {
 
 async function main() {
   const command = process.argv.slice(2);
+  const gateway = command[0] === '--gateway';
+  if (gateway) command.shift();
   if (command.length === 0) {
     console.error('[with-dev-env] Missing command to execute');
     process.exit(1);
   }
 
   const env = getDevEnv(process.env);
-  const missing = missingDashboardDevEnv(env);
+  assertLocalDevEnv(env);
+  const missing = missingDashboardDevEnv(env).filter(name => !gateway || name !== 'CLERK_SECRET_KEY');
   if (missing.length > 0) {
-    console.error(`[with-dev-env] Missing dashboard dev environment variables: ${missing.join(', ')}`);
+    console.error(`[with-dev-env] Missing development environment variables: ${missing.join(', ')}`);
     console.error('[with-dev-env] Add them to apps/dashboard/.env.local or a shared local env file.');
     process.exit(1);
   }
@@ -111,6 +152,10 @@ async function main() {
     stdio: 'inherit',
     env,
   });
+
+  for (const signal of ['SIGINT', 'SIGTERM']) {
+    process.once(signal, () => child.kill(signal));
+  }
 
   child.on('error', (error) => {
     console.error('[with-dev-env] Failed to start command', error);

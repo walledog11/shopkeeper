@@ -25,6 +25,7 @@ import type {
   DispatchThread,
 } from "./dispatch-message-types"
 import { captureDashboardOutboundReplySent } from "@/lib/server/product-analytics"
+import { isStorefrontChatGloballyEnabled, isStorefrontChatEnabledForIntegration } from "@/lib/storefront-chat/enabled"
 
 export type { DispatchMessageResult } from "./dispatch-message-types"
 
@@ -36,11 +37,16 @@ export type { DispatchMessageResult } from "./dispatch-message-types"
 async function resolveStorefrontChatDelivery(
   thread: DispatchThread,
 ): Promise<{ ok: true; integrationId: string; providerMessageId: undefined } | DispatchFailure> {
+  if (!isStorefrontChatGloballyEnabled()) return { ok: false, error: "Storefront chat is disabled" }
   const session = await db.storefrontChatSession.findFirst({
-    where: { threadId: thread.id, organizationId: thread.organizationId, revokedAt: null },
-    select: { integrationId: true },
+    where: {
+      threadId: thread.id, organizationId: thread.organizationId, revokedAt: null,
+      expiresAt: { gt: new Date() },
+      organization: { lifecycleStatus: "active" }, integration: { lifecycleStatus: "active" },
+    },
+    select: { integrationId: true, integration: { select: { metadata: true } } },
   })
-  if (session) {
+  if (session && isStorefrontChatEnabledForIntegration(session.integration.metadata)) {
     return { ok: true, integrationId: session.integrationId, providerMessageId: undefined }
   }
   // A live session that has moved on to a later episode is a different failure
@@ -50,7 +56,7 @@ async function resolveStorefrontChatDelivery(
     where: {
       threadId: thread.id,
       organizationId: thread.organizationId,
-      session: { revokedAt: null },
+      session: { revokedAt: null, expiresAt: { gt: new Date() }, threadId: { not: thread.id } },
     },
     select: { id: true },
   })
@@ -61,7 +67,7 @@ async function resolveStorefrontChatDelivery(
       error: "This conversation has ended and the shopper has started a new one",
     }
   }
-  return { ok: false, error: "Storefront chat session is closed or revoked" }
+  return { ok: false, error: "Storefront chat session is closed, expired, or disabled" }
 }
 
 // Refuse before the provider is touched. A draft or approval written against an

@@ -51,7 +51,9 @@ export async function rateLimit(
 }
 
 function getRateLimitClient(options: RateLimitOptions): FixedWindowCounterClient {
-  if (isE2ERateLimitForceEnabled(process.env, options)) {
+  // Built browser tests use the local Redis service, just like agent-lock.
+  // Keep enforcement active even when Next runs the server in production mode.
+  if (isE2EServer(process.env) || isE2ERateLimitForceEnabled(process.env, options)) {
     return getE2ERedis();
   }
 
@@ -75,6 +77,7 @@ export function isE2ERateLimitBypassEnabled(
   options: RateLimitOptions = {},
 ): boolean {
   return readEnv(env, 'NODE_ENV') !== 'production' &&
+    !isE2EServer(env) &&
     readEnv(env, 'E2E_TEST_RUN') === 'true' &&
     !isE2ERateLimitForceEnabled(env, options);
 }
@@ -91,6 +94,10 @@ export function isE2ERateLimitForceEnabled(
 
 function readEnv(env: NodeJS.ProcessEnv, name: string): string | undefined {
   return env[name];
+}
+
+function isE2EServer(env: NodeJS.ProcessEnv): boolean {
+  return readEnv(env, 'E2E_SERVER') === 'true' && readEnv(env, 'E2E_TEST_RUN') === 'true';
 }
 
 /** Returns a 429 response with standard rate-limit headers */

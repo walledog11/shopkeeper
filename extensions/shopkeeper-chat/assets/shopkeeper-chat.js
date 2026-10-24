@@ -1,33 +1,35 @@
-(function () {
+(async function () {
   var root = document.getElementById("shopkeeper-chat-root");
   if (!root || root.dataset.mounted) return;
   root.dataset.mounted = "1";
 
+  // Fetch presentation settings before mounting. This is intentionally separate
+  // from bootstrap: simply seeing the launcher must not create a session.
+  var publishedSettings = null;
+  if (root.dataset.configUrl) {
+    var configController = new AbortController();
+    var configTimeout = setTimeout(function () { configController.abort(); }, 8000);
+    try {
+      var configResponse = await fetch(root.dataset.configUrl, { signal: configController.signal, cache: "no-store" });
+      if (!configResponse.ok) return;
+      var configData = await configResponse.json();
+      if (configData.enabled !== true) return;
+      publishedSettings = configData.configuration && configData.configuration.settings;
+    } catch (error) {
+      // Stay hidden if availability or placement cannot be confirmed.
+      return;
+    } finally {
+      clearTimeout(configTimeout);
+    }
+  }
+
   var proxy = root.dataset.proxy;
-  var side = root.dataset.position === "left" ? "left" : "right";
+  var preview = root.dataset.preview === "1";
   var greeting = root.dataset.greeting || "";
   var launcherLabel = root.dataset.launcherLabel || "Chat with us";
-  var panelTitle = root.dataset.panelTitle || launcherLabel;
+  var panelTitle = root.dataset.panelTitle || root.dataset.shopName || launcherLabel;
   var statusLine = root.dataset.statusLine || "";
   var logoUrl = root.dataset.logoUrl || "";
-  var accent = root.dataset.accent || "#1a1a1a";
-
-  var colorBlack = "#1a1a1a";
-  var colorWhite = "#ffffff";
-  var colorTan = "#d4b896";
-  var colorTanBg = "#f5ebe0";
-  var colorTanShadow = "#c4a574";
-  var colorTanDot = "#d9cfc0";
-  var colorMuted = "#6b5d4f";
-  var colorAccent = accent;
-
-  var brutalBorder = "2px solid " + colorBlack;
-  var brutalShadow = "-2px 2px 0 " + colorTanShadow;
-  var brutalShadowSm = "-2px 2px 0 " + colorTanShadow;
-  var brutalShadowFocus = "-3px 3px 0 " + colorTanShadow;
-  var panelRadius = side === "right" ? "18px 18px 0 18px" : "18px 18px 18px 0";
-  var launcherRadius = side === "right" ? "22px 22px 0 22px" : "22px 22px 22px 0";
-  var sideInset = side + ": max(20px, env(safe-area-inset-" + side + "));";
 
   function parsePrompts(raw) {
     if (!raw) return [];
@@ -42,205 +44,16 @@
 
   var shadow = root.attachShadow({ mode: "open" });
   shadow.innerHTML = [
-    "<style>",
-    ":host { all: initial; display: block; overflow: hidden; }",
-    "*, *::before, *::after { box-sizing: border-box; }",
-    ".launcher {",
-    "  position: fixed; bottom: max(20px, env(safe-area-inset-bottom)); " + sideInset + " z-index: 2147483000;",
-    "  display: flex; align-items: center; gap: 10px;",
-    "  padding: 12px 20px; cursor: pointer;",
-    "  border: " + brutalBorder + "; border-radius: " + launcherRadius + ";",
-    "  background: " + colorAccent + "; color: " + colorWhite + ";",
-    "  font: 600 15px/1.2 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;",
-    "  box-shadow: " + brutalShadow + ";",
-    "}",
-    ".launcher[data-open='1'] { box-shadow: none; }",
-    ".launcher-badge {",
-    "  position: absolute; top: -6px; " + (side === "right" ? "right" : "left") + ": -4px;",
-    "  min-width: 18px; height: 18px; padding: 0 5px;",
-    "  border: " + brutalBorder + "; border-radius: 999px;",
-    "  background: #c44; color: " + colorWhite + ";",
-    "  font: 700 11px/14px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;",
-    "  text-align: center;",
-    "  display: none;",
-    "}",
-    ".launcher-badge[data-visible='1'] { display: block; }",
-    ".launcher-icon {",
-    "  display: flex; align-items: center; justify-content: center;",
-    "  width: 28px; height: 28px; flex-shrink: 0;",
-    "  border: 2px solid " + colorBlack + "; border-radius: 50%;",
-    "  background: " + colorTan + "; box-shadow: " + brutalShadowSm + ";",
-    "}",
-    ".launcher[data-open='1'] .launcher-icon { box-shadow: none; }",
-    ".launcher-icon svg { display: block; width: 22px; height: 22px; }",
-    ".launcher[data-open='1'] { padding: 12px; gap: 0; }",
-    ".launcher[data-open='1'] .launcher-label { display: none; }",
-    ".panel {",
-    "  position: fixed; bottom: 84px; " + sideInset + " z-index: 2147483000;",
-    "  width: min(380px, calc(100vw - 40px)); height: min(520px, calc(100vh - 120px));",
-    "  display: none; flex-direction: column; overflow: hidden; min-height: 0; max-width: 100%;",
-    "  background: " + colorWhite + "; border: none; border-radius: " + panelRadius + ";",
-    "  box-shadow: none;",
-    "  font: 400 15px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;",
-    "  color: " + colorBlack + ";",
-    "}",
-    ".panel[data-open='1'] { display: flex; }",
-    ".header {",
-    "  padding: 14px 16px; background: " + colorAccent + "; color: " + colorWhite + ";",
-    "  display: flex; justify-content: space-between; align-items: center; gap: 12px;",
-    "  border-bottom: " + brutalBorder + "; flex-shrink: 0;",
-    "}",
-    ".header-brand { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }",
-    ".header-logo {",
-    "  width: 36px; height: 36px; flex-shrink: 0;",
-    "  border: 2px solid " + colorWhite + "; border-radius: 50%; object-fit: cover;",
-    "}",
-    ".header-text { display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; }",
-    ".header h2 { margin: 0; font-size: 15px; font-weight: 700; white-space: nowrap; flex-shrink: 0; }",
-    ".header-status { margin: 0; font-size: 12px; font-weight: 400; opacity: .88; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }",
-    ".header-status::before { content: '\\00b7'; margin-right: 8px; opacity: .75; }",
-    ".header-close {",
-    "  display: none; flex-shrink: 0; align-items: center; justify-content: center;",
-    "  width: 34px; height: 34px; padding: 0; cursor: pointer;",
-    "  border: 2px solid " + colorWhite + "; border-radius: 50%;",
-    "  background: " + colorTan + "; color: " + colorBlack + ";",
-    "}",
-    ".header-close svg { display: block; width: 16px; height: 16px; }",
-    ".header-close:focus-visible { outline: 2px solid " + colorWhite + "; outline-offset: 2px; }",
-    ".log { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 14px;",
-    "  background-color: " + colorTanBg + ";",
-    "  background-image: radial-gradient(circle, " + colorTanDot + " 1px, transparent 1px);",
-    "  background-size: 14px 14px; -webkit-overflow-scrolling: touch; }",
-    ".msg { display: flex; align-items: flex-end; gap: 8px; max-width: 92%; }",
-    ".msg.them { align-self: flex-start; }",
-    ".msg.me { align-self: flex-end; }",
-    ".msg .bubble-wrap { display: flex; flex-direction: column; gap: 4px; min-width: 0; }",
-    ".msg.me .bubble-wrap { align-items: flex-end; }",
-    ".msg .bubble {",
-    "  padding: 10px 14px; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: anywhere;",
-    "  border: " + brutalBorder + "; font-size: 15px; line-height: 1.4;",
-    "  box-shadow: " + brutalShadow + ";",
-    "}",
-    ".msg.them .bubble { background: " + colorWhite + "; color: " + colorBlack + "; border-radius: 18px 18px 18px 0; }",
-    ".msg.me .bubble { background: " + colorAccent + "; color: " + colorWhite + "; border-radius: 18px 18px 0 18px; }",
-    ".msg-time { font-size: 11px; color: " + colorMuted + "; line-height: 1; }",
-    ".msg .avatar { flex-shrink: 0; width: 34px; height: 34px; }",
-    ".msg .avatar svg { display: block; width: 34px; height: 34px; }",
-    ".msg.note { align-self: center; background: none; color: " + colorMuted + "; font-size: 13px; text-align: center; max-width: 100%; }",
-    ".conversation-boundary { align-self: stretch; display: flex; align-items: center; gap: 10px; color: " + colorMuted + "; font-size: 12px; font-weight: 600; text-align: center; }",
-    ".conversation-boundary::before, .conversation-boundary::after { content: ''; height: 1px; flex: 1; background: " + colorTanShadow + "; }",
-    ".msg.typing .bubble { display: flex; align-items: center; gap: 4px; min-width: 52px; min-height: 40px; padding: 12px 14px; }",
-    ".typing-dot { width: 7px; height: 7px; border-radius: 50%; background: " + colorMuted + "; animation: typing-bounce 1.2s ease-in-out infinite; }",
-    ".typing-dot:nth-child(2) { animation-delay: .15s; }",
-    ".typing-dot:nth-child(3) { animation-delay: .3s; }",
-    "@keyframes typing-bounce { 0%, 60%, 100% { transform: translateY(0); opacity: .45; } 30% { transform: translateY(-4px); opacity: 1; } }",
-    ".quick-actions { flex-shrink: 0; padding: 14px 12px 12px; background: " + colorWhite + "; overflow: hidden; }",
-    ".quick-actions[data-hidden='1'] { display: none; }",
-    ".quick-actions-track {",
-    "  display: flex; flex-wrap: nowrap; align-items: center; gap: 8px;",
-    "  overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch;",
-    "  overscroll-behavior-x: contain; scrollbar-width: none;",
-    "}",
-    ".quick-actions-track::-webkit-scrollbar { display: none; }",
-    ".prompt-chip, .verify-open { flex: 0 0 auto; white-space: nowrap; }",
-    ".prompt-chip {",
-    "  border: " + brutalBorder + "; background: " + colorWhite + "; color: " + colorBlack + ";",
-    "  border-radius: 999px; padding: 8px 12px; cursor: pointer;",
-    "  font: inherit; font-size: 13px; font-weight: 600; line-height: 1.2; text-align: left;",
-    "}",
-    ".prompt-chip:hover { background: " + colorTanBg + "; }",
-    ".prompt-chip:focus-visible { outline: 2px solid " + colorTan + "; outline-offset: 2px; }",
-    ".composer { display: flex; align-items: flex-end; gap: 8px; padding: 12px; background: " + colorWhite + "; border-top: " + brutalBorder + "; flex-shrink: 0; min-width: 0; max-width: 100%; }",
-    ".composer textarea {",
-    "  flex: 1; padding: 10px 14px; min-width: 0; width: 100%; min-height: 42px; max-height: 120px; resize: none;",
-    "  font: inherit; font-size: 16px; line-height: 1.35; overflow-y: auto; overflow-x: hidden;",
-    "  border: " + brutalBorder + "; border-radius: 16px;",
-    "  background: " + colorWhite + ";",
-    "}",
-    ".composer textarea:focus { outline: none; border-color: " + colorTan + "; }",
-    ".composer button {",
-    "  border: " + brutalBorder + "; background: " + colorAccent + "; color: " + colorWhite + ";",
-    "  border-radius: 16px; padding: 10px 16px; line-height: 1.2; flex-shrink: 0;",
-    "  cursor: pointer; font: inherit; font-weight: 600;",
-    "}",
-    ".composer button:disabled { opacity: .45; cursor: default; }",
-    ".verify-open {",
-    "  display: inline-flex; align-items: center; justify-content: center; gap: 8px;",
-    "  border: " + brutalBorder + "; background: " + colorWhite + "; color: " + colorBlack + "; cursor: pointer;",
-    "  font: inherit; font-size: 13px; font-weight: 600; line-height: 1.2;",
-    "  padding: 10px 16px; border-radius: 999px; box-shadow: none;",
-    "}",
-    ".verify-open:hover { background: " + colorTanBg + "; }",
-    ".verify-open:focus-visible { outline: 2px solid " + colorTan + "; outline-offset: 2px; }",
-    ".verify-open:disabled { opacity: .45; cursor: default; }",
-    ".card {",
-    "  align-self: stretch; border: " + brutalBorder + "; border-radius: 18px 18px 18px 0;",
-    "  padding: 12px; background: " + colorWhite + "; box-shadow: " + brutalShadow + ";",
-    "  display: flex; flex-direction: column; gap: 8px;",
-    "}",
-    ".card h3 { margin: 0; font-size: 14px; font-weight: 700; }",
-    ".card p { margin: 0; font-size: 13px; color: " + colorMuted + "; }",
-    ".card label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: " + colorMuted + "; font-weight: 600; }",
-    ".card input {",
-    "  padding: 8px 10px; border: " + brutalBorder + "; border-radius: 10px 10px 10px 0;",
-    "  font: inherit; font-size: 14px; min-width: 0; box-shadow: " + brutalShadowSm + ";",
-    "}",
-    ".card input:focus { outline: none; box-shadow: " + brutalShadowFocus + "; }",
-    ".card .actions { display: flex; gap: 8px; }",
-    ".card button {",
-    "  border: " + brutalBorder + "; background: " + colorAccent + "; color: " + colorWhite + ";",
-    "  border-radius: 12px 12px 0 12px; padding: 8px 14px; cursor: pointer;",
-    "  font: inherit; font-size: 14px; font-weight: 600; box-shadow: " + brutalShadowSm + ";",
-    "}",
-    ".card button.ghost { background: " + colorWhite + "; color: " + colorBlack + "; border-radius: 12px 12px 12px 0; }",
-    ".card button:disabled { opacity: .45; cursor: default; }",
-    ".card .err { color: #a33; font-size: 12px; font-weight: 600; }",
-    "@media (max-width: 480px) {",
-    "  .panel {",
-    "    top: 0; left: 0; right: auto; bottom: auto; width: 100%; max-width: 100%;",
-    "    height: var(--sk-viewport-height, 100dvh); max-height: var(--sk-viewport-height, 100dvh);",
-    "    border-radius: 0; touch-action: manipulation; -webkit-backface-visibility: hidden;",
-    "  }",
-    "  .quick-actions {",
-    "    max-height: 72px; opacity: 1;",
-    "    transition: max-height .22s cubic-bezier(.32,.72,0,1), opacity .18s ease, padding .22s cubic-bezier(.32,.72,0,1);",
-    "  }",
-    "  .panel[data-keyboard='1'] .quick-actions {",
-    "    max-height: 0; opacity: 0; padding-top: 0; padding-bottom: 0; pointer-events: none;",
-    "  }",
-    "  .header { padding-top: max(14px, env(safe-area-inset-top)); }",
-    "  .header-close { display: inline-flex; }",
-    "  .launcher[data-open='1'] { display: none; }",
-    "  .composer { padding-bottom: 12px; }",
-    "  .card input { font-size: 16px; }",
-    "}",
-    "@media (prefers-reduced-motion: no-preference) {",
-    "  .launcher, .verify-open, .card button, .composer button { transition: transform .12s ease, box-shadow .12s ease, background .12s ease; }",
-    "  .launcher:not([data-open='1']):hover {",
-    "    transform: translate(1px, -1px); box-shadow: " + brutalShadowFocus + ";",
-    "  }",
-    "  .launcher[data-open='1']:hover { filter: brightness(1.08); }",
-    "  .card button:hover {",
-    "    transform: translate(1px, -1px); box-shadow: " + brutalShadowFocus + ";",
-    "  }",
-    "  .composer button:hover { transform: none; box-shadow: none; filter: brightness(1.08); }",
-    "}",
-    "@media (prefers-reduced-motion: reduce) {",
-    "  .typing-dot { animation: none; opacity: .7; }",
-    "}",
-    "</style>",
     "<button class='launcher' part='launcher' aria-haspopup='dialog' aria-expanded='false'>",
     "  <span class='launcher-badge' aria-hidden='true'></span>",
     "  <span class='launcher-icon' aria-hidden='true'>",
-    "    <svg viewBox='0 0 22 22'><circle cx='11' cy='8' r='4.5' fill='" + colorTan + "' stroke='" + colorBlack + "' stroke-width='1.75'/>",
-    "    <path d='M3 20c0-4.5 3.5-7.5 8-7.5s8 3 8 7.5' fill='" + colorTan + "' stroke='" + colorBlack + "' stroke-width='1.75' stroke-linejoin='round'/>",
-    "    <path d='M8 9 Q11 11.5 14 9' fill='none' stroke='" + colorBlack + "' stroke-width='1.5' stroke-linecap='round'/></svg>",
     "  </span><span class='launcher-label'></span>",
     "</button>",
     "<div class='panel' role='dialog' aria-modal='false' data-open='0'>",
     "  <div class='header'>",
     "    <div class='header-brand'>",
     "      <img class='header-logo' alt='' hidden />",
+    "      <span class='header-mark' aria-hidden='true'></span>",
     "      <div class='header-text'>",
     "        <h2></h2>",
     "        <p class='header-status' hidden></p>",
@@ -255,15 +68,35 @@
     "  <div class='log' role='log' aria-live='polite'></div>",
     "  <div class='quick-actions'>",
     "    <div class='quick-actions-track'>",
-    "      <button class='verify-open' type='button'>&#128274; Check an order</button>",
+    "      <button class='verify-open' type='button'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' aria-hidden='true'><rect x='5' y='10' width='14' height='11' rx='2'/><path d='M8 10V7a4 4 0 0 1 8 0v3'/></svg>Check an order</button>",
     "    </div>",
     "  </div>",
     "  <form class='composer'>",
     "    <textarea name='message' autocomplete='off' placeholder='Type a message&hellip;' aria-label='Message' maxlength='4000' rows='1'></textarea>",
-    "    <button type='submit'>Send</button>",
+    "    <button type='submit' aria-label='Send message'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M12 19V5m-6 6 6-6 6 6'/></svg></button>",
     "  </form>",
     "</div>"
   ].join("");
+
+  // The preview supplies these exact asset contents as a template. Storefronts
+  // load the same two files from Shopify's extension CDN.
+  var previewStyles = preview && document.getElementById("shopkeeper-preview-styles");
+  if (previewStyles) {
+    shadow.prepend(previewStyles.content.cloneNode(true));
+  } else {
+    var stylesheets = [root.dataset.tokensStylesheet, root.dataset.stylesheet].filter(Boolean);
+    if (stylesheets.length) {
+      root.style.visibility = "hidden";
+      var loaded = 0;
+      stylesheets.forEach(function (href) {
+        var link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = href;
+        link.onload = function () { if (++loaded === stylesheets.length) root.style.visibility = ""; };
+        shadow.appendChild(link);
+      });
+    }
+  }
 
   var launcher = shadow.querySelector(".launcher");
   var launcherBadge = shadow.querySelector(".launcher-badge");
@@ -273,6 +106,7 @@
   var headerTitle = shadow.querySelector(".header h2");
   var headerStatus = shadow.querySelector(".header-status");
   var headerLogo = shadow.querySelector(".header-logo");
+  var headerMark = shadow.querySelector(".header-mark");
   var headerClose = shadow.querySelector(".header-close");
   var log = shadow.querySelector(".log");
   var quickActions = shadow.querySelector(".quick-actions");
@@ -282,6 +116,13 @@
   var input = shadow.querySelector(".composer textarea");
   var sendBtn = shadow.querySelector(".composer button");
   var card = null;
+  var connection = document.createElement("div");
+  connection.className = "msg note connection-status";
+  connection.setAttribute("role", "status");
+  connection.hidden = true;
+  form.parentNode.insertBefore(connection, form);
+  sendBtn.disabled = true;
+  verifyBtn.disabled = true;
 
   headerTitle.textContent = panelTitle;
   panel.setAttribute("aria-label", panelTitle);
@@ -295,16 +136,8 @@
     headerLogo.hidden = false;
   }
 
-  var launcherIconChat = [
-    "<svg viewBox='0 0 22 22'><circle cx='11' cy='8' r='4.5' fill='" + colorTan + "' stroke='" + colorBlack + "' stroke-width='1.75'/>",
-    "<path d='M3 20c0-4.5 3.5-7.5 8-7.5s8 3 8 7.5' fill='" + colorTan + "' stroke='" + colorBlack + "' stroke-width='1.75' stroke-linejoin='round'/>",
-    "<path d='M8 9 Q11 11.5 14 9' fill='none' stroke='" + colorBlack + "' stroke-width='1.5' stroke-linecap='round'/></svg>"
-  ].join("");
-  var launcherIconClose = [
-    "<svg viewBox='0 0 22 22' aria-hidden='true'>",
-    "<path d='M6 6 L16 16 M16 6 L6 16' fill='none' stroke='" + colorBlack + "' stroke-width='2' stroke-linecap='round'/>",
-    "</svg>"
-  ].join("");
+  var launcherIconChat = "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5Z'/></svg>";
+  var launcherIconClose = "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' aria-hidden='true'><path d='m6 6 12 12M6 18 18 6'/></svg>";
 
   launcherLabelEl.textContent = launcherLabel;
   launcherIcon.innerHTML = launcherIconChat;
@@ -331,8 +164,20 @@
   var scrollEndTimer = null;
   var savedScrollY = 0;
 
+  function previewBarTop() {
+    // Shopify's preview bar lives in the browser's top layer. A higher z-index
+    // cannot clear it; use its visible wrapper, not the full-height iframe.
+    var bar = document.getElementById("PBarNextFrameWrapper");
+    var bounds = bar && bar.getBoundingClientRect();
+    return bounds && bounds.height > 0 ? Math.max(0, bounds.top) : window.innerHeight;
+  }
+
   function isMobileLayout() {
     return mobileQuery.matches;
+  }
+
+  function isVisibleOnViewport() {
+    return (isMobileLayout() ? root.dataset.showMobile : root.dataset.showDesktop) !== "false";
   }
 
   function clearMobilePanelLayout() {
@@ -377,6 +222,15 @@
   }
 
   function syncMobilePanelLayout() {
+    var availableBottom = Math.min(window.innerHeight, previewBarTop());
+    root.style.setProperty("--sk-preview-offset", (window.innerHeight - availableBottom) + "px");
+    if (!isVisibleOnViewport()) {
+      panel.dataset.open = "0";
+      launcher.setAttribute("aria-expanded", "false");
+      setLauncherOpen(false);
+      clearMobilePanelLayout();
+      return;
+    }
     if (!isMobileLayout() || panel.dataset.open !== "1") {
       clearMobilePanelLayout();
       return;
@@ -390,16 +244,16 @@
       panel.style.bottom = "auto";
       panel.style.width = "100%";
       panel.style.maxWidth = "100%";
-      panel.style.height = "100dvh";
+      panel.style.height = availableBottom + "px";
       panel.style.transform = "none";
       panel.style.webkitTransform = "none";
-      panel.style.setProperty("--sk-viewport-height", "100dvh");
+      panel.style.setProperty("--sk-viewport-height", availableBottom + "px");
       return;
     }
     var top = Math.max(0, vv.offsetTop);
     var left = Math.max(0, vv.offsetLeft);
     var width = Math.max(0, vv.width);
-    var height = Math.max(0, vv.height);
+    var height = Math.max(0, Math.min(vv.height, availableBottom - top));
     panel.style.top = "0";
     panel.style.left = left + "px";
     panel.style.right = "auto";
@@ -453,6 +307,22 @@
 
   bindMobileViewport();
 
+  function observePreviewBar() {
+    var bar = document.getElementById("PBarNextFrameWrapper");
+    if (!bar) return false;
+    if (window.ResizeObserver) new ResizeObserver(scheduleMobileLayout).observe(bar);
+    bar.addEventListener("toggle", scheduleMobileLayout);
+    scheduleMobileLayout();
+    return true;
+  }
+
+  if (!observePreviewBar() && location.search.indexOf("preview_theme_id=") !== -1) {
+    var previewObserver = new MutationObserver(function () {
+      if (observePreviewBar()) previewObserver.disconnect();
+    });
+    previewObserver.observe(document.body, { childList: true, subtree: true });
+  }
+
   function formatTime(iso) {
     if (!iso) return "";
     try {
@@ -496,23 +366,27 @@
     setKeyboardOpen(false);
   });
 
-  function avatarSvg(fill) {
-    return [
-      "<svg viewBox='0 0 34 34' aria-hidden='true'>",
-      "<circle cx='17' cy='12' r='6.5' fill='" + fill + "' stroke='#000' stroke-width='2'/>",
-      "<path d='M5 30c0-7 5.5-11.5 12-11.5s12 4.5 12 11.5' fill='" + fill + "' stroke='#000' stroke-width='2' stroke-linejoin='round'/>",
-      "<path d='M12.5 13.5 Q17 17.5 21.5 13.5' fill='none' stroke='#000' stroke-width='1.75' stroke-linecap='round'/>",
-      "</svg>"
-    ].join("");
+  function createAvatar() {
+    var avatar = document.createElement("div");
+    avatar.className = "avatar";
+    avatar.setAttribute("aria-hidden", "true");
+    if (logoUrl) {
+      var logo = document.createElement("img");
+      logo.src = logoUrl;
+      logo.alt = "";
+      logo.addEventListener("error", function () { avatar.innerHTML = launcherIconChat; });
+      avatar.appendChild(logo);
+    } else {
+      avatar.innerHTML = launcherIconChat;
+    }
+    return avatar;
   }
 
   function append(text, kind, at) {
     var el = document.createElement("div");
     el.className = "msg " + kind;
     if (kind === "me" || kind === "them") {
-      var avatar = document.createElement("div");
-      avatar.className = "avatar";
-      avatar.innerHTML = kind === "me" ? avatarSvg(colorTan) : avatarSvg(colorWhite);
+      var avatar = createAvatar();
       var wrap = document.createElement("div");
       wrap.className = "bubble-wrap";
       var bubble = document.createElement("div");
@@ -547,9 +421,7 @@
     typingEl = document.createElement("div");
     typingEl.className = "msg them typing";
     typingEl.setAttribute("aria-hidden", "true");
-    var avatar = document.createElement("div");
-    avatar.className = "avatar";
-    avatar.innerHTML = avatarSvg(colorWhite);
+    var avatar = createAvatar();
     var wrap = document.createElement("div");
     wrap.className = "bubble-wrap";
     var bubble = document.createElement("div");
@@ -631,11 +503,27 @@
   }
 
   var awaitingEcho = [];
+  var sending = false;
+  var failedDraft = null;
 
-  function dropEcho(text) {
-    var i = awaitingEcho.indexOf(text);
-    if (i !== -1) awaitingEcho.splice(i, 1);
-    return i !== -1;
+  function dropEcho(message) {
+    var i = awaitingEcho.findIndex(function (entry) {
+      return message.clientMessageId ? entry.id === message.clientMessageId : entry.text === message.text;
+    });
+    if (i === -1) return false;
+    var entry = awaitingEcho.splice(i, 1)[0];
+    confirmDelivery(entry);
+    return true;
+  }
+
+  function confirmDelivery(entry) {
+    entry.delivered = true;
+    entry.element.querySelector(".bubble").style.opacity = "";
+    if (entry.retry) { entry.retry.remove(); entry.retry = null; }
+    if (failedDraft === entry) {
+      if (input.value === entry.text) { input.value = ""; resizeComposer(); }
+      failedDraft = null;
+    }
   }
 
   function beginNewConversation(beforeEl, currentEcho, showDivider) {
@@ -656,39 +544,33 @@
 
   var WAITING_NOTICE_MS = 20000;
   var waitingTimer = null;
-  var waitingNoticeShown = false;
+  var waitingNotice = null;
 
   function clearWaitingNotice() {
     if (waitingTimer) {
       clearTimeout(waitingTimer);
       waitingTimer = null;
     }
+    if (waitingNotice) { waitingNotice.remove(); waitingNotice = null; }
   }
 
-  var HANDOFF_NOTICE = "Someone from the shop is looking at this and will follow up here.";
+  var HANDOFF_NOTICE = "Your message has been passed to the shop. Replies will appear here.";
 
   function armWaitingNotice() {
     clearWaitingNotice();
     waitingTimer = setTimeout(function () {
       waitingTimer = null;
-      if (waitingNoticeShown) return;
-      showHandoffNotice(false);
+      if (noticeEl) return;
+      hideTyping();
+      waitingNotice = append("Still waiting for a reply. You can keep this chat open or check back later.", "note");
     }, WAITING_NOTICE_MS);
   }
 
-  // The timer above is a guess that the reply is slow; `escalated` is the server
-  // saying a human owns the thread. They render the same sentence, so they share
-  // one node — otherwise a poll landing after the timer fired would print it
-  // twice. Because the server-driven one is re-derived on every bootstrap and
-  // poll it survives a reload, which the transient note did not: a shopper who
-  // refreshed mid-escalation was left staring at their own unanswered question.
+  // Only server-confirmed escalation promises a handoff to the shop.
   var noticeEl = null;
-  var noticeFromServer = false;
 
-  function showHandoffNotice(fromServer) {
-    if (fromServer) noticeFromServer = true;
+  function showHandoffNotice() {
     clearWaitingNotice();
-    waitingNoticeShown = true;
     hideTyping();
     if (!noticeEl) {
       noticeEl = append(HANDOFF_NOTICE, "note");
@@ -705,16 +587,12 @@
 
   function setEscalated(isEscalated) {
     if (isEscalated) {
-      showHandoffNotice(true);
+      showHandoffNotice();
       return;
     }
-    // Only retract what the server put up. An agent that is merely slow was never
-    // handed off, and pulling the line back out mid-wait reads as a glitch.
-    if (noticeEl && noticeFromServer) {
+    if (noticeEl) {
       noticeEl.remove();
       noticeEl = null;
-      noticeFromServer = false;
-      waitingNoticeShown = false;
     }
   }
 
@@ -723,10 +601,9 @@
       if (seen[m.id]) return;
       seen[m.id] = true;
       if (m.from === "customer") hasSentMessage = true;
-      if (m.from === "customer" && dropEcho(m.text)) return;
+      if (m.from === "customer" && dropEcho(m)) return;
       if (m.from !== "customer") {
         clearWaitingNotice();
-        waitingNoticeShown = false;
         hideTyping();
         if (panel.dataset.open !== "1") bumpUnread();
       }
@@ -735,9 +612,50 @@
     renderPrompts();
   }
 
+  function setConnection(message, retry) {
+    connection.textContent = message || "";
+    connection.hidden = !message;
+    if (retry) {
+      var button = document.createElement("button");
+      button.type = "button";
+      button.textContent = "Reconnect";
+      button.addEventListener("click", connect);
+      connection.appendChild(document.createTextNode(" "));
+      connection.appendChild(button);
+    }
+    sendBtn.disabled = sending || !session;
+    verifyBtn.disabled = Boolean(card) || !session;
+  }
+
+  function timedFetch(url, options) {
+    var controller = new AbortController();
+    var timer = setTimeout(function () { controller.abort(); }, 15000);
+    return fetch(url, Object.assign({}, options, { signal: controller.signal })).finally(function () {
+      clearTimeout(timer);
+    });
+  }
+
+  function endSession(disabled) {
+    session = null;
+    opening = null;
+    store(null);
+    if (poller) { clearInterval(poller); poller = null; }
+    closeCard();
+    clearWaitingNotice();
+    hideTyping();
+    setConnection(disabled ? "Chat is unavailable. Please use the shop's contact page." : "This chat has ended. Reconnect to start a new chat.", !disabled);
+  }
+
+  var refreshing = null;
   function requestSession() {
+    if (preview) {
+      session = { sessionId: "preview", token: "preview", messages: [] };
+      setConnection("");
+      return Promise.resolve(session);
+    }
+    if (refreshing) return refreshing;
     var prior = stored() || {};
-    return fetch(proxy + "/bootstrap", {
+    refreshing = timedFetch(proxy + "/bootstrap", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -747,23 +665,29 @@
         locale: document.documentElement.lang || null
       })
     }).then(function (r) {
-      if (r.status === 403) { root.remove(); return null; }
+      if (r.status === 403) { endSession(true); return null; }
       if (!r.ok) throw new Error("bootstrap " + r.status);
       return r.json();
     }).then(function (data) {
       if (!data) return null;
       session = data;
+      setConnection("");
       if (data.sessionId) {
         store({ sessionId: data.sessionId, resumeToken: data.resumeToken || prior.resumeToken });
       }
       return data;
+    }).finally(function () {
+      refreshing = null;
     });
+    return refreshing;
   }
 
   function bootstrap() {
     return requestSession().then(function (data) {
       if (!data) return;
-      if (greeting && !(data.messages || []).length) append(greeting, "note");
+      if (greeting && !(data.messages || []).length && !log.querySelector("[data-welcome]")) {
+        append(greeting, "them").dataset.welcome = "1";
+      }
       render(data.messages);
       setEscalated(data.escalated === true);
       startPolling();
@@ -772,14 +696,23 @@
 
   function authedFetch(path, init, retried) {
     if (!session || !session.token) return Promise.reject(new Error("no session"));
+    var sessionId = session.sessionId;
     var options = Object.assign({}, init);
     options.headers = Object.assign({}, init && init.headers, {
       Authorization: "Bearer " + session.token
     });
-    return fetch(proxy + path, options).then(function (r) {
+    return timedFetch(proxy + path, options).then(function (r) {
+      if (!session || session.sessionId !== sessionId) throw new Error("session changed");
+      if (r.status === 403 || r.status === 404) { endSession(r.status === 403); return r; }
       if (r.status !== 401 || retried) return r;
       return requestSession().then(function (data) {
         if (!data) return r;
+        if (data.sessionId !== sessionId) {
+          beginNewConversation(null, null, true);
+          render(data.messages);
+          setEscalated(data.escalated === true);
+          throw new Error("session changed");
+        }
         return authedFetch(path, init, true);
       });
     });
@@ -788,15 +721,20 @@
   function poll() {
     if (!session || !session.token) return;
     authedFetch("/messages", {}).then(function (r) {
-      return r.ok ? r.json() : null;
+      if (!r.ok) throw new Error("poll " + r.status);
+      return r.json();
     }).then(function (data) {
       if (!data) return;
+      setConnection("");
       render(data.messages);
       setEscalated(data.escalated === true);
-    }).catch(function () { /* transient */ });
+    }).catch(function () {
+      if (session) setConnection("Connection interrupted. Checking for replies again shortly.");
+    });
   }
 
   function startPolling() {
+    if (preview) return;
     if (poller) return;
     poller = setInterval(function () {
       if (document.visibilityState === "visible") poll();
@@ -817,30 +755,34 @@
     if (!nodes.length) return;
     var first = nodes[0];
     var last = nodes[nodes.length - 1];
-    if (e.shiftKey && document.activeElement === first) {
+    if (e.shiftKey && shadow.activeElement === first) {
       e.preventDefault();
       last.focus();
-    } else if (!e.shiftKey && document.activeElement === last) {
+    } else if (!e.shiftKey && shadow.activeElement === last) {
       e.preventDefault();
       first.focus();
     }
   }
 
   var opening = null;
+  function connect() {
+    if (opening) return opening;
+    setConnection("Connecting…");
+    opening = bootstrap().catch(function () {
+      setConnection("We couldn't connect. Your draft is still here.", true);
+    }).finally(function () { opening = null; });
+    return opening;
+  }
   function open() {
+    if (!isVisibleOnViewport()) return;
     lastFocusedBeforeOpen = document.activeElement;
     panel.dataset.open = "1";
     launcher.setAttribute("aria-expanded", "true");
     setLauncherOpen(true);
     clearUnread();
     syncMobilePanelLayout();
-    if (!isMobileLayout()) input.focus();
-    if (!opening) {
-      opening = bootstrap().catch(function () {
-        append("We couldn't start the chat just now. Please try again shortly.", "note");
-        opening = null;
-      });
-    }
+    if (!isMobileLayout() && !preview) input.focus();
+    if (!session) connect();
   }
 
   function close() {
@@ -848,6 +790,7 @@
     launcher.setAttribute("aria-expanded", "false");
     setLauncherOpen(false);
     clearMobilePanelLayout();
+    if (preview) return;
     launcher.focus();
     if (lastFocusedBeforeOpen && typeof lastFocusedBeforeOpen.focus === "function") {
       try { lastFocusedBeforeOpen.focus(); } catch (e) { /* stale node */ }
@@ -867,15 +810,16 @@
 
   function closeCard() {
     if (card) { card.remove(); card = null; }
-    verifyBtn.disabled = false;
+    verifyBtn.disabled = !session;
     syncQuickActions();
   }
 
   function openCard() {
+    if (!session) return;
     if (card) { card.querySelector("input").focus(); return; }
     verifyBtn.disabled = true;
-    syncQuickActions();
     card = document.createElement("div");
+    syncQuickActions();
     card.className = "card";
     log.appendChild(card);
     renderAskStep();
@@ -943,6 +887,7 @@
   }
 
   function postVerify(body) {
+    if (preview) return Promise.resolve({ status: body.action === "request" ? "sent" : "verified" });
     return authedFetch("/verify", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -954,6 +899,7 @@
   }
 
   function renderAskStep() {
+    var currentCard = card;
     cardShell("Check an order", "Enter the order number and the email used at checkout.");
     var orderField = addField("Order number", "text", "#1025");
     var emailField = addField("Email", "email", "you@example.com");
@@ -963,6 +909,7 @@
       if (!orderName || !email) return fail("Both fields are needed.");
 
       postVerify({ action: "request", orderName: orderName, email: email }).then(function (data) {
+        if (card !== currentCard) return;
         if (data.status === "send_limit") {
           return fail("You've asked for a few codes already. Try again a bit later.");
         }
@@ -974,7 +921,7 @@
         fail("Something went wrong. Try again in a moment.");
       });
     });
-    orderField.focus();
+    if (!preview) orderField.focus();
     scrollLogToEnd();
   }
 
@@ -1026,59 +973,88 @@
 
   verifyBtn.addEventListener("click", openCard);
 
-  function sendMessage(text) {
-    if (!text || !session || !session.token) return;
+  function sendMessage(text, retryEntry) {
+    if (!text || sending || !session || !session.token) return;
+    if (preview) {
+      hasSentMessage = true;
+      renderPrompts();
+      append(text, "me");
+      input.value = "";
+      resizeComposer();
+      append("Thanks for your message! This is a preview of how replies will look in your store.", "them");
+      return;
+    }
+    if (retryEntry && retryEntry.sessionId !== session.sessionId) {
+      input.value = text;
+      resizeComposer();
+      setConnection("Your previous chat ended. Send this draft to start a new conversation.");
+      return;
+    }
 
-    var hadConversationOnScreen = Boolean(log.querySelector(".msg.me, .msg.them"));
+    var hadConversationOnScreen = Boolean(log.querySelector(".msg.me, .msg.them:not([data-welcome])"));
     hasSentMessage = true;
     renderPrompts();
-    sendBtn.disabled = true;
-    var pending = append(text, "me");
-    awaitingEcho.push(text);
+    sending = true;
+    setConnection("");
+    var entry = retryEntry || {
+      id: window.crypto.randomUUID(), text: text, sessionId: session.sessionId,
+      element: append(text, "me"), delivered: false, retry: null
+    };
+    if (!retryEntry) awaitingEcho.push(entry);
+    if (entry.retry) { entry.retry.remove(); entry.retry = null; }
+    entry.element.querySelector(".bubble").style.opacity = "";
+    if (input.value.trim() === text) { input.value = ""; resizeComposer(); }
     showTyping();
     armWaitingNotice();
-    var clientMessageId = String(Date.now()) + "-" + Math.random().toString(36).slice(2, 10);
+
+    function failed(message) {
+      if (entry.delivered) return;
+      clearWaitingNotice();
+      hideTyping();
+      entry.element.querySelector(".bubble").style.opacity = "0.65";
+      if (!input.value) { input.value = text; resizeComposer(); failedDraft = entry; }
+      var retry = document.createElement("button");
+      retry.type = "button";
+      retry.className = "retry-send";
+      retry.textContent = "Retry message";
+      retry.addEventListener("click", function () { sendMessage(text, entry); });
+      entry.retry = document.createElement("div");
+      entry.retry.className = "err";
+      entry.retry.appendChild(document.createTextNode(message + " "));
+      entry.retry.appendChild(retry);
+      entry.element.querySelector(".bubble-wrap").appendChild(entry.retry);
+    }
 
     authedFetch("/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: text, clientMessageId: clientMessageId })
+      body: JSON.stringify({ text: text, clientMessageId: entry.id })
     }).then(function (r) {
       if (r.status === 429) {
         return r.json().catch(function () { return {}; }).then(function (body) {
-          dropEcho(text);
-          clearWaitingNotice();
-          hideTyping();
-          var pendingBubble = pending.querySelector(".bubble");
-          if (pendingBubble) pendingBubble.style.opacity = "0.5";
-          else pending.style.opacity = "0.5";
-          append(body.shopperMessage || "Too many messages just now. Try again in a moment.", "note");
+          failed(body.shopperMessage || "Too many messages just now. Try again in a moment.");
         });
       }
       if (!r.ok) throw new Error("send " + r.status);
       return r.json().catch(function () { return {}; }).then(function (body) {
+        confirmDelivery(entry);
         if (body.verification) {
-          dropEcho(text);
+          dropEcho({ clientMessageId: entry.id });
           clearWaitingNotice();
           hideTyping();
           append(verificationNote(body.verification, "that order"), "note");
           return;
         }
         if (body.isNewThread === true) {
-          beginNewConversation(pending, text, hadConversationOnScreen);
+          beginNewConversation(entry.element, entry, hadConversationOnScreen);
         }
         setTimeout(poll, 1200);
       });
     }).catch(function () {
-      dropEcho(text);
-      clearWaitingNotice();
-      hideTyping();
-      var pendingBubble = pending.querySelector(".bubble");
-      if (pendingBubble) pendingBubble.style.opacity = "0.5";
-      else pending.style.opacity = "0.5";
-      append("Not delivered. Check your connection and try again.", "note");
+      failed("Couldn't confirm delivery. Your message is saved here.");
     }).finally(function () {
-      sendBtn.disabled = false;
+      sending = false;
+      sendBtn.disabled = !session;
       input.focus();
     });
   }
@@ -1086,9 +1062,87 @@
   form.addEventListener("submit", function (e) {
     e.preventDefault();
     var text = input.value.trim();
-    if (!text) return;
-    input.value = "";
-    resizeComposer();
-    sendMessage(text);
+    if (!text || !session || sending) return;
+    var retry = failedDraft && failedDraft.text === text && failedDraft.sessionId === session.sessionId
+      ? failedDraft : null;
+    sendMessage(text, retry);
   });
+
+  function safeLogo(value) {
+    try {
+      var url = new URL(value, location.href);
+      var localPreview = preview && url.protocol === "http:" && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(url.hostname);
+      return (url.protocol === "https:" || localPreview) && !url.username && !url.password ? url.href : "";
+    } catch (e) { return ""; }
+  }
+
+  function applyConfiguration(settings) {
+    if (settings) {
+      greeting = settings.greeting || "";
+      launcherLabel = settings.launcherLabel || "Chat with us";
+      panelTitle = settings.title || root.dataset.shopName || "Chat with us";
+      statusLine = settings.subtitle || "";
+      logoUrl = settings.logoUrl ? safeLogo(settings.logoUrl) : "";
+      quickPrompts = Array.isArray(settings.quickPrompts) ? settings.quickPrompts.slice(0, 6) : [];
+    }
+    var accent = settings ? settings.accentColor : root.dataset.accent;
+    if (!/^#[0-9a-f]{6}$/i.test(accent || "")) accent = "#1b1a19";
+    var rgb = [1, 3, 5].map(function (offset) {
+      var value = parseInt(accent.slice(offset, offset + 2), 16) / 255;
+      return value <= 0.04045 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
+    });
+    var luminance = rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722;
+    root.style.setProperty("--sk-accent", accent);
+    root.style.setProperty("--sk-accent-text", luminance > 0.179 ? "#000000" : "#ffffff");
+    root.dataset.position = (settings ? settings.position : root.dataset.position) === "left" ? "left" : "right";
+    root.dataset.launcherStyle = settings && settings.launcherStyle === "icon" ? "icon" : "label";
+    root.dataset.showDesktop = String(!settings || settings.showOnDesktop !== false);
+    root.dataset.showMobile = String(!settings || settings.showOnMobile !== false);
+    ["X", "Y"].forEach(function (axis) {
+      var value = settings && settings["offset" + axis];
+      root.style.setProperty("--sk-offset-" + axis.toLowerCase(), (typeof value === "number" && isFinite(value) ? Math.max(12, Math.min(64, value)) : 20) + "px");
+    });
+    headerTitle.textContent = panelTitle;
+    panel.setAttribute("aria-label", panelTitle);
+    headerStatus.textContent = statusLine;
+    headerStatus.hidden = !statusLine;
+    headerLogo.hidden = !logoUrl;
+    headerMark.innerHTML = launcherIconChat;
+    headerMark.hidden = Boolean(logoUrl);
+    if (logoUrl) { headerLogo.src = logoUrl; headerLogo.alt = panelTitle; }
+    else headerLogo.removeAttribute("src");
+    setLauncherOpen(panel.dataset.open === "1");
+    renderPrompts();
+  }
+
+  headerLogo.addEventListener("error", function () { headerLogo.hidden = true; headerMark.hidden = false; });
+  applyConfiguration(publishedSettings);
+
+  if (preview) {
+    // Only the authenticated editor sets data-preview. No sessions, messages,
+    // polling, verification email, or external AI calls are made in this mode.
+    root.addEventListener("shopkeeper:preview", function (event) {
+      var detail = event.detail || {};
+      applyConfiguration(detail.settings);
+      hideTyping();
+      closeCard();
+      log.textContent = "";
+      hasSentMessage = false;
+      session = { sessionId: "preview", token: "preview", messages: [] };
+      setConnection("");
+      renderPrompts();
+      if (detail.scene === "launcher") { close(); return; }
+      open();
+      if (greeting) append(greeting, "them").dataset.welcome = "1";
+      if (detail.scene === "conversation" || detail.scene === "loading" || detail.scene === "error") {
+        append("Does this come in a smaller size?", "me");
+        hasSentMessage = true;
+        renderPrompts();
+      }
+      if (detail.scene === "conversation") append("Of course. Which size are you looking for? I can help you find the right fit.", "them");
+      if (detail.scene === "verification") openCard();
+      if (detail.scene === "loading") showTyping();
+      if (detail.scene === "error") setConnection("We couldn't connect. Your draft is still here.", true);
+    });
+  }
 })();

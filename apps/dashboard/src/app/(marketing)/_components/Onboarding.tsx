@@ -2,8 +2,8 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { MarketingSectionHeader } from "./MarketingSectionHeader";
 import { Reveal } from "./Reveal";
-import { marketingSectionTitleClass } from "./marketingUi";
 
 const STORE_URL = "linenandloom.com";
 const TYPE_START_MS = 250;
@@ -79,10 +79,12 @@ export function Onboarding() {
   return (
     <section id="onboarding" className="scroll-mt-24 py-12 sm:py-24">
       <div className="mx-auto max-w-6xl px-6">
-        <Reveal className="text-center">
-          <h2 className={`${marketingSectionTitleClass} mx-auto mb-10 max-w-[22ch]`}>
-            Connect your store. Set your rules.
-          </h2>
+        <Reveal>
+          <MarketingSectionHeader
+            className="mb-10 text-center"
+            titleClassName="max-w-[22ch]"
+            title="Connect your store. Set your rules."
+          />
         </Reveal>
 
         <div className="relative">

@@ -1,18 +1,17 @@
-import type { Metadata } from "next";
 import { Database, Download, KeyRound, LockKeyhole, ScrollText, ShieldCheck } from "lucide-react";
+import { MarketingDarkShowcase } from "../../_components/MarketingDarkShowcase";
+import { createProductPageMetadata } from "../../_components/marketing-metadata";
 import { ProductDetailTemplate } from "../../_components/ProductDetailTemplate";
 
 const title = "Security — Shopkeeper";
 const description =
   "Read Shopkeeper's product principles for workspace isolation, provider access, action limits, audit history, and data exports.";
 
-export const metadata: Metadata = {
+export const metadata = createProductPageMetadata({
   title,
   description,
-  alternates: { canonical: "/product/security" },
-  openGraph: { title, description, url: "/product/security" },
-  twitter: { title, description },
-};
+  path: "/product/security",
+});
 
 function SecurityModel() {
   const controls = [
@@ -23,10 +22,7 @@ function SecurityModel() {
   ] as const;
 
   return (
-    <figure
-      aria-labelledby="security-model-caption"
-      className="overflow-hidden rounded-3xl border border-stone-900/10 m-chapter--dark p-5 shadow-[0_35px_70px_-42px_rgba(22,20,19,0.9)] sm:p-8"
-    >
+    <MarketingDarkShowcase aria-labelledby="security-model-caption">
       <figcaption id="security-model-caption" className="sr-only">
         Product security model showing organization-scoped access, protected provider credentials,
         configured action boundaries, reviewable action history, and workspace exports.
@@ -60,7 +56,7 @@ function SecurityModel() {
           <div><p className="text-sm font-semibold">Exports provide a path out</p><p className="mt-1 text-[11px] leading-relaxed text-[#fcfaf8]/45">Workspace and customer data export as JSON; action history exports as CSV.</p></div>
         </div>
       </div>
-    </figure>
+    </MarketingDarkShowcase>
   );
 }
 

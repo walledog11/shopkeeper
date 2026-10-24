@@ -30,7 +30,7 @@ export async function authorizeStorefrontRequest(
   }
 
   const appSecret = process.env.SHOPIFY_APP_SECRET;
-  if (!appSecret) return NextResponse.json({ error: "not configured" }, { status: 503 });
+  if (!appSecret || !process.env.STOREFRONT_CHAT_SIGNING_SECRET) return NextResponse.json({ error: "not configured" }, { status: 503 });
 
   const url = new URL(request.url);
   if (!verifyAppProxySignature(url, appSecret) || !isProxyTimestampFresh(url)) {

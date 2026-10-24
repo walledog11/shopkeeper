@@ -19,7 +19,8 @@
   "workspaces": {
     ".": {
       "entry": ["scripts/**/*.{mjs,ts}", "e2e/**/*.{ts,cts}"],
-      "project": ["scripts/**/*.{mjs,ts,d.mts}", "e2e/**/*.{ts,cts}"]
+      "project": ["scripts/**/*.{mjs,ts,d.mts}", "e2e/**/*.{ts,cts}"],
+      "ignoreDependencies": ["body-parser", "next"]
     },
     "apps/dashboard": {
       "entry": [

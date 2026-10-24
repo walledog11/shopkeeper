@@ -103,6 +103,23 @@ describe("searchShopifyProducts", () => {
     }]);
   });
 
+  it("restricts storefront results to published active products and omits internal stock counts", async () => {
+    const product = {
+      id: "gid://shopify/Product/123", title: "Public hat", status: "ACTIVE", onlineStoreUrl: "https://shop.example/products/hat",
+      variants: { nodes: [{ id: "gid://shopify/ProductVariant/456", title: "Blue", price: "25.00", inventoryQuantity: 42 }] },
+    };
+    const fetchMock = vi.fn().mockResolvedValue(productsResponse([
+      product, { ...product, title: "Draft hat", status: "DRAFT" }, { ...product, title: "Private hat", onlineStoreUrl: null },
+    ]));
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await searchShopifyProducts({ query: 'hat OR (status:draft)' }, ctx, true);
+    expect(sentVariables(fetchMock)).toMatchObject({ storefront: true, query: 'status:active AND published_status:published AND (hat OR status draft)' });
+    expect(JSON.parse(result.message)).toEqual([{
+      product_id: "123", title: "Public hat", url: product.onlineStoreUrl,
+      variants: [{ variant_id: "456", title: "Blue", price: "25.00" }],
+    }]);
+  });
+
   it("defaults a missing inventory quantity to null", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(productsResponse([{
       id: "gid://shopify/Product/123",

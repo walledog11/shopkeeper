@@ -64,7 +64,7 @@ export async function listVerifiedOrderNames(
     where: {
       organizationId,
       verifiedAt: { not: null },
-      session: { revokedAt: null, episodes: { some: { threadId } } },
+      session: { revokedAt: null, expiresAt: { gt: new Date() }, episodes: { some: { threadId } } },
     },
     select: { orderName: true },
   });
@@ -94,7 +94,7 @@ export async function listVerifiedOrderNamesByThread(
     where: {
       organizationId,
       verifiedAt: { not: null },
-      session: { revokedAt: null, episodes: { some: { threadId: { in: [...wanted] } } } },
+      session: { revokedAt: null, expiresAt: { gt: new Date() }, episodes: { some: { threadId: { in: [...wanted] } } } },
     },
     select: {
       orderName: true,

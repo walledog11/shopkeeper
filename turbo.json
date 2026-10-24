@@ -1,7 +1,20 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": [
+    "scripts/**",
+    "tsconfig.base.json",
+    "eslint.config.mjs",
+    ".env",
+    ".env.local",
+    ".env.development.local",
+    ".env.e2e*",
+    "apps/*/.env",
+    "apps/*/.env.local",
+    "packages/db/.env"
+  ],
   "tasks": {
     "build": {
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"],
       "env": [
@@ -61,6 +74,7 @@
       "outputs": []
     },
     "test:integration": {
+      "cache": false,
       "dependsOn": ["^build"],
       "outputs": []
     }

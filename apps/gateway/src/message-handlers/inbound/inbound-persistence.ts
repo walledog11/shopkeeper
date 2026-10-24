@@ -21,6 +21,7 @@ import {
 import {
   resolveInboundEpisode,
   type ResolveInboundEpisodeResult,
+  type EpisodeTransactionClient,
 } from './resolve-inbound-episode.js';
 import { deliverInboundProcessing } from './inbound-processing.js';
 export { enqueueAiSummaryJob } from './inbound-processing.js';
@@ -55,6 +56,9 @@ export interface ProcessMessageOptions {
   // the same transaction that opens the episode — a session bound after the
   // fact would read as unverified for the window in between.
   storefrontSessionId?: string | null;
+  // Runs after the unique message insert, within its transaction. Channel
+  // admission and counters roll back with a failed/duplicate message.
+  admitMessage?: (tx: EpisodeTransactionClient, thread: ResolveInboundEpisodeResult['thread']) => Promise<void>;
   // Email path classifies pre-persistence so we can write filter columns inline
   // and skip the LLM round-trip in the SUMMARIZE_THREAD job. The job still runs
   // (with skipSummary=true) so plan precompute + operator notify still fire.
@@ -97,6 +101,7 @@ export async function processInboundMessage(
     traceId = null,
     attachments = [],
     storefrontSessionId = null,
+    admitMessage,
     precomputed = null,
     lockAsGenuine = false,
     isRealCustomerMessage = false,
@@ -232,6 +237,7 @@ export async function processInboundMessage(
         ...(attachments.length > 0 && { attachments }),
         ...(providerSentAt && { sentAt: providerSentAt }),
       });
+      if (admitMessage) await admitMessage(tx, episode.thread);
       let requestWriteOutcome: ClassificationWriteOutcome | null = null;
       // A note is not a conversation turn: it neither invalidates a pending
       // plan nor advances the thread's last-message cursor.

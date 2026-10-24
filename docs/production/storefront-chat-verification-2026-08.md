@@ -19,9 +19,9 @@ Each one cost a live failure to learn.
   merchant side: the dashboard stays healthy and an unsigned probe answers `401`,
   which reads as alive. Check `prisma migrate status` against production as a
   release step.
-- **A type error in a test file takes the gateway down silently.** The gateway
-  build runs `tsc` over the whole workspace including tests, and Railway keeps
-  the last good container serving. Check `railway deployment list` whenever
+- **Check the deployed gateway version after a build failure.** Railway can keep
+  the last good container serving. The production build now excludes tests;
+  run the separate typecheck as well. Check `railway deployment list` whenever
   gateway-side code looks like it did not take effect.
 - **The agent registry and `static-policy.ts` reach the client bundle.** Anything
   they import comes with them (`node:crypto` and `@shopkeeper/db` have both
@@ -128,6 +128,41 @@ Read these before changing anything on this channel.
 
 ## Running it on a store
 
+**Current implementation (October 2026).** Verification attempts are serialized,
+resends preserve the remaining guesses, and email/order/shop limits survive a
+new browser session. Matching and nonmatching requests both leave a challenge,
+so a follow-up code submission does not disclose an order/email match. Product
+search on this channel requires active Online Store publication and returns no
+internal inventory quantities. This follows Shopify's
+[product publication fields](https://shopify.dev/docs/api/admin-graphql/2026-04/objects/Product#field-Product.fields.onlineStoreUrl).
+Pending, failed and unknown replies are excluded from the shopper transcript.
+Expired sessions cannot authorize order access or receive new replies.
+
+Message persistence and the session/shop message budgets commit together;
+duplicate retries consume no extra allowance. Burst counters still count new
+attempts, including refused ones. The session allowance is for the session's
+lifetime; only the shop allowance resets daily. The widget retains failed drafts
+in the open tab and retries with the original message ID. A slow reply is shown
+as waiting; only server-confirmed escalation displays a handoff.
+
+**Release configuration.** Set a random `STOREFRONT_CHAT_SIGNING_SECRET` of at
+least 32 characters on the dashboard before enabling the platform switch. Keep
+`SHOPIFY_APP_SECRET`, `INTERNAL_API_SECRET`, `GATEWAY_INTERNAL_URL` and dashboard
+Redis credentials configured, with the internal secret matching the gateway.
+The integration setup panel reports recorded Shopify permissions, email sender
+configuration, merchant messaging, and the last storefront connection. These are
+configuration checks, not proof of provider delivery or active theme placement.
+Reconnect older Shopify installs for `write_app_proxy`, `read_products` and
+`read_orders`; the OAuth scope request now includes the app-proxy permission.
+
+Deploy the dashboard, gateway and Shopify app version together. This change
+requires no new database migration. Before enabling a customer-facing store,
+use a development store to check the theme embed on desktop and mobile, a
+published product question, an unpublished product exclusion, verification email
+delivery, a merchant handoff and reply, refresh/resume, an interrupted send and
+retry, and disabling chat. Save the embed on the intended live theme. Keep the
+platform switch off until that end-to-end check passes.
+
 **Enable for a merchant.** Two switches, both off by default: the platform kill
 switch `STOREFRONT_CHAT_ENABLED=true` on the dashboard (without it the merchant's
 toggle reads "not available for your workspace yet"), and the merchant's own
@@ -140,6 +175,31 @@ toggle. The merchant then does three things, and ops edits no metadata:
 
 The widget a store shows is the one the last `shopify app deploy` released (see
 the first finding above).
+
+**A missing launcher can be a missing asset.** On October 22 the active embed on
+the development store referenced `shopkeeper-production-29/assets/shopkeeper-chat.js`,
+but Shopify's CDN returned an HTML 404. Chromium reported `ERR_BLOCKED_BY_ORB`;
+the root element existed but had no shadow root. Check the actual deployed script
+URL, status and content type before changing the merchant's activation settings.
+Before publishing, substituting the repaired asset in an isolated browser
+confirmed the app proxy returned 200 and issued a session. A normal launcher
+click worked on desktop, and the mobile composer cleared the preview toolbar.
+
+**Preview toolbar overlap.** Shopify's preview toolbar is in the browser's top
+layer and can cover a fixed chat launcher regardless of its z-index. The widget
+now measures `PBarNextFrameWrapper`, keeps the launcher and desktop panel above
+it, and limits the mobile panel to the remaining viewport. Measure the visible
+wrapper: its iframe spans the viewport even though only the bottom strip shows.
+
+**October 22 extension release.**
+[`storefront-chat-repair-20261022-2`](https://dev.shopify.com/dashboard/40511769/apps/382559485953/versions/1178311491585)
+is active. The published `test-data` theme (`144485875946`) on
+`palette-dev-3peukw16.myshopify.com` still has the correct chat embed enabled.
+Post-release browser verification is pending a fresh preview link: the supplied
+link expired and now redirects to `/password`. Check the actual rendered script
+URL returns JavaScript, then click the launcher and confirm bootstrap succeeds.
+This release publishes the Shopify extension only; the dashboard and gateway
+changes above still require their own deployment.
 
 **Browser matrix**, on the dev store: Online Store 2.0 and a vintage theme ×
 desktop and mobile × embed on and off × Shopify Inbox bubble present and removed.

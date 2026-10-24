@@ -80,6 +80,14 @@ function makeDeps(): ToolExecutionDeps {
   };
 }
 
+it.each(['guest', 'verified', undefined] as const)('uses the storefront product boundary for auth state %s', async (authState) => {
+  const ctx = { ...makeCtx(), authState };
+  const deps = makeDeps();
+  const input = { query: 'hat' };
+  await definitionFor('search_shopify_products').execute(input, ctx, AGENT_SETTINGS_DEFAULTS, deps);
+  expect(deps.searchShopifyProducts).toHaveBeenCalledWith(input, ctx.shopify, authState !== undefined);
+});
+
 describe("agent tool registry", () => {
   it("exposes required merchant work as unscheduled in the offered return and exchange schemas", () => {
     for (const name of ["create_return", "create_exchange"] as const) {
