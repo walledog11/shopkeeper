@@ -8,7 +8,7 @@ import { merchantGapQuestion } from "./plan-preview.js";
 import { planSignals } from "./plan-signals.js";
 import { planCommunication } from "./proposal-communication.js";
 import { checkStaticToolPolicy } from "./tools/static-policy.js";
-import { AWAIT_CUSTOMER_PHOTO_TOOL, TOOL_CATEGORIES } from "./tools/registry/index.js";
+import { AWAIT_CUSTOMER_PHOTO_TOOL, AWAIT_ORDER_VERIFICATION_TOOL, TOOL_CATEGORIES } from "./tools/registry/index.js";
 import type {
   AgentPlan,
   ClassifierAlignmentState,
@@ -119,7 +119,7 @@ const QUICK_REPLY_READ_TOOLS = new Set([
 // Steps a clarifying reply may carry that only record what the reply asks the
 // customer for. They reach neither the customer nor Shopify, so they leave the
 // reply in the quick-reply lane and run beside it.
-const QUICK_REPLY_COMPANION_TOOLS = new Set([AWAIT_CUSTOMER_PHOTO_TOOL]);
+const QUICK_REPLY_COMPANION_TOOLS = new Set([AWAIT_CUSTOMER_PHOTO_TOOL, AWAIT_ORDER_VERIFICATION_TOOL]);
 
 const EXECUTABLE_CATEGORIES = new Set(["action", "communication", "internal"]);
 
@@ -137,6 +137,7 @@ const ESCALATION_EVIDENCE = new Set<PlanRoutingEvidenceCode>([
   "critical_planning_read_failure",
   "compensation_over_cap",
   "damage_photo_missing",
+  "order_unconfirmed",
 ]);
 
 function replyText(toolCall: RawToolCall | null): string | null {

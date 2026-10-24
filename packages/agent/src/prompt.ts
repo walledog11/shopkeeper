@@ -1,6 +1,6 @@
 import type { OrgSettings } from "./types.js";
 import { merchantLocalTime, resolveAgentSettings } from "./settings.js";
-import { isOperatorChannel } from "./thread-constants.js";
+import { isOperatorChannel, ORDER_VERIFICATION_CHANNELS } from "./thread-constants.js";
 import {
   hasUnresolvedShopifyCustomer,
   isStorefrontContext,
@@ -8,6 +8,8 @@ import {
 } from "./guest-policy.js";
 import type { AgentContext } from "./agent-context.js";
 import type { DamageEvidenceState } from "./damage-evidence.js";
+import type { OrderVerificationState } from "./order-verification.js";
+import type { RequestAsk } from "./classifier-signals.js";
 import {
   CONTEXT_BUDGETS,
   budgetKbArticles,
@@ -122,6 +124,46 @@ function buildDamageEvidenceSection(state: DamageEvidenceState | null | undefine
     }
   }
   return `\n\n## Damage claim\n${body}`;
+}
+
+const RESUMED_ASK_LABELS: Partial<Record<RequestAsk, string>> = {
+  refund: "a refund",
+  cancel: "a cancellation",
+  return: "a return",
+  exchange: "an exchange",
+  address_change: "an address change",
+  complaint: "help with a problem",
+};
+
+// Present only on a direct-message thread whose sender has not shown the order
+// they are asking about is theirs, or just has. Code checks the answer, so the
+// model is never told which detail was wrong and cannot pass it on.
+function buildOrderVerificationSection(state: OrderVerificationState | null | undefined): string {
+  if (!state) return "";
+  let body: string;
+  switch (state.kind) {
+    case "ask":
+      body = state.orderName
+        ? `Nothing here shows the sender placed order ${state.orderName}. Before you discuss it or propose anything for it, call await_order_verification with order_name ${state.orderName}, then send_reply asking for the email address or the shipping zip/postal code on that order. Do not read the order yet: their answer is checked for you.`
+        : "The sender is asking for help with an order but has not said which one, and nothing here shows they placed it. Call await_order_verification with no order_name, then send_reply asking for the order number. Do not read, discuss or propose anything for any order yet.";
+      break;
+    case "asked":
+      body = `You asked the sender to confirm order ${state.orderName} with its email address or shipping zip, and nothing they have sent confirms it. Call await_order_verification with order_name ${state.orderName} again, then send_reply asking once more, briefly, for the email or shipping zip on that order. If they sent one, say only that you could not confirm the order with it: never say which detail was wrong or whether the order exists. If they say they cannot give either, do not ask again: call escalate_to_human. Do not discuss the order.`;
+      break;
+    case "locked":
+      body = `The sender could not confirm ${state.orderName ? `order ${state.orderName}` : "an order"} is theirs, and may not be asked again. Do not ask, and do not discuss any order. Call escalate_to_human.`;
+      break;
+    case "verified": {
+      const how = state.method === "zip" ? "shipping zip" : "email address";
+      const resumed = state.resumedRequest?.facts;
+      const ask = resumed ? RESUMED_ASK_LABELS[resumed.ask] : undefined;
+      const reason = resumed?.reason ? ` (reason: ${resumed.reason.replace(/_/g, " ")})` : "";
+      const carryOn = ask ? ` Their message just confirmed it; before that they wanted ${ask}${reason}, so carry on with that request.` : "";
+      body = `The sender confirmed order ${state.order.orderName} by its ${how}. You may read it with get_order_by_name (order_name ${state.order.orderName}) and discuss it with them; it is the only order they have shown is theirs. It shows they placed the order, not who they are, and authorizes no change by itself.${carryOn}`;
+      break;
+    }
+  }
+  return `\n\n## Order confirmation\n${body}`;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -293,7 +335,11 @@ ${OPERATOR_PRODUCT_HELP_INSTRUCTIONS}`;
 export function buildSystemPromptParts(
   ctx: AgentContext,
   settings?: Partial<OrgSettings>,
-  options?: { exactDraftProposal?: boolean; damageEvidence?: DamageEvidenceState | null },
+  options?: {
+    exactDraftProposal?: boolean;
+    damageEvidence?: DamageEvidenceState | null;
+    orderVerification?: OrderVerificationState | null;
+  },
 ): { stable: string; volatile: string } {
   const s = resolveAgentSettings(settings);
   const isOperatorMode = isOperatorChannel(ctx.thread.channelType);
@@ -325,7 +371,7 @@ export function buildSystemPromptParts(
         // is the branch most Instagram threads take. Gated on the same predicate
         // as the tool set, so the read named here is a read the agent holds.
         : unresolvedCustomer
-          ? `No Shopify customer ID is pre-loaded for this thread, so nothing here establishes who the sender is. For a plain "where is my order" question, call get_order_fulfillment_status with the order number they gave - and the checkout email too, if they gave one - and answer from what it returns. Ask for the order number when you do not have one; do not guess at an order. The fuller order and customer reads still work, but they return the name, address, contact details and amounts on the order, which is not detail to hand an unverified sender: use them only when the question genuinely needs it, and expect the merchant to review that reply before it goes out. If you need to look up or act on a customer, call find_customer with by='query' first to resolve their ID.`
+          ? `No Shopify customer ID is pre-loaded for this thread, so nothing here establishes who the sender is. For a plain "where is my order" question, call get_order_fulfillment_status with the order number they gave${ORDER_VERIFICATION_CHANNELS.has(ctx.thread.channelType) ? "" : " - and the checkout email too, if they gave one -"} and answer from what it returns. Ask for the order number when you do not have one; do not guess at an order. The fuller order and customer reads still work, but they return the name, address, contact details and amounts on the order, which is not detail to hand an unverified sender: use them only when the question genuinely needs it, and expect the merchant to review that reply before it goes out. If you need to look up or act on a customer, call find_customer with by='query' first to resolve their ID.`
           : "No Shopify customer ID is pre-loaded for this thread. If you need to look up or act on a customer, call find_customer with by='query' first to resolve their ID.";
 
   if (isOperatorMode) {
@@ -430,7 +476,7 @@ ${identitySection}${ordersSection}${guestSection}
 
 ## Integrations
 ${shopifyNote}
-${shopifyCustomerNote}${buildGuardrailSection(s)}${buildAutonomySection(s)}${buildDamageEvidenceSection(options?.damageEvidence)}${buildStoreProfileSection(ctx.orgName, s.aiContext)}${kbSection}${buildVoiceSection(s)}${buildMerchantPreferencesSection(ctx)}${exactDraftSection}`;
+${shopifyCustomerNote}${buildGuardrailSection(s)}${buildAutonomySection(s)}${buildOrderVerificationSection(options?.orderVerification)}${buildDamageEvidenceSection(options?.damageEvidence)}${buildStoreProfileSection(ctx.orgName, s.aiContext)}${kbSection}${buildVoiceSection(s)}${buildMerchantPreferencesSection(ctx)}${exactDraftSection}`;
 
   return {
     stable: SUPPORT_STABLE_PREFIX,

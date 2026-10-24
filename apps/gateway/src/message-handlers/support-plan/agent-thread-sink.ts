@@ -1,7 +1,11 @@
 import { db, SenderType, createMessage } from '@shopkeeper/db';
 import { AGENT_NOTE_PREFIX, THREAD_STATUS } from '@shopkeeper/agent/thread-constants';
 import type { ThreadSink } from '@shopkeeper/agent/build-context';
-import { awaitCustomerPhotoMutation, updateThreadStatusMutation } from '@shopkeeper/agent/thread-io';
+import {
+  awaitCustomerPhotoMutation,
+  awaitOrderVerificationMutation,
+  updateThreadStatusMutation,
+} from '@shopkeeper/agent/thread-io';
 import { randomUUID } from 'node:crypto';
 import { createHash } from 'node:crypto';
 import { toolError, toolNotFound, toolOk, toolEscalated, toolUnknown, type ReceiptV1, type ToolResult } from '@shopkeeper/agent/tools';
@@ -9,6 +13,7 @@ import type {
   AddInternalNoteInput,
   AskOperatorInput,
   AwaitCustomerPhotoInput,
+  AwaitOrderVerificationInput,
   EscalateToHumanInput,
   SendEmailInput,
   SendReplyInput,
@@ -205,6 +210,10 @@ export const gatewayThreadSink: ThreadSink = {
 
   async awaitCustomerPhoto(input: AwaitCustomerPhotoInput, ctx: ThreadSinkContext): Promise<ToolResult> {
     return awaitCustomerPhotoMutation(input, ctx, (hookCtx) => publishThreadEvent(hookCtx.orgId, hookCtx.threadId));
+  },
+
+  async awaitOrderVerification(input: AwaitOrderVerificationInput, ctx: ThreadSinkContext): Promise<ToolResult> {
+    return awaitOrderVerificationMutation(input, ctx, (hookCtx) => publishThreadEvent(hookCtx.orgId, hookCtx.threadId));
   },
 
   async updateThreadTag(input: UpdateThreadTagInput, ctx: ThreadSinkContext): Promise<ToolResult> {

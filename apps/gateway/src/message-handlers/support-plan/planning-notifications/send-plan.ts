@@ -13,7 +13,7 @@ import {
 } from '../../../operator-notify-idempotency.js';
 import { listOperatorBindings, type OperatorNotifyOptions } from '../../../operator-notify.js';
 import { getContext, toPendingPlanToolCalls, type PendingPlan } from '../../../operator-context.js';
-import { listVerifiedOrderNames } from '../../../storefront-chat-verified-orders.js';
+import { listConfirmedOrders } from '../../../storefront-chat-verified-orders.js';
 import type { PlanIdentity } from '../planning-types.js';
 import {
   buildRequestDisplaySnapshot,
@@ -115,7 +115,8 @@ export async function sendOperatorPlanNotification(
   }
 
   const stage = await getConversationStage(threadId);
-  const verifiedOrders = await listVerifiedOrderNames(organizationId, threadId, channelType);
+  const confirmedOrders = await listConfirmedOrders(organizationId, threadId, channelType);
+  const verifiedOrders = confirmedOrders.map(order => order.orderName);
   const requestDisplay = options?.requestDisplay ?? await buildRequestDisplaySnapshot({
     organizationId,
     threadId,
@@ -210,7 +211,7 @@ export async function sendOperatorPlanNotification(
           dashboardUrl,
           rawToolCalls: plan.rawToolCalls,
           stage,
-          ...(verifiedOrders.length > 0 ? { verifiedOrders } : {}),
+          ...(confirmedOrders.length > 0 ? { verifiedOrders: confirmedOrders } : {}),
           ...(plan.validation ? { validation: plan.validation } : {}),
           ...(plan.communication ? { communication: plan.communication } : {}),
           ...(queueNotice ? { queueNotice } : {}),

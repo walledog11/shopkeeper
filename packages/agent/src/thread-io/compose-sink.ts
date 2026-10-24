@@ -2,6 +2,7 @@ import {
   addInternalNoteMutation,
   askOperatorMutation,
   awaitCustomerPhotoMutation,
+  awaitOrderVerificationMutation,
   escalateToHumanMutation,
   updateThreadStatusMutation,
   updateThreadTagMutation,
@@ -26,6 +27,7 @@ export function composeThreadSink(options: ComposeThreadSinkOptions): ThreadSink
     }),
     askOperator: (input, ctx) => askOperatorMutation(input, ctx, after),
     awaitCustomerPhoto: (input, ctx) => awaitCustomerPhotoMutation(input, ctx, after),
+    awaitOrderVerification: (input, ctx) => awaitOrderVerificationMutation(input, ctx, after),
     sendReply: options.sendReply,
     sendEmail: options.sendEmail,
   };

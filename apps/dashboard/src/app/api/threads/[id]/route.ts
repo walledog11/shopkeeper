@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import { db, Prisma, ThreadFilterStatus, ThreadFilterFeedback } from '@shopkeeper/db';
-import { BadRequestError, ConflictError, NotFoundError } from '@/lib/api/errors';
+import { BadRequestError, NotFoundError } from '@/lib/api/errors';
 import { readRequiredJsonObject } from '@/lib/api/body';
 import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
 import { merchantInboxInternalChannelFilter } from '@shopkeeper/agent/merchant-inbox-surfaces';
 import { stopWaitingTasksOnClosedThreads } from '@shopkeeper/agent/task-ledger';
 import { THREAD_STATUS, isAgentNoteContent, stripAgentNotePrefix } from '@shopkeeper/agent/thread-constants';
 import { parseThreadPatchBody } from '@/app/api/threads/_lib/validation';
+import { assertThreadsCanReopen } from '@/app/api/threads/_lib/reopen-threads';
 import type { AgentTurnAction } from '@shopkeeper/agent/turns';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -113,26 +114,8 @@ export const PATCH = withOrgRoute<{ id: string }>(
             : undefined);
 
     const updated = await db.$transaction(async (tx) => {
-      // One open thread per customer per channel (threads_one_open_per_customer).
-      // Lock the customer row as inbound episode resolution does, so an arriving
-      // message cannot open one between this check and the update.
       if (status === THREAD_STATUS.OPEN) {
-        await tx.$queryRaw`SELECT id FROM customers WHERE id = ${thread.customerId}::uuid FOR UPDATE`;
-        const openThread = await tx.thread.findFirst({
-          where: {
-            organizationId: org.id,
-            customerId: thread.customerId,
-            channelType: thread.channelType,
-            status: THREAD_STATUS.OPEN,
-            id: { not: id },
-          },
-          select: { id: true },
-        });
-        if (openThread) {
-          throw new ConflictError(
-            'This customer already has an open conversation on this channel. Close it to reopen this one.',
-          );
-        }
+        await assertThreadsCanReopen(tx, org.id, [{ id, ...thread }]);
       }
       const row = await tx.thread.update({
         where: { id },

@@ -3,6 +3,7 @@ import type {
   AddInternalNoteInput,
   AskOperatorInput,
   AwaitCustomerPhotoInput,
+  AwaitOrderVerificationInput,
   EscalateToHumanInput,
   SendEmailInput,
   SendReplyInput,
@@ -38,4 +39,5 @@ export interface ThreadSink {
   updateThreadStatus(input: UpdateThreadStatusInput, ctx: ThreadSinkContext): Promise<ToolResult>;
   updateThreadTag(input: UpdateThreadTagInput, ctx: ThreadSinkContext): Promise<ToolResult>;
   awaitCustomerPhoto(input: AwaitCustomerPhotoInput, ctx: ThreadSinkContext): Promise<ToolResult>;
+  awaitOrderVerification(input: AwaitOrderVerificationInput, ctx: ThreadSinkContext): Promise<ToolResult>;
 }

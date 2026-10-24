@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db, ChannelType, SenderType } from '@shopkeeper/db';
 import {
   cleanupTestData,
@@ -25,6 +25,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await cleanupTestData(org?.id);
 });
 
@@ -99,6 +100,60 @@ describe('closeInactiveOpenThreads', () => {
     expect(await closureOf(thread.id)).toEqual({ status: 'closed', closedReason: 'inactivity' });
     expect(await db.agentTask.findUniqueOrThrow({ where: { id: task.id } }))
       .toMatchObject({ status: 'cancelled', pendingQuestion: null });
+  });
+
+  it.each(['failed', 'pending', 'processing', 'unknown', 'bounced'])(
+    'keeps an unanswered thread open when its reply is %s',
+    async (sendStatus) => {
+      const thread = await openThread();
+      const inbound = await createTestMessage(thread.id, 'Where is my order?', SenderType.customer);
+      const outbound = await createTestMessage(thread.id, 'On its way.', SenderType.agent);
+      await ageConversation([inbound.id, outbound.id], QUIET_AGED);
+      await db.message.update({ where: { id: outbound.id }, data: { sendStatus } });
+
+      await closeInactiveOpenThreads(NOW);
+      expect(await statusOf(thread.id)).toBe('open');
+
+      // A successful retry resolves the same persisted attempt and makes the
+      // aged conversation eligible again; failed sends must not park it forever.
+      await db.message.update({ where: { id: outbound.id }, data: { sendStatus: 'sent' } });
+      await closeInactiveOpenThreads(NOW);
+      expect(await statusOf(thread.id)).toBe('closed');
+    },
+  );
+
+  it('rechecks activity after an in-flight inbound transaction commits', async () => {
+    const thread = await openThread();
+    const inbound = await createTestMessage(thread.id, 'Where is my order?', SenderType.customer);
+    const outbound = await createTestMessage(thread.id, 'On its way.', SenderType.agent);
+    await ageConversation([inbound.id, outbound.id], QUIET_AGED);
+
+    let snapshotRead!: () => void;
+    const snapshot = new Promise<void>(resolve => { snapshotRead = resolve; });
+    const findMany = db.thread.findMany.bind(db.thread);
+    // Only observe the real query; all writes and lock contention use Postgres.
+    // Prisma's lazy Promise branding differs from this async spy's Promise.
+    vi.spyOn(db.thread, 'findMany').mockImplementation((async (args) => {
+      const rows = await findMany(args);
+      if (rows.some(row => row.id === thread.id)) snapshotRead();
+      return rows;
+    }) as typeof db.thread.findMany);
+
+    let sweep!: Promise<number>;
+    await db.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM customers WHERE id = ${thread.customerId}::uuid FOR UPDATE`;
+      await tx.$queryRaw`SELECT id FROM threads WHERE id = ${thread.id}::uuid FOR UPDATE`;
+      sweep = closeInactiveOpenThreads(NOW);
+      await snapshot;
+      await tx.message.create({ data: {
+        organizationId: org.id, threadId: thread.id,
+        senderType: SenderType.customer, contentText: 'It still has not arrived.', sentAt: NOW,
+      } });
+      await tx.thread.update({ where: { id: thread.id }, data: { lastMessageAt: NOW } });
+    });
+
+    await sweep;
+    expect(await statusOf(thread.id)).toBe('open');
   });
 
   it('keeps a six-day answered thread open', async () => {

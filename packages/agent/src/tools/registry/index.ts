@@ -14,7 +14,7 @@ import { modelToolDescription } from "./model-contract.js";
 import { STATS_TOOL_DEFINITIONS } from "./stats.js";
 import { THREAD_TOOL_DEFINITIONS } from "./thread.js";
 
-export { AWAIT_CUSTOMER_PHOTO_TOOL } from "./thread.js";
+export { AWAIT_CUSTOMER_PHOTO_TOOL, AWAIT_ORDER_VERIFICATION_TOOL } from "./thread.js";
 import type { AgentToolDefinition, ToolCapability, ToolGroup } from "./types.js";
 
 export type {
@@ -24,6 +24,7 @@ export type {
   AskOperatorInput,
   AttachReturnLabelInput,
   AwaitCustomerPhotoInput,
+  AwaitOrderVerificationInput,
   CancelOrderInput,
   CreateExchangeInput,
   CreateFlashSaleInput,

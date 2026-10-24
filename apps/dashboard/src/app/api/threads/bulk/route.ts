@@ -4,6 +4,7 @@ import { stopWaitingTasksOnClosedThreads } from '@shopkeeper/agent/task-ledger';
 import { NotFoundError } from '@/lib/api/errors';
 import { readRequiredJsonObject } from '@/lib/api/body';
 import { withOrgRoute } from '@/lib/api/route';
+import { assertThreadsCanReopen } from '@/app/api/threads/_lib/reopen-threads';
 import { parseBulkThreadPatchBody } from '@/app/api/threads/_lib/validation';
 
 export const PATCH = withOrgRoute(
@@ -14,7 +15,7 @@ export const PATCH = withOrgRoute(
     // Verify all threads belong to this org
     const threads = await db.thread.findMany({
       where: { id: { in: ids }, organizationId: org.id, archivedAt: null },
-      select: { id: true },
+      select: { id: true, customerId: true, channelType: true },
     });
 
     if (threads.length === 0) {
@@ -26,11 +27,12 @@ export const PATCH = withOrgRoute(
     const data: Record<string, unknown> = {};
     // A close drops the cached plan with the conversation, as a single close does.
     if (action === 'close') Object.assign(data, { status: 'closed', cachedPlan: Prisma.DbNull, cachedPlanMessageId: null });
-    if (action === 'open') data.status = 'open';
+    if (action === 'open') Object.assign(data, { status: 'open', cachedPlan: Prisma.DbNull, cachedPlanMessageId: null });
     if (action === 'tag') data.tag = tag;
     if (action === 'archive') data.archivedAt = new Date();
 
     await db.$transaction(async (tx) => {
+      if (action === 'open') await assertThreadsCanReopen(tx, org.id, threads);
       await tx.thread.updateMany({
         where: { id: { in: verifiedIds }, organizationId: org.id },
         data,

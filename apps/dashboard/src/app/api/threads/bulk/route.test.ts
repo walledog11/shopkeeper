@@ -62,6 +62,30 @@ describe('PATCH /api/threads/bulk', () => {
     await expect(db.thread.findUnique({ where: { id: thread.id } })).resolves.toMatchObject(expected);
   });
 
+  it.each(['existing open conversation', 'two selected closed conversations'])(
+    'rejects %s atomically when reopening a batch',
+    async (conflict) => {
+      const customer = await createTestCustomer(org.id, 'conflict@example.com');
+      const first = await createTestThread(org.id, customer.id, ChannelType.email);
+      await db.thread.update({ where: { id: first.id }, data: { status: 'closed' } });
+      const second = await createTestThread(org.id, customer.id, ChannelType.email);
+      if (conflict === 'two selected closed conversations') {
+        await db.thread.update({ where: { id: second.id }, data: { status: 'closed' } });
+      }
+      const otherCustomer = await createTestCustomer(org.id, 'valid@example.com');
+      const valid = await createTestThread(org.id, otherCustomer.id, ChannelType.email);
+      await db.thread.update({ where: { id: valid.id }, data: { status: 'closed' } });
+      const ids = [valid.id, first.id, ...(conflict === 'two selected closed conversations' ? [second.id] : [])];
+
+      const response = await PATCH(request({ ids, action: 'open' }));
+      expect(response.status).toBe(409);
+      const selected = await db.thread.findMany({ where: { id: { in: ids } }, select: { status: true } });
+      expect(selected.every(thread => thread.status === 'closed')).toBe(true);
+      expect((await db.thread.findUniqueOrThrow({ where: { id: second.id } })).status)
+        .toBe(conflict === 'existing open conversation' ? 'open' : 'closed');
+    },
+  );
+
   it('stops the tasks waiting on every conversation it closes', async () => {
     const waiting = [];
     for (const email of ['bulk_wait_a@example.com', 'bulk_wait_b@example.com']) {

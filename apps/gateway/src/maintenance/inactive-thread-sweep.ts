@@ -1,3 +1,4 @@
+import type { Prisma as PrismaTypes } from '@prisma/client';
 import { decideAutonomy } from '@shopkeeper/agent/autonomy';
 import {
   getLastConversationMessage,
@@ -27,7 +28,7 @@ const NON_CONVERSATIONAL_GRACE_MS = 60 * 60 * 1000;
 
 const SWEEP_BATCH_SIZE = 200;
 
-type SweepMessage = PlanThreadMessage & { sentAt: Date };
+type SweepMessage = PlanThreadMessage & { sentAt: Date; sendStatus: string | null };
 
 export type InactiveThreadSweepRow = {
   id: string;
@@ -72,6 +73,14 @@ function classifyInactiveThreadClose(
   if (context.openWatchThreadIds.has(thread.id)) return 'skip';
   if (hasMerchantWorkCachedPlan(thread, settings)) return 'skip';
 
+  // A persisted outbound attempt is not evidence that the customer received a
+  // reply. Null is the legacy synchronous-send convention; fail closed for any
+  // other state until delivery is confirmed.
+  if (thread.messages.some(message =>
+    (message.senderType === SENDER_TYPE.AGENT || message.senderType === SENDER_TYPE.AI)
+    && message.sendStatus !== null && message.sendStatus !== 'sent'
+  )) return 'skip';
+
   const last = getLastConversationMessage(thread.messages) as SweepMessage | null;
   if (!last) {
     const graceCutoff = new Date(now.getTime() - NON_CONVERSATIONAL_GRACE_MS);
@@ -86,15 +95,18 @@ function classifyInactiveThreadClose(
   return 'close_quiet';
 }
 
-async function loadSweepContext(): Promise<{
+async function loadSweepContext(
+  client: Pick<typeof db, 'operatorContext' | 'planExecution' | 'returnWatch' | 'organization'> = db,
+  organizationId?: string,
+): Promise<{
   operatorPendingThreadIds: Set<string>;
   pendingExecutionThreadIds: Set<string>;
   openWatchThreadIds: Set<string>;
   settingsByOrg: Map<string, ReturnType<typeof resolveAgentSettings>>;
 }> {
   const operatorPendingThreadIds = new Set<string>();
-  const contexts = await db.operatorContext.findMany({
-    where: { pendingPlans: { not: Prisma.DbNull } },
+  const contexts = await client.operatorContext.findMany({
+    where: { organizationId, pendingPlans: { not: Prisma.DbNull } },
     select: { pendingPlans: true },
   });
   for (const row of contexts) {
@@ -105,8 +117,8 @@ async function loadSweepContext(): Promise<{
     }
   }
 
-  const pendingExecutions = await db.planExecution.findMany({
-    where: { status: { in: ['pending', 'claimed'] }, threadId: { not: null } },
+  const pendingExecutions = await client.planExecution.findMany({
+    where: { organizationId, status: { in: ['pending', 'claimed'] }, threadId: { not: null } },
     select: { threadId: true },
   });
   const pendingExecutionThreadIds = new Set(
@@ -114,13 +126,13 @@ async function loadSweepContext(): Promise<{
   );
 
   const openWatchThreadIds = new Set<string>();
-  const returnWatches = await db.returnWatch.findMany({
-    where: { status: 'open' },
+  const returnWatches = await client.returnWatch.findMany({
+    where: { organizationId, status: 'open' },
     select: { threadId: true },
   });
   for (const row of returnWatches) if (row.threadId) openWatchThreadIds.add(row.threadId);
 
-  const orgs = await db.organization.findMany({ select: { id: true, settings: true } });
+  const orgs = await client.organization.findMany({ where: { id: organizationId }, select: { id: true, settings: true } });
   const settingsByOrg = new Map(
     orgs.map((org) => [org.id, resolveAgentSettings(org.settings)]),
   );
@@ -132,6 +144,22 @@ async function loadSweepContext(): Promise<{
     settingsByOrg,
   };
 }
+
+const sweepThreadSelect = {
+  id: true,
+  organizationId: true,
+  customerId: true,
+  updatedAt: true,
+  escalatedAt: true,
+  cachedPlan: true,
+  cachedPlanMessageId: true,
+  filterStatus: true,
+  messages: {
+    where: { deletedAt: null, senderType: { not: SENDER_TYPE.NOTE } },
+    orderBy: [{ sentAt: 'asc' }, { id: 'asc' }],
+    select: { id: true, senderType: true, sentAt: true, sendStatus: true },
+  },
+} satisfies PrismaTypes.ThreadSelect;
 
 /**
  * Daily inbox retention: close note-only threads and threads the agent answered
@@ -155,53 +183,45 @@ export async function closeInactiveOpenThreads(now: Date = new Date()): Promise<
       },
       orderBy: { id: 'asc' },
       take: SWEEP_BATCH_SIZE,
-      select: {
-        id: true,
-        organizationId: true,
-        updatedAt: true,
-        escalatedAt: true,
-        cachedPlan: true,
-        cachedPlanMessageId: true,
-        filterStatus: true,
-        messages: {
-          where: { deletedAt: null, senderType: { not: SENDER_TYPE.NOTE } },
-          orderBy: [{ sentAt: 'asc' }, { id: 'asc' }],
-          select: { id: true, senderType: true, sentAt: true },
-        },
-      },
+      select: sweepThreadSelect,
     });
 
     if (threads.length === 0) break;
     lastId = threads[threads.length - 1]!.id;
 
-    const toClose: string[] = [];
     for (const thread of threads) {
       const settings = context.settingsByOrg.get(thread.organizationId) ?? resolveAgentSettings(null);
-      const decision = classifyInactiveThreadClose(
-        thread,
-        now,
-        settings,
-        context,
-      );
-      if (decision === 'skip') continue;
-      toClose.push(thread.id);
-    }
+      if (classifyInactiveThreadClose(thread, now, settings, context) === 'skip') continue;
 
-    if (toClose.length > 0) {
       closed += await db.$transaction(async (tx) => {
-        const closedRows = await tx.thread.updateManyAndReturn({
-          where: { id: { in: toClose }, status: THREAD_STATUS.OPEN },
-          data: { status: THREAD_STATUS.CLOSED, closedReason: 'inactivity' },
-          select: { id: true, organizationId: true },
+        // Match inbound episode resolution's customer-first lock order. The
+        // thread lock also serializes message inserts (via their foreign key)
+        // and changes to escalation/plan state while we recheck eligibility.
+        await tx.$queryRaw`SELECT id FROM customers WHERE id = ${thread.customerId}::uuid FOR UPDATE`;
+        await tx.$queryRaw`SELECT id FROM threads WHERE id = ${thread.id}::uuid FOR UPDATE`;
+        const current = await tx.thread.findFirst({
+          where: {
+            id: thread.id,
+            status: THREAD_STATUS.OPEN,
+            archivedAt: null,
+            deletedAt: null,
+            filterStatus: { not: ThreadFilterStatus.filtered },
+          },
+          select: sweepThreadSelect,
         });
-        const threadIdsByOrg = new Map<string, string[]>();
-        for (const row of closedRows) {
-          threadIdsByOrg.set(row.organizationId, [...(threadIdsByOrg.get(row.organizationId) ?? []), row.id]);
-        }
-        for (const [organizationId, threadIds] of threadIdsByOrg) {
-          await stopWaitingTasksOnClosedThreads(tx, { organizationId, threadIds });
-        }
-        return closedRows.length;
+        if (!current) return 0;
+        const freshContext = await loadSweepContext(tx, thread.organizationId);
+        const freshSettings = freshContext.settingsByOrg.get(thread.organizationId) ?? resolveAgentSettings(null);
+        if (classifyInactiveThreadClose(current, now, freshSettings, freshContext) === 'skip') return 0;
+
+        await tx.thread.update({
+          where: { id: thread.id },
+          data: { status: THREAD_STATUS.CLOSED, closedReason: 'inactivity' },
+        });
+        await stopWaitingTasksOnClosedThreads(tx, {
+          organizationId: thread.organizationId, threadIds: [thread.id],
+        });
+        return 1;
       });
     }
 

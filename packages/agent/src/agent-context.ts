@@ -1,10 +1,11 @@
-import type { ClassifierSignals } from "./classifier-signals.js";
+import type { ClassifierSignals, RequestFacts } from "./classifier-signals.js";
 import type { BillableModelUsage } from "./model-cost.js";
 import type { MerchantPreferenceSummary } from "./merchant-preferences.js";
 import type { ToolResult } from "./tools/result.js";
 import type {
   AddInternalNoteInput,
   AwaitCustomerPhotoInput,
+  AwaitOrderVerificationInput,
   SendReplyInput,
   SendEmailInput,
   UpdateThreadStatusInput,
@@ -24,6 +25,7 @@ export interface AgentIO {
   updateThreadTag(input: UpdateThreadTagInput, execution?: AgentExecutionIdentity): Promise<ToolResult>;
   /** Optional so a host that never plans support threads need not supply it. */
   awaitCustomerPhoto?(input: AwaitCustomerPhotoInput, execution?: AgentExecutionIdentity): Promise<ToolResult>;
+  awaitOrderVerification?(input: AwaitOrderVerificationInput, execution?: AgentExecutionIdentity): Promise<ToolResult>;
 }
 
 export interface AgentExecutionIdentity {
@@ -213,6 +215,33 @@ export interface RequestEvidence {
   photoRequestedAt: string | null;
 }
 
+/**
+ * One order a direct-message sender (Instagram, TikTok) was asked to confirm, and
+ * what came of it. Gateway code compares their own message with the order's email
+ * or shipping zip on Shopify; nothing here is ever the model's judgement.
+ */
+export interface OrderVerificationRecord {
+  /** Normalized with order-reference's `normalizeOrderName`; null while the agent asks which order. */
+  orderName: string | null;
+  /** Shopify's numeric id once verified, else null. */
+  orderId: string | null;
+  method: "email" | "zip" | null;
+  /** The thread whose agent asked last. */
+  threadId: string | null;
+  requestedAt: Date;
+  /** Times the agent has asked about this order. */
+  asks: number;
+  /** Values compared for this order: one per email or zip a message carried. */
+  attempts: number;
+  /** The newest customer message that carried an email or zip and was compared. */
+  answeredMessageId: string | null;
+  verifiedAt: Date | null;
+  /** The request the agent asked about, for the turn the answer lands on. */
+  requestFacts: RequestFacts | null;
+  /** That request asked for compensation. */
+  compensationRequested: boolean;
+}
+
 // Support module context: the base plus the ticket, customer, Shopify linkage,
 // recent orders, and KB articles the support agent needs.
 export interface SupportContext extends BaseAgentContext {
@@ -261,6 +290,12 @@ export interface SupportContext extends BaseAgentContext {
   classifierSignals?: ClassifierSignals | null;
   // Absent on hosts that do not load it, which reads as no photo and no request.
   requestEvidence?: RequestEvidence;
+  /**
+   * This sender's order confirmations, on Instagram and TikTok threads only.
+   * Separate from `authState`/`verifiedOrders`, which switch on the storefront
+   * policy. Read through `orderVerificationState`.
+   */
+  orderVerifications?: OrderVerificationRecord[];
 }
 
 export type AgentContext = SupportContext;

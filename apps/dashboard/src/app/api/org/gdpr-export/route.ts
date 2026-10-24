@@ -51,12 +51,36 @@ export const GET = withOrgRoute(
       },
     })
 
-    if (!customer) {
+    // An Instagram or TikTok sender who confirmed one of the requested orders by
+    // its email or zip: their conversation carries this customer's details, and
+    // customers/redact deletes it with them.
+    const confirmingSenders = privacyRequest && privacyRequest.orderIds.length > 0
+      ? await db.customer.findMany({
+          where: {
+            organizationId: org.id,
+            orderVerifications: {
+              some: {
+                organizationId: org.id,
+                shopDomain: privacyRequest.shopDomain,
+                verifiedAt: { not: null },
+                orderId: { in: privacyRequest.orderIds },
+              },
+            },
+          },
+          select: { id: true },
+        })
+      : []
+
+    if (!customer && confirmingSenders.length === 0) {
       throw new NotFoundError('No customer found for that privacy request')
     }
 
+    const customerIds = [...new Set([
+      ...(customer ? [customer.id] : []),
+      ...confirmingSenders.map(sender => sender.id),
+    ])]
     const threads = await db.thread.findMany({
-      where: { customerId: customer.id, organizationId: org.id, deletedAt: null },
+      where: { customerId: { in: customerIds }, organizationId: org.id, deletedAt: null },
       include: {
         messages: {
           where: {
@@ -80,12 +104,14 @@ export const GET = withOrgRoute(
         },
       }),
       organization: org.name,
-      customer: {
-        name: customer.name,
-        platformId: customer.platformId,
-        ...(shopifyCustomerId && { shopifyCustomerId }),
-        createdAt: customer.createdAt,
-      },
+      ...(customer && {
+        customer: {
+          name: customer.name,
+          platformId: customer.platformId,
+          ...(shopifyCustomerId && { shopifyCustomerId }),
+          createdAt: customer.createdAt,
+        },
+      }),
       threads: threads.map(t => ({
         id: t.id,
         channel: t.channelType,

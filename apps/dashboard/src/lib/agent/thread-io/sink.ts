@@ -62,5 +62,6 @@ export const updateThreadTag = dashboardThreadSink.updateThreadTag;
 export const escalateToHuman = dashboardThreadSink.escalateToHuman;
 export const askOperator = dashboardThreadSink.askOperator;
 export const awaitCustomerPhoto = dashboardThreadSink.awaitCustomerPhoto;
+export const awaitOrderVerification = dashboardThreadSink.awaitOrderVerification;
 
 export { sendEmail, sendReply } from "./send";
