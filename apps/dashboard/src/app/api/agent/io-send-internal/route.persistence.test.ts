@@ -34,6 +34,7 @@ describe('POST /api/agent/io-send-internal storefront persistence', () => {
     ['human_approved', 'Approved storefront reply.'],
     ['auto_executed', 'Automatic storefront reply.'],
   ] as const)('persists a %s send_reply for the widget to poll', async (agentActionMode, text) => {
+    vi.stubEnv('STOREFRONT_CHAT_ENABLED', 'true');
     const shopDomain = `storefront-${agentActionMode}-${org.id.slice(0, 8)}.myshopify.com`;
     const integration = await createTestIntegration(org.id, {
       platform: ChannelType.shopify,
