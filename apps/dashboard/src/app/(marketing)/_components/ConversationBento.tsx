@@ -3,6 +3,9 @@
 import type { ReactNode } from "react";
 import { LazyMotion, domAnimation, m } from "motion/react";
 import { ActionLog, ChannelRoles, GuidanceVisual, ShopperChat } from "./BentoVisuals";
+import { marketingMotionEase } from "./marketingMotion";
+import { MarketingSection } from "./MarketingSection";
+import { MarketingSectionHeader } from "./MarketingSectionHeader";
 type BentoGradientPosition = "br" | "bottom-left";
 
 const cardReveal = {
@@ -13,7 +16,7 @@ const cardReveal = {
     transition: {
       duration: 0.75,
       delay: i * 0.11,
-      ease: [0.22, 1, 0.36, 1] as const,
+      ease: marketingMotionEase,
     },
   }),
 };
@@ -82,21 +85,24 @@ function ConvertBentoCard({ index }: { index: number }) {
 export function ConversationBento() {
   return (
     <LazyMotion features={domAnimation} strict>
-      <section
-        aria-labelledby="conversation-bento-heading"
-        className="mx-auto max-w-6xl px-5 py-16 sm:px-6 sm:py-24"
-      >
+      <MarketingSection aria-labelledby="conversation-bento-heading">
         <m.header
-          className="mb-10 max-w-[min(900px,100%)] text-left sm:mb-12"
+          className="mb-10 max-w-[min(900px,100%)] sm:mb-12"
           initial={{ opacity: 0, y: 22 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.5 }}
-          transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.7, ease: marketingMotionEase }}
         >
-          <h2 id="conversation-bento-heading" className="m-display m-h2">
-            Built for stores where every conversation counts.{" "}
-            <span className="m-tail">Shopkeeper handles the routine and brings you the rest.</span>
-          </h2>
+          <MarketingSectionHeader
+            align="start"
+            id="conversation-bento-heading"
+            title={
+              <>
+                Built for stores where every conversation counts.{" "}
+                <span className="m-tail">Shopkeeper handles the routine and brings you the rest.</span>
+              </>
+            }
+          />
         </m.header>
 
         <div className="m-bento-grid">
@@ -139,7 +145,7 @@ export function ConversationBento() {
             <ConvertBentoCard index={3} />
           </div>
         </div>
-      </section>
+      </MarketingSection>
     </LazyMotion>
   );
 }

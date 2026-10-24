@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/ui/cn";
-import { inboxNavItem, shopNavItem, topBarDropdowns, type NavItem } from "../nav-items";
+import { inboxNavItem, shopNavItem, chatNavItem, topBarDropdowns, type NavItem } from "../nav-items";
 import { HeaderSearch } from "../header-search/HeaderSearch";
 import { Logo } from "./Logo";
 import { AccountNavPill } from "./AccountNavPill";
@@ -106,6 +106,7 @@ export function DesktopTopBar({
   const prefetchNav = useDashboardNavPrefetch();
   const inboxIsActive = isRouteActive(pathname, inboxNavItem.href);
   const shopIsActive = isRouteActive(pathname, shopNavItem.href);
+  const chatIsActive = isRouteActive(pathname, chatNavItem.href);
 
   return (
     <div className="pointer-events-none relative z-40 hidden shrink-0 md:block mb-6">
@@ -142,6 +143,15 @@ export function DesktopTopBar({
               className={topBarNavTriggerClass(shopIsActive)}
             >
               <span>{shopNavItem.name}</span>
+            </Link>
+
+            <Link
+              href={chatNavItem.href}
+              onClick={(e) => handleNavClick(e, chatIsActive)}
+              {...dashboardNavPrefetchHandlers(prefetchNav, chatNavItem.href)}
+              className={topBarNavTriggerClass(chatIsActive)}
+            >
+              <span>{chatNavItem.name}</span>
             </Link>
 
             {topBarDropdowns.map(({ label, items }) => (

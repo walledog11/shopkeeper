@@ -110,7 +110,7 @@ function IntegrationsPageContent({
   const { data, mutate } = useIntegrations({ fallbackData: initialIntegrations })
   const integrations = useMemo(() => data ?? [], [data])
   const loaded = data !== undefined
-  const [openId, setOpenId] = useState<string | null>(null)
+  const [openId, setOpenId] = useState<string | null>(searchParams.get("configure") === "shopify" ? "shopify" : null)
   const shopifyPresenceRef = useRef<ReturnType<typeof resolveShopifyConnectionState> | null>(null)
   const mountedRef = useRef(true)
   const [toast, setToast] = useState<{ tone: "success" | "error"; message: string } | null>(null)

@@ -1,23 +1,18 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import { MarketingDarkShowcase } from "../../_components/MarketingDarkShowcase";
+import { createProductPageMetadata } from "../../_components/marketing-metadata";
 import { ProductDetailTemplate } from "../../_components/ProductDetailTemplate";
 
 const title = "Order operations — Shopkeeper";
 const description =
   "See how Shopkeeper prepares and completes supported Shopify order work while keeping consequential actions under merchant control.";
 
-export const metadata: Metadata = {
+export const metadata = createProductPageMetadata({
   title,
   description,
-  alternates: { canonical: "/product/order-operations" },
-  openGraph: {
-    title,
-    description,
-    url: "/product/order-operations",
-  },
-  twitter: { title, description },
-};
+  path: "/product/order-operations",
+});
 
 const actionGroups = [
   {
@@ -92,7 +87,7 @@ const faqs = [
 
 function OrderWorkflowWalkthrough() {
   return (
-    <div className="rounded-3xl m-chapter--dark px-6 py-10 sm:px-10 sm:py-14">
+    <MarketingDarkShowcase as="div" plain className="px-6 py-10 sm:px-10 sm:py-14">
       <div className="max-w-2xl">
         <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#fcfaf8]/55">Order #3102</p>
         <h2 className="m-display m-h2 mt-3">
@@ -108,7 +103,7 @@ function OrderWorkflowWalkthrough() {
           </li>
         ))}
       </ol>
-    </div>
+    </MarketingDarkShowcase>
   );
 }
 
@@ -142,7 +137,7 @@ export default function OrderOperationsPage() {
       requirementsFooter={
         <Link
           href="/product/approvals-and-controls"
-          className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-stone-800 underline decoration-stone-300 underline-offset-4 hover:text-stone-950"
+          className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-[color:var(--m-ink)] underline decoration-[color:var(--m-line-strong)] underline-offset-4 hover:text-[color:var(--m-ink)]"
         >
           Explore approval modes and limits
           <ArrowRight className="size-4" aria-hidden />

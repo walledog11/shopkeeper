@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Check, LoaderCircle } from "lucide-react";
 import { PRIMARY_CTA_LABEL } from "@/lib/brand";
@@ -86,7 +85,7 @@ export function WaitlistForm({
             {secondaryAction ? <div className="m-waitlist-secondary">{secondaryAction}</div> : null}
           </div>
           <label className="m-waitlist-opt-in">
-            <input type="checkbox" name="newsletter" disabled={state === "saving"} />
+            <input type="checkbox" name="newsletter" defaultChecked disabled={state === "saving"} />
             <span>Send me occasional product updates, too.</span>
           </label>
           <div className="m-waitlist-trap" aria-hidden="true">
@@ -94,7 +93,6 @@ export function WaitlistForm({
             <input id={`${id}-company`} name="company" tabIndex={-1} autoComplete="off" />
           </div>
           {error && <p id={`${id}-error`} role="alert" className="m-waitlist-error">{error}</p>}
-          <p id={`${id}-note`} className="m-waitlist-note">We’ll email you about early access. <Link href="/privacy">Privacy</Link></p>
         </form>
       )}
     </div>

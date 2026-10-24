@@ -1,4 +1,5 @@
-import { db, utcDayString } from '@shopkeeper/db';
+import { utcDayString } from '@shopkeeper/db';
+import type { EpisodeTransactionClient } from './message-handlers/inbound/resolve-inbound-episode.js';
 import { fixedWindowRateLimit, type FixedWindowCounterClient } from '@shopkeeper/agent/rate-limit';
 import logger from './logger.js';
 import { getGatewayRedis } from './clients/redis-client.js';
@@ -30,6 +31,14 @@ export interface StorefrontChatBudgetVerdict {
 }
 
 const ALLOWED: StorefrontChatBudgetVerdict = { allowed: true };
+
+export class StorefrontChatBudgetError extends Error {
+  constructor(readonly verdict: StorefrontChatBudgetVerdict) {
+    super('Storefront chat budget exhausted');
+  }
+}
+
+export class StorefrontChatSessionUnavailableError extends Error {}
 
 // Burst limits fail **closed** in production, matching the gateway's other
 // limiter: an unreachable Redis must not become an open door on the one route
@@ -68,22 +77,33 @@ async function burst(
 /**
  * Decide whether one shopper message may be admitted, and account for it if so.
  *
- * Called before `processInboundMessage`, so a denial costs nothing beyond the
- * checks themselves. The counters move only on an admitted message: a refused
- * message must not consume the budget it was refused by, or a shopper who keeps
- * retrying would push their own reset further away.
+ * Called inside inbound persistence's transaction, after its unique message
+ * insert and before commit or model work. Throw on refusal to roll back the
+ * message, episode and counters together. Duplicate inserts never reach here.
  */
 export async function claimStorefrontChatBudget(input: {
   organizationId: string;
   integrationId: string;
   sessionId: string;
-  sessionMessageCount: number;
   shopperIp: string | null;
-}): Promise<StorefrontChatBudgetVerdict> {
-  const { organizationId, integrationId, sessionId, sessionMessageCount, shopperIp } = input;
+}, tx: EpisodeTransactionClient): Promise<StorefrontChatBudgetVerdict> {
+  const { organizationId, integrationId, sessionId, shopperIp } = input;
   const budgets = getStorefrontChatMessageBudgets();
   const limits = getStorefrontChatBurstLimits();
   const redis = counterClient();
+
+  // This update locks the session until the inbound transaction commits. The
+  // count read below cannot race another admitted message on the same browser.
+  const live = await tx.storefrontChatSession.updateMany({
+    where: {
+      id: sessionId, organizationId, integrationId, revokedAt: null, expiresAt: { gt: new Date() },
+      organization: { lifecycleStatus: 'active' },
+      integration: { lifecycleStatus: 'active', metadata: { path: ['storefrontChat', 'enabled'], equals: true } },
+    },
+    data: { lastSeenAt: new Date() },
+  });
+  if (!live.count) throw new StorefrontChatSessionUnavailableError('Storefront chat session is unavailable');
+  const session = await tx.storefrontChatSession.findUniqueOrThrow({ where: { id: sessionId }, select: { messageCount: true } });
 
   const sessionBurst = await burst(
     redis,
@@ -109,7 +129,7 @@ export async function claimStorefrontChatBudget(input: {
     }
   }
 
-  if (sessionMessageCount >= budgets.perSession) {
+  if (session.messageCount >= budgets.perSession) {
     return { allowed: false, denial: 'session_budget' };
   }
 
@@ -118,7 +138,7 @@ export async function claimStorefrontChatBudget(input: {
   // shop race here, and the unique (integration_id, day) index makes the
   // increment atomic. The returned count is this message's position in the day,
   // so admitting exactly the first `perShopPerDay` of them is a `>` test.
-  const usage = await db.storefrontChatDailyUsage.upsert({
+  const usage = await tx.storefrontChatDailyUsage.upsert({
     where: { integrationId_day: { integrationId, day } },
     create: { organizationId, integrationId, day, messageCount: 1 },
     update: { messageCount: { increment: 1 } },
@@ -126,29 +146,10 @@ export async function claimStorefrontChatBudget(input: {
   });
 
   if (usage.messageCount > budgets.perShopPerDay) {
-    // Over budget. The counter deliberately keeps climbing past the ceiling —
-    // it is how sustained exhaustion is distinguished from just touching the
-    // limit when reading the logs afterwards.
-    logger.warn(
-      { opsAlert: true, organizationId, integrationId, day, messageCount: usage.messageCount, limit: budgets.perShopPerDay },
-      '[StorefrontChat] Shop daily message budget exhausted',
-    );
-    // Only the message that crosses the ceiling tells the merchant. Every
-    // refusal after it is the same fact, and a shop under sustained load would
-    // otherwise turn one closed widget into hundreds of notifications. The
-    // idempotency key covers the races this integer test cannot.
-    if (usage.messageCount === budgets.perShopPerDay + 1) {
-      await alertStorefrontChatExhaustion({
-        organizationId,
-        integrationId,
-        day,
-        limit: budgets.perShopPerDay,
-      });
-    }
     return { allowed: false, denial: 'shop_budget' };
   }
 
-  await db.storefrontChatSession.update({
+  await tx.storefrontChatSession.update({
     where: { id: sessionId },
     data: { messageCount: { increment: 1 } },
   });
@@ -156,11 +157,23 @@ export async function claimStorefrontChatBudget(input: {
   return ALLOWED;
 }
 
+// Outside the admission transaction. The notification's durable idempotency
+// key allows only one merchant notice per shop/day, including concurrent refusals.
+export async function reportStorefrontChatExhaustion(organizationId: string, integrationId: string): Promise<void> {
+  const day = utcDayString();
+  const limit = getStorefrontChatMessageBudgets().perShopPerDay;
+  logger.warn({ opsAlert: true, organizationId, integrationId, day, limit }, '[StorefrontChat] Shop daily message budget exhausted');
+  await alertStorefrontChatExhaustion({ organizationId, integrationId, day, limit });
+}
+
 // What the widget is told. Deliberately vague about which limit was hit — a
 // shopper cannot act on the difference, and spelling it out would hand an abuser
 // a map of the thresholds.
 export function storefrontChatDenialMessage(denial: StorefrontChatBudgetDenial): string {
-  return denial === 'session_burst' || denial === 'ip_burst'
-    ? "You're sending messages faster than we can read them. Give it a moment and try again."
-    : "We've hit today's chat limit. Please email us and we'll pick this up from there.";
+  if (denial === 'session_burst' || denial === 'ip_burst') {
+    return "You're sending messages faster than we can read them. Give it a moment and try again.";
+  }
+  return denial === 'session_budget'
+    ? "This chat has reached its message limit. Please use the shop's contact page for more help."
+    : "We've hit today's chat limit. Please use the shop's contact page, or try again tomorrow.";
 }

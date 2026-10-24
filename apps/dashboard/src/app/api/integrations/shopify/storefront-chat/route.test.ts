@@ -7,7 +7,7 @@ vi.mock('@clerk/nextjs/server', () => ({
 }));
 
 import { auth } from '@clerk/nextjs/server';
-import { PATCH } from './route';
+import { GET, PATCH } from './route';
 
 let org: Awaited<ReturnType<typeof createTestOrg>>;
 
@@ -24,6 +24,9 @@ beforeEach(async () => {
     orgRole: 'org:admin',
   } as ReturnType<typeof auth> extends Promise<infer T> ? T : never);
   vi.stubEnv('STOREFRONT_CHAT_ENABLED', 'true');
+  vi.stubEnv('STOREFRONT_CHAT_SIGNING_SECRET', 'storefront-test-secret-with-32-characters');
+  vi.stubEnv('SHOPIFY_APP_SECRET', 'shopify-test-secret');
+  vi.stubEnv('INTERNAL_API_SECRET', 'internal-test-secret');
 });
 
 afterEach(async () => {
@@ -52,7 +55,8 @@ describe('PATCH /api/integrations/shopify/storefront-chat', () => {
     const integration = await createTestIntegration(org.id, {
       platform: ChannelType.shopify,
       externalAccountId: 'merchant.myshopify.com',
-      metadata: { oauthScopes: ['read_orders'], retained: 'value' },
+      accessToken: 'shpat_test',
+      metadata: { oauthScopes: ['read_orders', 'read_products', 'write_app_proxy'], retained: 'value' },
     });
 
     const response = await patchStorefrontChat(true);
@@ -61,10 +65,27 @@ describe('PATCH /api/integrations/shopify/storefront-chat', () => {
 
     const saved = await db.integration.findUniqueOrThrow({ where: { id: integration.id } });
     expect(saved.metadata).toEqual({
-      oauthScopes: ['read_orders'],
+      oauthScopes: ['read_orders', 'read_products', 'write_app_proxy'],
       retained: 'value',
       storefrontChat: { enabled: true },
     });
+  });
+
+  it('reports incomplete setup and refuses activation until required configuration is present', async () => {
+    await createTestIntegration(org.id, {
+      platform: ChannelType.shopify, accessToken: 'shpat_test', externalAccountId: 'merchant.myshopify.com',
+      metadata: { oauthScopes: ['read_orders', 'read_products', 'write_app_proxy'] },
+    });
+    vi.stubEnv('STOREFRONT_CHAT_SIGNING_SECRET', '');
+    const response = await GET(new Request('http://localhost/api/integrations/shopify/storefront-chat'));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.canEnable).toBe(false);
+    expect(body.checks.find((check: { id: string }) => check.id === 'service').ready).toBe(false);
+    expect(body.checks.find((check: { id: string }) => check.id === 'email').ready).toBe(false);
+    expect((await patchStorefrontChat(true)).status).toBe(400);
+    vi.stubEnv('STOREFRONT_CHAT_SIGNING_SECRET', 'storefront-test-secret-with-32-characters');
+    expect((await patchStorefrontChat(true)).status).toBe(200);
   });
 
   it('rejects enabling when the platform kill switch is off', async () => {

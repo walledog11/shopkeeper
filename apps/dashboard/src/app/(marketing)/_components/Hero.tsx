@@ -1,15 +1,7 @@
 import { ButtonLink } from "./ButtonLink";
+import { marketingRiseStyle } from "./marketingMotion";
 import { WaitlistForm } from "./WaitlistForm";
-import { Check, MessageSquareText } from "lucide-react";
-
-const heroProofPoints = ["Free to join", "Connects to Shopify"] as const;
-
-function rise(delayMs: number) {
-  return {
-    animation: "m-rise 0.7s ease-out both",
-    animationDelay: `${delayMs}ms`,
-  } as React.CSSProperties;
-}
+import { MessageSquareText } from "lucide-react";
 
 // Fixed positions so server and client render the same sparkle field.
 const sparkles = [
@@ -36,7 +28,7 @@ function SparkIcon({ className }: { className?: string }) {
 
 function HeroFlow() {
   return (
-    <div className="mx-auto mt-14 w-full max-w-6xl sm:mt-16" style={rise(260)}>
+    <div className="mx-auto mt-14 w-full max-w-6xl sm:mt-16" style={marketingRiseStyle(260)}>
       <div
         className="m-shimmer-panel relative overflow-hidden rounded-[1.75rem] px-5 pb-10 pt-10 sm:pt-12"
         role="img"
@@ -65,7 +57,6 @@ function HeroFlow() {
           <span aria-hidden className="m-flow-line" />
 
           <div className="m-flow-step m-flow-chip" style={{ animationDelay: "900ms" }}>
-            <SparkIcon className="size-3.5" />
             Checking order #3102 in Shopify
           </div>
 
@@ -104,38 +95,25 @@ function HeroFlow() {
 export function Hero() {
   return (
     <section className="relative isolate px-5 pb-8 pt-14 text-center sm:px-6 sm:pt-20 md:pb-12">
-      <h1 className="m-display m-h1 mx-auto mb-5 max-w-[min(900px,94vw)]" style={rise(0)}>
+      <h1 className="m-display m-h1 mx-auto mb-5 max-w-[min(900px,94vw)]" style={marketingRiseStyle(0)}>
         The AI shopkeeper built for solo Shopify stores
       </h1>
 
-      <p className="m-lede mx-auto mb-4 max-w-[640px]" style={rise(80)}>
+      <p className="m-lede mx-auto mb-4 max-w-[640px]" style={marketingRiseStyle(80)}>
         Shopkeeper answers your customers and does the work in Shopify.
         Give it instructions from iMessage or the dashboard.
       </p>
 
-      <p className="mx-auto mb-8 max-w-[600px] text-[14px] leading-relaxed text-[color:var(--m-ink-2)]" style={rise(120)}>
-        By default, routine replies can send automatically. Order changes,
-        refunds, and exceptions wait for your approval.
-      </p>
-
-      <div id="waitlist" className="scroll-mt-24" style={rise(160)}>
+      <div id="waitlist" className="scroll-mt-24" style={marketingRiseStyle(160)}>
         <WaitlistForm
           source="hero"
           secondaryAction={
-            <ButtonLink href="#workflow" variant="outline" size="lg" className="sm:mt-1">
+            <ButtonLink href="#workflow" variant="outline" size="lg">
               <MessageSquareText aria-hidden className="size-4" />
               See what you can ask
             </ButtonLink>
           }
         />
-        <ul className="mt-5 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[13px] text-[color:var(--m-ink-3)]">
-          {heroProofPoints.map((point) => (
-            <li key={point} className="flex items-center gap-1.5">
-              <Check aria-hidden className="size-3.5" />
-              {point}
-            </li>
-          ))}
-        </ul>
       </div>
 
       <HeroFlow />

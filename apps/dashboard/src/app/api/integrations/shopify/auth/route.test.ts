@@ -59,6 +59,7 @@ describe('POST /api/integrations/shopify/auth', () => {
     expect(redirectUrl.origin).toBe('https://fixture-shop.myshopify.com');
     expect(redirectUrl.pathname).toBe('/admin/oauth/authorize');
     expect(redirectUrl.searchParams.get('client_id')).toBe('shopify-client-id');
+    expect(redirectUrl.searchParams.get('scope')?.split(',')).toContain('write_app_proxy');
     expect(redirectUrl.searchParams.get('redirect_uri')).toBe('http://dashboard.test/api/integrations/shopify/callback');
     expect(redirectUrl.searchParams.get('state')).toMatch(/^[a-f0-9]{32}$/);
 

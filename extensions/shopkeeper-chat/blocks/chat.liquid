@@ -31,7 +31,11 @@
 <div
   id="shopkeeper-chat-root"
   data-shop="{{ shop.permanent_domain }}"
+  data-shop-name="{{ shop.name | escape }}"
   data-proxy="/apps/{{ block.settings.proxy_subpath | default: 'shopkeeper-chat' }}"
+  data-config-url="/apps/{{ block.settings.proxy_subpath | default: 'shopkeeper-chat' }}/config"
+  data-stylesheet="{{ 'shopkeeper-chat.css' | asset_url }}"
+  data-tokens-stylesheet="{{ 'shopkeeper-tokens.css' | asset_url }}"
   data-greeting="{{ block.settings.greeting | escape }}"
   data-launcher-label="{{ block.settings.launcher_label | escape }}"
   data-panel-title="{{ panel_title | escape }}"
@@ -43,6 +47,7 @@
   data-page-url="{{ canonical_url }}"
 ><span hidden></span></div>
 
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@1,2&amp;display=swap">
 <script src="{{ 'shopkeeper-chat.js' | asset_url }}" defer></script>
 
 {% schema %}
@@ -50,6 +55,10 @@
   "name": "Shopkeeper Chat",
   "target": "body",
   "settings": [
+    {
+      "type": "paragraph",
+      "content": "Open Chat in Shopkeeper to change your picture, colors, and messages. Saved settings apply across your themes. The settings below are used until you first save in Shopkeeper."
+    },
     {
       "type": "text",
       "id": "launcher_label",

@@ -1094,7 +1094,7 @@ html:has(.m-page) {
 @media (min-width: 640px) {
   .m-waitlist-top {
     flex-direction: row;
-    align-items: flex-start;
+    align-items: stretch;
     justify-content: center;
   }
 }
@@ -1105,7 +1105,12 @@ html:has(.m-page) {
 }
 
 .m-waitlist-secondary {
+  display: flex;
   flex-shrink: 0;
+}
+
+.m-waitlist-secondary .m-btn {
+  height: 100%;
 }
 
 .m-waitlist-fields {

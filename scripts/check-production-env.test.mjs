@@ -80,6 +80,13 @@ test('dashboard launch contract passes with the expected production env', () => 
   assert.deepEqual(result.warnings, []);
 });
 
+test('enabled storefront chat requires a signing secret', () => {
+  const env = createDashboardLaunchEnv({ STOREFRONT_CHAT_ENABLED: 'true' });
+  assert.match(validateProductionEnv('dashboard', { env }).errors.join('\n'), /STOREFRONT_CHAT_SIGNING_SECRET/);
+  env.STOREFRONT_CHAT_SIGNING_SECRET = 'a'.repeat(32);
+  assert.deepEqual(validateProductionEnv('dashboard', { env }).errors, []);
+});
+
 test('dashboard launch contract rejects mismatched app URLs', () => {
   const result = validateProductionEnv('dashboard', {
     scope: 'launch',

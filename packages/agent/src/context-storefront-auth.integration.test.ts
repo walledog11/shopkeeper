@@ -157,12 +157,12 @@ describe("storefront auth state in buildContext", () => {
     expect(ctx!.verifiedOrders).toEqual([{ orderName: "#1025", orderId: "5678901234" }]);
   });
 
-  it("drops back to guest when the session is revoked", async () => {
+  it.each(['revoked', 'expired'])("drops back to guest when the session is %s", async (state) => {
     const { org, thread, session } = await storefrontThread();
     await addVerification(org.id, session.id, "#1025", "5678901234", true);
     await db.storefrontChatSession.update({
       where: { id: session.id },
-      data: { revokedAt: new Date() },
+      data: state === 'revoked' ? { revokedAt: new Date() } : { expiresAt: new Date(0) },
     });
 
     const ctx = await buildContext(thread.id, org.id, sink);

@@ -1,24 +1,22 @@
-import type { Metadata } from "next";
 import { Check, MessageCircle, PackageSearch, Sparkles } from "lucide-react";
+import { createProductPageMetadata } from "../../_components/marketing-metadata";
 import { ProductDetailTemplate } from "../../_components/ProductDetailTemplate";
 
 const title = "Customer support — Shopkeeper";
 const description =
   "See how Shopkeeper uses Shopify context, store policy, merchant judgment, and approved voice guidance to resolve customer requests.";
 
-export const metadata: Metadata = {
+export const metadata = createProductPageMetadata({
   title,
   description,
-  alternates: { canonical: "/product/customer-support" },
-  openGraph: { title, description, url: "/product/customer-support" },
-  twitter: { title, description },
-};
+  path: "/product/customer-support",
+});
 
 function SupportContextView() {
   return (
     <figure
       aria-labelledby="support-view-caption"
-      className="overflow-hidden rounded-3xl border border-stone-900/10 bg-white shadow-[0_35px_70px_-45px_rgba(22,20,19,0.75)]"
+      className="overflow-hidden rounded-3xl border border-[color:var(--m-line)] bg-white shadow-[0_35px_70px_-45px_rgba(22,20,19,0.75)]"
     >
       <figcaption id="support-view-caption" className="sr-only">
         A support workspace showing Maya&apos;s size-swap request, matching Shopify and
@@ -32,9 +30,9 @@ function SupportContextView() {
         <span className="rounded-full bg-emerald-300/10 px-3 py-1 text-[10px] font-semibold text-emerald-100">Resolved</span>
       </div>
       <div className="grid lg:grid-cols-[0.9fr_1.2fr]">
-        <div className="border-b border-stone-900/10 bg-[color:var(--m-bg-alt)] p-5 sm:p-7 lg:border-r lg:border-b-0">
-          <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500"><MessageCircle className="size-3.5" aria-hidden /> Conversation</p>
-          <div className="mt-5 rounded-2xl rounded-bl-md bg-white p-4 text-[13px] leading-relaxed text-stone-800 shadow-[0_12px_28px_-22px_rgba(22,20,19,0.6)]">
+        <div className="border-b border-[color:var(--m-line)] bg-[color:var(--m-bg-alt)] p-5 sm:p-7 lg:border-r lg:border-b-0">
+          <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[color:var(--m-ink-3)]"><MessageCircle className="size-3.5" aria-hidden /> Conversation</p>
+          <div className="mt-5 rounded-2xl rounded-bl-md bg-white p-4 text-[13px] leading-relaxed text-[color:var(--m-ink)] shadow-[0_12px_28px_-22px_rgba(22,20,19,0.6)]">
             hey! I ordered the linen jumpsuit in M but need S — can you switch it before it ships?
           </div>
           <div className="mt-4 ml-auto rounded-2xl rounded-br-md m-chapter--dark p-4 text-[13px] leading-relaxed">
@@ -43,7 +41,7 @@ function SupportContextView() {
           </div>
         </div>
         <div className="p-5 sm:p-7">
-          <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500"><PackageSearch className="size-3.5" aria-hidden /> Context used for this answer</p>
+          <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[color:var(--m-ink-3)]"><PackageSearch className="size-3.5" aria-hidden /> Context used for this answer</p>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             {[
               ["Order", "#3102 · Paid · Unfulfilled"],
@@ -51,17 +49,17 @@ function SupportContextView() {
               ["Store policy", "Equal-price swap allowed before fulfillment"],
               ["Control", "Ask first · Approved by merchant"],
             ].map(([label, value]) => (
-              <div key={label} className="rounded-xl border border-stone-900/10 bg-white p-4">
-                <p className="text-[9px] font-semibold uppercase tracking-[0.1em] text-stone-400">{label}</p>
-                <p className="mt-2 text-xs leading-relaxed text-stone-700">{value}</p>
+              <div key={label} className="rounded-xl border border-[color:var(--m-line)] bg-white p-4">
+                <p className="text-[9px] font-semibold uppercase tracking-[0.1em] text-[color:var(--m-ink-3)]">{label}</p>
+                <p className="mt-2 text-xs leading-relaxed text-[color:var(--m-ink-2)]">{value}</p>
               </div>
             ))}
           </div>
           <div className="mt-3 flex items-start gap-3 rounded-xl border border-violet-800/10 bg-violet-700/[0.05] p-4">
             <Sparkles className="mt-0.5 size-4 shrink-0 text-violet-700" aria-hidden />
             <div>
-              <p className="text-xs font-semibold text-stone-800">Approved voice guidance</p>
-              <p className="mt-1 text-[11px] leading-relaxed text-stone-500">Concise, warm, and specific. Do not over-apologize or promise a ship date.</p>
+              <p className="text-xs font-semibold text-[color:var(--m-ink)]">Approved voice guidance</p>
+              <p className="mt-1 text-[11px] leading-relaxed text-[color:var(--m-ink-3)]">Concise, warm, and specific. Do not over-apologize or promise a ship date.</p>
             </div>
           </div>
         </div>

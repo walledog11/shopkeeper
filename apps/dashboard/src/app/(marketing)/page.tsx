@@ -5,7 +5,7 @@ import { MerchantTasks } from "./_components/MerchantTasks";
 import { CustomerSupportShowcase } from "./_components/CustomerSupportShowcase";
 import { ConversationBento } from "./_components/ConversationBento";
 import { Onboarding } from "./_components/Onboarding";
-import { ProactiveOperations } from "./_components/ProductOverview";
+import { ProactiveOperations, TrustSection } from "./_components/ProactiveOperations";
 import { Pricing } from "./_components/Pricing";
 import { FAQ as Faq } from "./_components/FAQ";
 import { CTA as Cta } from "./_components/CTA";
@@ -42,6 +42,9 @@ export default function Home() {
         <ProactiveOperations />
       </div>
       <Pricing />
+      <div className="m-chapter m-chapter--alt">
+        <TrustSection />
+      </div>
       <div className="m-chapter m-chapter--alt">
         <Faq />
       </div>

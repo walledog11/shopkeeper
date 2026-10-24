@@ -38,6 +38,8 @@ export const publicRoutePatterns = [
   // webhook or an OAuth callback. Authentication is Shopify's app-proxy
   // signature plus a session bearer token, enforced in the routes themselves.
   "/api/storefront-chat/proxy(.*)",
+  // Public, normalized brand pictures uploaded by workspace admins.
+  "/api/storefront-chat/images/[a-fA-F0-9-]{36}/[a-fA-F0-9-]{36}",
 ] as const;
 
 const signedInNoOrgRoutePatterns = [

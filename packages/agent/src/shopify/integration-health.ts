@@ -65,6 +65,7 @@ export const SHOPIFY_OAUTH_SCOPES = [
   "write_discounts",
   "read_store_credit_accounts",
   "write_store_credit_account_transactions",
+  "write_app_proxy",
 ] as const;
 
 export type ShopifyOAuthScope = (typeof SHOPIFY_OAUTH_SCOPES)[number];

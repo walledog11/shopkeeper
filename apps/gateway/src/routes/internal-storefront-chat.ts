@@ -9,6 +9,9 @@ import { processInboundMessage } from '../message-handlers/inbound/inbound-persi
 import {
   claimStorefrontChatBudget,
   storefrontChatDenialMessage,
+  StorefrontChatBudgetError,
+  StorefrontChatSessionUnavailableError,
+  reportStorefrontChatExhaustion,
 } from '../storefront-chat-budget.js';
 
 // Storefront shopper messages enter here rather than being persisted by the
@@ -20,39 +23,22 @@ export function registerInternalStorefrontChatRoutes(router: Router): void {
   router.post('/storefront-chat/message', internalJsonParser(), async (req: Request, res: Response) => {
     if (!authorizeInternalRequest(req, res, 'InternalStorefrontChat')) return;
 
-    const { organizationId, sessionId, integrationId, text, clientMessageId, shopperIp } = (req.body ?? {}) as Record<string, string>;
+    const { organizationId, sessionId, text, clientMessageId, shopperIp } = (req.body ?? {}) as Record<string, string>;
 
     if (!organizationId || !sessionId || typeof text !== 'string' || !text.trim()) {
       return res.status(400).json({ error: 'organizationId, sessionId and text are required' });
     }
 
     const session = await db.storefrontChatSession.findFirst({
-      where: { id: sessionId, organizationId, revokedAt: null },
-      select: { id: true, customerId: true, threadId: true, integrationId: true, messageCount: true },
+      where: {
+        id: sessionId, organizationId, revokedAt: null, expiresAt: { gt: new Date() },
+        organization: { lifecycleStatus: 'active' },
+        integration: { lifecycleStatus: 'active', metadata: { path: ['storefrontChat', 'enabled'], equals: true } },
+      },
+      select: { id: true, integrationId: true },
     });
     if (!session) {
       return res.status(404).json({ error: 'session not found' });
-    }
-
-    // Budget first: this is the last point before an anonymous message starts
-    // costing the merchant money, since everything past here — classification,
-    // summary, plan precompute — calls the model.
-    const verdict = await claimStorefrontChatBudget({
-      organizationId,
-      integrationId: session.integrationId,
-      sessionId: session.id,
-      sessionMessageCount: session.messageCount,
-      shopperIp: typeof shopperIp === 'string' && shopperIp ? shopperIp : null,
-    });
-    if (!verdict.allowed && verdict.denial) {
-      if (verdict.retryAt) {
-        res.set('Retry-After', String(Math.max(0, verdict.retryAt - Math.floor(Date.now() / 1000))));
-      }
-      return res.status(429).json({
-        error: 'storefront chat budget exhausted',
-        denial: verdict.denial,
-        shopperMessage: storefrontChatDenialMessage(verdict.denial),
-      });
     }
 
     try {
@@ -63,7 +49,7 @@ export function registerInternalStorefrontChatRoutes(router: Router): void {
         text,
         getGatewayBullMqQueue(QUEUE.AI_SUMMARY),
         {
-          integrationId: integrationId ?? null,
+          integrationId: session.integrationId,
           // Scoped by session so a shopper retrying the same client id is a
           // no-op, matching the widget's optimistic retry.
           externalMessageId: clientMessageId
@@ -74,6 +60,17 @@ export function registerInternalStorefrontChatRoutes(router: Router): void {
           // opens the episode. Verification resolves through that row, so a
           // session bound afterwards would read as guest in between.
           storefrontSessionId: session.id,
+          admitMessage: async (tx, thread) => {
+            const verdict = await claimStorefrontChatBudget({
+              organizationId, integrationId: session.integrationId, sessionId: session.id,
+              shopperIp: typeof shopperIp === 'string' && shopperIp ? shopperIp : null,
+            }, tx);
+            if (!verdict.allowed) throw new StorefrontChatBudgetError(verdict);
+            await tx.storefrontChatSession.update({
+              where: { id: session.id },
+              data: { threadId: thread.id, customerId: thread.customerId },
+            });
+          },
         },
       );
 
@@ -81,21 +78,15 @@ export function registerInternalStorefrontChatRoutes(router: Router): void {
         return res.status(200).json({ deduped: true });
       }
 
-      // Bind the session to whichever thread won the create race, and re-bind
-      // after a closed-thread rollover opens a new one.
-      if (session.threadId !== result.thread.id || !session.customerId) {
-        await db.storefrontChatSession.update({
-          where: { id: session.id },
-          data: {
-            threadId: result.thread.id,
-            customerId: result.thread.customerId,
-            lastSeenAt: new Date(),
-          },
-        });
-      }
-
       return res.status(202).json({ threadId: result.thread.id, isNewThread: result.isNew });
     } catch (err) {
+      if (err instanceof StorefrontChatSessionUnavailableError) return res.status(404).json({ error: 'session not found' });
+      if (err instanceof StorefrontChatBudgetError && err.verdict.denial) {
+        const { denial, retryAt } = err.verdict;
+        if (retryAt) res.set('Retry-After', String(Math.max(0, retryAt - Math.floor(Date.now() / 1000))));
+        if (denial === 'shop_budget') await reportStorefrontChatExhaustion(organizationId, session.integrationId);
+        return res.status(429).json({ error: 'storefront chat budget exhausted', denial, shopperMessage: storefrontChatDenialMessage(denial) });
+      }
       logger.error({ err, organizationId, sessionId }, '[StorefrontChat] Failed to persist shopper message');
       return res.status(500).json({ error: 'failed to persist message' });
     }

@@ -1,7 +1,10 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { AlertTriangle, ExternalLink, MessageSquare } from "lucide-react"
+import Link from "next/link"
+import { AlertTriangle, ArrowRight, ExternalLink, MessageSquare } from "lucide-react"
+import useSWR from "swr"
+import { fetcher } from "@/lib/api/fetcher"
 import type { Integration } from "@/types"
 import { Switch } from "@/components/ui/switch"
 import { isStorefrontChatEnabledForIntegration } from "@/lib/storefront-chat/enabled"
@@ -26,6 +29,11 @@ export function ShopifyStorefrontChatSection({
   const [enabled, setEnabled] = useState(serverEnabled)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { data: readiness, error: readinessError, mutate: refreshReadiness } = useSWR<{
+    canEnable: boolean
+    checks: { id: string; ready: boolean; detail: string }[]
+    lastConnectedAt: string | null
+  }>("/api/integrations/shopify/storefront-chat", fetcher)
 
   useEffect(() => {
     setEnabled(serverEnabled)
@@ -49,14 +57,20 @@ export function ShopifyStorefrontChatSection({
       setError("Couldn't update storefront chat. Try again.")
     }
     setSaving(false)
+    void refreshReadiness()
   }
 
   const toggleDisabled = !canManageWorkspace
     || saving
     || (!storefrontChatGloballyEnabled && !enabled)
+    || (!enabled && !readiness?.canEnable)
 
   return (
     <ConfigureSection title="Storefront chat">
+      <Link href="/dashboard/chat" className="flex items-center justify-between gap-3 px-4 py-4 transition-colors hover:bg-foreground/[0.03] sm:px-5">
+        <div><p className="text-[13px] font-semibold">Customize chat</p><p className="mt-1 text-xs text-muted-foreground">Your branding, welcome message, and placement — with a live preview.</p></div>
+        <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+      </Link>
       {!storefrontChatGloballyEnabled && !enabled ? (
         <div className="px-4 py-3.5 text-xs leading-relaxed text-foreground/55">
           Storefront chat is not available for your workspace yet.
@@ -75,6 +89,26 @@ export function ShopifyStorefrontChatSection({
           />
         )}
       />
+      <div className="space-y-2 px-4 py-3.5 text-xs leading-relaxed text-foreground/65">
+        {readiness ? (
+          <ul className="space-y-1.5">
+            {readiness.checks.map((check) => (
+              <li key={check.id}>
+                <span className={check.ready ? "text-green-700" : "text-amber-700"}>
+                  {check.ready ? "✓ " : "• "}
+                </span>
+                {check.detail}
+              </li>
+            ))}
+          </ul>
+        ) : <p>{readinessError ? "Couldn't check setup. Try again." : "Checking chat setup…"}</p>}
+        {readiness?.lastConnectedAt ? (
+          <p>Last storefront connection: {new Date(readiness.lastConnectedAt).toLocaleString()}</p>
+        ) : <p>No storefront connection recorded yet.</p>}
+        <button type="button" onClick={() => void refreshReadiness()} className="font-semibold underline underline-offset-2">
+          Check setup again
+        </button>
+      </div>
       {enabled ? (
         <div className="space-y-4 px-4 py-4 sm:px-5">
           <div>
@@ -85,6 +119,7 @@ export function ShopifyStorefrontChatSection({
                 <span className="font-medium text-foreground/75">Shopkeeper Chat</span> app embed.
               </li>
               <li>Save the theme so the chat bubble appears on your storefront.</li>
+              <li>Open your live storefront and test a product question, an order verification code, and a reply from Shopkeeper.</li>
               <li>
                 Turn off Shopify Inbox&apos;s storefront chat bubble so shoppers do not see two launchers.
               </li>

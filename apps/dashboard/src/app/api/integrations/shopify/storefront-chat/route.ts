@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { db } from '@shopkeeper/db';
-import { BadRequestError } from '@/lib/api/errors';
+import { BadRequestError, ConflictError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
 import { readRequiredJsonObject } from '@/lib/api/body';
 import {
@@ -8,6 +9,12 @@ import {
   readStorefrontChatEnabled,
 } from '@/lib/storefront-chat/metadata';
 import { isStorefrontChatGloballyEnabled } from '@/lib/storefront-chat/enabled';
+import { getStorefrontChatReadiness } from '@/lib/storefront-chat/readiness';
+
+export const GET = withOrgRoute(
+  { context: 'Shopify storefront chat GET', errorMessage: 'Failed to check storefront chat setup' },
+  async ({ org }) => NextResponse.json(await getStorefrontChatReadiness(org.id)),
+);
 
 export const PATCH = withOrgRoute(
   {
@@ -19,7 +26,7 @@ export const PATCH = withOrgRoute(
   },
   async ({ org, request }) => {
     const integration = await db.integration.findFirst({
-      where: { organizationId: org.id, platform: 'shopify' },
+      where: { organizationId: org.id, platform: 'shopify', lifecycleStatus: 'active' },
       select: { id: true, metadata: true },
     });
     if (!integration) {
@@ -34,14 +41,19 @@ export const PATCH = withOrgRoute(
     if (body.enabled && !isStorefrontChatGloballyEnabled()) {
       throw new BadRequestError('Storefront chat is not available yet');
     }
+    if (body.enabled && !(await getStorefrontChatReadiness(org.id)).canEnable) {
+      throw new BadRequestError('Complete the chat service setup and reconnect Shopify before enabling chat');
+    }
 
     const metadata = mergeStorefrontChatEnabled(integration.metadata, body.enabled);
 
     await db.$transaction(async (tx) => {
-      await tx.integration.update({
-        where: { id: integration.id },
+      const saved = await tx.integration.updateMany({
+        where: { id: integration.id, organizationId: org.id, lifecycleStatus: 'active',
+          metadata: { equals: integration.metadata ?? Prisma.DbNull } },
         data: { metadata },
       });
+      if (!saved.count) throw new ConflictError('Shop settings changed. Try again.');
 
       if (!body.enabled) {
         await tx.storefrontChatSession.updateMany({

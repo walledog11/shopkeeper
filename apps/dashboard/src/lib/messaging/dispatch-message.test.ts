@@ -63,6 +63,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await cleanupTestData(org?.id);
   process.env.E2E_OUTBOUND_MODE = originalEnv.E2E_OUTBOUND_MODE;
   process.env.E2E_OUTBOUND_RECORD_PATH = originalEnv.E2E_OUTBOUND_RECORD_PATH;
@@ -83,6 +84,29 @@ afterEach(async () => {
     await rm(tempDir, { recursive: true, force: true });
     tempDir = null;
   }
+});
+
+it('delivers storefront replies only while the session is live and chat is enabled', async () => {
+  vi.stubEnv('STOREFRONT_CHAT_ENABLED', 'true');
+  const integration = await createTestIntegration(org.id, {
+    platform: ChannelType.shopify, metadata: { storefrontChat: { enabled: true } },
+  });
+  const customer = await createTestCustomer(org.id, 'storefront-delivery');
+  const thread = await createTestThread(org.id, customer.id, ChannelType.shopify_chat);
+  const session = await db.storefrontChatSession.create({ data: {
+    organizationId: org.id, integrationId: integration.id, storefrontHost: integration.externalAccountId,
+    threadId: thread.id, resumeSecretHash: 'a'.repeat(64), expiresAt: new Date(Date.now() + 60_000),
+  } });
+  const deliver = () => dispatchMessage({ ...thread, customer }, org, 'Storefront reply', { source: 'agent_send_reply' });
+  const sent = await deliver();
+  expect(sent.ok).toBe(true);
+  expect(sent.ok && sent.message.sendStatus).toBe('sent');
+  await db.storefrontChatSession.update({ where: { id: session.id }, data: { expiresAt: new Date(0) } });
+  expect((await deliver()).ok).toBe(false);
+  await db.storefrontChatSession.update({ where: { id: session.id }, data: { expiresAt: new Date(Date.now() + 60_000) } });
+  await db.integration.update({ where: { id: integration.id }, data: { metadata: { storefrontChat: { enabled: false } } } });
+  expect((await deliver()).ok).toBe(false);
+  expect(await db.message.count({ where: { threadId: thread.id, sendStatus: 'sent' } })).toBe(1);
 });
 
 function restoreEnv(name: string, value: string | undefined) {

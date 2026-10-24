@@ -29,7 +29,7 @@ function formatStorefrontChatExhaustionMessage(limit: number, shop: string | nul
   const where = shop ? `Your storefront chat on ${shop}` : 'Your storefront chat';
   return [
     `${where} hit today's limit of ${limit} messages.`,
-    "It's turning shoppers away until midnight UTC — they're asked to email you instead.",
+    "It's turning shoppers away until midnight UTC — they're directed to your shop's contact page.",
     "If the storefront is really that busy, the limit can go up. If it isn't, something is hammering the widget.",
   ].join('\n');
 }
@@ -37,9 +37,8 @@ function formatStorefrontChatExhaustionMessage(limit: number, shop: string | nul
 /**
  * Tell the merchant their storefront chat has stopped answering.
  *
- * Called once, on the message that crosses the ceiling — not on the refusals
- * that follow it, which is what keeps a sustained flood from becoming a flood of
- * notifications. Never throws: this runs inside the refusal path, and failing to
+ * Repeated refusals share a durable notification key. Never throws: this runs
+ * outside the admission transaction in the refusal path, and failing to
  * report a closed widget must not also break closing it.
  */
 export async function alertStorefrontChatExhaustion(

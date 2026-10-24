@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { SectionLabel } from "./SectionLabel";
+import { MarketingSectionHeader } from "./MarketingSectionHeader";
 
 export type ProductLink = {
   href: string;
@@ -11,12 +11,12 @@ export type ProductLink = {
 export function RelatedLinks({ links }: { links: readonly ProductLink[] }) {
   return (
     <section aria-labelledby="related-heading" className="mx-auto max-w-6xl px-6 py-14">
-      <div className="mb-8 text-center">
-        <SectionLabel>keep exploring</SectionLabel>
-        <h2 id="related-heading" className="m-display m-h2">
-          Follow the product story.
-        </h2>
-      </div>
+      <MarketingSectionHeader
+        className="mb-8"
+        id="related-heading"
+        eyebrow="keep exploring"
+        title="Follow the product story."
+      />
       <div className="grid gap-4 md:grid-cols-3">
         {links.map((link) => (
           <Link key={link.href} href={link.href} className="m-card group p-5 transition-colors hover:border-[color:var(--m-line-strong)] motion-reduce:transition-none">

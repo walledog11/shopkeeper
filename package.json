@@ -10,8 +10,8 @@
     "npm": "10.x"
   },
   "scripts": {
-    "predev": "npm run db:generate -w packages/db && npx turbo run build --filter=\"./packages/*\"",
-    "dev": "npx turbo run dev",
+    "predev": "node scripts/dev.mjs doctor --startup && npm run db:generate -w packages/db && npx turbo run build --filter=\"./packages/*\"",
+    "dev": "node scripts/with-dev-env.mjs npx turbo run dev --env-mode=loose",
     "waitlist:export": "node scripts/export-waitlist.mjs",
     "waitlist:provision": "node scripts/provision-waitlist-loops.mjs",
     "waitlist:configure-local": "node scripts/configure-waitlist-loops-local.mjs",
@@ -54,7 +54,7 @@
     "audit:agent-runtime-retirement": "node ./scripts/audit-agent-runtime-retirement.mjs",
     "audit:production-dependencies": "npm audit --omit=dev --audit-level=high",
     "preview:seed": "node scripts/with-test-env.mjs node scripts/seed-preview-store.mjs",
-    "demo:seed": "node scripts/seed-local-demo-store.mjs",
+    "demo:seed": "node scripts/with-dev-env.mjs node scripts/seed-local-demo-store.mjs",
     "preview:serve": "E2E_AUTH_BYPASS=true E2E_AI_MODE=live node scripts/with-test-env.mjs npm run serve:e2e -w apps/dashboard",
     "preview:dev": "E2E_AUTH_BYPASS=true E2E_AI_MODE=live node scripts/with-test-env.mjs npm run dev:e2e -w apps/dashboard",
     "recover:gmail-history": "tsx ./scripts/recover-gmail-history.ts",
@@ -72,7 +72,9 @@
     "cleanup:duplicate-integrations": "node ./scripts/cleanup-duplicate-integrations.mjs",
     "audit:bullmq-compatibility-names": "node ./scripts/audit-bullmq-compatibility-names.mjs",
     "audit:outbound-email-mode": "node ./scripts/audit-outbound-email-mode.mjs",
-    "audit:email-inbound-transport": "node ./scripts/audit-email-inbound-transport.mjs"
+    "audit:email-inbound-transport": "node ./scripts/audit-email-inbound-transport.mjs",
+    "dev:setup": "node scripts/dev.mjs setup",
+    "dev:doctor": "node scripts/dev.mjs doctor"
   },
   "devDependencies": {
     "@clerk/testing": "^2.0.22",
@@ -87,13 +89,15 @@
     "globals": "^16.4.0",
     "knip": "^6.31.0",
     "prisma": "6.19.3",
-    "turbo": "^2.9.5",
     "tsx": "^4.22.4",
+    "turbo": "^2.9.5",
     "typescript": "^5",
     "typescript-eslint": "^8.46.0"
   },
   "dependencies": {
-    "@prisma/client": "6.19.3"
+    "@prisma/client": "6.19.3",
+    "body-parser": "2.4.0",
+    "next": "16.4.3"
   },
   "packageManager": "npm@10.9.3",
   "overrides": {
@@ -112,10 +116,13 @@
     "concurrently": {
       "shell-quote": "1.10.0"
     },
-    "next": {
-      ".": "16.3.8",
-      "postcss": "8.5.25"
+    "next": "16.4.3",
+    "body-parser": "2.4.0",
+    "express": {
+      "body-parser": "2.4.0"
     },
+    "undici": "7.30.1",
+    "zod": "4.6.6",
     "deepmerge-ts": "^8.0.1"
   }
 }

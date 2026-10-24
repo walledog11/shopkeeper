@@ -46,6 +46,9 @@ Unit tests must not need Postgres, Redis, Playwright, provider credentials or ne
 
 - `npm run test:services:up` starts Postgres and Redis from `docker-compose.test.yml`;
   `test:integration` and `test:coverage` bootstrap the DB package and run migrations.
+  Local development shares these containers but uses `shopkeeper_dev` and Redis DB 1;
+  tests use `clerk_test` and Redis DB 0. Do not flush all Redis databases in tests.
+  Integration tasks always execute; Turbo does not cache their database-dependent results.
 - In `apps/dashboard` and `apps/gateway`, Vitest setup installs a fetch guard: localhost
   and the configured local service URLs are allowed, every other host is blocked.
   Package tests run without it, so mock fetch there yourself (`vi.stubGlobal('fetch', …)`,
