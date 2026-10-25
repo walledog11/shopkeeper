@@ -5,7 +5,7 @@ import type { Fixture, FixtureRunSummary } from "./types"
 
 function cachePath(fixture: Fixture, repeats: number): string | null {
   const directory = process.env.EVAL_RESULT_CACHE_DIR?.trim()
-  if (!directory || process.env.UPDATE_EVAL_BASELINE === "1") return null
+  if (!directory) return null
   const judgeMode = isJudgeEnabled() ? "all-judges" : "gated-judges"
   return join(directory, `${fixture.id}.r${repeats}.${judgeMode}.json`)
 }

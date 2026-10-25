@@ -529,7 +529,7 @@ evals, new fixtures and fixture expansion happen only when the owner asks, reuse
 the existing harnesses, and never tune against held-out inputs. When the owner
 does ask, dispatch `evals.yml` on the exact commit with `max_usd` and
 `max_model_calls`: `release` mode for a release check, `targeted` for named
-fixtures, `drift` for the three-repeat measurement. Diagnose with a
+fixtures. Diagnose with a
 single-fixture, one-repeat probe, and do not tune and rerun. Paid eval files
 skip unless `EVAL_RUN=1` or `REQUIRE_MODEL_EVALS=1`, so a bare
 `test:integration` or `verify:pr` never bills. Local commands and ceilings are

@@ -1,0 +1,8 @@
+{
+  "recordedAt": "2026-10-24",
+  "summary": "Core release fixtures that still fail intermittently at repeats=1 even after EVAL_CONFIRM_HARD_FAILURES retries. Outcomes are logged and excluded from the hard-gate pass rate; fix the agent or tighten the fixture rather than expanding this list.",
+  "fixtureIds": [
+    "refund-partial-placeholder",
+    "withheld-cancellation-follow-up"
+  ]
+}

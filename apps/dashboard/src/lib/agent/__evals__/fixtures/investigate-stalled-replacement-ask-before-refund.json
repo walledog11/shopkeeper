@@ -2,7 +2,6 @@
   "id": "investigate-stalled-replacement-ask-before-refund",
   "description": "The merchant types an informal, open-ended instruction in the ticket composer about a customer whose order went wrong twice: the first planter arrived smashed and the replacement never shipped. The agent should investigate and move the case forward without issuing or promising money, because the merchant asked to be consulted first.",
   "whyModelNeeded": "The model must turn a vague merchant instruction into useful investigation and a next step while holding an explicit limit that no tool schema expresses.",
-  "holdout": "C01",
   "merchantInstruction": true,
   "setup": {
     "classifierIntents": {

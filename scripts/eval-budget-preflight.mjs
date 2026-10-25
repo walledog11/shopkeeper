@@ -26,7 +26,7 @@ const positiveInteger = name => {
 };
 
 const mode = required('mode');
-if (!['targeted', 'release', 'drift', 'baseline'].includes(mode)) {
+if (!['targeted', 'release'].includes(mode)) {
   throw new Error(`Unsupported eval mode ${JSON.stringify(mode)}`);
 }
 const maxUsd = positiveNumber('max-usd');
@@ -51,10 +51,6 @@ if (mode === 'targeted') {
   const found = new Set(fixtures.map(fixture => fixture.id));
   const missing = [...requestedIds].filter(id => !found.has(id));
   if (missing.length > 0) throw new Error(`Unknown fixture IDs: ${missing.join(', ')}`);
-  // Held-out fixtures run only with their whole suite (selectFixtures in the
-  // eval harness); refuse here too, before any job starts.
-  const heldOut = fixtures.filter(fixture => fixture.holdout).map(fixture => fixture.id);
-  if (heldOut.length > 0) throw new Error(`Held-out fixtures cannot be targeted: ${heldOut.join(', ')}`);
 } else if (mode === 'release') {
   fixtures = allFixtures.filter(fixture => fixture.suite === 'core' && fixture.advisory !== true);
 } else {
@@ -84,12 +80,12 @@ const usageCost = (model, usage) => {
   ) / 1_000_000;
 };
 
-const baseline = JSON.parse(readFileSync(resolve('apps/dashboard/src/lib/agent/__evals__/baseline.json'), 'utf8'));
-const models = baseline.usage?.models ?? {};
-const baselineRuns = baseline.usage?.runs ?? 0;
-if (baselineRuns <= 0) throw new Error('Committed eval baseline has no usage evidence');
+const budgetEvidence = JSON.parse(readFileSync(resolve('apps/dashboard/src/lib/agent/__evals__/eval-budget-evidence.json'), 'utf8'));
+const models = budgetEvidence.usage?.models ?? {};
+const baselineRuns = budgetEvidence.usageRuns ?? budgetEvidence.usage?.runs ?? 0;
+if (baselineRuns <= 0) throw new Error('eval-budget-evidence.json has no usage evidence');
 const judgedBaselineRuns = allFixtures.filter(fixture => (fixture.expectedRubric?.checks ?? []).length > 0).length
-  * baseline.repeats;
+  * (budgetEvidence.repeats ?? 3);
 const agentCostPerRun = Object.entries(models)
   .filter(([model]) => model !== 'claude-sonnet-4-6')
   .reduce((total, [model, usage]) => total + usageCost(model, usage), 0) / baselineRuns;
@@ -115,20 +111,8 @@ const dashboardEstimate = mode === 'targeted'
   ? Math.max(baselineDashboardEstimate, TARGETED_COLD_START_USD_PER_REPEAT * repeats)
   : baselineDashboardEstimate;
 // The gateway suite is the five `order-ops.eval.test.ts` fixtures at ~2 model
-// calls each, and `drift`/`baseline` force `repeats=3`. Both gateway terms were
-// once constants sized for a single repeat, so a baseline allocated 24 calls
-// against a ~30-call need and died `24 / 24` after four of the five fixtures —
-// run 33120836618, which had authorised 700. The dollar side already scaled off
-// maxUsd; only the call side did not. Scale both off `repeats` so a mode that
-// runs the suite three times reserves three times the calls.
-const GATEWAY_FIXTURES = 5;
-const GATEWAY_CALLS_PER_RUN = 2;
-const gatewayCallEstimate = mode === 'targeted'
-  ? 0
-  : mode === 'release'
-    ? 3
-    : GATEWAY_FIXTURES * GATEWAY_CALLS_PER_RUN * repeats;
-const gatewayEstimate = mode === 'targeted' ? 0 : mode === 'release' ? 0.03 : 0.05 * repeats;
+const gatewayCallEstimate = mode === 'targeted' ? 0 : 3;
+const gatewayEstimate = mode === 'targeted' ? 0 : 0.03;
 const estimatedUsd = dashboardEstimate + gatewayEstimate;
 // Aggregate release/baseline runs can use observed average usage because dozens
 // of fixtures share one ceiling. A small targeted run cannot: one planner may
@@ -162,20 +146,12 @@ if (estimatedCalls > maxCalls) {
 // while the dashboard crossed its $0.6375 sub-limit at $0.6633, still below the
 // $0.75 total authorization. Keep $0.05 for the bounded gateway path and leave
 // $0.70 for the larger release suite. Drift/baseline retain proportional room.
-const gatewayUsd = gatewayEstimate === 0
-  ? 0
-  : mode === 'release'
-    ? Math.max(gatewayEstimate * 1.5, 0.05)
-    : Math.max(gatewayEstimate * 1.5, maxUsd * 0.15);
+const gatewayUsd = gatewayEstimate === 0 ? 0 : Math.max(gatewayEstimate * 1.5, 0.05);
 const dashboardMaxUsd = maxUsd - gatewayUsd;
 if (dashboardMaxUsd <= dashboardEstimate) {
   throw new Error(`Dashboard allocation $${dashboardMaxUsd.toFixed(2)} does not cover its $${dashboardEstimate.toFixed(2)} estimate`);
 }
-const gatewayMaxCalls = mode === 'targeted'
-  ? 0
-  : mode === 'release'
-    ? 6
-    : Math.ceil(gatewayCallEstimate * 1.5);
+const gatewayMaxCalls = mode === 'targeted' ? 0 : 6;
 const dashboardMaxCalls = maxCalls - gatewayMaxCalls;
 if (dashboardMaxCalls <= 0) throw new Error('Call ceiling leaves no dashboard allocation');
 

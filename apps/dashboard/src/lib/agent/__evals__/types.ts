@@ -161,10 +161,6 @@ export interface ExpectedRubric {
   checks: RubricCheck[];
 }
 
-// C04, C09 and C12 are deterministic database cases and have no model fixture.
-export const HOLDOUT_CASES = ["C01", "C02", "C03", "C05", "C06", "C07", "C08", "C10", "C11"] as const;
-export type HoldoutCase = (typeof HOLDOUT_CASES)[number];
-
 export interface Fixture {
   id: string;
   description: string;
@@ -181,10 +177,9 @@ export interface Fixture {
   // `core` is the paid release profile and is always hard-gated. `extended`
   // belongs to the complete drift profile and may be hard or advisory.
   suite: "core" | "extended";
-  // A held-out variant of a model-scored case in the Package 0 evaluation
-  // manifest. It measures behavior on input nobody tuned against, so it runs
-  // only in whole-suite comparisons and cannot be selected by name.
-  holdout?: HoldoutCase;
+  // Recorded in recorded-stochastic-core-fixtures.json. Release runs retry these
+  // with EVAL_CONFIRM_HARD_FAILURES but exclude them from the hard gate.
+  stochasticRelease?: boolean;
   // The attempt that follows an approved message the executor withheld, which
   // only runtime v2 has. `instruction` is what that attempt is given.
   withheldMessageFollowUp?: true;

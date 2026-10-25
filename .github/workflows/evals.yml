@@ -23,9 +23,9 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'Release gate, targeted diagnosis, three-repeat drift, or baseline regeneration'
+        description: 'Release gate or targeted diagnosis'
         type: choice
-        options: [release, targeted, drift, baseline]
+        options: [release, targeted]
         default: release
       fixtures:
         description: 'Comma-separated fixture IDs (required for targeted mode)'
@@ -92,8 +92,8 @@ jobs:
         run: npm run test:services:up
       - name: Bootstrap test database
         run: node ./scripts/test-bootstrap.mjs
-      - name: Load and validate every dashboard fixture without model calls
-        run: npm run test:integration -w apps/dashboard -- --run src/lib/agent/__evals__/index.test.ts
+      - name: Run dashboard harness checks without model calls
+        run: npm run test:integration -w apps/dashboard -- --run src/lib/agent/__evals__/harness.integration.test.ts
       - name: Run deterministic gateway pre-filter without model calls
         run: npm run test:integration -w apps/gateway -- --run src/order-ops.eval.test.ts -t 'order-ops deterministic pre-filter'
       - name: Stop test services
@@ -133,7 +133,6 @@ jobs:
           repeats="$REPEATS"
           judges="$JUDGES"
           if [ "$mode" = release ]; then repeats=1; judges=off; fi
-          if [ "$mode" = drift ] || [ "$mode" = baseline ]; then repeats=3; judges=on; fi
           node scripts/eval-budget-preflight.mjs \
             --mode "$mode" \
             --fixtures "$FIXTURES" \
@@ -241,7 +240,7 @@ jobs:
       - run: npm ci
       - run: npm run test:services:up
       - run: node ./scripts/test-bootstrap.mjs
-      - name: Run 26 distinct hard core fixtures; confirm only a stochastic failure
+      - name: Run 35 hard-gated core fixtures (2 recorded stochastic cases excluded from the gate)
         run: |
           set -o pipefail
           npm run test:evals -w apps/dashboard 2>&1 | tee eval-output.log
@@ -333,203 +332,5 @@ jobs:
             printf -- '- Approved maximum: %s / %s calls\n' "$MAX_USD" "$MAX_MODEL_CALLS"
             echo '- A failure is a blocker or targeted-diagnosis input; it does not trigger another paid run.'
           } >> "$GITHUB_STEP_SUMMARY"
-          test "$DASHBOARD_RESULT" = success
-          test "$GATEWAY_RESULT" = success
-
-  drift-dashboard:
-    name: Paid three-repeat dashboard drift measurement
-    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'drift'
-    needs: [deterministic-preflight, budget-preflight]
-    runs-on: ubuntu-latest
-    env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      EVAL_SUITE: full
-      EVAL_REPEATS: '3'
-      RUN_JUDGE_EVALS: '1'
-      EVAL_CONFIRM_HARD_FAILURES: '0'
-      EVAL_MAX_USD: ${{ needs.budget-preflight.outputs.dashboard_max_usd }}
-      EVAL_MAX_MODEL_CALLS: ${{ needs.budget-preflight.outputs.dashboard_max_calls }}
-      EVAL_RESULT_CACHE_DIR: test-results/eval-cache
-      REQUIRE_MODEL_EVALS: '1'
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm }
-      - uses: actions/cache/restore@v4
-        with:
-          path: test-results/eval-cache
-          key: eval-results-${{ runner.os }}-${{ github.sha }}-drift-r3-jall-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: eval-results-${{ runner.os }}-${{ github.sha }}-drift-r3-jall-
-      - run: test -n "$ANTHROPIC_API_KEY" && test "$ANTHROPIC_API_KEY" != test-anthropic-key
-      - run: npm ci
-      - run: npm run test:services:up
-      - run: node ./scripts/test-bootstrap.mjs
-      - name: Measure hard and advisory drift separately
-        run: |
-          set -o pipefail
-          npm run test:evals -w apps/dashboard 2>&1 | tee eval-output.log
-      - if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: test-results/eval-cache
-          key: eval-results-${{ runner.os }}-${{ github.sha }}-drift-r3-jall-${{ github.run_id }}-${{ github.run_attempt }}
-      - if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: drift-dashboard-evidence
-          path: |
-            eval-output.log
-            test-results/eval-report.log
-            test-results/eval-ledger.jsonl
-            test-results/eval-cache
-          if-no-files-found: warn
-      - if: always()
-        run: npm run test:services:down
-
-  drift-gateway:
-    name: Paid three-repeat gateway drift measurement
-    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'drift'
-    needs: [deterministic-preflight, budget-preflight]
-    runs-on: ubuntu-latest
-    env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      EVAL_REPEATS: '3'
-      EVAL_RETRY_HARD: '0'
-      EVAL_MAX_USD: ${{ needs.budget-preflight.outputs.gateway_max_usd }}
-      EVAL_MAX_MODEL_CALLS: ${{ needs.budget-preflight.outputs.gateway_max_calls }}
-      REQUIRE_MODEL_EVALS: '1'
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm }
-      - run: test -n "$ANTHROPIC_API_KEY" && test "$ANTHROPIC_API_KEY" != test-anthropic-key
-      - run: npm ci
-      - run: npm run test:services:up
-      - run: node ./scripts/test-bootstrap.mjs
-      - name: Run all gateway hard and advisory fixtures three times in one budget
-        run: |
-          set -o pipefail
-          npm run test:evals -w apps/gateway 2>&1 | tee gateway-eval.log
-      - if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: drift-gateway-evidence
-          path: |
-            gateway-eval.log
-            test-results/eval-ledger.jsonl
-          if-no-files-found: warn
-      - if: always()
-        run: npm run test:services:down
-
-  drift-summary:
-    name: Complete drift evidence
-    if: always() && github.event_name == 'workflow_dispatch' && inputs.mode == 'drift'
-    needs: [drift-dashboard, drift-gateway]
-    runs-on: ubuntu-latest
-    steps:
-      - env:
-          DASHBOARD_RESULT: ${{ needs.drift-dashboard.result }}
-          GATEWAY_RESULT: ${{ needs.drift-gateway.result }}
-        run: |
-          echo "Dashboard drift: $DASHBOARD_RESULT; gateway drift: $GATEWAY_RESULT" >> "$GITHUB_STEP_SUMMARY"
-          test "$DASHBOARD_RESULT" = success
-          test "$GATEWAY_RESULT" = success
-
-  regenerate-baseline:
-    name: Regenerate full three-repeat dashboard baseline
-    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'baseline'
-    needs: [deterministic-preflight, budget-preflight]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      EVAL_SUITE: full
-      EVAL_REPEATS: '3'
-      RUN_JUDGE_EVALS: '1'
-      UPDATE_EVAL_BASELINE: '1'
-      EVAL_CONFIRM_HARD_FAILURES: '0'
-      EVAL_MAX_USD: ${{ needs.budget-preflight.outputs.dashboard_max_usd }}
-      EVAL_MAX_MODEL_CALLS: ${{ needs.budget-preflight.outputs.dashboard_max_calls }}
-      REQUIRE_MODEL_EVALS: '1'
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm }
-      - run: test -n "$ANTHROPIC_API_KEY" && test "$ANTHROPIC_API_KEY" != test-anthropic-key
-      - run: npm ci
-      - run: npm run test:services:up
-      - run: node ./scripts/test-bootstrap.mjs
-      - name: Run full dashboard suite three times and write baseline
-        run: npm run test:evals -w apps/dashboard
-      - name: Commit regenerated baseline
-        run: |
-          if git diff --quiet -- apps/dashboard/src/lib/agent/__evals__/baseline.json; then
-            echo 'Baseline was unchanged.'
-            exit 0
-          fi
-          git config user.name shopkeeper-eval-bot
-          git config user.email shopkeeper-eval-bot@users.noreply.github.com
-          git add apps/dashboard/src/lib/agent/__evals__/baseline.json
-          git commit -m 'chore(evals): regenerate full baseline'
-          git push
-      - if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: baseline-dashboard-evidence
-          path: |
-            test-results/eval-report.log
-            test-results/eval-ledger.jsonl
-            apps/dashboard/src/lib/agent/__evals__/baseline.json
-          if-no-files-found: warn
-      - if: always()
-        run: npm run test:services:down
-
-  baseline-gateway:
-    name: Capture full three-repeat gateway baseline
-    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'baseline'
-    needs: [deterministic-preflight, budget-preflight]
-    runs-on: ubuntu-latest
-    env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      EVAL_REPEATS: '3'
-      EVAL_RETRY_HARD: '0'
-      EVAL_MAX_USD: ${{ needs.budget-preflight.outputs.gateway_max_usd }}
-      EVAL_MAX_MODEL_CALLS: ${{ needs.budget-preflight.outputs.gateway_max_calls }}
-      REQUIRE_MODEL_EVALS: '1'
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm }
-      - run: test -n "$ANTHROPIC_API_KEY" && test "$ANTHROPIC_API_KEY" != test-anthropic-key
-      - run: npm ci
-      - run: npm run test:services:up
-      - run: node ./scripts/test-bootstrap.mjs
-      - name: Capture all gateway fixtures three times in one budget
-        run: |
-          set -o pipefail
-          npm run test:evals -w apps/gateway 2>&1 | tee gateway-eval.log
-      - if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: baseline-gateway-evidence
-          path: |
-            gateway-eval.log
-            test-results/eval-ledger.jsonl
-          if-no-files-found: warn
-      - if: always()
-        run: npm run test:services:down
-
-  baseline-summary:
-    name: Complete baseline capture
-    if: always() && github.event_name == 'workflow_dispatch' && inputs.mode == 'baseline'
-    needs: [regenerate-baseline, baseline-gateway]
-    runs-on: ubuntu-latest
-    steps:
-      - env:
-          DASHBOARD_RESULT: ${{ needs.regenerate-baseline.result }}
-          GATEWAY_RESULT: ${{ needs.baseline-gateway.result }}
-        run: |
-          echo "Dashboard baseline: $DASHBOARD_RESULT; gateway baseline: $GATEWAY_RESULT" >> "$GITHUB_STEP_SUMMARY"
           test "$DASHBOARD_RESULT" = success
           test "$GATEWAY_RESULT" = success

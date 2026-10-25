@@ -155,36 +155,3 @@ export function formatUsageBreakdown(summaries: readonly FixtureRunSummary[]): s
   ].join("\n")
 }
 
-function promptTokens(phase: PhaseUsage): number {
-  return phase.inputTokens + phase.cacheCreationInputTokens + phase.cacheReadInputTokens
-}
-
-function deltaLine(
-  label: string,
-  current: { phase: PhaseUsage; runs: number },
-  baseline: { phase: PhaseUsage; runs: number },
-): string {
-  const perRun = (value: number, runs: number) => (runs > 0 ? value / runs : 0)
-  const part = (name: string, read: (phase: PhaseUsage) => number) => {
-    const now = perRun(read(current.phase), current.runs)
-    const before = perRun(read(baseline.phase), baseline.runs)
-    const pct = before > 0 ? ((now - before) / before) * 100 : 0
-    const sign = pct >= 0 ? "+" : ""
-    return `${name}/run ${now.toFixed(0)} vs ${before.toFixed(0)} (${sign}${pct.toFixed(1)}%)`
-  }
-  return `  ${label.padEnd(8)} ${part("out", phase => phase.outputTokens)}  ${part("prompt", promptTokens)}`
-}
-
-/**
- * Per-run token movement against the committed baseline.
- *
- * Output tokens are the line to read for a thinking change — thinking bills as
- * output — and prompt tokens for anything touching context or tool schemas.
- */
-export function formatUsageDelta(current: BaselineUsage, baseline: BaselineUsage): string {
-  return [
-    `[eval:usage-delta] per-run tokens vs baseline (${current.runs} runs vs ${baseline.runs}):`,
-    deltaLine("planner", { phase: current.planner, runs: current.runs }, { phase: baseline.planner, runs: baseline.runs }),
-    deltaLine("run", { phase: current.run, runs: current.runs }, { phase: baseline.run, runs: baseline.runs }),
-  ].join("\n")
-}

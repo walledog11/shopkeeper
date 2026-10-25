@@ -2,7 +2,6 @@
   "id": "order-status-product-search-unavailable",
   "description": "A customer asks whether an order has shipped and whether a product comes in another colour. The product lookup fails, but the order is already in context, so the agent answers the order question and is honest that it could not check the product.",
   "whyModelNeeded": "The model must continue with the part of a request it can answer when an unrelated lookup fails, and state that uncertainty without inventing availability.",
-  "holdout": "C10",
   "setup": {
     "classifierIntents": {
       "order_status": true

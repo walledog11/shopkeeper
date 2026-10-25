@@ -2,7 +2,6 @@
   "id": "continuity-two-black-variants",
   "description": "The agent offered two black options for an exchange, and the customer answers 'the black one'. Both offered variants are black, so the agent must ask which one rather than pick.",
   "whyModelNeeded": "The model must notice that a natural reference matches two consequential options and ask one focused question instead of choosing.",
-  "holdout": "C05",
   "setup": {
     "classifierIntents": {
       "mutative_request": true

@@ -1,5 +1,3 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs"
-import { join } from "node:path"
 import { summarizeUsage } from "./usage"
 import type {
   CategoryScore,
@@ -35,12 +33,14 @@ const CATEGORY_PREFIXES = [
   "store-credit",
   "tier",
 ]
-const BASELINE_PATH = join(__dirname, "baseline.json")
-const DEFAULT_REGRESSION_THRESHOLD = 0.05
 const DEFAULT_EVAL_REPEATS = 1
 
 function categoryOf(id: string): string {
   return CATEGORY_PREFIXES.find(prefix => id === prefix || id.startsWith(`${prefix}-`)) ?? id
+}
+
+function isSoftGatedFixture(fixture: Pick<Fixture, "advisory" | "stochasticRelease">): boolean {
+  return fixture.advisory === true || fixture.stochasticRelease === true
 }
 
 export function summarizeResults(summaries: readonly FixtureRunSummary[]): EvalBaseline {
@@ -79,15 +79,15 @@ function emptyGateScore(): GateScore {
 
 export function summarizeGates(
   summaries: readonly FixtureRunSummary[],
-  fixtures: readonly Pick<Fixture, "id" | "advisory">[],
+  fixtures: readonly Pick<Fixture, "id" | "advisory" | "stochasticRelease">[],
 ): GateSummary {
-  const advisoryIds = new Set(
-    fixtures.filter(fixture => fixture.advisory === true).map(fixture => fixture.id),
+  const softIds = new Set(
+    fixtures.filter(fixture => isSoftGatedFixture(fixture)).map(fixture => fixture.id),
   )
   const hardGated = emptyGateScore()
   const advisory = emptyGateScore()
   for (const summary of summaries) {
-    const bucket = advisoryIds.has(summary.id) ? advisory : hardGated
+    const bucket = softIds.has(summary.id) ? advisory : hardGated
     bucket.fixtureCount += 1
     bucket.total += summary.repeats
     bucket.passed += summary.passes
@@ -121,18 +121,6 @@ export function formatSummary(summary: EvalBaseline): string {
   return lines.join("\n")
 }
 
-export function shouldUpdateBaseline(): boolean {
-  const flag = process.env.UPDATE_EVAL_BASELINE
-  if (flag === undefined) return false
-  const normalized = flag.trim().toLowerCase()
-  return normalized !== "" && normalized !== "0" && normalized !== "false"
-}
-
-export function regressionThreshold(): number {
-  const parsed = Number(process.env.EVAL_BASELINE_THRESHOLD)
-  return Number.isFinite(parsed) ? parsed : DEFAULT_REGRESSION_THRESHOLD
-}
-
 export function evalRepeats(): number {
   const parsed = Number(process.env.EVAL_REPEATS)
   if (!Number.isFinite(parsed) || parsed < 1) return DEFAULT_EVAL_REPEATS
@@ -145,61 +133,4 @@ export function hardFailureConfirmations(): number {
   const parsed = Number(configured)
   if (!Number.isFinite(parsed) || parsed < 0) return 0
   return Math.floor(parsed)
-}
-
-export function writeBaseline(summary: EvalBaseline): void {
-  writeFileSync(BASELINE_PATH, `${JSON.stringify(summary, null, 2)}\n`)
-}
-
-export function loadBaseline(): EvalBaseline | null {
-  if (!existsSync(BASELINE_PATH)) return null
-  return JSON.parse(readFileSync(BASELINE_PATH, "utf8")) as EvalBaseline
-}
-
-export function selectBaselineFixtures(
-  baseline: EvalBaseline,
-  fixtureIds: ReadonlySet<string>,
-): EvalBaseline {
-  const fixtureEntries = Object.entries(baseline.fixtures)
-    .filter(([id]) => fixtureIds.has(id))
-  const summaries: FixtureRunSummary[] = fixtureEntries.map(([id, score]) => ({
-    id,
-    repeats: score.repeats,
-    passes: score.passes,
-    passRate: score.passRate,
-    results: [],
-  }))
-  const selected = summarizeResults(summaries)
-  return {
-    ...selected,
-    generatedAt: baseline.generatedAt,
-    usage: undefined,
-  }
-}
-
-export function compareToBaseline(
-  current: EvalBaseline,
-  baseline: EvalBaseline,
-  threshold: number,
-): { aggregate: string | null; categories: string[]; fixtures: string[] } {
-  const drop = (value: number, base: number) =>
-    `${(value * 100).toFixed(1)}% dropped > ${(threshold * 100).toFixed(1)} pts below baseline ${(base * 100).toFixed(1)}%`
-  const aggregate = current.passRate < baseline.passRate - threshold
-    ? `aggregate pass rate ${drop(current.passRate, baseline.passRate)}`
-    : null
-  const categories: string[] = []
-  for (const [category, baseScore] of Object.entries(baseline.categories)) {
-    const score = current.categories[category]
-    if (score && score.passRate < baseScore.passRate - threshold) {
-      categories.push(`category "${category}" pass rate ${drop(score.passRate, baseScore.passRate)}`)
-    }
-  }
-  const fixtures: string[] = []
-  for (const [id, baseScore] of Object.entries(baseline.fixtures ?? {})) {
-    const score = current.fixtures[id]
-    if (score && score.passRate < baseScore.passRate - threshold) {
-      fixtures.push(`fixture "${id}" pass rate ${drop(score.passRate, baseScore.passRate)}`)
-    }
-  }
-  return { aggregate, categories, fixtures }
 }

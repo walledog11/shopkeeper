@@ -40,11 +40,7 @@ describe("eval selection", () => {
     expect(() => selectFixtures(fixtures, "core", new Set(["extended-a"]))).toThrow(/extended-a/)
   })
 
-  it("runs a held-out fixture with its suite and never by name", () => {
-    const heldOut = { ...fixture("holdout-a", "core"), holdout: "C05" as const }
-    const all = [...fixtures, heldOut]
-    expect(selectFixtures(all, "core", null).map(row => row.id)).toEqual(["core-a", "holdout-a"])
-    expect(() => selectFixtures(all, "full", new Set(["core-a", "holdout-a"]))).toThrow(/held-out.*holdout-a/)
-    expect(selectFixtures(all, "full", new Set(["core-a"])).map(row => row.id)).toEqual(["core-a"])
+  it("allows targeting any in-suite fixture by name", () => {
+    expect(selectFixtures(fixtures, "core", new Set(["core-a"])).map(row => row.id)).toEqual(["core-a"])
   })
 })

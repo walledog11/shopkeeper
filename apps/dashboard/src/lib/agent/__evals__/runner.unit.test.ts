@@ -13,11 +13,9 @@ import {
   countDiscoveryCalls,
   formatGateSummary,
   formatTaskSummary,
-  formatUsageDelta,
   hardFailureConfirmations,
   installSimulatedShopifyRest,
   mutativeIntentActionFailures,
-  selectBaselineFixtures,
   shouldVerifyExpectedActions,
   summarizeGates,
   summarizeResults,
@@ -29,22 +27,24 @@ describe("summarizeGates", () => {
     { id: "hard-a", repeats: 3, passes: 3, passRate: 1, results: [] },
     { id: "hard-b", repeats: 3, passes: 1, passRate: 1 / 3, results: [] },
     { id: "soft-a", repeats: 3, passes: 0, passRate: 0, results: [] },
+    { id: "stoch-a", repeats: 3, passes: 2, passRate: 2 / 3, results: [] },
   ];
   const fixtures = [
     { id: "hard-a", advisory: false as const },
     { id: "hard-b" },
     { id: "soft-a", advisory: true as const },
+    { id: "stoch-a", stochasticRelease: true as const },
   ];
 
   it("splits run-weighted pass rates by advisory flag", () => {
     const gates = summarizeGates(summaries, fixtures);
     expect(gates.hardGated).toEqual({ fixtureCount: 2, total: 6, passed: 4, passRate: 4 / 6 });
-    expect(gates.advisory).toEqual({ fixtureCount: 1, total: 3, passed: 0, passRate: 0 });
+    expect(gates.advisory).toEqual({ fixtureCount: 2, total: 6, passed: 2, passRate: 2 / 6 });
   });
 
   it("formats a CI-parseable gate summary line", () => {
     const line = formatGateSummary(summarizeGates(summaries, fixtures));
-    expect(line).toBe("[eval:gates] hard-gated 4/6 (66.7%) | advisory 0/3 (0.0%)");
+    expect(line).toBe("[eval:gates] hard-gated 4/6 (66.7%) | advisory 2/6 (33.3%)");
   });
 });
 
@@ -61,43 +61,6 @@ describe("release gate controls", () => {
     else process.env.EVAL_RETRY_HARD = previousRetry;
   });
 
-  it("projects a mixed baseline onto hard-gated fixture IDs", () => {
-    const baseline = summarizeResults([
-      { id: "hard-a", repeats: 3, passes: 3, passRate: 1, results: [] },
-      { id: "soft-a", repeats: 3, passes: 0, passRate: 0, results: [] },
-    ]) as EvalBaseline;
-    const hard = selectBaselineFixtures(baseline, new Set(["hard-a"]));
-    expect(hard).toMatchObject({ total: 3, passed: 3, passRate: 1 });
-    expect(hard.fixtures).toEqual({ "hard-a": { repeats: 3, passes: 3, passRate: 1 } });
-  });
-});
-
-describe("formatUsageDelta", () => {
-  const phase = (outputTokens: number, inputTokens: number): PhaseUsage => ({
-    outputTokens,
-    inputTokens,
-    cacheReadInputTokens: 0,
-    cacheCreationInputTokens: 0,
-  });
-
-  it("normalizes per run so a different fixture count still compares", () => {
-    // 4000 output over 4 runs vs 4000 over 2: same totals, half the cost per run.
-    // Comparing totals here would report no change at all.
-    const line = formatUsageDelta(
-      { runs: 4, planner: phase(4000, 1000), run: phase(0, 0), judge: phase(0, 0) },
-      { runs: 2, planner: phase(4000, 1000), run: phase(0, 0), judge: phase(0, 0) },
-    );
-    expect(line).toContain("out/run 1000 vs 2000 (-50.0%)");
-    expect(line).toContain("prompt/run 250 vs 500 (-50.0%)");
-  });
-
-  it("signs an increase", () => {
-    const line = formatUsageDelta(
-      { runs: 1, planner: phase(150, 0), run: phase(0, 0), judge: phase(0, 0) },
-      { runs: 1, planner: phase(100, 0), run: phase(0, 0), judge: phase(0, 0) },
-    );
-    expect(line).toContain("out/run 150 vs 100 (+50.0%)");
-  });
 });
 
 describe("task measures", () => {

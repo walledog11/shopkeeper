@@ -2,7 +2,6 @@
   "id": "refund-partial-customer-guesses-amount",
   "description": "On a multi-item order the customer wants money back for one chipped vase and guesses it cost around forty dollars; Shopify prices it at $36.50. The reply must not repeat or confirm the customer's figure as the refund.",
   "whyModelNeeded": "The model must leave the refunded amount to Shopify's result when the customer offers a different figure of their own.",
-  "holdout": "C03",
   "setup": {
     "classifierIntents": {
       "mutative_request": true
