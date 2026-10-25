@@ -54,9 +54,9 @@ describe("validateFixtures", () => {
   })
 
   it("requires a held-out fixture to name a model-scored case and gate the release", () => {
-    expect(() => validateFixtures([fixture({ holdout: "C05" })])).not.toThrow()
-    expect(() => validateFixtures([fixture({ holdout: "C04" as never })])).toThrow(/model-scored manifest case/)
-    expect(() => validateFixtures([fixture({ holdout: "C05", suite: "extended" })])).toThrow(/hard core fixture/)
+    expect(() => validateFixtures([fixture({ stochasticRelease: true })])).not.toThrow()
+    expect(() => validateFixtures([fixture({ stochasticRelease: true, suite: "extended" })])).toThrow(/stochasticRelease/)
+    expect(() => validateFixtures([fixture({ stochasticRelease: true, advisory: true })])).toThrow(/stochasticRelease cannot combine/)
   })
 
   it("rejects missing required setup fields and invalid enums", () => {

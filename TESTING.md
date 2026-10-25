@@ -67,16 +67,18 @@ Unit tests must not need Postgres, Redis, Playwright, provider credentials or ne
 ## Agent evals (paid — run only when asked)
 
 The live-model harness is `apps/dashboard/src/lib/agent/__evals__`: JSON fixtures, a
-committed `baseline.json`, and a judge. Eval test files are swept into integration runs
-but skip unless `EVAL_RUN=1` or `REQUIRE_MODEL_EVALS=1`, so ordinary runs never bill.
-Pull requests run only a free deterministic preflight. A second paid suite, the order-ops
-eval (`apps/gateway/src/order-ops.eval.test.ts`, `npm run test:evals -w apps/gateway`),
-follows the same skip and ceiling rules.
+judge, and `recorded-stochastic-core-fixtures.json` for the two core cases that stay
+off the hard release gate. Free checks live in `harness.integration.test.ts`; paid cases
+in `index.test.ts`. Both skip unless `EVAL_RUN=1` or `REQUIRE_MODEL_EVALS=1`, so ordinary
+runs never bill. Path-triggered pushes run only the free deterministic preflight in
+`evals.yml`. A second paid suite, the order-ops eval
+(`apps/gateway/src/order-ops.eval.test.ts`, `npm run test:evals -w apps/gateway`), follows
+the same skip and ceiling rules.
 
 Each suite has one paid command, `test:evals`, and it refuses to start without both
 ceilings, `EVAL_MAX_USD` and `EVAL_MAX_MODEL_CALLS`; the call cap is the strict backstop.
-The canonical paid run is a manual dispatch of `evals.yml` (modes `release`, `targeted`,
-`drift`, `baseline`), which sizes both suites' ceilings before any model call:
+The canonical paid run is a manual dispatch of `evals.yml` (`release` or `targeted`),
+which sizes both suites' ceilings before any model call:
 
 ```sh
 gh workflow run evals.yml -f mode=release -f max_usd=0.90 -f max_model_calls=120
@@ -89,8 +91,9 @@ EVAL_MAX_USD=0.10 EVAL_MAX_MODEL_CALLS=20 EVAL_FIXTURE=refund-partial \
   npm run test:evals -w apps/dashboard
 ```
 
-Scope comes from env: `EVAL_FIXTURE`, `EVAL_SUITE` (`core`/`full`), `EVAL_REPEATS`,
-`RUN_JUDGE_EVALS=1`, and `UPDATE_EVAL_BASELINE=1` to rewrite `baseline.json`.
+Scope comes from env: `EVAL_FIXTURE`, `EVAL_SUITE` (`core`/`full`), `EVAL_REPEATS`, and
+`RUN_JUDGE_EVALS=1`. Paid budget sizing reads `eval-budget-evidence.json`, not a full
+pass-rate baseline.
 
 The test database must be up: with Postgres down every fixture fails before any model
 call (`calls=0`). Evals cannot see the Shopify layer — every Shopify tool result is

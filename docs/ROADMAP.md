@@ -65,9 +65,6 @@ Last updated: 2026-10-18.
      every customer message without an approved draft, and the refusal above goes.
    - Retire `AutonomyShadowDecision` and cache version 6; make the retirement audits
      measure what they license; decide whether `RequestEpisodeOutcome` earns its keep.
-   - Trim the test meta-layer: record the two failing core fixtures, drop the holdout
-     mechanism, stale baseline and duplicate preflight job, and run integration through
-     turbo with `--concurrency=1`.
 
 ## Next — the first real merchant
 

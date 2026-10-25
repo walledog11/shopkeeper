@@ -2,7 +2,6 @@
   "id": "order-status-spanish-brand-voice",
   "description": "A customer asks in Spanish where their order is. The shop's brand voice asks for first names, very short replies and a named sign-off. The agent answers from the order already in context, in Spanish, in that voice.",
   "whyModelNeeded": "The model must keep the same facts and authority as the routine order-status answer while writing in the customer's language under the merchant's voice.",
-  "holdout": "C11",
   "setup": {
     "classifierIntents": {
       "order_status": true

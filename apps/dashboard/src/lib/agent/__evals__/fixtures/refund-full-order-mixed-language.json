@@ -2,7 +2,6 @@
   "id": "refund-full-order-mixed-language",
   "description": "A customer writing half in Spanish asks for a full refund on an order that arrived broken and declines a replacement. The agent requests the refund while Shopify supplies the amount and currency.",
   "whyModelNeeded": "The model must recognise an explicit refund request across two languages and target the right order without calculating money.",
-  "holdout": "C02",
   "setup": {
     "classifierIntents": {
       "mutative_request": true

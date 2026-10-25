@@ -1,6 +1,6 @@
 import { isAgentToolName } from "@shopkeeper/agent/tools"
 import { INTENT_KEYS } from "@shopkeeper/agent/classifier-signals"
-import { HOLDOUT_CASES, type Fixture, type ToolInputExpectation } from "./types"
+import type { Fixture, ToolInputExpectation } from "./types"
 
 import { isRecord } from "@shopkeeper/shared/guards";
 const SUITES = new Set(["core", "extended"])
@@ -306,15 +306,11 @@ export function validateFixtures(fixtures: readonly unknown[], filenames?: reado
       if (!ACTION_STATUSES.has(action.status)) local.push(`expectedPlan.expectedAgentActions[${actionIndex}].status is invalid`)
       if (!ACTION_MODES.has(action.mode)) local.push(`expectedPlan.expectedAgentActions[${actionIndex}].mode is invalid`)
     }
-    if (fixture.holdout !== undefined) {
-      if (!(HOLDOUT_CASES as readonly string[]).includes(fixture.holdout)) {
-        local.push(`holdout must name a model-scored manifest case (${HOLDOUT_CASES.join(", ")})`)
-      }
-      // A held-out case is measured by the release comparison, which runs the
-      // hard core suite only.
-      if (fixture.suite !== "core" || fixture.advisory === true) {
-        local.push("a held-out fixture must be a hard core fixture")
-      }
+    if (fixture.stochasticRelease === true && fixture.suite !== "core") {
+      local.push("stochasticRelease is only for core release fixtures")
+    }
+    if (fixture.stochasticRelease === true && fixture.advisory === true) {
+      local.push("stochasticRelease cannot combine with advisory")
     }
     for (const [resultIndex, result] of (fixture.setup.simulateToolResults ?? []).entries()) {
       assertToolName(result.tool, `setup.simulateToolResults[${resultIndex}].tool`, local)

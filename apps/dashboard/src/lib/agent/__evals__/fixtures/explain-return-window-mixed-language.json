@@ -2,7 +2,6 @@
   "id": "explain-return-window-mixed-language",
   "description": "A customer who has not decided whether to keep a delivered lamp asks, half in Spanish, how long they would have to return it. The agent answers from the returns article and starts nothing.",
   "whyModelNeeded": "The model must read a conditional, mixed-language question as a request for information, not as a return request.",
-  "holdout": "C02",
   "setup": {
     "classifierIntents": {
       "policy_question": true

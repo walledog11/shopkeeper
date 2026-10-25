@@ -33,25 +33,18 @@ import type {
 } from "./types"
 
 export {
-  compareToBaseline,
   evalRepeats,
   formatGateSummary,
   formatSummary,
   hardFailureConfirmations,
-  loadBaseline,
-  regressionThreshold,
-  selectBaselineFixtures,
-  shouldUpdateBaseline,
   summarizeGates,
   summarizeResults,
-  writeBaseline,
 } from "./baseline"
 export { mutativeIntentActionFailures } from "./assertions"
 export {
   formatModelUsageBreakdown,
   formatTaskSummary,
   formatUsageBreakdown,
-  formatUsageDelta,
   probeSystemPromptCacheRead,
 } from "./usage"
 

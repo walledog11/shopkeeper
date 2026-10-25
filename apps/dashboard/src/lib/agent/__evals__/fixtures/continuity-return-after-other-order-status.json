@@ -2,7 +2,6 @@
   "id": "continuity-return-after-other-order-status",
   "description": "A customer starts a return on one order, breaks off to ask whether a different order has shipped, then says 'go ahead with the lamp one'. The agent should open the return for the lamp on the first order and not act on the second.",
   "whyModelNeeded": "The model must resume the unfinished task across an interleaved question about another order and keep the two orders apart.",
-  "holdout": "C06",
   "setup": {
     "classifierIntents": {
       "mutative_request": true

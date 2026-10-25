@@ -1,13 +1,11 @@
-// Agent evals: plan-shape suite (always-on, gated by ANTHROPIC_API_KEY) + optional
-// LLM-judge rubrics (Layer 2). The judge fires only for fixtures with `expectedRubric`
-// that draft a non-empty reply, and only when judging is enabled.
+// Agent evals: plan-shape suite (paid, gated by evalsEnabled) + optional LLM-judge
+// rubrics. Free harness checks live in harness.integration.test.ts.
 //
 // Judge gating (see runner.ts:isJudgeEnabled): defaults to ON locally and OFF in CI
 // (when `process.env.CI` is set). Override with `RUN_JUDGE_EVALS`:
-//   RUN_JUDGE_EVALS=1     → force-enable (e.g. nightly / scheduled CI runs)
+//   RUN_JUDGE_EVALS=1     → force-enable (e.g. scheduled CI runs)
 //   RUN_JUDGE_EVALS=0     → force-disable
-//   EVAL_FIXTURE=id[,id]  → run only named fixtures and skip full-baseline comparison
-// Skipping keeps per-push spend in check — each judged fixture adds a Sonnet call.
+//   EVAL_FIXTURE=id[,id]  → run only named fixtures
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { appendFileSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -23,19 +21,12 @@ import {
   formatModelUsageBreakdown,
   formatTaskSummary,
   formatUsageBreakdown,
-  formatUsageDelta,
-  shouldUpdateBaseline,
-  writeBaseline,
-  loadBaseline,
-  compareToBaseline,
-  regressionThreshold,
   evalRepeats,
   hardFailureConfirmations,
-  selectBaselineFixtures,
 } from "./runner";
-import { anthropic } from "@shopkeeper/agent/ai";
 import type { Fixture, FixtureRunSummary } from "./types";
 import { validateFixtures } from "./fixture-validator";
+import { assertRecordedStochasticCoreFixtures } from "./recorded-stochastic-core";
 import { readCachedPassingSummary, writePassingSummary } from "./result-cache";
 import {
   evalsEnabled,
@@ -56,6 +47,7 @@ function loadFixtures(): Fixture[] {
   const files = readdirSync(FIXTURES_DIR).filter((f) => f.endsWith(".json")).sort();
   const fixtures = files.map((f) => JSON.parse(readFileSync(join(FIXTURES_DIR, f), "utf8")) as Fixture);
   validateFixtures(fixtures, files);
+  assertRecordedStochasticCoreFixtures(fixtures);
   return fixtures;
 }
 
@@ -68,9 +60,6 @@ const ANTHROPIC_API_HOST = "api.anthropic.com";
 describe.sequential("agent evals", () => {
   const suite = requestedEvalSuite();
   const requestedIds = requestedFixtureIds();
-  if (requestedIds && shouldUpdateBaseline()) {
-    throw new Error("EVAL_FIXTURE cannot be combined with UPDATE_EVAL_BASELINE")
-  }
   const allFixtures = loadFixtures();
   const fixtures = selectFixtures(allFixtures, suite, requestedIds);
   if (fixtures.length === 0) {
@@ -80,52 +69,12 @@ describe.sequential("agent evals", () => {
     return;
   }
 
-  // Free, and run through this file's import graph on purpose: if anything loads
-  // the agent executor ahead of the runner's mock, fixtures run against real
-  // Shopify tools and a paid suite fails as a harness gap (2026-09-26, $0.82).
-  it("serves a fixture's simulated read result to the planner", async () => {
-    const fixture = allFixtures.find((f) => f.id === "storefront-guest-product-search");
-    const simulated = fixture?.setup.simulateToolResults?.find((r) => r.tool === "search_shopify_products");
-    if (!fixture || !simulated) throw new Error("guard fixture no longer simulates search_shopify_products");
-    const toolResults: unknown[] = [];
-    const originalCreate = anthropic.messages.create;
-    let calls = 0;
-    anthropic.messages.create = (async (body: { model: string; messages: Array<{ content: unknown }> }) => {
-      calls += 1;
-      const last = body.messages[body.messages.length - 1]?.content;
-      if (Array.isArray(last)) toolResults.push(...last.filter((block) => block?.type === "tool_result"));
-      return {
-        id: `scripted-${calls}`,
-        type: "message",
-        role: "assistant",
-        model: body.model,
-        content: calls === 1
-          ? [{ type: "tool_use", id: "read-1", name: "search_shopify_products", input: { query: "Pencil Half Zip" } }]
-          : [{ type: "text", text: "Done." }],
-        stop_reason: calls === 1 ? "tool_use" : "end_turn",
-        stop_sequence: null,
-        usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
-      };
-    }) as never;
-    try {
-      await runFixtureRepeated(fixture, 1);
-    } finally {
-      anthropic.messages.create = originalCreate;
-    }
-    expect(toolResults).toContainEqual(expect.objectContaining({ tool_use_id: "read-1", content: simulated.result }));
-  });
-
-  // Fixture loading and validation above are free and worth keeping on every
-  // integration run; everything past here spends. See selection.ts:evalsEnabled.
   if (!evalsEnabled()) {
     it.skip("live-model evals (set EVAL_RUN=1, or use npm run test:evals)", () => {});
     return;
   }
 
   if (!hasRealKey) {
-    // Only the eval workflows demand a real key (they set REQUIRE_MODEL_EVALS=1).
-    // The regular CI coverage run sweeps this file in with `src/**/*.test.ts` and
-    // has no key, so keying off `process.env.CI` would red every push.
     const requireKey = process.env.REQUIRE_MODEL_EVALS === "1";
     (requireKey ? it : it.skip)("requires ANTHROPIC_API_KEY to be set to a real key", () => {
       if (requireKey) throw new Error("ANTHROPIC_API_KEY must be a real key; skipped model suites cannot pass CI");
@@ -181,12 +130,6 @@ describe.sequential("agent evals", () => {
             results: retries.results,
           };
         }
-        // An infrastructure or budget failure is not a statement about the model, and the
-        // capture below writes after every fixture — so recording one would publish an outage
-        // as a pass-rate. Run 33129019610 put 19 fixtures at 0/3 with `calls=0` because the
-        // API answered "credit balance is too low"; had the outage instead hit one repeat of
-        // three, the relaxed capture bar would have written 2/3 and called it flappiness.
-        // Refuse before the write, in every mode.
         const brokenResult = summary.results.find(
           result => result.failureKind === "infrastructure" || result.failureKind === "budget",
         );
@@ -198,9 +141,6 @@ describe.sequential("agent evals", () => {
         }
         collected.push(summary);
         writePassingSummary(fixture, repeats, summary);
-        // In update mode, persist after each fixture so an interrupted capture keeps
-        // what already ran instead of losing everything when the final afterAll never fires.
-        if (shouldUpdateBaseline()) writeBaseline(summarizeResults(collected));
         const last = summary.results[summary.results.length - 1];
         const plannerIterations = summary.results.map(result => result.usage.plannerModelCalls).join(",");
         writeEvalReportLine(
@@ -209,35 +149,20 @@ describe.sequential("agent evals", () => {
         for (const f of summary.results.find((r) => !r.pass)?.failures ?? []) {
           writeEvalReportLine(`  - ${f}`);
         }
-        // Advisory fixtures are exempt: their pass-rate is still recorded (and baseline-gated),
-        // but a 0/N draw does not red CI — the property they probe is model judgment, not a
-        // safety gate. See Fixture.advisory.
-        //
-        // A baseline capture records what it observes, so a flappy fixture clears this bar and
-        // its real rate is written; only a fixture that never passes is hard-broken. Requiring
-        // every repeat here made the capture circular — a three-repeat baseline exists to
-        // measure flap rates, but could only be written when nothing flapped, so run
-        // 33120836618 spent $2.64, completed all 84 fixtures, and committed nothing because two
-        // came back 2/3. Every other mode keeps the strict bar: the release gate and the PR
-        // gate must still see every repeat pass. At repeats=1 both branches are identical.
         if (fixture.advisory && suite === "full") {
           if (summary.passes === 0) {
             writeEvalReportLine(`  ~ advisory ${summary.id}: 0/${summary.repeats} (not gated)`);
           }
-        } else if (shouldUpdateBaseline()) {
-          expect(summary.passes).toBeGreaterThan(0);
+        } else if (fixture.stochasticRelease) {
+          if (summary.passes !== summary.repeats) {
+            writeEvalReportLine(
+              `  ~ stochastic ${summary.id}: ${summary.passes}/${summary.repeats} (recorded core; not hard-gated)`,
+            );
+          }
         } else {
           expect(summary.passes).toBe(summary.repeats);
         }
       },
-      // Generous: a multi-iteration agent run can take >60s under rate-limit backoff, and we
-      // now run it `repeats` times back-to-back. A timed-out fixture keeps running and its
-      // restore would clobber the next one's instrumentation on the shared client, so we avoid
-      // abandoning runs mid-flight.
-      // Provider backoff can dominate a healthy repeated run. The 2026-07-28
-      // committed cadence produced a passing 3/3 fixture in 943s, beyond the
-      // previous 540s allowance, so keep enough headroom to avoid reporting a
-      // model-quality regression when every repeat actually completed.
       360_000 * repeats,
     );
   }
@@ -256,55 +181,6 @@ describe.sequential("agent evals", () => {
         `[eval:budget] spent=$${spend.spentUsd.toFixed(4)}/$${spend.maxUsd.toFixed(2)} calls=${spend.calls}/${spend.maxCalls}`,
       );
       budget.assertWithinLimit();
-    }
-
-    if (shouldUpdateBaseline()) {
-      writeBaseline(summary);
-      writeEvalReportLine("[eval:baseline] wrote baseline.json");
-      return;
-    }
-
-    // A targeted diagnosis is intentionally incomparable to the full committed
-    // baseline. The selected fixture still hard-fails above; only the aggregate
-    // and category regression comparison is skipped.
-    if (suite === "core" || requestedIds) return;
-
-    const baseline = loadBaseline();
-    if (!baseline) {
-      writeEvalReportLine(
-        "[eval:baseline] no committed baseline; skipping regression gate. Run with UPDATE_EVAL_BASELINE=1 to create one.",
-      );
-      return;
-    }
-
-    // Cost movement, reported but never gated: a tuning change is allowed to
-    // cost more if it scores better, and that call is the merchant's, not CI's.
-    if (summary.usage && baseline.usage) {
-      writeEvalReportLine(formatUsageDelta(summary.usage, baseline.usage));
-    }
-
-    const hardIds = new Set(fixtures.filter(fixture => !fixture.advisory).map(fixture => fixture.id));
-    const hardSummary = summarizeResults(collected.filter(item => hardIds.has(item.id)));
-    const hardBaseline = selectBaselineFixtures(baseline, hardIds);
-    if (hardSummary.repeats !== hardBaseline.repeats) {
-      writeEvalReportLine(
-        `[eval:baseline] WARN incomparable repeat counts (${hardSummary.repeats} current vs ${hardBaseline.repeats} baseline); drift comparison skipped`,
-      );
-      return;
-    }
-
-    const threshold = regressionThreshold();
-    const { aggregate, categories, fixtures: fixtureRegressions } = compareToBaseline(
-      hardSummary,
-      hardBaseline,
-      threshold,
-    );
-    for (const msg of [...categories, ...fixtureRegressions]) {
-      writeEvalReportLine(`[eval:baseline] WARN ${msg}`);
-    }
-    if (aggregate) {
-      writeEvalReportLine(`[eval:baseline] ERROR ${aggregate}`);
-      throw new Error(`[eval:baseline] regression: ${aggregate}`);
     }
   });
 

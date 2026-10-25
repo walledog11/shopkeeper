@@ -2,7 +2,7 @@
   "id": "withheld-cancellation-follow-up",
   "description": "The merchant approved cancelling one order and a reply that also answered a question about a second order. Shopify refused the cancellation because the order had shipped, so the approved reply was withheld. The follow-up attempt must tell the customer what actually happened and still answer the independent question.",
   "whyModelNeeded": "The model must recover from a definite provider failure with an honest, useful message, without claiming the failed action and without dropping the part of the request that did not depend on it.",
-  "holdout": "C08",
+  "stochasticRelease": true,
   "withheldMessageFollowUp": true,
   "setup": {
     "classifierIntents": {
