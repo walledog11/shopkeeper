@@ -1,23 +1,29 @@
 # Website chat
 
 Merchants open **Chat** directly in the main navigation at `/dashboard/chat`.
-The previous integration URL redirects here. The page has an enable switch,
-**Save changes**, and a live preview alongside two tabs:
-
-- **Appearance:** upload or remove a picture, name, color, button style and text,
-  bottom left/right placement, and computers/phones.
-- **Messages:** welcome message, subtitle, and up to six individual suggested
-  questions with add/remove controls.
+The previous integration URL redirects here. The main form contains a picture,
+brand color, and welcome message. **More options** contains the chat name, short
+description, button style and text, placement, devices, and suggested questions.
+Shopify integration settings link here instead of duplicating configuration.
 
 Spacing and picture sizing are automatic. The preview uses the real widget,
-with computer/phone and open-chat/button views. On smaller screens, merchants
-switch between **Edit** and **Preview**. Preview messages never leave the frame.
+with computer/phone views and its working launcher. On smaller screens, merchants
+switch between **Customize** and **Preview**. Preview messages never leave the frame.
+The preview fits both the available width and height; editing appearance preserves
+its conversation, verification inputs, and open/closed state.
 
 Only workspace admins can upload pictures, save settings, or enable chat.
-**Discard** restores saved settings. Saving does not enable the channel; the
-same page provides its enable switch and a link to Shopify's theme editor.
+**Discard** restores saved settings. **Save changes** does not enable the channel;
+**Save and turn on** saves the displayed design before enabling it. A failed save
+leaves chat off. **Finish setup in Shopify** opens the theme editor. Enabled in
+Shopkeeper does not claim that the theme embed is installed or currently visible.
 The platform service, Shopify permissions, and saved theme app embed must be
 ready before chat can appear on a storefront.
+
+Setup checks load separately from the editor. Saves preserve edits made while a
+request is pending. Drafts survive navigation in tab-local session storage scoped
+to the workspace and integration; stale drafts require reloading saved settings
+before publishing. Save, setup, and upload requests have bounded timeouts.
 
 ## Pictures
 
@@ -54,7 +60,8 @@ hidden if configuration cannot be loaded or chat is disabled.
 
 Until the first dashboard save, existing Liquid settings remain the fallback.
 The editor starts with defaults and explains that saving replaces theme settings.
-Saved dashboard settings then apply across themes.
+Saved dashboard settings then apply across themes. Legacy theme fields keep their
+IDs and values but are hidden; the theme editor links to Website chat instead.
 
 ## Shared UI and preview
 
@@ -67,22 +74,25 @@ The authenticated preview route serves the exact extension JavaScript and styles
 in a sandboxed frame. It uses the middleware script nonce and includes the assets
 in Next.js output tracing. Messages, verification, and conversation samples are
 local to the frame: no shopper sessions, AI calls, polling, or verification emails.
-The frame accepts settings only from its parent window. Image and font loads
-are allowed; other network calls are blocked.
+The frame accepts settings only from its parent window. Its startup handshake
+also handles cached frames that load before React. Updates are coalesced per
+animation frame. Fonts load after the preview becomes interactive. Local form
+events are allowed; CSP blocks form navigation and network calls other than images
+and fonts.
 
 ## Verification and release
 
 ```sh
-npm run test:unit -w apps/dashboard -- src/lib/storefront-chat/widget-configuration.unit.test.ts src/lib/storefront-chat/widget-conversation-boundary.unit.test.ts src/proxy/path-access-policy.unit.test.ts
+npm run test:unit -w apps/dashboard -- src/components/storefront-chat/useChatEditor.unit.test.tsx src/lib/storefront-chat/widget-configuration.unit.test.ts src/lib/storefront-chat/widget-conversation-boundary.unit.test.ts src/proxy/path-access-policy.unit.test.ts
 npm run test:integration -w apps/dashboard -- src/app/api/integrations/shopify/storefront-chat/configuration/route.test.ts src/app/api/integrations/shopify/storefront-chat/image/route.test.ts src/app/api/integrations/shopify/storefront-chat/route.test.ts
 npm run typecheck -w apps/dashboard
 npm run build -w apps/dashboard
 ```
 
-Browser checks exercise a real picture upload and public delivery, live preview,
-save/reload, enable/disable, picture removal/discard, questions, placement, device
-visibility, mobile layouts, and the old URL redirect. Current screenshots and
-results are in `artifacts/chat-editor-rework/`.
+The browser regression in `e2e/chat-preview.spec.ts` uses native form submission
+and checks conversation/draft preservation, short desktop windows, and repeated
+phone preview switching. Save/reload, activation, upload, and conflict recovery
+are also covered by the focused suites and browser walkthroughs.
 
 Deploy the dashboard before releasing the Shopify extension; the launcher needs
 the configuration endpoint. Release Liquid, JavaScript, and both CSS assets

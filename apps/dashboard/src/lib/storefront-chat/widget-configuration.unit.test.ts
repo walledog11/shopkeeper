@@ -115,4 +115,50 @@ describe('storefront presentation configuration', () => {
     expect(root.shadowRoot!.querySelector('.panel')!.getAttribute('data-open')).toBe('0');
     expect(document.body.dataset.skScrollLocked).not.toBe('1');
   });
+
+  it('updates a preview in place without losing messages, drafts, or its closed state', () => {
+    const root = document.getElementById('shopkeeper-chat-root')!;
+    delete root.dataset.configUrl;
+    root.dataset.preview = '1';
+    vi.stubGlobal('fetch', vi.fn());
+    window.eval(source);
+    const update = (settings = DEFAULT_CHAT_SETTINGS) => root.dispatchEvent(new CustomEvent('shopkeeper:preview', {
+      detail: { settings, scene: 'welcome' },
+    }));
+    update();
+    const shadow = root.shadowRoot!;
+    const input = shadow.querySelector<HTMLTextAreaElement>('textarea')!;
+    expect(shadow.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(false);
+    input.value = 'A sample question';
+    shadow.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    const message = shadow.querySelector('.msg.me');
+    input.value = 'An unfinished message';
+    update({ ...DEFAULT_CHAT_SETTINGS, greeting: 'Updated welcome', accentColor: '#30694e' });
+    expect(shadow.querySelector('.msg.me')).toBe(message);
+    expect(input.value).toBe('An unfinished message');
+    expect(shadow.querySelector('[data-welcome] .bubble')!.textContent).toBe('Updated welcome');
+    shadow.querySelector<HTMLButtonElement>('.header-close')!.click();
+    update({ ...DEFAULT_CHAT_SETTINGS, title: 'New name' });
+    expect(shadow.querySelector('.panel')!.getAttribute('data-open')).toBe('0');
+    expect(shadow.querySelector('.msg.me')).toBe(message);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('retains an in-progress verification form when changing preview branding', () => {
+    const root = document.getElementById('shopkeeper-chat-root')!;
+    delete root.dataset.configUrl;
+    root.dataset.preview = '1';
+    window.eval(source);
+    const update = (title: string) => root.dispatchEvent(new CustomEvent('shopkeeper:preview', {
+      detail: { settings: { ...DEFAULT_CHAT_SETTINGS, title }, scene: 'welcome' },
+    }));
+    update('Store');
+    const shadow = root.shadowRoot!;
+    shadow.querySelector<HTMLButtonElement>('.verify-open')!.click();
+    const order = shadow.querySelector<HTMLInputElement>('.card input')!;
+    order.value = '#1234';
+    update('Store support');
+    expect(shadow.querySelector('.card input')).toBe(order);
+    expect(order.value).toBe('#1234');
+  });
 });

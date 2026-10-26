@@ -6,6 +6,8 @@ import { EmailNotConfiguredError } from '@shopkeeper/email/types';
 import { getGatewayBaseUrl } from '@/lib/server/gateway-url';
 import { isStorefrontChatGloballyEnabled } from './enabled';
 
+export type StorefrontChatReadiness = Awaited<ReturnType<typeof getStorefrontChatReadiness>>;
+
 function isStorefrontChatServiceConfigured(): boolean {
   try {
     return Boolean(
