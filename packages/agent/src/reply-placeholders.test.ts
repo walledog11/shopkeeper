@@ -222,9 +222,10 @@ describe("customerMoney", () => {
 describe("replyPlaceholderInstructions", () => {
   it("offers exactly the placeholders the executor can fill", () => {
     const text = replyPlaceholderInstructions();
-    for (const name of ["refund_amount", "return_name", "order_name", "gift_card_amount", "tracking_number"]) {
+    for (const name of ["refund_amount", "order_name", "gift_card_amount", "tracking_number"]) {
       expect(text).toContain(`{{${name}}}`);
     }
+    expect(text).not.toContain("{{return_name}}");
     expect(text).toContain("create_refund or create_partial_refund or cancel_order");
   });
 });
