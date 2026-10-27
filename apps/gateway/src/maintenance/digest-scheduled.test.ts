@@ -24,6 +24,7 @@ vi.mock('../clients/spectrum.js', () => ({
 }));
 
 import { buildOrgDigest, sendScheduledDigests } from './digest.js';
+import { parkCurrentPlan } from '../test-fixtures/operator-pending-plan-fixtures.js';
 
 vi.mock('./digest-briefing/narrate.js', () => ({
   narrateBriefingItems: async (_org: string, items: unknown[]) => items,
@@ -227,13 +228,13 @@ describe('sendScheduledDigests — first-night briefing', () => {
     const thread = await createTestThread(org.id, customer.id, ChannelType.email);
     const legacyText = 'Could you refund the chipped cup from order #4200?';
     const source = await createTestMessage(thread.id, legacyText);
-    const pendingPlans = [{
+    const memberKey = `member:rollback-${org.id}`;
+    const pendingPlans = [await parkCurrentPlan(org.id, memberKey, {
       threadId: thread.id,
       instruction: 'Refund the chipped cup',
       planId: 'dededede-dede-4ede-8ede-dededededede',
-      sourceMessageId: source.id,
       rawToolCalls: [{ id: 'reply-1', name: 'send_reply', input: { text: 'I can help.' } }],
-    }];
+    }, source.id)];
     const pendingDigest = {
       items: [{ threadId: thread.id, kind: 'approval', planId: pendingPlans[0]!.planId }],
       threadIds: [],
@@ -246,13 +247,9 @@ describe('sendScheduledDigests — first-night briefing', () => {
         classifierSignals: { version: 4, language: 'en', intents: { mutative_request: true } },
       },
     });
-    await db.operatorContext.create({
-      data: {
-        organizationId: org.id,
-        memberKey: `member:rollback-${org.id}`,
-        pendingPlans,
-        pendingDigest,
-      },
+    await db.operatorContext.update({
+      where: { organizationId_memberKey: { organizationId: org.id, memberKey } },
+      data: { pendingDigest },
     });
     await db.organization.update({
       where: { id: org.id },

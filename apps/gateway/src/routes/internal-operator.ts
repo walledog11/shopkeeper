@@ -14,7 +14,9 @@ import {
   getContext,
   loadLiveOperatorContext,
   normalizeApprovedToolCalls,
+  resolvePendingQuestionContext,
 } from '../operator-context.js';
+import { applyOperatorAnswerReplan } from '../message-handlers/operator/operator-answer-replan.js';
 import { clearPendingPlan, runApprovedPendingPlan } from '../message-handlers/operator/pending-plan-actions.js';
 import { resolveOperatorMemberKey } from '../operator-identity.js';
 import { pushOperatorEscalation } from '../operator-escalation.js';
@@ -70,6 +72,48 @@ function durableRequestPayload(request: MemberRequestRecord) {
 }
 
 export function registerInternalOperatorRoutes(router: Router): void {
+  // The dashboard's answer to a question the agent asked about a ticket. It runs
+  // the same continuation as an answer from the phone, so the re-drafted card is
+  // parked for the answering member and pushed to every bound channel.
+  router.post('/operator/answer', internalJsonParser(), async (req: Request, res: Response) => {
+    if (!authorizeInternalRequest(req, res, 'InternalOperator')) return;
+
+    const body = req.body as Record<string, unknown>;
+    const organizationId = stringField(body.organizationId);
+    const clerkUserId = stringField(body.clerkUserId);
+    const threadId = stringField(body.threadId);
+    const answer = stringField(body.answer);
+    if (!organizationId || !clerkUserId || !threadId || !answer || typeof body.saveToKb !== 'boolean') {
+      return res.status(400).json({
+        error: 'organizationId, clerkUserId, threadId, answer and saveToKb are required',
+      });
+    }
+
+    try {
+      const memberKey = await resolveOperatorMemberKey(organizationId, clerkUserId);
+      const result = await applyOperatorAnswerReplan({
+        organizationId, memberKey, clerkUserId, threadId, answer,
+        endsWait: 'question',
+        saveToKb: body.saveToKb,
+      });
+      if (result.status === 'failed') return res.status(502).json({ error: result.message });
+      const { pendingQuestion } = await getContext(organizationId, memberKey);
+      if (pendingQuestion?.threadId === threadId) {
+        await resolvePendingQuestionContext(organizationId, memberKey, pendingQuestion);
+      }
+      return res.status(200).json(result);
+    } catch (err) {
+      if (err instanceof ApiError && err.status < 500) {
+        return res.status(err.status).json({ error: err.message });
+      }
+      logger.error(
+        { err: (err as Error).message, organizationId, clerkUserId, threadId },
+        '[InternalOperator] answer handler error',
+      );
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
+  });
+
   router.post('/operator/plan-requests', internalJsonParser(), async (req: Request, res: Response) => {
     if (!authorizeInternalRequest(req, res, 'InternalOperator')) return;
     const body = req.body as Record<string, unknown>;

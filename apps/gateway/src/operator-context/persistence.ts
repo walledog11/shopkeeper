@@ -347,6 +347,23 @@ async function pendingPlanStaleReason(
   return null;
 }
 
+/**
+ * Why a parked plan can no longer be acted on, or null while it can: its run
+ * already finished, or the card no longer matches the thread's current plan.
+ * The phone queue and the briefing both ask this one question, so the briefing
+ * never numbers a card the queue has already dropped.
+ */
+export async function pendingPlanDropReason(
+  organizationId: string,
+  plan: PendingPlan,
+): Promise<PendingPlanStaleReason | 'execution_terminal' | null> {
+  const execution = plan.planId
+    ? await getPlanExecution(organizationId, plan.planId).catch(() => null)
+    : null;
+  if (execution && execution.status !== 'pending' && execution.status !== 'claimed') return 'execution_terminal';
+  return pendingPlanStaleReason(organizationId, plan);
+}
+
 async function resolveStalePendingPlanContext(
   organizationId: string,
   memberKey: string,
@@ -453,12 +470,8 @@ export async function loadLiveOperatorContext(
 
   const live: PendingPlan[] = [];
   for (const plan of context.pendingPlans) {
-    const execution = plan.planId
-      ? await getPlanExecution(organizationId, plan.planId).catch(() => null)
-      : null;
-    const terminal = execution && execution.status !== 'pending' && execution.status !== 'claimed';
-    const reason = terminal ? null : await pendingPlanStaleReason(organizationId, plan);
-    if (terminal || reason) {
+    const reason = await pendingPlanDropReason(organizationId, plan);
+    if (reason) {
       // The merchant may be looking at this card right now, so say what was
       // dropped and why. Silence here is what turned one production incident
       // into a forensic reconstruction against expired logs.
@@ -467,8 +480,7 @@ export async function loadLiveOperatorContext(
         memberKey,
         threadId: plan.threadId,
         planId: plan.planId ?? null,
-        reason: terminal ? 'execution_terminal' : reason,
-        ...(terminal ? { executionStatus: execution?.status } : {}),
+        reason,
       }, '[Operator] Parked plan dropped before the merchant could act on it');
       await resolveStalePendingPlanContext(organizationId, memberKey, plan).catch(() => undefined);
       continue;

@@ -19,10 +19,6 @@ Last updated: 2026-10-27.
    `npm run test:unit` covers every test that needs no database and runs without Docker.
 2. **Architecture-audit fixes (2026-10-17)**, one PR each, in this order. Most defects were
    traced in code, not seen in production:
-   - Dashboard answers re-plan on the gateway (`applyOperatorAnswerReplan`), so they park
-     and notify every channel; `io-send-internal` reports a post-acceptance throw as
-     unknown; the gateway sink uses `composeThreadSink`; the briefing and the queue share
-     one liveness predicate.
    - Autonomy: `allowsAutomaticExecution` covers escalation-only plans in
      `plan-failure-replan`; `validateCustomerFacingApprovalSet` compares the executable
      plan; one exhaustive table per code list replaces the four-place escalation ritual.

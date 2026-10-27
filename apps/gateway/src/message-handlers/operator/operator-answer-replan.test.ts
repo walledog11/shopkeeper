@@ -9,7 +9,7 @@ import {
   createTestMessage,
   cleanupTestData,
 } from '@shopkeeper/db/test-helpers';
-import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
+import { buildAgentPlanCacheRecord, readAgentPlanCache } from '@shopkeeper/agent/plan-cache';
 import type { AgentPlan } from '@shopkeeper/agent/types';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import {
@@ -368,6 +368,74 @@ describe('applyOperatorAnswerReplan', () => {
         warnings: [],
       };
     }
+
+    function replyPlan(threadId: string): AgentPlan {
+      return {
+        instruction: 'Refund request', warnings: [],
+        steps: [{ id: 'reply', tool: 'send_reply', category: 'communication', label: 'Reply', description: 'Reply', enabled: true }],
+        rawToolCalls: [{ id: 'reply', name: 'send_reply', input: { text: 'We can accept the return.' } }],
+        communication: {
+          mode: 'exact_draft', destination: { kind: 'thread', id: threadId, channel: 'email' },
+          draft: 'We can accept the return.', allowedResultBindings: [],
+        },
+      };
+    }
+
+    // The dashboard's answer form reaches this continuation through the gateway,
+    // so these hold for an answer from any surface.
+    it.each(['budget', 'cancelled', 'claim_lost', 'new_customer_message'] as const)(
+      'publishes nothing after %s', async (reason) => {
+        const { member, thread, taskId } = await seedWaitingSupportTask({ pending: true });
+        if (reason === 'budget') {
+          await db.agentTask.update({ where: { id: taskId }, data: { modelCallsUsed: budget.modelCallLimit } });
+        }
+        planAgentSpy.mockImplementation(async (ctx) => {
+          await ctx.taskBudget.reserveModelCall();
+          if (reason === 'cancelled') {
+            await db.agentTask.update({ where: { id: taskId }, data: { cancelledAt: new Date() } });
+          } else if (reason === 'claim_lost') {
+            await db.agentTask.update({ where: { id: taskId }, data: { claimToken: randomUUID() } });
+          } else if (reason === 'new_customer_message') {
+            await createTestMessage(thread.id, 'Actually, cancel the return.', SenderType.customer);
+          }
+          return replyPlan(thread.id);
+        });
+
+        const result = await applyOperatorAnswerReplan({
+          organizationId: org.id, memberKey: `member:${member.id}`, clerkUserId: member.clerkUserId,
+          threadId: thread.id, answer: 'Yes, accept it.', endsWait: 'question', saveToKb: false,
+        });
+
+        expect(result.status).toBe('failed');
+        expect((await db.thread.findUniqueOrThrow({ where: { id: thread.id } })).cachedPlan).toBeNull();
+        expect(await db.agentProposal.count({ where: { taskId } })).toBe(0);
+      },
+    );
+
+    it('commits a receipt-bound proposal with the original customer source and cumulative usage', async () => {
+      const { member, thread, custMsg, taskId } = await seedWaitingSupportTask({ pending: true });
+      await db.agentTask.update({ where: { id: taskId }, data: { modelCallsUsed: 2, inputTokensUsed: 10, outputTokensUsed: 5 } });
+      planAgentSpy.mockImplementation(async (ctx) => {
+        await ctx.taskBudget.reserveModelCall();
+        await ctx.taskBudget.recordModelUsage({ inputTokens: 20, outputTokens: 8, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 }, 'claude-haiku-4-5-20251001');
+        return { ...replyPlan(thread.id), instruction: 'Expanded merchant answer planning context' };
+      });
+
+      const result = await applyOperatorAnswerReplan({
+        organizationId: org.id, memberKey: `member:${member.id}`, clerkUserId: member.clerkUserId,
+        threadId: thread.id, answer: 'Yes, accept it.', endsWait: 'question', saveToKb: false,
+      });
+
+      expect(result.status).toBe('replanned');
+      const settled = await db.agentTask.findUniqueOrThrow({ where: { id: taskId } });
+      const cached = readAgentPlanCache((await db.thread.findUniqueOrThrow({ where: { id: thread.id } })).cachedPlan)!;
+      expect(settled).toMatchObject({ status: 'waiting_approval', activeProposalId: cached.planId, modelCallsUsed: 3, inputTokensUsed: 30, outputTokensUsed: 13 });
+      const proposal = await db.agentProposal.findUniqueOrThrow({ where: { id: cached.planId! } });
+      const source = await db.agentRequest.findUniqueOrThrow({ where: { id: (proposal.sourceRequestIds as string[])[0] } });
+      expect(source).toMatchObject({ sourceMessageId: custMsg.id, actorKind: 'member', taskId });
+      // Off, the answer directs this re-plan only.
+      expect(await db.kbArticle.count({ where: { organizationId: org.id } })).toBe(0);
+    });
 
     // The same conversation waiting on a *card* rather than a question: the
     // attempt parked a proposal any bound member may approve, which is what the

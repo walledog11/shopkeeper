@@ -48,6 +48,26 @@ describe('POST /api/agent/io-send-internal', () => {
     expect(sendReply).not.toHaveBeenCalled();
   });
 
+  // The gateway reads a non-2xx hop as a definite failure unless the body says
+  // otherwise, and a definite failure lets the message be drafted again.
+  it('reports a send that threw after acceptance as an unknown outcome', async () => {
+    const organization = await createTestOrg();
+    organizationId = organization.id;
+    const customer = await createTestCustomer(organization.id, `throw:${organization.id}`);
+    const thread = await createTestThread(organization.id, customer.id, ChannelType.email);
+    sendReply.mockRejectedValueOnce(new Error('connection reset after provider accepted'));
+
+    const response = await POST(request({
+      orgId: organization.id,
+      threadId: thread.id,
+      op: 'send_reply',
+      input: { text: 'Hello' },
+    }));
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toMatchObject({ outcome: 'unknown' });
+  });
+
   it('forwards the durable operation identity as an inseparable pair', async () => {
     const organization = await createTestOrg();
     organizationId = organization.id;

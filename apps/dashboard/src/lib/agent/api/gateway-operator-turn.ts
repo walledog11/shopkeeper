@@ -69,6 +69,16 @@ export async function postGatewayAgentRequest(params: {
   return { status: res.status, payload: await res.json().catch(() => null) };
 }
 
+export async function postGatewayAnswer(params: {
+  organizationId: string; clerkUserId: string; threadId: string; answer: string; saveToKb: boolean;
+}): Promise<{ status: number; payload: { status?: string; message?: string; error?: string } | null }> {
+  const base = getGatewayBaseUrl({ required: true });
+  const res = await fetchProviderWithDeadline(`${base}/internal/operator/answer`, {
+    method: "POST", headers: gatewayAuth(), body: JSON.stringify(params),
+  }, { provider: "gateway", operation: "merchant-answer", timeoutMs: OPERATOR_TURN_TIMEOUT_MS });
+  return { status: res.status, payload: await res.json().catch(() => null) };
+}
+
 export async function postGatewayPlanRequest(params: {
   organizationId: string; clerkUserId: string; threadId: string;
   clientRequestId: string; instruction: string; force: boolean;

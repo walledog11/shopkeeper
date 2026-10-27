@@ -21,6 +21,7 @@ import {
 } from './digest-briefing/index.js';
 import { formatConversationParagraph } from './digest-briefing/conversation.js';
 import { appendPendingPlan, updateContext } from '../operator-context.js';
+import { parkCurrentPlan } from '../test-fixtures/operator-pending-plan-fixtures.js';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
 const NOW = DIGEST_FIXTURE_NOW;
@@ -139,8 +140,9 @@ describe('loadWaitingOnYouItems', () => {
       },
     });
 
-    await updateContext(org.id, 'chat-1', { pendingPlan });
-    await updateContext(org.id, 'chat-2', { pendingPlan });
+    const source = await createTestMessage(thread.id, 'My order arrived damaged and I want my money back.');
+    const parked = await parkCurrentPlan(org.id, 'chat-1', pendingPlan, source.id);
+    await updateContext(org.id, 'chat-2', { pendingPlan: parked });
 
     const items = await loadWaitingOnYouItems(org.id, NOW);
     expect(items).toHaveLength(1);
@@ -160,14 +162,13 @@ describe('loadWaitingOnYouItems', () => {
     const customer = await createTestCustomer(org.id, 'review-approval@example.com', { name: 'Inez' });
     const thread = await createTestThread(org.id, customer.id, 'email');
     const planId = 'abababab-abab-4bab-8bab-abababababab';
-    await updateContext(org.id, 'review-approval', {
-      pendingPlan: {
-        threadId: thread.id,
-        instruction: 'Reply to the customer',
-        planId,
-        rawToolCalls: [{ id: 'tc1', name: 'send_reply', input: { text: 'On it.' } }],
-      },
-    });
+    const source = await createTestMessage(thread.id, 'Hello?');
+    await parkCurrentPlan(org.id, 'review-approval', {
+      threadId: thread.id,
+      instruction: 'Reply to the customer',
+      planId,
+      rawToolCalls: [{ id: 'tc1', name: 'send_reply', input: { text: 'On it.' } }],
+    }, source.id);
 
     const items = await loadWaitingOnYouItems(org.id, NOW);
     expect(items).toHaveLength(1);
@@ -188,15 +189,12 @@ describe('loadWaitingOnYouItems', () => {
         classifierSignals: { version: 4, language: 'en', intents: { mutative_request: true } },
       },
     });
-    await updateContext(org.id, 'legacy-approval', {
-      pendingPlan: {
-        threadId: thread.id,
-        instruction: 'Reply to the customer',
-        planId,
-        sourceMessageId: source.id,
-        rawToolCalls: [{ id: 'tc1', name: 'send_reply', input: { text: 'I can help.' } }],
-      },
-    });
+    await parkCurrentPlan(org.id, 'legacy-approval', {
+      threadId: thread.id,
+      instruction: 'Reply to the customer',
+      planId,
+      rawToolCalls: [{ id: 'tc1', name: 'send_reply', input: { text: 'I can help.' } }],
+    }, source.id);
 
     const items = await loadWaitingOnYouItems(org.id, NOW);
     expect(items).toHaveLength(1);

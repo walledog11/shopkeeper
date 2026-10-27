@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
-import { db, ThreadFilterStatus } from '@shopkeeper/db';
+import { db, Prisma, ThreadFilterStatus } from '@shopkeeper/db';
 import { cleanupTestData, createTestCustomer, createTestMessage, createTestOrg, createTestThread } from '@shopkeeper/db/test-helpers';
 import { testRefundAndReplyPlanCache } from '../test-fixtures/agent-plan-cache-fixtures.js';
 import {
@@ -339,7 +339,11 @@ describe('conversation briefing pipeline', () => {
   it('does not revive an old approval after a new customer request supersedes it', async () => {
     const plan = await seedSarahReplyPendingPlan(org.id);
     const next = await createTestMessage(plan.threadId, 'Actually, please cancel my order.');
-    await db.thread.update({ where: { id: plan.threadId }, data: { requestSourceMessageId: next.id } });
+    // As inbound persistence does: a new customer message clears the cached plan.
+    await db.thread.update({
+      where: { id: plan.threadId },
+      data: { requestSourceMessageId: next.id, cachedPlan: Prisma.DbNull, cachedPlanMessageId: null },
+    });
     const digest = (await buildOrgDigest(org.id, NOW))!;
     expect(digest.pendingDigest.items).toEqual([]);
     expect(digest.message).not.toContain('soy wax');
