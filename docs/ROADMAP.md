@@ -17,10 +17,7 @@ Last updated: 2026-10-27.
    dashboard `test-setup.ts` with one `mockClerkSession()` helper; split scenario files
    over ~600 lines; turn lint-style tests into ESLint rules. No new tests. Closes when
    `npm run test:unit` covers every test that needs no database and runs without Docker.
-2. **Agent-core debt**, one PR each:
-   - One money formatter (copies in `sales-pulse.ts`, `conversation-attribution.ts`,
-     `lib/format/currency.ts`, `publicMoney`, the context-panel formatters).
-3. **Architecture-audit fixes (2026-10-17)**, one PR each, in this order. Most defects were
+2. **Architecture-audit fixes (2026-10-17)**, one PR each, in this order. Most defects were
    traced in code, not seen in production:
    - Dashboard answers re-plan on the gateway (`applyOperatorAnswerReplan`), so they park
      and notify every channel; `io-send-internal` reports a post-acceptance throw as

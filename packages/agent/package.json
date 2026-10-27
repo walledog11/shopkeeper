@@ -286,6 +286,10 @@
       "types": "./dist/product-help/index.d.ts",
       "default": "./dist/product-help/index.js"
     },
+    "./money": {
+      "types": "./dist/money.d.ts",
+      "default": "./dist/money.js"
+    },
     "./composer-plan-handoff": {
       "types": "./dist/composer-plan-handoff.d.ts",
       "default": "./dist/composer-plan-handoff.js"

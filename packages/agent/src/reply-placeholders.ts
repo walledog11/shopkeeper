@@ -1,6 +1,7 @@
 import type { ActionEntry } from "./agent-context.js";
 import type { ReceiptSuccessV1 } from "./tools/result.js";
 import type { RawToolCall, ReplyPlaceholderName, ResultBinding } from "./types.js";
+import { formatMoney } from "./money.js";
 
 /**
  * Receipt-bound placeholders in an exact draft (overhaul plan, decision A).
@@ -35,20 +36,8 @@ interface PlaceholderDefinition {
   sources: PlaceholderSources;
 }
 
-/**
- * The customer-facing form of an exact amount. Money follows the same convention
- * as the merchant-facing copy in shopify/sales-pulse.ts — a symbol for USD, a
- * trailing ISO code otherwise; "USD 20.00" reads like a bank statement. The
- * amount is used as given, never re-rounded: not every currency has two decimal
- * places.
- */
-export function customerMoney(amount: string, currency: string): string {
-  const code = currency.trim().toUpperCase();
-  return code === "USD" ? `$${amount}` : `${amount} ${code}`;
-}
-
 const refundAmount = (receipt: { facts: { amount: string; currency: string } }) => (
-  customerMoney(receipt.facts.amount, receipt.facts.currency)
+  formatMoney(receipt.facts.amount, receipt.facts.currency, { exact: true })
 );
 
 const PLACEHOLDERS: Record<ReplyPlaceholderName, PlaceholderDefinition> = {
@@ -89,7 +78,7 @@ const PLACEHOLDERS: Record<ReplyPlaceholderName, PlaceholderDefinition> = {
     sources: {
       create_gift_card: {
         field: "facts.amount",
-        read: (receipt) => customerMoney(receipt.facts.amount, receipt.facts.currency),
+        read: (receipt) => formatMoney(receipt.facts.amount, receipt.facts.currency, { exact: true }),
       },
     },
   },

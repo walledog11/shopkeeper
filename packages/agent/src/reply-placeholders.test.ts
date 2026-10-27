@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import type { ActionEntry } from "./agent-context.js";
 import {
   bindReplyPlaceholders,
-  customerMoney,
   displayApprovedDraft,
   fillApprovedDraft,
   isResultBinding,
@@ -209,13 +208,6 @@ describe("fillApprovedDraft", () => {
       expect(fillApprovedDraft(draft, bindings, [cancelAction(null)]))
         .toEqual({ status: "unfilled", placeholder: "refund_amount" });
     });
-  });
-});
-
-describe("customerMoney", () => {
-  it("keeps the provider's precision rather than assuming two decimals", () => {
-    expect(customerMoney("42.00", "usd")).toBe("$42.00");
-    expect(customerMoney("4200", "JPY")).toBe("4200 JPY");
   });
 });
 

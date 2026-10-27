@@ -4,7 +4,8 @@ import { useState } from "react"
 import { Check, RefreshCw } from "lucide-react"
 import { cn } from "@/lib/ui/cn"
 import { merchantSandSurfaceClass } from "@/lib/ui/merchant-palette"
-import { formatMoney, formatMonthYear } from "./formatters"
+import { formatMoney } from "@shopkeeper/agent/money"
+import { formatMonthYear } from "./formatters"
 import type { ShopifyCustomer } from "@/types/shopify"
 import {
   contextGhostButtonClassName,
@@ -68,7 +69,7 @@ export function CustomerInfo({ customer, isEditing, onEditingChange, onSaved, sh
 
   const stats = [
     { label: "Orders", value: String(customer.orders_count) },
-    { label: "Spent", value: formatMoney(customer.total_spent, customer.currency) },
+    { label: "Spent", value: formatMoney(customer.total_spent, customer.currency, { exact: true }) },
     { label: "Since", value: formatMonthYear(customer.created_at) },
   ]
 

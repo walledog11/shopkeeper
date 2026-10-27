@@ -1,6 +1,7 @@
 import { db } from '@shopkeeper/db';
 import { hashVerifiedEmail } from '@shopkeeper/agent/storefront-verification';
 import { CHANNEL_TYPE } from '@shopkeeper/agent/thread-constants';
+import { formatMoney } from '@shopkeeper/agent/money';
 import logger from '../../logger.js';
 import type { ShopifyOrderPayload } from '../../types.js';
 
@@ -341,14 +342,6 @@ export async function loadAttributionRollup(
   };
 }
 
-function formatMoney(cents: number, currency: string): string {
-  const amount = (cents / 100).toLocaleString('en-US', {
-    minimumFractionDigits: cents % 100 === 0 ? 0 : 2,
-    maximumFractionDigits: 2,
-  });
-  return currency === 'USD' ? `$${amount}` : `${amount} ${currency}`;
-}
-
 // Deliberately "talked to me first", not "I earned this". The join is a proved
 // email or a matching customer record, which establishes that the shopper who
 // talked also bought — not that the conversation caused the purchase. Claiming
@@ -359,8 +352,8 @@ export function formatAttributionLine(rollup: AttributionRollup): string | null 
   const everyOrder = rollup.attributedCount === rollup.orderCount;
   const money = rollup.currency
     ? everyOrder
-      ? ` — ${formatMoney(rollup.attributedCents, rollup.currency)}`
-      : ` — ${formatMoney(rollup.attributedCents, rollup.currency)} of ${formatMoney(rollup.totalCents, rollup.currency)}`
+      ? ` — ${formatMoney(rollup.attributedCents / 100, rollup.currency)}`
+      : ` — ${formatMoney(rollup.attributedCents / 100, rollup.currency)} of ${formatMoney(rollup.totalCents / 100, rollup.currency)}`
     : '';
 
   // "1 of your 1 order" is the tell that a template wrote the sentence. When

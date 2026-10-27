@@ -8,7 +8,7 @@ import {
   NeedsYouCardHeader,
 } from "@/app/dashboard/_components/home/needs-you-card-ui"
 import { needsYouCardShellClassName, needsYouSecondaryButtonClassName } from "@/app/dashboard/_components/home/needs-you-card-styles"
-import { formatCurrency } from "@/lib/format/currency"
+import { formatMoney } from "@shopkeeper/agent/money"
 import { cn } from "@/lib/ui/cn"
 import type { OrderRow } from "@/lib/orders/order-contract"
 import { orderItemCount } from "./orders-board-model"
@@ -59,7 +59,7 @@ function OrderDetail({ order, shop }: { order: OrderRow; shop: string | null }) 
         </div>
 
         <p className="text-sm leading-snug">
-          <span className="font-bold text-[#1a1a1a]">{formatCurrency(order.total_price, order.currency)}</span>
+          <span className="font-bold text-[#1a1a1a]">{formatMoney(order.total_price, order.currency, { exact: true })}</span>
           <span className="text-[#6b5d4f]/50"> · </span>
           <span className="text-[#6b5d4f]">{itemCount} item{itemCount !== 1 ? "s" : ""}</span>
         </p>

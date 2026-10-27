@@ -6,7 +6,7 @@ import {
   isShopifyIntegrationOperational,
   shopifyRouteErrorResponse,
 } from "@/lib/server/shopify-integration"
-import { normalizeCurrencyCode } from "@/lib/format/currency"
+import { normalizeCurrencyCode } from "@shopkeeper/agent/money"
 import {
   type OrderRow,
   type OrdersPageResponse,
