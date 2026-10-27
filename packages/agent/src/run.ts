@@ -197,7 +197,7 @@ export async function runAgent(
                   ?? TOOL_CATEGORIES[call.name]
                   ?? "unknown",
                 organizationId: ctx.orgId,
-                status: action.status ?? "success",
+                status: action.status,
                 tool: call.name,
               }]);
             } catch (err) {

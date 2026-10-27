@@ -13,21 +13,6 @@ import { CONCIERGE_BUBBLE } from "@/app/dashboard/_components/home/needs-you-car
 import { cn } from "@/lib/ui/cn"
 import type { ChatMessage } from "./agent-chat-session"
 
-function getToolResultHint(tool: string, result: string): string | null {
-  if (result.startsWith("Error")) return null
-  const countMatch = result.match(/\b(\d+)\b/)
-  if (!countMatch) return null
-  const n = countMatch[1]
-  const hints: Record<string, (n: string) => string> = {
-    find_customer: (n) => `${n} customer${n === "1" ? "" : "s"}`,
-    search_shopify_customers: (n) => `${n} customer${n === "1" ? "" : "s"}`,
-    search_shopify_products: (n) => `${n} product${n === "1" ? "" : "s"}`,
-    get_shopify_orders: (n) => `${n} order${n === "1" ? "" : "s"}`,
-    search_kb: (n) => `from ${n} KB article${n === "1" ? "" : "s"}`,
-  }
-  return hints[tool]?.(n) ?? null
-}
-
 export function AgentChatMessage({
   message,
   onApprove,
@@ -62,7 +47,6 @@ export function AgentChatMessage({
           <div className={`flex flex-wrap gap-1.5 ${hideAvatar ? "mb-1.5" : "mb-2.5"}`}>
             {visibleActions.map((action) => {
               const variant = getToolChipVariant(action)
-              const hint = variant !== "error" ? getToolResultHint(action.tool, action.result) : null
               return (
                 <span
                   key={`${action.tool}-${action.result}`}
@@ -73,7 +57,6 @@ export function AgentChatMessage({
                   {variant === "read" && <Search className="size-3 shrink-0 opacity-70" />}
                   {variant === "pending" && <AlertCircle className="size-3 shrink-0" />}
                   {getToolChipLabel(action)}
-                  {hint && <span className="opacity-70">{"\u00b7"} {hint}</span>}
                 </span>
               )
             })}

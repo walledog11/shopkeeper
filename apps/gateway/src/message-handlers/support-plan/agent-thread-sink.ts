@@ -24,6 +24,7 @@ import type { AgentActionMode } from '@shopkeeper/agent/context';
 import logger from '../../logger.js';
 import { recordAgentFailureInBackground } from '../../agent-failure-alerts.js';
 import { postDashboardInternal } from '../../clients/dashboard-internal.js';
+import { DASHBOARD_DISPATCH_FAILED } from '@shopkeeper/agent/message-dispatch';
 import { pushOperatorEscalation } from '../../operator-escalation.js';
 import { publishThreadEvent } from '../../realtime/publish.js';
 
@@ -153,7 +154,7 @@ async function dispatchAgentSend(
       if (response.outcome === 'unknown') {
         return dispatchFailureReceipt(ctx, op, input, 'unknown', 'dashboard_response_unknown', `Unknown: message dispatch may have completed, but the dashboard response was not received. Reference: ${requestId}. Do not send it again automatically.`);
       }
-      return dispatchFailureReceipt(ctx, op, input, 'failed', 'dashboard_dispatch_failed', formatDispatchFailureMessage(response.status, requestId));
+      return dispatchFailureReceipt(ctx, op, input, 'failed', DASHBOARD_DISPATCH_FAILED, formatDispatchFailureMessage(response.status, requestId));
     }
     return response.data;
   } catch (err) {

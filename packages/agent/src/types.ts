@@ -292,7 +292,7 @@ export type PlanExecutionOutcome = 'committed' | 'failed' | 'partial' | 'unknown
 export interface AgentTurn {
   id?: string
   instruction: string
-  actions: { tool: string; result: string; status?: 'success' | 'error' | 'policy_block' | 'escalated' | 'unknown' }[]
+  actions: { tool: string; result: string; status: 'success' | 'error' | 'policy_block' | 'escalated' | 'unknown' }[]
   summary: string | null
   error: string | null
   mode?: 'human_approved' | 'auto_executed' | 'read_only'

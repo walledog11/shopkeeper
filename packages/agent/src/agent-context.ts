@@ -311,7 +311,7 @@ export interface ActionEntry {
   toolCallId?: string;
   providerOperationKey?: string;
   durationMs?: number;
-  status?: AgentActionStatus;
+  status: AgentActionStatus;
   mode?: AgentActionMode;
   errorDetail?: string;
   category?: string;

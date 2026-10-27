@@ -18,10 +18,6 @@ Last updated: 2026-10-27.
    over ~600 lines; turn lint-style tests into ESLint rules. No new tests. Closes when
    `npm run test:unit` covers every test that needs no database and runs without Docker.
 2. **Agent-core debt**, one PR each:
-   - Typed tool status, error code and data flow end to end; nothing branches on
-     `Error:`/`Unknown:` prefixes (`message-dispatch.ts`, `tool-action-display.ts`,
-     `AgentChatMessage.tsx` — whose chips print an ID as a count — and
-     `AgentPrivateTurns.tsx`).
    - The ticket composer stops routing instructions by regex
      (`shouldUsePrivateComposerAsk` in `useConversationAgentFlow.ts`): anything not opening
      with a listed verb, or containing "write"/"why", goes to the read-only ask, so "Issue

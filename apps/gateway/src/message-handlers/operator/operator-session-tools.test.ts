@@ -10,7 +10,7 @@ import {
 } from '@shopkeeper/db/test-helpers';
 import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
-import { formatOperatorDispatchFailure } from '@shopkeeper/agent/message-dispatch';
+import { DASHBOARD_DISPATCH_FAILED, formatOperatorDispatchFailure } from '@shopkeeper/agent/message-dispatch';
 import type { BaseAgentContext } from '@shopkeeper/agent/context';
 import { BadRequestError, ConflictError } from '@shopkeeper/shared/errors';
 import {
@@ -333,7 +333,15 @@ describe('approve_pending_plan', () => {
     const memberKey = 'member:dispatch_fail';
     mockExecuteOperatorAgentTurn.mockResolvedValueOnce({
       outcome: 'failed',
-      summary: formatOperatorDispatchFailure('Error: message dispatch failed (500). Reference: req-1.'),
+      summary: formatOperatorDispatchFailure({
+        status: 'error',
+        result: 'Error: message dispatch failed (500). Reference: req-1.',
+        receipt: {
+          version: 1, operationId: 'operation-1', executionId: 'execution-1', tool: 'send_reply',
+          target: { kind: 'thread', id: 'ticket_thread_1' }, observedAt: '2026-10-27T00:00:00.000Z',
+          providerReference: null, outcome: 'failed', code: DASHBOARD_DISPATCH_FAILED,
+        },
+      }),
       threadId: 'ticket_thread_1',
       actionsPerformed: [],
     });

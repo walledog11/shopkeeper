@@ -37,6 +37,17 @@ export function serializeAgentTurn(turn: AgentTurn): string {
   return `${AGENT_TURN_PREFIX}${JSON.stringify(toNoteShape(turn))}`;
 }
 
+// Notes written before actions carried a status said how a call ended only in
+// the prefix of its result text. Read once here, so nothing downstream does.
+function legacyNoteAction(value: unknown): AgentTurnAction | null {
+  if (!value || typeof value !== "object") return null;
+  const action = value as Partial<AgentTurnAction>;
+  if (typeof action.tool !== "string" || typeof action.result !== "string") return null;
+  const status = action.status
+    ?? (action.result.startsWith("Unknown:") ? "unknown" : action.result.startsWith("Error:") ? "error" : "success");
+  return { tool: action.tool, result: action.result, status };
+}
+
 function parseAgentTurn(contentText: string | null | undefined): AgentTurn | null {
   if (!contentText) return null;
   const prefixLength = getAgentTurnPrefixLength(contentText);
@@ -50,7 +61,9 @@ function parseAgentTurn(contentText: string | null | undefined): AgentTurn | nul
       // Legacy notes carry the full actions array; new notes omit it because
       // AgentAction is now the canonical per-tool record. Hydration happens in
       // extractAgentTurnsFromMessages when an actionsByTurnId map is supplied.
-      actions: Array.isArray(parsed.actions) ? parsed.actions : [],
+      actions: Array.isArray(parsed.actions)
+        ? parsed.actions.flatMap(action => legacyNoteAction(action) ?? [])
+        : [],
       summary: parsed.summary ?? null,
       error: parsed.error ?? null,
       ...(parsed.mode ? { mode: parsed.mode } : {}),

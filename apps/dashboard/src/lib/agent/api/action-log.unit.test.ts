@@ -46,15 +46,23 @@ describe("agent action-log note helpers", () => {
   it("parses migrated note payloads that still carry the inline actions array", () => {
     // Rows migrated from the old prefix keep their inline actions array in the
     // payload; new notes omit it (AgentAction is canonical). Both must parse.
+    // Those actions predate a recorded status, so it is read from the result
+    // text once, here.
     const note = `${AGENT_TURN_PREFIX}${JSON.stringify({
       instruction: "Refund the order",
-      actions: [{ tool: "create_refund", result: "Refunded $25.00." }],
+      actions: [
+        { tool: "create_refund", result: "Refunded $25.00." },
+        { tool: "send_reply", result: "Error: message dispatch failed (502)." },
+      ],
       summary: "Issued the refund.",
       error: null,
     })}`;
 
     const [turn] = extractAgentTurnsFromMessages([{ id: "msg_note", contentText: note }]);
-    expect(turn.actions).toEqual([{ tool: "create_refund", result: "Refunded $25.00." }]);
+    expect(turn.actions).toEqual([
+      { tool: "create_refund", result: "Refunded $25.00.", status: "success" },
+      { tool: "send_reply", result: "Error: message dispatch failed (502).", status: "error" },
+    ]);
     expect(turn.summary).toBe("Issued the refund.");
   });
 

@@ -1,12 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
+  DASHBOARD_DISPATCH_FAILED,
   formatOperatorDispatchFailure,
   summarizeOperatorTurnDispatchFailure,
 } from "./message-dispatch.js";
 
 describe("message-dispatch helpers", () => {
   it("surfaces the already-formatted approval failure from its typed status", () => {
-    const failure = formatOperatorDispatchFailure("Error: message dispatch failed (503). Reference: req-9.");
+    const failure = formatOperatorDispatchFailure({
+      status: "error",
+      result: "Error: message dispatch failed (503). Reference: req-9.",
+      receipt: {
+        version: 1, operationId: "operation-1", executionId: "execution-1", tool: "send_reply",
+        target: { kind: "thread", id: "thread-1" }, observedAt: "2026-10-27T00:00:00.000Z",
+        providerReference: null, outcome: "failed", code: DASHBOARD_DISPATCH_FAILED,
+      },
+    });
     const summary = summarizeOperatorTurnDispatchFailure([
       { tool: "approve_pending_plan", result: failure, status: "error", durationMs: 1 },
     ] as never);
@@ -42,7 +51,10 @@ describe("message-dispatch helpers", () => {
 });
 
 it('does not recommend a blind retry for unknown message dispatch', () => {
-  const message = formatOperatorDispatchFailure('Unknown: message dispatch may have completed. Reference: req-1.');
+  const message = formatOperatorDispatchFailure({
+    status: 'unknown',
+    result: 'Unknown: message dispatch may have completed. Reference: req-1.',
+  });
   expect(message).toContain('delivery may already have completed');
   expect(message).not.toContain('delivery failed');
   expect(message).not.toContain('wait a moment and retry');

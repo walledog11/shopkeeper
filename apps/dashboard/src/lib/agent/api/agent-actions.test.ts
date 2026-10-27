@@ -116,7 +116,7 @@ describe("agent-actions writer", () => {
     expect(row.executedAt).toBeInstanceOf(Date);
   });
 
-  it("batches inserts, backfills category and errorDetail, and defaults a missing status", async () => {
+  it("batches inserts and backfills category and errorDetail", async () => {
     org = await createTestOrg();
     const customer = await createTestCustomer(org.id, "ada@example.com", { name: "Ada" });
     const thread = await createTestThread(org.id, customer.id, ChannelType.email);
@@ -127,6 +127,7 @@ describe("agent-actions writer", () => {
         result: JSON.stringify([{ id: "1" }]),
         input: { customer_id: "cust_1" },
         durationMs: 88,
+        status: "success",
       },
       {
         tool: "create_refund",

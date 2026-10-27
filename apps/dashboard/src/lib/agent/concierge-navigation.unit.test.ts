@@ -12,6 +12,7 @@ describe("extractConciergeNavigation", () => {
       {
         tool: "navigate_dashboard",
         result: buildNavigateDashboardResult(destination!),
+        status: "success",
       },
     ];
 
@@ -24,7 +25,7 @@ describe("extractConciergeNavigation", () => {
 
   it("ignores invalid navigate payloads", () => {
     const actions: ActionEntry[] = [
-      { tool: "navigate_dashboard", result: "not json" },
+      { tool: "navigate_dashboard", result: "not json", status: "success" },
     ];
     expect(extractConciergeNavigation(actions)).toBeNull();
   });
