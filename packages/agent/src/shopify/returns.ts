@@ -346,7 +346,7 @@ export async function createReturn(
       },
     } : undefined;
     const result = toolOk(
-      `Opened return ${returnName} (status ${returnStatus}) on order ${orderId} for: ${itemList}. No refund was issued - this only authorizes the customer to send the items back. Tell the customer the return is set up and how to ship the items.`,
+      `Opened return ${returnName} (status ${returnStatus}) on order ${orderId} for: ${itemList}. No refund was issued - this only authorizes the customer to send the items back. Tell the customer the return is set up.`,
       {
         returnWatch: {
           shopifyReturnId: returnId,

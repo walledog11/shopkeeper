@@ -12,7 +12,7 @@ import { resolveOperatorThread } from '@shopkeeper/agent/internal-thread';
 import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import type { AgentPlan, PlanValidation } from '@shopkeeper/agent/types';
-import { getContext, updateContext } from '../operator-context.js';
+import { appendPendingPlan, getContext, updateContext } from '../operator-context.js';
 import {
   SECRET,
   lastReplyText,
@@ -57,10 +57,11 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
     validation?: PlanValidation;
     customerName?: string;
     actionLabel?: string;
+    customerKey?: string;
   }) {
     const customer = await createTestCustomer(
       org.id,
-      `plan_${params.memberKey.replace(':', '_')}@test.com`,
+      `plan_${params.memberKey.replace(':', '_')}${params.customerKey ?? ''}@test.com`,
     );
     const thread = await createTestThread(org.id, customer.id, ChannelType.email);
     const sourceMessage = await createTestMessage(thread.id, 'Please help with this request.');
@@ -207,6 +208,44 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
 
     expect(executeOperatorAgentTurnSpy).toHaveBeenCalledOnce();
     expect(lastReplyText()).not.toContain('Nothing is waiting for your approval');
+  });
+
+  // 2026-10-22: with one card per ticket, a second ticket's card can land while
+  // the merchant is typing about the first, so a bare "yes" no longer says which
+  // card it answers. It runs nothing and asks.
+  it('"yes" with two plans waiting runs nothing and names both', async () => {
+    const chatId = '5555020';
+    const memberKey = await bindMember(chatId);
+    await parkCurrentPlan({
+      memberKey,
+      customerKey: '_first',
+      instruction: 'refund #1',
+      rawToolCalls: [{ id: 'tc1', name: 'refundOrder', input: { amount: 5 } }],
+      customerName: 'Rajbir Sambi',
+      actionLabel: 'refund order #1',
+    });
+    const [first] = (await getContext(org.id, memberKey)).pendingPlans;
+    await parkCurrentPlan({
+      memberKey,
+      customerKey: '_second',
+      instruction: 'return #2',
+      rawToolCalls: [{ id: 'tc2', name: 'create_return', input: { order_id: '2' } }],
+      customerName: 'Sam Lee',
+      actionLabel: 'open a return on order #2',
+    });
+    await appendPendingPlan(org.id, memberKey, first!, 5);
+
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'yes' } });
+    await processPendingOperatorEvents(org.id);
+    await waitForReplies(1);
+
+    expect(executeOperatorAgentTurnSpy).not.toHaveBeenCalled();
+    expect(lastReplyText()).toContain('You have 2 plans waiting');
+    expect(lastReplyText()).toContain('1. Sam — open a return on order #2\n2. Rajbir — refund order #1');
+    expect((await getContext(org.id, memberKey)).pendingPlans).toHaveLength(2);
   });
 
   it('does not run or discard a plan that requires thread review', async () => {

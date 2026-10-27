@@ -141,12 +141,11 @@ export function getGatewayRuntimeFlags(): GatewayRuntimeFlags {
   };
 }
 
-// Max pending plans held per operator context (A6-step-2 queue). Default 1
-// reproduces the pre-queue single-slot overwrite exactly; raise it (bounded 1–5)
-// to let plans stack and be individually approved. Enablement is gated on P1
-// execution-ledger rollout.
+// Max pending plans held per operator context (bounded 1–5). Each ticket keeps
+// its own card, so one ticket's card never pushes another's off the phone; with
+// more than one waiting, a bare yes/no names none and is asked which.
 export function getOperatorPlanQueueMax(): number {
-  const parsed = parsePositiveIntEnv('OPERATOR_PLAN_QUEUE_MAX', 1);
+  const parsed = parsePositiveIntEnv('OPERATOR_PLAN_QUEUE_MAX', 5);
   return Math.min(parsed, 5);
 }
 

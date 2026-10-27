@@ -49,7 +49,7 @@ export const POST = withInternalRoute(
     if (kind === 'handoff') {
       const result = await dispatchAcknowledgement(thread, org, HANDOFF_ACKNOWLEDGEMENT);
       if (!result.ok) {
-        return NextResponse.json({ error: result.error }, { status: 502 });
+        return NextResponse.json({ error: result.error, ...(result.outcome && { outcome: result.outcome }) }, { status: 502 });
       }
       return NextResponse.json(result.skipped ? { ok: true, skipped: true } : { ok: true });
     }
@@ -65,7 +65,7 @@ export const POST = withInternalRoute(
       source: 'auto_ack',
     });
     if (!result.ok) {
-      return NextResponse.json({ error: result.error }, { status: 502 });
+      return NextResponse.json({ error: result.error, ...(result.outcome && { outcome: result.outcome }) }, { status: 502 });
     }
 
     return NextResponse.json({ ok: true });

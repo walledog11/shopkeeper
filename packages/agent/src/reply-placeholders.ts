@@ -6,8 +6,8 @@ import type { RawToolCall, ReplyPlaceholderName, ResultBinding } from "./types.j
  * Receipt-bound placeholders in an exact draft (overhaul plan, decision A).
  *
  * The model writes the customer message before approval. A value that only
- * exists once the write has run — the amount Shopify actually refunded, the
- * return's name — is written as `{{refund_amount}}`, shown to the merchant as a
+ * exists once the write has run — the amount Shopify actually refunded, a
+ * tracking number — is written as `{{refund_amount}}`, shown to the merchant as a
  * labeled placeholder, bound into the approval, and filled after execution from
  * the successful receipt of the one approved call it names. Nothing else in the
  * approved text changes.
@@ -27,6 +27,11 @@ interface PlaceholderDefinition {
   label: string;
   /** What the model is told it holds. */
   describes: string;
+  /**
+   * False for a value only the merchant can use. A customer message is never
+   * offered it and cannot bind it; the merchant still sees it in the receipt.
+   */
+  customerFacing: boolean;
   sources: PlaceholderSources;
 }
 
@@ -50,6 +55,7 @@ const PLACEHOLDERS: Record<ReplyPlaceholderName, PlaceholderDefinition> = {
   refund_amount: {
     label: "refund amount",
     describes: "the amount the refund actually returns",
+    customerFacing: true,
     sources: {
       create_refund: { field: "facts.amount", read: refundAmount },
       create_partial_refund: { field: "facts.amount", read: refundAmount },
@@ -62,6 +68,7 @@ const PLACEHOLDERS: Record<ReplyPlaceholderName, PlaceholderDefinition> = {
   return_name: {
     label: "return number",
     describes: "the name of the return that is created",
+    customerFacing: false,
     sources: {
       create_return: { field: "facts.returnName", read: (receipt) => receipt.facts.returnName },
       create_exchange: { field: "facts.returnName", read: (receipt) => receipt.facts.returnName },
@@ -70,6 +77,7 @@ const PLACEHOLDERS: Record<ReplyPlaceholderName, PlaceholderDefinition> = {
   order_name: {
     label: "order number",
     describes: "the name of the order that is created",
+    customerFacing: true,
     sources: {
       create_shopify_order: { field: "facts.orderName", read: (receipt) => receipt.facts.orderName },
     },
@@ -77,6 +85,7 @@ const PLACEHOLDERS: Record<ReplyPlaceholderName, PlaceholderDefinition> = {
   gift_card_amount: {
     label: "gift card amount",
     describes: "the value of the gift card that is issued",
+    customerFacing: true,
     sources: {
       create_gift_card: {
         field: "facts.amount",
@@ -87,6 +96,7 @@ const PLACEHOLDERS: Record<ReplyPlaceholderName, PlaceholderDefinition> = {
   tracking_number: {
     label: "tracking number",
     describes: "the tracking number recorded for the shipment",
+    customerFacing: true,
     sources: {
       fulfill_order: { field: "facts.tracking.number", read: (receipt) => receipt.facts.tracking.number },
       attach_return_label: { field: "facts.trackingNumber", read: (receipt) => receipt.facts.trackingNumber },
@@ -112,8 +122,8 @@ function sourceFor(placeholder: ReplyPlaceholderName, tool: string): Placeholder
 
 /**
  * Binds each placeholder in the draft to the one approved call that can fill it.
- * `unbound` names every token that cannot be bound: an unknown name, or a name
- * with no approved call to fill it or more than one.
+ * `unbound` names every token that cannot be bound: an unknown or merchant-only
+ * name, or a name with no approved call to fill it or more than one.
  */
 export function bindReplyPlaceholders(
   draft: string,
@@ -122,7 +132,7 @@ export function bindReplyPlaceholders(
   const bindings: ResultBinding[] = [];
   const unbound: string[] = [];
   for (const name of tokenNames(draft)) {
-    if (!isPlaceholderName(name)) {
+    if (!isPlaceholderName(name) || !PLACEHOLDERS[name].customerFacing) {
       unbound.push(name);
       continue;
     }
@@ -225,6 +235,7 @@ export function fillApprovedDraft(
  */
 export function replyPlaceholderInstructions(): string {
   const lines = (Object.entries(PLACEHOLDERS) as [ReplyPlaceholderName, PlaceholderDefinition][])
+    .filter(([, definition]) => definition.customerFacing)
     .map(([name, definition]) => (
       `- {{${name}}}: ${definition.describes} (${Object.keys(definition.sources).join(" or ")})`
     ));

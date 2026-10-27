@@ -146,7 +146,14 @@ function requestedWriteEscalationCode(input: BuildPlanRoutingEvidenceInput): Pla
   if (damagePhotoMissing(input)) return "damage_photo_missing";
   if (input.orderVerification?.kind === "locked") return "order_unconfirmed";
   const shape = planShape(rawToolCalls);
-  if (!shape.hasAction && !shape.hasEscalation && !shape.hasEvidenceRequest && hasExplicitCompensationRequest(input)) {
+  // A "which order?" ask still open from an earlier turn is the evidence request:
+  // the sender's next message decides, so a turn that sends nothing waits too.
+  const awaitingOrder = rawToolCalls.length === 0
+    && input.orderVerification?.kind === "asked" && input.orderVerification.orderName === null;
+  if (
+    !shape.hasAction && !shape.hasEscalation && !shape.hasEvidenceRequest && !awaitingOrder
+    && hasExplicitCompensationRequest(input)
+  ) {
     return "compensation_exception";
   }
   return null;

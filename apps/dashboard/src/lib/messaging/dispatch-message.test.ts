@@ -34,7 +34,7 @@ vi.mock('@/lib/server/provider-send-alerts', () => ({
   recordProviderSendFailure: mockRecordProviderSendFailure,
 }));
 
-import { dispatchMessage } from './dispatch-message';
+import { dispatchAcknowledgement, dispatchMessage } from './dispatch-message';
 import { readOutboundRecords } from '@/lib/server/outbound-recorder';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
@@ -310,16 +310,19 @@ describe('dispatchMessage', () => {
       status: 429,
     },
     {
+      // A 5xx may have been delivered anyway, so it is not a refusal to retry.
       response: { error: { code: 2 } },
-      error: 'Instagram is temporarily unavailable — try again later',
+      error: "Instagram didn't confirm this message, so it may already have reached the customer. Check Instagram before sending it again",
       detail: 'Instagram provider temporarily unavailable',
       status: 503,
+      outcome: 'unknown' as const,
     },
   ])('returns and records Instagram provider failures: $detail', async ({
     response,
     error,
     detail,
     status,
+    outcome,
   }) => {
     const integration = await createInstagramLoginIntegration();
     const customer = await createTestCustomer(org.id, 'ig_customer');
@@ -329,7 +332,7 @@ describe('dispatchMessage', () => {
 
     const result = await dispatchMessage({ ...thread, customer }, org, 'Instagram reply.');
 
-    expect(result).toEqual({ ok: false, error, providerStatus: status });
+    expect(result).toEqual({ ok: false, error, providerStatus: status, ...(outcome && { outcome }) });
     expect(mockRecordProviderSendFailure).toHaveBeenCalledWith(
       'meta',
       'ig_dm',
@@ -925,6 +928,21 @@ describe('dispatchMessage — SocialAPI Instagram transport', () => {
 
     expect(result).toMatchObject({ ok: false });
     expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  // 2026-10-22: an acknowledgement SocialAPI delivered but timed out on was
+  // recorded as refused, which released its once-per-wait claim, and the
+  // customer got it twice.
+  it('keeps the acknowledgement claim when SocialAPI times out, so it is not sent twice', async () => {
+    const { customer, thread } = await socialApiThread();
+    mockFetch.mockRejectedValueOnce(new DOMException('timed out', 'TimeoutError'));
+
+    const first = await dispatchAcknowledgement({ ...thread, customer }, org, 'Someone is looking at this.');
+    const second = await dispatchAcknowledgement({ ...thread, customer }, org, 'Someone is looking at this.');
+
+    expect(first).toMatchObject({ ok: false, outcome: 'unknown' });
+    expect(second).toEqual({ ok: true, skipped: true });
+    expect(mockFetch.mock.calls.filter(([url]) => String(url).includes('social-api.ai'))).toHaveLength(1);
   });
 
   it('never retries a SocialAPI failure through Meta', async () => {

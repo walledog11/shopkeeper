@@ -8,27 +8,14 @@ import {
   mostRecentPendingPlan,
   normalizeApprovedToolCalls,
   pendingPlanNeedsThreadReview,
+  pendingPlanOrdinals,
+  summarizePendingPlan,
   type OperatorContext,
-  type PendingPlan,
 } from '../../operator-context.js';
 import { runApprovedPendingPlan, clearPendingPlan } from '../../message-handlers/operator/pending-plan-actions.js';
 import { ConflictError } from '@shopkeeper/shared/errors';
 import type { PendingPlanCommand } from './command-parser.js';
 import type { OperatorMessageContext } from '../operator-message.js';
-
-// A literal yes/no acts on the most-recent plan; any older queued plans stay
-// pending. Names one so the merchant knows something's still waiting for them.
-function stillWaitingSuffix(remaining: PendingPlan[]): string {
-  if (remaining.length === 0) return '';
-  if (remaining.length === 1) {
-    const plan = remaining[0]!;
-    const who = plan.customerName ? plan.customerName.split(' ')[0] : 'another customer';
-    return plan.actionLabel
-      ? `\n(${who}'s plan is still waiting — I'd ${plan.actionLabel}.)`
-      : `\n(${who}'s plan is still waiting.)`;
-  }
-  return `\n(${remaining.length} more plans are still waiting for you.)`;
-}
 
 // A bare yes/no answers whatever the merchant read last. Cards, questions and
 // digests are pushed and mirrored onto the operator thread without a task; the
@@ -70,19 +57,34 @@ export async function handlePendingPlanCommand(
     );
     return true;
   }
+  // A bare yes/no names no card. With one waiting it can only mean that one;
+  // with several it could mean any, and the newest may have arrived after the
+  // merchant started typing about another. Run nothing and ask which, numbering
+  // each plan as the agent that reads the answer will resolve the number.
+  if (context.pendingPlans.length > 1) {
+    logger.info({ chatId, command: command.type, waiting: context.pendingPlans.length }, '[Operator] Bare decision with several plans waiting');
+    const ordinals = pendingPlanOrdinals(context.pendingPlans, context.pendingDigest);
+    const lines = context.pendingPlans
+      .map((plan, index) => ({ ordinal: ordinals[index] ?? null, summary: summarizePendingPlan(plan) }))
+      .sort((a, b) => (a.ordinal ?? Number.MAX_SAFE_INTEGER) - (b.ordinal ?? Number.MAX_SAFE_INTEGER))
+      .map(({ ordinal, summary }) => (ordinal ? `${ordinal}. ${summary}` : summary));
+    await reply([
+      `You have ${context.pendingPlans.length} plans waiting, so I haven't done anything yet. Which one did you mean?`,
+      ...lines,
+      'Tell me which, by number or name.',
+    ].join('\n'));
+    return true;
+  }
   if (pendingPlanNeedsThreadReview(pendingPlan, context.pendingDigest)) {
     await reply('The request details were unavailable in the briefing. Open the thread before deciding what to do with this plan.');
     return true;
   }
-  // Everything but the most-recent plan stays parked; name it in the reply.
-  const remaining = context.pendingPlans.slice(0, -1);
-
   const { threadId, instruction, rawToolCalls } = pendingPlan;
   if (command.type === 'plan-dismiss') {
     try {
       const dismissed = await clearPendingPlan(organizationId, memberKey, clerkUserId, pendingPlan);
       if (!dismissed) {
-        await reply(`That plan was already replaced or resolved.${stillWaitingSuffix(remaining)}`);
+        await reply('That plan was already replaced or resolved.');
         return true;
       }
     } catch (error) {
@@ -94,7 +96,7 @@ export async function handlePendingPlanCommand(
     }
     // Older parked plans carry no actionLabel.
     const dismissed = pendingPlan.actionLabel ? `Dismissed — I won't ${pendingPlan.actionLabel}.` : 'Plan dismissed.';
-    await reply(`${dismissed}${stillWaitingSuffix(remaining)}`);
+    await reply(dismissed);
     return true;
   }
 
@@ -140,10 +142,6 @@ export async function handlePendingPlanCommand(
     return true;
   }
 
-  if (execution.outcome !== 'committed') {
-    await reply(execution.summary);
-    return true;
-  }
-  await reply(`${execution.summary}${stillWaitingSuffix(remaining)}`);
+  await reply(execution.summary);
   return true;
 }

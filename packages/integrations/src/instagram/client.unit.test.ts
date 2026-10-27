@@ -128,6 +128,7 @@ describe('Instagram API client', () => {
         subcode: null,
         message: 'Instagram API returned an invalid response',
         requestId: null,
+        outcomeUnknown: true,
       },
     });
 
@@ -146,6 +147,7 @@ describe('Instagram API client', () => {
         subcode: 2018278,
         message: 'Outside messaging window',
         requestId: 'trace-1',
+        outcomeUnknown: false,
       },
     });
   });
@@ -379,6 +381,7 @@ describe('Instagram API client', () => {
         subcode: 463,
         message: 'Invalid OAuth access token.',
         requestId: 'trace-1',
+        outcomeUnknown: false,
       },
     });
   });
@@ -397,6 +400,7 @@ describe('Instagram API client', () => {
         subcode: null,
         message: 'Instagram API returned an invalid response',
         requestId: 'request-1',
+        outcomeUnknown: true,
       },
     });
   });

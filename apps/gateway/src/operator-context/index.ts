@@ -8,7 +8,9 @@ export {
   removePendingPlanForThread,
   resolvePendingPlanContexts,
   resolvePendingQuestionContext,
+  pendingPlanOrdinals,
   selectPendingPlan,
+  summarizePendingPlan,
   updateContext,
   type SelectPendingPlanResult,
 } from './persistence.js';

@@ -7,7 +7,7 @@ Technical contracts and settled engineering decisions live with the code they go
 ([agent-runtime](agent-runtime.md), [runbook](production/runbook.md),
 [transport plan](socialapi-transport-plan.md)), not here.
 
-Last updated: 2026-10-18.
+Last updated: 2026-10-27.
 
 ## Now — finish the cleanup
 
@@ -84,11 +84,8 @@ In order. This is the product's critical path.
    Closes when the agent asks for the order, then its email or zip, the reply confirms
    it, the photo ask follows, and the merchant gets one card: the confirmation line,
    photos and the proposed resolution.
-3. **Find why a parked card was discarded before the merchant replied.** Each drop logs a
-   `PendingPlanStaleReason` (`apps/gateway/src/operator-context/persistence.ts`); the
-   suspect is `plan_replaced` after a re-plan, or a second task overwriting the thread's
-   single cache slot. Closes when the cause is named and a re-plan re-parks and re-notifies
-   instead of orphaning a card the merchant is reading.
+3. **A customer follow-up ("ok thanks") orphans a parked card** (`cache_absent`). Closes when
+   it re-plans from the waiting task's objective and re-notifies; revise targets `planId`.
 4. **Close SocialAPI vendor diligence** before any external merchant's data flows: DPA,
    written retention/deletion answers, the terms §11.4 contradiction, a "Powered by
    SocialAPI" notice before the vendor redirect, and `/privacy` naming SocialAPI as a
@@ -110,6 +107,8 @@ In order. This is the product's critical path.
 - **SocialAPI hardening** (S1–S6 in [the transport plan](socialapi-transport-plan.md)):
   `dm.sent` correlation (a reply typed in the Instagram app never reaches the thread),
   missed-delivery recovery, account health probing, failed-connect compensation.
+- **Instagram reply latency:** measure per hop, then make the order-confirmation ask one
+  model call. SocialAPI has no typing or "Seen" for Instagram; ask the vendor.
 - **Agent rough edges seen live:** the operator agent's own chat question is reported as
   an escalation and the merchant's answer errors (`answer_operator_question` only knows
   ticket questions); cards on already-escalated threads print the raw
