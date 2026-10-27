@@ -128,7 +128,8 @@ export function formatOperatorPlanMessage(
     // Honesty disclosure about what parking this card does to the operator's
     // queue: `replaces` (cap-1: it evicts a different thread's pending plan),
     // `evicts` (cap>1: the queue is full so the oldest waiting plan is trimmed),
-    // or `stacked` (cap>1: it joins the queue, nothing dropped).
+    // or `stacked` (cap>1: it joins the queue, nothing dropped, so a bare yes/no
+    // no longer says which card it answers).
     queueNotice?: QueueNotice;
     // Orders this sender showed are theirs. Without it the card describes an
     // anonymous visitor above a draft that quotes their address, and the
@@ -300,18 +301,16 @@ export function formatOperatorPlanMessage(
   if (options?.queueNotice) {
     const notice = options.queueNotice;
     if (notice.kind === 'stacked') {
-      lines.push('', `(Added — you now have ${notice.waiting} plans waiting for you.)`);
+      const name = customerFirstName(customerName);
+      lines.push('', name
+        ? `(You have ${notice.waiting} plans waiting, so say whose you mean, like "yes ${name}".)`
+        : `(You have ${notice.waiting} plans waiting, so say which one you mean when you answer.)`);
     } else {
       const earlierName = customerFirstName(notice.customerName);
-      if (notice.kind === 'replaces') {
-        lines.push('', earlierName
-          ? `(This replaces the earlier plan for ${earlierName}. That one's still on your dashboard.)`
-          : "(This replaces an earlier plan. It's still on your dashboard.)");
-      } else {
-        lines.push('', earlierName
-          ? `(This pushes out ${earlierName}'s plan to stay under your limit. It's still on your dashboard.)`
-          : "(This pushes out the oldest waiting plan to stay under your limit. It's still on your dashboard.)");
-      }
+      const earlier = earlierName ? `${earlierName}'s plan` : 'The earlier plan';
+      lines.push('', notice.kind === 'replaces'
+        ? `(${earlier} is off your phone now, so yes or no here only answers this one. It's still on your dashboard.)`
+        : `(${earlier} is off your phone now to keep your list short. It's still on your dashboard.)`);
     }
   }
 
