@@ -19,9 +19,6 @@ Last updated: 2026-10-27.
    `npm run test:unit` covers every test that needs no database and runs without Docker.
 2. **Architecture-audit fixes (2026-10-17)**, one PR each, in this order. Most defects were
    traced in code, not seen in production:
-   - Autonomy: `allowsAutomaticExecution` covers escalation-only plans in
-     `plan-failure-replan`; `validateCustomerFacingApprovalSet` compares the executable
-     plan; one exhaustive table per code list replaces the four-place escalation ritual.
    - Remove partial approval (`toggleStep`, Telegram plan-skip remnants) and require
      `planId` on `/api/agent`.
    - Delete the parallel planning mode in `ai-summary-flow.ts`, so new email threads plan

@@ -111,26 +111,8 @@ export type RoutingDecision = 'auto_execute' | 'needs_review' | 'escalate'
 
 export type ClassifierAlignmentState = 'aligned' | 'missing' | 'unaligned' | 'not_applicable'
 
-export type PlanRoutingEvidenceCode =
-  | 'classifier_unavailable'
-  | 'classifier_unaligned'
-  | 'fraud_risk'
-  | 'forwarded_prompt_injection'
-  | 'contradictory_request'
-  | 'out_of_scope_commercial_request'
-  | 'fulfilled_cancellation_request'
-  | 'fulfilled_address_change_request'
-  | 'already_refunded_request'
-  | 'non_paid_refund_request'
-  | 'compensation_exception'
-  | 'ambiguous_customer'
-  | 'critical_planning_read_failure'
-  | 'compensation_over_cap'
-  | 'damage_photo_missing'
-  | 'order_unconfirmed'
-  | 'policy_gap'
-  | 'kb_gap'
-  | 'circular_channel_deflection'
+import type { PlanRoutingEvidenceCode } from './routing-evidence.js'
+export type { PlanRoutingEvidenceCode }
 
 export interface PlanRoutingEvidence {
   classifierState: ClassifierAlignmentState

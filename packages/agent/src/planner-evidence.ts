@@ -21,6 +21,7 @@ import {
 import { AWAIT_ORDER_VERIFICATION_TOOL, getToolDefinition, TOOL_CATEGORIES } from "./tools/registry/index.js";
 import type { ToolStatus } from "./tools/result.js";
 import { shopMoneyAmountOf } from "./tools/static-policy.js";
+import { escalationReasonFor } from "./routing-evidence.js";
 import type {
   ClassifierAlignmentState,
   MerchantContinuationKind,
@@ -50,28 +51,6 @@ export interface BuiltPlanRoutingEvidence {
   evidence: PlanRoutingEvidence;
   signalCodes: ProducedPlanSignalCode[];
 }
-
-const ESCALATION_REASONS: Record<PlanRoutingEvidenceCode, string | undefined> = {
-  classifier_unavailable: undefined,
-  classifier_unaligned: undefined,
-  fraud_risk: "Possible fraud signals (chargeback/dispute language or urgent non-receipt) — needs human review.",
-  forwarded_prompt_injection: "Message claims a prior authorization for a refund — needs human verification.",
-  contradictory_request: "Customer made contradictory requests in one message — needs a human to clarify.",
-  out_of_scope_commercial_request: "Wholesale, bulk, or B2B inquiry — out of scope for automated support.",
-  fulfilled_cancellation_request: "Cancellation requested for an already-fulfilled order — needs human review.",
-  fulfilled_address_change_request: "Address change requested for an already-fulfilled order — needs human review.",
-  already_refunded_request: "Refund requested for an order that is already fully refunded — needs human review.",
-  non_paid_refund_request: "Refund requested for an order whose payment is not in the paid state — needs human review.",
-  compensation_exception: "Compensation was requested but the plan contains no safe compensation action — needs human review.",
-  ambiguous_customer: "Multiple matching customers found — needs a human to confirm identity.",
-  critical_planning_read_failure: "Order or customer lookup failed — could not verify details to act safely.",
-  compensation_over_cap: "Compensation above the workspace limit was planned — needs human review.",
-  damage_photo_missing: "Customer reports a damaged or defective item without a photo — over to you.",
-  order_unconfirmed: "The sender could not confirm the order is theirs — over to you.",
-  policy_gap: undefined,
-  kb_gap: undefined,
-  circular_channel_deflection: undefined,
-};
 
 function classifierState(ctx: AgentContext): ClassifierAlignmentState {
   return classifierAlignmentState(
@@ -301,7 +280,7 @@ export function buildPlanRoutingEvidence(
 
   const uniqueCodes = [...new Set(codes)];
   const escalationReasons = uniqueCodes
-    .map((code) => ESCALATION_REASONS[code])
+    .map(escalationReasonFor)
     .filter((reason): reason is string => Boolean(reason));
   const needsQuestion = uniqueCodes.includes("policy_gap") || uniqueCodes.includes("kb_gap");
   return {

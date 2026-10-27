@@ -567,24 +567,14 @@ writing*.
 
 ### Adding a structural escalation code
 
-A new escalating `PlanRoutingEvidenceCode` goes in four places in
-`packages/agent/src`:
-
-1. the `PlanRoutingEvidenceCode` union (`types.ts`);
-2. `ESCALATION_EVIDENCE` (`autonomy.ts`), which makes `decideAutonomy` escalate
-   on it;
-3. `ESCALATION_REASONS` (`planner-evidence.ts`), its fixed merchant-facing
-   reason;
-4. `PLAN_ROUTING_EVIDENCE_CODES` (`plan-cache-shape.ts`).
-
-TypeScript checks only `ESCALATION_REASONS`, a `Record` over the union.
-`ESCALATION_EVIDENCE` is a deliberately partial set: left out, the code silently
-stops escalating. `PLAN_ROUTING_EVIDENCE_CODES` is a plain array: left out, any
-cached plan carrying the code fails `isPlanRoutingEvidence` and
-`readAgentPlanCacheRecordShape` rejects it. A code derived from the plan's
-writes also needs a position in `requestedWriteEscalationCode`, which keeps only
-the first match, so a specific code goes before the generic
-`compensation_exception`.
+A new `PlanRoutingEvidenceCode` is one entry in `PLAN_ROUTING_EVIDENCE`
+(`packages/agent/src/routing-evidence.ts`): its fixed merchant-facing reason if
+it escalates, `null` if it routes some other way. The union, the set
+`decideAutonomy` escalates on, the reasons and the cache decoder's code list all
+derive from that table, so a code cannot be known to one and missing from
+another. A code derived from the plan's writes also needs a position in
+`requestedWriteEscalationCode`, which keeps only the first match, so a specific
+code goes before the generic `compensation_exception`.
 
 ### Deterministic failure and race cases
 
