@@ -98,8 +98,11 @@ export type OrderVerificationState =
   | { kind: "verified"; order: VerifiedOrderRef; method: "email" | "zip"; resumedRequest: OrderVerificationRequest | null }
   /** Out of attempts, or asked as often as it may be: the merchant takes it from here. */
   | { kind: "locked"; orderName: string | null }
-  /** Asked and not yet confirmed. `pendingRequest` is what the ask was about. */
-  | { kind: "asked"; orderName: string; pendingRequest: OrderVerificationRequest | null }
+  /**
+   * Asked and not yet confirmed; `orderName` is null while the open question is
+   * which order. `pendingRequest` is what the ask was about.
+   */
+  | { kind: "asked"; orderName: string | null; pendingRequest: OrderVerificationRequest | null }
   /** Needs confirming and nothing asked yet; `orderName` is null until they name one. */
   | { kind: "ask"; orderName: string | null; pendingRequest: OrderVerificationRequest | null };
 
@@ -224,7 +227,7 @@ export function orderVerificationState(ctx: AgentContext, now: Date = new Date()
       if (continuesAsk(facts)) {
         return orderVerificationAttemptsLeft(records) === 0 || latestHere.asks >= ORDER_VERIFICATION_MAX_ASKS
           ? { kind: "locked", orderName: null }
-          : { kind: "ask", orderName: null, pendingRequest: requestOf(latestHere) };
+          : { kind: "asked", orderName: null, pendingRequest: requestOf(latestHere) };
       }
     } else if (latestHere.verifiedAt !== null || continuesAsk(facts)) {
       return stateOf(latestHere, records, { answeredNow: false });

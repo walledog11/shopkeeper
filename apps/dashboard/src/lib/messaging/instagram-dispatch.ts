@@ -26,6 +26,7 @@ const EXPIRED_CONNECTION = "Instagram connection expired — reconnect Instagram
 const MISSING_PERMISSION = "Instagram messaging permission is missing — reconnect Instagram"
 const SOCIALAPI_UNCONFIGURED = "Instagram replies are not configured — contact support"
 const SOCIALAPI_NO_CONVERSATION = "This Instagram conversation cannot be replied to yet"
+const DELIVERY_UNCONFIRMED = "Instagram didn't confirm this message, so it may already have reached the customer. Check Instagram before sending it again"
 
 
 function instagramMetadata(metadata: unknown): Record<string, unknown> | null {
@@ -124,6 +125,7 @@ async function sendThroughSocialApi(input: {
         category: result.error.category,
         httpStatus: result.error.httpStatus,
         integrationId: input.integrationId,
+        outcomeUnknown: result.error.outcomeUnknown,
         requestId: result.error.requestId,
         threadId: input.threadId,
       },
@@ -138,7 +140,9 @@ async function sendThroughSocialApi(input: {
     })
     return {
       ok: false,
-      error: "Failed to send via Instagram",
+      ...(result.error.outcomeUnknown
+        ? { outcome: "unknown" as const, error: DELIVERY_UNCONFIRMED }
+        : { error: "Failed to send via Instagram" }),
       ...(result.error.httpStatus > 0 && { providerStatus: result.error.httpStatus }),
     }
   }
@@ -365,6 +369,7 @@ export async function dispatchInstagramDirect(
         code: result.error.code,
         httpStatus: result.error.httpStatus,
         integrationId: igIntegration.id,
+        outcomeUnknown: result.error.outcomeUnknown,
         requestId: result.error.requestId,
         subcode: result.error.subcode,
         threadId: thread.id,
@@ -379,7 +384,9 @@ export async function dispatchInstagramDirect(
     })
     return {
       ok: false,
-      error: mapped.error,
+      ...(result.error.outcomeUnknown
+        ? { outcome: "unknown" as const, error: DELIVERY_UNCONFIRMED }
+        : { error: mapped.error }),
       ...(result.error.httpStatus > 0 && { providerStatus: result.error.httpStatus }),
     }
   }

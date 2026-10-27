@@ -148,6 +148,10 @@ function buildOrderVerificationSection(state: OrderVerificationState | null | un
         : "The sender is asking for help with an order but has not said which one, and nothing here shows they placed it. Call await_order_verification with no order_name, then send_reply asking for the order number. Do not read, discuss or propose anything for any order yet.";
       break;
     case "asked":
+      if (!state.orderName) {
+        body = "You already asked the sender which order this is about, and they have not named one. Do not ask the same question again. If their new message only adds to what they told you before, it may have crossed with your question: send nothing and propose nothing. If they answered without an order number, for example with an email address, call await_order_verification with no order_name and send_reply asking once more, briefly, for the order number itself. If they say they cannot find it, call escalate_to_human. Do not read, discuss or propose anything for any order yet.";
+        break;
+      }
       body = `You asked the sender to confirm order ${state.orderName} with its email address or shipping zip, and nothing they have sent confirms it. Call await_order_verification with order_name ${state.orderName} again, then send_reply asking once more, briefly, for the email or shipping zip on that order. If they sent one, say only that you could not confirm the order with it: never say which detail was wrong or whether the order exists. If they say they cannot give either, do not ask again: call escalate_to_human. Do not discuss the order.`;
       break;
     case "locked":
