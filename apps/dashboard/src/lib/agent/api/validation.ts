@@ -105,9 +105,13 @@ export function parseAgentRouteBody(body: unknown) {
 
 export function parseAgentAskBody(body: unknown) {
   const candidate = requireObject(body);
+  if (candidate.planHandoff !== undefined && typeof candidate.planHandoff !== "boolean") {
+    invalidField("planHandoff", "planHandoff must be a boolean");
+  }
   return {
     threadId: requireNonEmptyString(candidate.threadId, "threadId"),
     instruction: requireTrimmedInstruction(candidate.instruction),
+    planHandoff: candidate.planHandoff !== false,
   };
 }
 

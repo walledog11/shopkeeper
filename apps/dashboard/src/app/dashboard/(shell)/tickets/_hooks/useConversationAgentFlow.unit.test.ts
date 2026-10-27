@@ -24,7 +24,6 @@ import {
   getAgentCommandState,
   planRequiresApproval,
   resolvePendingPlan,
-  shouldUsePrivateComposerAsk,
   useConversationAgentFlow,
 } from "./useConversationAgentFlow"
 import type { AgentPlan, Ticket } from "@/types"
@@ -103,25 +102,6 @@ describe("resolvePendingPlan", () => {
       validation: { status: "invalid" },
     })
     expect(planRequiresApproval(plan)).toBe(true)
-  })
-})
-
-describe("shouldUsePrivateComposerAsk", () => {
-  it("routes private questions and draft requests away from execution", () => {
-    expect(shouldUsePrivateComposerAsk("What should I say to this customer?")).toBe(true)
-    expect(shouldUsePrivateComposerAsk("Summarize this request")).toBe(true)
-    expect(shouldUsePrivateComposerAsk("draft a reply")).toBe(true)
-  })
-
-  it("does not treat explicit action instructions as private asks", () => {
-    expect(shouldUsePrivateComposerAsk("change the order to size medium")).toBe(false)
-    expect(shouldUsePrivateComposerAsk("can you refund this order?")).toBe(false)
-    expect(shouldUsePrivateComposerAsk("send the customer an email")).toBe(false)
-  })
-
-  it("keeps action-related questions private when they are phrased as questions", () => {
-    expect(shouldUsePrivateComposerAsk("The customer wants to update their address. What should I do?")).toBe(true)
-    expect(shouldUsePrivateComposerAsk("What should I say about changing the size?")).toBe(true)
   })
 })
 

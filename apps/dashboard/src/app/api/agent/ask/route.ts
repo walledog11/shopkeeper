@@ -8,6 +8,8 @@ import { parseAgentAskBody } from "@/lib/agent/api/validation";
 import { buildContext, hashInstructionForLog, runAgent } from "@/lib/agent/runner";
 import { resolveAgentSettings } from "@shopkeeper/agent/settings";
 import { serializeAgentTurn } from "@shopkeeper/agent/turns";
+import { handsOffToPlanning } from "@shopkeeper/agent/composer-plan-handoff";
+import { buildComposerPlanHandoffTools } from "@/lib/agent/composer-plan-handoff-tool";
 import logger from "@/lib/server/logger";
 import type { OrgSettings } from "@/types";
 
@@ -25,7 +27,7 @@ export const POST = withOrgRoute(
   },
   async ({ org, request }) => {
     const startedAt = Date.now();
-    const { threadId, instruction } = parseAgentAskBody(await readRequiredJsonObject(request));
+    const { threadId, instruction, planHandoff } = parseAgentAskBody(await readRequiredJsonObject(request));
     const instructionHash = hashInstructionForLog(instruction);
     await requireOrgThread(threadId, org.id);
 
@@ -41,19 +43,27 @@ export const POST = withOrgRoute(
     // 4 for readOnly), so cap the fetch instead of loading 50 rows.
     const ctx = await buildContext(threadId, org.id, { messageWindow: 4 });
     const turnId = randomUUID();
-    const result = await runAgent(ctx, instruction, undefined, settings, { readOnly: true, turnId });
-
-    await createMessage({
-      threadId,
-      senderType: "note",
-      contentText: serializeAgentTurn({
-        id: turnId,
-        instruction,
-        actions: result.actionsPerformed,
-        summary: result.summary,
-        error: null,
-      }),
+    const result = await runAgent(ctx, instruction, undefined, settings, {
+      readOnly: true,
+      turnId,
+      ...(planHandoff ? { moduleTools: buildComposerPlanHandoffTools() } : {}),
     });
+
+    // A handoff answers nothing: the plan card the composer opens next is the
+    // record of this instruction.
+    if (!handsOffToPlanning(result.actionsPerformed)) {
+      await createMessage({
+        threadId,
+        senderType: "note",
+        contentText: serializeAgentTurn({
+          id: turnId,
+          instruction,
+          actions: result.actionsPerformed,
+          summary: result.summary,
+          error: null,
+        }),
+      });
+    }
 
     logger.info({
       orgId: org.id,

@@ -19,6 +19,7 @@ import { buildMerchantPreferencesPromptSection } from "./merchant-preferences.js
 import { replyPlaceholderInstructions } from "./reply-placeholders.js";
 import { EXCHANGE_EFFECT_DESCRIPTION, EXCHANGE_REPLY_GUIDANCE, EXCHANGE_FINANCIAL_GUIDANCE } from "./shopify/exchange-contract.js";
 import { MERCHANT_FOLLOW_UP_GUIDANCE } from "./tools/registry/model-contract.js";
+import { DRAFT_PLAN_TOOL } from "./composer-plan-handoff.js";
 
 function promptText(value: string | null | undefined, maxChars: number): string {
   return truncateContextText(value?.trim() ?? "", maxChars);
@@ -493,7 +494,11 @@ export function buildSystemPrompt(ctx: AgentContext, settings?: Partial<OrgSetti
   return stable ? `${stable}\n\n${volatile}` : volatile;
 }
 
-export function buildComposerAskPrompt(ctx: AgentContext, settings?: Partial<OrgSettings>): string {
+export function buildComposerAskPrompt(
+  ctx: AgentContext,
+  settings?: Partial<OrgSettings>,
+  options: { planHandoff?: boolean } = {},
+): string {
   const s = resolveAgentSettings(settings);
   const ordersJson = recentOrdersJson(ctx);
   const kbArticles = promptKbArticles(ctx);
@@ -525,7 +530,9 @@ ${kbSection}
 - Never send, email, notify, update, refund, cancel, tag, close, or otherwise mutate anything.
 - Use only read-only tools when you need context.
 - If the operator asks what to say or asks for a draft, provide draft text they can review and send themselves.
-- If the operator asks you to perform an action from private ask mode, say what should happen next and offer the plan in natural product language, e.g. "This looks safe to update. I can queue the address-change plan for your approval." Do not say "I can only read data" or mention tool permissions.
+${options.planHandoff
+    ? `- If the operator asks you to do something rather than asking a question — change, refund, cancel or edit an order, send or email the customer, tag or close the ticket — call ${DRAFT_PLAN_TOOL} and do not answer it yourself. Then reply with one short sentence saying you're drafting it for their approval.`
+    : `- If the operator asks you to perform an action from private ask mode, say what should happen next and offer the plan in natural product language, e.g. "This looks safe to update. I can queue the address-change plan for your approval." Do not say "I can only read data" or mention tool permissions.`}
 - Never mention missing tools, available tools, read-only mode, permissions, or implementation limits. If you do not know something, say what the operator should verify in normal support language.
 - If you are uncertain, say so plainly rather than guessing.
 - Sound like a sharp coworker, not a report generator. Use plain sentences, no markdown headings, no bold labels, and avoid bullet lists unless the operator explicitly asks for a checklist.

@@ -16,7 +16,13 @@ describe("agent api validation", () => {
     })).toEqual({
       threadId: "thread_123",
       instruction: "What should I say?",
+      planHandoff: true,
     });
+    expect(parseAgentAskBody({
+      threadId: "thread_123",
+      instruction: "What should I say?",
+      planHandoff: false,
+    }).planHandoff).toBe(false);
   });
 
   it("parses pending-plan button decisions", () => {

@@ -109,7 +109,7 @@ describe("conversation agent requests", () => {
       }), { status: 500 }),
     ))
 
-    const result = await askAgentPrivately("thread-1", "what should I say?")
+    const result = await askAgentPrivately("thread-1", "what should I say?", { planHandoff: true })
 
     expect(result.ok).toBe(false)
     expect(result.turn).toMatchObject({
