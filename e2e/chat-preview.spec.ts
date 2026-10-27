@@ -20,17 +20,37 @@ test('chat preview submits sample messages and stays usable while editing and re
     } } });
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto('/dashboard/chat');
-    const frame = page.frameLocator('iframe[title="Website chat preview"]');
+    const iframe = page.locator('iframe[title="Website chat preview"]');
+    const frame = iframe.contentFrame();
     await expect(frame.locator('.panel')).toBeVisible();
     const input = frame.getByRole('textbox', { name: 'Message', exact: true });
     await input.fill('A sample question');
-    await frame.getByRole('button', { name: 'Send message' }).click();
+    await input.press('Enter');
     await expect(frame.locator('.msg.me .bubble')).toHaveText('A sample question');
+    await test.step('send with a mouse inside the scaled preview', async () => {
+      await input.fill('A mouse question');
+      const send = frame.getByRole('button', { name: 'Send message' });
+      await expect(send).toBeEnabled();
+      await send.scrollIntoViewIfNeeded();
+      // Chromium's locator.click() ignores an opaque iframe's CSS scale. Use
+      // the button's frame-local position and the iframe's rendered dimensions.
+      const frameBounds = await iframe.evaluate(element => {
+        const bounds = element.getBoundingClientRect();
+        return { x: bounds.x, y: bounds.y, scaleX: bounds.width / element.clientWidth, scaleY: bounds.height / element.clientHeight };
+      });
+      const buttonCenter = await send.evaluate(element => {
+        const bounds = element.getBoundingClientRect();
+        return { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+      });
+      expect(frameBounds.scaleX).toBeLessThan(1);
+      await page.mouse.click(frameBounds.x + buttonCenter.x * frameBounds.scaleX, frameBounds.y + buttonCenter.y * frameBounds.scaleY);
+      await expect(frame.locator('.msg.me .bubble')).toHaveText(['A sample question', 'A mouse question']);
+    });
     await input.fill('Keep this draft');
     await page.getByLabel('Welcome message', { exact: true }).fill('An updated greeting');
     await expect(frame.locator('[data-welcome] .bubble')).toHaveText('An updated greeting');
     await expect(input).toHaveValue('Keep this draft');
-    await expect(frame.locator('.msg.me .bubble')).toHaveText('A sample question');
+    await expect(frame.locator('.msg.me .bubble')).toHaveText(['A sample question', 'A mouse question']);
 
     await page.setViewportSize({ width: 390, height: 844 });
     for (let index = 0; index < 3; index++) {
