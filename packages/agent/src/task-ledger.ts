@@ -580,6 +580,35 @@ async function advanceOrOpenThreadTask(
   });
 }
 
+/**
+ * Whether a conversation's current request is parked on the merchant: the task
+ * that took it waits on their approval or their answer, and nothing of it has
+ * reached a provider.
+ *
+ * The request must be that task's own. A later request on another task already
+ * replaced the card, so the classifier carrying it forward would only plan it a
+ * second time.
+ */
+export async function requestAwaitsMerchant(
+  input: { organizationId: string; threadId: string; sourceMessageId: string },
+): Promise<boolean> {
+  const waiting = await db.agentTask.findFirst({
+    where: {
+      organizationId: input.organizationId, threadId: input.threadId,
+      initiatingActorKind: "customer", cancelledAt: null, claimToken: null,
+      requests: { some: { organizationId: input.organizationId, sourceMessageId: input.sourceMessageId } },
+      actions: { none: { dispatchState: { in: DISPATCHED_STATES } } },
+      executions: { none: { status: { in: ["claimed", "committed", "unknown"] } } },
+      OR: [
+        { status: "waiting_approval", activeProposal: { is: { status: "ready" } } },
+        { status: "waiting_input", pendingAnswererKind: "member" },
+      ],
+    },
+    select: { id: true },
+  });
+  return waiting !== null;
+}
+
 export interface CustomerRequestInput {
   organizationId: string;
   threadId: string;
@@ -1074,7 +1103,7 @@ export type EndedWait = "question" | "proposal";
  * about which task this input belongs to.
  */
 function continuableTaskWhere(
-  input: { organizationId: string; threadId: string; endsWait: EndedWait },
+  input: { organizationId: string; threadId: string; endsWait: EndedWait; proposalId?: string },
   actorKey: string,
 ): PrismaTypes.AgentTaskWhereInput {
   const scopeKeys = endsWaitScopeKeys({ kind: "member", key: actorKey });
@@ -1100,6 +1129,7 @@ function continuableTaskWhere(
           // re-draft a decision that has already been made.
           activeProposal: {
             is: {
+              ...(input.proposalId ? { id: input.proposalId } : {}),
               status: "ready" as const,
               approverScopeKind: "member" as const,
               approverScopeKey: { in: scopeKeys },
@@ -1141,6 +1171,11 @@ export async function claimContinuedAgentTask(input: {
   clerkUserId: string;
   threadId: string;
   endsWait: EndedWait;
+  /**
+   * The card the merchant is revising. A revision of a card that has since been
+   * replaced must not land on its replacement, which they have not read.
+   */
+  proposalId?: string;
   /** The merchant input that ends the wait; persisted before the claim moves. */
   continuationInstruction?: string;
   continuationChannel?: ChannelType;

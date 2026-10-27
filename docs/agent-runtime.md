@@ -138,6 +138,13 @@ use the same base instruction in the cache, card and proposal hash. Cancellation
 lost or expired claims, and a newer customer message prevent publication.
 Reply-only continuations await approval until the reviewed reply executes.
 
+A customer message that asks nothing ("ok thanks", "hi") does not close a
+request waiting on the merchant's approval or answer. The classifier write
+(`requestFieldsForBurst`) carries that request forward onto the new message, so
+planning re-drafts it on the same task against the conversation as it now
+stands and re-parks the card. A phone revision names the card it revises, so it
+never lands on a replacement the merchant has not read.
+
 Revisions deliver the canonical full card to the answering iMessage device and
 other bindings. Drafts too long to display require dashboard review and cannot
 be approved from the phone. Keep the operator's pending question until the answer

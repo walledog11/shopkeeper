@@ -11,20 +11,13 @@ Last updated: 2026-10-27.
 
 ## Now — finish the cleanup
 
-1. **Confirm the `Gateway Worker` runs with `NODE_ENV=production`.** The `shopkeeper` web
-   service does: its Express error page carries no stack trace (2026-10-15). Without it
-   `validateGatewayEnv` skips its production boot checks, `loadKey` can fall back to a dev
-   encryption key, `hasValidPostmarkAuth` accepts unauthenticated posts when its
-   credentials are unset, and rate limiting fails open. Nixpacks writes it into every Node
-   image unless a Railway variable overrides it. Closes when the worker's logs are JSON
-   (runbook: *Railway*).
-2. **Test suite structure.** One naming rule everywhere (`*.integration.test.ts` needs
+1. **Test suite structure.** One naming rule everywhere (`*.integration.test.ts` needs
    services, any other `*.test.ts` doesn't); move DB-free "integration" files to unit and
    agent-package tests out of the gateway; replace the Clerk-mock patching in the
    dashboard `test-setup.ts` with one `mockClerkSession()` helper; split scenario files
    over ~600 lines; turn lint-style tests into ESLint rules. No new tests. Closes when
    `npm run test:unit` covers every test that needs no database and runs without Docker.
-3. **Agent-core debt**, one PR each:
+2. **Agent-core debt**, one PR each:
    - Delete the execution-time reply renderer (`renderReplyCompletionClaims` and its
      helpers) and the dead `completionEvidence` plumbing; keep
      `unsupportedReplyCompletionClaims` as a refusal. Its only live caller is operator
@@ -43,7 +36,7 @@ Last updated: 2026-10-27.
    - Split `task-ledger.ts` by concern.
    - One money formatter (copies in `sales-pulse.ts`, `conversation-attribution.ts`,
      `lib/format/currency.ts`, `publicMoney`, the context-panel formatters).
-4. **Architecture-audit fixes (2026-10-17)**, one PR each, in this order. Most defects were
+3. **Architecture-audit fixes (2026-10-17)**, one PR each, in this order. Most defects were
    traced in code, not seen in production:
    - Dashboard answers re-plan on the gateway (`applyOperatorAnswerReplan`), so they park
      and notify every channel; `io-send-internal` reports a post-acceptance throw as
@@ -84,22 +77,20 @@ In order. This is the product's critical path.
    Closes when the agent asks for the order, then its email or zip, the reply confirms
    it, the photo ask follows, and the merchant gets one card: the confirmation line,
    photos and the proposed resolution.
-3. **A customer follow-up ("ok thanks") orphans a parked card** (`cache_absent`). Closes when
-   it re-plans from the waiting task's objective and re-notifies; revise targets `planId`.
-4. **Close SocialAPI vendor diligence** before any external merchant's data flows: DPA,
+3. **Close SocialAPI vendor diligence** before any external merchant's data flows: DPA,
    written retention/deletion answers, the terms §11.4 contradiction, a "Powered by
    SocialAPI" notice before the vendor redirect, and `/privacy` naming SocialAPI as a
    processor. Gates are in [socialapi-s0-diligence](production/socialapi-s0-diligence-2026-09-07.md).
-5. **First live SocialAPI merchant connect** (runbook: *Instagram via SocialAPI*), with
+4. **First live SocialAPI merchant connect** (runbook: *Instagram via SocialAPI*), with
    the `SOCIALAPI_*` vars added to `scripts/check-production-env.mjs`. Closes when a
    workspace connects from the dashboard and its next DM routes to it.
-6. **Disconnect and deletion revoke the SocialAPI account.** `disconnectInstagramAccount`
+5. **Disconnect and deletion revoke the SocialAPI account.** `disconnectInstagramAccount`
    has no caller. Closes when disconnect revokes the remote account (or records why not)
    and a disconnect → reconnect keeps routing and customer identity.
-7. **Rotate `SHOPIFY_APP_SECRET`** (exposed 2026-08-30; steps in the runbook).
-8. **Install the Shopify app on a real, non-dev store.** Closes when the install grants
+6. **Rotate `SHOPIFY_APP_SECRET`** (exposed 2026-08-30; steps in the runbook).
+7. **Install the Shopify app on a real, non-dev store.** Closes when the install grants
    every `SHOPIFY_OAUTH_SCOPES` scope and a missing scope shows the reconnect path.
-9. **Two supervised external merchants** complete real approved loops with no
+8. **Two supervised external merchants** complete real approved loops with no
    wrong-recipient, unauthorized-money, duplicate-action or lost-message incident.
 
 ## Later

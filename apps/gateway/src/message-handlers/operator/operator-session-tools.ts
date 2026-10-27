@@ -195,6 +195,7 @@ export function buildOperatorSessionTools(
         // continued rather than re-planned beside itself, and the proposal the
         // merchant is superseding stops being approvable.
         endsWait: 'proposal',
+        ...(pendingPlan.planId ? { revisedPlanId: pendingPlan.planId } : {}),
         ...(deliveryRef ? { deliveryRef } : {}),
       });
       return result.status === 'failed' ? toolError(result.message) : toolOk(result.message);

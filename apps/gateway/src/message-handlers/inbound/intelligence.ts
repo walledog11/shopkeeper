@@ -13,12 +13,12 @@ import {
   CLASSIFIER_OUTPUT_SCHEMA,
   classifiedEpisodeFields,
   classifiedFilterFields,
-  classifiedRequestFields,
   classifierUserInput,
   logClassificationAttemptUnresolved,
   logClassificationRequestWrite,
   classifierSystemPrompt,
   parseClassifierJson,
+  requestFieldsForBurst,
 } from './classification.js';
 import { listVerifiedOrderNames } from '../../storefront-chat-verified-orders.js';
 import { getConversationBurst } from './conversation-burst.js';
@@ -134,12 +134,15 @@ export async function generateThreadIntelligence(
     const settledBurst = await getConversationBurst(threadId);
     const sourceMessageId = burst.messages.at(-1)?.id ?? null;
     const requestIsCurrent = (settledBurst.messages.at(-1)?.id ?? null) === sourceMessageId;
+    const requestFields = requestIsCurrent
+      ? await requestFieldsForBurst(fullThread, aiData, sourceMessageId)
+      : null;
 
     const updated = await db.thread.update({
       where: { id: threadId },
       data: {
         ...classifiedEpisodeFields(aiData),
-        ...(requestIsCurrent && classifiedRequestFields(aiData, sourceMessageId)),
+        ...requestFields,
         ...filterFields,
       },
     });

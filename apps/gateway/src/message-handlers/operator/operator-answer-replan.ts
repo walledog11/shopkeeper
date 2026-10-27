@@ -48,6 +48,8 @@ export interface OperatorAnswerReplanParams {
   deliveryRef?: string;
   /** Plan that asked the merchant, when known before the cached plan is replaced. */
   askingPlanId?: string | null;
+  /** The card being revised, so a revision never lands on a card that replaced it. */
+  revisedPlanId?: string;
   /**
    * Which wait this text ends — the question the agent asked, or the card it
    * parked. The caller knows because the merchant's tool call is what says so,
@@ -89,6 +91,7 @@ export async function applyOperatorAnswerReplan(
     clerkUserId: params.clerkUserId,
     threadId: params.threadId,
     endsWait: params.endsWait,
+    ...(params.revisedPlanId ? { proposalId: params.revisedPlanId } : {}),
     continuationInstruction: params.answer,
     continuationChannel: 'operator',
     leaseMs: ANSWER_REPLAN_LEASE_MS,

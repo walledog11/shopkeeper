@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { db } from '@shopkeeper/db';
+import { db, Prisma } from '@shopkeeper/db';
 import { createTestMessage } from '@shopkeeper/db/test-helpers';
 import {
   ANY_MEMBER_ACTOR_KEY,
@@ -15,10 +15,11 @@ import {
 } from '../../test-fixtures/support-plan-test-fixtures.js';
 import { createTestOrgTracker } from '../../test-fixtures/test-org-tracker.js';
 
-const { mockPlanAgent, mockBuildContext, mockMaybeAutoExecute } = vi.hoisted(() => ({
+const { mockPlanAgent, mockBuildContext, mockMaybeAutoExecute, mockClassifier } = vi.hoisted(() => ({
   mockPlanAgent: vi.fn(),
   mockBuildContext: vi.fn(async () => ({})),
   mockMaybeAutoExecute: vi.fn<(params: { durableTurn?: { requestId: string; taskId: string } }) => Promise<unknown>>(),
+  mockClassifier: vi.fn(),
 }));
 
 // Only the model and the provider are stood in for. The thread, the message, the
@@ -39,8 +40,16 @@ vi.mock('@shopkeeper/agent/request-outcome', () => ({
 vi.mock('../../realtime/publish.js', () => ({ publishThreadEvent: vi.fn(async () => {}) }));
 vi.mock('../../product-analytics.js', () => ({ captureAgentPlanGenerated: vi.fn(async () => {}) }));
 vi.mock('../../operator-context.js', () => ({ removePendingPlanForThread: vi.fn(async () => {}) }));
+vi.mock('@anthropic-ai/sdk', () => ({
+  default: class Anthropic {
+    messages = { create: mockClassifier };
+  },
+}));
 
 import { generateThreadPlan } from './generate-thread-plan.js';
+import { precomputeThreadPlan } from './planning.js';
+import { generateThreadIntelligence } from '../inbound/intelligence.js';
+import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 
 const refund: RawToolCall = {
   id: 'refund', name: 'create_refund',
@@ -264,6 +273,75 @@ describe('durable support task', () => {
       revision: 0,
     });
     expect(tasks[1]).toMatchObject({ status: 'completed', revision: 0 });
+  });
+
+  it('re-plans a parked request on its own task when the customer writes back asking nothing', async () => {
+    const seed = await seedThread();
+    const classify = (fields: { summary: string; requestSummary: string; requestDisposition: string; ask: string }) => ({
+      content: [{ type: 'text', text: JSON.stringify({
+        title: 'Refund request',
+        summary: fields.summary,
+        tag: 'Returns',
+        classification: 'genuine',
+        reason: 'A real customer.',
+        language: 'en',
+        intents: {},
+        requestSummary: fields.requestSummary,
+        requestDisposition: fields.requestDisposition,
+        requestFacts: {
+          ask: fields.ask, subject: null, order: fields.ask === 'refund' ? '#1001' : null,
+          deadline: null, deadlineText: null, alternative: null, reason: null,
+        },
+      }) }],
+      usage: { input_tokens: 10, output_tokens: 10 },
+    });
+    mockClassifier.mockResolvedValueOnce(classify({
+      summary: 'Customer asks for a refund on order #1001.',
+      requestSummary: 'Customer asks for a refund on order #1001.',
+      requestDisposition: 'merchant_action',
+      ask: 'refund',
+    }));
+    await generateThreadIntelligence(seed.threadId);
+    mockPlanAgent.mockResolvedValue(agentPlanFromRawToolCalls([refund, reply]));
+    await generateThreadPlan(seed.organizationId, seed.threadId, false);
+    const parked = await taskFor(seed.organizationId);
+    expect(parked.status).toBe('waiting_approval');
+
+    // The customer's "ok thanks" clears the card's cached plan on arrival and
+    // classifies as closing the loop. Written as the thread's request, that
+    // verdict stopped anything re-planning, and the card the merchant was
+    // reading failed its next liveness check as cache_absent.
+    const thanks = await createTestMessage(seed.threadId, 'ok thanks');
+    await db.thread.update({
+      where: { id: seed.threadId },
+      data: { cachedPlan: Prisma.DbNull, cachedPlanMessageId: null },
+    });
+    mockClassifier.mockResolvedValueOnce(classify({
+      summary: 'Customer asked for a refund on order #1001, then said thanks.',
+      requestSummary: '',
+      requestDisposition: 'acknowledgement',
+      ask: 'none',
+    }));
+    await generateThreadIntelligence(seed.threadId);
+    expect(await db.thread.findUniqueOrThrow({ where: { id: seed.threadId } })).toMatchObject({
+      requestSourceMessageId: thanks.id,
+      requestSummary: 'Customer asks for a refund on order #1001.',
+      requestDisposition: 'merchant_action',
+    });
+
+    const replanned = await precomputeThreadPlan(
+      seed.organizationId, seed.threadId, resolveAgentSettings(null), { sourceMessageId: thanks.id },
+    );
+    expect(replanned?.identity?.sourceMessageId).toBe(thanks.id);
+    expect(mockPlanAgent).toHaveBeenLastCalledWith(
+      expect.anything(), 'Customer asks for a refund on order #1001.', expect.anything(), expect.anything(),
+    );
+    const continued = await db.agentTask.findUniqueOrThrow({ where: { id: parked.id } });
+    expect(continued).toMatchObject({ status: 'waiting_approval', revision: parked.revision + 1 });
+    expect(continued.activeProposalId).toBe(replanned?.identity?.planId);
+    expect(await db.agentProposal.findUniqueOrThrow({ where: { id: parked.activeProposalId! } }))
+      .toMatchObject({ status: 'superseded' });
+    expect(await db.agentTask.count({ where: { organizationId: seed.organizationId } })).toBe(1);
   });
 
   it('records the attempt as failed without swallowing the failure', async () => {
