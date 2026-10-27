@@ -299,24 +299,26 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
     }
     // The report above says a step failed and a follow-up needs approval. The
     // card carrying that follow-up has to reach the same channels, or the
-    // merchant is told to approve something they cannot see.
-    if (planResult.failureReplanAwaitingApproval && planResult.plan) {
-      await sendOperatorPlanNotification(
-        organizationId,
-        threadId,
-        customerName,
-        channelType,
-        updatedThread?.requestSummary ?? null,
-        planResult.plan,
-        planResult.instruction,
-        planResult.identity ? { identity: planResult.identity } : undefined,
-      );
-    }
-    // Both leave the customer waiting on the merchant: a handoff, or a follow-up
-    // card after a failed step.
-    if (autoExecutionOnlyHandedOff(planResult) || planResult.failureReplanAwaitingApproval) {
-      await acknowledgeHandoff(organizationId, threadId, channelType);
-    }
+    // merchant is told to approve something they cannot see. Both a handoff and
+    // that card leave the customer waiting on the merchant, so they are told,
+    // without waiting on the card.
+    await Promise.all([
+      planResult.failureReplanAwaitingApproval && planResult.plan
+        ? sendOperatorPlanNotification(
+          organizationId,
+          threadId,
+          customerName,
+          channelType,
+          updatedThread?.requestSummary ?? null,
+          planResult.plan,
+          planResult.instruction,
+          planResult.identity ? { identity: planResult.identity } : undefined,
+        )
+        : undefined,
+      autoExecutionOnlyHandedOff(planResult) || planResult.failureReplanAwaitingApproval
+        ? acknowledgeHandoff(organizationId, threadId, channelType)
+        : undefined,
+    ]);
     return;
   }
 
@@ -346,33 +348,39 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
     return;
   }
 
+  // The customer's acknowledgement does not wait on the merchant's card: it is
+  // claimed once per wait, so a retry after a failed card never repeats it.
   if (planResult.merchantQuestion) {
-    await sendOperatorQuestionNotification(
+    await Promise.all([
+      acknowledgeHandoff(organizationId, threadId, channelType),
+      sendOperatorQuestionNotification(
+        organizationId,
+        threadId,
+        customerName,
+        channelType,
+        decision.requestSummary,
+        planResult.merchantQuestion,
+        planResult.instruction,
+        planResult.identity ? {
+          planId: planResult.identity.planId,
+          sourceMessageId: planResult.identity.sourceMessageId,
+        } : undefined,
+      ),
+    ]);
+    return;
+  }
+
+  await Promise.all([
+    acknowledgeHandoff(organizationId, threadId, channelType),
+    sendOperatorPlanNotification(
       organizationId,
       threadId,
       customerName,
       channelType,
       decision.requestSummary,
-      planResult.merchantQuestion,
+      planResult.plan,
       planResult.instruction,
-      planResult.identity ? {
-        planId: planResult.identity.planId,
-        sourceMessageId: planResult.identity.sourceMessageId,
-      } : undefined,
-    );
-    await acknowledgeHandoff(organizationId, threadId, channelType);
-    return;
-  }
-
-  await sendOperatorPlanNotification(
-    organizationId,
-    threadId,
-    customerName,
-    channelType,
-    decision.requestSummary,
-    planResult.plan,
-    planResult.instruction,
-    planResult.identity ? { identity: planResult.identity } : undefined,
-  );
-  await acknowledgeHandoff(organizationId, threadId, channelType);
+      planResult.identity ? { identity: planResult.identity } : undefined,
+    ),
+  ]);
 }
