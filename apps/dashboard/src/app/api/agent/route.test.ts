@@ -88,7 +88,7 @@ async function createThreadWithCachedPlan(plan: AgentPlan, instruction = 'Handle
     });
   }
 
-  return thread;
+  return Object.assign(thread, { planId: cachedPlan.planId! });
 }
 
 describe('POST /api/agent', () => {
@@ -108,7 +108,7 @@ describe('POST /api/agent', () => {
     const res = await POST(new Request('http://localhost:3000/api/agent', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ threadId: thread.id, instruction: 'Handle this', approvedToolCalls }),
+      body: JSON.stringify({ threadId: thread.id, instruction: 'Handle this', approvedToolCalls, planId: thread.planId }),
     }));
 
     expect(res.status).toBe(400);
@@ -128,7 +128,7 @@ describe('POST /api/agent', () => {
     const res = await POST(new Request('http://localhost:3000/api/agent', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ threadId: thread.id, instruction: 'Handle this', approvedToolCalls }),
+      body: JSON.stringify({ threadId: thread.id, instruction: 'Handle this', approvedToolCalls, planId: thread.planId }),
     }));
 
     expect(res.status).toBe(409);
@@ -146,7 +146,7 @@ describe('POST /api/agent', () => {
     const res = await POST(new Request('http://localhost:3000/api/agent', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ threadId: thread.id, instruction: 'Handle this' }),
+      body: JSON.stringify({ threadId: thread.id, instruction: 'Handle this', planId: thread.planId }),
     }));
 
     expect(res.status).toBe(400);
@@ -168,6 +168,7 @@ describe('POST /api/agent', () => {
         threadId: thread.id,
         instruction: 'Handle this',
         approvedToolCalls: [{ id: 'send_1', name: 'send_reply', input: { text: 'Different text' } }],
+        planId: thread.planId,
       }),
     }));
 
@@ -187,7 +188,7 @@ describe('POST /api/agent', () => {
     const res = await POST(new Request('http://localhost:3000/api/agent', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ threadId: thread.id, instruction: 'Handle this', approvedToolCalls }),
+      body: JSON.stringify({ threadId: thread.id, instruction: 'Handle this', approvedToolCalls, planId: thread.planId }),
     }));
 
     expect(res.status).toBe(200);
@@ -221,7 +222,7 @@ describe('POST /api/agent', () => {
     const res = await POST(new Request('http://localhost:3000/api/agent', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ threadId: thread.id, instruction: 'Handle this', approvedToolCalls }),
+      body: JSON.stringify({ threadId: thread.id, instruction: 'Handle this', approvedToolCalls, planId: thread.planId }),
     }));
 
     expect(res.status).toBe(500);
@@ -240,7 +241,7 @@ describe('POST /api/agent', () => {
       rawToolCalls: approvedToolCalls,
     };
     const thread = await createThreadWithCachedPlan(plan);
-    const body = JSON.stringify({ threadId: thread.id, instruction: 'Handle this', approvedToolCalls });
+    const body = JSON.stringify({ threadId: thread.id, instruction: 'Handle this', approvedToolCalls, planId: thread.planId });
 
     const first = await POST(new Request('http://localhost:3000/api/agent', {
       method: 'POST',
@@ -255,7 +256,26 @@ describe('POST /api/agent', () => {
       headers: { 'Content-Type': 'application/json' },
       body,
     }));
-    expect(second.status).toBe(400);
+    // The approval names a proposal that already ran, so it conflicts.
+    expect(second.status).toBe(409);
     expect(mockExecuteAgentTurn).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses an approval without the proposal it approves', async () => {
+    const approvedToolCalls = [{ id: 'send_1', name: 'send_reply', input: { text: 'Hi' } }];
+    const thread = await createThreadWithCachedPlan({
+      instruction: 'Handle this',
+      steps: [{ id: 'send_1', tool: 'send_reply', label: 'Notify customer', description: '"Hi"', category: 'communication', enabled: true }],
+      rawToolCalls: approvedToolCalls,
+    });
+
+    const res = await POST(new Request('http://localhost:3000/api/agent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId: thread.id, instruction: 'Handle this', approvedToolCalls }),
+    }));
+
+    expect(res.status).toBe(400);
+    expect(mockExecuteAgentTurn).not.toHaveBeenCalled();
   });
 });

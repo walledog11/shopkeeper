@@ -93,7 +93,7 @@ describe('ActionPlanCard', () => {
       .toContain('This draft cannot be approved');
     expect(view.container.textContent).toContain('unsupported promise');
     expect(view.container.querySelector('[data-testid="action-plan-run"]')).toBeNull();
-    expect(view.container.querySelector('[data-testid="action-plan-step-toggle"]')).toBeNull();
+    expect(view.container.querySelector('[data-testid="action-plan-step"]')).toBeNull();
 
     click(view.container.querySelector('[data-testid="action-plan-dismiss-invalid"]'));
     expect(onDismiss).toHaveBeenCalledTimes(1);
@@ -191,35 +191,6 @@ describe('ActionPlanCard', () => {
 
     click(runButton());
     expect(view.onApprove).toHaveBeenCalledWith(plan.rawToolCalls);
-  });
-
-  it('allows a reviewed action step to be disabled', () => {
-    const plan: AgentPlan = {
-      instruction: 'Refund the order',
-      steps: [{
-        id: 'refund-1',
-        tool: 'create_refund',
-        label: 'Refund order',
-        description: 'Refund order #1001',
-        category: 'action',
-        enabled: true,
-      }],
-      rawToolCalls: [{
-        id: 'refund-1',
-        name: 'create_refund',
-        input: { order_id: '1001' },
-      }],
-    };
-    const view = render(plan);
-    const toggle = view.container.querySelector('[data-testid="action-plan-step-toggle"]');
-
-    click(toggle);
-
-    expect(window.confirm).toHaveBeenCalled();
-    expect(toggle?.getAttribute('aria-pressed')).toBe('false');
-    expect(
-      (view.container.querySelector('[data-testid="action-plan-run"]') as HTMLButtonElement).disabled,
-    ).toBe(true);
   });
 
   it.each([

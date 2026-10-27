@@ -14,13 +14,13 @@ describe('parseTelegramCommand', () => {
     });
     expect(parseTelegramCommand('YeS')).toEqual({ type: 'plan-run' });
     expect(parseTelegramCommand('NO')).toEqual({ type: 'plan-dismiss' });
-    expect(parseTelegramCommand('SkIp 2')).toEqual({ type: 'plan-skip', index: 2 });
   });
 
   it('falls back to free-form for malformed indexes', () => {
     expect(parseTelegramCommand('open two')).toEqual({ type: 'free-form', instruction: 'open two' });
     expect(parseTelegramCommand('spam 1.5')).toEqual({ type: 'free-form', instruction: 'spam 1.5' });
-    expect(parseTelegramCommand('skip -1')).toEqual({ type: 'free-form', instruction: 'skip -1' });
+    // Leaving a step out is a revision the agent drafts, not a command.
+    expect(parseTelegramCommand('skip 2')).toEqual({ type: 'free-form', instruction: 'skip 2' });
   });
 
   it('falls back to free-form when reply text is empty', () => {

@@ -74,7 +74,7 @@ export const POST = withOrgRoute(
       executionIntent: "merchant_approved",
       failureRoute: "/api/agent",
       approvedToolCalls,
-      expectedIdentity: { instructionHash: hashInstruction(instruction), ...(planId ? { planId } : {}) },
+      expectedIdentity: { instructionHash: hashInstruction(instruction), planId },
       ...(approver ? { approver } : {}),
     });
     const result = executed.result;

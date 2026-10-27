@@ -308,17 +308,23 @@ async function loadExecutionSource(params: {
   if (!durable) return loadCurrentCachedHomePlan(params);
 
   validateDurableExpectedIdentity(durable, params.expectedIdentity!);
+  const thread = await requireOrgThread(params.threadId, params.orgId);
+  // The proposal was judged when it was parked, but the card it was parked from
+  // still has the last word on validity: a draft that failed validation never
+  // runs, whichever record the approval names.
+  const card = readAgentPlanCache(thread.cachedPlan);
+  const cardValidation = card?.planId === durable.proposalId ? card.plan.validation : undefined;
   const plan: AgentPlan = {
     planId: durable.proposalId,
     instruction: durable.instruction,
     steps: buildPlanSteps(durable.canonicalActions),
     rawToolCalls: durable.canonicalActions,
-    validation: { status: "valid", issues: [] },
+    validation: cardValidation ?? { status: "valid", issues: [] },
     routingEvidence: { classifierState: "not_applicable", codes: [] },
     communication: durable.communication,
   };
   return {
-    channel: (await requireOrgThread(params.threadId, params.orgId)).channelType,
+    channel: thread.channelType,
     instruction: durable.instruction,
     lastCustomerMessageId: durable.sourceMessageId,
     planId: durable.proposalId,

@@ -13,8 +13,6 @@ import {
 import type { PlanSignal, PlanStep } from "@/types"
 import { formatPlanStepSentence } from "./plan-step-display"
 
-type DisplayStep = PlanStep & { enabled: boolean }
-
 function isShopifyLinkSignal(signal: PlanSignal): boolean {
   return signal.code === "shopify_customer_unresolved"
 }
@@ -48,9 +46,8 @@ export function ActionPlanBody({
   replyText,
   shopifyActionSteps,
   showReplyHero,
-  toggleStep,
 }: {
-  actionSteps: DisplayStep[]
+  actionSteps: PlanStep[]
   blockingSignals: PlanSignal[]
   customerName?: string | null
   advisorySignals: PlanSignal[]
@@ -60,9 +57,8 @@ export function ActionPlanBody({
   isMobileSticky: boolean
   onFocusShopifyLink?: () => void
   replyText: string | null
-  shopifyActionSteps: DisplayStep[]
+  shopifyActionSteps: PlanStep[]
   showReplyHero: boolean
-  toggleStep: (id: string, tool: string) => void
 }) {
   // No text color here: the reply bubble sets white text on its fixed dark fill,
   // and a theme color would turn ink-dark on the paper theme.
@@ -72,9 +68,9 @@ export function ActionPlanBody({
   const photosFor = (signal: PlanSignal) => (
     signal.code === "damage_photo_attached" ? <AttachmentList attachments={damagePhotos} compact /> : null
   )
-  // What approving the enabled steps still leaves to the merchant.
+  // What approving these steps still leaves to the merchant.
   const followUps = outstandingMerchantFollowUps(
-    [...actionSteps, ...shopifyActionSteps].filter(step => step.enabled).map(step => step.tool),
+    [...actionSteps, ...shopifyActionSteps].map(step => step.tool),
   )
   const customer = customerFirstName(customerName) ?? "the customer"
 
@@ -133,32 +129,21 @@ export function ActionPlanBody({
       ) : (
         <ol className="mt-3 flex flex-col gap-1.5">
           {actionSteps.map(step => (
-            <li key={step.id}>
-              <button
-                type="button"
-                data-testid="action-plan-step-toggle"
-                data-step-id={step.id}
-                aria-pressed={step.enabled}
-                onClick={() => toggleStep(step.id, step.tool)}
-                disabled={isExecuting}
-                className="flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-foreground/[0.03] disabled:opacity-60"
-              >
-                <span className={`mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-md border transition-colors ${
-                  step.enabled
-                    ? "border-foreground bg-foreground text-background"
-                    : "border-border text-faint"
-                }`}>
-                  {isExecuting && step.enabled
-                    ? <Loader2 className="size-2.5 animate-spin" />
-                    : <Check className="size-3" />
-                  }
-                </span>
-                <span className={`min-w-0 flex-1 text-sm leading-relaxed ${
-                  step.enabled ? "text-strong" : "text-faint line-through"
-                }`}>
-                  {formatPlanStepSentence(step, customerName)}
-                </span>
-              </button>
+            <li
+              key={step.id}
+              data-testid="action-plan-step"
+              data-step-id={step.id}
+              className="flex w-full items-start gap-3 rounded-xl px-3 py-2.5"
+            >
+              <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-md border border-foreground bg-foreground text-background">
+                {isExecuting
+                  ? <Loader2 className="size-2.5 animate-spin" />
+                  : <Check className="size-3" />
+                }
+              </span>
+              <span className="min-w-0 flex-1 text-sm leading-relaxed text-strong">
+                {formatPlanStepSentence(step, customerName)}
+              </span>
             </li>
           ))}
         </ol>
@@ -169,28 +154,18 @@ export function ActionPlanBody({
           <span className="text-[11px] font-semibold text-faint">Also in Shopify</span>
           <div className="flex flex-wrap gap-1.5">
             {shopifyActionSteps.map(step => (
-              <button
-                type="button"
+              <span
                 key={step.id}
-                data-testid="action-plan-step-toggle"
+                data-testid="action-plan-step"
                 data-step-id={step.id}
-                aria-pressed={step.enabled}
-                onClick={() => toggleStep(step.id, step.tool)}
-                disabled={isExecuting}
-                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
-                  step.enabled
-                    ? "border-amber-600/25 bg-amber-600/[0.08] text-amber-700/90"
-                    : "border-border text-faint line-through"
-                }`}
+                className="inline-flex items-center gap-1.5 rounded-full border border-amber-600/25 bg-amber-600/[0.08] px-3 py-1.5 text-xs font-medium text-amber-700/90"
               >
-                {isExecuting && step.enabled
+                {isExecuting
                   ? <Loader2 className="size-3 animate-spin" />
-                  : <span className={`size-1.5 rounded-full ${
-                      step.enabled ? "bg-amber-600" : "bg-foreground/20"
-                    }`} />
+                  : <span className="size-1.5 rounded-full bg-amber-600" />
                 }
                 {stepChipLabel(step)}
-              </button>
+              </span>
             ))}
           </div>
         </div>

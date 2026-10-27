@@ -99,7 +99,9 @@ export function parseAgentRouteBody(body: unknown) {
     threadId: requireNonEmptyString(candidate.threadId, "threadId"),
     instruction: requireTrimmedInstruction(candidate.instruction),
     approvedToolCalls: parseApprovedToolCalls(candidate.approvedToolCalls),
-    planId: parseOptionalString(candidate.planId, "planId"),
+    // The durable proposal approval binds to. A card without one predates
+    // durable approvals and has to be regenerated, so it is refused here.
+    planId: requireNonEmptyString(candidate.planId, "planId"),
   };
 }
 
