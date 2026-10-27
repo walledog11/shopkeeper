@@ -20,7 +20,7 @@ import { ConflictError, ForbiddenError } from "./errors.js";
 import { hashInstruction, hashPlan } from "./agent-actions.js";
 import {
   ANY_MEMBER_ACTOR_KEY, actorMayEndWait, NO_SUSPENSION, requireMemberActorKey,
-} from "./task-ledger.js";
+} from "./task-ledger/index.js";
 import { communicationFromColumns } from "./proposal-communication.js";
 import { requireDurableAgentRuntime } from "./runtime-modes.js";
 import type { ProposalCommunication, RawToolCall } from "./types.js";

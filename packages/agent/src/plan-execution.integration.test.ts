@@ -30,7 +30,7 @@ import { claimCurrentPlanExecution } from "./execution-ledger.js";
 import {
   acceptCustomerAgentRequest, claimAgentTask, claimWithheldMessageFollowUp, findQueuedAgentTasks,
   finishWithheldMessageFollowUp, settleAgentTaskClaim, withheldMessageFollowUp, ANY_MEMBER_ACTOR_KEY,
-} from "./task-ledger.js";
+} from "./task-ledger/index.js";
 import { updateThreadStatusMutation } from "./thread-io/db-mutations.js";
 import { authorizeAgentProposal } from "./task-approval.js";
 import { deriveProposalCommunication } from "./proposal-communication.js";

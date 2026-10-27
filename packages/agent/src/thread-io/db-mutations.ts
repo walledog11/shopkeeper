@@ -9,7 +9,7 @@ import {
   ORDER_VERIFICATION_MAX_ASKS,
   orderVerificationAttemptsLeft,
 } from "../order-verification.js";
-import { stopWaitingTasksOnClosedThreads } from "../task-ledger.js";
+import { stopWaitingTasksOnClosedThreads } from "../task-ledger/index.js";
 import { AGENT_NOTE_PREFIX, THREAD_STATUS } from "../thread-constants.js";
 import { toolEscalated, toolError, toolNotFound, toolOk, type ToolResult } from "../tools/result.js";
 import type {

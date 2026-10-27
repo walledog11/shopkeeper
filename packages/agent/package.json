@@ -115,8 +115,8 @@
       "default": "./dist/agent-actions.js"
     },
     "./task-ledger": {
-      "types": "./dist/task-ledger.d.ts",
-      "default": "./dist/task-ledger.js"
+      "types": "./dist/task-ledger/index.d.ts",
+      "default": "./dist/task-ledger/index.js"
     },
     "./task-run": {
       "types": "./dist/task-run.d.ts",

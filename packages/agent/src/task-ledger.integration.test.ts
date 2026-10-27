@@ -17,7 +17,7 @@ import {
   failAgentTaskClaim, findQueuedAgentTasks,
   recordAgentTaskModelUsage, reconcileExpiredAgentTaskClaims, renewAgentTaskLease,
   reserveAgentTaskModelCall, settleAgentTaskClaim,
-} from "./task-ledger.js";
+} from "./task-ledger/index.js";
 
 const orgIds: string[] = [];
 const budget = { runtimeVersion: 2, modelCallLimit: 20, activeTimeMsLimit: 120000, spendNanoUsdLimit: 1000000000n };

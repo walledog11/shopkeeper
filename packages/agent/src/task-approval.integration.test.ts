@@ -6,7 +6,7 @@ import { ConflictError, ForbiddenError } from "./errors.js";
 import {
   ANY_MEMBER_ACTOR_KEY, acceptCustomerAgentRequest, acceptMemberAgentRequest,
   attachMemberAgentTask, cancelMemberAgentTask, claimAgentTask, settleAgentTaskClaim,
-} from "./task-ledger.js";
+} from "./task-ledger/index.js";
 import { authorizeAgentProposal, rejectAgentProposal } from "./task-approval.js";
 import {
   claimPlanExecution, completePlanExecution, finalizeReconciledPlanExecution,

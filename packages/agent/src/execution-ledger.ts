@@ -6,7 +6,7 @@ import { hashInstruction, hashPlan } from "./agent-actions.js";
 import { ledgerStatusForPlanOutcome, planExecutionOutcomeForActions } from "./execution-outcome.js";
 import { readAgentPlanCache } from "./plan-cache.js";
 import { SENDER_TYPE } from "./thread-constants.js";
-import { withheldMessageFollowUpCheckpoint } from "./task-ledger.js";
+import { withheldMessageFollowUpCheckpoint } from "./task-ledger/index.js";
 import type { ApprovedMessageWithheld } from "./agent-context.js";
 
 export interface PlanExecutionIdentity {

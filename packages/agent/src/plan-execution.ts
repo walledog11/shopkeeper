@@ -35,7 +35,7 @@ import {
 } from "./execution-ledger.js";
 import { isInvalidPlan } from "./plan-validation.js";
 import { recordRequestEpisodeDismissed, recordRequestEpisodeExecution } from "./request-outcome.js";
-import { ANY_MEMBER_ACTOR_KEY, type ProposalSnapshot, type TaskSettlement } from "./task-ledger.js";
+import { ANY_MEMBER_ACTOR_KEY, type ProposalSnapshot, type TaskSettlement } from "./task-ledger/index.js";
 import {
   authorizeAgentProposal,
   readDurableProposalExecutionSource,
