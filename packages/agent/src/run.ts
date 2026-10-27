@@ -56,7 +56,6 @@ import {
   CONTEXT_BUDGETS,
   truncateContextText,
 } from "./context-budget.js";
-import type { CompletionFact } from "./completion-facts.js";
 
 export interface RunAgentOptions extends RunAgentPolicyOptions {
   // Injected tool-failure recorder. The dashboard wires this to its ops-alert
@@ -75,9 +74,6 @@ export interface RunAgentOptions extends RunAgentPolicyOptions {
   // Shadow/enforced durable plan execution row that owns this run's actions.
   executionId?: string;
   taskAuthority?: AgentActionTaskAuthority;
-  // Successful facts established by live reads during planning. Approved plans
-  // do not re-run those reads, so their evidence travels with the execution.
-  completionEvidence?: readonly CompletionFact[];
   // The communication an approved proposal binds (runtime v2). Its customer
   // message is sent exactly as approved, placeholders filled from receipts, and
   // only if every approved write succeeded. Absent for legacy plans.
@@ -167,7 +163,6 @@ export async function runAgent(
       supportThread,
       actionsPerformed,
       executedToolCalls,
-      completionEvidence: options?.completionEvidence,
       beginAction: async (call, operationId, providerOperationKey) => {
         const attempt = await beginAgentActionAttempt({
           orgId: ctx.orgId,

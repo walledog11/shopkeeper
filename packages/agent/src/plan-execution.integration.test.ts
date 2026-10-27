@@ -1123,45 +1123,6 @@ describe("executeCurrentCachedHomePlan execution", () => {
     expect(after.cachedPlanMessageId).toBeNull();
   });
 
-  it("carries successful planning-read facts into approved reply execution", async () => {
-    const base = quickReplyPlan();
-    const read = { id: "read_1", name: "get_order_by_name", input: { order_name: "#1001" } };
-    const plan: AgentPlan = {
-      ...base,
-      rawToolCalls: [read, ...base.rawToolCalls],
-      readResults: {
-        read_1: JSON.stringify({
-          id: "123",
-          name: "#1001",
-          financial_status: "refunded",
-          fulfillment_status: null,
-          total_price: "20.00",
-          currency: "USD",
-        }),
-      },
-    };
-    const { org, thread, settings, execution } = await seedExecutablePlan({ plan });
-    const runAgent = vi.fn(async () => okResult);
-
-    await executeCurrentCachedHomePlan({
-      orgId: org.id,
-      threadId: thread.id,
-      settings,
-      executionIntent: "merchant_approved",
-      failureRoute: "test",
-      ...execution,
-      approvedToolCalls: plan.rawToolCalls,
-    }, makeDeps({ runAgent }));
-
-    expect(runAgent.mock.calls[0]?.[4].completionEvidence).toEqual([
-      expect.objectContaining({
-        action: "refund",
-        outcome: "success",
-        executionReference: "read:read_1",
-      }),
-    ]);
-  });
-
   // Package 5: the request ID is the turn ID because that is how settlement finds
   // the rows this execution wrote. Both halves are asserted, because a turn ID
   // that does not match the request links nothing and still looks correct.

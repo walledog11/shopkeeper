@@ -35,7 +35,6 @@ import {
 } from "./execution-ledger.js";
 import { isInvalidPlan } from "./plan-validation.js";
 import { recordRequestEpisodeDismissed, recordRequestEpisodeExecution } from "./request-outcome.js";
-import { historicalCompletionFacts } from "./completion-facts.js";
 import { ANY_MEMBER_ACTOR_KEY, type ProposalSnapshot, type TaskSettlement } from "./task-ledger.js";
 import {
   authorizeAgentProposal,
@@ -749,10 +748,6 @@ export async function executeCurrentCachedHomePlan(params: {
           }
         : {}),
       ...(executionId ? { executionId } : {}),
-      completionEvidence: historicalCompletionFacts(
-        current.plan.rawToolCalls,
-        current.plan.readResults,
-      ),
       // The same snapshot validateApprovedCommunication checked the calls
       // against, and the one the approval hash binds.
       ...(approvedCommunication ? { approvedCommunication } : {}),

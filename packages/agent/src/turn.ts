@@ -9,7 +9,6 @@ import type { AgentActionApproval } from "./agent-actions.js";
 import type { AgentActionTaskAuthority } from "./agent-actions.js";
 import type { AgentToolDefinition } from "./tools/registry/index.js";
 import type { OrgSettings, ProposalCommunication, RawToolCall } from "./types.js";
-import type { CompletionFact } from "./completion-facts.js";
 
 // Options executeAgentTurn forwards to the injected runAgent. The host's runAgent
 // wrapper resolves `failureRoute` into its ops-alert recorder and builds the
@@ -21,7 +20,6 @@ export interface ExecuteTurnRunOptions {
   approval?: AgentActionApproval;
   executionId?: string;
   taskAuthority?: AgentActionTaskAuthority;
-  completionEvidence?: readonly CompletionFact[];
   approvedCommunication?: ProposalCommunication;
   // Host-injected control tools for this turn (e.g. the gateway's operator
   // control tools). Forwarded to runAgent; ignored on the approved-execution and
@@ -78,7 +76,6 @@ export interface ExecuteAgentTurnParams {
   auditMode?: "human_approved" | "auto_executed" | "read_only";
   approval?: AgentActionApproval;
   executionId?: string;
-  completionEvidence?: readonly CompletionFact[];
   /** The communication an approved runtime-v2 proposal binds; absent for legacy plans. */
   approvedCommunication?: ProposalCommunication;
   // Operator freeform turns only: the host-rendered pending-state ledger passed
@@ -152,7 +149,6 @@ export async function executeAgentTurn(
         ...(params.approval ? { approval: params.approval } : {}),
         ...(params.executionId ? { executionId: params.executionId } : {}),
         ...(params.taskAuthority ? { taskAuthority: params.taskAuthority } : {}),
-        ...(params.completionEvidence ? { completionEvidence: params.completionEvidence } : {}),
         ...(params.approvedCommunication ? { approvedCommunication: params.approvedCommunication } : {}),
         ...(params.moduleTools ? { moduleTools: params.moduleTools } : {}),
       }

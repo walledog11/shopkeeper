@@ -18,12 +18,6 @@ Last updated: 2026-10-27.
    over ~600 lines; turn lint-style tests into ESLint rules. No new tests. Closes when
    `npm run test:unit` covers every test that needs no database and runs without Docker.
 2. **Agent-core debt**, one PR each:
-   - Delete the execution-time reply renderer (`renderReplyCompletionClaims` and its
-     helpers) and the dead `completionEvidence` plumbing; keep
-     `unsupportedReplyCompletionClaims` as a refusal. Its only live caller is operator
-     `send_email`, where it drops an ungrounded claim, deletes greetings and prints
-     Shopify's internal id as an order number. Approved and auto-executed plans already
-     send exact drafts, so this does not gate `autoExecuteMode: live`.
    - Typed tool status, error code and data flow end to end; nothing branches on
      `Error:`/`Unknown:` prefixes (`message-dispatch.ts`, `tool-action-display.ts`,
      `AgentChatMessage.tsx` — whose chips print an ID as a count — and

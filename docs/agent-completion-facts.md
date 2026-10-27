@@ -37,5 +37,6 @@ result-text inference cannot fill them.
 
 Planning may flag unsupported draft language for merchant review. It does not
 rewrite approved exact drafts after execution. Model turns without an approval
-snapshot still ground their wording in receipts and observed provider reads.
+snapshot still ground their wording in receipts and observed provider reads; a
+claim neither supports is refused, never rewritten.
 See [agent-runtime.md](agent-runtime.md) for migration and compatibility policy.
