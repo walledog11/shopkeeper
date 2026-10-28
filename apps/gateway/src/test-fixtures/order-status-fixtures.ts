@@ -32,7 +32,7 @@ export const order = {
   shipping_address: null,
 };
 
-export const catalogProduct = {
+const catalogProduct = {
   id: 'gid://shopify/Product/9001',
   title: 'Pencil Half Zip',
   variants: {

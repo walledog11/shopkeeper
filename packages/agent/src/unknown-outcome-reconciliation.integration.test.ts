@@ -22,6 +22,8 @@ import { shopifyIdempotencyKey, shopifyOperationTag } from "./shopify/client.js"
 
 const ELEVEN_MINUTES_AGO = () => new Date(Date.now() - 11 * 60 * 1000);
 
+// One file on purpose: runUnknownOutcomeReconciliation sweeps every organization,
+// so stale rows seeded by a second file running in parallel would join its counts.
 describe("unknown outcome reconciliation", () => {
   let orgId: string | null = null;
 

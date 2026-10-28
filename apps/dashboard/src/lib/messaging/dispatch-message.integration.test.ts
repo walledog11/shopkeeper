@@ -1,15 +1,9 @@
 import { randomUUID } from 'node:crypto';
-
 import { mkdtemp, rm } from 'node:fs/promises';
-
 import os from 'node:os';
-
 import path from 'node:path';
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
 import { ChannelType, EmailProvider, SenderType, db } from '@shopkeeper/db';
-
 import {
   cleanupTestData,
   createTestCustomer,
@@ -41,13 +35,10 @@ vi.mock('@/lib/server/provider-send-alerts', () => ({
 }));
 
 import { dispatchMessage } from './dispatch-message';
-
 import { readOutboundRecords } from '@/lib/server/outbound-recorder';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
-
 let tempDir: string | null = null;
-
 const originalEnv = {
   E2E_OUTBOUND_MODE: process.env.E2E_OUTBOUND_MODE,
   E2E_OUTBOUND_RECORD_PATH: process.env.E2E_OUTBOUND_RECORD_PATH,

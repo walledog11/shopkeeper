@@ -7,17 +7,11 @@ Technical contracts and settled engineering decisions live with the code they go
 ([agent-runtime](agent-runtime.md), [runbook](production/runbook.md),
 [transport plan](socialapi-transport-plan.md)), not here.
 
-Last updated: 2026-10-27.
+Last updated: 2026-10-28.
 
 ## Now — finish the cleanup
 
-1. **Test suite structure.** One naming rule everywhere (`*.integration.test.ts` needs
-   services, any other `*.test.ts` doesn't); move DB-free "integration" files to unit and
-   agent-package tests out of the gateway; replace the Clerk-mock patching in the
-   dashboard `test-setup.ts` with one `mockClerkSession()` helper; split scenario files
-   over ~600 lines; turn lint-style tests into ESLint rules. No new tests. Closes when
-   `npm run test:unit` covers every test that needs no database and runs without Docker.
-2. **Architecture-audit fixes (2026-10-17)**, one PR each, in this order. Most defects were
+1. **Architecture-audit fixes (2026-10-17)**, one PR each, in this order. Most defects were
    traced in code, not seen in production:
    - One open support task per thread: delete the ledger's customer wait and continuity
      matching; reconcile only on unsettled dispatches. Check production `waiting_input`

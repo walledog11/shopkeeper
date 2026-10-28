@@ -1,10 +1,6 @@
-
 import { rm } from 'node:fs/promises';
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
 import { ChannelType, SenderType, db } from '@shopkeeper/db';
-
 import {
   cleanupTestData,
   createTestCustomer,
@@ -38,9 +34,7 @@ vi.mock('@/lib/server/provider-send-alerts', () => ({
 import { dispatchAcknowledgement, dispatchMessage } from './dispatch-message';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
-
 let tempDir: string | null = null;
-
 const originalEnv = {
   E2E_OUTBOUND_MODE: process.env.E2E_OUTBOUND_MODE,
   E2E_OUTBOUND_RECORD_PATH: process.env.E2E_OUTBOUND_RECORD_PATH,
