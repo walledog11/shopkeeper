@@ -1,10 +1,9 @@
 import type {
-  ActionEntry,
   AgentActionStatus,
   BaseAgentContext,
   SupportContext,
 } from "./agent-context.js";
-import { parseReceiptV1, type ReceiptV1 } from "./tools/result.js";
+import type { ReceiptV1 } from "./tools/result.js";
 import type { RawToolCall } from "./types.js";
 
 export type CompletionAction =
@@ -188,166 +187,6 @@ function mutationFacts(input: {
   }
 }
 
-function receiptOutcome(receipt: ReceiptV1): CompletionFactOutcome {
-  return receipt.outcome === "succeeded" ? "success" : receipt.outcome;
-}
-
-function receiptCompletionFacts(
-  action: ActionEntry,
-  ctx?: FactContext,
-  orderNames?: ReadonlyMap<string, string>,
-): CompletionFact[] {
-  const receipt = parseReceiptV1(action.receipt);
-  if (receipt.tool !== action.tool) {
-    throw new Error(`Receipt tool ${receipt.tool} does not match action tool ${action.tool}`);
-  }
-
-  const executionReference = receipt.operationId;
-  const outcome = receiptOutcome(receipt);
-  const target = receipt.target.kind === "order"
-    ? orderTarget(receipt.target.id, ctx, orderNames)
-    : { kind: receipt.target.kind as CompletionFactTarget["kind"], id: receipt.target.id };
-
-  if (receipt.tool === "create_refund" || receipt.tool === "create_partial_refund") {
-    if (receipt.outcome !== "succeeded") {
-      return [fact("refund", receipt.tool, outcome, executionReference, { target })];
-    }
-    return [fact("refund", receipt.tool, outcome, executionReference, {
-      target: orderTarget(receipt.facts.orderId, ctx, orderNames),
-      amount: receipt.facts.amount,
-      currency: receipt.facts.currency,
-    })];
-  }
-
-  if (receipt.tool === "cancel_order") {
-    const facts = [fact("cancellation", receipt.tool, outcome, executionReference, { target })];
-    if (
-      receipt.outcome === "succeeded"
-      && (receipt.facts.refund || /^(?:partially_)?refunded$/i.test(receipt.facts.financialStatus.trim()))
-    ) {
-      facts.push(fact("refund", receipt.tool, outcome, executionReference, { target }));
-    }
-    return facts;
-  }
-
-  if (receipt.tool === "create_return") {
-    return [fact("return", receipt.tool, outcome, executionReference, {
-      target: receipt.outcome === "succeeded"
-        ? orderTarget(receipt.facts.orderId, ctx, orderNames)
-        : target,
-    })];
-  }
-
-  if (receipt.tool === "attach_return_label") {
-    return [fact("return", receipt.tool, outcome, executionReference, {
-      target: receipt.outcome === "succeeded"
-        ? orderTarget(receipt.facts.orderId, ctx, orderNames)
-        : target,
-    })];
-  }
-
-  if (receipt.tool === "create_exchange") {
-    const receiptTarget = receipt.outcome === "succeeded"
-      ? orderTarget(receipt.facts.orderId, ctx, orderNames)
-      : target;
-    return [
-      fact("exchange", receipt.tool, outcome, executionReference, { target: receiptTarget }),
-      fact("return", receipt.tool, outcome, executionReference, { target: receiptTarget }),
-    ];
-  }
-
-  if (receipt.tool === "fulfill_order") {
-    return [fact("fulfillment", receipt.tool, outcome, executionReference, {
-      target: receipt.outcome === "succeeded"
-        ? orderTarget(receipt.facts.orderId, ctx, orderNames)
-        : target,
-    })];
-  }
-
-  if (receipt.tool === "update_shopify_order_address") {
-    const addressOutcome = receipt.facts?.orderAddress.outcome;
-    return [fact(
-      "address_update",
-      receipt.tool,
-      addressOutcome === "updated" || addressOutcome === "already_matched" ? "success" : outcome,
-      executionReference,
-      {
-        target: receipt.facts
-          ? orderTarget(receipt.facts.orderId, ctx, orderNames)
-          : target,
-      },
-    )];
-  }
-
-  if (receipt.tool === "edit_shopify_order") {
-    const hasCommittedChange = receipt.facts?.changes.some(
-      (change) => change.outcome === "committed",
-    ) ?? false;
-    return [fact(
-      "order_update",
-      receipt.tool,
-      hasCommittedChange ? "success" : outcome,
-      executionReference,
-      {
-        target: receipt.facts
-          ? orderTarget(receipt.facts.orderId, ctx, orderNames)
-          : target,
-      },
-    )];
-  }
-
-  if (receipt.tool === "create_shopify_order") {
-    return [fact("order_creation", receipt.tool, outcome, executionReference, {
-      target: receipt.outcome === "succeeded"
-        ? {
-            kind: "order",
-            id: receipt.facts.orderId,
-            ...(receipt.facts.orderName !== receipt.facts.orderId
-              ? { aliases: [receipt.facts.orderName] }
-              : {}),
-          }
-        : target,
-    })];
-  }
-
-  if (receipt.tool === "update_shopify_customer_info") {
-    return [fact("customer_update", receipt.tool, outcome, executionReference, {
-      target: receipt.outcome === "succeeded"
-        ? { kind: "customer", id: receipt.facts.customerId }
-        : target,
-    })];
-  }
-
-  if (receipt.tool === "add_shopify_customer_note") {
-    return [fact("customer_note", receipt.tool, outcome, executionReference, {
-      target: receipt.outcome === "succeeded"
-        ? { kind: "customer", id: receipt.facts.customerId }
-        : target,
-    })];
-  }
-
-  if (receipt.tool === "create_gift_card") {
-    return [fact("store_credit", receipt.tool, outcome, executionReference, {
-      target: receipt.outcome === "succeeded"
-        ? { kind: "customer", id: receipt.facts.customerId }
-        : target,
-      ...(receipt.outcome === "succeeded"
-        ? { amount: receipt.facts.amount, currency: receipt.facts.currency }
-        : {}),
-    })];
-  }
-
-  if (receipt.tool === "create_flash_sale" || receipt.tool === "end_flash_sale") {
-    return [fact("discount", receipt.tool, outcome, executionReference)];
-  }
-
-  if (receipt.tool === "set_variant_prices") {
-    return [fact("price_update", receipt.tool, outcome, executionReference)];
-  }
-
-  return [];
-}
-
 /**
  * Order names read on this turn, keyed by order id.
  *
@@ -398,26 +237,6 @@ export function proposedCompletionFacts(
     ctx,
     orderNames,
   }));
-}
-
-export function executedCompletionFacts(
-  actions: readonly ActionEntry[],
-  ctx?: FactContext,
-): CompletionFact[] {
-  const orderNames = collectOrderNames(actions
-    .filter(action => action.status === "success" && ["get_order_by_name", "get_shopify_orders"].includes(action.tool))
-    .map(action => ({ tool: action.tool, raw: action.result })));
-  return actions.flatMap(action => {
-    if (action.receipt !== undefined) return receiptCompletionFacts(action, ctx, orderNames);
-    if (action.status === "success" && ["get_order_by_name", "get_shopify_orders"].includes(action.tool)) {
-      try {
-        return historicalOrderFacts(JSON.parse(action.result), action.tool, `read:${action.toolCallId}`);
-      } catch {
-        return [];
-      }
-    }
-    return [];
-  });
 }
 
 function historicalOrderFacts(
