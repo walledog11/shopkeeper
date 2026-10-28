@@ -1,0 +1,405 @@
+
+import { rm } from 'node:fs/promises';
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { ChannelType, SenderType, db } from '@shopkeeper/db';
+
+import {
+  cleanupTestData,
+  createTestCustomer,
+  createTestIntegration,
+  createTestOrg,
+  createTestThread,
+} from '@shopkeeper/db/test-helpers';
+
+const { mockFetch, mockPostmarkSend, mockRecordProviderSendFailure } = vi.hoisted(() => ({
+  mockFetch: vi.fn(),
+  mockPostmarkSend: vi.fn(),
+  mockRecordProviderSendFailure: vi.fn(),
+}));
+
+vi.stubGlobal('fetch', mockFetch);
+
+vi.mock('postmark', () => ({
+  ServerClient: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
+    this.sendEmail = mockPostmarkSend;
+  }),
+}));
+
+vi.mock('@/lib/server/redis', () => ({
+  getRedis: vi.fn(() => ({ incr: vi.fn(), expire: vi.fn() })),
+}));
+
+vi.mock('@/lib/server/provider-send-alerts', () => ({
+  recordProviderSendFailure: mockRecordProviderSendFailure,
+}));
+
+import { dispatchAcknowledgement, dispatchMessage } from './dispatch-message';
+
+let org!: Awaited<ReturnType<typeof createTestOrg>>;
+
+let tempDir: string | null = null;
+
+const originalEnv = {
+  E2E_OUTBOUND_MODE: process.env.E2E_OUTBOUND_MODE,
+  E2E_OUTBOUND_RECORD_PATH: process.env.E2E_OUTBOUND_RECORD_PATH,
+  INBOUND_EMAIL_DOMAIN: process.env.INBOUND_EMAIL_DOMAIN,
+  OUTBOUND_EMAIL_ASYNC: process.env.OUTBOUND_EMAIL_ASYNC,
+  TIKTOK_SHOP_API_BASE_URL: process.env.TIKTOK_SHOP_API_BASE_URL,
+  TIKTOK_SHOP_APP_KEY: process.env.TIKTOK_SHOP_APP_KEY,
+  TIKTOK_SHOP_APP_SECRET: process.env.TIKTOK_SHOP_APP_SECRET,
+  TIKTOK_SHOP_ENABLED: process.env.TIKTOK_SHOP_ENABLED,
+  TIKTOK_SHOP_SEND_MESSAGE_PATH: process.env.TIKTOK_SHOP_SEND_MESSAGE_PATH,
+  TIKTOK_SHOP_TOKEN_URL: process.env.TIKTOK_SHOP_TOKEN_URL,
+};
+
+beforeEach(async () => {
+  org = await createTestOrg();
+  process.env.E2E_OUTBOUND_MODE = 'live';
+  process.env.INBOUND_EMAIL_DOMAIN = 'mail.test';
+  delete process.env.OUTBOUND_EMAIL_ASYNC;
+  mockFetch.mockReset();
+  mockPostmarkSend.mockReset().mockResolvedValue({ MessageID: 'mock-message-id' });
+  mockRecordProviderSendFailure.mockReset().mockResolvedValue({ emitted: false });
+});
+
+afterEach(async () => {
+  vi.unstubAllEnvs();
+  await cleanupTestData(org?.id);
+  process.env.E2E_OUTBOUND_MODE = originalEnv.E2E_OUTBOUND_MODE;
+  process.env.E2E_OUTBOUND_RECORD_PATH = originalEnv.E2E_OUTBOUND_RECORD_PATH;
+  process.env.INBOUND_EMAIL_DOMAIN = originalEnv.INBOUND_EMAIL_DOMAIN;
+  if (originalEnv.OUTBOUND_EMAIL_ASYNC === undefined) {
+    delete process.env.OUTBOUND_EMAIL_ASYNC;
+  } else {
+    process.env.OUTBOUND_EMAIL_ASYNC = originalEnv.OUTBOUND_EMAIL_ASYNC;
+  }
+  restoreEnv('TIKTOK_SHOP_API_BASE_URL', originalEnv.TIKTOK_SHOP_API_BASE_URL);
+  restoreEnv('TIKTOK_SHOP_APP_KEY', originalEnv.TIKTOK_SHOP_APP_KEY);
+  restoreEnv('TIKTOK_SHOP_APP_SECRET', originalEnv.TIKTOK_SHOP_APP_SECRET);
+  restoreEnv('TIKTOK_SHOP_ENABLED', originalEnv.TIKTOK_SHOP_ENABLED);
+  restoreEnv('TIKTOK_SHOP_SEND_MESSAGE_PATH', originalEnv.TIKTOK_SHOP_SEND_MESSAGE_PATH);
+  restoreEnv('TIKTOK_SHOP_TOKEN_URL', originalEnv.TIKTOK_SHOP_TOKEN_URL);
+
+  if (tempDir) {
+    await rm(tempDir, { recursive: true, force: true });
+    tempDir = null;
+  }
+});
+
+function restoreEnv(name: string, value: string | undefined) {
+  if (value === undefined) {
+    delete process.env[name];
+    return;
+  }
+  process.env[name] = value;
+}
+
+async function createInstagramLoginIntegration() {
+  const integration = await createTestIntegration(org.id, {
+    platform: ChannelType.ig_dm,
+    externalAccountId: `ig_${org.id.slice(0, 8)}`,
+    accessToken: 'test-ig-token',
+    metadata: {
+      instagram: {
+        authModel: 'instagram_login',
+        grantedScopes: [
+          'instagram_business_basic',
+          'instagram_business_manage_messages',
+        ],
+        permissionsVerified: true,
+      },
+    },
+  });
+  return db.integration.update({
+    where: { id: integration.id },
+    data: { tokenExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) },
+  });
+}
+
+async function createSocialApiIntegration() {
+  return createTestIntegration(org.id, {
+    platform: ChannelType.ig_dm,
+    externalAccountId: `ig_socialapi_${org.id.slice(0, 8)}`,
+    accessToken: null,
+    metadata: {
+      instagram: {
+        authModel: 'socialapi',
+        transport: 'socialapi',
+        socialApiAccountId: 'acc_controlled',
+      },
+    },
+  });
+}
+
+async function routeInstagramThread(
+  threadId: string,
+  integrationId: string,
+  customerMessageAt = new Date(),
+) {
+  await db.thread.update({
+    where: { id: threadId },
+    data: {
+      replyIntegrationId: integrationId,
+      replyIntegrationUpdatedAt: customerMessageAt,
+    },
+  });
+  await db.message.create({
+    data: {
+      threadId,
+      organizationId: org.id,
+      senderType: SenderType.customer,
+      contentText: 'Inbound Instagram message',
+      externalMessageId: `mid-inbound-${threadId}`,
+      integrationId,
+      sentAt: customerMessageAt,
+    },
+  });
+}
+
+describe('dispatchMessage', () => {
+  it('uses the thread reply integration and persists the Instagram provider message ID', async () => {
+    const integration = await createInstagramLoginIntegration();
+    const customer = await createTestCustomer(org.id, 'ig_exact_route_customer');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.ig_dm);
+    await routeInstagramThread(thread.id, integration.id);
+    mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({
+      message_id: 'mid-outbound-1',
+      recipient_id: customer.platformId,
+    }), { status: 200 }));
+
+    const result = await dispatchMessage({ ...thread, customer }, org, 'Instagram reply.');
+
+    expect(result).toMatchObject({ ok: true });
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`https://graph.instagram.com/v25.0/${integration.externalAccountId}/messages`);
+    expect(init.headers).toMatchObject({ Authorization: 'Bearer test-ig-token' });
+    expect(JSON.parse(String(init.body))).toEqual({
+      recipient: { id: customer.platformId },
+      message: { text: 'Instagram reply.' },
+    });
+    const saved = await db.message.findFirstOrThrow({
+      where: { threadId: thread.id, senderType: SenderType.agent },
+    });
+    expect(saved.integrationId).toBe(integration.id);
+    expect(saved.providerMessageId).toBe('mid-outbound-1');
+  });
+
+  it('does not fall back to the workspace integration when a thread has no reply route', async () => {
+    await createInstagramLoginIntegration();
+    const customer = await createTestCustomer(org.id, 'ig_legacy_customer');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.ig_dm);
+    await db.message.create({
+      data: {
+        threadId: thread.id,
+        organizationId: org.id,
+        senderType: SenderType.customer,
+        contentText: 'Legacy inbound message',
+        sentAt: new Date(),
+      },
+    });
+
+    const result = await dispatchMessage({ ...thread, customer }, org, 'Do not send.');
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'This Instagram conversation is no longer connected',
+    });
+    expect(mockFetch).not.toHaveBeenCalled();
+    await expect(db.message.count({
+      where: { threadId: thread.id, senderType: SenderType.agent },
+    })).resolves.toBe(0);
+  });
+
+  it('enforces the Instagram reply window from the latest customer provider timestamp', async () => {
+    const integration = await createInstagramLoginIntegration();
+    const customer = await createTestCustomer(org.id, 'ig_expired_window_customer');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.ig_dm);
+    await routeInstagramThread(
+      thread.id,
+      integration.id,
+      new Date(Date.now() - 24 * 60 * 60 * 1000 - 1),
+    );
+
+    const result = await dispatchMessage({ ...thread, customer }, org, 'Too late.');
+
+    expect(result).toEqual({
+      ok: false,
+      error: "Instagram only allows replies within 24 hours of the customer's last message",
+    });
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('refuses an expired Instagram Login token before calling the provider', async () => {
+    const integration = await createInstagramLoginIntegration();
+    await db.integration.update({
+      where: { id: integration.id },
+      data: { tokenExpiresAt: new Date(Date.now() - 1) },
+    });
+    const customer = await createTestCustomer(org.id, 'ig_expired_token_customer');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.ig_dm);
+    await routeInstagramThread(thread.id, integration.id);
+
+    const result = await dispatchMessage({ ...thread, customer }, org, 'Do not send.');
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'Instagram connection expired — reconnect Instagram to reply',
+    });
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('refuses to send when the Instagram health check requires reconnect', async () => {
+    const integration = await createInstagramLoginIntegration();
+    await db.integration.update({
+      where: { id: integration.id },
+      data: {
+        metadata: {
+          instagram: {
+            authModel: 'instagram_login',
+            grantedScopes: [
+              'instagram_business_basic',
+              'instagram_business_manage_messages',
+            ],
+            healthStatus: 'reconnect_required',
+            lastHealthError: {
+              category: 'permission',
+              code: 'messages_subscription_missing',
+            },
+            permissionsVerified: true,
+          },
+        },
+      },
+    });
+    const customer = await createTestCustomer(org.id, 'ig_health_reconnect_customer');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.ig_dm);
+    await routeInstagramThread(thread.id, integration.id);
+
+    const result = await dispatchMessage({ ...thread, customer }, org, 'Do not send.');
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'Instagram messaging permission is missing — reconnect Instagram',
+    });
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('keeps legacy Page-token Instagram conversations read-only', async () => {
+    const integration = await createTestIntegration(org.id, {
+      platform: ChannelType.ig_dm,
+      externalAccountId: `legacy_ig_${org.id.slice(0, 8)}`,
+      accessToken: 'legacy-page-token',
+    });
+    await db.integration.update({
+      where: { id: integration.id },
+      data: { tokenExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) },
+    });
+    const customer = await createTestCustomer(org.id, 'ig_legacy_page_customer');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.ig_dm);
+    await routeInstagramThread(thread.id, integration.id);
+
+    const result = await dispatchMessage({ ...thread, customer }, org, 'Do not send.');
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'This legacy Instagram conversation is read-only',
+    });
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('dispatchMessage — SocialAPI Instagram transport', () => {
+  const originalKey = process.env.SOCIALAPI_API_KEY;
+
+  beforeEach(() => {
+    process.env.SOCIALAPI_API_KEY = 'test-socialapi-key';
+  });
+
+  afterEach(() => {
+    restoreEnv('SOCIALAPI_API_KEY', originalKey);
+  });
+
+  async function socialApiThread(conversationId: string | null = 'conv_controlled') {
+    const integration = await createSocialApiIntegration();
+    const customer = await createTestCustomer(org.id, 'socialapi_customer');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.ig_dm);
+    await routeInstagramThread(thread.id, integration.id);
+    if (conversationId) {
+      await db.thread.update({ where: { id: thread.id }, data: { externalSpaceId: conversationId } });
+    }
+    return { customer, integration, thread };
+  }
+
+  it('sends through SocialAPI with the thread conversation, not the Meta Graph API', async () => {
+    const { customer, integration, thread } = await socialApiThread();
+    mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({
+      success: true,
+      message_id: 'socialapi-msg-1',
+      message_ids: ['socialapi-msg-1'],
+    }), { status: 200 }));
+
+    const result = await dispatchMessage({ ...thread, customer }, org, 'SocialAPI reply.');
+
+    expect(result).toMatchObject({ ok: true });
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('social-api.ai');
+    expect(url).not.toContain('graph.instagram.com');
+    expect(JSON.parse(String(init.body))).toMatchObject({ text: 'SocialAPI reply.' });
+    const saved = await db.message.findFirstOrThrow({
+      where: { threadId: thread.id, senderType: SenderType.agent },
+    });
+    expect(saved.integrationId).toBe(integration.id);
+    expect(saved.providerMessageId).toBe('socialapi-msg-1');
+  });
+
+  it('refuses to send when the thread has no provider conversation id', async () => {
+    const { customer, thread } = await socialApiThread(null);
+
+    const result = await dispatchMessage({ ...thread, customer }, org, 'SocialAPI reply.');
+
+    expect(result).toMatchObject({ ok: false });
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('refuses to send when no workspace API key is configured', async () => {
+    delete process.env.SOCIALAPI_API_KEY;
+    const { customer, thread } = await socialApiThread();
+
+    const result = await dispatchMessage({ ...thread, customer }, org, 'SocialAPI reply.');
+
+    expect(result).toMatchObject({ ok: false });
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  // 2026-10-22: an acknowledgement SocialAPI delivered but timed out on was
+  // recorded as refused, which released its once-per-wait claim, and the
+  // customer got it twice.
+  it('keeps the acknowledgement claim when SocialAPI times out, so it is not sent twice', async () => {
+    const { customer, thread } = await socialApiThread();
+    mockFetch.mockRejectedValueOnce(new DOMException('timed out', 'TimeoutError'));
+
+    const first = await dispatchAcknowledgement({ ...thread, customer }, org, 'Someone is looking at this.');
+    const second = await dispatchAcknowledgement({ ...thread, customer }, org, 'Someone is looking at this.');
+
+    expect(first).toMatchObject({ ok: false, outcome: 'unknown' });
+    expect(second).toEqual({ ok: true, skipped: true });
+    expect(mockFetch.mock.calls.filter(([url]) => String(url).includes('social-api.ai'))).toHaveLength(1);
+  });
+
+  it('never retries a SocialAPI failure through Meta', async () => {
+    const { customer, integration, thread } = await socialApiThread();
+    mockFetch.mockResolvedValueOnce(new Response('{"error":"nope"}', { status: 502 }));
+
+    const result = await dispatchMessage({ ...thread, customer }, org, 'SocialAPI reply.');
+
+    expect(result).toMatchObject({ ok: false });
+    expect(mockFetch.mock.calls.every(([url]) => !String(url).includes('graph.instagram.com'))).toBe(true);
+    expect(mockRecordProviderSendFailure).toHaveBeenCalledWith(
+      'socialapi',
+      'ig_dm',
+      org.id,
+      expect.objectContaining({ threadId: thread.id, integrationId: integration.id }),
+    );
+  });
+});

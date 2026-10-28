@@ -578,10 +578,10 @@ code goes before the generic `compensation_exception`.
 
 ### Deterministic failure and race cases
 
-These are contracts to preserve, not a test list. Reuse
-`task-ledger.integration.test.ts`, `task-approval.integration.test.ts`,
-`plan-execution.integration.test.ts` and
-`unknown-outcome-reconciliation.integration.test.ts` when they cover the
+These are contracts to preserve, not a test list. Reuse the
+`task-ledger*.integration.test.ts`, `task-approval.integration.test.ts`,
+`plan-execution*.integration.test.ts` and
+`unknown-outcome-reconciliation.integration.test.ts` suites when they cover the
 changed decision.
 
 - Duplicate/redelivered requests and concurrent approvals have one owner;
