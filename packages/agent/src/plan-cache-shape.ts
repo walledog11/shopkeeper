@@ -24,6 +24,12 @@ export interface AgentPlanCacheRecordShape {
   version: number
   planId: string | null
   instruction: string
+  /**
+   * The conversation's latest message when the plan was drafted, whoever sent
+   * it: the customer message a support plan answers, or what a merchant's draft
+   * follows. Null when the thread had none. The plan is current only while this
+   * is still the latest.
+   */
   lastCustomerMessageId: string | null
   settingsFingerprint: string
   plan: AgentPlan
@@ -260,9 +266,7 @@ export function getCurrentPlanForThread(
   thread: { cachedPlan: unknown; cachedPlanMessageId: string | null },
   messages: PlanThreadMessage[],
 ): AgentPlan | null {
-  const pendingCustomerMessageId = getPendingCustomerMessageId(messages)
-  if (!pendingCustomerMessageId) return null
-  if (!thread.cachedPlanMessageId || thread.cachedPlanMessageId !== pendingCustomerMessageId) return null
+  if (thread.cachedPlanMessageId !== (getLastConversationMessage(messages)?.id ?? null)) return null
   const cache = readAgentPlanCacheRecordShape(thread.cachedPlan)
   if (!cache || cache.version !== AGENT_PLAN_CACHE_VERSION) return null
   const plan = cache.planId ? { ...cache.plan, planId: cache.planId } : cache.plan

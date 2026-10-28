@@ -5,6 +5,7 @@ import type { RawToolCall } from '@shopkeeper/agent/types';
 import { getPlanExecution } from '@shopkeeper/agent/execution-ledger';
 import { AGENT_PLAN_CACHE_VERSION, readAgentPlanCacheRecordShape } from '@shopkeeper/agent/plan-cache-shape';
 import { hashInstruction, hashPlan } from '@shopkeeper/agent/agent-actions';
+import { getLatestConversationMessage } from '@shopkeeper/agent/thread-auth';
 import { customerFirstName } from '@shopkeeper/agent/person-name';
 import logger from '../logger.js';
 import {
@@ -329,19 +330,25 @@ async function pendingPlanStaleReason(
   // Identity-less queue entries predate durable approval and cannot describe a
   // current cache unambiguously. Do not offer them and wait for an approval to
   // discover that they are stale.
-  if (!plan.planId || !plan.sourceMessageId || !plan.planHash || !plan.instructionHash) {
+  if (!plan.planId || plan.sourceMessageId === undefined || !plan.planHash || !plan.instructionHash) {
     return 'identity_incomplete';
   }
-  const thread = await db.thread.findFirst({
-    where: { id: plan.threadId, organizationId },
-    select: { cachedPlan: true, cachedPlanMessageId: true },
-  });
+  const [thread, latest] = await Promise.all([
+    db.thread.findFirst({
+      where: { id: plan.threadId, organizationId },
+      select: { cachedPlan: true, cachedPlanMessageId: true },
+    }),
+    getLatestConversationMessage(plan.threadId, organizationId),
+  ]);
   const cached = readAgentPlanCacheRecordShape(thread?.cachedPlan);
   if (!cached) return 'cache_absent';
   if (cached.version !== AGENT_PLAN_CACHE_VERSION) return 'cache_version_superseded';
   if (cached.planId !== plan.planId) return 'plan_replaced';
   if (cached.lastCustomerMessageId !== plan.sourceMessageId) return 'source_message_advanced';
   if (thread?.cachedPlanMessageId !== plan.sourceMessageId) return 'source_message_advanced';
+  // A merchant answering by hand writes no plan, so only the conversation
+  // shows the card is behind it; the execution claim would refuse it.
+  if ((latest?.id ?? null) !== plan.sourceMessageId) return 'source_message_advanced';
   if (hashPlan(cached.plan) !== plan.planHash) return 'plan_edited';
   if (hashInstruction(cached.instruction) !== plan.instructionHash) return 'instruction_changed';
   return null;
@@ -387,7 +394,7 @@ async function resolveStalePendingPlanContext(
           WHERE element->>'threadId' IS DISTINCT FROM ${plan.threadId}
              OR (
                element->>'planId' IS NOT NULL
-               AND element->>'sourceMessageId' IS NOT NULL
+               AND element->'sourceMessageId' IS NOT NULL
                AND element->>'planHash' IS NOT NULL
                AND element->>'instructionHash' IS NOT NULL
              )

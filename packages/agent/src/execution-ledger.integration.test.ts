@@ -180,6 +180,40 @@ describe("plan execution ledger", () => {
     expect(execution.lastError).toBe("stale_plan");
   });
 
+  // A merchant's draft on an answered ticket follows our own last reply. It is
+  // current until anyone writes again, the merchant included.
+  it("claims a draft that follows our own reply until anything newer is written", async () => {
+    const identity = await seedIdentity();
+    const reply = await createTestMessage(identity.threadId!, "It shipped yesterday.", "agent");
+    await db.message.update({ where: { id: reply.id }, data: { sentAt: new Date(Date.now() + 60_000) } });
+    const settings = resolveAgentSettings(null);
+    const plan: AgentPlan = {
+      instruction: "Tell them the tracking number",
+      steps: [],
+      rawToolCalls: [{ id: "send_1", name: "send_reply", input: { text: "Your tracking number is 1Z999." } }],
+    };
+    const seedDraft = async () => {
+      const cache = buildAgentPlanCacheRecord({
+        instruction: plan.instruction, lastCustomerMessageId: reply.id, settings, plan,
+      });
+      await db.thread.update({
+        where: { id: identity.threadId! },
+        data: { cachedPlanMessageId: reply.id, cachedPlan: cache as object },
+      });
+      return {
+        ...identity, planId: cache.planId!, sourceMessageId: reply.id,
+        planHash: hashPlan(plan), instructionHash: hashInstruction(plan.instruction),
+      };
+    };
+
+    expect((await claimCurrentPlanExecution(await seedDraft())).claimed).toBe(true);
+
+    const stale = await seedDraft();
+    const handReply = await createTestMessage(identity.threadId!, "Here you go: 1Z999.", "agent");
+    await db.message.update({ where: { id: handReply.id }, data: { sentAt: new Date(Date.now() + 120_000) } });
+    await expect(claimCurrentPlanExecution(stale)).rejects.toBeInstanceOf(ConflictError);
+  });
+
   it("requires the active claim token for terminal transitions", async () => {
     const identity = await seedIdentity();
     const claim = await claimPlanExecution(identity);

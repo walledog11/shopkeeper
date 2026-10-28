@@ -22,9 +22,11 @@ export interface PendingPlan {
   rawToolCalls: ToolCall[];
   // Optional for backward compatibility with operator_context rows written
   // before durable plan identity shipped. Every newly parked plan includes all
-  // four fields; approval revalidates them against the live thread cache.
+  // four fields; approval revalidates them against the live thread cache. A
+  // null source is a draft made before its ticket had any message, never a
+  // missing one.
   planId?: string;
-  sourceMessageId?: string;
+  sourceMessageId?: string | null;
   planHash?: string;
   instructionHash?: string;
   // Display-only, parked so the keyword fast path can name the concrete action
@@ -260,7 +262,8 @@ function readPendingPlan(value: unknown): PendingPlan | null {
     threadId: value.threadId,
     instruction: value.instruction,
     ...(typeof value.planId === 'string' ? { planId: value.planId } : {}),
-    ...(typeof value.sourceMessageId === 'string' ? { sourceMessageId: value.sourceMessageId } : {}),
+    ...(typeof value.sourceMessageId === 'string' || value.sourceMessageId === null
+      ? { sourceMessageId: value.sourceMessageId } : {}),
     ...(typeof value.planHash === 'string' ? { planHash: value.planHash } : {}),
     ...(typeof value.instructionHash === 'string' ? { instructionHash: value.instructionHash } : {}),
     ...(typeof value.customerName === 'string' ? { customerName: value.customerName } : {}),

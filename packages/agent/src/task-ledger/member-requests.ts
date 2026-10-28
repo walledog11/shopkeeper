@@ -218,12 +218,14 @@ export async function acceptTicketAgentRequest(input: MemberRequestInput & {
       const task = await tx.agentTask.findFirstOrThrow({ where: { id: existing.taskId!, organizationId: input.organizationId } });
       return { request: existing, task, deduplicated: true };
     }
+    // The draft follows the conversation as it stands now, whoever spoke last
+    // (or nobody yet, on a ticket opened to write to someone); the execution
+    // claim refuses it once anything newer is written.
     const source = await tx.message.findFirst({
       where: { organizationId: input.organizationId, threadId: input.threadId, deletedAt: null, senderType: { not: "note" } },
       orderBy: [{ sentAt: "desc" }, { id: "desc" }],
-      select: { id: true, senderType: true },
+      select: { id: true },
     });
-    if (source?.senderType !== "customer") throw new ConflictError("This ticket has no unanswered customer message to plan for.");
     const candidates = await tx.agentTask.findMany({
       where: {
         organizationId: input.organizationId, threadId: input.threadId,
@@ -274,7 +276,7 @@ export async function acceptTicketAgentRequest(input: MemberRequestInput & {
     }
     const request = await tx.agentRequest.create({ data: {
       id: requestId, organizationId: input.organizationId, actorKey, actorKind: "member",
-      channel: thread.channelType, threadId: input.threadId, sourceMessageId: source.id,
+      channel: thread.channelType, threadId: input.threadId, sourceMessageId: source?.id ?? null,
       dedupeKey: input.dedupeKey, payloadVersion: 1, payloadHash, payload,
       normalizedInstruction: instruction, state: "attached", taskId: task.id, attachedAt: new Date(),
     } });

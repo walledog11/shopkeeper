@@ -161,7 +161,6 @@ export async function processAgentTaskJob(data: AgentTaskJobData): Promise<void>
   let summary: string | undefined;
   try {
     if (isComposer) {
-      if (!request.sourceMessageId) throw new Error('Composer request has no customer message source.');
       await runComposerTask({
         ...claim, requestId: request.id, threadId: claimed.task.threadId,
         sourceMessageId: request.sourceMessageId, instruction: request.normalizedInstruction,

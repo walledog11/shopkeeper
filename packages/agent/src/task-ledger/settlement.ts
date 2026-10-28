@@ -131,7 +131,7 @@ export async function settleAgentTaskClaim(input: TaskClaimIdentity & {
   requestId: string;
   settlement: TaskSettlement;
   /** Publish the composer projection together with its durable wait. */
-  planCache?: { threadId: string; sourceMessageId: string; cache: AgentPlanCacheRecord };
+  planCache?: { threadId: string; sourceMessageId: string | null; cache: AgentPlanCacheRecord };
 }) {
   return db.$transaction(async (tx) => {
     if (input.planCache) {

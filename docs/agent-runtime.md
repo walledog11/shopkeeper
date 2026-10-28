@@ -133,6 +133,15 @@ planning in their host process; they are not queued HTTP submissions. The
 private `/api/agent/ask` surface remains a bounded, synchronous, read-only query.
 It cannot execute writes or authorize a proposal.
 
+A request records its source: the conversation's latest message when it was
+accepted, whoever sent it, or none on a ticket with no messages yet. A customer
+request's source is the message it answers; a merchant's draft follows whatever
+was said last, so it works on an answered ticket. The cached plan, the card and
+the execution claim treat a plan as current only while its source is still the
+latest message, and the claim refuses anything newer, the merchant's own reply
+by hand included. A card on a merchant's draft quotes their instruction when the
+customer's request cannot be shown.
+
 Continuations retain the customer-message source on their durable request and
 use the same base instruction in the cache, card and proposal hash. Cancellation,
 lost or expired claims, and a newer customer message prevent publication.
