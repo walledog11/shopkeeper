@@ -9,17 +9,17 @@ const projects = [
   {
     name: 'dashboard',
     root: 'apps/dashboard',
-    unitInclude: ['src/**/*.unit.test.{ts,tsx}'],
-    integrationInclude: ['src/**/*.test.{ts,tsx}'],
-    integrationExclude: ['src/**/*.unit.test.{ts,tsx}'],
+    unitInclude: ['src/**/*.test.{ts,tsx}'],
+    unitExclude: ['src/**/*.integration.test.{ts,tsx}'],
+    integrationInclude: ['src/**/*.integration.test.{ts,tsx}'],
     productionInclude: ['src/**/*.{ts,tsx}'],
   },
   {
     name: 'gateway',
     root: 'apps/gateway',
-    unitInclude: ['src/**/*.unit.test.ts'],
-    integrationInclude: ['src/**/*.test.ts'],
-    integrationExclude: ['src/**/*.unit.test.ts'],
+    unitInclude: ['src/**/*.test.ts'],
+    unitExclude: ['src/**/*.integration.test.ts'],
+    integrationInclude: ['src/**/*.integration.test.ts'],
     productionInclude: ['src/**/*.{ts,tsx}'],
   },
 ];
@@ -33,17 +33,17 @@ for (const project of projects) {
   assertArrayEqual(
     readStringArray(unitConfig, 'include'),
     project.unitInclude,
-    `${project.name} unit config must own only *.unit.test files.`,
+    `${project.name} unit config must include every test file.`,
+  );
+  assertArrayEqual(
+    readStringArray(unitConfig, 'exclude'),
+    project.unitExclude,
+    `${project.name} unit config must exclude service-backed integration tests.`,
   );
   assertArrayEqual(
     readStringArray(integrationConfig, 'include'),
     project.integrationInclude,
-    `${project.name} integration config must include regular *.test files.`,
-  );
-  assertArrayEqual(
-    readStringArray(integrationConfig, 'exclude'),
-    project.integrationExclude,
-    `${project.name} integration config must exclude unit-owned tests.`,
+    `${project.name} integration config must own only *.integration.test files.`,
   );
   assertArrayEqual(
     readCoverageArray(coverageConfig, 'include'),
@@ -58,9 +58,8 @@ for (const project of projects) {
     .sort();
 
   assertExactlyOneOwner(tests, (file) => [
-    file.includes('.unit.test.') ? `${project.name}:unit` : null,
-    !file.includes('.unit.test.') ? `${project.name}:integration` : null,
-  ].filter(Boolean));
+    file.includes('.integration.test.') ? `${project.name}:integration` : `${project.name}:unit`,
+  ]);
 }
 
 for (const project of [

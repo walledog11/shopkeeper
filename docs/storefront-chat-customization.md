@@ -73,8 +73,8 @@ are allowed; other network calls are blocked.
 ## Verification and release
 
 ```sh
-npm run test:unit -w apps/dashboard -- src/lib/storefront-chat/widget-configuration.unit.test.ts src/lib/storefront-chat/widget-conversation-boundary.unit.test.ts src/proxy/path-access-policy.unit.test.ts
-npm run test:integration -w apps/dashboard -- src/app/api/integrations/shopify/storefront-chat/configuration/route.test.ts src/app/api/integrations/shopify/storefront-chat/image/route.test.ts src/app/api/integrations/shopify/storefront-chat/route.test.ts
+npm run test:unit -w apps/dashboard -- src/lib/storefront-chat/widget-configuration.test.ts src/lib/storefront-chat/widget-conversation-boundary.test.ts src/proxy/path-access-policy.test.ts
+npm run test:integration -w apps/dashboard -- src/app/api/integrations/shopify/storefront-chat/configuration/route.integration.test.ts src/app/api/integrations/shopify/storefront-chat/image/route.integration.test.ts src/app/api/integrations/shopify/storefront-chat/route.integration.test.ts
 npm run typecheck -w apps/dashboard
 npm run build -w apps/dashboard
 ```
