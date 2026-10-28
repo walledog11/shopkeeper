@@ -1,7 +1,6 @@
 import { db } from '@shopkeeper/db';
 import {
   getLatestConversationMessage,
-  getLatestCustomerMessageText,
   requireOrgThread,
 } from '@shopkeeper/agent/thread-auth';
 import { readAgentPlanCache } from '@shopkeeper/agent/plan-cache';
@@ -24,28 +23,6 @@ import {
 } from '../support-plan/planning-notifications.js';
 import { autoExecutionOnlyHandedOff, shouldNotifyAutoExecution } from '../support-plan/planning-types.js';
 import type { AiSummaryJobData } from '../../types.js';
-
-export const DEFAULT_PLAN_INSTRUCTION = "Handle this customer's latest request";
-
-export function canParallelizeThreadPlanning(thread: {
-  channelType: string;
-  filterDecidedAt: Date | null;
-  requestSourceMessageId: string | null;
-}, sourceMessageId: string): boolean {
-  // Any customer-origin channel whose filter can change must decide sender
-  // trust before a safe reply is eligible to execute. Shopify order-event notes
-  // and internal channels are never filtered and can still plan in parallel.
-  const filterable = thread.channelType === CHANNEL.EMAIL
-    || thread.channelType === CHANNEL.SHOPIFY_CHAT
-    || thread.channelType === CHANNEL.IG_DM
-    || thread.channelType === CHANNEL.TIKTOK;
-  return (!filterable || thread.filterDecidedAt !== null)
-    && thread.requestSourceMessageId === sourceMessageId;
-}
-
-export function resolveParallelPlanInstruction(latestCustomerMessageText: string | null): string {
-  return latestCustomerMessageText?.trim() || DEFAULT_PLAN_INSTRUCTION;
-}
 
 export function resolveAiSummarySourceMessageId(
   queuedSourceMessageId: string,
@@ -73,10 +50,9 @@ type PublishDecision =
 
 // The one gate in front of every merchant-facing park, run against a fresh read
 // immediately before publishing rather than the snapshot the plan was built
-// from. Between planning and here the customer can send again and the classifier
-// can land its verdict — the classifier runs *in parallel* with planning on most
-// channels, so a disposition read any earlier is routinely the previous burst's
-// or absent entirely.
+// from. Between planning and here the customer can send again and the newer
+// burst's verdict can land, so a disposition read any earlier may belong to a
+// request this plan was not drafted for.
 async function resolvePublishDecision(
   organizationId: string,
   threadId: string,
@@ -127,19 +103,11 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
   } = data;
   logger.info({ threadId, organizationId, traceId }, '[AISummary] Processing job');
 
-  const [threadSnapshot, latestConversation] = await Promise.all([
-    db.thread.findUnique({
-      where: { id: threadId },
-      select: {
-        channelType: true,
-        filterDecidedAt: true,
-        filterStatus: true,
-        requestSourceMessageId: true,
-      },
-    }),
+  const [threadExists, latestConversation] = await Promise.all([
+    db.thread.findUnique({ where: { id: threadId }, select: { id: true } }),
     getLatestConversationMessage(threadId, organizationId),
   ]);
-  if (!threadSnapshot) {
+  if (!threadExists) {
     logger.warn({ threadId, organizationId }, '[AISummary] Thread not found — skipping');
     return;
   }
@@ -159,14 +127,33 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
     );
   }
 
-  const parallelPlan = canParallelizeThreadPlanning(threadSnapshot, sourceMessageId);
+  const org = await db.organization.findUnique({
+    where: { id: organizationId },
+    select: { settings: true },
+  });
+  const settings = resolveAgentSettings(org?.settings);
+  const withinBusinessHours = isWithinBusinessHours(settings);
+
+  // Classified before it is planned, on every channel: the planner's
+  // instruction is the request the classifier summarised, never the raw body.
+  // An email that opens its thread was classified inline, so this is a read.
+  const updatedThread = await generateThreadIntelligence(threadId, { skipSummary });
+
+  if (updatedThread?.filterStatus && updatedThread.filterStatus !== 'genuine') {
+    logger.info(
+      { threadId, organizationId, classification: updatedThread.filterStatus },
+      '[AISummary] Non-genuine thread — skipping plan precompute and notification',
+    );
+    return;
+  }
+
   // Compared after this burst is classified and before it is planned, so the
   // turn reads the stored outcome and a message asking something else is not
   // read as an answer. A Shopify lookup that failed retries the job, since its
   // answer is still uncompared; any other failure leaves the ask pending and the
   // turn planned as if nothing was answered, so a missing table never stops
   // planning.
-  const checkOrderVerificationAnswers = () => evaluateOrderVerificationAnswers(organizationId, threadId)
+  const answeredOrderVerification = await evaluateOrderVerificationAnswers(organizationId, threadId)
     .catch((err: unknown) => {
       if (err instanceof OrderVerificationLookupError) throw err;
       logger.warn(
@@ -176,75 +163,13 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
       return false;
     });
 
-  if (
-    parallelPlan
-    && threadSnapshot.filterStatus
-    && threadSnapshot.filterStatus !== 'genuine'
-  ) {
-    if (!skipSummary) {
-      await generateThreadIntelligence(threadId, { skipSummary });
-    }
-    logger.info(
-      { threadId, organizationId, classification: threadSnapshot.filterStatus },
-      '[AISummary] Non-genuine thread — skipping plan precompute and notification',
-    );
-    return;
-  }
-
-  const org = await db.organization.findUnique({
-    where: { id: organizationId },
-    select: { settings: true },
-  });
-  const settings = resolveAgentSettings(org?.settings);
-  const withinBusinessHours = isWithinBusinessHours(settings);
-
-  let parallelInstruction: string | undefined;
-  if (parallelPlan) {
-    const latestCustomerMessageText = await getLatestCustomerMessageText(threadId, organizationId);
-    parallelInstruction = resolveParallelPlanInstruction(latestCustomerMessageText);
-    logger.info(
-      { threadId, organizationId, channelType: threadSnapshot.channelType, planningPath: 'parallel' },
-      '[AISummary] Starting plan precompute in parallel with intelligence',
-    );
-  }
-
-  // The parallel path plans a burst the classifier has already read.
-  const parallelAnswered = parallelPlan ? await checkOrderVerificationAnswers() : false;
-  const intelligencePromise = generateThreadIntelligence(threadId, { skipSummary });
-  const planPromise = parallelPlan
-    ? precomputeThreadPlan(organizationId, threadId, settings, {
-        allowAutoExecute: withinBusinessHours,
-        instruction: parallelInstruction,
-        sourceMessageId,
-        skipSummary,
-        answeredOrderVerification: parallelAnswered,
-      })
-    : null;
-
-  const updatedThread = await intelligencePromise;
-
-  if (updatedThread?.filterStatus && updatedThread.filterStatus !== 'genuine') {
-    if (planPromise) {
-      await planPromise.catch(() => {});
-    }
-    logger.info(
-      { threadId, organizationId, classification: updatedThread.filterStatus },
-      '[AISummary] Non-genuine thread — skipping plan precompute and notification',
-    );
-    return;
-  }
-
-  const answeredOrderVerification = parallelPlan ? parallelAnswered : await checkOrderVerificationAnswers();
-
   if (!withinBusinessHours) {
-    const planResult = parallelPlan
-      ? await planPromise
-      : await precomputeThreadPlan(organizationId, threadId, settings, {
-          allowAutoExecute: false,
-          sourceMessageId,
-          skipSummary,
-          answeredOrderVerification,
-        });
+    const planResult = await precomputeThreadPlan(organizationId, threadId, settings, {
+      allowAutoExecute: false,
+      sourceMessageId,
+      skipSummary,
+      answeredOrderVerification,
+    });
     if (planResult?.autoExecuted) {
       // Routine answers and clarification questions are useful immediately and
       // replace the generic acknowledgement. A failed send is different: the
@@ -272,14 +197,12 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
     return;
   }
 
-  const planResult = parallelPlan
-    ? await planPromise
-    : await precomputeThreadPlan(organizationId, threadId, settings, {
-        allowAutoExecute: true,
-        sourceMessageId,
-        skipSummary,
-        answeredOrderVerification,
-      });
+  const planResult = await precomputeThreadPlan(organizationId, threadId, settings, {
+    allowAutoExecute: true,
+    sourceMessageId,
+    skipSummary,
+    answeredOrderVerification,
+  });
 
   if (!planResult) {
     logger.info({ threadId, organizationId }, '[AISummary] No plan precomputed — skipping operator notification');

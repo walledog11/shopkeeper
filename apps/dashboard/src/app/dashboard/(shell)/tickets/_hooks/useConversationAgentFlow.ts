@@ -59,18 +59,6 @@ export function resolvePendingPlan(plan: AgentPlan, instruction: string): AgentP
     : null
 }
 
-const PRIVATE_ASK_RE =
-  /\b(what should i|what do i|what to say|how should i|how do i|what can i|can you draft|draft|write|rewrite|responding to this|summari[sz]e|explain|do we have enough|should i|what's|what is|why)\b/i
-const ACTION_REQUEST_RE =
-  /^(?:(?:please|can you|could you|go ahead and|let's|lets)\s+)?(?:change|update|edit|swap|remove|add|refund|cancel|create|place|make|send|email|notify|close|tag|run|approve)\b/i
-
-export function shouldUsePrivateComposerAsk(instruction: string): boolean {
-  const normalized = instruction.trim()
-  if (!normalized) return false
-  if (PRIVATE_ASK_RE.test(normalized)) return true
-  return !ACTION_REQUEST_RE.test(normalized)
-}
-
 export function planRequiresApproval(plan: AgentPlan): boolean {
   return plan.validation?.status === "invalid"
     || plan.steps.some(step => step.category === "action" || step.category === "communication" || step.category === "internal")
@@ -210,22 +198,36 @@ export function useConversationAgentFlow({
     }
   }
 
-  const answerPrivateQuestion = async (instruction: string, echo: string = instruction) => {
+  // Resolves true when the agent handed the instruction to planning instead of
+  // answering it. The caller then plans, and the loading state stays up for it.
+  const answerPrivateQuestion = async (
+    instruction: string,
+    echo: string = instruction,
+    planHandoff = false,
+  ): Promise<boolean> => {
     onReplyChange("")
     setPendingInstruction(echo)
     setIsPlanLoading(true)
 
+    let handedOff = false
     try {
-      const result = await askAgentPrivately(ticket.id, instruction)
+      const result = await askAgentPrivately(ticket.id, instruction, { planHandoff })
+      if (result.ok && result.handsOffToPlanning) {
+        handedOff = true
+        return true
+      }
       const turn = createAgentTurn({ ...result.turn, instruction: echo })
       if (result.ok) {
         onAgentComplete(turn)
       } else {
         onAgentTurnAdd(turn)
       }
+      return false
     } finally {
-      setIsPlanLoading(false)
-      setPendingInstruction(null)
+      if (!handedOff) {
+        setIsPlanLoading(false)
+        setPendingInstruction(null)
+      }
     }
   }
 
@@ -233,15 +235,11 @@ export function useConversationAgentFlow({
     if (isAgentMode && agentInstruction) {
       const instruction = agentInstruction
 
-      if (shouldUsePrivateComposerAsk(instruction)) {
-        await answerPrivateQuestion(instruction)
-        return
-      }
+      // The agent reads whether this is a question or something to do; only
+      // the second reaches planning, which takes over the ticket's draft.
+      if (!(await answerPrivateQuestion(instruction, instruction, true))) return
 
-      onReplyChange("")
       planningEpoch.current += 1
-      setPendingInstruction(instruction)
-      setIsPlanLoading(true)
 
       try {
         const plan = await fetchAgentPlan(ticket.id, instruction)

@@ -12,7 +12,7 @@ import {
   recordAgentActionsBatch,
 } from "./agent-actions.js";
 import type { ReceiptV1 } from "./tools/result.js";
-import { acceptMemberAgentRequest, cancelMemberAgentTask, claimAgentTask } from "./task-ledger.js";
+import { acceptMemberAgentRequest, cancelMemberAgentTask, claimAgentTask } from "./task-ledger/index.js";
 
 const orgIds: string[] = [];
 

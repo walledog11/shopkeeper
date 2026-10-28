@@ -29,14 +29,8 @@ import {
   type PersistedAgentAction,
 } from "./agent-actions.js";
 import type { ModelUsageMetrics } from "./usage.js";
-import {
-  executedCompletionFacts,
-  type CompletionFact,
-} from "./completion-facts.js";
-import {
-  renderReplyCompletionClaims,
-  unsupportedReplyCompletionClaims,
-} from "./plan-grounding.js";
+import { executedCompletionFacts } from "./completion-facts.js";
+import { unsupportedReplyCompletionClaims } from "./plan-grounding.js";
 import type { ProposalCommunication } from "./types.js";
 import { fillApprovedDraft } from "./reply-placeholders.js";
 
@@ -359,7 +353,6 @@ export async function executeAgentToolCall(
     // them).
     moduleTools?: Record<string, AgentToolDefinition>;
     operationScopeId?: string;
-    completionEvidence?: readonly CompletionFact[];
     approvedMessage?: ApprovedMessage;
     /** The calls are the model's own, not an approved plan's (see quoteModelFullRefund). */
     quoteModelRefunds?: boolean;
@@ -391,18 +384,14 @@ export async function executeAgentToolCall(
   const approvedMessage = input.approvedMessage && isCustomerMessage(toolCall.name)
     ? prepareApprovedMessage(toolCall, input.approvedMessage, actionsPerformed)
     : null;
-  // Non-draft communication also grounds completion claims in validated receipts.
+  // A message the model writes in this turn may claim only what a validated
+  // receipt from this turn shows. It is refused rather than rewritten.
   const receiptReplyFacts = !input.approvedMessage && isCustomerMessage(toolCall.name)
-    ? [
-      ...(input.completionEvidence ?? []),
-      ...executedCompletionFacts(actionsPerformed, ctx),
-    ]
+    ? executedCompletionFacts(actionsPerformed, ctx)
     : null;
   const authoredToolCall = approvedMessage && "call" in approvedMessage
     ? approvedMessage.call
-    : receiptReplyFacts
-      ? renderReplyCompletionClaims(toolCall, receiptReplyFacts, ctx)
-      : toolCall;
+    : toolCall;
   const quoted = input.quoteModelRefunds && !readOnly && !hasUnknownProviderOutcome(actionsPerformed)
     ? await quoteModelFullRefund(authoredToolCall, ctx)
     : { call: authoredToolCall };
@@ -456,11 +445,6 @@ export async function executeAgentToolCall(
     errorDetail = result;
   } else if (
     receiptReplyFacts
-    // Validate the exact receipt-bound text that will be dispatched. The model
-    // draft may contain a broader phrase (for example "shipping address") that
-    // the canonical renderer deliberately replaces with one grounded claim;
-    // checking the discarded draft can reject a safe reply for a claim no
-    // customer will receive.
     && unsupportedReplyCompletionClaims(executableToolCall, receiptReplyFacts, ctx).length > 0
   ) {
     result = `Error: skipped ${toolCall.name} because its completion claim is not supported by a successful action result.`;

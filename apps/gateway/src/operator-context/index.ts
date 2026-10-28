@@ -5,6 +5,7 @@ export {
   getContext,
   loadLiveOperatorContext,
   normalizeApprovedToolCalls,
+  pendingPlanDropReason,
   removePendingPlanForThread,
   resolvePendingPlanContexts,
   resolvePendingQuestionContext,

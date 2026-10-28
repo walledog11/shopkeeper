@@ -8,6 +8,7 @@ import { merchantGapQuestion } from "./plan-preview.js";
 import { planSignals } from "./plan-signals.js";
 import { planCommunication } from "./proposal-communication.js";
 import { checkStaticToolPolicy } from "./tools/static-policy.js";
+import { isEscalationEvidence } from "./routing-evidence.js";
 import { AWAIT_CUSTOMER_PHOTO_TOOL, AWAIT_ORDER_VERIFICATION_TOOL, TOOL_CATEGORIES } from "./tools/registry/index.js";
 import type {
   AgentPlan,
@@ -89,8 +90,18 @@ export type AutonomyVerdict =
  * approval-path guard and the failure-replan child gate read it, so the two
  * cannot drift into disagreeing about the same verdict.
  */
-export function allowsAutomaticExecution(verdict: AutonomyVerdict): boolean {
-  return verdict.kind === "quick_reply" || verdict.kind === "auto_execute";
+/**
+ * Whether a plan runs without a human: a safe reply, an allowed action, or a
+ * handoff with nothing else in it, which the merchant never approves
+ * (decision O). Every execution path asks this, so a failure replan that only
+ * escalates is not parked for an approval nobody may give.
+ */
+export function allowsAutomaticExecution(
+  verdict: AutonomyVerdict,
+  toolCalls: readonly Pick<RawToolCall, "name">[],
+): boolean {
+  return verdict.kind === "quick_reply" || verdict.kind === "auto_execute"
+    || (verdict.kind === "escalate" && isEscalationOnlyPlan(toolCalls));
 }
 
 /** A handoff with optional investigation, but no action or customer message. */
@@ -122,23 +133,6 @@ const QUICK_REPLY_READ_TOOLS = new Set([
 const QUICK_REPLY_COMPANION_TOOLS = new Set([AWAIT_CUSTOMER_PHOTO_TOOL, AWAIT_ORDER_VERIFICATION_TOOL]);
 
 const EXECUTABLE_CATEGORIES = new Set(["action", "communication", "internal"]);
-
-const ESCALATION_EVIDENCE = new Set<PlanRoutingEvidenceCode>([
-  "fraud_risk",
-  "forwarded_prompt_injection",
-  "contradictory_request",
-  "out_of_scope_commercial_request",
-  "fulfilled_cancellation_request",
-  "fulfilled_address_change_request",
-  "already_refunded_request",
-  "non_paid_refund_request",
-  "compensation_exception",
-  "ambiguous_customer",
-  "critical_planning_read_failure",
-  "compensation_over_cap",
-  "damage_photo_missing",
-  "order_unconfirmed",
-]);
 
 function replyText(toolCall: RawToolCall | null): string | null {
   const input = toolCall?.input;
@@ -194,7 +188,7 @@ export function decideAutonomy(
 ): AutonomyVerdict {
   const evidence = routingEvidence(plan, context);
   const explicitEscalation = plan.rawToolCalls.find((call) => call.name === "escalate_to_human") ?? null;
-  const escalationCodes = evidence.codes.filter((code) => ESCALATION_EVIDENCE.has(code));
+  const escalationCodes = evidence.codes.filter(isEscalationEvidence);
   // Structural evidence is itself the policy decision, and it is derived from
   // the merchant's own data rather than from the model's proposal — so it is
   // decided ahead of plan validity. Ordering it after would let a model escape

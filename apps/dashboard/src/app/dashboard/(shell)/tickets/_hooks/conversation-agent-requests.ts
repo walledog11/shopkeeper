@@ -1,5 +1,6 @@
 import { ApiRequestError, requestJson } from "@/lib/api/fetcher"
 import { committedWithUnsentReply, planExecutionOutcomeForActions } from "@shopkeeper/agent/execution-outcome"
+import { handsOffToPlanning } from "@shopkeeper/agent/composer-plan-handoff"
 import type { ActionEntry } from "@/lib/agent/runner"
 import type { AgentPlan, AgentTurn, PlanExecutionOutcome, RawToolCall } from "@/types"
 import type { GatewayAgentRequestPayload } from "@/lib/agent/api/gateway-operator-turn"
@@ -22,7 +23,7 @@ export type AgentRequestResult =
   | { ok: false; executionId: string | null; outcome: Exclude<PlanExecutionOutcome, "committed">; turn: Omit<AgentTurn, "id"> }
 
 type AgentTurnRequestResult =
-  | { ok: true; turn: Omit<AgentTurn, "id"> }
+  | { ok: true; turn: Omit<AgentTurn, "id">; handsOffToPlanning: boolean }
   | { ok: false; turn: Omit<AgentTurn, "id"> }
 
 const PLAN_EXECUTION_OUTCOMES = new Set<PlanExecutionOutcome>([
@@ -160,6 +161,7 @@ export async function executeApprovedAgentPlan(
 export async function askAgentPrivately(
   threadId: string,
   instruction: string,
+  options: { planHandoff: boolean },
 ): Promise<AgentTurnRequestResult> {
   try {
     const payload = await requestJson<AgentActionPayload>(
@@ -167,11 +169,15 @@ export async function askAgentPrivately(
       {
         method: "POST",
         headers: JSON_HEADERS,
-        body: JSON.stringify({ threadId, instruction }),
+        body: JSON.stringify({ threadId, instruction, planHandoff: options.planHandoff }),
       },
       "Agent failed.",
     )
-    return { ok: true, turn: agentTurnFields(instruction, payload, null) }
+    return {
+      ok: true,
+      turn: agentTurnFields(instruction, payload, null),
+      handsOffToPlanning: handsOffToPlanning(payload.actionsPerformed ?? []),
+    }
   } catch (error) {
     if (error instanceof ApiRequestError) {
       const payload = (error.payload ?? {}) as AgentActionPayload

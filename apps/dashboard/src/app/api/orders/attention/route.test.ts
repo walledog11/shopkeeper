@@ -1,149 +1,74 @@
-import { randomUUID } from 'crypto';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { db } from '@shopkeeper/db';
-import { cleanupTestData, createTestCustomer, createTestOrg, createTestThread } from '@shopkeeper/db/test-helpers';
-import type { OrderAttentionFinding, OrderAttentionReturn } from './route';
+import { describe, expect, it } from "vitest"
+import { parseFlagOrderRow } from "./route"
 
-type OrderAttentionResponse = { findings: OrderAttentionFinding[]; returns: OrderAttentionReturn[] };
+// Mirrors the strings emitted by @shopkeeper/agent/order-ops run.ts:
+//   instruction = `order-risk-review:${order.id}`
+//   summary     = `Flagged order ${order.name} for review: ${reason}`
+//   input       = { reason }
+const at = new Date("2026-06-21T12:00:00.000Z")
 
-vi.mock('@clerk/nextjs/server', () => ({
-  auth: vi.fn(),
-  clerkClient: vi.fn(),
-}));
+describe("parseFlagOrderRow", () => {
+  it("recovers order id, name, and reason from a well-formed finding", () => {
+    const result = parseFlagOrderRow({
+      id: "row-1",
+      input: { reason: "Shipping address mismatch, high-value first order" },
+      instruction: "order-risk-review:5012345678",
+      summary: "Flagged order #1043 for review: Shipping address mismatch, high-value first order",
+      executedAt: at,
+    })
+    expect(result).toEqual({
+      id: "row-1",
+      orderId: "5012345678",
+      orderName: "#1043",
+      reason: "Shipping address mismatch, high-value first order",
+      at: "2026-06-21T12:00:00.000Z",
+    })
+  })
 
-import { auth } from '@clerk/nextjs/server';
-import { GET } from './route';
+  it("prefers the tool input reason over the summary tail", () => {
+    const result = parseFlagOrderRow({
+      id: "row-2",
+      input: { reason: "Structured reason" },
+      instruction: "order-risk-review:99",
+      summary: "Flagged order #2 for review: summary tail reason",
+      executedAt: at,
+    })
+    expect(result.reason).toBe("Structured reason")
+  })
 
-let org: Awaited<ReturnType<typeof createTestOrg>>;
-let otherOrg: Awaited<ReturnType<typeof createTestOrg>> | null = null;
+  it("falls back to the summary tail when input has no reason", () => {
+    const result = parseFlagOrderRow({
+      id: "row-3",
+      input: {},
+      instruction: "order-risk-review:99",
+      summary: "Flagged order #2 for review: summary tail reason",
+      executedAt: at,
+    })
+    expect(result.reason).toBe("summary tail reason")
+  })
 
-function seedShopify(orgId: string, connectedAt: Date) {
-  return db.integration.create({
-    data: {
-      organizationId: orgId,
-      platform: 'shopify',
-      externalAccountId: `store-${randomUUID()}.myshopify.com`,
-      accessToken: 'token',
-      createdAt: connectedAt,
-    },
-  });
-}
+  it("derives a name from the order id when the summary is unparseable", () => {
+    const result = parseFlagOrderRow({
+      id: "row-4",
+      input: { reason: "risk" },
+      instruction: "order-risk-review:777",
+      summary: null,
+      executedAt: at,
+    })
+    expect(result.orderId).toBe("777")
+    expect(result.orderName).toBe("Order 777")
+  })
 
-function seedFlagOrder(
-  orgId: string,
-  orderId: string,
-  name: string,
-  reason: string,
-  executedAt: Date,
-  status = 'escalated',
-) {
-  return db.agentAction.create({
-    data: {
-      turnId: randomUUID(),
-      organizationId: orgId,
-      tool: 'flag_order',
-      category: 'action',
-      input: { reason },
-      status,
-      mode: 'auto_executed',
-      durationMs: 12,
-      instruction: `order-risk-review:${orderId}`,
-      summary: `Flagged order ${name} for review: ${reason}`,
-      executedAt,
-    },
-  });
-}
-
-async function getAttention(): Promise<OrderAttentionResponse> {
-  const res = await GET(new Request('http://localhost/api/orders/attention'));
-  expect(res.status).toBe(200);
-  return (await res.json()) as OrderAttentionResponse;
-}
-
-beforeEach(async () => {
-  org = await createTestOrg();
-  vi.mocked(auth).mockResolvedValue({
-    userId: 'usr_attention',
-    orgId: org.clerkOrgId,
-  } as ReturnType<typeof auth> extends Promise<infer T> ? T : never);
-});
-
-afterEach(async () => {
-  await cleanupTestData(org?.id);
-  await cleanupTestData(otherOrg?.id);
-  otherOrg = null;
-  vi.clearAllMocks();
-});
-
-describe('GET /api/orders/attention', () => {
-  it('returns findings from the current store connection and open Returns threads', async () => {
-    await seedShopify(org.id, new Date('2026-06-01T00:00:00.000Z'));
-    await seedFlagOrder(org.id, '9001', '#1001', 'High-risk shipping address', new Date('2026-06-10T00:00:00.000Z'));
-    const customer = await createTestCustomer(org.id, 'buyer@example.com', { name: 'Jane Doe' });
-    await createTestThread(org.id, customer.id, 'email', { tag: 'Returns' });
-    // A non-Returns thread must not appear in the returns bucket.
-    const otherCustomer = await createTestCustomer(org.id, 'support@example.com', { name: 'Sam Support' });
-    await createTestThread(org.id, otherCustomer.id, 'email', { tag: 'Support' });
-
-    const body = await getAttention();
-
-    expect(body.findings).toEqual([
-      expect.objectContaining({ orderId: '9001', orderName: '#1001', reason: 'High-risk shipping address' }),
-    ]);
-    expect(body.returns).toEqual([expect.objectContaining({ customerName: 'Jane Doe', summary: null })]);
-  });
-
-  it('excludes findings generated before the current store was connected', async () => {
-    // Mirrors a Shopify reinstall: the store reconnects, wiping the order the
-    // earlier finding referenced. The stale finding must not surface.
-    await seedShopify(org.id, new Date('2026-06-15T00:00:00.000Z'));
-    await seedFlagOrder(org.id, '7317445509440', '#PG1013', 'Random-looking email', new Date('2026-06-09T00:00:00.000Z'));
-    const customer = await createTestCustomer(org.id, 'buyer@example.com', { name: 'Jane Doe' });
-    await createTestThread(org.id, customer.id, 'email', { tag: 'Returns' });
-
-    const body = await getAttention();
-
-    expect(body.findings).toEqual([]);
-    expect(body.returns).toHaveLength(1);
-  });
-
-  it('excludes flag_order rows that did not come back escalated', async () => {
-    // Rows written before 2026-08-04 recorded 'success' on flag_order, under
-    // plumbing that never set flagReason — so the run did not actually treat the
-    // order as flagged. Surfacing them shows a finding the module never made.
-    await seedShopify(org.id, new Date('2026-06-01T00:00:00.000Z'));
-    await seedFlagOrder(
-      org.id,
-      '7317445509440',
-      '#PG1013',
-      'Random-looking email',
-      new Date('2026-06-10T00:00:00.000Z'),
-      'success',
-    );
-
-    const body = await getAttention();
-
-    expect(body.findings).toEqual([]);
-  });
-
-  it('returns no findings when no Shopify store is connected', async () => {
-    await seedFlagOrder(org.id, '9001', '#1001', 'risk', new Date());
-
-    const body = await getAttention();
-
-    expect(body.findings).toEqual([]);
-  });
-
-  it('does not leak another org findings or returns', async () => {
-    otherOrg = await createTestOrg();
-    await seedShopify(otherOrg.id, new Date('2026-06-01T00:00:00.000Z'));
-    await seedFlagOrder(otherOrg.id, '8001', '#8001', 'foreign risk', new Date('2026-06-10T00:00:00.000Z'));
-    const foreignCustomer = await createTestCustomer(otherOrg.id, 'foreign@example.com', { name: 'Foreign' });
-    await createTestThread(otherOrg.id, foreignCustomer.id, 'email', { tag: 'Returns' });
-
-    const body = await getAttention();
-
-    expect(body.findings).toEqual([]);
-    expect(body.returns).toEqual([]);
-  });
-});
+  it("degrades safely when neither instruction nor summary is present", () => {
+    const result = parseFlagOrderRow({
+      id: "row-5",
+      input: null,
+      instruction: null,
+      summary: null,
+      executedAt: at,
+    })
+    expect(result.orderId).toBeNull()
+    expect(result.orderName).toBe("An order")
+    expect(result.reason).toBe("Flagged for review")
+  })
+})

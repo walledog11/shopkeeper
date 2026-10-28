@@ -113,10 +113,6 @@ export function hashInstruction(instruction: string): string {
   return sha256Hex(instruction);
 }
 
-function deriveStatus(entry: ActionEntry): AgentActionStatus {
-  return entry.status ?? "success";
-}
-
 function deriveErrorDetail(entry: ActionEntry, status: AgentActionStatus): string | null {
   if (entry.errorDetail) return entry.errorDetail;
   if (status === "error" || status === "policy_block" || status === "unknown") return entry.result;
@@ -149,7 +145,7 @@ function validatedEntryReceipt(entry: ActionEntry, expectedOperationId?: string)
   if (expectedOperationId && receipt.operationId !== expectedOperationId) {
     throw new Error("Receipt operationId does not match the durable action operation ID");
   }
-  const status = deriveStatus(entry);
+  const status = entry.status;
   const expectedStatus = RECEIPT_ACTION_STATUS[receipt.outcome];
   if (status !== expectedStatus) {
     throw new Error(`Receipt outcome ${receipt.outcome} requires action status ${expectedStatus}`);
@@ -167,7 +163,7 @@ function entryToRow(params: CommonRecordParams & {
   id: string;
   turnId: string;
 }) {
-  const status = deriveStatus(params.entry);
+  const status = params.entry.status;
   const receipt = validatedEntryReceipt(params.entry);
   return {
     id: params.id,
@@ -343,7 +339,7 @@ export async function failAgentActionBeforeDispatch(
   attempt: AgentActionAttempt,
   entry: ActionEntry,
 ): Promise<void> {
-  const status = deriveStatus(entry);
+  const status = entry.status;
   if (status === "unknown" || status === "success") {
     throw new Error("An action that was not dispatched requires a definite failure result");
   }
@@ -415,7 +411,7 @@ export async function completeAgentActionAttempt(
   attempt: AgentActionAttempt,
   entry: ActionEntry,
 ): Promise<void> {
-  const status = deriveStatus(entry);
+  const status = entry.status;
   const receipt = validatedEntryReceipt(entry, attempt.operationId);
   const dispatchState = status === "unknown" ? "unknown" : "settled";
   const result = await db.agentAction.updateMany({

@@ -105,14 +105,6 @@ export async function handlePendingPlanCommand(
     return true;
   }
 
-  // The approval binds the whole bundle, so a subset can never execute; and
-  // "skip 0" or an index past the last step fell through to running every step,
-  // refund included. Leaving a step out is a revision.
-  if (command.type === 'plan-skip') {
-    await reply("I can't run part of a plan, so I've run nothing. Tell me what to change and I'll redraft it, or reply no to dismiss it.");
-    return true;
-  }
-
   const approvedRawToolCalls = normalizeApprovedToolCalls(rawToolCalls);
 
   logger.info({ chatId, threadId, toolCallCount: approvedRawToolCalls.length }, '[Operator] Approving plan');

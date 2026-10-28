@@ -48,6 +48,13 @@ export interface OperatorAnswerReplanParams {
   deliveryRef?: string;
   /** Plan that asked the merchant, when known before the cached plan is replaced. */
   askingPlanId?: string | null;
+  /** The card being revised, so a revision never lands on a card that replaced it. */
+  revisedPlanId?: string;
+  /**
+   * Whether the answer becomes a knowledge-base article. Off, it directs this
+   * re-plan only, so a one-off judgment call never becomes policy. Defaults on.
+   */
+  saveToKb?: boolean;
   /**
    * Which wait this text ends — the question the agent asked, or the card it
    * parked. The caller knows because the merchant's tool call is what says so,
@@ -89,6 +96,7 @@ export async function applyOperatorAnswerReplan(
     clerkUserId: params.clerkUserId,
     threadId: params.threadId,
     endsWait: params.endsWait,
+    ...(params.revisedPlanId ? { proposalId: params.revisedPlanId } : {}),
     continuationInstruction: params.answer,
     continuationChannel: 'operator',
     leaseMs: ANSWER_REPLAN_LEASE_MS,
@@ -163,7 +171,8 @@ async function runAnswerReplan(
       : `Merchant note for the agent: ${answer}`,
   });
 
-  const saved = await saveMerchantAnswerToKb({
+  const saveToKb = params.saveToKb !== false;
+  const saved = saveToKb ? await saveMerchantAnswerToKb({
     organizationId,
     threadId,
     question,
@@ -171,7 +180,7 @@ async function runAnswerReplan(
     threadTag: meta?.tag,
     channelType: meta?.channelType ?? thread.channelType,
     threadSummary: meta?.aiSummary,
-  });
+  }) : null;
 
   void captureObservedMerchantPreferenceProposal({
     organizationId,
@@ -198,7 +207,9 @@ async function runAnswerReplan(
     }
     logger.info({ organizationId, threadId, reason: 'thread_already_answered' }, '[Operator] Answer recorded, skipped re-plan');
     return {
-      message: 'Got it — saved that for next time. This ticket was already handled.',
+      message: saved
+        ? 'Got it — saved that for next time. This ticket was already handled.'
+        : 'Got it. This ticket was already handled.',
       status: 'already_handled',
     };
   }
@@ -216,12 +227,12 @@ async function runAnswerReplan(
     baseInstruction,
     question,
     answer,
-    saveToKb: true,
+    saveToKb,
   });
 
   const doReplan = async (): Promise<{ plan: AgentPlan; cacheRecord: ReturnType<typeof buildAgentPlanCacheRecord> }> => {
     const ctx = await buildContext(threadId, organizationId, gatewayThreadSink, {
-      pinKbArticles: [{ title: saved.title, body: saved.body }],
+      ...(saved ? { pinKbArticles: [{ title: saved.title, body: saved.body }] } : {}),
       runtimeVersion,
     });
     ctx.taskBudget = control.taskBudget;

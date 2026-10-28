@@ -1,0 +1,550 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import request from 'supertest';
+import { ChannelType, db } from '@shopkeeper/db';
+import {
+  createTestCustomer,
+  createTestMessage,
+  createTestThread,
+} from '@shopkeeper/db/test-helpers';
+import { hashInstruction, hashPlan } from '@shopkeeper/agent/agent-actions';
+import { resolveOperatorThread } from '@shopkeeper/agent/internal-thread';
+import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
+import { resolveAgentSettings } from '@shopkeeper/agent/settings';
+import type { AgentPlan, PlanValidation } from '@shopkeeper/agent/types';
+import { appendPendingPlan, getContext, updateContext } from '../operator-context.js';
+import {
+  SECRET,
+  lastReplyText,
+  seedBindToken,
+  processPendingOperatorEvents,
+  telegramFixture,
+  waitForReplies,
+} from '../test-fixtures/telegram-webhook-test-fixture.js';
+
+const {
+  app,
+  executeOperatorAgentTurnSpy,
+  incrStore,
+  mockLogger,
+  sendChatActionSpy,
+  sendMessageSpy,
+  setMessageReactionSpy,
+} = telegramFixture;
+let org: { id: string };
+
+beforeEach(() => {
+  org = telegramFixture.org;
+});
+
+describe('POST /webhooks/telegram — pending plan commands', () => {
+  // Operator state hangs off the person, so binding a chat also tells us which
+  // queue that chat's messages will read.
+  async function bindMember(chatId: string) {
+    const member = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: `usr_${chatId}` },
+    });
+    await db.orgMemberTelegramChat.create({
+      data: { orgMemberId: member.id, chatId },
+    });
+    return `member:${member.id}`;
+  }
+
+  async function parkCurrentPlan(params: {
+    memberKey: string;
+    instruction: string;
+    rawToolCalls: AgentPlan['rawToolCalls'];
+    validation?: PlanValidation;
+    customerName?: string;
+    actionLabel?: string;
+    customerKey?: string;
+  }) {
+    const customer = await createTestCustomer(
+      org.id,
+      `plan_${params.memberKey.replace(':', '_')}${params.customerKey ?? ''}@test.com`,
+    );
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+    const sourceMessage = await createTestMessage(thread.id, 'Please help with this request.');
+    const validation = params.validation ?? { status: 'valid' as const, issues: [] };
+    const plan: AgentPlan = {
+      instruction: params.instruction,
+      steps: params.rawToolCalls.map((toolCall, index) => ({
+        id: toolCall.id,
+        tool: toolCall.name,
+        label: `Step ${index + 1}`,
+        description: `Run ${toolCall.name}`,
+        category: toolCall.name === 'send_reply' ? 'communication' : 'action',
+        enabled: true,
+      })),
+      rawToolCalls: params.rawToolCalls,
+      validation,
+    };
+    const cache = buildAgentPlanCacheRecord({
+      instruction: params.instruction,
+      lastCustomerMessageId: sourceMessage.id,
+      settings: resolveAgentSettings(null),
+      plan,
+    });
+    const expectedIdentity = {
+      planId: cache.planId!,
+      sourceMessageId: sourceMessage.id,
+      planHash: hashPlan(cache.plan),
+      instructionHash: hashInstruction(params.instruction),
+    };
+    await db.thread.update({
+      where: { id: thread.id },
+      data: { cachedPlan: cache as object, cachedPlanMessageId: sourceMessage.id },
+    });
+    await updateContext(org.id, params.memberKey, {
+      pendingPlan: {
+        threadId: thread.id,
+        instruction: params.instruction,
+        rawToolCalls: params.rawToolCalls.map((toolCall) => ({
+          id: toolCall.id,
+          name: toolCall.name,
+          input: toolCall.input,
+        })),
+        validation,
+        ...expectedIdentity,
+        ...(params.customerName ? { customerName: params.customerName } : {}),
+        ...(params.actionLabel ? { actionLabel: params.actionLabel } : {}),
+      },
+    });
+    return { threadId: thread.id, expectedIdentity };
+  }
+
+  it('"yes" runs the agent with rawToolCalls as approvedToolCalls', async () => {
+    const chatId = '5555001';
+    const memberKey = await bindMember(chatId);
+    const { threadId, expectedIdentity } = await parkCurrentPlan({
+      memberKey,
+      instruction: 'refund #1',
+      rawToolCalls: [{ id: 'tc1', name: 'refundOrder', input: { amount: 5 } }],
+    });
+
+    executeOperatorAgentTurnSpy.mockResolvedValueOnce({
+      outcome: 'committed',
+      summary: 'Refunded.',
+      threadId,
+      actionsPerformed: [],
+    });
+
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'yes' } });
+
+    await processPendingOperatorEvents(org.id);
+    await waitForReplies(1);
+    expect(setMessageReactionSpy).toHaveBeenCalledWith(chatId, 1, '👀');
+    expect(sendChatActionSpy).toHaveBeenCalledWith(chatId, 'typing');
+    expect(executeOperatorAgentTurnSpy).toHaveBeenCalledOnce();
+    expect(executeOperatorAgentTurnSpy).toHaveBeenCalledWith({
+      orgId: org.id,
+      threadId,
+      instruction: 'refund #1',
+      approvedToolCalls: [{ id: 'tc1', name: 'refundOrder', input: { amount: 5 } }],
+      clerkUserId: `usr_${chatId}`,
+      expectedIdentity,
+    });
+    expect(lastReplyText()).toBe('Refunded.');
+
+    const ctx = await getContext(org.id, memberKey);
+    expect(ctx.pendingPlan).toBeNull();
+  });
+
+  // 2026-09-10: the queue was empty when the merchant's "Yes" landed, so the
+  // fast path declined it and the model turn treated the word as a fresh
+  // instruction — which it satisfied by attempting the refund itself. A
+  // decision about a draft that is gone gets answered here, not forwarded.
+  it('"yes" with nothing queued answers deterministically and runs no turn', async () => {
+    const chatId = '5555009';
+    await bindMember(chatId);
+
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'yes' } });
+
+    await processPendingOperatorEvents(org.id);
+    await waitForReplies(1);
+
+    expect(executeOperatorAgentTurnSpy).not.toHaveBeenCalled();
+    expect(lastReplyText()).toContain('Nothing is waiting for your approval');
+  });
+
+  // 2026-10-05: the agent's own reply asked "Want me to send a reply letting them
+  // know it's cancelled and refunded?", and the merchant's "Yes" got the answer
+  // above, because an offer in conversation is not a queued draft. When the
+  // agent's turn spoke last, only the agent knows what the yes agrees to.
+  it('"yes" right after the agent\'s own reply goes to the agent turn', async () => {
+    const chatId = '5555013';
+    const memberKey = await bindMember(chatId);
+    const operatorThread = await resolveOperatorThread(org.id, memberKey);
+    const task = await db.agentTask.create({ data: {
+      organizationId: org.id, threadId: operatorThread.id, initiatingActorKind: 'member',
+      initiatingActorKey: memberKey, objective: 'Was the customer notified?',
+      runtimeVersion: 2, checkpointVersion: 1, checkpoint: {},
+      modelCallLimit: 10, activeTimeMsLimit: 60000, spendNanoUsdLimit: 1000000n,
+    } });
+    await db.message.create({ data: {
+      threadId: operatorThread.id, organizationId: org.id, senderType: 'agent', agentTaskId: task.id,
+      contentText: "No, I haven't messaged them yet. Want me to send a reply letting them know it's cancelled and refunded?",
+    } });
+    executeOperatorAgentTurnSpy.mockResolvedValueOnce({
+      outcome: 'committed',
+      summary: 'Sent.',
+      threadId: operatorThread.id,
+      actionsPerformed: [],
+    });
+
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'Yes' } });
+
+    await processPendingOperatorEvents(org.id);
+    await waitForReplies(1);
+
+    expect(executeOperatorAgentTurnSpy).toHaveBeenCalledOnce();
+    expect(lastReplyText()).not.toContain('Nothing is waiting for your approval');
+  });
+
+  // 2026-10-22: with one card per ticket, a second ticket's card can land while
+  // the merchant is typing about the first, so a bare "yes" no longer says which
+  // card it answers. It runs nothing and asks.
+  it('"yes" with two plans waiting runs nothing and names both', async () => {
+    const chatId = '5555020';
+    const memberKey = await bindMember(chatId);
+    await parkCurrentPlan({
+      memberKey,
+      customerKey: '_first',
+      instruction: 'refund #1',
+      rawToolCalls: [{ id: 'tc1', name: 'refundOrder', input: { amount: 5 } }],
+      customerName: 'Rajbir Sambi',
+      actionLabel: 'refund order #1',
+    });
+    const [first] = (await getContext(org.id, memberKey)).pendingPlans;
+    await parkCurrentPlan({
+      memberKey,
+      customerKey: '_second',
+      instruction: 'return #2',
+      rawToolCalls: [{ id: 'tc2', name: 'create_return', input: { order_id: '2' } }],
+      customerName: 'Sam Lee',
+      actionLabel: 'open a return on order #2',
+    });
+    await appendPendingPlan(org.id, memberKey, first!, 5);
+
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'yes' } });
+    await processPendingOperatorEvents(org.id);
+    await waitForReplies(1);
+
+    expect(executeOperatorAgentTurnSpy).not.toHaveBeenCalled();
+    expect(lastReplyText()).toContain('You have 2 plans waiting');
+    expect(lastReplyText()).toContain('1. Sam — open a return on order #2\n2. Rajbir — refund order #1');
+    expect((await getContext(org.id, memberKey)).pendingPlans).toHaveLength(2);
+  });
+
+  it('does not run or discard a plan that requires thread review', async () => {
+    const chatId = '5555012';
+    const memberKey = await bindMember(chatId);
+    const { threadId, expectedIdentity } = await parkCurrentPlan({
+      memberKey,
+      instruction: 'refund #10',
+      rawToolCalls: [{ id: 'tc1', name: 'refundOrder', input: { amount: 5 } }],
+    });
+    await updateContext(org.id, memberKey, {
+      pendingDigest: {
+        items: [{
+          threadId,
+          kind: 'approval',
+          planId: expectedIdentity.planId,
+          needsThreadReview: true,
+        }],
+        sentAt: new Date().toISOString(),
+      },
+    });
+
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'yes' } });
+    await processPendingOperatorEvents(org.id);
+    await waitForReplies(1);
+
+    expect(lastReplyText()).toContain('Open the thread before deciding');
+    expect(executeOperatorAgentTurnSpy).not.toHaveBeenCalled();
+    expect((await getContext(org.id, memberKey)).pendingPlan).toMatchObject({ planId: expectedIdentity.planId });
+  });
+
+  it.each(['yes'])('%s cannot run a validation-failed draft', async (command) => {
+    const chatId = '5555010';
+    const memberKey = await bindMember(chatId);
+    const { threadId } = await parkCurrentPlan({
+      memberKey,
+      instruction: 'Reply',
+      rawToolCalls: [{ id: 's1', name: 'send_reply', input: { text: '' } }],
+      validation: {
+        status: 'invalid',
+        issues: [{ code: 'invalid_tool_input', message: 'The reply text cannot be blank.' }],
+      },
+    });
+
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: command } });
+
+    await processPendingOperatorEvents(org.id);
+    await waitForReplies(1);
+    expect(executeOperatorAgentTurnSpy).not.toHaveBeenCalled();
+    expect(lastReplyText()).toContain('failed validation');
+    expect((await getContext(org.id, memberKey)).pendingPlans.at(-1)?.threadId).toBe(threadId);
+  });
+
+  // Older parked plans have no actionLabel — the fast path must still answer.
+  it('"no" clears pendingPlan without calling the agent', async () => {
+    const chatId = '5555003';
+    const memberKey = await bindMember(chatId);
+    await parkCurrentPlan({
+      memberKey,
+      instruction: 'i',
+      rawToolCalls: [],
+    });
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'no' } });
+
+    await processPendingOperatorEvents(org.id);
+    await waitForReplies(1);
+    expect(lastReplyText()).toBe('Plan dismissed.');
+    expect(executeOperatorAgentTurnSpy).not.toHaveBeenCalled();
+    const ctx = await getContext(org.id, memberKey);
+    expect(ctx.pendingPlan).toBeNull();
+  });
+
+  it('"no" names the dropped action when the plan parked a label', async () => {
+    const chatId = '5555005';
+    const memberKey = await bindMember(chatId);
+    await parkCurrentPlan({
+      memberKey,
+      instruction: 'refund #1',
+      rawToolCalls: [],
+      customerName: 'Sarah Chen',
+      actionLabel: 'reply to Sarah',
+    });
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'no' } });
+
+    await processPendingOperatorEvents(org.id);
+    await waitForReplies(1);
+    expect(lastReplyText()).toBe("Dismissed — I won't reply to Sarah.");
+    expect(executeOperatorAgentTurnSpy).not.toHaveBeenCalled();
+    const ctx = await getContext(org.id, memberKey);
+    expect(ctx.pendingPlan).toBeNull();
+  });
+});
+
+// ── Digest commands: review / spam N / reply N ───────────────────────────────
+describe('POST /webhooks/telegram — digest commands', () => {
+  async function setupDigest(opts: { customerName?: string; aiSummary?: string | null } = {}) {
+    const chatId = `${6000000 + Math.floor(Math.random() * 999_999)}`;
+    const member = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: `usr_${chatId}` },
+    });
+    await db.orgMemberTelegramChat.create({
+      data: { orgMemberId: member.id, chatId },
+    });
+    const customer = await createTestCustomer(org.id, `cust_${chatId}@test.com`, {
+      name: opts.customerName ?? 'Jane',
+    });
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        filterStatus: 'questionable',
+        filterReason: 'No order context',
+        aiSummary: opts.aiSummary ?? null,
+      },
+    });
+    await updateContext(org.id, `member:${member.id}`, {
+      pendingDigest: {
+        items: [{ threadId: thread.id, kind: 'flagged' as const }],
+        sentAt: new Date().toISOString(),
+      },
+    });
+    return { chatId, threadId: thread.id, memberKey: `member:${member.id}` };
+  }
+
+  it('"review" lists the briefing', async () => {
+    const { chatId } = await setupDigest({ customerName: 'Alice', aiSummary: 'Asking for refund' });
+
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'review' } });
+
+    await processPendingOperatorEvents(org.id);
+    await waitForReplies(1);
+    const text = lastReplyText();
+    expect(text).toMatch(/From your last briefing/);
+    expect(text).toMatch(/1\. Alice/);
+    expect(text).toMatch(/Asking for refund/);
+  });
+
+  // `kind` decides what a bare number does, not what the merchant may ask for.
+  // An escalation is exactly the item they answer by hand, and REPLY used to
+  // refuse it as "not one I flagged" — the same gate that made the briefing's own
+  // items unreachable from the model path.
+  it('"reply 1 <text>" answers an escalated item the agent could not plan', async () => {
+    const { chatId, threadId, memberKey } = await setupDigest({ customerName: 'Priya' });
+    await db.thread.update({
+      where: { id: threadId },
+      data: { filterStatus: 'genuine', escalatedAt: new Date() },
+    });
+    await updateContext(org.id, memberKey, {
+      pendingDigest: {
+        items: [{ threadId, kind: 'decision' as const }],
+        sentAt: new Date().toISOString(),
+      },
+    });
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    );
+
+    try {
+      await request(app)
+        .post('/webhooks/telegram')
+        .set('x-telegram-bot-api-secret-token', SECRET)
+        .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'reply 1 Here is our privacy policy.' } });
+
+      await processPendingOperatorEvents(org.id);
+      await waitForReplies(1);
+      expect(lastReplyText()).toBe('Replied to Priya — "Here is our privacy policy."');
+      const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+      expect(JSON.parse(init.body as string)).toEqual({ threadId, text: 'Here is our privacy policy.' });
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  // The one kind that is still redirected: a drafted reply is already parked, so
+  // sending a second by hand would write to the customer twice.
+  it('points "reply 1 <text>" at the draft when a plan is already waiting', async () => {
+    const { chatId, threadId, memberKey } = await setupDigest();
+    await updateContext(org.id, memberKey, {
+      pendingDigest: {
+        items: [{ threadId, kind: 'approval' as const, planId: 'plan-1' }],
+        sentAt: new Date().toISOString(),
+      },
+    });
+
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'reply 1 my own words' } });
+
+    await processPendingOperatorEvents(org.id);
+    await waitForReplies(1);
+    expect(lastReplyText()).toMatch(/already drafted/);
+  });
+
+  it('"spam 1" marks the thread filtered', async () => {
+    const { chatId, threadId } = await setupDigest();
+
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'spam 1' } });
+
+    await processPendingOperatorEvents(org.id);
+    await waitForReplies(1);
+    expect(lastReplyText()).toBe("Marked Jane's message as spam.");
+    const updated = await db.thread.findUnique({ where: { id: threadId } });
+    expect(updated?.filterStatus).toBe('filtered');
+    expect(updated?.filterFeedback).toBe('confirmed_spam');
+  });
+
+  it('"reply 1 <text>" posts to /api/messages/internal', async () => {
+    const { chatId, threadId } = await setupDigest();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    );
+
+    try {
+      await request(app)
+        .post('/webhooks/telegram')
+        .set('x-telegram-bot-api-secret-token', SECRET)
+        .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'reply 1 Thanks for your patience!' } });
+
+      await processPendingOperatorEvents(org.id);
+      await waitForReplies(1);
+      expect(setMessageReactionSpy).toHaveBeenCalledWith(chatId, 1, '👀');
+      expect(sendChatActionSpy).toHaveBeenCalledWith(chatId, 'typing');
+      expect(lastReplyText()).toBe('Replied to Jane — "Thanks for your patience!"');
+      expect(fetchSpy).toHaveBeenCalledOnce();
+      const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+      expect(url).toMatch(/\/api\/messages\/internal$/);
+      const body = JSON.parse(init.body as string);
+      expect(body).toEqual({ threadId, text: 'Thanks for your patience!' });
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('"open 5" with out-of-range index replies friendly error', async () => {
+    const { chatId } = await setupDigest();
+
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'open 5' } });
+
+    await processPendingOperatorEvents(org.id);
+    await waitForReplies(1);
+    expect(lastReplyText()).toMatch(/There's no 5 on that list/);
+  });
+
+  it('opens a thread-review item but refuses a blind action command', async () => {
+    const { chatId, threadId, memberKey } = await setupDigest({
+      customerName: 'Inez',
+      aiSummary: 'Original request needs review',
+    });
+    await updateContext(org.id, memberKey, {
+      pendingDigest: {
+        items: [{
+          threadId,
+          kind: 'approval',
+          planId: 'plan-review',
+          needsThreadReview: true,
+        }],
+        sentAt: new Date().toISOString(),
+      },
+    });
+
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'spam 1' } });
+    await processPendingOperatorEvents(org.id);
+    await waitForReplies(1);
+    expect(lastReplyText()).toBe('Open number 1 before deciding what to do with it.');
+
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { message_id: 2, chat: { id: Number(chatId), type: 'private' }, text: 'open 1' } });
+    await processPendingOperatorEvents(org.id);
+    await waitForReplies(2);
+    expect(lastReplyText()).toContain('1. Inez');
+    expect(lastReplyText()).toContain('Original request needs review');
+  });
+});
+
+// ── HELP / SUMMARY commands ──────────────────────────────────────────────────

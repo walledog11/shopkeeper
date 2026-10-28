@@ -35,8 +35,7 @@ import {
 } from "./execution-ledger.js";
 import { isInvalidPlan } from "./plan-validation.js";
 import { recordRequestEpisodeDismissed, recordRequestEpisodeExecution } from "./request-outcome.js";
-import { historicalCompletionFacts } from "./completion-facts.js";
-import { ANY_MEMBER_ACTOR_KEY, type ProposalSnapshot, type TaskSettlement } from "./task-ledger.js";
+import { ANY_MEMBER_ACTOR_KEY, type ProposalSnapshot, type TaskSettlement } from "./task-ledger/index.js";
 import {
   authorizeAgentProposal,
   readDurableProposalExecutionSource,
@@ -148,22 +147,33 @@ function validateApprovedToolCalls(plan: AgentPlan, approvedToolCalls: RawToolCa
   }
 }
 
-/** @internal Pure guard exported for deterministic boundary tests. */
-export function validateCustomerFacingApprovalSet(
-  verdict: AutonomyVerdict,
-  approvedToolCalls: RawToolCall[],
-): void {
-  const approvedExecutable = approvedToolCalls.filter((call) => {
+function executableCalls(calls: readonly RawToolCall[]): RawToolCall[] {
+  return calls.filter((call) => {
     const category = TOOL_CATEGORIES[call.name];
     return Boolean(category && EXECUTABLE_CATEGORIES.has(category));
   });
+}
+
+/**
+ * @internal Pure guard exported for deterministic boundary tests.
+ *
+ * Compared with the plan's own executable calls, which is what the card shows
+ * and the merchant approves. The verdict's subset is a different list — empty
+ * for a plan that escalates — so comparing with it refused the unchanged plan.
+ */
+export function validateCustomerFacingApprovalSet(
+  plan: Pick<AgentPlan, "rawToolCalls">,
+  approvedToolCalls: RawToolCall[],
+): void {
+  const approvedExecutable = executableCalls(approvedToolCalls);
   const includesCustomerSend = approvedExecutable.some(
     (call) => call.name === "send_reply" || call.name === "send_email",
   );
-  if (!includesCustomerSend || !("toolCalls" in verdict)) return;
+  if (!includesCustomerSend) return;
 
-  const plannedIds = new Set(verdict.toolCalls.map((call) => call.id));
-  const unchanged = approvedExecutable.length === verdict.toolCalls.length
+  const planned = executableCalls(plan.rawToolCalls);
+  const plannedIds = new Set(planned.map((call) => call.id));
+  const unchanged = approvedExecutable.length === planned.length
     && approvedExecutable.every((call) => plannedIds.has(call.id));
   if (!unchanged) {
     throw new BadRequestError(
@@ -298,17 +308,23 @@ async function loadExecutionSource(params: {
   if (!durable) return loadCurrentCachedHomePlan(params);
 
   validateDurableExpectedIdentity(durable, params.expectedIdentity!);
+  const thread = await requireOrgThread(params.threadId, params.orgId);
+  // The proposal was judged when it was parked, but the card it was parked from
+  // still has the last word on validity: a draft that failed validation never
+  // runs, whichever record the approval names.
+  const card = readAgentPlanCache(thread.cachedPlan);
+  const cardValidation = card?.planId === durable.proposalId ? card.plan.validation : undefined;
   const plan: AgentPlan = {
     planId: durable.proposalId,
     instruction: durable.instruction,
     steps: buildPlanSteps(durable.canonicalActions),
     rawToolCalls: durable.canonicalActions,
-    validation: { status: "valid", issues: [] },
+    validation: cardValidation ?? { status: "valid", issues: [] },
     routingEvidence: { classifierState: "not_applicable", codes: [] },
     communication: durable.communication,
   };
   return {
-    channel: (await requireOrgThread(params.threadId, params.orgId)).channelType,
+    channel: thread.channelType,
     instruction: durable.instruction,
     lastCustomerMessageId: durable.sourceMessageId,
     planId: durable.proposalId,
@@ -343,7 +359,8 @@ export async function readParkedProposalForThread(params: {
   if (!current.plan || !current.planId || isEscalationOnlyPlan(current.plan.rawToolCalls)) return null;
   const verdict = current.verdict;
   const reviewable = verdict.kind === "needs_review" && verdict.approvalAllowed;
-  const explicitlyDrafted = params.manualReview && (allowsAutomaticExecution(verdict) || verdict.kind === "escalate");
+  const explicitlyDrafted = params.manualReview
+    && (allowsAutomaticExecution(verdict, current.plan.rawToolCalls) || verdict.kind === "escalate");
   if ((!reviewable && !explicitlyDrafted) || !("toolCalls" in verdict)) return null;
   // The verdict decides whether there is anything to approve; the plan decides
   // what the bundle is. Snapshotting `verdict.toolCalls` instead recorded only
@@ -593,8 +610,7 @@ export async function executeCurrentCachedHomePlan(params: {
   if (params.executionIntent === "merchant_approved" && escalationOnly) {
     throw new BadRequestError("This ticket needs you; there is nothing to approve. No refund or customer reply was executed by this approval.");
   }
-  const automaticAllowed = allowsAutomaticExecution(verdict)
-    || (verdict.kind === "escalate" && escalationOnly);
+  const automaticAllowed = allowsAutomaticExecution(verdict, current.plan.rawToolCalls);
   const merchantAllowed = automaticAllowed
     || verdict.kind === "escalate"
     || (verdict.kind === "needs_review" && verdict.approvalAllowed);
@@ -617,13 +633,10 @@ export async function executeCurrentCachedHomePlan(params: {
       ? current.plan.rawToolCalls
       : "toolCalls" in verdict ? verdict.toolCalls : []);
   validateApprovedToolCalls(current.plan, requestedToolCalls);
-  validateCustomerFacingApprovalSet(verdict, requestedToolCalls);
+  validateCustomerFacingApprovalSet(current.plan, requestedToolCalls);
   validateApprovedCommunication(current.plan, requestedToolCalls, thread);
   const approvedCommunication = planCommunication(current.plan);
-  if (!requestedToolCalls.some((call) => {
-    const category = TOOL_CATEGORIES[call.name];
-    return Boolean(category && EXECUTABLE_CATEGORIES.has(category));
-  })) {
+  if (executableCalls(requestedToolCalls).length === 0) {
     throw new BadRequestError("The current plan has no executable tool calls");
   }
 
@@ -749,10 +762,6 @@ export async function executeCurrentCachedHomePlan(params: {
           }
         : {}),
       ...(executionId ? { executionId } : {}),
-      completionEvidence: historicalCompletionFacts(
-        current.plan.rawToolCalls,
-        current.plan.readResults,
-      ),
       // The same snapshot validateApprovedCommunication checked the calls
       // against, and the one the approval hash binds.
       ...(approvedCommunication ? { approvedCommunication } : {}),

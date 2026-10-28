@@ -12,19 +12,6 @@ export function fulfillmentLabel(status: string | null): { label: string; textCl
   }
 }
 
-export function formatMoney(value: string | number | null | undefined, currency?: string | null) {
-  const n = typeof value === 'number' ? value : parseFloat(value ?? '')
-  const amount = Number.isFinite(n) ? n : 0
-  if (currency) {
-    try {
-      return amount.toLocaleString('en-US', { style: 'currency', currency })
-    } catch {
-      // Fall through to a compact numeric fallback for unexpected currency codes.
-    }
-  }
-  return `$${amount.toFixed(2)}`
-}
-
 export function formatMonthYear(iso: string | null | undefined) {
   return formatSharedMonthYear(iso, { fallback: '-', timeZone: 'UTC' })
 }

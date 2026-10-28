@@ -115,8 +115,8 @@
       "default": "./dist/agent-actions.js"
     },
     "./task-ledger": {
-      "types": "./dist/task-ledger.d.ts",
-      "default": "./dist/task-ledger.js"
+      "types": "./dist/task-ledger/index.d.ts",
+      "default": "./dist/task-ledger/index.js"
     },
     "./task-run": {
       "types": "./dist/task-run.d.ts",
@@ -285,6 +285,14 @@
     "./product-help": {
       "types": "./dist/product-help/index.d.ts",
       "default": "./dist/product-help/index.js"
+    },
+    "./money": {
+      "types": "./dist/money.d.ts",
+      "default": "./dist/money.js"
+    },
+    "./composer-plan-handoff": {
+      "types": "./dist/composer-plan-handoff.d.ts",
+      "default": "./dist/composer-plan-handoff.js"
     },
     "./dashboard-destinations": {
       "types": "./dist/dashboard-destinations.d.ts",

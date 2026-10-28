@@ -159,8 +159,14 @@ export const POST = withInternalRoute(
 
       return NextResponse.json(result);
     } catch (error) {
+      // Past validation and ownership the send may already have reached the
+      // provider, so a throw here is not a definite failure. Reported as one, it
+      // let the gateway treat the message as unsent and draft it again.
       logger.error({ err: error, requestId, orgId, threadId, op }, "[Agent io-send-internal] dispatch failed");
-      throw error;
+      return NextResponse.json(
+        { error: "Message dispatch outcome unknown", outcome: "unknown", ...(requestId ? { requestId } : {}) },
+        { status: 500 },
+      );
     }
   },
 );

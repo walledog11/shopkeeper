@@ -9,7 +9,7 @@ import { db } from '@shopkeeper/db';
 import { Prisma } from '@prisma/client';
 import { formatFactsBriefingLine } from '../briefing-fields.js';
 import { listVerifiedOrderNamesByThread } from '../../storefront-chat-verified-orders.js';
-import { parseStoredPendingPlan } from '../../operator-context.js';
+import { parseStoredPendingPlan, pendingPlanDropReason } from '../../operator-context.js';
 import {
   requestDisplayHasContext,
   unavailableRequestDisplay,
@@ -66,9 +66,11 @@ function toWaitingItem(params: {
   };
 }
 
+// A card the phone queue offers is waiting on the merchant whatever the plan
+// would do unattended: it was parked because nothing sent it. So the queue's own
+// predicate is the only filter here.
 async function loadOperatorWaitingItems(
   organizationId: string,
-  settings: ReturnType<typeof resolveAgentSettings>,
   now: Date,
 ): Promise<WaitingItem[]> {
   const contexts = await db.operatorContext.findMany({
@@ -88,40 +90,17 @@ async function loadOperatorWaitingItems(
       : []);
 
     for (const pendingPlan of plans) {
-      if (await isPlanExecutionResolved(organizationId, pendingPlan.planId)) continue;
+      if (await pendingPlanDropReason(organizationId, pendingPlan)) continue;
 
       const thread = await db.thread.findFirst({
         where: { id: pendingPlan.threadId, organizationId },
         select: {
           channelType: true,
-          filterStatus: true,
           cachedPlan: true,
-          cachedPlanMessageId: true,
           requestSourceMessageId: true,
           customer: { select: { name: true } },
-          messages: {
-            where: { deletedAt: null, senderType: { not: SENDER_TYPE.NOTE } },
-            orderBy: [{ sentAt: 'desc' }, { id: 'desc' }],
-            take: 1,
-            select: { id: true, senderType: true, sentAt: true },
-          },
         },
       });
-      if (thread) {
-        const cached = readAgentPlanCacheRecordShape(thread.cachedPlan);
-        // A newer request or replacement draft supersedes this queued item.
-        // Never describe the old draft and let an approval resolve to the new one.
-        if (pendingPlan.planId && cached?.planId && pendingPlan.planId !== cached.planId) continue;
-        if (pendingPlan.sourceMessageId && thread.requestSourceMessageId
-          && pendingPlan.sourceMessageId !== thread.requestSourceMessageId) continue;
-        const currentPlan = getCurrentPlanForThread(thread, thread.messages);
-        if (
-          currentPlan
-          && decideAutonomy(currentPlan, settings, { filterStatus: thread.filterStatus }).kind === 'quick_reply'
-        ) {
-          continue;
-        }
-      }
       const requestDisplay = pendingPlan.requestDisplay ?? unavailableRequestDisplay();
       const requestFacts = requestDisplay.kind === 'classified' ? requestDisplay.facts : null;
       const alignedSourceMessageId = thread?.requestSourceMessageId
@@ -256,7 +235,7 @@ export async function loadWaitingOnYouItems(
     select: { settings: true },
   });
   const settings = resolveAgentSettings(organization?.settings);
-  const operatorItems = await loadOperatorWaitingItems(organizationId, settings, now);
+  const operatorItems = await loadOperatorWaitingItems(organizationId, now);
   const seen = new Set<string>();
   const merged: WaitingItem[] = [];
 

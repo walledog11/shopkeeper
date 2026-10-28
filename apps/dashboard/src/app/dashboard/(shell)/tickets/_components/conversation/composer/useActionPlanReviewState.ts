@@ -9,18 +9,9 @@ import type { AgentPlan, PlanCardOutcome, RawToolCall } from "@/types"
 import { getPlanCollapsedPreview } from "./plan-step-display"
 import { planRecipientDisplay } from "./plan-recipient-display"
 
-const HIGH_RISK_TOOLS = new Set(["create_refund"])
 const REPLY_TOOLS = new Set(["send_reply", "send_email"])
 
-function highRiskUncheckMessage(tool: string): string {
-  if (tool === "create_refund") {
-    return "Dropping the refund step skips the refund. Continue?"
-  }
-  return "Dropping this step skips a customer-facing action. Continue?"
-}
-
 interface ActionPlanReviewState {
-  disabledStepIds: Set<string>
   collapsed: boolean
   compactHeader: boolean
   confirming: boolean
@@ -29,7 +20,6 @@ interface ActionPlanReviewState {
 }
 
 type ActionPlanReviewAction =
-  | { type: "toggleStep"; id: string }
   | { type: "setConfirming"; value: boolean }
   | { type: "setWarningsReviewed"; value: boolean }
   | { type: "submit" }
@@ -42,17 +32,6 @@ function reducer(
   action: ActionPlanReviewAction,
 ): ActionPlanReviewState {
   switch (action.type) {
-    case "toggleStep": {
-      const disabledStepIds = new Set(state.disabledStepIds)
-      if (disabledStepIds.has(action.id)) disabledStepIds.delete(action.id)
-      else disabledStepIds.add(action.id)
-      return {
-        ...state,
-        disabledStepIds,
-        confirming: false,
-        warningsReviewed: false,
-      }
-    }
     case "setConfirming":
       return { ...state, confirming: action.value }
     case "setWarningsReviewed":
@@ -82,7 +61,6 @@ export function useActionPlanReviewState({
   plan: AgentPlan
 }) {
   const [state, dispatch] = useReducer(reducer, undefined, () => ({
-    disabledStepIds: new Set<string>(),
     collapsed: false,
     compactHeader: false,
     confirming: false,
@@ -91,10 +69,9 @@ export function useActionPlanReviewState({
   }))
   const submissionStarted = useRef(false)
 
-  const steps = plan.steps.map(step => ({
-    ...step,
-    enabled: !state.disabledStepIds.has(step.id),
-  }))
+  // The merchant approves the whole card or none of it: its proposal hash binds
+  // every step, so a card with a step switched off could never be approved.
+  const steps = plan.steps
   const replyStep = steps.find(step => REPLY_TOOLS.has(step.tool)) ?? null
   const actionSteps = steps.filter(step => !REPLY_TOOLS.has(step.tool))
   const shopifyActionSteps = actionSteps.filter(step => TOOL_CATEGORIES[step.tool] === "action")
@@ -105,9 +82,8 @@ export function useActionPlanReviewState({
   const { blocking: blockingSignals, advisory: advisorySignals } = planSignalTiers(plan)
   const hasBlockingSignals = blockingSignals.length > 0
   const needsWarningReview = hasBlockingSignals && !state.warningsReviewed
-  const enabledCount = steps.filter(step => step.enabled).length
-  const consequential = steps.some(step => step.enabled && TOOL_CATEGORIES[step.tool] === "action")
-  const enabledActions = shopifyActionSteps.some(step => step.enabled)
+  const consequential = steps.some(step => TOOL_CATEGORIES[step.tool] === "action")
+  const enabledActions = shopifyActionSteps.length > 0
   const inReviewFlow = needsWarningReview || state.confirming
   const isRunning = !executionOutcome && (isExecuting || state.submitting)
 
@@ -124,24 +100,11 @@ export function useActionPlanReviewState({
           ? (enabledActions ? "Approve & send" : "Send reply")
           : "Approve"
 
-  const toggleStep = (id: string, tool: string) => {
-    const isEnabled = !state.disabledStepIds.has(id)
-    if (isEnabled && HIGH_RISK_TOOLS.has(tool) && !window.confirm(highRiskUncheckMessage(tool))) {
-      return
-    }
-    dispatch({ type: "toggleStep", id })
-  }
-
   const runApprovedSteps = async () => {
     if (submissionStarted.current) return
     submissionStarted.current = true
-    const enabledIds = new Set(steps.flatMap(step => step.enabled ? [step.id] : []))
-    const stepIds = new Set(steps.map(step => step.id))
-    const approved = plan.rawToolCalls.filter(toolCall => (
-      !stepIds.has(toolCall.id) || enabledIds.has(toolCall.id)
-    ))
     dispatch({ type: "submit" })
-    await onApprove(approved)
+    await onApprove(plan.rawToolCalls)
   }
 
   const onApproveClick = () => {
@@ -171,7 +134,6 @@ export function useActionPlanReviewState({
     actionSteps,
     blockingSignals,
     collapsedPreview: getPlanCollapsedPreview(plan),
-    enabledCount,
     hasBlockingSignals,
     headerLabel,
     advisorySignals,
@@ -186,7 +148,6 @@ export function useActionPlanReviewState({
     shopifyActionSteps,
     showReplyHero,
     state,
-    toggleStep,
     collapse: () => dispatch({ type: "collapse" }),
     expand: () => dispatch({ type: "expand" }),
     bodyExpanded: () => dispatch({ type: "bodyExpanded" }),

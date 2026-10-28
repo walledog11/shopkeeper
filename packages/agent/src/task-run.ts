@@ -5,7 +5,7 @@ import { estimateModelUsageCostUsd, UnknownModelPriceError } from "./model-cost.
 import {
   recordAgentTaskModelUsage, renewAgentTaskLease, reserveAgentTaskModelCall,
   type ActiveTaskClaim,
-} from "./task-ledger.js";
+} from "./task-ledger/index.js";
 
 export function taskModelBudget(claim: ActiveTaskClaim): TaskModelBudget {
   return {

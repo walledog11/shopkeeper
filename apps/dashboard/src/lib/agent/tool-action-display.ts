@@ -12,7 +12,7 @@ export function getToolChipLabel(action: ActionEntry): string {
 }
 
 export function getToolChipVariant(action: ActionEntry): ToolChipVariant {
-  if (action.status === "error" || action.status === "unknown" || action.result.startsWith("Error") || action.result.startsWith("Unknown:")) return "error";
+  if (action.status === "error" || action.status === "unknown") return "error";
 
   const category = action.category ?? TOOL_CATEGORIES[action.tool];
   if (category === "read" || category === "internal" || action.mode === "read_only") return "read";

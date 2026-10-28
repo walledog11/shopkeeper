@@ -2,33 +2,23 @@ import type { ActionEntry } from "./agent-context.js";
 
 export const INTERNAL_REQUEST_ID_HEADER = "x-shopkeeper-request-id";
 
-export function isMessageDispatchFailureMessage(message: string): boolean {
-  return /message dispatch failed/i.test(message)
-    || /^Unknown:.*message dispatch/i.test(message);
-}
+/**
+ * The failure code a gateway send records when its hop to the dashboard failed
+ * before any provider answered. Its text is an HTTP status and a request
+ * reference, which tells the merchant nothing they can act on.
+ */
+export const DASHBOARD_DISPATCH_FAILED = "dashboard_dispatch_failed";
 
-export function extractDispatchReference(message: string): string | null {
-  const match = message.match(/Reference:\s*([^\s.]+)/i);
-  return match?.[1] ?? null;
-}
-
-export function formatOperatorDispatchFailure(message: string): string {
-  const reference = extractDispatchReference(message);
-  const ref = reference ? ` Reference: ${reference}.` : "";
-
-  if (message.startsWith("Unknown:")) {
-    return `${message} Check the ticket and recorded actions before retrying; delivery may already have completed.`;
+export function formatOperatorDispatchFailure(
+  action: Pick<ActionEntry, "status" | "result" | "receipt">,
+): string {
+  if (action.status === "unknown") {
+    return `${action.result} Check the ticket and recorded actions before retrying; delivery may already have completed.`;
   }
-
-  if (isMessageDispatchFailureMessage(message)) {
-    return `I couldn't send the customer message — delivery failed.${ref} Nothing was confirmed sent; try again from the dashboard or wait a moment and retry.`;
+  if (action.receipt?.outcome === "failed" && action.receipt.code === DASHBOARD_DISPATCH_FAILED) {
+    return "I couldn't send the customer message — delivery failed. Nothing was confirmed sent; try again from the dashboard or wait a moment and retry.";
   }
-
-  if (message.startsWith("Error:")) {
-    return `${message}${ref}`;
-  }
-
-  return message;
+  return action.result;
 }
 
 /**
@@ -56,7 +46,7 @@ export function summarizeOperatorTurnDispatchFailure(actions: ActionEntry[]): st
       action.category === "communication"
       && (action.status === "error" || action.status === "unknown")
     ) {
-      return formatOperatorDispatchFailure(action.result);
+      return formatOperatorDispatchFailure(action);
     }
   }
   return null;

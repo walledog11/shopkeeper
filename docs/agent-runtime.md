@@ -138,6 +138,13 @@ use the same base instruction in the cache, card and proposal hash. Cancellation
 lost or expired claims, and a newer customer message prevent publication.
 Reply-only continuations await approval until the reviewed reply executes.
 
+A customer message that asks nothing ("ok thanks", "hi") does not close a
+request waiting on the merchant's approval or answer. The classifier write
+(`requestFieldsForBurst`) carries that request forward onto the new message, so
+planning re-drafts it on the same task against the conversation as it now
+stands and re-parks the card. A phone revision names the card it revises, so it
+never lands on a replacement the merchant has not read.
+
 Revisions deliver the canonical full card to the answering iMessage device and
 other bindings. Drafts too long to display require dashboard review and cannot
 be approved from the phone. Keep the operator's pending question until the answer
@@ -560,31 +567,21 @@ writing*.
 
 ### Adding a structural escalation code
 
-A new escalating `PlanRoutingEvidenceCode` goes in four places in
-`packages/agent/src`:
-
-1. the `PlanRoutingEvidenceCode` union (`types.ts`);
-2. `ESCALATION_EVIDENCE` (`autonomy.ts`), which makes `decideAutonomy` escalate
-   on it;
-3. `ESCALATION_REASONS` (`planner-evidence.ts`), its fixed merchant-facing
-   reason;
-4. `PLAN_ROUTING_EVIDENCE_CODES` (`plan-cache-shape.ts`).
-
-TypeScript checks only `ESCALATION_REASONS`, a `Record` over the union.
-`ESCALATION_EVIDENCE` is a deliberately partial set: left out, the code silently
-stops escalating. `PLAN_ROUTING_EVIDENCE_CODES` is a plain array: left out, any
-cached plan carrying the code fails `isPlanRoutingEvidence` and
-`readAgentPlanCacheRecordShape` rejects it. A code derived from the plan's
-writes also needs a position in `requestedWriteEscalationCode`, which keeps only
-the first match, so a specific code goes before the generic
-`compensation_exception`.
+A new `PlanRoutingEvidenceCode` is one entry in `PLAN_ROUTING_EVIDENCE`
+(`packages/agent/src/routing-evidence.ts`): its fixed merchant-facing reason if
+it escalates, `null` if it routes some other way. The union, the set
+`decideAutonomy` escalates on, the reasons and the cache decoder's code list all
+derive from that table, so a code cannot be known to one and missing from
+another. A code derived from the plan's writes also needs a position in
+`requestedWriteEscalationCode`, which keeps only the first match, so a specific
+code goes before the generic `compensation_exception`.
 
 ### Deterministic failure and race cases
 
-These are contracts to preserve, not a test list. Reuse
-`task-ledger.integration.test.ts`, `task-approval.integration.test.ts`,
-`plan-execution.integration.test.ts` and
-`unknown-outcome-reconciliation.integration.test.ts` when they cover the
+These are contracts to preserve, not a test list. Reuse the
+`task-ledger*.integration.test.ts`, `task-approval.integration.test.ts`,
+`plan-execution*.integration.test.ts` and
+`unknown-outcome-reconciliation.integration.test.ts` suites when they cover the
 changed decision.
 
 - Duplicate/redelivered requests and concurrent approvals have one owner;

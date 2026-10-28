@@ -102,7 +102,7 @@ vi.mock("@shopkeeper/agent/executor", async importOriginal => {
 
 // Lives here, not in usage.ts. When usage.ts imported the planner, the real
 // executor loaded ahead of the mock above and every simulated tool result was
-// ignored; the guard in index.test.ts catches that without a model call.
+// ignored; the guard in index.integration.test.ts catches that without a model call.
 export function countDiscoveryCalls(response: unknown): number {
   if (!response || typeof response !== "object" || !("content" in response)) return 0
   const content = (response as { content?: unknown }).content

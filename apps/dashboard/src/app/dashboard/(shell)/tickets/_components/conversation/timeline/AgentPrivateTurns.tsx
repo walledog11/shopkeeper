@@ -55,9 +55,9 @@ export default function AgentPrivateTurns({
                   {turn.actions.length > 0 && (
                     <div className="space-y-1">
                       {turn.actions.map((action) => {
-                        const isError = action.status
-                          ? (action.status === "error" || action.status === "policy_block" || action.status === "unknown")
-                          : action.result.startsWith("Error:")
+                        const isError = action.status === "error"
+                          || action.status === "policy_block"
+                          || action.status === "unknown"
                         return (
                           <div key={`${action.tool}-${action.result}`} className="flex items-center gap-1.5">
                             {isError

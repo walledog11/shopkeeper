@@ -18,6 +18,7 @@ import {
   type AgentToolDefinition,
 } from "./tools/registry/index.js";
 import { buildSystemPromptParts, buildComposerAskPrompt } from "./prompt.js";
+import { DRAFT_PLAN_TOOL } from "./composer-plan-handoff.js";
 import { AWAIT_CUSTOMER_PHOTO_TOOL } from "./damage-evidence.js";
 import { isOperatorChannel } from "./intent.js";
 import { buildMessageHistory } from "./message-history.js";
@@ -56,7 +57,6 @@ import {
   CONTEXT_BUDGETS,
   truncateContextText,
 } from "./context-budget.js";
-import type { CompletionFact } from "./completion-facts.js";
 
 export interface RunAgentOptions extends RunAgentPolicyOptions {
   // Injected tool-failure recorder. The dashboard wires this to its ops-alert
@@ -69,15 +69,12 @@ export interface RunAgentOptions extends RunAgentPolicyOptions {
   onActionsPersisted?: (actions: PersistedAgentAction[]) => void;
   // Host-injected module tools appended to the selected tool set for this run
   // (e.g. the gateway's operator control tools). Resolved ahead of the shared
-  // registry by the executor. Ignored in read-only mode. Keeping them injected
-  // keeps host-specific tools out of the shared registry.
+  // registry by the executor. Read-only mode offers only read-category ones.
+  // Keeping them injected keeps host-specific tools out of the shared registry.
   moduleTools?: Record<string, AgentToolDefinition>;
   // Shadow/enforced durable plan execution row that owns this run's actions.
   executionId?: string;
   taskAuthority?: AgentActionTaskAuthority;
-  // Successful facts established by live reads during planning. Approved plans
-  // do not re-run those reads, so their evidence travels with the execution.
-  completionEvidence?: readonly CompletionFact[];
   // The communication an approved proposal binds (runtime v2). Its customer
   // message is sent exactly as approved, placeholders filled from receipts, and
   // only if every approved write succeeded. Absent for legacy plans.
@@ -167,7 +164,6 @@ export async function runAgent(
       supportThread,
       actionsPerformed,
       executedToolCalls,
-      completionEvidence: options?.completionEvidence,
       beginAction: async (call, operationId, providerOperationKey) => {
         const attempt = await beginAgentActionAttempt({
           orgId: ctx.orgId,
@@ -202,7 +198,7 @@ export async function runAgent(
                   ?? TOOL_CATEGORIES[call.name]
                   ?? "unknown",
                 organizationId: ctx.orgId,
-                status: action.status ?? "success",
+                status: action.status,
                 tool: call.name,
               }]);
             } catch (err) {
@@ -312,19 +308,21 @@ export async function runAgent(
           && tool.name !== AWAIT_CUSTOMER_PHOTO_TOOL
           && tool.name !== AWAIT_ORDER_VERIFICATION_TOOL
         ));
-    const tools = readOnly
-      ? selectedCoreTools
-      : [
-        ...selectedCoreTools,
-        ...Object.values(options?.moduleTools ?? {}).map((def) => ({
+    const tools = [
+      ...selectedCoreTools,
+      ...Object.values(options?.moduleTools ?? {})
+        .filter((def) => !readOnly || def.category === "read")
+        .map((def) => ({
           name: def.name,
           description: def.description,
           input_schema: def.inputSchema,
         })),
-      ];
+    ];
     let systemPromptBlocks;
     if (readOnly) {
-      systemPromptBlocks = buildCachedSystemPrompt(buildComposerAskPrompt(ctx, settings));
+      systemPromptBlocks = buildCachedSystemPrompt(buildComposerAskPrompt(ctx, settings, {
+        planHandoff: tools.some((tool) => tool.name === DRAFT_PLAN_TOOL),
+      }));
     } else {
       const { stable, volatile } = buildSystemPromptParts(ctx, settings);
       systemPromptBlocks = buildSplitCachedSystemPrompt(stable, volatile);

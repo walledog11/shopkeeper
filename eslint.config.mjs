@@ -84,6 +84,18 @@ export default [
       "react-hooks/set-state-in-effect": "off",
     },
   },
+  {
+    // The liveness route stays cheap enough to poll (see its comment).
+    files: ["apps/dashboard/src/app/api/health/route.ts"],
+    rules: {
+      "no-restricted-imports": ["error", {
+        patterns: [{
+          group: ["@shopkeeper/db", "@shopkeeper/db/*", "**/server/redis", "@upstash/*"],
+          message: "The liveness route must not touch the database or Redis; use /api/health/deep.",
+        }],
+      }],
+    },
+  },
   withFiles(js.configs.recommended, repoNodeJsFiles),
   {
     files: [...repoNodeJsFiles, ...repoNodeTsFiles],

@@ -6,8 +6,7 @@ export type DigestCommand =
 
 export type PendingPlanCommand =
   | { type: 'plan-run' }
-  | { type: 'plan-dismiss' }
-  | { type: 'plan-skip'; index: number };
+  | { type: 'plan-dismiss' };
 
 export type TelegramCommand =
   | { type: 'start'; token: string | null }
@@ -18,7 +17,7 @@ export type TelegramCommand =
   | { type: 'free-form'; instruction: string };
 
 const DIGEST_COMMAND_TYPES = new Set(['digest-review', 'digest-open', 'digest-spam', 'digest-reply']);
-const PENDING_PLAN_COMMAND_TYPES = new Set(['plan-run', 'plan-dismiss', 'plan-skip']);
+const PENDING_PLAN_COMMAND_TYPES = new Set(['plan-run', 'plan-dismiss']);
 
 export function isDigestCommand(command: { type: string }): command is DigestCommand {
   return DIGEST_COMMAND_TYPES.has(command.type);
@@ -74,12 +73,6 @@ export function parseTelegramCommand(body: string): TelegramCommand {
     const index = parseIndex(replyMatch[1]);
     const text = replyMatch[2].trim();
     if (index !== null && text) return { type: 'digest-reply', index, text };
-  }
-
-  const skipMatch = normalized.match(/^skip\s+(\d+)$/);
-  if (skipMatch) {
-    const index = parseIndex(skipMatch[1]);
-    if (index !== null) return { type: 'plan-skip', index };
   }
 
   // An order reference (`#1234`, `order 1234`) is no longer a deterministic

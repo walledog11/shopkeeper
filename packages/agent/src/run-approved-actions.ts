@@ -71,10 +71,7 @@ export function summarizeApprovedDashboardActions(
     return summary ? `${summary}.${followUps}` : "Approved plan executed.";
   }
 
-  const prefix = cause.status === "unknown" ? "Unknown:" : "Error:";
-  const lead = formatOperatorDispatchFailure(
-    cause.result.startsWith(prefix) ? cause.result : `${prefix} ${cause.result}`,
-  );
+  const lead = formatOperatorDispatchFailure(cause);
   return done.length > 0 ? `${lead}\nAlready done: ${done.join(", ")}.${followUps}` : lead;
 }
 
