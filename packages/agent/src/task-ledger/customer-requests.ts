@@ -52,60 +52,54 @@ async function requireCustomerActor(
 }
 
 /**
- * The support conversation's task lookup. A thread runs one task at a time —
- * that is the shape the cached plan it records already had — so a later message
- * advances the open one rather than opening a second beside it. The revision
- * increment is the supersede: whatever the previous attempt parked stops being
- * the current proposal, which is what the plan cache did by overwriting itself.
+ * The support conversation's task lookup. A thread holds one open support task —
+ * the shape the one cached plan it records already has — so a later message
+ * advances it rather than opening a second beside it. The revision increment is
+ * the supersede: whatever the previous attempt parked stops being the current
+ * proposal, which is what the plan cache does by overwriting itself.
  *
- * Two kinds of task are left alone. A terminal one is not reset by new work, and
- * a claimed one belongs to the attempt holding it — advancing that would revoke
- * a claim mid-flight. Both cases open a new task, so a conversation can hold
- * more than one; nothing here assumes it cannot.
+ * The message lands on the newest open task. A claimed one belongs to the
+ * attempt holding it, and one that reached a provider is never replayed from the
+ * top, so either opens a new task; the attempt it sits beside cannot publish over
+ * the newer message. Any other open task that is still only a wait is split work
+ * from before one task per thread, parked on a card the cache already replaced,
+ * and the message ends it. One whose approved proposal is about to run belongs to
+ * that run.
  */
 async function advanceOrOpenThreadTask(
   tx: Pick<typeof db, "agentTask" | "agentProposal">,
   input: {
     organizationId: string; threadId: string; actorKey: string;
     objective: string; budget: TaskBudget; requestId: string;
-    continuity?: TaskContinuityHint;
-    continuityMode?: "classified";
   },
 ) {
-  const continuity = normalizedContinuityHint(input.continuity);
-  const matchByContinuity = input.continuityMode === "classified" || continuity !== null;
-  const openTasks = await tx.agentTask.findMany({
+  const now = new Date();
+  const [newest] = await tx.agentTask.findMany({
     where: {
       organizationId: input.organizationId, threadId: input.threadId,
       initiatingActorKind: "customer",
-      status: { in: ["queued", "waiting_input", "waiting_approval"] },
-      cancelledAt: null, claimToken: null,
-      actions: { none: { dispatchState: { in: DISPATCHED_STATES } } },
+      status: { in: ["queued", "running", "waiting_input", "waiting_approval"] },
+      cancelledAt: null,
     },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    select: {
-      id: true, status: true, activeProposalId: true, checkpoint: true,
-      pendingAnswererKind: true, pendingAnswererKey: true,
-    },
-    take: matchByContinuity ? 20 : 1,
+    select: { id: true },
+    take: 1,
   });
-  const exactCustomerWaits = openTasks.filter(task => (
-    task.status === "waiting_input"
-    && task.pendingAnswererKind === "customer"
-    && task.pendingAnswererKey === input.actorKey
-  ));
-  const candidates = exactCustomerWaits.length > 0
-    ? exactCustomerWaits
-    : matchByContinuity
-      ? openTasks.filter(task => {
-        const prior = checkpointContinuity(task.checkpoint);
-        return continuity && prior ? continuityMatches(continuity, prior) : false;
+  const idleWait = {
+    organizationId: input.organizationId, threadId: input.threadId,
+    initiatingActorKind: "customer" as const,
+    status: { in: ["queued" as const, "waiting_input" as const, "waiting_approval" as const] },
+    cancelledAt: null, claimToken: null,
+    actions: { none: { dispatchState: { in: DISPATCHED_STATES } } },
+    executions: { none: { status: { in: ["claimed" as const, "committed" as const, "unknown" as const] } } },
+  };
+  const open = newest
+    ? await tx.agentTask.findFirst({
+        where: { ...idleWait, id: newest.id },
+        select: { id: true, status: true, activeProposalId: true, checkpoint: true },
       })
-      : openTasks;
-  // Runtime-v2 relevance is fail-closed: no match or more than one match opens
-  // separate work. The model can then ask a focused question without either
-  // pending task or proposal being silently invalidated.
-  const open = candidates.length === 1 ? candidates[0] : null;
+    : null;
+  let task = null;
   if (open) {
     // Conditional on the status it was read at: a concurrent claim, stop, or
     // sweep that moved the task first leaves this request to open its own.
@@ -116,11 +110,10 @@ async function advanceOrOpenThreadTask(
       },
       data: {
         ...NO_SUSPENSION, status: "queued",
-        revision: { increment: 1 }, lastProgressAt: new Date(),
+        revision: { increment: 1 }, lastProgressAt: now,
         checkpoint: {
           sourceRequestIds: [...checkpointSourceRequestIds(open.checkpoint), input.requestId],
           nextWork: "investigate",
-          ...(continuity ? { continuity } : {}),
         },
       },
     });
@@ -128,24 +121,38 @@ async function advanceOrOpenThreadTask(
       await supersedeActiveProposal(tx, {
         organizationId: input.organizationId,
         activeProposalId: open.activeProposalId,
-      }, new Date());
-      return tx.agentTask.findFirstOrThrow({
+      }, now);
+      task = await tx.agentTask.findFirstOrThrow({
         where: { id: open.id, organizationId: input.organizationId },
       });
     }
   }
-  return tx.agentTask.create({
+  task ??= await tx.agentTask.create({
     data: {
       organizationId: input.organizationId, threadId: input.threadId,
       initiatingActorKind: "customer", initiatingActorKey: input.actorKey,
       objective: input.objective.slice(0, 4000),
       ...input.budget, checkpointVersion: 1,
-      checkpoint: {
-        sourceRequestIds: [input.requestId], nextWork: "investigate",
-        ...(continuity ? { continuity } : {}),
-      },
+      checkpoint: { sourceRequestIds: [input.requestId], nextWork: "investigate" },
     },
   });
+  const stale = await tx.agentTask.findMany({
+    where: {
+      ...idleWait, id: { not: task.id },
+      OR: [{ activeProposalId: null }, { activeProposal: { status: { not: "approved" } } }],
+    },
+    select: { id: true, activeProposalId: true },
+  });
+  for (const other of stale) {
+    await supersedeActiveProposal(tx, {
+      organizationId: input.organizationId, activeProposalId: other.activeProposalId,
+    }, now);
+    await tx.agentTask.update({
+      where: { id: other.id, organizationId: input.organizationId },
+      data: { ...NO_SUSPENSION, status: "cancelled", cancelledAt: now, lastProgressAt: now },
+    });
+  }
+  return task;
 }
 
 /**
@@ -185,48 +192,6 @@ export interface CustomerRequestInput {
   /** The task's durable objective — the planner's instruction for this thread. */
   objective: string;
   budget: TaskBudget;
-  /** Classifier-derived relevance hint. It selects no authority by itself. */
-  continuity?: TaskContinuityHint;
-  /** Runtime-v2 relevance fails closed when classification is absent or unusable. */
-  continuityMode?: "classified";
-}
-
-export interface TaskContinuityHint {
-  ask: string;
-  order: string | null;
-  subject: string | null;
-}
-
-function normalizedContinuityHint(value: TaskContinuityHint | undefined): TaskContinuityHint | null {
-  if (!value) return null;
-  const ask = value.ask.trim().slice(0, 64);
-  if (!ask || ask === "none" || ask === "other") return null;
-  const order = value.order?.trim().slice(0, 24) || null;
-  const subject = value.subject?.trim().toLocaleLowerCase().slice(0, 120) || null;
-  return { ask, order, subject };
-}
-
-export function checkpointContinuity(value: unknown): TaskContinuityHint | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const continuity = (value as Record<string, unknown>).continuity;
-  if (!continuity || typeof continuity !== "object" || Array.isArray(continuity)) return null;
-  const source = continuity as Record<string, unknown>;
-  if (typeof source.ask !== "string") return null;
-  return normalizedContinuityHint({
-    ask: source.ask,
-    order: typeof source.order === "string" ? source.order : null,
-    subject: typeof source.subject === "string" ? source.subject : null,
-  });
-}
-
-
-function continuityMatches(current: TaskContinuityHint, prior: TaskContinuityHint): boolean {
-  if (current.ask !== prior.ask) return false;
-  if (current.order && prior.order && current.order !== prior.order) return false;
-  if (current.subject && prior.subject && current.subject !== prior.subject) return false;
-  // One side may be the focused follow-up that supplies the entity the first
-  // turn was missing. The caller still requires this to be the sole match.
-  return true;
 }
 
 /**
@@ -291,6 +256,13 @@ export async function acceptCustomerAgentRequest(input: CustomerRequestInput) {
   if (!objective) throw new BadRequestError("A task needs an objective.");
   return db.$transaction(async (tx) => {
     const actor = await requireCustomerActor(tx, input);
+    // Two messages on one thread pick its open task one at a time, so they
+    // cannot each open one. Composer acceptance and settlement take the thread
+    // before its tasks too.
+    await tx.$queryRaw(Prisma.sql`
+      SELECT id FROM threads WHERE id = ${input.threadId}::uuid
+      AND organization_id = ${input.organizationId}::uuid FOR UPDATE
+    `);
     const payload = {
       version: 1, threadId: input.threadId,
       sourceMessageId: input.sourceMessageId,
@@ -339,8 +311,6 @@ export async function acceptCustomerAgentRequest(input: CustomerRequestInput) {
     const task = await advanceOrOpenThreadTask(tx, {
       organizationId: input.organizationId, threadId: input.threadId,
       actorKey: actor.actorKey, objective, budget: input.budget, requestId: request.id,
-      ...(input.continuity ? { continuity: input.continuity } : {}),
-      ...(input.continuityMode ? { continuityMode: input.continuityMode } : {}),
     });
     request = await tx.agentRequest.update({
       where: { id: request.id, organizationId: input.organizationId },

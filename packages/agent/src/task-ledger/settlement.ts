@@ -9,7 +9,7 @@ import { hashPlan } from "../agent-actions.js";
 import { communicationColumns } from "../proposal-communication.js";
 import type { ProposalCommunication, RawToolCall } from "../types.js";
 import { commitThreadPlanCacheIfCurrent, type AgentPlanCacheRecord } from "../plan-cache.js";
-import { DISPATCHED_STATES, NO_SUSPENSION, activeTimeDeltaMs, type TaskClaimIdentity } from "./shared.js";
+import { NO_SUSPENSION, activeTimeDeltaMs, taskDispatches, type TaskClaimIdentity } from "./shared.js";
 import type { TaskAnswerer } from "./wait-scope.js";
 
 export const AGENT_PROPOSAL_SCHEMA_VERSION = 1;
@@ -168,16 +168,11 @@ export async function settleAgentTaskClaim(input: TaskClaimIdentity & {
       },
       data: { taskId: input.taskId },
     });
-    const consequential = ownedTask.cancelledAt
-      ? await tx.agentAction.count({
-          where: {
-            organizationId: input.organizationId, taskId: input.taskId,
-            dispatchState: { in: DISPATCHED_STATES },
-          },
-        })
-      : 0;
+    const dispatches = ownedTask.cancelledAt
+      ? await taskDispatches(tx, input)
+      : { dispatched: false, unsettled: false };
     const status = ownedTask.cancelledAt
-      ? consequential > 0 ? "reconciling" as const : "cancelled" as const
+      ? dispatches.unsettled ? "reconciling" as const : "cancelled" as const
       : input.settlement.status;
     // A stop overrides what the attempt wanted to wait on, so the stopped task
     // is left pointing at no proposal and no question.
@@ -198,15 +193,11 @@ export async function settleAgentTaskClaim(input: TaskClaimIdentity & {
         activeCheckpointAt: null,
         lastProgressAt: now,
         ...(status === "completed" ? { completedAt: now } : {}),
-        ...(status === "reconciling"
-          ? {
-              failureCode: ownedTask.cancelledAt
-                ? "cancelled_after_dispatch"
-                : input.settlement.status === "reconciling"
-                  ? input.settlement.failureCode
-                  : "reconciliation_required",
-            }
-          : {}),
+        ...(ownedTask.cancelledAt
+          ? { failureCode: dispatches.dispatched ? "cancelled_after_dispatch" : null }
+          : input.settlement.status === "reconciling"
+            ? { failureCode: input.settlement.failureCode }
+            : {}),
         activeTimeMsUsed: { increment: activeTimeMs },
       },
     });
@@ -237,13 +228,8 @@ export async function failAgentTaskClaim(input: TaskClaimIdentity & {
       },
       data: { taskId: input.taskId },
     });
-    const consequential = await tx.agentAction.count({
-      where: {
-        organizationId: input.organizationId, taskId: input.taskId,
-        dispatchState: { in: DISPATCHED_STATES },
-      },
-    });
-    const status = consequential > 0
+    const { dispatched, unsettled } = await taskDispatches(tx, input);
+    const status = unsettled
       ? "reconciling"
       : ownedTask.cancelledAt ? "cancelled" : "failed";
     const activeTimeMs = activeTimeDeltaMs(ownedTask.activeCheckpointAt, now);
@@ -256,7 +242,7 @@ export async function failAgentTaskClaim(input: TaskClaimIdentity & {
         status,
         ...NO_SUSPENSION,
         failureCode: (ownedTask.cancelledAt
-          ? consequential > 0 ? "cancelled_after_dispatch" : null
+          ? dispatched ? "cancelled_after_dispatch" : null
           : input.failureCode.slice(0, 64)),
         claimToken: null, leaseExpiresAt: null, activeCheckpointAt: null,
         activeTimeMsUsed: { increment: activeTimeMs }, lastProgressAt: now,

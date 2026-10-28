@@ -189,6 +189,7 @@ Use a task-specific state set: `queued`, `running`, `waiting_input`, `waiting_ap
 | running | Model asks a relevant question | waiting_input; persist question and response before releasing claim |
 | running | Policy requires approval for persisted proposal | waiting_approval; persist proposal and notification intent |
 | waiting_input | Scoped answer matched to question/task | queued; attach request and increment revision |
+| queued/waiting_* (support) | A customer message on the thread | A thread holds one open support task. The newest is queued at the next revision with its proposal superseded, unless it is claimed or reached a provider, which opens a new one; any other wait on the thread is cancelled with its proposal |
 | waiting_approval | Valid decision for current proposal/hash | queued; record approval atomically, then enqueue |
 | waiting_approval | Revision/dismissal | queued or cancelled according to instruction; invalidate pending proposal |
 | running | Submitted write has uncertain outcome | reconciling; retain operation key, receipt if available and spend reservation |
@@ -196,10 +197,10 @@ Use a task-specific state set: `queued`, `running`, `waiting_input`, `waiting_ap
 | running | Objective satisfied; required response persisted | completed; delivery can still be pending/failed |
 | waiting_approval | Approved execution withheld its exact draft — a write definitely failed, or a placeholder had no receipt value — and no outcome is unknown | queued, revision incremented, the follow-up and its execution recorded on the checkpoint |
 | queued (follow-up) | Worker wins the follow-up claim; every write settled, no execution claimed or unknown | running; the attempt may only read and draft, and its draft requires review. With nothing to draft against — conversation closed, customer answered or wrote again — completed or failed as the execution was |
-| queued/running/waiting_* | Authorized stop | cancelled if no uncertain submitted write; otherwise reconciling with cancellation recorded |
+| queued/running/waiting_* | Authorized stop | cancelled if no write's outcome is open (a settled write is not open); otherwise reconciling with cancellation recorded |
 | waiting_input/waiting_approval | Conversation closed, unless its proposal is already approved (decision C) | Authorized stop, in the transaction that closes the conversation; the pending proposal is superseded |
 | running | Definite unrecoverable failure or exhausted budget | failed with reason and resumable facts; uncertainty still takes precedence as reconciling |
-| running | Lease expired on a customer support attempt; no stop, no action dispatched, no execution claimed, committed or unknown | failed (`interrupted_attempt`), charged no time past its last checkpoint. A member task reconciles: its turn can act on other threads. A stopped attempt with nothing dispatched is cancelled |
+| running | Lease expired on a customer support attempt; no stop, no write or execution whose outcome is open | failed (`interrupted_attempt`); charged no time past its last checkpoint when nothing reached a provider. A member task reconciles: its turn can act on other threads. A stopped attempt with no open outcome is cancelled |
 | failed | Its customer message is accepted again (job retry, plan recovery); planning work (`investigate`), no action dispatched, no plan execution for that message, budget left | queued, revision incremented; spent budget carries over |
 
 Completed and cancelled tasks are not reset by a duplicate request, and a failed one only by the row above. A deliberate new instruction can create a new task referencing prior work. A known partial result remains visible even when the overall task fails or is cancelled.

@@ -14,7 +14,7 @@ export const MESSAGING_TOOL_DEFINITIONS = [
       "Send a message to the customer on their channel (Instagram DM, email, etc.).",
     fields: {
       text: stringArg(CUSTOMER_MESSAGE_TEXT, { required: true, nonBlank: true }),
-      await_response: booleanArg("Set true only when this reply asks the customer for information required to continue the current task."),
+      await_response: booleanArg("Retired; parked replies may still carry it.", { retired: true }),
       promises_follow_up: booleanArg("Set true when this reply tells the customer that you or anyone at the store will do something later, such as look into it, pass it along, or get back to them. Nothing does that work on its own, so the merchant approves the reply before it is sent."),
     },
     category: "communication",

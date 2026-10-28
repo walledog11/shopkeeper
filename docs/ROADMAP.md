@@ -13,9 +13,6 @@ Last updated: 2026-10-28.
 
 1. **Architecture-audit fixes (2026-10-17)**, one PR each, in this order. Most defects were
    traced in code, not seen in production:
-   - One open support task per thread: delete the ledger's customer wait and continuity
-     matching; reconcile only on unsettled dispatches. Check production `waiting_input`
-     customer waits first.
    - Operator-written customer emails become reviewed exact drafts: requests record the
      latest message of any sender at acceptance and execution refuses anything newer, which
      also lets `draft_ticket_reply` work on an answered ticket. Then execution refuses

@@ -26,7 +26,6 @@ export {
 } from "./customer-requests.js";
 export type {
   CustomerRequestInput,
-  TaskContinuityHint,
 } from "./customer-requests.js";
 export {
   claimAgentTask,

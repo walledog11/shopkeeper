@@ -140,7 +140,7 @@ export interface AddInternalNoteInput {
 
 export interface SendReplyInput {
   text: string;
-  /** True only when this question must be answered to continue the current task. */
+  /** Retired: nothing reads it. Persisted inputs may still carry it. */
   await_response?: boolean;
   /** True when the reply tells the customer someone will do something later. */
   promises_follow_up?: boolean;

@@ -200,7 +200,7 @@ describe('durable support task', () => {
     });
   });
 
-  it('preserves separate work when a new request has no classified continuity', async () => {
+  it('re-plans a new request on the thread\'s one task, whatever it asks', async () => {
     const seed = await seedThread();
     mockPlanAgent.mockResolvedValue(agentPlanFromRawToolCalls([refund, reply]));
     await generateThreadPlan(seed.organizationId, seed.threadId, false);
@@ -214,65 +214,13 @@ describe('durable support task', () => {
     await generateThreadPlan(seed.organizationId, seed.threadId, false);
 
     const second = await taskFor(seed.organizationId);
-    expect(second.id).not.toBe(first.id);
-    expect(second.revision).toBe(0);
+    expect(second.id).toBe(first.id);
+    expect(second.revision).toBe(1);
     expect(second.activeProposalId).not.toBe(first.activeProposalId);
-    expect(await db.agentTask.count({ where: { organizationId: seed.organizationId } })).toBe(2);
+    expect(await db.agentProposal.findUniqueOrThrow({ where: { id: first.activeProposalId! } }))
+      .toMatchObject({ status: 'superseded' });
+    expect(await db.agentTask.count({ where: { organizationId: seed.organizationId } })).toBe(1);
     expect(await db.agentRequest.count({ where: { organizationId: seed.organizationId } })).toBe(2);
-  });
-
-  it('preserves a parked task when the classified next request is a different topic', async () => {
-    const seed = await seedThread();
-    await db.thread.update({
-      where: { id: seed.threadId },
-      data: { classifierSignals: {
-        version: 5,
-        language: 'en',
-        intents: {},
-        requestFacts: {
-          ask: 'refund', subject: null, order: '#1001', deadline: null,
-          deadlineText: null, alternative: null,
-        },
-      } },
-    });
-    mockPlanAgent.mockResolvedValue(agentPlanFromRawToolCalls([refund, reply]));
-    await generateThreadPlan(seed.organizationId, seed.threadId, false);
-    const first = await taskFor(seed.organizationId);
-    expect(first.checkpoint).toMatchObject({
-      continuity: { ask: 'refund', order: '#1001', subject: null },
-    });
-
-    await createTestMessage(seed.threadId, 'Also, where is order 2002?');
-    await db.thread.update({
-      where: { id: seed.threadId },
-      data: {
-        requestSummary: 'Tell the customer where order #2002 is.',
-        classifierSignals: {
-          version: 5,
-          language: 'en',
-          intents: {},
-          requestFacts: {
-            ask: 'order_status', subject: null, order: '#2002', deadline: null,
-            deadlineText: null, alternative: null,
-          },
-        },
-      },
-    });
-    mockPlanAgent.mockResolvedValue(agentPlanFromRawToolCalls([reply]));
-    await generateThreadPlan(seed.organizationId, seed.threadId, false);
-
-    const tasks = await db.agentTask.findMany({
-      where: { organizationId: seed.organizationId },
-      orderBy: { createdAt: 'asc' },
-    });
-    expect(tasks).toHaveLength(2);
-    expect(tasks[0]).toMatchObject({
-      id: first.id,
-      status: 'waiting_approval',
-      activeProposalId: first.activeProposalId,
-      revision: 0,
-    });
-    expect(tasks[1]).toMatchObject({ status: 'completed', revision: 0 });
   });
 
   it('re-plans a parked request on its own task when the customer writes back asking nothing', async () => {

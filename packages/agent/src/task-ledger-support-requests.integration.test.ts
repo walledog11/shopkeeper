@@ -119,167 +119,44 @@ describe("support conversation request boundary", () => {
     expect(await db.agentRequest.count({ where: { organizationId: input.organizationId } })).toBe(2);
   });
 
-  it("keeps independent classified topics as separate tasks", async () => {
+  // Before one task per thread, a message the classifier read as a new topic
+  // opened a second task beside a parked one, leaving it waiting on a card the
+  // thread's cache had already replaced.
+  it("ends split work so the thread has one open task", async () => {
     const input = await seedSupport();
-    const first = await acceptCustomerAgentRequest({
-      ...input,
-      continuity: { ask: "return", order: "#1001", subject: "blue shirt" },
-    });
-    const next = await createTestMessage(input.threadId, "Also, where is order 2002?");
-    const second = await acceptCustomerAgentRequest({
-      ...input,
-      sourceMessageId: next.id,
-      continuity: { ask: "order_status", order: "#2002", subject: null },
-    });
-
-    expect(second.task.id).not.toBe(first.task.id);
-    expect(await db.agentTask.count({ where: { organizationId: input.organizationId } })).toBe(2);
-    expect((await db.agentTask.findUniqueOrThrow({ where: { id: first.task.id } })).revision).toBe(0);
-  });
-
-  it("does not supersede a parked task when runtime-v2 classification is absent", async () => {
-    const input = await seedSupport();
-    const first = await acceptCustomerAgentRequest({
-      ...input,
-      continuityMode: "classified",
-      continuity: { ask: "return", order: "#1001", subject: null },
-    });
-    const terseMessage = await createTestMessage(input.threadId, "Yes, that one");
-    const terse = await acceptCustomerAgentRequest({
-      ...input,
-      sourceMessageId: terseMessage.id,
-      continuityMode: "classified",
-    });
-
-    expect(terse.task.id).not.toBe(first.task.id);
-    expect((await db.agentTask.findUniqueOrThrow({ where: { id: first.task.id } })).revision).toBe(0);
-  });
-
-  it("continues the exact task when its customer answers a durable question", async () => {
-    const input = await seedSupport();
-    const first = await acceptCustomerAgentRequest({
-      ...input,
-      continuityMode: "classified",
-      continuity: { ask: "address_change", order: "#1001", subject: null },
-    });
+    const { task: older } = await acceptCustomerAgentRequest(input);
     const claim = await claimAgentTask({
-      organizationId: input.organizationId,
-      taskId: first.task.id,
-      expectedRevision: first.task.revision,
+      organizationId: input.organizationId, taskId: older.id, expectedRevision: older.revision,
     });
     await settleAgentTaskClaim({
-      organizationId: input.organizationId,
-      taskId: first.task.id,
-      expectedRevision: first.task.revision,
-      claimToken: claim!.claimToken,
-      requestId: first.request.id,
-      settlement: {
-        status: "waiting_input",
-        question: "What is the full postal code?",
-        answerer: { kind: "customer", key: first.task.initiatingActorKey },
-      },
+      organizationId: input.organizationId, taskId: older.id, expectedRevision: older.revision,
+      claimToken: claim!.claimToken, requestId: (await db.agentRequest.findFirstOrThrow({
+        where: { organizationId: input.organizationId },
+      })).id,
+      settlement: { status: "waiting_approval", proposal: {
+        instruction: "Refund them", sourceRequestIds: [],
+        rawToolCalls: [{ id: "t1", name: "create_refund", input: { order_id: "1" } }],
+      } },
     });
+    const parked = await db.agentTask.findUniqueOrThrow({ where: { id: older.id } });
+    const split = await db.agentTask.create({ data: {
+      organizationId: input.organizationId, threadId: input.threadId,
+      initiatingActorKind: "customer", initiatingActorKey: `customer:${input.customerId}`,
+      objective: "Where is order 2002?", ...budget, checkpointVersion: 1,
+      status: "waiting_input", pendingQuestionId: randomUUID(), pendingQuestion: "Which order?",
+      pendingAnswererKind: "customer", pendingAnswererKey: `customer:${input.customerId}`,
+      checkpoint: { sourceRequestIds: [], nextWork: "investigate" },
+    } });
 
-    const answer = await createTestMessage(input.threadId, "It is 94107");
-    const resumed = await acceptCustomerAgentRequest({
-      ...input,
-      sourceMessageId: answer.id,
-      continuityMode: "classified",
-    });
+    const next = await createTestMessage(input.threadId, "Order 2002");
+    const later = await acceptCustomerAgentRequest({ ...input, sourceMessageId: next.id });
 
-    expect(resumed.task.id).toBe(first.task.id);
-    expect(resumed.task).toMatchObject({ status: "queued", revision: 1 });
-    expect((resumed.task.checkpoint as { sourceRequestIds: string[] }).sourceRequestIds)
-      .toEqual([first.request.id, resumed.request.id]);
-  });
-
-  it("returns to the one task matching the classified topic and entity", async () => {
-    const input = await seedSupport();
-    const first = await acceptCustomerAgentRequest({
-      ...input,
-      continuity: { ask: "return", order: "#1001", subject: "blue shirt" },
+    expect(later.task).toMatchObject({ id: split.id, status: "queued", revision: 1 });
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: older.id } })).toMatchObject({
+      status: "cancelled", activeProposalId: null, cancelledAt: expect.any(Date),
     });
-    const otherMessage = await createTestMessage(input.threadId, "Where is order 2002?");
-    await acceptCustomerAgentRequest({
-      ...input,
-      sourceMessageId: otherMessage.id,
-      continuity: { ask: "order_status", order: "#2002", subject: null },
-    });
-    const returnMessage = await createTestMessage(input.threadId, "Back to returning order 1001");
-    const resumed = await acceptCustomerAgentRequest({
-      ...input,
-      sourceMessageId: returnMessage.id,
-      continuity: { ask: "return", order: "#1001", subject: null },
-    });
-
-    expect(resumed.task.id).toBe(first.task.id);
-    expect(resumed.task.revision).toBe(1);
-    expect((resumed.task.checkpoint as { sourceRequestIds: string[] }).sourceRequestIds).toEqual([
-      first.request.id,
-      resumed.request.id,
-    ]);
-  });
-
-  it("keeps two items on the same order separate and resumes only the named item", async () => {
-    const input = await seedSupport();
-    const first = await acceptCustomerAgentRequest({
-      ...input,
-      continuity: { ask: "return", order: "#1001", subject: "blue shirt" },
-    });
-    const secondMessage = await createTestMessage(input.threadId, "I also need to return the black shoes from that order");
-    const second = await acceptCustomerAgentRequest({
-      ...input,
-      sourceMessageId: secondMessage.id,
-      continuity: { ask: "return", order: "#1001", subject: "black shoes" },
-    });
-    expect(second.task.id).not.toBe(first.task.id);
-
-    const followUp = await createTestMessage(input.threadId, "About the blue shirt on order 1001");
-    const resumed = await acceptCustomerAgentRequest({
-      ...input,
-      sourceMessageId: followUp.id,
-      continuity: { ask: "return", order: "#1001", subject: "blue shirt" },
-    });
-    expect(resumed.task.id).toBe(first.task.id);
-    expect(resumed.task.revision).toBe(1);
-    expect((await db.agentTask.findUniqueOrThrow({ where: { id: second.task.id } })).revision).toBe(0);
-
-    const terse = await createTestMessage(input.threadId, "Yes, that one");
-    const ambiguous = await acceptCustomerAgentRequest({
-      ...input,
-      sourceMessageId: terse.id,
-      continuityMode: "classified",
-      continuity: { ask: "return", order: "#1001", subject: null },
-    });
-    expect(ambiguous.task.id).not.toBe(first.task.id);
-    expect(ambiguous.task.id).not.toBe(second.task.id);
-  });
-
-  it("does not choose between two tasks for an ambiguous terse follow-up", async () => {
-    const input = await seedSupport();
-    const first = await acceptCustomerAgentRequest({
-      ...input,
-      continuity: { ask: "return", order: null, subject: "blue shirt" },
-    });
-    const secondMessage = await createTestMessage(input.threadId, "I also need to return the black shoes");
-    const second = await acceptCustomerAgentRequest({
-      ...input,
-      sourceMessageId: secondMessage.id,
-      continuity: { ask: "return", order: null, subject: "black shoes" },
-    });
-    const ambiguousMessage = await createTestMessage(input.threadId, "Yes, that one");
-    const ambiguous = await acceptCustomerAgentRequest({
-      ...input,
-      sourceMessageId: ambiguousMessage.id,
-      continuity: { ask: "return", order: null, subject: null },
-    });
-
-    expect(new Set([first.task.id, second.task.id, ambiguous.task.id]).size).toBe(3);
-    const originals = await db.agentTask.findMany({
-      where: { id: { in: [first.task.id, second.task.id] } },
-      select: { revision: true },
-    });
-    expect(originals).toEqual([{ revision: 0 }, { revision: 0 }]);
+    expect((await db.agentProposal.findUniqueOrThrow({ where: { id: parked.activeProposalId! } })).status)
+      .toBe("superseded");
   });
 
   it("opens a new task rather than replaying one that reached a provider", async () => {

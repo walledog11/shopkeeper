@@ -35,10 +35,11 @@ export async function findQueuedAgentTasks(limit = 100) {
 // attempt that ends that way failed, and `requeueFailedAttempt` decides whether
 // its message re-runs it. It is charged no time past its last checkpoint: a dead
 // worker did no work there, and a support lease is as long as the task's time
-// limit, so charging it would leave the re-run nothing. A member turn can act on
-// other threads' proposals, so its own rows prove nothing and it reconciles.
-// Anything else still owes reconciliation, exactly as the worker-side settle and
-// fail paths decide it.
+// limit, so charging it would leave the re-run nothing. One whose writes all
+// settled failed too, charged as usual and never re-run; only a write or
+// execution whose outcome is still open reconciles, exactly as the worker-side
+// settle and fail paths decide it. A member turn can act on other threads'
+// proposals, so its own rows prove nothing and it reconciles.
 //
 // The rows are locked before the update reads them, so a dispatch authorized
 // just before a lease ran out is seen rather than missed by a stale snapshot.
@@ -52,6 +53,15 @@ export async function reconcileExpiredAgentTaskClaims(now = new Date()) {
     WHERE e.task_id = agent_tasks.id AND e.organization_id = agent_tasks.organization_id
     AND e.status IN ('claimed', 'committed', 'unknown')
   ))`;
+  const unsettled = Prisma.sql`(EXISTS (
+    SELECT 1 FROM agent_actions a
+    WHERE a.task_id = agent_tasks.id AND a.organization_id = agent_tasks.organization_id
+    AND a.dispatch_state IN ('dispatch_authorized', 'submitted', 'unknown')
+  ) OR EXISTS (
+    SELECT 1 FROM plan_executions e
+    WHERE e.task_id = agent_tasks.id AND e.organization_id = agent_tasks.organization_id
+    AND e.status IN ('claimed', 'unknown')
+  ))`;
   const interrupted = Prisma.sql`(cancelled_at IS NULL
     AND initiating_actor_kind = 'customer' AND NOT ${dispatched})`;
   return db.$transaction(async (tx) => {
@@ -64,8 +74,10 @@ export async function reconcileExpiredAgentTaskClaims(now = new Date()) {
     if (expired.length === 0) return 0;
     return tx.$executeRaw(Prisma.sql`
       UPDATE agent_tasks
-      SET status = CASE WHEN ${interrupted} THEN 'failed'::"AgentTaskStatus"
-                        WHEN cancelled_at IS NOT NULL AND NOT ${dispatched}
+      SET status = CASE WHEN cancelled_at IS NULL AND initiating_actor_kind = 'customer'
+                          AND NOT ${unsettled}
+                        THEN 'failed'::"AgentTaskStatus"
+                        WHEN cancelled_at IS NOT NULL AND NOT ${unsettled}
                         THEN 'cancelled'::"AgentTaskStatus"
                         ELSE 'reconciling'::"AgentTaskStatus" END,
           failure_code = CASE
