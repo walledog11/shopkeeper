@@ -2,6 +2,7 @@
 //
 // Reports legacy pending-plan storage and tool-call JSON shapes that block
 // retiring compatibility readers in apps/gateway/src/operator-context.ts.
+// --strict fails while either reader still has a row to read.
 //
 //   npm run audit:operator-context-compatibility
 //   npm run audit:operator-context-compatibility -- --strict
@@ -27,7 +28,7 @@ const report = {
 
 console.log(JSON.stringify(report, null, 2));
 
-if (strict && !report.safeToRetireLegacyToolCallShape) {
+if (strict && !(report.safeToRetireIdentityLessReader && report.safeToRetireLegacyToolCallShape)) {
   process.exitCode = 1;
 }
 

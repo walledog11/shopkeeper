@@ -135,7 +135,7 @@ function planIdentity(params: {
 
 // In-process auto-plan: resolve thread + settings, serve a warm plan cache or
 // plan and cache a fresh one, then auto-execute within business hours using the
-// gateway lock provider and no-op shadow recorder.
+// gateway lock provider.
 export async function generateThreadPlan(
   organizationId: string,
   threadId: string,

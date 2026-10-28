@@ -345,17 +345,22 @@ Activity labels distinguish blocked, failed, and unknown calls. Request polling
 shows a failed/reconciling summary only when its stored response belongs to that
 request, and does not restore approval controls on it.
 
-Versioned cache/receipt decoders, historical journal rows, provider operation
-keys, unknown-action reconciliation, and attributed delivery recovery remain.
-`Thread.cachedPlan` is a presentation projection, not execution authority.
+Versioned receipt decoders, historical journal rows, provider operation keys,
+unknown-action reconciliation, and attributed delivery recovery remain. The plan
+cache decoder reads only the current version (`AGENT_PLAN_CACHE_VERSION`); an
+earlier record reads as no plan, which every currency check already treated it
+as. `Thread.cachedPlan` is a presentation projection, not execution authority.
 Cache digest and missing-plan recovery maintenance still serve current durable
 work. Their presence does not enable the retired runtime.
 
 `npm run audit:agent-runtime-retirement -- --strict` is the read-only inventory
-of task versions/statuses, historical proposals, unknown actions, and current
-taskless caches; it refuses actionable non-v2 state. Run it against the
-intended database before removing any retained compatibility reader, and
-never rewrite or delete the rows it reports.
+of task versions/statuses, historical proposals, unknown actions, stored cache
+versions and current cards without a durable proposal. Each of its `licenses`
+names the compatibility it allows retiring: `runtimeOneExecution` (no
+actionable non-v2 task or unknown action) and `tasklessApproval` (no current
+card a merchant could approve that lacks a durable proposal); `--strict` fails
+unless both hold. Run it against the intended database before removing any
+retained compatibility reader, and never rewrite or delete the rows it reports.
 
 ## Deployment and rollback
 

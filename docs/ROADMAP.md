@@ -9,13 +9,6 @@ Technical contracts and settled engineering decisions live with the code they go
 
 Last updated: 2026-10-28.
 
-## Now — finish the cleanup
-
-1. **Architecture-audit fixes (2026-10-17)**, one PR each, in this order. Most defects were
-   traced in code, not seen in production:
-   - Retire `AutonomyShadowDecision` and cache version 6; make the retirement audits
-     measure what they license; decide whether `RequestEpisodeOutcome` earns its keep.
-
 ## Next — the first real merchant
 
 In order. This is the product's critical path.
@@ -83,7 +76,9 @@ In order. This is the product's critical path.
 - **Compliance webhooks:** exercise `customers/data_request` and `shop/redact` once
   ([data-deletion](production/data-deletion.md)).
 - **Production leftovers:** get `audit:agent-runtime-retirement -- --strict` clean
-  (taskless cached plans regenerated, open unknown actions reconciled). Drop
+  (approvable cards without a durable proposal regenerated, open unknown actions
+  reconciled). Drop the unused `autonomy_shadow_decisions` table in the release after the
+  one that stopped reading it (runbook *Migrations*: destructive cleanup ships later). Drop
   `AGENT_RUNTIME_VERSION` from Railway only once no pre-#165 revision can be a rollback
   target ([agent-runtime](agent-runtime.md), *Deployment and rollback*). Retire the
   identity-less operator queue reader once `audit:operator-context-compatibility --
@@ -136,7 +131,7 @@ In order. This is the product's critical path.
 | The next support-prompt bullet for one bad output | Move `SUPPORT_INSTRUCTIONS` invariants into schema or executor |
 | The next change to merchant-answer KB or order-ops findings | Typed fields instead of regexes in `merchant-answer-kb.ts`, `order-ops/finding.ts` |
 | Async recovery exercised | Decide async-only outbound email and retire the sync path |
-| A few weeks of real merchant traffic | Baseline outcomes from `agent_actions`/`agent_tasks`/`agent_turn_usage` |
+| A few weeks of real merchant traffic | Baseline outcomes from `request_episode_outcomes`/`agent_actions`/`agent_tasks`/`agent_turn_usage` |
 | Attributed chat sales look too low | Anonymous-shopper attribution via cart attributes |
 | Classifier spend matters | Classify a two-message email burst once |
 | Tool-schema cost justifies a re-proof | Consolidate `get_shopify_orders`/`get_order_by_name` into one `orders.json` read; `get_order_tracking` stays separate. Those two are the whole verified-storefront set (`VERIFIED_ORDER_TOOL_NAMES`), so a by-customer lookup must reach neither storefront state, and the guest/verified matrix is re-proved |
@@ -185,3 +180,8 @@ In order. This is the product's critical path.
 - **Evals can't see the Shopify layer** — every Shopify tool result is simulated, so the
   dev store is the only test of `packages/agent/src/shopify/*`.
 - **Founder and test workspaces never count** as demand, success or renewal evidence.
+- **`RequestEpisodeOutcome` stays.** It is the only per-plan record of the classification
+  and autonomy verdict a plan was made under (the task ledger keeps neither), the Review
+  page's outcome line, and what `audit:request-outcomes` reports for the pilot's
+  approved-unedited and auto-resolved rates. Its writes are best-effort, so it costs upkeep,
+  not risk. (2026-10-28)

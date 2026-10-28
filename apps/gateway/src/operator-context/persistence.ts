@@ -3,7 +3,7 @@ import type { Prisma as PrismaTypes } from '@prisma/client';
 import { isEscalationOnlyPlan } from '@shopkeeper/agent/autonomy';
 import type { RawToolCall } from '@shopkeeper/agent/types';
 import { getPlanExecution } from '@shopkeeper/agent/execution-ledger';
-import { AGENT_PLAN_CACHE_VERSION, readAgentPlanCacheRecordShape } from '@shopkeeper/agent/plan-cache-shape';
+import { readAgentPlanCacheRecordShape } from '@shopkeeper/agent/plan-cache-shape';
 import { hashInstruction, hashPlan } from '@shopkeeper/agent/agent-actions';
 import { getLatestConversationMessage } from '@shopkeeper/agent/thread-auth';
 import { customerFirstName } from '@shopkeeper/agent/person-name';
@@ -317,7 +317,6 @@ export function selectPendingPlan(
 type PendingPlanStaleReason =
   | 'identity_incomplete'
   | 'cache_absent'
-  | 'cache_version_superseded'
   | 'plan_replaced'
   | 'source_message_advanced'
   | 'plan_edited'
@@ -342,7 +341,6 @@ async function pendingPlanStaleReason(
   ]);
   const cached = readAgentPlanCacheRecordShape(thread?.cachedPlan);
   if (!cached) return 'cache_absent';
-  if (cached.version !== AGENT_PLAN_CACHE_VERSION) return 'cache_version_superseded';
   if (cached.planId !== plan.planId) return 'plan_replaced';
   if (cached.lastCustomerMessageId !== plan.sourceMessageId) return 'source_message_advanced';
   if (thread?.cachedPlanMessageId !== plan.sourceMessageId) return 'source_message_advanced';

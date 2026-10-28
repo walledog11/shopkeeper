@@ -100,10 +100,10 @@ describe("getCurrentPlanForThread", () => {
     ])).toBeNull()
   })
 
-  it("keeps legacy cache records readable but never current/actionable", () => {
+  it("reads a record from a retired cache version as no plan", () => {
     const thread = threadWithPlan("cust_1")
     thread.cachedPlan = { ...thread.cachedPlan, version: 6 }
-    expect(readAgentPlanCacheRecordShape(thread.cachedPlan)?.version).toBe(6)
+    expect(readAgentPlanCacheRecordShape(thread.cachedPlan)).toBeNull()
     expect(getCurrentPlanForThread(
       thread,
       [{ id: "cust_1", senderType: "customer" }],
@@ -134,7 +134,7 @@ describe("getCurrentPlanForThread", () => {
 })
 
 describe("readAgentPlanCacheRecordShape", () => {
-  it("reads current and previous stored agent plan cache versions", () => {
+  it("reads the current cache version and no earlier one", () => {
     const current = buildAgentPlanCacheRecord({
       instruction: "Handle address change",
       lastCustomerMessageId: "cust_1",
@@ -148,12 +148,7 @@ describe("readAgentPlanCacheRecordShape", () => {
       validation: { status: "valid", issues: [] },
       routingEvidence: { classifierState: "not_applicable", codes: [] },
     })
-    expect(readAgentPlanCacheRecordShape(previous)?.version).toBe(1)
-    expect(readAgentPlanCacheRecordShape(previous)?.plan).toEqual({
-      ...PLAN,
-      validation: { status: "valid", issues: [] },
-      routingEvidence: { classifierState: "not_applicable", codes: [] },
-    })
+    expect(readAgentPlanCacheRecordShape(previous)).toBeNull()
   })
 
   it("keeps dashboard approval records separate from agent plan cache records", () => {
@@ -209,7 +204,7 @@ describe("readAgentPlanCacheRecordShape", () => {
     })).toBeNull()
   })
 
-  it("requires explicit validation on current records but reads v5 records", () => {
+  it("requires explicit validation", () => {
     const current = buildAgentPlanCacheRecord({
       instruction: "Handle address change",
       lastCustomerMessageId: "cust_1",
@@ -222,7 +217,6 @@ describe("readAgentPlanCacheRecordShape", () => {
     }
 
     expect(readAgentPlanCacheRecordShape(withoutValidation)).toBeNull()
-    expect(readAgentPlanCacheRecordShape({ ...withoutValidation, version: 5 })).not.toBeNull()
   })
 })
 
