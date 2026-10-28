@@ -13,10 +13,6 @@ Last updated: 2026-10-28.
 
 1. **Architecture-audit fixes (2026-10-17)**, one PR each, in this order. Most defects were
    traced in code, not seen in production:
-   - Operator-written customer emails become reviewed exact drafts: requests record the
-     latest message of any sender at acceptance and execution refuses anything newer, which
-     also lets `draft_ticket_reply` work on an answered ticket. Then execution refuses
-     every customer message without an approved draft, and the refusal above goes.
    - Retire `AutonomyShadowDecision` and cache version 6; make the retirement audits
      measure what they license; decide whether `RequestEpisodeOutcome` earns its keep.
 

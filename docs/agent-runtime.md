@@ -391,6 +391,11 @@ letter (F) is not reused.
   Only those placeholders may change, using the approved write's successful
   receipt. A failed write or missing binding withholds the message. The model
   writes the draft before approval; merchant messages may compose after outcomes.
+  Execution refuses a customer message no approval binds, so nothing a model
+  writes in a turn reaches a customer. The operator agent drafts instead: a
+  reply through `draft_ticket_reply`, and an email to someone without a ticket
+  through `draft_email`, which parks that exact email on their email ticket
+  (opened for them if they have none) for approval.
 - **B. A flagged reply is never sent.** Display flags on approval cards. A flag
   on an otherwise unreviewed reply holds it as a proposal. Do not delete the
   flagged sentence and send the rest: validate, do not repair.

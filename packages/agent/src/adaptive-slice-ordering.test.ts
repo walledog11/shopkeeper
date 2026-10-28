@@ -266,6 +266,12 @@ describe("running an approved exact-draft proposal", () => {
       "Handle the refund request.",
       [APPROVED_REFUND, APPROVED_REPLY],
       LIVE_SETTINGS,
+      { approvedCommunication: {
+        mode: "exact_draft",
+        destination: { kind: "thread", id: "thread_1", channel: "email" },
+        draft: APPROVED_REPLY.input.text,
+        allowedResultBindings: [],
+      } },
     );
 
     // The money moves before the customer is written to.
@@ -328,6 +334,12 @@ describe("running an approved exact-draft proposal", () => {
       "Handle the refund request.",
       [APPROVED_REFUND, APPROVED_REPLY],
       LIVE_SETTINGS,
+      { approvedCommunication: {
+        mode: "exact_draft",
+        destination: { kind: "thread", id: "thread_1", channel: "email" },
+        draft: APPROVED_REPLY.input.text,
+        allowedResultBindings: [],
+      } },
     );
 
     // A definite failure stops the batch before the approved reply, which was
@@ -529,7 +541,9 @@ describe("a compound task: read the order and the policy, refund one line, repor
     const revisedInstruction = "Both napkins were torn - refund both of them.";
     const revised = await planAgent(ctx, revisedInstruction, LIVE_SETTINGS, {});
 
-    const result = await runAgent(ctx, revisedInstruction, approvedCalls(revised), LIVE_SETTINGS);
+    const result = await runAgent(ctx, revisedInstruction, approvedCalls(revised), LIVE_SETTINGS, {
+      ...(revised.communication ? { approvedCommunication: revised.communication } : {}),
+    });
 
     // The superseded proposal named and quoted one napkin but never committed
     // anything; the money that moved is the revised selection's approved quote,

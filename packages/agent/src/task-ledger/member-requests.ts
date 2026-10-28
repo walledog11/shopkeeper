@@ -176,11 +176,33 @@ export async function acceptMemberAgentRequest(input: MemberRequestInput) {
   });
 }
 
+/** An email the merchant's request already wrote out, word for word. */
+export interface TicketEmailDraft {
+  to: string;
+  subject: string;
+  body: string;
+}
+
+/** The email a ticket request carries to be parked as written, if it has one. */
+export function ticketRequestEmail(payload: unknown): TicketEmailDraft | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  const email = (payload as Record<string, unknown>).email;
+  if (!email || typeof email !== "object" || Array.isArray(email)) return null;
+  const { to, subject, body } = email as Record<string, unknown>;
+  return typeof to === "string" && typeof subject === "string" && typeof body === "string"
+    ? { to, subject, body }
+    : null;
+}
+
 /** A composer command replaces unexecuted work on its ticket, under the same
  * task lock as approval. The task's runtime and accumulated budget survive a
- * regeneration. Approved, claimed, or uncertain work must finish first. */
+ * regeneration. Approved, claimed, or uncertain work must finish first.
+ *
+ * With `email`, the request's draft is that email exactly as written, and
+ * planning it parks it for approval rather than asking the model for one. */
 export async function acceptTicketAgentRequest(input: MemberRequestInput & {
   force: boolean;
+  email?: TicketEmailDraft;
 }) {
   if (!input.budget) throw new BadRequestError("A task budget is required.");
   validateTaskBudget(input.budget);
@@ -188,7 +210,10 @@ export async function acceptTicketAgentRequest(input: MemberRequestInput & {
   if (!instruction || instruction.length > 16000 || !input.dedupeKey.trim() || input.dedupeKey.length > 255) {
     throw new BadRequestError("A bounded instruction and stable request key are required.");
   }
-  const payload = { version: 1, kind: "ticket_plan", threadId: input.threadId, instruction, force: input.force };
+  const payload = {
+    version: 1, kind: "ticket_plan", threadId: input.threadId, instruction, force: input.force,
+    ...(input.email ? { email: { to: input.email.to, subject: input.email.subject, body: input.email.body } } : {}),
+  };
   const payloadHash = hashInstruction(JSON.stringify(payload));
   return db.$transaction(async (tx) => {
     const actorKey = await requireMemberActorKey(tx, {

@@ -632,3 +632,25 @@ export async function planAgent(
     ...(damageEvidence?.kind === "photos" ? { damagePhotos: damageEvidence.photos } : {}),
   };
 }
+
+/**
+ * The plan for a message the merchant's request already wrote out word for
+ * word. It is validated like any captured proposal and binds the same exact
+ * draft, but no model is asked to write it, so what the merchant approves is
+ * what they (or the operator agent for them) wrote.
+ */
+export function planWrittenDraft(
+  ctx: AgentContext,
+  instruction: string,
+  rawToolCalls: AgentPlan["rawToolCalls"],
+): AgentPlan {
+  const communication = deriveProposalCommunication(rawToolCalls, ctx.thread);
+  return {
+    instruction,
+    steps: buildPlanSteps(rawToolCalls),
+    rawToolCalls,
+    validation: validatePlan({ ctx, instruction, rawToolCalls, singleCustomerMessage: true }),
+    routingEvidence: { classifierState: "not_applicable", codes: [] },
+    ...(communication ? { communication } : {}),
+  };
+}

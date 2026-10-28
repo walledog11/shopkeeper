@@ -7,6 +7,15 @@ import type { SendEmailInput, SendReplyInput } from "./types.js";
 const CUSTOMER_MESSAGE_TEXT =
   "Exactly what they read. Write it the way a person at the shop would: warm, plain, short sentences, no em dashes (—), bullet characters or markdown. Never describe their photos or attachments back to them. Order and tracking numbers are the only store references to mention; leave out internal ones such as a return's.";
 
+// What an email to a customer is made of. The operator's draft_email parks
+// exactly this input as the send_email the merchant approves, so the two read
+// and validate it the same way.
+export const SEND_EMAIL_FIELDS = {
+  to: stringArg("Recipient email address in user@domain format (e.g. 'jane@example.com'). Must be a valid SMTP address — never a name or phone number.", { required: true, nonBlank: true }),
+  subject: stringArg("Email subject line.", { required: true, nonBlank: true }),
+  body: stringArg(CUSTOMER_MESSAGE_TEXT, { required: true, nonBlank: true }),
+};
+
 export const MESSAGING_TOOL_DEFINITIONS = [
   defineTool({
     name: "send_reply",
@@ -31,11 +40,7 @@ export const MESSAGING_TOOL_DEFINITIONS = [
     name: "send_email",
     description:
       "Send an outbound email to any email address. Use this to proactively contact a customer (e.g. shipping delay notice) even when the current thread is not an email thread.",
-    fields: {
-      to: stringArg("Recipient email address in user@domain format (e.g. 'jane@example.com'). Must be a valid SMTP address — never a name or phone number.", { required: true, nonBlank: true }),
-      subject: stringArg("Email subject line.", { required: true, nonBlank: true }),
-      body: stringArg(CUSTOMER_MESSAGE_TEXT, { required: true, nonBlank: true }),
-    },
+    fields: SEND_EMAIL_FIELDS,
     category: "communication",
     group: "messaging",
     capabilities: ["thread-io"],

@@ -77,24 +77,11 @@ const confirmedRefundReceipt = {
   },
 };
 
-describe("completion grounding at execution", () => {
-  it("sends a grounded completion claim as written", async () => {
+describe("customer messages at execution", () => {
+  // Decision A: a customer reads only an approved draft. A message the model
+  // writes in a turn is refused, however well its receipts support it.
+  it("refuses a message no approval binds, grounded or not", async () => {
     const result = await sendWithEvidence("We refunded USD 20.00 for order #1001.", [{
-      tool: "create_refund",
-      toolCallId: "refund_1",
-      input: { order_id: "123", amount: "20.00", currency: "USD" },
-      result: "Refund of $20.00 issued successfully for order 123.",
-      status: "success",
-      receipt: confirmedRefundReceipt,
-    }]);
-
-    expect(result.sendReply).toHaveBeenCalledOnce();
-    expect(result.sendReply).toHaveBeenCalledWith({ text: "We refunded USD 20.00 for order #1001." });
-    expect(result.actionsPerformed.at(-1)).toMatchObject({ tool: "send_reply", status: "success" });
-  });
-
-  it("blocks wrong amount copy even though a refund tool succeeded", async () => {
-    const result = await sendWithEvidence("We refunded $21.00 for the order.", [{
       tool: "create_refund",
       toolCallId: "refund_1",
       input: { order_id: "123", amount: "20.00", currency: "USD" },
@@ -107,31 +94,8 @@ describe("completion grounding at execution", () => {
     expect(result.actionsPerformed.at(-1)).toMatchObject({
       tool: "send_reply",
       status: "error",
-      result: expect.stringContaining("not supported by a successful action result"),
+      result: expect.stringContaining("only as a draft the merchant approved"),
     });
-  });
-
-  it("blocks a compound reply when only part of the work succeeded", async () => {
-    const result = await sendWithEvidence("We refunded the order and opened a return.", [
-      {
-        tool: "create_refund",
-        toolCallId: "refund_1",
-        input: { order_id: "123", amount: "20.00", currency: "USD" },
-        result: "Refund of $20.00 issued successfully for order 123.",
-        status: "success",
-      receipt: confirmedRefundReceipt,
-      },
-      {
-        tool: "create_return",
-        toolCallId: "return_1",
-        input: { order_id: "123" },
-        result: "Error: provider rejected return.",
-        status: "error",
-      },
-    ]);
-
-    expect(result.sendReply).not.toHaveBeenCalled();
-    expect(result.actionsPerformed.at(-1)?.status).toBe("error");
   });
 });
 

@@ -1,11 +1,11 @@
 import { db } from '@shopkeeper/db';
 import { buildContext } from '@shopkeeper/agent/build-context';
-import { planAgent } from '@shopkeeper/agent/planner';
+import { planAgent, planWrittenDraft } from '@shopkeeper/agent/planner';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { requireOrgThread } from '@shopkeeper/agent/thread-auth';
 import { buildAgentPlanCacheRecord, readAgentPlanCache } from '@shopkeeper/agent/plan-cache';
 import { supportAttemptSettlement } from '@shopkeeper/agent/plan-execution';
-import { settleAgentTaskClaim, type TaskClaimIdentity } from '@shopkeeper/agent/task-ledger';
+import { settleAgentTaskClaim, type TaskClaimIdentity, type TicketEmailDraft } from '@shopkeeper/agent/task-ledger';
 import { captureCommittedPlanOutcome } from '@shopkeeper/agent/request-outcome';
 import { hashInstruction, hashPlan } from '@shopkeeper/agent/agent-actions';
 import type { TaskModelBudget } from '@shopkeeper/agent/context';
@@ -19,7 +19,9 @@ import {
 } from '../shared/request-display.js';
 
 /** Planning stays on the ticket and never executes the proposed writes. The
- * task worker owns the lease, budget, and stop boundary across disconnects. */
+ * task worker owns the lease, budget, and stop boundary across disconnects.
+ * An email the request already wrote out is parked as written; no model is
+ * asked for it. */
 export async function runComposerTask(input: TaskClaimIdentity & {
   claimToken: string;
   requestId: string;
@@ -27,6 +29,7 @@ export async function runComposerTask(input: TaskClaimIdentity & {
   /** The conversation's latest message when the merchant asked; null on a ticket with none yet. */
   sourceMessageId: string | null;
   instruction: string;
+  email?: TicketEmailDraft | null;
   runtimeVersion: number;
   assertExecutionAllowed: () => void;
 }, budget: TaskModelBudget): Promise<void> {
@@ -40,10 +43,11 @@ export async function runComposerTask(input: TaskClaimIdentity & {
   ctx.agentRequestId = input.requestId;
   ctx.agentTaskId = input.taskId;
   ctx.assertExecutionAllowed = input.assertExecutionAllowed;
-  const plan = await planAgent(ctx, input.instruction, settings, {
-    merchantInstruction: true, runtimeVersion: input.runtimeVersion,
-
-  });
+  const plan = input.email
+    ? planWrittenDraft(ctx, input.instruction, [{ id: 'draft_email', name: 'send_email', input: { ...input.email } }])
+    : await planAgent(ctx, input.instruction, settings, {
+      merchantInstruction: true, runtimeVersion: input.runtimeVersion,
+    });
   input.assertExecutionAllowed();
   const cache = buildAgentPlanCacheRecord({
     instruction: input.instruction, lastCustomerMessageId: input.sourceMessageId, settings, plan,

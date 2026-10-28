@@ -17,3 +17,4 @@ export {
   updateThreadTagMutation,
 } from "./db-mutations.js";
 export { composeThreadSink, type ComposeThreadSinkOptions } from "./compose-sink.js";
+export { openEmailThreadFor } from "./email-thread.js";

@@ -160,7 +160,7 @@ describe("runAgent tool execution", () => {
     expect(names).not.toContain("escalate_to_human");
     expect(names).not.toContain("send_reply");
     expect(names).not.toContain("add_internal_note");
-    expect(names).toContain("send_email");
+    expect(names).not.toContain("send_email");
     const messages = mockCreate.mock.calls[0]?.[0].messages;
     expect(messages[0].content.at(-1)).toEqual({ type: "text", text: "What needs attention?" });
     expect(messages[0].content[0].text).toContain('"status":"cancelled"');
@@ -360,10 +360,10 @@ describe("runAgent moduleTools seam", () => {
 
 it('keeps a completed action journaled when the following model call fails', async () => {
   const { completeAgentActionAttempt, recordAgentTurnUsage } = await import('./agent-actions.js');
-  mockCreate.mockResolvedValueOnce(toolUse('send_reply', { text: 'Sent once' })).mockRejectedValueOnce(new Error('model unavailable'));
+  mockCreate.mockResolvedValueOnce(toolUse('update_thread_tag', { tag: 'Refund' })).mockRejectedValueOnce(new Error('model unavailable'));
   const ctx = makeCtx();
-  await expect(runAgent(ctx, 'Reply')).rejects.toThrow('model unavailable');
-  expect(ctx.io?.sendReply).toHaveBeenCalledOnce();
+  await expect(runAgent(ctx, 'Tag it')).rejects.toThrow('model unavailable');
+  expect(ctx.io?.updateThreadTag).toHaveBeenCalledOnce();
   expect(mockBeginAgentActionAttempt).toHaveBeenCalledOnce();
   expect(completeAgentActionAttempt).toHaveBeenCalledWith(
     { id: 'action_1', operationId: 'operation_1' },
@@ -372,10 +372,20 @@ it('keeps a completed action journaled when the following model call fails', asy
   expect(recordAgentTurnUsage).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'error' }));
 });
 
+// The exact draft an approved plan binds for its "hello" reply.
+const APPROVED_HELLO = {
+  approvedCommunication: {
+    mode: 'exact_draft' as const,
+    destination: { kind: 'thread' as const, id: 'thread_1', channel: 'email' },
+    draft: 'hello',
+    allowedResultBindings: [],
+  },
+};
+
 it('does not execute a mutation when the attempt cannot be persisted', async () => {
   mockBeginAgentActionAttempt.mockRejectedValueOnce(new Error('database unavailable'));
   const ctx = makeCtx();
-  await expect(runAgent(ctx, 'Reply', [{ id: 'send', name: 'send_reply', input: { text: 'hello' } }])).rejects.toThrow('database unavailable');
+  await expect(runAgent(ctx, 'Reply', [{ id: 'send', name: 'send_reply', input: { text: 'hello' } }], undefined, APPROVED_HELLO)).rejects.toThrow('database unavailable');
   expect(ctx.io?.sendReply).not.toHaveBeenCalled();
 });
 
@@ -387,6 +397,6 @@ it('checks ownership again between mutations in the same approved batch', async 
   await expect(runAgent(ctx, 'Reply and close', [
     { id: 'send', name: 'send_reply', input: { text: 'hello' } },
     { id: 'close', name: 'update_thread_status', input: { status: 'closed' } },
-  ])).rejects.toThrow('lost lease');
+  ], undefined, APPROVED_HELLO)).rejects.toThrow('lost lease');
   expect(ctx.io?.updateThreadStatus).not.toHaveBeenCalled();
 });

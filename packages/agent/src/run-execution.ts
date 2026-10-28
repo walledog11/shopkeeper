@@ -29,8 +29,6 @@ import {
   type PersistedAgentAction,
 } from "./agent-actions.js";
 import type { ModelUsageMetrics } from "./usage.js";
-import { executedCompletionFacts } from "./completion-facts.js";
-import { unsupportedReplyCompletionClaims } from "./plan-grounding.js";
 import type { ProposalCommunication } from "./types.js";
 import { fillApprovedDraft } from "./reply-placeholders.js";
 
@@ -381,13 +379,13 @@ export async function executeAgentToolCall(
   // Before any per-call copy of ctx is made, so every copy shares one holder.
   ctx.actionAuthority ??= { block: null };
   const category = moduleTools?.[toolCall.name]?.category ?? TOOL_CATEGORIES[toolCall.name];
-  const approvedMessage = input.approvedMessage && isCustomerMessage(toolCall.name)
-    ? prepareApprovedMessage(toolCall, input.approvedMessage, actionsPerformed)
-    : null;
-  // A message the model writes in this turn may claim only what a validated
-  // receipt from this turn shows. It is refused rather than rewritten.
-  const receiptReplyFacts = !input.approvedMessage && isCustomerMessage(toolCall.name)
-    ? executedCompletionFacts(actionsPerformed, ctx)
+  // A customer reads only what a merchant approved, or what policy let run as
+  // the exact draft of a plan (decision A). A message a model writes in this
+  // turn has neither, so it is refused, never sent and never rewritten.
+  const approvedMessage = isCustomerMessage(toolCall.name)
+    ? input.approvedMessage
+      ? prepareApprovedMessage(toolCall, input.approvedMessage, actionsPerformed)
+      : { refusal: `Error: skipped ${toolCall.name} because a customer message is sent only as a draft the merchant approved.` }
     : null;
   const authoredToolCall = approvedMessage && "call" in approvedMessage
     ? approvedMessage.call
@@ -442,13 +440,6 @@ export async function executeAgentToolCall(
   } else if ("refusal" in quoted) {
     result = quoted.refusal.message;
     status = quoted.refusal.status === "policy_block" ? "policy_block" : "error";
-    errorDetail = result;
-  } else if (
-    receiptReplyFacts
-    && unsupportedReplyCompletionClaims(executableToolCall, receiptReplyFacts, ctx).length > 0
-  ) {
-    result = `Error: skipped ${toolCall.name} because its completion claim is not supported by a successful action result.`;
-    status = "error";
     errorDetail = result;
   } else {
     actionDispatch = !readOnly && category !== "read"
