@@ -16,7 +16,7 @@ export const troubleshooting: Category = {
         {
           heading: "1. Check your integration is connected",
           steps: [
-            "Go to the Integrations page.",
+            "Open Settings → Channels.",
             "Confirm the relevant channel shows a green Connected status.",
             "If it shows disconnected, click Reconnect and complete the flow.",
           ],
@@ -54,7 +54,7 @@ export const troubleshooting: Category = {
             "Make sure the account is in Instagram Professional mode: Business or Creator.",
             "Confirm you signed in to the intended Instagram account and granted both requested permissions.",
             "If the account belongs to another Shopkeeper workspace, disconnect it there before trying again.",
-            "Try disconnecting and reconnecting from the Integrations page.",
+            "Try disconnecting and reconnecting from Settings → Channels.",
           ],
         },
         {
@@ -62,7 +62,7 @@ export const troubleshooting: Category = {
           steps: [
             "Instagram only forwards new DMs after the connection is made — historical messages will not appear.",
             "Make sure the customer messaged your connected Instagram account directly (not a comment).",
-            "Check the Integrations page for a reconnect warning or degraded subscription status.",
+            "Check Settings → Channels for a reconnect warning or degraded subscription status.",
           ],
         },
       ],
@@ -83,7 +83,7 @@ export const troubleshooting: Category = {
           heading: "Duplicate tickets appearing",
           steps: [
             "If you have multiple forwarding rules pointing to Shopkeeper, each will create a ticket.",
-            "Go to Integrations and remove any duplicate email connections.",
+            "Open Settings → Channels and remove any duplicate email connections.",
             "In Gmail, ensure only one forwarding rule is active for your support address.",
           ],
         },

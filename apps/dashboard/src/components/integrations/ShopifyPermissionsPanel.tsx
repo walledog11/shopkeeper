@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { Check, X } from "lucide-react"
 import { resolveAgentSettings } from "@shopkeeper/agent/settings"
-import { agentConfigureHref } from "@/lib/agent/configure"
+import { settingsSectionHref } from "@/app/dashboard/_components/nav-items"
 import { useOrg } from "@/hooks/useOrg"
 import { PermissionRow } from "./PermissionRow"
 
@@ -69,10 +69,10 @@ export function ShopifyPermissionRows() {
       ))}
       <div className="border-t border-foreground/[0.06] px-4 py-3">
         <Link
-          href={agentConfigureHref("autonomy")}
+          href={settingsSectionHref("approvals")}
           className="text-xs font-semibold text-amber-700 transition-colors hover:text-amber-800"
         >
-          Change in Configure →
+          Change in Approvals & limits →
         </Link>
       </div>
     </>

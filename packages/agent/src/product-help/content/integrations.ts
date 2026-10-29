@@ -16,7 +16,7 @@ export const integrations: Category = {
         {
           heading: "How to connect",
           steps: [
-            "Go to the Integrations page.",
+            "Open Settings → Channels.",
             "Click Connect on the Gmail / Email card.",
             "Enter your support email address (e.g. support@yourstore.com).",
             "Click Save.",
@@ -58,7 +58,7 @@ export const integrations: Category = {
         {
           heading: "How to connect",
           steps: [
-            "Go to the Integrations page.",
+            "Open Settings → Channels.",
             "Click Connect on the Instagram card.",
             "You'll be redirected to Instagram to authorize Shopkeeper.",
             "Sign in to the Professional account you want to connect.",
@@ -85,24 +85,24 @@ export const integrations: Category = {
           heading: "What you'll need",
           steps: [
             "An iPhone with iMessage enabled.",
-            "Access to your Shopkeeper dashboard (Integrations page).",
+            "Access to your Shopkeeper dashboard (Settings → Phone & briefing).",
           ],
         },
         {
           heading: "How to connect",
           steps: [
-            "Go to Integrations → iMessage.",
+            "Open Settings → Phone & briefing.",
             "Click Link your iPhone — a QR code and connect code appear.",
             "Scan the QR with your iPhone camera (or tap the text link) and send the prefilled message.",
             "You'll receive a welcome text within about 30 seconds when the link succeeds.",
-            "Integrations shows your linked handle; you can link additional iPhones from the same page.",
+            "Phone & briefing shows your linked handle; you can link additional iPhones from the same page.",
           ],
         },
         {
           heading: "Troubleshooting",
           steps: [
             "Connect codes expire after 24 hours — click Link your iPhone again to mint a fresh code.",
-            "If the line doesn't recognize you, go to Integrations → iMessage → Unlink, then link again with a new code.",
+            "If the line doesn't recognize you, go to Settings → Phone & briefing → iMessage → Unlink, then link again with a new code.",
             "Only handles you link can use the operator line — texting a fresh code re-links that iPhone to whoever minted it.",
           ],
         },
@@ -126,13 +126,13 @@ export const integrations: Category = {
           heading: "Signs a channel has disconnected",
           steps: [
             "No new tickets are arriving from a channel you expect messages from.",
-            "The integration card on the Integrations page may show a warning.",
+            "The card in Settings → Channels may show a warning.",
           ],
         },
         {
           heading: "How to reconnect",
           steps: [
-            "Go to the Integrations page.",
+            "Open Settings → Channels.",
             "Find the affected channel and click Reconnect.",
             "Complete the authorisation flow again.",
             "New messages will resume appearing as tickets.",

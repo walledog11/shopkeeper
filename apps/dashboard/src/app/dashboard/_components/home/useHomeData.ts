@@ -13,6 +13,7 @@ import { useIntegrations } from "@/hooks/useIntegrations"
 import { useOperatorChannels } from "@/hooks/useOperatorChannels"
 import { isEmailIntegrationConfigured } from "@/lib/integrations/onboarding-setup"
 import { isShopifyIntegrationActive } from "@/lib/integrations/shopify-connection"
+import { settingsSectionHref } from "@/app/dashboard/_components/nav-items"
 
 export function useHomeData(
   initialHomeSummary?: HomeSummary,
@@ -74,7 +75,7 @@ export function useHomeData(
   const workflowSteps = useMemo(() => [
     { label: "Connect Shopify", href: "/dashboard/integrations", status: (hasShopify ? "done" : "pending") as "done" | "pending" },
     { label: "Set up email forwarding", href: "/dashboard/integrations", status: (hasEmailForwarding ? "done" : "pending") as "done" | "pending" },
-    { label: "Connect your phone (optional)", href: "/dashboard/integrations", status: (hasPhoneBound ? "done" : "pending") as "done" | "pending", optional: true },
+    { label: "Connect your phone (optional)", href: settingsSectionHref("briefing"), status: (hasPhoneBound ? "done" : "pending") as "done" | "pending", optional: true },
     { label: "Receive first ticket", href: "/dashboard/tickets", status: (hasReceivedTicket ? "done" : "pending") as "done" | "pending" },
     { label: "Send first reply", href: "/dashboard/tickets", status: (home.hasSentReply ? "done" : "pending") as "done" | "pending" },
   ], [

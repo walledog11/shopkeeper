@@ -4,8 +4,7 @@ import { InboxStreamLoading } from "@/app/dashboard/(shell)/tickets/_components/
 import { needsYouCardShellClassName } from "@/app/dashboard/_components/home/needs-you-card-styles"
 import { MemoryLibrarySkeleton } from "./MemoryLibrarySkeleton"
 import { Pulse } from "./Pulse"
-import { AccountSettingsSkeleton } from "./AccountSettingsSkeleton"
-import { dashboardChromeColumnClassName, dashboardChromeMaxWidthClass, dashboardPageShellClassName } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
+import { dashboardChromeColumnClassName, dashboardChromeMaxWidthClass } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
 import { SearchFilterBarSkeleton } from "@/components/ui/search-filter-bar"
 import { SOLID_SETTINGS_TILE } from "@/lib/ui/glass-card-styles"
 import { boardCardShadowClassName } from "@/lib/ui/board-card-styles"
@@ -129,37 +128,31 @@ const INTEGRATION_SECTION_KEYS = ["integrations-section-1", "integrations-sectio
 
 export function IntegrationsPageSkeleton() {
   return (
-    <PageShell>
-      <div className="flex-1 overflow-y-auto">
-        <div className={cn(dashboardChromeColumnClassName(), "space-y-6 py-6 md:pt-0")}>
-          <div className="grid gap-8 lg:grid-cols-2 items-start">
-            {INTEGRATION_SECTION_KEYS.map(sectionKey => (
-              <section key={sectionKey} className="space-y-4" aria-hidden>
+    <div className="grid gap-8 lg:grid-cols-2 items-start">
+      {INTEGRATION_SECTION_KEYS.map(sectionKey => (
+        <section key={sectionKey} className="space-y-4" aria-hidden>
+          <div className="space-y-2">
+            <Pulse className="h-4 w-32 rounded-md" />
+            <Pulse className="h-3 w-full max-w-sm rounded-md bg-foreground/[0.05]" />
+          </div>
+          <div className="grid items-stretch auto-rows-fr grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-4">
+            {["card-a", "card-b", "card-c", "card-d"].map(cardKey => (
+              <div key={`${sectionKey}-${cardKey}`} className={cn(CARD_SHELL, "gap-4")}>
+                <div className="flex items-center gap-3">
+                  <Pulse className="size-8 rounded-lg shrink-0" />
+                  <Pulse className="h-5 w-28" />
+                </div>
                 <div className="space-y-2">
-                  <Pulse className="h-4 w-32 rounded-md" />
-                  <Pulse className="h-3 w-full max-w-sm rounded-md bg-foreground/[0.05]" />
+                  <Pulse className="h-3 w-full bg-foreground/[0.05]" />
+                  <Pulse className="h-3 w-4/5 bg-foreground/[0.05]" />
                 </div>
-                <div className="grid items-stretch auto-rows-fr grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-4">
-                  {["card-a", "card-b", "card-c", "card-d"].map(cardKey => (
-                    <div key={`${sectionKey}-${cardKey}`} className={cn(CARD_SHELL, "gap-4")}>
-                      <div className="flex items-center gap-3">
-                        <Pulse className="size-8 rounded-lg shrink-0" />
-                        <Pulse className="h-5 w-28" />
-                      </div>
-                      <div className="space-y-2">
-                        <Pulse className="h-3 w-full bg-foreground/[0.05]" />
-                        <Pulse className="h-3 w-4/5 bg-foreground/[0.05]" />
-                      </div>
-                      <Pulse className="h-10 w-full rounded-[10px]" />
-                    </div>
-                  ))}
-                </div>
-              </section>
+                <Pulse className="h-10 w-full rounded-[10px]" />
+              </div>
             ))}
           </div>
-        </div>
-      </div>
-    </PageShell>
+        </section>
+      ))}
+    </div>
   )
 }
 
@@ -182,53 +175,17 @@ export function ReviewPageSkeleton() {
   )
 }
 
-export function AccountPageSkeleton() {
+/** Content-only: the settings layout already draws the rail and page title. */
+export function SettingsContentSkeleton() {
   return (
-    <PageShell>
-      <div className="flex-1 overflow-y-auto">
-        <div className={cn(dashboardPageShellClassName(), "gap-6 pb-20")}>
-          <AccountSettingsSkeleton />
+    <div className="flex flex-col gap-4">
+      {Array.from({ length: 6 }, (_, index) => (
+        <div key={index} className={cn(SOLID_SETTINGS_TILE, "space-y-2")}>
+          <Pulse className="h-4 w-28 rounded-md" />
+          <Pulse className="h-4 w-2/3 rounded-md bg-foreground/[0.05]" />
         </div>
-      </div>
-    </PageShell>
-  )
-}
-
-export function SettingsPageSkeleton() {
-  return (
-    <PageShell>
-      <div className="flex-1 overflow-y-auto">
-        <div className={cn(dashboardPageShellClassName(), "gap-4 pb-20")}>
-          <div className="flex flex-col gap-4">
-            {Array.from({ length: 6 }, (_, index) => (
-              <div key={index} className={cn(SOLID_SETTINGS_TILE, "space-y-2")}>
-                <Pulse className="h-4 w-28 rounded-md" />
-                <Pulse className="h-4 w-2/3 rounded-md bg-foreground/[0.05]" />
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </PageShell>
-  )
-}
-
-export function AgentConfigurePageSkeleton() {
-  return (
-    <PageShell>
-      <div className="custom-scrollbar flex-1 overflow-y-auto">
-        <div className={cn(dashboardPageShellClassName(), "gap-4 pb-20")}>
-          <div className="flex flex-col gap-4">
-            {Array.from({ length: 8 }, (_, index) => (
-              <div key={index} className={cn(SOLID_SETTINGS_TILE, "space-y-2")}>
-                <Pulse className="h-4 w-28 rounded-md" />
-                <Pulse className="h-4 w-2/3 rounded-md bg-foreground/[0.05]" />
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </PageShell>
+      ))}
+    </div>
   )
 }
 
@@ -236,30 +193,28 @@ const TEAM_MEMBER_ROW_KEYS = ["member-skeleton-1", "member-skeleton-2", "member-
 
 export function TeamPageSkeleton() {
   return (
-    <PageShell className="h-full overflow-y-auto bg-background">
-      <div className="mx-auto max-w-3xl space-y-6 px-4 py-5 pb-10 md:px-8 md:pt-0" aria-busy="true" aria-label="Loading team">
-        <div className="flex items-center justify-end">
-          <Pulse className="h-9 w-32 rounded-md" />
-        </div>
+    <div className="space-y-6" aria-busy="true" aria-label="Loading team">
+      <div className="flex items-center justify-end">
+        <Pulse className="h-9 w-32 rounded-md" />
+      </div>
 
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
-          <div className="border-b border-border px-5 py-3.5">
-            <Pulse className="h-4 w-20 rounded-md" />
-          </div>
-          <div className="divide-y divide-border">
-            {TEAM_MEMBER_ROW_KEYS.map(key => (
-              <div key={key} className="flex items-center gap-3 px-5 py-3.5">
-                <Pulse className="size-9 shrink-0 rounded-full" />
-                <div className="min-w-0 flex-1 space-y-1.5">
-                  <Pulse className="h-3.5 w-40 rounded-md" />
-                  <Pulse className="h-3 w-56 max-w-full rounded-md bg-foreground/[0.04]" />
-                </div>
-                <Pulse className="h-5 w-16 shrink-0 rounded-md bg-foreground/[0.05]" />
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="border-b border-border px-5 py-3.5">
+          <Pulse className="h-4 w-20 rounded-md" />
+        </div>
+        <div className="divide-y divide-border">
+          {TEAM_MEMBER_ROW_KEYS.map(key => (
+            <div key={key} className="flex items-center gap-3 px-5 py-3.5">
+              <Pulse className="size-9 shrink-0 rounded-full" />
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <Pulse className="h-3.5 w-40 rounded-md" />
+                <Pulse className="h-3 w-56 max-w-full rounded-md bg-foreground/[0.04]" />
               </div>
-            ))}
-          </div>
+              <Pulse className="h-5 w-16 shrink-0 rounded-md bg-foreground/[0.05]" />
+            </div>
+          ))}
         </div>
       </div>
-    </PageShell>
+    </div>
   )
 }

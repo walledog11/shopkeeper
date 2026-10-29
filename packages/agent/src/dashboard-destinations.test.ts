@@ -8,8 +8,8 @@ import {
 describe("dashboard destinations", () => {
   it("resolves known destination ids", () => {
     expect(getDashboardDestination("integrations")?.href).toBe("/dashboard/integrations");
-    expect(getDashboardDestination("agent_settings")?.label).toBe("Agent configure");
-    expect(getDashboardDestination("workspace_settings")?.href).toBe("/dashboard/settings");
+    expect(getDashboardDestination("approvals")?.label).toBe("Approvals & limits");
+    expect(getDashboardDestination("billing")?.href).toBe("/dashboard/settings/billing");
     expect(getDashboardDestination("account_settings")?.href).toBe("/dashboard/account");
     expect(getDashboardDestination("missing")).toBeNull();
   });
@@ -22,7 +22,7 @@ describe("dashboard destinations", () => {
     expect(parseNavigateDashboardResult(result)).toEqual({
       type: "navigate",
       href: "/dashboard/integrations",
-      label: "Integrations",
+      label: "Channels",
     });
   });
 

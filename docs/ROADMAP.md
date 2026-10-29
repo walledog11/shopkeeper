@@ -119,10 +119,8 @@ In order. This is the product's critical path.
   ≥80% of routine plans approved unedited, no unresolved money or wrong-recipient
   incident. Stripe prices only when the pilot tests renewal.
 - **Shopify App Store listing:** check whether one exists, then decide.
-- **Settings in one place:** one Settings area with a left rail (General, Approvals & limits,
-  Hours & away, Phone & briefing, Channels, Team, Usage & billing, Data & privacy, Account),
-  old URLs and `navigate_dashboard` destinations redirected; then store profile, voice and
-  preferences edited in Memory instead of Configure.
+- **Store profile in Memory:** edit about-your-store, brand voice and merchant preferences in
+  Memory, where they are already shown read-only, then retire Settings → Store profile.
 
 ## Parked — reopen on the trigger
 

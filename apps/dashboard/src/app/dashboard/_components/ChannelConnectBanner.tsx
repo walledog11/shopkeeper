@@ -2,11 +2,12 @@ import Link from "next/link"
 import type { ComponentType, ReactNode } from "react"
 import { MessageCircle } from "lucide-react"
 import { cn } from "@/lib/ui/cn"
+import { settingsSectionHref } from "@/app/dashboard/_components/nav-items"
 
 export default function ChannelConnectBanner({
   children,
   className,
-  href = "/dashboard/integrations#imessage",
+  href = settingsSectionHref("briefing"),
   actionLabel = "Connect iMessage",
   icon: Icon = MessageCircle,
 }: {

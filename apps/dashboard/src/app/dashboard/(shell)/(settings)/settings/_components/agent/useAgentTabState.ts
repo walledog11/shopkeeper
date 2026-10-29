@@ -1,0 +1,315 @@
+"use client"
+
+import { useEffect, useMemo, useReducer, useRef, useState } from "react"
+import { useSWRConfig } from "swr"
+import {
+  agentSettingsReducer,
+  applyTierDefaultsToInheritedSettings,
+  buildAgentSettingsPatch,
+  buildSettingsPayload,
+  collectExplicitOverridePaths,
+  hydrateSettings,
+  hydrateSettingsFromStorage,
+  rawInputsFor,
+  resetPathToTierDefault,
+  resolveBrowserTimezone,
+  storeTimezonePatch,
+  writeSettingsPath,
+  type AutonomyOverridePath,
+} from "./agent-tab-helpers"
+import { isValidBusinessHoursWindow, resolveAgentSettings, type AutonomyTier } from "@shopkeeper/agent/settings"
+import type { OrgSettings, OrgSettingsPatch, VoiceProposal } from "@/types"
+
+interface UseAgentTabStateProps {
+  settings: OrgSettings
+  rawSettings: OrgSettingsPatch
+  version: string
+  orgName: string
+  voiceProposal: VoiceProposal | null
+  // Only the page that shows the timezone fills a missing one from the browser;
+  // anywhere else the fill would open the page with unsaved changes.
+  prefillTimezone: boolean
+}
+
+export function useAgentTabState({
+  settings,
+  rawSettings,
+  version,
+  orgName,
+  voiceProposal,
+  prefillTimezone,
+}: UseAgentTabStateProps) {
+  const { mutate } = useSWRConfig()
+  const [settingsState, dispatch] = useReducer(agentSettingsReducer, settings, hydrateSettingsFromStorage)
+  const browserTimezoneRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    const browserTimezone = resolveBrowserTimezone()
+    browserTimezoneRef.current = browserTimezone
+    if (prefillTimezone && !settingsState.businessHoursTimezone?.trim()) {
+      dispatch({ type: "set", patch: storeTimezonePatch(browserTimezone) })
+    }
+  }, [prefillTimezone, settingsState.businessHoursTimezone])
+  const [businessName, setBusinessName] = useState(orgName)
+  const initialNameRef = useRef(orgName)
+  const initialRaw = useMemo(() => rawInputsFor(settings), [settings])
+  const [maxRefundInput, setMaxRefundInput] = useState<string>(initialRaw.maxRefund)
+  const [dailyRefundCapInput, setDailyRefundCapInput] = useState<string>(initialRaw.dailyRefundCap)
+  const [dailyLLMSpendCapInput, setDailyLLMSpendCapInput] = useState<string>(initialRaw.dailyLLMSpendCap)
+  const [digestHourInput, setDigestHourInput] = useState<string>(initialRaw.digestHour)
+  const [digestSecondHourInput, setDigestSecondHourInput] = useState<string>(initialRaw.digestSecondHour)
+  const [lowStockThresholdInput, setLowStockThresholdInput] = useState<string>(initialRaw.lowStockThreshold)
+  const [businessHoursStartInput, setBusinessHoursStartInput] = useState<string>(initialRaw.bhStart)
+  const [businessHoursEndInput, setBusinessHoursEndInput] = useState<string>(initialRaw.bhEnd)
+  const currentVersionRef = useRef(version)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [staleVersion, setStaleVersion] = useState(false)
+  const [proposal, setProposal] = useState<VoiceProposal | null>(voiceProposal)
+  const [voiceBusy, setVoiceBusy] = useState<null | "approve" | "dismiss">(null)
+  const [explicitOverridePaths, setExplicitOverridePaths] = useState<AutonomyOverridePath[]>(
+    () => collectExplicitOverridePaths(rawSettings),
+  )
+
+  const payload = useMemo(
+    () => buildSettingsPayload(settingsState, {
+      maxRefund: maxRefundInput,
+      dailyRefundCap: dailyRefundCapInput,
+      dailyLLMSpendCap: dailyLLMSpendCapInput,
+      digestHour: digestHourInput,
+      digestSecondHour: digestSecondHourInput,
+      lowStockThreshold: lowStockThresholdInput,
+      bhStart: businessHoursStartInput,
+      bhEnd: businessHoursEndInput,
+    }),
+    [
+      settingsState,
+      maxRefundInput,
+      dailyRefundCapInput,
+      dailyLLMSpendCapInput,
+      digestHourInput,
+      digestSecondHourInput,
+      lowStockThresholdInput,
+      businessHoursStartInput,
+      businessHoursEndInput,
+    ],
+  )
+
+  const settingsPatch = useMemo(
+    () => buildAgentSettingsPatch(payload, explicitOverridePaths),
+    [payload, explicitOverridePaths],
+  )
+  const serializedPatch = useMemo(() => JSON.stringify(settingsPatch), [settingsPatch])
+  const initialPatchRef = useRef<string>(serializedPatch)
+  const baselineRawRef = useRef<OrgSettingsPatch>(rawSettings)
+  const freshBaselineRef = useRef<OrgSettingsPatch | null>(null)
+  const explicitOverrideSet = useMemo(() => new Set(explicitOverridePaths), [explicitOverridePaths])
+  const trimmedBusinessName = businessName.trim()
+  const nameDirty = trimmedBusinessName !== initialNameRef.current
+  const isDirty = serializedPatch !== initialPatchRef.current || nameDirty
+  const businessNameInvalid = nameDirty && trimmedBusinessName.length === 0
+  const autonomyTier = settingsState.autonomyTier ?? "guarded"
+  const businessHoursInvalid = payload.businessHoursEnabled
+    && !isValidBusinessHoursWindow(payload.businessHoursStart, payload.businessHoursEnd)
+
+  function markExplicit(path: AutonomyOverridePath) {
+    setExplicitOverridePaths(prev => prev.includes(path) ? prev : [...prev, path])
+  }
+
+  function clearExplicit(path: AutonomyOverridePath) {
+    setExplicitOverridePaths(prev => prev.filter(item => item !== path))
+  }
+
+  function applyBaseline(target: OrgSettingsPatch) {
+    const hydrated = hydrateSettings(resolveAgentSettings(target))
+    const explicit = collectExplicitOverridePaths(target)
+    const raw = rawInputsFor(hydrated)
+    dispatch({ type: "reset", payload: hydrated })
+    setExplicitOverridePaths(explicit)
+    setMaxRefundInput(raw.maxRefund)
+    setDailyRefundCapInput(raw.dailyRefundCap)
+    setDailyLLMSpendCapInput(raw.dailyLLMSpendCap)
+    setDigestHourInput(raw.digestHour)
+    setDigestSecondHourInput(raw.digestSecondHour)
+    setLowStockThresholdInput(raw.lowStockThreshold)
+    setBusinessHoursStartInput(raw.bhStart)
+    setBusinessHoursEndInput(raw.bhEnd)
+    setBusinessName(initialNameRef.current)
+    baselineRawRef.current = target
+    initialPatchRef.current = JSON.stringify(buildAgentSettingsPatch(buildSettingsPayload(hydrated, raw), explicit))
+  }
+
+  function reset() {
+    applyBaseline(freshBaselineRef.current ?? baselineRawRef.current)
+    freshBaselineRef.current = null
+    setError(null)
+    setStaleVersion(false)
+  }
+
+  function selectTier(tier: AutonomyTier) {
+    const next = applyTierDefaultsToInheritedSettings(settingsState, tier, explicitOverridePaths)
+    dispatch({ type: "reset", payload: next })
+    if (!explicitOverrideSet.has("maxRefundAmount")) {
+      setMaxRefundInput(rawInputsFor(next).maxRefund)
+    }
+  }
+
+  function setAutonomyOverride(path: AutonomyOverridePath, value: unknown) {
+    markExplicit(path)
+    dispatch({ type: "reset", payload: writeSettingsPath(settingsState, path, value) as OrgSettings })
+  }
+
+  function resetAutonomyOverride(path: AutonomyOverridePath) {
+    clearExplicit(path)
+    const next = resetPathToTierDefault(settingsState, path)
+    dispatch({ type: "reset", payload: next })
+    if (path === "maxRefundAmount") {
+      setMaxRefundInput(rawInputsFor(next).maxRefund)
+    }
+  }
+
+  async function save() {
+    setError(null)
+    setStaleVersion(false)
+    setSaving(true)
+    setSaved(false)
+    try {
+      const body: {
+        name?: string
+        settings: OrgSettingsPatch
+        settingsUnset: string[]
+        version: string
+      } = {
+        settings: settingsPatch.settings,
+        settingsUnset: settingsPatch.settingsUnset,
+        version: currentVersionRef.current,
+      }
+      if (nameDirty) body.name = trimmedBusinessName
+
+      const res = await fetch("/api/org", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+      if (res.status === 409) {
+        const conflict = await res.json().catch(() => ({})) as {
+          current?: { version?: string; settings?: OrgSettingsPatch; name?: string }
+        }
+        if (conflict.current?.version) currentVersionRef.current = conflict.current.version
+        if (conflict.current?.settings) {
+          freshBaselineRef.current = conflict.current.settings
+        }
+        if (conflict.current?.name) setBusinessName(conflict.current.name)
+        setStaleVersion(true)
+        return
+      }
+      if (!res.ok) throw new Error("Failed")
+      const saved = await res.json().catch(() => ({})) as {
+        version?: string
+        settings?: OrgSettingsPatch
+        name?: string
+      }
+      if (saved.version) currentVersionRef.current = saved.version
+      if (saved.settings) baselineRawRef.current = saved.settings
+      if (saved.name) {
+        initialNameRef.current = saved.name
+        setBusinessName(saved.name)
+      }
+      void mutate(
+        "/api/org",
+        (current: { settings?: OrgSettingsPatch; version?: string; name?: string } | undefined) => ({
+          ...(current ?? {}),
+          ...(saved.version ? { version: saved.version } : {}),
+          ...(saved.settings ? { settings: saved.settings } : {}),
+          ...(saved.name ? { name: saved.name } : {}),
+        }),
+        { revalidate: false },
+      )
+      initialPatchRef.current = serializedPatch
+      freshBaselineRef.current = null
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    } catch {
+      setError("Failed to save. Please try again.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function resolveVoiceProposal(action: "approve" | "dismiss") {
+    if (!proposal || voiceBusy) return
+    setVoiceBusy(action)
+    try {
+      const res = await fetch("/api/agent/voice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      })
+      if (!res.ok) throw new Error("Failed")
+      if (action === "approve") {
+        const body = await res.json().catch(() => ({})) as { settings?: OrgSettingsPatch; version?: string }
+        if (body.version) currentVersionRef.current = body.version
+        if (body.settings) applyBaseline(body.settings)
+        void mutate(
+          "/api/org",
+          (current: { settings?: OrgSettingsPatch; version?: string } | undefined) => ({
+            ...(current ?? {}),
+            ...(body.version ? { version: body.version } : {}),
+            ...(body.settings ? { settings: body.settings } : {}),
+          }),
+          { revalidate: false },
+        )
+      }
+      setProposal(null)
+    } catch {
+      setError("Could not update the voice suggestion. Please try again.")
+    } finally {
+      setVoiceBusy(null)
+    }
+  }
+
+  return {
+    settingsState,
+    dispatch,
+    payload,
+    explicitOverrideSet,
+    autonomyTier,
+    businessName,
+    setBusinessName,
+    businessNameInvalid,
+    maxRefundInput,
+    setMaxRefundInput,
+    dailyRefundCapInput,
+    setDailyRefundCapInput,
+    dailyLLMSpendCapInput,
+    setDailyLLMSpendCapInput,
+    digestHourInput,
+    setDigestHourInput,
+    digestSecondHourInput,
+    setDigestSecondHourInput,
+    lowStockThresholdInput,
+    setLowStockThresholdInput,
+    businessHoursStartInput,
+    setBusinessHoursStartInput,
+    businessHoursEndInput,
+    setBusinessHoursEndInput,
+    saving,
+    saved,
+    error,
+    staleVersion,
+    proposal,
+    voiceBusy,
+    isDirty,
+    businessHoursInvalid,
+    markExplicit,
+    reset,
+    save,
+    selectTier,
+    setAutonomyOverride,
+    resetAutonomyOverride,
+    resolveVoiceProposal,
+  }
+}
+
+export type AgentTabController = ReturnType<typeof useAgentTabState>

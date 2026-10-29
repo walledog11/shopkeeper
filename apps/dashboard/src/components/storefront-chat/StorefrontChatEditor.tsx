@@ -13,6 +13,7 @@ import { cn } from '@/lib/ui/cn';
 import { ChatSettingsFields } from './ChatSettingsFields';
 import { ChatPreview } from './ChatPreview';
 import { useChatEditor } from './useChatEditor';
+import { settingsSectionHref } from '@/app/dashboard/_components/nav-items';
 
 export default function StorefrontChatEditor({ initialData, canManage, themeEditorUrl, draftKey }: {
   initialData: ChatConfigurationResponse;
@@ -100,9 +101,9 @@ export default function StorefrontChatEditor({ initialData, canManage, themeEdit
             onChange={editor.change} onUploadingChange={editor.setUploading} />
           {!data.configuration && <p className="mt-4 text-xs leading-relaxed text-muted-foreground">Your current theme design stays in use until you save this preview.</p>}
           <div className="mt-5 border-t border-border pt-5 text-xs leading-relaxed text-muted-foreground">
-            <p>Replies and approvals follow your <Link href="/dashboard/agent/configure" className="underline underline-offset-4">agent settings</Link>.</p>
+            <p>Replies and approvals follow your <Link href={settingsSectionHref("approvals")} className="underline underline-offset-4">approval settings</Link>.</p>
             {setup && <p className="mt-2">{setup.checks.find(check => check.id === 'operator')?.ready
-              ? 'Requests for you appear in iMessage and your dashboard.' : <>Requests for you appear in your dashboard. <Link href="/dashboard/integrations?configure=imessage" className="underline underline-offset-4">Connect iMessage</Link></>}</p>}
+              ? 'Requests for you appear in iMessage and your dashboard.' : <>Requests for you appear in your dashboard. <Link href={settingsSectionHref("briefing")} className="underline underline-offset-4">Connect iMessage</Link></>}</p>}
             {setup && !setup.checks.find(check => check.id === 'email')?.ready && <p className="mt-2">To let customers check their orders, <Link href="/dashboard/integrations?configure=gmail" className="underline underline-offset-4">connect an email account</Link>.</p>}
           </div>
         </form>

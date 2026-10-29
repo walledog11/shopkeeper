@@ -6,6 +6,7 @@ import { formatDate } from "@/lib/format/date"
 import { cn } from "@/lib/ui/cn"
 import { GLASS_CARD_SURFACE } from "@/lib/ui/glass-card-styles"
 import type { MemoryBook, MemoryBookPage } from "./memory-books"
+import { settingsSectionHref } from "@/app/dashboard/_components/nav-items"
 
 const MEMORY_CARD_SHELL = cn(
   "flex w-full flex-col rounded-3xl px-5 py-5 font-sans",
@@ -124,7 +125,7 @@ function FanOutPanel({
         </div>
         <div className="flex items-center gap-2">
           {source.canAddNote && <button type="button" onClick={onAddNote} className="inline-flex h-8 items-center rounded-md bg-foreground px-3 text-xs font-semibold text-background">Add note</button>}
-          {settingsSource && <Link href="/dashboard/agent/configure" className="inline-flex h-8 items-center rounded-md border border-border px-3 text-xs font-semibold text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground">Edit in Configure</Link>}
+          {settingsSource && <Link href={settingsSectionHref("store-profile")} className="inline-flex h-8 items-center rounded-md border border-border px-3 text-xs font-semibold text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground">Edit in Settings</Link>}
         </div>
       </div>
 
@@ -153,7 +154,7 @@ function FanOutPanel({
       ) : (
         <div className="mt-3 flex min-h-56 flex-col items-center justify-center rounded-3xl border border-dashed border-foreground/[0.10] bg-card/35 px-6 py-10 text-center font-sans">
           <p className="text-sm font-semibold text-muted-foreground">Nothing here yet</p>
-          <p className="mt-1 max-w-sm text-xs leading-relaxed text-faint">{source.canAddNote ? "Add the first note to this source." : settingsSource ? "Fill this in from Agent → Configure." : "Notes will appear here as this source learns or syncs."}</p>
+          <p className="mt-1 max-w-sm text-xs leading-relaxed text-faint">{source.canAddNote ? "Add the first note to this source." : settingsSource ? "Fill this in from Settings → Store profile." : "Notes will appear here as this source learns or syncs."}</p>
           {source.canAddNote && <button type="button" onClick={onAddNote} className="mt-4 inline-flex h-8 items-center rounded-md bg-foreground px-3 text-xs font-semibold text-background">Add first note</button>}
         </div>
       )}
