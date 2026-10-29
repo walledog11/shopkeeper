@@ -282,6 +282,9 @@ export async function processInboundMessage(
         }
       }
       if (routeReceivedAt) {
+        // The reply route is the integration and the provider conversation of
+        // the newest message, taken together: after a reconnect, the first
+        // conversation id would pair the new account with a dead conversation.
         await tx.thread.updateMany({
           where: {
             id: episode.thread.id,
@@ -294,6 +297,7 @@ export async function processInboundMessage(
           data: {
             replyIntegrationId: integrationId,
             replyIntegrationUpdatedAt: routeReceivedAt,
+            ...(externalSpaceId && { externalSpaceId }),
           },
         });
       }

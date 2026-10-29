@@ -257,10 +257,10 @@ describe('Message worker — normalized ig_dm jobs', () => {
     })).toBeNull();
   });
   describe('SocialAPI transport', () => {
-    async function createSocialApiIntegration() {
+    async function createSocialApiIntegration(accountId = `ig_socialapi_${org.id}`) {
       return createTestIntegration(org.id, {
         platform: ChannelType.ig_dm,
-        externalAccountId: `ig_socialapi_${org.id}`,
+        externalAccountId: accountId,
         accessToken: null,
         metadata: { instagram: { authModel: 'socialapi', transport: 'socialapi' } },
       });
@@ -299,6 +299,39 @@ describe('Message worker — normalized ig_dm jobs', () => {
       // SocialAPI row cannot hold, and SocialAPI's own enrichment is off with no
       // workspace key, so this path still makes no outbound call at all.
       expect(getMockFetch().mock.calls.length).toBe(fetchCallsBefore);
+    });
+
+    it('routes replies through the reconnected account and its conversation, keeping the customer', async () => {
+      const handler = getCapturedHandlers().get('inbound-messages');
+      const before = await createSocialApiIntegration(`ig_socialapi_before_${org.id}`);
+      await handler!(makeIgDmJob(org.id, 'socialapi_author_reconnect', {
+        instagramAccountId: before.externalAccountId,
+        integrationId: before.id,
+        provider: 'socialapi',
+        providerConversationId: 'conv_before',
+        messageMid: 'native.mid.before',
+        providerSentAt: '2026-07-14T12:00:00.000Z',
+      }));
+      // A completed disconnect deletes the row; the merchant then reconnects.
+      await db.integration.delete({ where: { id: before.id } });
+      const after = await createSocialApiIntegration(`ig_socialapi_after_${org.id}`);
+      await handler!(makeIgDmJob(org.id, 'socialapi_author_reconnect', {
+        instagramAccountId: after.externalAccountId,
+        integrationId: after.id,
+        provider: 'socialapi',
+        providerConversationId: 'conv_after',
+        messageMid: 'native.mid.after',
+        providerSentAt: '2026-07-14T13:00:00.000Z',
+      }));
+
+      const customers = await db.customer.findMany({
+        where: { organizationId: org.id, platformId: 'socialapi_author_reconnect' },
+      });
+      expect(customers).toHaveLength(1);
+      const thread = await db.thread.findFirstOrThrow({
+        where: { organizationId: org.id, customerId: customers[0]!.id, status: 'open' },
+      });
+      expect(thread).toMatchObject({ replyIntegrationId: after.id, externalSpaceId: 'conv_after' });
     });
 
     function socialApiConversationsResponse(

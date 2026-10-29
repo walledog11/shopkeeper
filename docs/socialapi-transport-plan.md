@@ -16,7 +16,7 @@ Meta, migration, or any cross-provider handoff needs a future dated decision.
 
 - **Works on a controlled account:** a signed `dm.received` becomes a durable `provider: 'socialapi'` job, a ticket and a plan; an approved reply leaves through SocialAPI's conversation endpoint; an approval card reaches the bound iMessage line. A merchant approval executing a mutative plan end to end through SocialAPI is not yet proven.
 - **Built, never run for a live merchant:** merchant OAuth connect (S2). It is closed in production because `SOCIALAPI_ENABLED` and `SOCIALAPI_BRAND_ASSIGNMENTS` are unset, so `getSocialApiConnectConfig` returns null.
-- **Absent:** connection generations, `dm.sent` reconciliation, recovery/catch-up reads, SocialAPI health probing, transport-routed disconnect and deletion, OAuth compensation, the "Powered by SocialAPI" disclosure, and transport-tagged observability.
+- **Absent:** connection generations, `dm.sent` reconciliation, recovery/catch-up reads, SocialAPI health probing, remote brand deletion, OAuth compensation, the "Powered by SocialAPI" disclosure, and transport-tagged observability.
 - **Blocked on the vendor:** SocialAPI exposes no native Instagram account ID, and the DPA and retention terms are unreconciled ([S0 diligence](production/socialapi-s0-diligence-2026-09-07.md)).
 
 ## Decisions and invariants
@@ -154,10 +154,12 @@ Done when webhooks and polling cannot create duplicate messages and a missed web
 
 ### S5. Outbound, health, disconnect, and deletion
 
-Built in `dispatchInstagramDirect`: outbound branches on the pinned transport after loading `replyIntegrationId`; the 24-hour window check is shared; a SocialAPI thread with no `externalSpaceId` refuses to send; calls and send-failure alerts carry the transport; a SocialAPI failure never touches a Graph API host.
+Built in `dispatchInstagramDirect`: outbound branches on the pinned transport after loading `replyIntegrationId`; the 24-hour window check is shared; a SocialAPI thread with no `externalSpaceId` refuses to send; calls and send-failure alerts carry the transport; a SocialAPI failure never touches a Graph API host. A thread's reply route (`replyIntegrationId` with `externalSpaceId`) follows its newest inbound message, so after a reconnect the new account is not paired with an old conversation.
+
+Built in `cleanupIntegrationProvider`: durable disconnect cleanup routes by transport. Direct unsubscribes Meta; SocialAPI deletes the connected account (`revokeSocialApiAccountBeforeDisconnect`), and workspace deletion runs the same cleanup. A 404 counts as revoked only once the brand's account listing confirms it; any other failure fails the cleanup, so the disconnect retries and records why.
 
 - [ ] SocialAPI health probing for account status and reconnect reason; do not run direct Meta subscription/token-refresh logic for SocialAPI rows.
-- [ ] Route durable disconnect cleanup by transport: direct unsubscribes Meta; SocialAPI deletes the connected account (`disconnectInstagramAccount` exists in the client but nothing calls it). Workspace deletion also deletes the remote brand when safe.
+- [ ] Workspace deletion also deletes the remote brand when safe (the client has no brand operation; today the operator removes the brand and its assignment).
 - [ ] Reconnect updates the existing integration and thread routing when the verified account is unchanged, increments generation, and prevents stale jobs restoring old routes.
 - [ ] Outage behavior: flag the integration degraded, stop automated sends when outcome safety is unclear, keep reconciliation scheduled, and tell the merchant to use Instagram directly. A provider message ID proves acceptance, not delivery.
 

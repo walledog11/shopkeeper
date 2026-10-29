@@ -7,7 +7,7 @@ Technical contracts and settled engineering decisions live with the code they go
 ([agent-runtime](agent-runtime.md), [runbook](production/runbook.md),
 [transport plan](socialapi-transport-plan.md)), not here.
 
-Last updated: 2026-10-28.
+Last updated: 2026-10-29.
 
 ## Next — the first real merchant
 
@@ -31,12 +31,14 @@ In order. This is the product's critical path.
    written retention/deletion answers, the terms §11.4 contradiction, a "Powered by
    SocialAPI" notice before the vendor redirect, and `/privacy` naming SocialAPI as a
    processor. Gates are in [socialapi-s0-diligence](production/socialapi-s0-diligence-2026-09-07.md).
-4. **First live SocialAPI merchant connect** (runbook: *Instagram via SocialAPI*), with
-   the `SOCIALAPI_*` vars added to `scripts/check-production-env.mjs`. Closes when a
-   workspace connects from the dashboard and its next DM routes to it.
-5. **Disconnect and deletion revoke the SocialAPI account.** `disconnectInstagramAccount`
-   has no caller. Closes when disconnect revokes the remote account (or records why not)
-   and a disconnect → reconnect keeps routing and customer identity.
+4. **First live SocialAPI merchant connect** (runbook: *Instagram via SocialAPI*). Closes
+   when `verify:production:env` passes, a workspace connects from the dashboard, and its
+   next DM routes to it.
+5. **Disconnect and reconnect the controlled SocialAPI account** (built: disconnect and
+   workspace deletion revoke the remote account). Closes when the account is gone from
+   the brand's listing and, after reconnecting, the same sender's next DM lands on the
+   same customer and a reply reaches them. If SocialAPI issues new author IDs on
+   reconnect, record that in the transport plan (invariant 6) instead.
 6. **Rotate `SHOPIFY_APP_SECRET`** (exposed 2026-08-30; steps in the runbook).
 7. **Install the Shopify app on a real, non-dev store.** Closes when the install grants
    every `SHOPIFY_OAUTH_SCOPES` scope and a missing scope shows the reconnect path.
@@ -47,7 +49,8 @@ In order. This is the product's critical path.
 
 - **SocialAPI hardening** (S1–S6 in [the transport plan](socialapi-transport-plan.md)):
   `dm.sent` correlation (a reply typed in the Instagram app never reaches the thread),
-  missed-delivery recovery, account health probing, failed-connect compensation.
+  missed-delivery recovery, account health probing, failed-connect compensation, and a
+  reconnect that switches accounts, which deletes the old row without revoking it.
 - **Instagram reply latency:** measure per hop, then make the order-confirmation ask one
   model call. SocialAPI has no typing or "Seen" for Instagram; ask the vendor.
 - **Agent rough edges seen live:** the operator agent's own chat question is reported as
