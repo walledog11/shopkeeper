@@ -3,7 +3,6 @@ import { applyEscalationRouting } from "./escalation-materialization.js";
 import {
   detectUngroundedEscalationReasons,
   detectUngroundedReplyText,
-  renderReplyCompletionClaims,
   unsupportedReplyCompletionClaims,
 } from "./plan-grounding.js";
 
@@ -45,81 +44,6 @@ describe("plan grounding", () => {
       name: "send_reply",
       input: { text: "No refund has been issued, and we've canceled order #1001." },
     }, facts)).toEqual(["No refund has been issued, and we've canceled order #1001."]);
-  });
-
-  it.each([
-    ["return", "We've created your return.", "A return has been created for order #1001."],
-    ["exchange", "We've created your exchange.", "An exchange has been created for order #1001."],
-    ["cancellation", "We've canceled the order.", "Order #1001 has been canceled."],
-    ["store_credit", "We've issued your store credit.", "Store credit of $20.00 has been issued."],
-    ["address_update", "We've updated the address.", "The address for order #1001 has been updated."],
-    ["customer_update", "We've updated the customer profile.", "The customer profile has been updated."],
-    ["customer_note", "We've added a note.", "A note has been added to the customer profile."],
-    ["fulfillment", "We've fulfilled the order.", "Order #1001 has been fulfilled."],
-    ["order_creation", "We've created the order.", "The order has been created."],
-    ["order_update", "We've updated the order.", "Order #1001 has been updated."],
-    ["price_update", "We've updated the prices.", "The variant prices have been updated."],
-    ["discount", "We've applied the discount.", "The discount has been applied."],
-  ] as const)("renders a deterministic %s completion statement", (action, text, expected) => {
-    const rendered = renderReplyCompletionClaims({
-      id: "reply",
-      name: "send_reply",
-      input: { text },
-    }, [{
-      action,
-      target: { kind: "order", id: "123", aliases: ["#1001"] },
-      amount: "20.00",
-      currency: "USD",
-      outcome: "success",
-      executionReference: "operation_1",
-      sourceTool: "test",
-    }]);
-
-    expect(rendered.input).toEqual({ text: expected });
-  });
-
-  it("keeps a non-USD refund in trailing-ISO form", () => {
-    const rendered = renderReplyCompletionClaims({
-      id: "reply",
-      name: "send_reply",
-      input: { text: "We've issued your refund." },
-    }, [{
-      action: "refund",
-      amount: "18.50",
-      currency: "EUR",
-      outcome: "success",
-      executionReference: "refund_1",
-      sourceTool: "create_refund",
-    }]);
-
-    expect(rendered.input).toEqual({ text: "A refund of 18.50 EUR has been issued." });
-  });
-
-  it("does not turn a contrastive refund mention into a rendered refund claim", () => {
-    const rendered = renderReplyCompletionClaims({
-      id: "reply",
-      name: "send_reply",
-      input: { text: "We've issued store credit instead of a refund." },
-    }, [
-      {
-        action: "store_credit",
-        amount: "20.00",
-        currency: "USD",
-        outcome: "success",
-        executionReference: "credit_1",
-        sourceTool: "create_gift_card",
-      },
-      {
-        action: "refund",
-        amount: "20.00",
-        currency: "USD",
-        outcome: "success",
-        executionReference: "refund_1",
-        sourceTool: "create_refund",
-      },
-    ]);
-
-    expect(rendered.input).toEqual({ text: "Store credit of $20.00 has been issued." });
   });
 
   it("rejects unsupported escalation and customer-facing mutation claims", () => {

@@ -1,9 +1,11 @@
+import type { Prisma } from '@prisma/client';
 import {
   ThreadFilterStatus,
   type DbThreadFilterStatus,
   type DbThreadRequestDisposition,
 } from '@shopkeeper/db';
 import { isSpendCapError } from '@shopkeeper/db';
+import { requestAwaitsMerchant } from '@shopkeeper/agent/task-ledger';
 import type Anthropic from '@anthropic-ai/sdk';
 import {
   anthropic,
@@ -31,6 +33,8 @@ import {
 } from '@shopkeeper/agent/classifier-signals';
 import logger from '../../logger.js';
 import { CHANNEL } from '../../constants.js';
+import { isRecord } from '../../lib/typing.js';
+import { mayParkMerchantWork } from '../support-plan/planning-types.js';
 import {
   CLASSIFIER_MAX_TOKENS,
   CLASSIFIER_VERSION,
@@ -76,9 +80,60 @@ export function classifiedRequestFields(
   sourceMessageId: string | null,
 ) {
   return {
-    classifierSignals: classifierSignals(result),
+    classifierSignals: classifierSignals(result) as Prisma.InputJsonObject,
     requestSummary: result.requestSummary || null,
     requestDisposition: result.requestDisposition,
+    requestSourceMessageId: sourceMessageId,
+  };
+}
+
+export interface StoredThreadRequest {
+  id: string;
+  organizationId: string;
+  requestSourceMessageId: string | null;
+  requestSummary: string | null;
+  requestDisposition: DbThreadRequestDisposition | null;
+  classifierSignals: Prisma.JsonValue | null;
+}
+
+/**
+ * The request half to write for a classified burst.
+ *
+ * A burst that asks nothing ("ok thanks", "hi") does not close a request still
+ * parked on the merchant, who has not acted on it. That request carries forward
+ * onto the new source message, so planning re-drafts it against the
+ * conversation as it now stands and re-parks the card. Writing the no-work
+ * verdict instead orphaned the card: the message had already cleared the cached
+ * plan, and the verdict stopped anything from planning it again.
+ *
+ * Only the post-persistence path needs this. The email path classifies inline
+ * only for an email that opens its thread, which has no request to carry.
+ */
+export async function requestFieldsForBurst(
+  thread: StoredThreadRequest,
+  result: ClassificationResult,
+  sourceMessageId: string | null,
+): Promise<ReturnType<typeof classifiedRequestFields>> {
+  const classified = classifiedRequestFields(result, sourceMessageId);
+  const stored = thread.classifierSignals;
+  if (
+    !sourceMessageId
+    || mayParkMerchantWork(result.requestDisposition)
+    || !thread.requestSourceMessageId
+    || !thread.requestDisposition
+    || !mayParkMerchantWork(thread.requestDisposition)
+    || !isRecord(stored)
+  ) return classified;
+  const parked = await requestAwaitsMerchant({
+    organizationId: thread.organizationId,
+    threadId: thread.id,
+    sourceMessageId: thread.requestSourceMessageId,
+  });
+  if (!parked) return classified;
+  return {
+    classifierSignals: stored as Prisma.InputJsonObject,
+    requestSummary: thread.requestSummary,
+    requestDisposition: thread.requestDisposition,
     requestSourceMessageId: sourceMessageId,
   };
 }

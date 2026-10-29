@@ -1,4 +1,5 @@
-import { fulfillmentLabel, formatMoney, formatShortDate } from "./formatters"
+import { formatMoney } from "@shopkeeper/agent/money"
+import { fulfillmentLabel, formatShortDate } from "./formatters"
 import { ProductImage } from "./ProductImage"
 import { SectionHeader } from "./SectionHeader"
 import { cn } from "@/lib/ui/cn"
@@ -89,7 +90,7 @@ export function OrderList({
           <div className="flex flex-row justify-between w-full">
             <p className="text-xs leading-4 font-semibold text-[#1a1a1a]">Order Total: </p>
             <span className="text-xs leading-4 font-semibold text-[#1a1a1a] tabular-nums shrink-0">
-              {formatMoney(order.total_price, order.currency)}
+              {formatMoney(order.total_price, order.currency, { exact: true })}
             </span>
           </div>
         </div>

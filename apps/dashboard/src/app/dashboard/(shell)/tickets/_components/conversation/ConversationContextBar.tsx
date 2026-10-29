@@ -9,7 +9,7 @@ import { merchantSandInkClass } from "@/lib/ui/merchant-palette"
 import { needsYouMetaPillClassName } from "@/app/dashboard/_components/home/needs-you-card-styles"
 import type { Thread } from "@/types"
 import { useShopifyCustomer } from "../context-panel/useShopifyCustomer"
-import { formatMoney } from "../context-panel/formatters"
+import { formatMoney } from "@shopkeeper/agent/money"
 import {
   ConversationContextDropdown,
   CustomerContextPanel,
@@ -84,7 +84,7 @@ export default function ConversationContextBar({
       facts.push({
         key: "shopify",
         icon: ShoppingBag,
-        text: `${orders} · ${formatMoney(customer.total_spent, customer.currency)}`,
+        text: `${orders} · ${formatMoney(customer.total_spent, customer.currency, { exact: true })}`,
         tone: "value",
         section: "orders",
       })

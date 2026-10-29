@@ -7,7 +7,7 @@ on:
       - 'packages/agent/**'
       - 'apps/dashboard/src/lib/agent/**'
       - 'apps/dashboard/src/lib/messaging/**'
-      - 'apps/gateway/src/order-ops.eval.test.ts'
+      - 'apps/gateway/src/order-ops.eval.integration.test.ts'
       - 'packages/db/refund-spend.ts'
       - 'scripts/eval-budget-preflight.mjs'
       - '.github/workflows/evals.yml'
@@ -16,7 +16,7 @@ on:
       - 'packages/agent/**'
       - 'apps/dashboard/src/lib/agent/**'
       - 'apps/dashboard/src/lib/messaging/**'
-      - 'apps/gateway/src/order-ops.eval.test.ts'
+      - 'apps/gateway/src/order-ops.eval.integration.test.ts'
       - 'packages/db/refund-spend.ts'
       - 'scripts/eval-budget-preflight.mjs'
       - '.github/workflows/evals.yml'
@@ -87,7 +87,7 @@ jobs:
       - name: Validate shared cost accounting and fixture controls
         run: |
           npm run test:unit -w packages/agent
-          npm run test:unit -w apps/dashboard -- --run src/lib/agent/__evals__/runner.unit.test.ts src/lib/agent/__evals__/selection.unit.test.ts src/lib/agent/__evals__/fixture-validator.unit.test.ts src/lib/agent/__evals__/result-cache.unit.test.ts
+          npm run test:unit -w apps/dashboard -- --run src/lib/agent/__evals__/runner.test.ts src/lib/agent/__evals__/selection.test.ts src/lib/agent/__evals__/fixture-validator.test.ts src/lib/agent/__evals__/result-cache.test.ts
       - name: Start test services
         run: npm run test:services:up
       - name: Bootstrap test database
@@ -95,7 +95,7 @@ jobs:
       - name: Run dashboard harness checks without model calls
         run: npm run test:integration -w apps/dashboard -- --run src/lib/agent/__evals__/harness.integration.test.ts
       - name: Run deterministic gateway pre-filter without model calls
-        run: npm run test:integration -w apps/gateway -- --run src/order-ops.eval.test.ts -t 'order-ops deterministic pre-filter'
+        run: npm run test:integration -w apps/gateway -- --run src/order-ops.eval.integration.test.ts -t 'order-ops deterministic pre-filter'
       - name: Stop test services
         if: always()
         run: npm run test:services:down

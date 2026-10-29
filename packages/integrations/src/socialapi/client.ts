@@ -23,6 +23,12 @@ export interface SocialApiError {
   code: string | number | null;
   message: string;
   requestId: string | null;
+  /**
+   * The request may have taken effect anyway: it timed out or failed in flight,
+   * SocialAPI answered 5xx, or it answered 2xx with a body we could not read. A
+   * send in this state may already be with the customer, so it is not retried.
+   */
+  outcomeUnknown: boolean;
 }
 
 export type SocialApiResult<T> =
@@ -161,7 +167,7 @@ function readError(payload: unknown): { code: string | number | null; message: s
 }
 
 function validationError(message: string, httpStatus = 0, requestId: string | null = null): SocialApiError {
-  return { category: 'validation', httpStatus, code: null, message, requestId };
+  return { category: 'validation', httpStatus, code: null, message, requestId, outcomeUnknown: false };
 }
 
 function requestId(response: Response): string | null {
@@ -196,6 +202,7 @@ async function requestJson<T>(
         code: null,
         message: timedOut ? 'SocialAPI request timed out' : 'SocialAPI request failed',
         requestId: null,
+        outcomeUnknown: true,
       },
     };
   }
@@ -203,14 +210,16 @@ async function requestJson<T>(
   const payload = response.status === 204 ? null : await readJson(response);
   if (!response.ok) {
     const descriptor = readError(payload);
+    const category = classifyError(response.status, descriptor.code);
     return {
       ok: false,
       error: {
-        category: classifyError(response.status, descriptor.code),
+        category,
         httpStatus: response.status,
         code: descriptor.code,
         message: descriptor.message ?? 'SocialAPI request failed',
         requestId: requestId(response),
+        outcomeUnknown: response.status >= 500 && category === 'transient_provider_failure',
       },
     };
   }
@@ -219,7 +228,10 @@ async function requestJson<T>(
   if (data === null) {
     return {
       ok: false,
-      error: validationError('SocialAPI returned an invalid response', response.status, requestId(response)),
+      error: {
+        ...validationError('SocialAPI returned an invalid response', response.status, requestId(response)),
+        outcomeUnknown: true,
+      },
     };
   }
   return { ok: true, data, httpStatus: response.status, requestId: requestId(response) };

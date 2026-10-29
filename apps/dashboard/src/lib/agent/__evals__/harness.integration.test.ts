@@ -1,5 +1,5 @@
 // Free deterministic checks for the agent eval harness. Live-model cases stay in
-// index.test.ts behind evalsEnabled().
+// index.integration.test.ts behind evalsEnabled().
 import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";

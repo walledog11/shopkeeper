@@ -7,6 +7,7 @@ export default defineConfig({
     setupFiles: ['./src/test-setup.ts'],
     testTimeout: 30_000,
     hookTimeout: 30_000,
-    include: ['src/**/*.unit.test.ts'],
+    include: ['src/**/*.test.ts'],
+    exclude: ['src/**/*.integration.test.ts'],
   },
 });

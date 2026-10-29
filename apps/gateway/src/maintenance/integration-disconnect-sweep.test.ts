@@ -1,42 +1,67 @@
-import { randomUUID } from 'node:crypto';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Queue } from 'bullmq';
-import { db } from '@shopkeeper/db';
-import { cleanupTestData, createTestOrg } from '@shopkeeper/db/test-helpers';
 import type { IntegrationDisconnectJobData } from '../types.js';
+
+const { listRecoverableIntegrationDisconnects } = vi.hoisted(() => ({
+  listRecoverableIntegrationDisconnects: vi.fn(),
+}));
+
+vi.mock('@shopkeeper/db', () => ({ listRecoverableIntegrationDisconnects }));
+vi.mock('../logger.js', () => ({
+  default: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
+}));
+
 import { enqueueRecoverableIntegrationDisconnects } from './integration-disconnect-sweep.js';
 
-const organizationIds: string[] = [];
+const add = vi.fn();
+const getJob = vi.fn();
+const queue = { add, getJob } as unknown as Queue<IntegrationDisconnectJobData>;
 
-afterEach(async () => {
-  await Promise.all(organizationIds.splice(0).map((id) => cleanupTestData(id)));
+beforeEach(() => {
+  vi.clearAllMocks();
+  add.mockResolvedValue({ id: 'job' });
 });
 
-describe('integration disconnect recovery pagination', () => {
-  it('enqueues every eligible operation in a backlog larger than 100 rows', async () => {
-    const organization = await createTestOrg();
-    organizationIds.push(organization.id);
-    const createdAt = new Date(Date.now() - 1_000);
-    const operations = Array.from({ length: 125 }, (_, index) => ({
-      id: randomUUID(),
-      integrationId: randomUUID(),
-      organizationId: organization.id,
-      platform: 'email' as const,
-      externalAccountId: `recovery-backlog-${index}@example.test`,
-      createdAt,
-    }));
-    await db.integrationDisconnect.createMany({ data: operations });
+describe('enqueueRecoverableIntegrationDisconnects', () => {
+  it('re-enqueues pending operations with stable job ids', async () => {
+    listRecoverableIntegrationDisconnects.mockResolvedValue([
+      { id: 'disconnect_1', organizationId: 'organization_1' },
+    ]);
+    getJob.mockResolvedValue(null);
 
-    const add = vi.fn().mockResolvedValue({ id: 'job' });
-    const getJob = vi.fn().mockResolvedValue(null);
-    const queue = { add, getJob } as unknown as Queue<IntegrationDisconnectJobData>;
-
-    const enqueued = await enqueueRecoverableIntegrationDisconnects(queue);
-
-    const enqueuedIds = new Set(
-      add.mock.calls.map((call) => (call[1] as IntegrationDisconnectJobData).operationId),
+    await expect(enqueueRecoverableIntegrationDisconnects(queue)).resolves.toBe(1);
+    expect(add).toHaveBeenCalledWith(
+      'process-integration-disconnect',
+      { operationId: 'disconnect_1', organizationId: 'organization_1' },
+      { jobId: 'disconnect_1' },
     );
-    expect(enqueued).toBeGreaterThanOrEqual(operations.length);
-    expect(operations.every((operation) => enqueuedIds.has(operation.id))).toBe(true);
+  });
+
+  it('leaves a live job alone', async () => {
+    listRecoverableIntegrationDisconnects.mockResolvedValue([
+      { id: 'disconnect_1', organizationId: 'organization_1' },
+    ]);
+    getJob.mockResolvedValue({
+      getState: vi.fn().mockResolvedValue('active'),
+      remove: vi.fn(),
+    });
+
+    await expect(enqueueRecoverableIntegrationDisconnects(queue)).resolves.toBe(0);
+    expect(add).not.toHaveBeenCalled();
+  });
+
+  it.each(['completed', 'failed'])('replaces a retained %s job', async (state) => {
+    const remove = vi.fn().mockResolvedValue(undefined);
+    listRecoverableIntegrationDisconnects.mockResolvedValue([
+      { id: 'disconnect_1', organizationId: 'organization_1' },
+    ]);
+    getJob.mockResolvedValue({
+      getState: vi.fn().mockResolvedValue(state),
+      remove,
+    });
+
+    await expect(enqueueRecoverableIntegrationDisconnects(queue)).resolves.toBe(1);
+    expect(remove).toHaveBeenCalledOnce();
+    expect(add).toHaveBeenCalledOnce();
   });
 });

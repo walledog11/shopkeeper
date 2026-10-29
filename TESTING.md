@@ -30,15 +30,10 @@ misleading check.
 During a change, typecheck and run the targeted tests for what you touched. Leave
 `verify:pr` to CI unless something justifies a full local run.
 
-**Which suite a file belongs to is decided by its name**, and `npm run lint:structure`
-rejects a file no suite owns:
-
-- `apps/dashboard`, `apps/gateway`: `*.unit.test.ts(x)` is unit; any other `*.test.ts(x)`
-  is integration.
-- `packages/agent`: `*.integration.test.ts` is integration; any other `*.test.ts` is
-  unit.
-- `packages/db`: integration only — every test is `*.integration.test.ts`.
-- Other packages (`analytics`, `email`, `integrations`, `shared`): unit.
+**Which suite a file belongs to is decided by its name**, the same way in every
+workspace, and `npm run lint:structure` rejects a file no suite owns:
+`*.integration.test.ts(x)` needs services and runs in the integration suite; any other
+`*.test.ts(x)` is unit. `packages/db` has integration tests only.
 
 Unit tests must not need Postgres, Redis, Playwright, provider credentials or network.
 
@@ -56,6 +51,9 @@ Unit tests must not need Postgres, Redis, Playwright, provider credentials or ne
   `scripts/test-network-guard.mjs`; don't add env flags to bypass the guard.
 - `test-setup.ts` defaults `E2E_TEST_RUN=true` because the rate limiter fails closed
   without Upstash; a wall of 429s means that flag got unset.
+- A dashboard test signs in with `mockClerkSession()`
+  (`apps/dashboard/src/test-fixtures/clerk-session.ts`), which also confirms the Clerk
+  membership `getOrCreateOrg` checks; the file still mocks `@clerk/nextjs/server` itself.
 - `with-test-env.mjs` loads `apps/dashboard/.env.local` and `apps/gateway/.env`, so a
   real `ANTHROPIC_API_KEY` is usually present locally.
 - `.githooks/pre-push` runs `npm run typecheck`; enable it with
@@ -69,11 +67,11 @@ Unit tests must not need Postgres, Redis, Playwright, provider credentials or ne
 The live-model harness is `apps/dashboard/src/lib/agent/__evals__`: JSON fixtures, a
 judge, and `recorded-stochastic-core-fixtures.json` for the two core cases that stay
 off the hard release gate. Free checks live in `harness.integration.test.ts`; paid cases
-in `index.test.ts`. Both skip unless `EVAL_RUN=1` or `REQUIRE_MODEL_EVALS=1`, so ordinary
-runs never bill. Path-triggered pushes run only the free deterministic preflight in
-`evals.yml`. A second paid suite, the order-ops eval
-(`apps/gateway/src/order-ops.eval.test.ts`, `npm run test:evals -w apps/gateway`), follows
-the same skip and ceiling rules.
+in `index.integration.test.ts`. Both skip unless `EVAL_RUN=1` or `REQUIRE_MODEL_EVALS=1`,
+so ordinary runs never bill. Path-triggered pushes run only the free deterministic
+preflight in `evals.yml`. A second paid suite, the order-ops eval
+(`apps/gateway/src/order-ops.eval.integration.test.ts`,
+`npm run test:evals -w apps/gateway`), follows the same skip and ceiling rules.
 
 Each suite has one paid command, `test:evals`, and it refuses to start without both
 ceilings, `EVAL_MAX_USD` and `EVAL_MAX_MODEL_CALLS`; the call cap is the strict backstop.

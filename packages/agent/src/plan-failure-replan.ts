@@ -312,7 +312,7 @@ export async function attemptFailureReplanAfterExecution(params: {
   });
 
   return {
-    status: allowsAutomaticExecution(childVerdict) ? "executable" : "awaiting_approval",
+    status: allowsAutomaticExecution(childVerdict, childPlan.rawToolCalls) ? "executable" : "awaiting_approval",
     cache,
     context: failureReplan,
     childVerdict,

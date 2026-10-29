@@ -29,6 +29,12 @@ export interface InstagramProviderError {
   subcode: number | null;
   message: string;
   requestId: string | null;
+  /**
+   * The request may have taken effect anyway: it timed out or failed in flight,
+   * Meta answered 5xx, or it answered 2xx with a body we could not read. A send
+   * in this state may already be with the customer, so it is not retried.
+   */
+  outcomeUnknown: boolean;
 }
 
 export type InstagramApiResult<T> =
@@ -191,6 +197,7 @@ function createValidationError(message: string, httpStatus = 0): InstagramProvid
     subcode: null,
     message,
     requestId: null,
+    outcomeUnknown: false,
   };
 }
 
@@ -202,13 +209,15 @@ function createResponseError(
     ?? response.headers.get('x-fb-trace-id')
     ?? response.headers.get('x-request-id');
   const code = descriptor?.code ?? null;
+  const category = classifyProviderError(response.status, code);
   return {
-    category: classifyProviderError(response.status, code),
+    category,
     httpStatus: response.status,
     code,
     subcode: descriptor?.subcode ?? null,
     message: descriptor?.message ?? 'Instagram API request failed',
     requestId,
+    outcomeUnknown: response.status >= 500 && category === 'transient_provider_failure',
   };
 }
 
@@ -236,6 +245,7 @@ async function requestInstagramJson<T>(
         error: {
           ...createValidationError('Instagram API returned an invalid response', response.status),
           requestId: response.headers.get('x-fb-trace-id') ?? response.headers.get('x-request-id'),
+          outcomeUnknown: true,
         },
       };
     }
@@ -258,6 +268,7 @@ async function requestInstagramJson<T>(
         subcode: null,
         message: timedOut ? 'Instagram API request timed out' : 'Instagram API request failed',
         requestId: null,
+        outcomeUnknown: true,
       },
     };
   }

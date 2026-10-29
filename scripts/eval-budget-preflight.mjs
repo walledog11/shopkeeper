@@ -110,7 +110,7 @@ const TARGETED_COLD_START_USD_PER_REPEAT = 0.046 * 1.2;
 const dashboardEstimate = mode === 'targeted'
   ? Math.max(baselineDashboardEstimate, TARGETED_COLD_START_USD_PER_REPEAT * repeats)
   : baselineDashboardEstimate;
-// The gateway suite is the five `order-ops.eval.test.ts` fixtures at ~2 model
+// The gateway suite is the five `order-ops.eval.integration.test.ts` fixtures at ~2 model
 const gatewayCallEstimate = mode === 'targeted' ? 0 : 3;
 const gatewayEstimate = mode === 'targeted' ? 0 : 0.03;
 const estimatedUsd = dashboardEstimate + gatewayEstimate;

@@ -2,6 +2,7 @@ import { SENDER_TYPE } from "./thread-constants.js"
 import type { AgentPlan, ClassifierAlignmentState, PlanRoutingEvidence, PlanRoutingEvidenceCode, PlanSignal, PlanStep, PlanValidation, PlanValidationIssue, PlanValidationIssueCode, RawToolCall, ToolCategory } from "./types.js"
 import { isRecord } from "./guards.js"
 import { isProposalCommunication } from "./proposal-communication.js"
+import { PLAN_ROUTING_EVIDENCE_CODES } from "./routing-evidence.js"
 export type PlanThreadMessage = {
   id: string
   senderType: string
@@ -29,41 +30,28 @@ export interface AgentPlanCacheRecordShape {
   failureReplan?: PlanFailureReplanContext
 }
 
-const TOOL_CATEGORIES: ToolCategory[] = ["action", "communication", "internal", "read"]
-const PLAN_VALIDATION_ISSUE_CODES: PlanValidationIssueCode[] = [
-  "invalid_tool_input",
-  "duplicate_tool_call_id",
-  "already_refunded_action",
-  "orphan_internal_note",
-  "ungrounded_escalation_reason",
-  "ungrounded_customer_reply",
-  "multiple_customer_messages",
-  "unbound_reply_placeholder",
-  "unnamed_line_item_target",
-]
-const CLASSIFIER_ALIGNMENT_STATES: ClassifierAlignmentState[] = ["aligned", "missing", "unaligned", "not_applicable"]
-const PLAN_ROUTING_EVIDENCE_CODES: PlanRoutingEvidenceCode[] = [
-  "classifier_unavailable",
-  "classifier_unaligned",
-  "fraud_risk",
-  "forwarded_prompt_injection",
-  "contradictory_request",
-  "out_of_scope_commercial_request",
-  "fulfilled_cancellation_request",
-  "fulfilled_address_change_request",
-  "already_refunded_request",
-  "non_paid_refund_request",
-  "compensation_exception",
-  "ambiguous_customer",
-  "critical_planning_read_failure",
-  "compensation_over_cap",
-  "damage_photo_missing",
-  "order_unconfirmed",
-  "policy_gap",
-  "kb_gap",
-  "circular_channel_deflection",
-]
+// Each list is keyed by its union, so the compiler refuses one that misses a
+// member. A value a writer can produce but this decoder does not know makes
+// every cached plan carrying it unreadable.
+function valuesOf<T extends string>(table: Record<T, true>): T[] {
+  return Object.keys(table) as T[]
+}
 
+const TOOL_CATEGORIES = valuesOf<ToolCategory>({ action: true, communication: true, internal: true, read: true })
+const PLAN_VALIDATION_ISSUE_CODES = valuesOf<PlanValidationIssueCode>({
+  invalid_tool_input: true,
+  duplicate_tool_call_id: true,
+  already_refunded_action: true,
+  orphan_internal_note: true,
+  ungrounded_escalation_reason: true,
+  ungrounded_customer_reply: true,
+  multiple_customer_messages: true,
+  unbound_reply_placeholder: true,
+  unnamed_line_item_target: true,
+})
+const CLASSIFIER_ALIGNMENT_STATES = valuesOf<ClassifierAlignmentState>({
+  aligned: true, missing: true, unaligned: true, not_applicable: true,
+})
 
 function isToolCategory(value: unknown): value is ToolCategory {
   return typeof value === "string" && TOOL_CATEGORIES.includes(value as ToolCategory)

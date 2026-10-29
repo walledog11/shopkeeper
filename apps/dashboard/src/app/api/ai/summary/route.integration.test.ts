@@ -1,0 +1,88 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mockClerkSession } from '@/test-fixtures/clerk-session';
+import { ChannelType, db } from '@shopkeeper/db';
+import {
+  cleanupTestData,
+  createTestCustomer,
+  createTestOrg,
+  createTestThread,
+} from '@shopkeeper/db/test-helpers';
+
+const { mockGenerateText } = vi.hoisted(() => ({
+  mockGenerateText: vi.fn(),
+}));
+
+vi.mock('@clerk/nextjs/server', () => ({
+  auth: vi.fn(),
+  clerkClient: vi.fn(),
+}));
+
+vi.mock('@shopkeeper/agent/ai', () => ({
+  generateText: mockGenerateText,
+}));
+
+import { POST } from './route';
+
+let org: Awaited<ReturnType<typeof createTestOrg>>;
+
+beforeEach(async () => {
+  org = await createTestOrg();
+  mockClerkSession({
+    userId: 'usr_ai_summary',
+    orgId: org.clerkOrgId,
+  });
+  mockGenerateText.mockResolvedValue(JSON.stringify({
+    title: 'Shipping Help Needed',
+    summary: 'Customer needs shipping help.',
+  }));
+});
+
+afterEach(async () => {
+  await cleanupTestData(org?.id);
+  vi.clearAllMocks();
+});
+
+describe('POST /api/ai/summary', () => {
+  it('rejects malformed JSON without generating a summary', async () => {
+    const res = await POST(new Request('http://localhost/api/ai/summary', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{',
+    }));
+
+    expect(res.status).toBe(400);
+    expect(mockGenerateText).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when threadId is missing', async () => {
+    const res = await POST(jsonRequest({}));
+
+    expect(res.status).toBe(400);
+    expect(mockGenerateText).not.toHaveBeenCalled();
+  });
+
+  it('generates and persists a summary for a valid thread', async () => {
+    const customer = await createTestCustomer(org.id, 'summary@test.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+
+    const res = await POST(jsonRequest({ threadId: thread.id }));
+    const body = await res.json() as { title: string; summary: string };
+
+    expect(res.status).toBe(200);
+    expect(body.title).toBe('Shipping Help Needed');
+    expect(body.summary).toBe('Customer needs shipping help.');
+    expect(mockGenerateText).toHaveBeenCalledOnce();
+
+    const updated = await db.thread.findUnique({ where: { id: thread.id } });
+    expect(updated?.aiTitle).toBe('Shipping Help Needed');
+    expect(updated?.aiSummary).toBe('Customer needs shipping help.');
+  });
+});
+
+function jsonRequest(body: unknown) {
+  return new Request('http://localhost/api/ai/summary', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}

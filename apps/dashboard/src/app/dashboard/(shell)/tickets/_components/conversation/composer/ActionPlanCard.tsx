@@ -106,7 +106,6 @@ interface ActionPlanControlsProps {
   primaryLabel: string | null
   successLabel: string
   status: {
-    enabledCount: number
     hasBlockingSignals: boolean
     inReviewFlow: boolean
     executionOutcome: PlanCardOutcome | null
@@ -238,7 +237,7 @@ function ActionPlanControls({
           type="button"
           data-testid="action-plan-run"
           onClick={onApproveClick}
-          disabled={status.isRunning || status.enabledCount === 0 || Boolean(status.executionOutcome)}
+          disabled={status.isRunning || Boolean(status.executionOutcome)}
           confirming={
             status.inReviewFlow || (status.hasBlockingSignals && status.warningsReviewed)
           }
@@ -309,7 +308,6 @@ export default function ActionPlanCard({
     actionSteps,
     blockingSignals,
     collapsedPreview,
-    enabledCount,
     hasBlockingSignals,
     headerLabel,
     advisorySignals,
@@ -324,7 +322,6 @@ export default function ActionPlanCard({
     shopifyActionSteps,
     showReplyHero,
     state,
-    toggleStep,
   } = review
   const showEditTakeover = Boolean(onEdit && (showReplyHero || planInvalid))
 
@@ -377,7 +374,6 @@ export default function ActionPlanCard({
               replyText={replyText}
               shopifyActionSteps={shopifyActionSteps}
               showReplyHero={showReplyHero}
-              toggleStep={toggleStep}
             />}
 
             <ActionPlanControls
@@ -388,7 +384,6 @@ export default function ActionPlanCard({
               primaryLabel={primaryLabel}
               successLabel={showReplyHero ? "Sent" : "Done"}
               status={{
-                enabledCount,
                 executionOutcome,
                 hasBlockingSignals,
                 inReviewFlow,

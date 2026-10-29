@@ -208,15 +208,13 @@ export async function handleIgDmJob(job: Job<InboundJobData>, aiSummaryQueue: Qu
     // Each transport reads the shopper's display name from its own surface: Meta's
     // Graph API for a direct row, and SocialAPI's conversation list for a provider
     // row, which is the only place SocialAPI carries it.
-    let customerName: string | null = null;
-    if (integration.transport === 'meta_direct') {
-      const profileResult = await fetchInstagramMessagingUserProfile(
-        senderIgsid,
-        integration.accessToken,
-      );
-      if (profileResult.ok) {
-        customerName = profileResult.data.name ?? profileResult.data.username;
-      } else {
+    const lookupCustomerName = async (): Promise<string | null> => {
+      if (integration.transport === 'meta_direct') {
+        const profileResult = await fetchInstagramMessagingUserProfile(
+          senderIgsid,
+          integration.accessToken,
+        );
+        if (profileResult.ok) return profileResult.data.name ?? profileResult.data.username;
         logger.warn(
           {
             category: profileResult.error.category,
@@ -227,8 +225,9 @@ export async function handleIgDmJob(job: Job<InboundJobData>, aiSummaryQueue: Qu
           },
           '[Worker] Instagram profile enrichment failed',
         );
+        return null;
       }
-    } else if (providerConversationId) {
+      if (!providerConversationId) return null;
       // A display name is worth one bounded read, never the message: a failed
       // lookup leaves the ticket under its platform-id label and is retried by
       // the next inbound message, which merges the name onto the same customer.
@@ -238,7 +237,7 @@ export async function handleIgDmJob(job: Job<InboundJobData>, aiSummaryQueue: Qu
           conversationId: providerConversationId,
           participantId: senderIgsid,
         });
-        customerName = profile?.name ?? null;
+        return profile?.name ?? null;
       } catch (error) {
         logger.warn(
           {
@@ -249,18 +248,23 @@ export async function handleIgDmJob(job: Job<InboundJobData>, aiSummaryQueue: Qu
           },
           '[Worker] SocialAPI profile enrichment failed',
         );
+        return null;
       }
-    }
+    };
 
     // Media needs no token on either transport: the downloader fetches the URL
     // itself, from an allowlisted host. A view-once photo arrives with no URL, so
-    // it stays the marker formatInstagramMessage writes.
-    const storedAttachments = await persistProviderAttachments(
-      organizationId,
-      attachments.filter(attachment => isSupportedInstagramBinaryAttachment(attachment.type)),
-      downloadInstagramAttachment,
-      externalMessageId,
-    );
+    // it stays the marker formatInstagramMessage writes. The name lookup and the
+    // download are independent, so neither waits on the other.
+    const [customerName, storedAttachments] = await Promise.all([
+      lookupCustomerName(),
+      persistProviderAttachments(
+        organizationId,
+        attachments.filter(attachment => isSupportedInstagramBinaryAttachment(attachment.type)),
+        downloadInstagramAttachment,
+        externalMessageId,
+      ),
+    ]);
 
     await processInboundMessage(
       organizationId,

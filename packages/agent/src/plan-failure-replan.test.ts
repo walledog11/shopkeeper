@@ -71,19 +71,30 @@ describe("plan failure replan helpers", () => {
   });
 
   it("lets only the child's own verdict decide whether it runs without a human", () => {
+    const escalate = { id: "esc_1", name: "escalate_to_human", input: { reason: "needs a human" } };
     expect(allowsAutomaticExecution(
       { kind: "auto_execute", reasons: [], toolCalls: [], replyText: "ok", sendReplyToolCall: sendCall },
+      [sendCall],
     )).toBe(true);
     expect(allowsAutomaticExecution(
       { kind: "quick_reply", reasons: [], toolCalls: [], replyText: "ok", sendReplyToolCall: sendCall },
+      [sendCall],
     )).toBe(true);
     // A child needing review is cached for approval, never run on the parent's.
     expect(allowsAutomaticExecution(
       { kind: "needs_review", reasons: [], approvalAllowed: true, toolCalls: [sendCall] },
+      [sendCall],
     )).toBe(false);
     expect(allowsAutomaticExecution(
       { kind: "escalate", reasons: [], escalationReason: "needs a human", toolCalls: [] },
+      [sendCall, escalate],
     )).toBe(false);
+    // A child that only hands off runs: nobody may approve a handoff (decision O),
+    // so parking it for approval left the merchant a card that could not be acted on.
+    expect(allowsAutomaticExecution(
+      { kind: "escalate", reasons: [], escalationReason: "needs a human", toolCalls: [] },
+      [escalate],
+    )).toBe(true);
   });
 
   it("builds a planning instruction with completed steps and the failure reason", () => {

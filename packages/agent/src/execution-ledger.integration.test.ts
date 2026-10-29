@@ -17,7 +17,7 @@ import {
   type PlanExecutionDeps,
 } from "./plan-execution.js";
 import { resolveAgentSettings } from "./settings.js";
-import { ANY_MEMBER_ACTOR_KEY, acceptCustomerAgentRequest, claimAgentTask, settleAgentTaskClaim } from "./task-ledger.js";
+import { ANY_MEMBER_ACTOR_KEY, acceptCustomerAgentRequest, claimAgentTask, settleAgentTaskClaim } from "./task-ledger/index.js";
 import { deriveProposalCommunication } from "./proposal-communication.js";
 import type { AgentContext } from "./agent-context.js";
 import type { AgentPlan } from "./types.js";

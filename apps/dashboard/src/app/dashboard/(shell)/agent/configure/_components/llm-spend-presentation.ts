@@ -1,3 +1,5 @@
+import { formatMoney } from "@shopkeeper/agent/money"
+
 export interface LlmSpendSnapshot {
   day: string
   defaultCapUsd: number
@@ -12,7 +14,7 @@ export interface LlmSpendPresentation {
 }
 
 function dollars(value: number): string {
-  return value.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 })
+  return formatMoney(value, "USD", { exact: true })
 }
 
 export function presentLlmSpend(snapshot: LlmSpendSnapshot, capUsd: number): LlmSpendPresentation {

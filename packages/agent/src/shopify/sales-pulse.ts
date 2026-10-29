@@ -1,5 +1,6 @@
 import { parseNextPageInfo, shopifyRest, type ShopifyContext } from "./client.js";
 import type { ShopifyOrder } from "./types.js";
+import { formatMoney } from "../money.js";
 
 const ORDER_PAGE_LIMIT = 250;
 const DEFAULT_MAX_PAGES = 5;
@@ -85,12 +86,6 @@ export function shiftWindowByDays(window: OrderWindowBounds, days: number): Orde
     start: new Date(window.start.getTime() + deltaMs),
     end: new Date(window.end.getTime() + deltaMs),
   };
-}
-
-function formatMoney(amount: number, currency: string | null): string {
-  const rounded = amount % 1 === 0 ? amount.toFixed(0) : amount.toFixed(2);
-  if (!currency || currency === "USD") return `$${rounded}`;
-  return `${rounded} ${currency}`;
 }
 
 // Null when there is nothing to report — a briefing that says "0 orders · $0

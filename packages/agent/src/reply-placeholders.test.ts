@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import type { ActionEntry } from "./agent-context.js";
 import {
   bindReplyPlaceholders,
-  customerMoney,
   displayApprovedDraft,
   fillApprovedDraft,
   isResultBinding,
@@ -212,19 +211,13 @@ describe("fillApprovedDraft", () => {
   });
 });
 
-describe("customerMoney", () => {
-  it("keeps the provider's precision rather than assuming two decimals", () => {
-    expect(customerMoney("42.00", "usd")).toBe("$42.00");
-    expect(customerMoney("4200", "JPY")).toBe("4200 JPY");
-  });
-});
-
 describe("replyPlaceholderInstructions", () => {
   it("offers exactly the placeholders the executor can fill", () => {
     const text = replyPlaceholderInstructions();
-    for (const name of ["refund_amount", "return_name", "order_name", "gift_card_amount", "tracking_number"]) {
+    for (const name of ["refund_amount", "order_name", "gift_card_amount", "tracking_number"]) {
       expect(text).toContain(`{{${name}}}`);
     }
+    expect(text).not.toContain("{{return_name}}");
     expect(text).toContain("create_refund or create_partial_refund or cancel_order");
   });
 });

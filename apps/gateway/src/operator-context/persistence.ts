@@ -5,6 +5,7 @@ import type { RawToolCall } from '@shopkeeper/agent/types';
 import { getPlanExecution } from '@shopkeeper/agent/execution-ledger';
 import { AGENT_PLAN_CACHE_VERSION, readAgentPlanCacheRecordShape } from '@shopkeeper/agent/plan-cache-shape';
 import { hashInstruction, hashPlan } from '@shopkeeper/agent/agent-actions';
+import { customerFirstName } from '@shopkeeper/agent/person-name';
 import logger from '../logger.js';
 import {
   briefingOrdinal,
@@ -190,18 +191,28 @@ export type SelectPendingPlanResult =
   | { plan: PendingPlan }
   | { error: string; code: 'none_pending' | 'needs_disambiguation' | 'needs_thread_review' };
 
-function summarizePendingPlan(plan: PendingPlan): string {
-  const who = plan.customerName ? plan.customerName.split(' ')[0] : 'the customer';
+export function summarizePendingPlan(plan: PendingPlan): string {
+  const who = customerFirstName(plan.customerName) ?? 'the customer';
   const what = plan.actionLabel ?? plan.instruction;
   return `${who} — ${what}`;
 }
 
-function pendingPlanOptions(plans: PendingPlan[], digest?: PendingDigest | null): string {
+// The number selectPendingPlan resolves to each queued plan: its place in the
+// briefing while one is pending, else its place in the queue. A plan the pending
+// briefing does not list has none.
+export function pendingPlanOrdinals(plans: PendingPlan[], digest?: PendingDigest | null): (number | null)[] {
   return plans.map((plan, index) => {
     const item = digest?.items.find((entry) => entry.threadId === plan.threadId);
     const ordinal = !item?.planId || item.planId === plan.planId
       ? briefingOrdinal(digest ?? null, plan.threadId) : null;
-    const reference = ordinal ?? (digest?.items.length ? plan.planId ?? plan.customerName : index + 1);
+    return ordinal ?? (digest?.items.length ? null : index + 1);
+  });
+}
+
+function pendingPlanOptions(plans: PendingPlan[], digest?: PendingDigest | null): string {
+  const ordinals = pendingPlanOrdinals(plans, digest);
+  return plans.map((plan, index) => {
+    const reference = ordinals[index] ?? plan.planId ?? plan.customerName;
     return `${reference ?? 'Pending plan'}. ${summarizePendingPlan(plan)}`;
   }).join('; ');
 }
@@ -336,6 +347,23 @@ async function pendingPlanStaleReason(
   return null;
 }
 
+/**
+ * Why a parked plan can no longer be acted on, or null while it can: its run
+ * already finished, or the card no longer matches the thread's current plan.
+ * The phone queue and the briefing both ask this one question, so the briefing
+ * never numbers a card the queue has already dropped.
+ */
+export async function pendingPlanDropReason(
+  organizationId: string,
+  plan: PendingPlan,
+): Promise<PendingPlanStaleReason | 'execution_terminal' | null> {
+  const execution = plan.planId
+    ? await getPlanExecution(organizationId, plan.planId).catch(() => null)
+    : null;
+  if (execution && execution.status !== 'pending' && execution.status !== 'claimed') return 'execution_terminal';
+  return pendingPlanStaleReason(organizationId, plan);
+}
+
 async function resolveStalePendingPlanContext(
   organizationId: string,
   memberKey: string,
@@ -442,12 +470,8 @@ export async function loadLiveOperatorContext(
 
   const live: PendingPlan[] = [];
   for (const plan of context.pendingPlans) {
-    const execution = plan.planId
-      ? await getPlanExecution(organizationId, plan.planId).catch(() => null)
-      : null;
-    const terminal = execution && execution.status !== 'pending' && execution.status !== 'claimed';
-    const reason = terminal ? null : await pendingPlanStaleReason(organizationId, plan);
-    if (terminal || reason) {
+    const reason = await pendingPlanDropReason(organizationId, plan);
+    if (reason) {
       // The merchant may be looking at this card right now, so say what was
       // dropped and why. Silence here is what turned one production incident
       // into a forensic reconstruction against expired logs.
@@ -456,8 +480,7 @@ export async function loadLiveOperatorContext(
         memberKey,
         threadId: plan.threadId,
         planId: plan.planId ?? null,
-        reason: terminal ? 'execution_terminal' : reason,
-        ...(terminal ? { executionStatus: execution?.status } : {}),
+        reason,
       }, '[Operator] Parked plan dropped before the merchant could act on it');
       await resolveStalePendingPlanContext(organizationId, memberKey, plan).catch(() => undefined);
       continue;
