@@ -183,37 +183,33 @@ export function resolveBrowserTimezone(): string {
   }
 }
 
-function hydrateTzFromStorage(existing: string | undefined, legacyOffset: number | undefined): string | undefined {
-  if (existing && existing.trim() !== "" && !existing.startsWith("Etc/")) return existing
-  if (typeof legacyOffset === "number") {
-    const mapped = OFFSET_TO_CURATED_ZONE[Math.round(legacyOffset)]
+function isCuratedZone(zone: string | undefined): zone is string {
+  return Boolean(zone?.trim()) && !zone!.startsWith("Etc/")
+}
+
+// Same order as storeTimeZone. Resolved settings default both legacy offsets
+// to 0, so a zero offset says nothing about where the store is.
+function storedStoreTimezone(settings: OrgSettings): string | undefined {
+  if (isCuratedZone(settings.digestTimezone)) return settings.digestTimezone
+  if (isCuratedZone(settings.businessHoursTimezone)) return settings.businessHoursTimezone
+  for (const offset of [settings.digestTimezoneOffset, settings.businessHoursTimezoneOffset]) {
+    const mapped = offset ? OFFSET_TO_CURATED_ZONE[Math.round(offset)] : undefined
     if (mapped) return mapped
   }
   return undefined
 }
 
-function hydrateTz(existing: string | undefined, legacyOffset: number | undefined): string {
-  return hydrateTzFromStorage(existing, legacyOffset) ?? resolveBrowserTimezone()
+/** The page edits one store timezone and saves it to both keys that hold it. */
+export function storeTimezonePatch(zone: string): Pick<OrgSettings, "businessHoursTimezone" | "digestTimezone"> {
+  return { businessHoursTimezone: zone, digestTimezone: zone }
 }
 
 export function hydrateSettingsFromStorage(settings: OrgSettings): OrgSettings {
-  return {
-    ...settings,
-    digestTimezone: hydrateTzFromStorage(settings.digestTimezone, settings.digestTimezoneOffset)
-      ?? settings.digestTimezone
-      ?? "",
-    businessHoursTimezone: hydrateTzFromStorage(settings.businessHoursTimezone, settings.businessHoursTimezoneOffset)
-      ?? settings.businessHoursTimezone
-      ?? "",
-  }
+  return { ...settings, ...storeTimezonePatch(storedStoreTimezone(settings) ?? "") }
 }
 
 export function hydrateSettings(settings: OrgSettings): OrgSettings {
-  return {
-    ...settings,
-    digestTimezone: hydrateTz(settings.digestTimezone, settings.digestTimezoneOffset),
-    businessHoursTimezone: hydrateTz(settings.businessHoursTimezone, settings.businessHoursTimezoneOffset),
-  }
+  return { ...settings, ...storeTimezonePatch(storedStoreTimezone(settings) ?? resolveBrowserTimezone()) }
 }
 
 // Curated list of ~30 zones grouped by region. One entry per DST region -
@@ -280,6 +276,17 @@ export const TIMEZONE_GROUPS: { label: string; zones: { id: string; label: strin
 ]
 
 export const KNOWN_TIMEZONE_IDS = new Set(TIMEZONE_GROUPS.flatMap(group => group.zones.map(zone => zone.id)))
+
+function formatHour(hour: number): string {
+  const period = hour < 12 ? "AM" : "PM"
+  const display = hour % 12 === 0 ? 12 : hour % 12
+  return `${display}:00 ${period}`
+}
+
+export const HOUR_OPTIONS = Array.from({ length: 24 }, (_, hour) => ({
+  value: String(hour),
+  label: formatHour(hour),
+}))
 
 export const DAY_OPTIONS = [
   ["mon", "Mon"],

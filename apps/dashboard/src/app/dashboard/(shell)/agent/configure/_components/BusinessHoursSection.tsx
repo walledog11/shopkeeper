@@ -1,25 +1,12 @@
 "use client"
 
-import { DAY_OPTIONS } from "./agent-tab-helpers"
+import { DAY_OPTIONS, HOUR_OPTIONS } from "./agent-tab-helpers"
 import {
   CharacterCountTextarea,
   SelectField,
 } from "@/components/settings-form/fields"
-import { settingsSelectClassName } from "@/components/settings-form/class-names"
 import { settingsTextareaClassName } from "@/app/dashboard/(shell)/settings/_components/SettingsTile"
-import { TimezoneSelect } from "./TimezoneSelect"
 import type { AgentTabController } from "./useAgentTabState"
-
-function formatHour(hour: number): string {
-  const period = hour < 12 ? "AM" : "PM"
-  const display = hour % 12 === 0 ? 12 : hour % 12
-  return `${display}:00 ${period}`
-}
-
-const HOUR_OPTIONS = Array.from({ length: 24 }, (_, hour) => ({
-  value: String(hour),
-  label: formatHour(hour),
-}))
 
 export function BusinessHoursSection({ controller }: { controller: AgentTabController }) {
   const {
@@ -83,17 +70,6 @@ export function BusinessHoursSection({ controller }: { controller: AgentTabContr
       {businessHoursInvalid ? (
         <p className="text-xs text-red-600">Opening and closing times must be different.</p>
       ) : null}
-
-      <div className="space-y-1.5">
-        <span className="block text-xs font-semibold text-muted-foreground">Timezone</span>
-        <TimezoneSelect
-          aria-label="Business hours timezone"
-          value={settingsState.businessHoursTimezone ?? ""}
-          onChange={(value) => dispatch({ type: "set", patch: { businessHoursTimezone: value } })}
-          className={settingsSelectClassName("w-full sm:w-80")}
-        />
-        <p className="text-xs text-faint">Daylight Saving Time is handled automatically.</p>
-      </div>
 
       <CharacterCountTextarea
         label="Auto-acknowledgment message"

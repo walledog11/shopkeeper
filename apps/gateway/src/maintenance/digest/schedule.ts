@@ -1,4 +1,4 @@
-import { offsetToIanaFallback } from '@shopkeeper/agent/settings';
+import { storeTimeZone } from '@shopkeeper/agent/settings';
 import { DIGEST_INTERVALS, WEEKDAY_INDEX } from './constants.js';
 
 function normalizeHour(value: unknown, fallback: number): number {
@@ -6,15 +6,6 @@ function normalizeHour(value: unknown, fallback: number): number {
     return fallback;
   }
   return ((Math.round(value) % 24) + 24) % 24;
-}
-
-function resolveTz(settings: Record<string, unknown>): string {
-  const tz = settings.digestTimezone;
-  if (typeof tz === 'string' && tz.trim() !== '') return tz;
-  const offset = typeof settings.digestTimezoneOffset === 'number'
-    ? Math.round(settings.digestTimezoneOffset)
-    : 0;
-  return offsetToIanaFallback(offset);
 }
 
 function localHourAndDay(timeZone: string, now: Date): { hour: number; day: number } {
@@ -43,7 +34,7 @@ function localHourAndDay(timeZone: string, now: Date): { hour: number; day: numb
  * every supported frequency puts its sends in distinct hours.
  */
 export function digestWindowKey(settings: Record<string, unknown>, now: Date): string {
-  const timeZone = resolveTz(settings);
+  const timeZone = storeTimeZone(settings);
   try {
     const parts = new Intl.DateTimeFormat('en-US', {
       timeZone,
@@ -72,7 +63,7 @@ export function shouldSendDigest(
   const secondHour = normalizeHour(settings.digestSecondHour, 17);
   const days = typeof settings.digestDays === 'string' ? settings.digestDays : 'every_day';
 
-  const tz = resolveTz(settings);
+  const tz = storeTimeZone(settings);
   const { hour: localHour, day: localDay } = localHourAndDay(tz, new Date(nowMs));
 
   if (days === 'weekdays' && (localDay === 0 || localDay === 6)) return false;
@@ -92,6 +83,16 @@ function timeOfDayGreeting(localHour: number): string {
   return 'Evening';
 }
 
+// How often the merchant chose to hear from the agent, for the first briefing.
+function briefingCadence(settings: Record<string, unknown>): string {
+  const weekdays = settings.digestDays === 'weekdays';
+  const frequency = typeof settings.digestFrequency === 'string' ? settings.digestFrequency : 'daily';
+  if (frequency === 'twice_daily') return weekdays ? 'twice every weekday' : 'twice a day';
+  const interval = DIGEST_INTERVALS[frequency];
+  if (interval) return `every ${interval} hours${weekdays ? ' on weekdays' : ''}`;
+  return weekdays ? 'every weekday' : 'every day';
+}
+
 // Introduce the agent once. Routine briefings start with a simple greeting;
 // an on-demand SUMMARY goes straight to the answer.
 export function buildDigestOpener(
@@ -100,8 +101,8 @@ export function buildDigestOpener(
   now: Date,
   firstBriefing: boolean,
 ): string {
-  const greeting = timeOfDayGreeting(localHourAndDay(resolveTz(settings), now).hour);
+  const greeting = timeOfDayGreeting(localHourAndDay(storeTimeZone(settings), now).hour);
   return firstBriefing
-    ? `${greeting}, ${agentName} here with your first rundown. You'll get one like this every day.`
+    ? `${greeting}, ${agentName} here with your first rundown. You'll get one like this ${briefingCadence(settings)}.`
     : `${greeting}!`;
 }

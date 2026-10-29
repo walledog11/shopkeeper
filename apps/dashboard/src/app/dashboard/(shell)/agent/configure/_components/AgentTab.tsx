@@ -23,6 +23,7 @@ interface Props {
   orgName: string
   voiceProposal: VoiceProposal | null
   shopifyConnected: boolean
+  phoneLinked: boolean
   merchantPreferences: {
     active: MerchantPreferenceRecord[]
     proposed: MerchantPreferenceRecord[]
@@ -38,7 +39,7 @@ export default function AgentTab(props: Props) {
   // page; the save bar tells them why they can't apply a change.
   const { membership } = useOrganization()
   const isAdmin = membership?.role === "org:admin"
-  const { shopifyConnected } = props
+  const { shopifyConnected, phoneLinked } = props
 
   return (
     <div className="flex w-full flex-col gap-4">
@@ -46,7 +47,11 @@ export default function AgentTab(props: Props) {
       <MerchantPreferencesSection controller={preferencesController} canEdit={isAdmin} />
       <AgentAutonomySection controller={controller} />
       <WhenOnDutySection controller={controller} />
-      {shopifyConnected ? <MorningBriefingSection controller={controller} /> : null}
+      <MorningBriefingSection
+        controller={controller}
+        phoneLinked={phoneLinked}
+        shopifyConnected={shopifyConnected}
+      />
       <AgentAdvancedSection controller={controller} llmSpend={props.llmSpend} />
 
       <StickySaveBar controller={controller} canSave={isAdmin} />

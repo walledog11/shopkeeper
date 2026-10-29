@@ -95,7 +95,7 @@ export function AgentAutonomyAdvancedSection({
     <>
       <SettingsTile
         label="Compensation limits"
-        description="Override the caps that come with your trust level. Leave blank to use the tier default."
+        description={`${AGENT_DISPLAY_NAME} never issues more than these, even with your approval. Anything larger comes to you to handle in Shopify.`}
       >
         <div className="space-y-4">
           <div className="space-y-1.5">
@@ -170,6 +170,28 @@ export function AgentAutonomyAdvancedSection({
         <div className="space-y-1.5">
           <OverrideHint
             path="blockCancellations"
+            tier={autonomyTier}
+            payload={payload}
+            explicitOverrideSet={explicitOverrideSet}
+            onReset={resetAutonomyOverride}
+          />
+        </div>
+      </SettingsTile>
+
+      <SettingsTile
+        label="Block custom items on new orders"
+        description={`When ${AGENT_DISPLAY_NAME} creates an order, every item must be a product from your catalog, at its catalog price.`}
+        action={
+          <Switch
+            checked={settingsState.blockCustomLineItems}
+            onChange={(value) => setAutonomyOverride("blockCustomLineItems", value)}
+            ariaLabel="Block custom items on new orders"
+          />
+        }
+      >
+        <div className="space-y-1.5">
+          <OverrideHint
+            path="blockCustomLineItems"
             tier={autonomyTier}
             payload={payload}
             explicitOverrideSet={explicitOverrideSet}

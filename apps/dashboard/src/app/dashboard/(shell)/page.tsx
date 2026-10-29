@@ -1,6 +1,6 @@
 import { auth, currentUser } from "@clerk/nextjs/server"
 import { cookies } from "next/headers"
-import { localGreeting, resolveAgentSettings } from "@shopkeeper/agent/settings"
+import { localGreeting, resolveAgentSettings, storeTimeZone } from "@shopkeeper/agent/settings"
 import type { OrgSettings } from "@/types"
 import { isInstagramIntegrationEnabledForOrg } from "@/lib/env"
 import {
@@ -32,7 +32,7 @@ export default async function DashboardPage() {
   ])
 
   const userName = user?.firstName ?? user?.fullName ?? ""
-  const greeting = localGreeting(settings.businessHoursTimezone ?? "UTC")
+  const greeting = localGreeting(storeTimeZone(settings))
 
   return (
     <DashboardHomeClient

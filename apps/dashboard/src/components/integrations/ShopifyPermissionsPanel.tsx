@@ -24,7 +24,10 @@ function StatusBadge({ enabled }: { enabled: boolean }) {
 export function ShopifyPermissionRows() {
   const { data } = useOrg({ enabled: true })
   const settings = resolveAgentSettings(data?.settings)
-  const refundCap = settings.maxRefundAmount == null ? null : `auto-approve up to $${settings.maxRefundAmount}`
+  // A ceiling, not an approval threshold: nothing larger runs even when approved.
+  const refundCap = settings.maxRefundAmount == null
+    ? "No per-refund limit"
+    : `Never more than $${settings.maxRefundAmount} per refund`
 
   const rows = [
     {
@@ -42,7 +45,7 @@ export function ShopifyPermissionRows() {
       enabled: settings.toolsEnabled.action && !settings.blockCancellations,
     },
     {
-      label: "Modify line items & discounts",
+      label: "Add custom items to new orders",
       enabled: settings.toolsEnabled.action && !settings.blockCustomLineItems,
     },
   ] as const

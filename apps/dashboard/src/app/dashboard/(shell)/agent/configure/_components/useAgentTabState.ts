@@ -13,6 +13,7 @@ import {
   rawInputsFor,
   resetPathToTierDefault,
   resolveBrowserTimezone,
+  storeTimezonePatch,
   writeSettingsPath,
   type AutonomyOverridePath,
 } from "./agent-tab-helpers"
@@ -35,17 +36,10 @@ export function useAgentTabState({ settings, rawSettings, version, orgName, voic
   useEffect(() => {
     const browserTimezone = resolveBrowserTimezone()
     browserTimezoneRef.current = browserTimezone
-    const patch: Partial<OrgSettings> = {}
-    if (!settingsState.digestTimezone?.trim() || settingsState.digestTimezone.startsWith("Etc/")) {
-      patch.digestTimezone = browserTimezone
+    if (!settingsState.businessHoursTimezone?.trim()) {
+      dispatch({ type: "set", patch: storeTimezonePatch(browserTimezone) })
     }
-    if (!settingsState.businessHoursTimezone?.trim() || settingsState.businessHoursTimezone.startsWith("Etc/")) {
-      patch.businessHoursTimezone = browserTimezone
-    }
-    if (Object.keys(patch).length > 0) {
-      dispatch({ type: "set", patch })
-    }
-  }, [settingsState.businessHoursTimezone, settingsState.digestTimezone])
+  }, [settingsState.businessHoursTimezone])
   const [businessName, setBusinessName] = useState(orgName)
   const initialNameRef = useRef(orgName)
   const initialRaw = useMemo(() => rawInputsFor(settings), [settings])

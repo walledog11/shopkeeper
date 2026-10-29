@@ -22,7 +22,6 @@ export interface OrgSettings {
   // Default behavior
   autoPlanOnOpen: boolean;
   autoExecuteMode?: 'off' | 'live'; // off = approval-only; live = auto-fire
-  defaultInstruction: string;
 
   // Tool permissions
   toolsEnabled: AgentToolPermissions;

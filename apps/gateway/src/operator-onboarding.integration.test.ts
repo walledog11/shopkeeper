@@ -60,4 +60,25 @@ describe('finalizeOperatorBind', () => {
     expect(settings.digestEnabled).toBe(false);
     expect(settings.firstBriefingPending).toBe(false);
   });
+
+  it('keeps briefings off when a merchant who switched them off relinks their only phone', async () => {
+    const member = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: `u-${org.id}` },
+    });
+    await db.organization.update({
+      where: { id: org.id },
+      data: { settings: { digestEnabled: false, lastSuccessfulDigestAt: '2026-10-01T15:00:00.000Z' } },
+    });
+    await db.orgMemberImessageBinding.create({
+      data: { orgMemberId: member.id, senderId: `s-${org.id}`, spaceId: `sp-${org.id}` },
+    });
+
+    await finalizeOperatorBind(org.id);
+
+    const settings = (await db.organization.findUnique({
+      where: { id: org.id },
+      select: { settings: true },
+    }))?.settings as Record<string, unknown>;
+    expect(settings.digestEnabled).toBe(false);
+  });
 });

@@ -24,11 +24,12 @@ export default async function AgentConfigurePage() {
   const org = await getOrCreateOrg()
   const rawSettings = normalizeStoredOrgSettings(org.settings)
   const settings = resolveAgentSettings(rawSettings)
-  const [integrations, merchantPreferences, spentNanoUsd] = await Promise.all([
+  const [integrations, linkedPhones, merchantPreferences, spentNanoUsd] = await Promise.all([
     db.integration.findMany({
       where: { organizationId: org.id },
       select: { platform: true },
     }),
+    db.orgMemberImessageBinding.count({ where: { orgMember: { organizationId: org.id } } }),
     getMerchantPreferencesPageData(org.id),
     getDailyLlmSpendNano(org.id).catch((error) => {
       logger.error({ err: error, organizationId: org.id }, "[agent-configure] LLM spend read failed")
@@ -52,6 +53,7 @@ export default async function AgentConfigurePage() {
         orgName={org.name}
         voiceProposal={parseVoiceProposal(org.voiceProposal)}
         shopifyConnected={shopifyConnected}
+        phoneLinked={linkedPhones > 0}
         merchantPreferences={merchantPreferences}
         llmSpend={llmSpend}
       />

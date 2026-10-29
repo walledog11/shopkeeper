@@ -40,11 +40,12 @@ export async function finalizeOperatorBind(organizationId: string): Promise<stri
   });
   const settings = resolveAgentSettings(org?.settings);
 
-  // First operator channel for this org, and digests never switched on → this
-  // is the onboarding bind. Turn on the morning digest and arm the first
-  // briefing. Once digestEnabled is true this branch never re-fires.
+  // First operator channel for this org, and no briefing ever sent → this is
+  // the onboarding bind. Turn on the morning digest and arm the first briefing.
+  // A merchant who has had briefings and switched them off keeps them off when
+  // they relink a phone.
   const bindings = await listOperatorBindings(organizationId);
-  if (bindings.length === 1 && !settings.digestEnabled) {
+  if (bindings.length === 1 && !settings.digestEnabled && !settings.lastSuccessfulDigestAt) {
     const raw = (org?.settings as Record<string, unknown> | null) ?? {};
     await db.organization.update({
       where: { id: organizationId },
