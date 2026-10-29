@@ -3,10 +3,9 @@
 import Link from "next/link";
 import type { MouseEvent } from "react";
 import { cn } from "@/lib/ui/cn";
-import type { NavItem, NavSection } from "../nav-items";
+import { isNavItemActive, type NavItem, type NavSection } from "../nav-items";
 import { OpenCountBadge } from "./OpenCountBadge";
 import {
-  isRouteActive,
   mobileNavGroupCardClass,
   mobileNavLinkClass,
   reviewCountBadgeClass,
@@ -46,7 +45,7 @@ export function NavGroupList({
             </p>
             <div className={mobileNavGroupCardClass}>
               {section.items.map((item) => {
-                const isActive = isRouteActive(pathname, item.href);
+                const isActive = isNavItemActive(pathname, item);
                 const badgeCount = itemBadgeCount(item, needsYouCount);
                 const label = item.mobileName ?? item.name;
 

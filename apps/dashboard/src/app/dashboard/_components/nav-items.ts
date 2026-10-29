@@ -1,5 +1,7 @@
-import { Inbox, Settings2, Box, Cable, BrainCircuit, IdCardLanyard, Home, ScanEye, SlidersHorizontal, User, MessageCircle } from "lucide-react";
+import { Inbox, Settings2, Box, BrainCircuit, Home, ScanEye, User, MessageCircle } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings";
+import { isRouteActive } from "./sidebar/sidebar-helpers";
 
 export interface NavItem {
   name: string;
@@ -28,12 +30,6 @@ export const inboxNavItem: NavItem = {
 };
 
 export const topBarAgentItems: NavItem[] = [
-  {
-    name: "Configure",
-    href: "/dashboard/agent/configure",
-    icon: SlidersHorizontal,
-    description: "Store identity, trust level, and voice",
-  },
   {
     name: "Memory",
     href: "/dashboard/kb",
@@ -73,37 +69,69 @@ export const accountSettingsNavItem: NavItem = {
   description: "Profile, sign-in, and logout",
 };
 
-export const workspaceSettingsNavItem: NavItem = {
-  name: "Settings",
-  mobileName: "Workspace settings",
-  href: "/dashboard/settings",
-  icon: Settings2,
-  description: "Billing and workspace admin",
-};
+export interface SettingsSection {
+  id: string;
+  label: string;
+  href: string;
+  description: string;
+}
 
-export const integrationsNavItem: NavItem = {
-  name: "Integrations",
-  href: "/dashboard/integrations",
-  icon: Cable,
-  description: "Connect channels and external tools",
-};
-
-export const teamNavItem: NavItem = {
-  name: "Team",
-  href: "/dashboard/team",
-  icon: IdCardLanyard,
-  description: "Members, roles, and access",
-};
-
-export const topBarWorkspaceItems: NavItem[] = [
-  integrationsNavItem,
-  teamNavItem,
-  workspaceSettingsNavItem,
+/**
+ * Every settings page, in rail order. Channels, Team and Account keep the URLs
+ * they had before Settings had one home; the (settings) route group gives them
+ * its layout without moving them.
+ */
+export const settingsSectionGroups: { heading: string; sections: SettingsSection[] }[] = [
+  {
+    heading: "Store",
+    sections: [
+      { id: "general", label: "General", href: "/dashboard/settings/general", description: "Store name and timezone." },
+      { id: "store-profile", label: "Store profile", href: "/dashboard/settings/store-profile", description: `What ${AGENT_DISPLAY_NAME} knows about your store and how it sounds.` },
+      { id: "approvals", label: "Approvals & limits", href: "/dashboard/settings/approvals", description: `What ${AGENT_DISPLAY_NAME} does without asking, and what it never does.` },
+      { id: "hours", label: "Hours & away", href: "/dashboard/settings/hours", description: "Business hours and the message customers get when you're closed." },
+      { id: "briefing", label: "Phone & briefing", href: "/dashboard/settings/briefing", description: "Your linked iPhone and when your briefing arrives." },
+      { id: "channels", label: "Channels", href: "/dashboard/integrations", description: "Where customers reach you, and your Shopify store." },
+      { id: "team", label: "Team", href: "/dashboard/team", description: "Members, roles, and invites." },
+      { id: "billing", label: "Usage & billing", href: "/dashboard/settings/billing", description: "Plan, payment, invoices, and the daily AI limit." },
+      { id: "data", label: "Data & privacy", href: "/dashboard/settings/data", description: "Exports, retention, and deleting the workspace." },
+    ],
+  },
+  {
+    heading: "You",
+    sections: [
+      { id: "account", label: "Account", href: "/dashboard/account", description: "Your profile, sign-in, and devices." },
+    ],
+  },
 ];
+
+export const settingsSections: SettingsSection[] = settingsSectionGroups.flatMap(group => group.sections);
+
+export function settingsSectionHref(id: string): string {
+  const section = settingsSections.find(candidate => candidate.id === id);
+  if (!section) throw new Error(`Unknown settings section: ${id}`);
+  return section.href;
+}
+
+export function activeSettingsSection(pathname: string): SettingsSection | null {
+  return settingsSections.find(section => isRouteActive(pathname, section.href)) ?? null;
+}
+
+export const settingsNavItem: NavItem = {
+  name: "Settings",
+  href: settingsSectionHref("general"),
+  icon: Settings2,
+  description: "Your store, approvals, channels, team, and billing",
+};
+
+/** The Settings item stands for every settings page, not only the one it opens. */
+export function isNavItemActive(pathname: string, item: NavItem): boolean {
+  return item === settingsNavItem
+    ? activeSettingsSection(pathname) !== null
+    : isRouteActive(pathname, item.href);
+}
 
 export const topBarDropdowns = [
   { label: "Agent", items: topBarAgentItems },
-  { label: "Workspace", items: topBarWorkspaceItems },
 ] as const;
 
 /** Mobile nav sections (logo links home). */
@@ -113,13 +141,9 @@ export const mobileNavSections: NavSection[] = [
   {
     heading: "Shopkeeper",
     items: [
-      topBarAgentItems[2],
       topBarAgentItems[1],
       topBarAgentItems[0],
     ],
   },
-  {
-    heading: "Workspace",
-    items: topBarWorkspaceItems,
-  },
+  { heading: "Workspace", items: [settingsNavItem] },
 ];

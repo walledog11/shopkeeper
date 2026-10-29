@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/ui/cn";
-import { inboxNavItem, shopNavItem, chatNavItem, topBarDropdowns, type NavItem } from "../nav-items";
+import { inboxNavItem, isNavItemActive, shopNavItem, chatNavItem, settingsNavItem, topBarDropdowns, type NavItem } from "../nav-items";
 import { HeaderSearch } from "../header-search/HeaderSearch";
 import { Logo } from "./Logo";
 import { AccountNavPill } from "./AccountNavPill";
@@ -107,6 +107,7 @@ export function DesktopTopBar({
   const inboxIsActive = isRouteActive(pathname, inboxNavItem.href);
   const shopIsActive = isRouteActive(pathname, shopNavItem.href);
   const chatIsActive = isRouteActive(pathname, chatNavItem.href);
+  const settingsIsActive = isNavItemActive(pathname, settingsNavItem);
 
   return (
     <div className="pointer-events-none relative z-40 hidden shrink-0 md:block mb-6">
@@ -163,6 +164,15 @@ export function DesktopTopBar({
                 prefetchNav={prefetchNav}
               />
             ))}
+
+            <Link
+              href={settingsNavItem.href}
+              onClick={(e) => handleNavClick(e, settingsIsActive)}
+              {...dashboardNavPrefetchHandlers(prefetchNav, settingsNavItem.href)}
+              className={topBarNavTriggerClass(settingsIsActive)}
+            >
+              <span>{settingsNavItem.name}</span>
+            </Link>
           </nav>
 
           <div className="pointer-events-auto min-w-0 flex-1">

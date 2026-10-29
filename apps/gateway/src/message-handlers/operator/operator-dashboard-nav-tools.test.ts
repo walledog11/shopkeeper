@@ -18,7 +18,7 @@ describe('navigate_dashboard', () => {
     expect(parseNavigateDashboardResult(result.message)).toEqual({
       type: 'navigate',
       href: '/dashboard/integrations',
-      label: 'Integrations',
+      label: 'Channels',
     });
   });
 

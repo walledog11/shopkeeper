@@ -3,7 +3,7 @@ import { fetchOrdersPage } from "./(shell)/orders/_components/order-requests"
 import {
   deleteTeamMember,
   revokeTeamInvitation,
-} from "./(shell)/team/_components/team-page-requests"
+} from "./(shell)/(settings)/team/_components/team-page-requests"
 
 afterEach(() => {
   vi.unstubAllGlobals()

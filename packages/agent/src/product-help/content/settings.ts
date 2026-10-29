@@ -16,8 +16,8 @@ export const settings: Category = {
         {
           heading: "How to update it",
           steps: [
-            "Open Agent → Configure in the top navigation.",
-            "Find the business name field under Your store.",
+            "Open Settings → General.",
+            "Change the business name.",
             "Save your changes.",
           ],
         },
@@ -28,15 +28,14 @@ export const settings: Category = {
       title: "Store context and brand voice",
       body: [
         {
-          text: "Agent → Configure is where you set how {agent} represents your store and writes replies.",
+          text: "Settings → Store profile is where you set how {agent} represents your store and writes replies.",
         },
         {
           heading: "Where to find them",
           steps: [
-            "Open Agent → Configure in the top navigation.",
-            "Set your business name, store timezone, about-your-store details, and brand voice.",
-            "Choose a trust level.",
-            "Set compensation limits further down. {agent} never issues more than them, even with your approval; anything larger comes to you.",
+            "Settings → General: your business name and store timezone.",
+            "Settings → Store profile: about-your-store details and brand voice.",
+            "Settings → Approvals & limits: your trust level and compensation limits. {agent} never issues more than them, even with your approval; anything larger comes to you.",
           ],
         },
         {
@@ -72,14 +71,15 @@ export const settings: Category = {
       title: "Account and workspace settings",
       body: [
         {
-          text: "Your personal login lives under Account. Billing, data exports, and workspace admin live under Workspace → Settings.",
+          text: "Your personal login lives under Settings → Account. Billing lives under Usage & billing, and exports and workspace admin under Data & privacy.",
         },
         {
           heading: "What lives where",
           steps: [
             "Click your avatar to open Account and update your profile, sign-in methods, or log out.",
-            "Open Workspace → Settings for billing, data exports, and GDPR requests.",
-            "Use the danger zone at the bottom of Workspace → Settings to archive every ticket or delete the workspace. Archiving deletes nothing; deleting the workspace erases its data.",
+            "Open Settings → Usage & billing for your plan, payment method and invoices.",
+            "Open Settings → Data & privacy for data exports and customer data requests.",
+            "Use the danger zone at the bottom of Data & privacy to archive every ticket or delete the workspace. Archiving deletes nothing; deleting the workspace erases its data.",
           ],
         },
       ],
@@ -94,9 +94,9 @@ export const settings: Category = {
         {
           heading: "How to change it",
           steps: [
-            "Open Agent → Configure and find Briefing.",
+            "Open Settings → Phone & briefing.",
             "Switch it off, or choose once or twice a day, the time, and every day or weekdays only.",
-            "Times follow the store timezone, set near the top of the page.",
+            "Times follow the store timezone, set in Settings → General.",
             "Save your changes.",
           ],
         },

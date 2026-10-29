@@ -21,14 +21,8 @@ export const DASHBOARD_DESTINATIONS: readonly DashboardDestination[] = [
   {
     id: "integrations",
     href: "/dashboard/integrations",
-    label: "Integrations",
-    description: "Connect email, Instagram, iMessage, and other channels",
-  },
-  {
-    id: "agent_settings",
-    href: "/dashboard/agent/configure",
-    label: "Agent configure",
-    description: "Store identity, trust level, brand voice, and autonomy",
+    label: "Channels",
+    description: "Connect email, Instagram, website chat, and Shopify",
   },
   {
     id: "memory",
@@ -49,22 +43,58 @@ export const DASHBOARD_DESTINATIONS: readonly DashboardDestination[] = [
     description: "Orders that need a look",
   },
   {
-    id: "workspace_settings",
-    href: "/dashboard/settings",
-    label: "Workspace settings",
-    description: "Billing and workspace admin",
+    id: "settings_general",
+    href: "/dashboard/settings/general",
+    label: "General settings",
+    description: "Store name and timezone",
   },
   {
-    id: "account_settings",
-    href: "/dashboard/account",
-    label: "Account settings",
-    description: "Profile, sign-in, and logout",
+    id: "store_profile",
+    href: "/dashboard/settings/store-profile",
+    label: "Store profile",
+    description: "About your store, brand voice, and preferences",
+  },
+  {
+    id: "approvals",
+    href: "/dashboard/settings/approvals",
+    label: "Approvals & limits",
+    description: "Trust level, compensation limits, and blocked actions",
+  },
+  {
+    id: "hours",
+    href: "/dashboard/settings/hours",
+    label: "Hours & away",
+    description: "Business hours and the away message",
+  },
+  {
+    id: "briefing",
+    href: "/dashboard/settings/briefing",
+    label: "Phone & briefing",
+    description: "Link an iPhone and set when the briefing arrives",
   },
   {
     id: "team",
     href: "/dashboard/team",
     label: "Team",
     description: "Members, roles, and access",
+  },
+  {
+    id: "billing",
+    href: "/dashboard/settings/billing",
+    label: "Usage & billing",
+    description: "Plan, payment, invoices, and the daily AI limit",
+  },
+  {
+    id: "data_privacy",
+    href: "/dashboard/settings/data",
+    label: "Data & privacy",
+    description: "Exports, retention, archiving, and deleting the workspace",
+  },
+  {
+    id: "account_settings",
+    href: "/dashboard/account",
+    label: "Account settings",
+    description: "Profile, sign-in, and logout",
   },
 ] as const;
 

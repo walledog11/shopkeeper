@@ -16,7 +16,7 @@ export const gettingStarted: Category = {
         {
           heading: "Step 1 — Connect Shopify and set up email forwarding",
           steps: [
-            "Go to the Integrations page from the sidebar.",
+            "Open Settings → Channels.",
             "Connect Shopify with your store domain.",
             "Open the Email card and choose Set up forwarding.",
             "Copy your Shopkeeper inbound address (orgId@inbound.shopkeeper.app) and add it as a forwarding destination in Gmail, cPanel, or Cloudflare.",
@@ -63,16 +63,12 @@ export const gettingStarted: Category = {
           text: "The Inbox is your main workspace. It groups open tickets by what they need from you — flagged for you, needs your answer, needs review — with everything else behind All conversations. Open a ticket and the bar above the conversation carries the customer and order context {agent} used.",
         },
         {
-          heading: "Integrations",
-          text: "Connect and manage your channels here. Each card shows connection status and lets you add or remove accounts. Once email is connected, inbound spam filtering lives on this page too.",
+          heading: "Settings",
+          text: "Settings in the top navigation is one place for everything you set once: General, Store profile, Approvals & limits, Hours & away, Phone & briefing, Channels, Team, Usage & billing, Data & privacy, and your Account (also behind your avatar).",
         },
         {
-          heading: "Configure",
-          text: "Agent → Configure is how {agent} writes and how much it may do on its own: store identity, trust level, hours, and voice.",
-        },
-        {
-          heading: "Workspace settings",
-          text: "Workspace → Settings holds billing, data exports, and workspace admin. Your personal login is under Account — click your avatar.",
+          heading: "Channels",
+          text: "Settings → Channels is where you connect and manage email, Instagram, website chat and Shopify. Each card shows connection status and lets you add or remove accounts. Once email is connected, inbound spam filtering lives on this page too.",
         },
       ],
     },

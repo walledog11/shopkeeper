@@ -14,6 +14,7 @@ import {
 } from "./needs-you-card-ui"
 import { needsYouSecondaryButtonClassName } from "./needs-you-card-styles"
 import { appPrimaryButtonClassName } from "@/lib/ui/app-button-styles"
+import { settingsSectionHref } from "@/app/dashboard/_components/nav-items"
 
 export function ProposedPreferenceCards({
   items,
@@ -100,7 +101,7 @@ export function ProposedPreferenceCards({
               {busyId === item.id ? <Loader2 className="size-4 animate-spin" /> : <X className="size-4" />}
               Dismiss
             </Button>
-            <Link href="/dashboard/agent/configure" className={needsYouSecondaryButtonClassName}>
+            <Link href={settingsSectionHref("store-profile")} className={needsYouSecondaryButtonClassName}>
               Review in settings
             </Link>
           </NeedsYouCardFooter>

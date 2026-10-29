@@ -5,7 +5,7 @@ import { extractConciergeNavigation } from "./concierge-navigation";
 
 describe("extractConciergeNavigation", () => {
   it("returns the first valid navigate action", () => {
-    const destination = getDashboardDestination("agent_settings");
+    const destination = getDashboardDestination("approvals");
     expect(destination).not.toBeNull();
 
     const actions: ActionEntry[] = [
@@ -18,8 +18,8 @@ describe("extractConciergeNavigation", () => {
 
     expect(extractConciergeNavigation(actions)).toEqual({
       type: "navigate",
-      href: "/dashboard/agent/configure",
-      label: "Agent configure",
+      href: "/dashboard/settings/approvals",
+      label: "Approvals & limits",
     });
   });
 

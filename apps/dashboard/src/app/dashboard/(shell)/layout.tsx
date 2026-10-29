@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { HelpProvider } from "../_components/help/HelpContext";
 import NotificationBar, { type Notification } from "../_components/NotificationBar";
 import NavProgressBar from "../_components/NavProgressBar";
+import { settingsSectionHref } from "../_components/nav-items";
 import DashboardSidebar from "../_components/DashboardSidebar";
 import AgentPanelUrlSync from "../_components/agent-panel/AgentPanelUrlSync";
 import { AgentPanelProvider } from "../_components/agent-panel/AgentPanelContext";
@@ -79,7 +80,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         type: "warning",
         title: `Your free trial ends in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}.`,
         message: "Upgrade to keep your team running smoothly.",
-        action: { label: "Upgrade now", href: "/dashboard/settings#billing" },
+        action: { label: "Upgrade now", href: settingsSectionHref("billing") },
       });
     }
   }
@@ -91,7 +92,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       type: "warning",
       title: "Your payment failed.",
       message: "Update your billing details to avoid service interruption.",
-      action: { label: "Update billing", href: "/dashboard/settings#billing" },
+      action: { label: "Update billing", href: settingsSectionHref("billing") },
     });
   }
 
@@ -102,7 +103,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       type: "warning",
       title: "Your subscription is canceled.",
       message: "Reactivate your plan to restore agent actions and sending.",
-      action: { label: "Reactivate", href: "/dashboard/settings#billing" },
+      action: { label: "Reactivate", href: settingsSectionHref("billing") },
     });
   }
 
