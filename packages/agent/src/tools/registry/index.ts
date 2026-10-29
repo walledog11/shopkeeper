@@ -70,6 +70,7 @@ export type {
 } from "./types.js";
 export { ToolInputValidationError } from "./schema.js";
 export { defineTool, numberArg, stringArg } from "./schema.js";
+export { SEND_EMAIL_FIELDS } from "./messaging.js";
 export { contextCapabilities, unmetToolCapability } from "./helpers.js";
 
 export const TOOL_DEFINITIONS = [

@@ -335,6 +335,22 @@ describe("durable dashboard persistence foundation", () => {
       organizationId: uncertain.task.organizationId, taskId: uncertain.task.id, expectedRevision: 0,
       claimToken: uncertainClaim!.claimToken, requestId: uncertain.request.id, failureCode: "worker_lost",
     })).toBe("reconciling");
+
+    // A settled write's outcome is on the record. Reconciling it would park the
+    // task where nothing ever moves it again.
+    const settled = await seedTask();
+    const settledClaim = await claimAgentTask({ organizationId: settled.task.organizationId, taskId: settled.task.id, expectedRevision: 0 });
+    await db.agentAction.create({ data: {
+      organizationId: settled.task.organizationId, threadId: settled.task.threadId,
+      turnId: settled.request.id, tool: "create_refund", category: "order", input: {},
+      status: "success", mode: "human_approved", dispatchState: "settled",
+      submittedAt: new Date(), executedAt: new Date(), durationMs: 1,
+      operationId: randomUUID(), actionIndex: 0,
+    } });
+    expect(await failAgentTaskClaim({
+      organizationId: settled.task.organizationId, taskId: settled.task.id, expectedRevision: 0,
+      claimToken: settledClaim!.claimToken, requestId: settled.request.id, failureCode: "model_failed",
+    })).toBe("failed");
   });
 
   it("finds accepted queue gaps and marks expired running claims for reconciliation", async () => {

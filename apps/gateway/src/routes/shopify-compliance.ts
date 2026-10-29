@@ -310,7 +310,6 @@ async function deleteSelectedCustomerData(
     await tx.returnWatch.deleteMany({ where: watchWhere });
     await tx.voiceEdit.deleteMany({ where: threadWhere });
     await tx.kbCitation.deleteMany({ where: threadWhere });
-    await tx.autonomyShadowDecision.deleteMany({ where: threadWhere });
     await tx.agentAction.deleteMany({
       where: {
         organizationId,

@@ -34,7 +34,8 @@ export interface AgentActionResult {
 
 export interface PlanIdentity {
   planId: string;
-  sourceMessageId: string;
+  /** Null for a draft made before its ticket had any message. */
+  sourceMessageId: string | null;
   planHash: string;
   instructionHash: string;
 }

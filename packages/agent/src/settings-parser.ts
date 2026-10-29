@@ -393,9 +393,13 @@ function parseSettingsObject(value: unknown, mode: ParseMode): OrgSettingsPatch 
   readToolsEnabled(value, output, context);
   readBusinessHoursDays(value, output, context);
 
+  // Only a row written before autoExecuteMode existed falls back to the old
+  // boolean. A mode that is stored but no longer valid, such as the retired
+  // "shadow" (route everything to a person), is dropped to the default and
+  // never read as the boolean's "live".
   if (
     context.mode === "stored"
-    && output.autoExecuteMode === undefined
+    && !hasOwn(value, "autoExecuteMode")
     && typeof value.autoExecuteEnabled === "boolean"
   ) {
     output.autoExecuteMode = value.autoExecuteEnabled ? "live" : "off";

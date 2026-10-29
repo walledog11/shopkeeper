@@ -18,7 +18,11 @@ export function analyzePendingPlan(plan) {
 
   return {
     valid: typeof plan.threadId === 'string' && typeof plan.instruction === 'string',
-    identityLess: !plan.planId,
+    // The same test the queue's own liveness check applies (identity_incomplete
+    // in pendingPlanStaleReason): all four fields, where a null source is a
+    // draft made before its ticket had any message, not a missing one.
+    identityLess: !plan.planId || !Object.hasOwn(plan, 'sourceMessageId')
+      || !plan.planHash || !plan.instructionHash,
     legacyToolCalls,
     toolCalls: rawToolCalls.length,
   };
@@ -52,6 +56,7 @@ export function summarizeOperatorContextCompatibility(rows) {
     identityLessQueuedPlans: 0,
     legacyToolCalls: 0,
     queuedPlanCount: 0,
+    safeToRetireIdentityLessReader: true,
     safeToRetireLegacyToolCallShape: true,
   };
 
@@ -62,6 +67,7 @@ export function summarizeOperatorContextCompatibility(rows) {
     summary.queuedPlanCount += analysis.queuedPlanCount;
   }
 
+  summary.safeToRetireIdentityLessReader = summary.identityLessQueuedPlans === 0;
   summary.safeToRetireLegacyToolCallShape = summary.legacyToolCalls === 0;
 
   return summary;

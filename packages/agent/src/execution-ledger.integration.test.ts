@@ -17,7 +17,9 @@ import {
   type PlanExecutionDeps,
 } from "./plan-execution.js";
 import { resolveAgentSettings } from "./settings.js";
-import { ANY_MEMBER_ACTOR_KEY, acceptCustomerAgentRequest, claimAgentTask, settleAgentTaskClaim } from "./task-ledger/index.js";
+import { ANY_MEMBER_ACTOR_KEY, acceptCustomerAgentRequest, acceptTicketAgentRequest, claimAgentTask, settleAgentTaskClaim } from "./task-ledger/index.js";
+import { openEmailThreadFor } from "./thread-io/email-thread.js";
+import { buildPlanSteps } from "./planner-steps.js";
 import { deriveProposalCommunication } from "./proposal-communication.js";
 import type { AgentContext } from "./agent-context.js";
 import type { AgentPlan } from "./types.js";
@@ -180,6 +182,40 @@ describe("plan execution ledger", () => {
     expect(execution.lastError).toBe("stale_plan");
   });
 
+  // A merchant's draft on an answered ticket follows our own last reply. It is
+  // current until anyone writes again, the merchant included.
+  it("claims a draft that follows our own reply until anything newer is written", async () => {
+    const identity = await seedIdentity();
+    const reply = await createTestMessage(identity.threadId!, "It shipped yesterday.", "agent");
+    await db.message.update({ where: { id: reply.id }, data: { sentAt: new Date(Date.now() + 60_000) } });
+    const settings = resolveAgentSettings(null);
+    const plan: AgentPlan = {
+      instruction: "Tell them the tracking number",
+      steps: [],
+      rawToolCalls: [{ id: "send_1", name: "send_reply", input: { text: "Your tracking number is 1Z999." } }],
+    };
+    const seedDraft = async () => {
+      const cache = buildAgentPlanCacheRecord({
+        instruction: plan.instruction, lastCustomerMessageId: reply.id, settings, plan,
+      });
+      await db.thread.update({
+        where: { id: identity.threadId! },
+        data: { cachedPlanMessageId: reply.id, cachedPlan: cache as object },
+      });
+      return {
+        ...identity, planId: cache.planId!, sourceMessageId: reply.id,
+        planHash: hashPlan(plan), instructionHash: hashInstruction(plan.instruction),
+      };
+    };
+
+    expect((await claimCurrentPlanExecution(await seedDraft())).claimed).toBe(true);
+
+    const stale = await seedDraft();
+    const handReply = await createTestMessage(identity.threadId!, "Here you go: 1Z999.", "agent");
+    await db.message.update({ where: { id: handReply.id }, data: { sentAt: new Date(Date.now() + 120_000) } });
+    await expect(claimCurrentPlanExecution(stale)).rejects.toBeInstanceOf(ConflictError);
+  });
+
   it("requires the active claim token for terminal transitions", async () => {
     const identity = await seedIdentity();
     const claim = await claimPlanExecution(identity);
@@ -260,6 +296,70 @@ describe("plan execution ledger", () => {
     });
 
     expect(action.execution?.planId).toBe(identity.planId);
+  });
+
+  // The operator's email to someone with no ticket is parked on one opened for
+  // them, before it has any message. Approving it runs the exact email; once
+  // anyone writes there, the draft no longer follows the conversation.
+  it("runs an email drafted on a ticket with no messages, until one arrives", async () => {
+    const org = await createTestOrg();
+    orgIds.push(org.id);
+    const member = await db.orgMember.create({ data: { organizationId: org.id, clerkUserId: `usr_${randomUUID()}` } });
+    const email = { to: "jo@example.com", subject: "Your order", body: "Hi Jo, it ships Friday." };
+    const opened = await openEmailThreadFor({ organizationId: org.id, to: email.to, subject: email.subject });
+    const thread = await db.thread.findUniqueOrThrow({ where: { id: opened.id } });
+    const settings = resolveAgentSettings(null);
+    const rawToolCalls = [{ id: "draft_email", name: "send_email", input: email }];
+    const plan: AgentPlan = {
+      instruction: "Email Jo",
+      steps: buildPlanSteps(rawToolCalls),
+      rawToolCalls,
+      communication: deriveProposalCommunication(rawToolCalls, thread) ?? undefined,
+    };
+    const draft = async () => {
+      const { request, task } = await acceptTicketAgentRequest({
+        organizationId: org.id, clerkUserId: member.clerkUserId, threadId: thread.id,
+        dedupeKey: randomUUID(), instruction: plan.instruction, force: false, email,
+        budget: { runtimeVersion: 2, modelCallLimit: 20, activeTimeMsLimit: 120000, spendNanoUsdLimit: 1000000000n },
+      });
+      const claim = await claimAgentTask({ organizationId: org.id, taskId: task.id, expectedRevision: task.revision });
+      const cache = buildAgentPlanCacheRecord({ instruction: plan.instruction, lastCustomerMessageId: null, settings, plan });
+      expect(await settleAgentTaskClaim({
+        organizationId: org.id, taskId: task.id, expectedRevision: task.revision,
+        claimToken: claim!.claimToken, requestId: request.id,
+        settlement: {
+          status: "waiting_approval",
+          proposal: {
+            proposalId: cache.planId!, instruction: plan.instruction, rawToolCalls,
+            communication: plan.communication, sourceRequestIds: [request.id],
+          },
+          approver: { kind: "member", key: ANY_MEMBER_ACTOR_KEY },
+        },
+        planCache: { threadId: thread.id, sourceMessageId: null, cache },
+      })).toBe(true);
+      return cache;
+    };
+    const sent: unknown[] = [];
+    const deps: PlanExecutionDeps = {
+      lock: { acquire: async () => ({ release: async () => {} }) },
+      buildContext: async () => ({}) as AgentContext,
+      runAgent: async (_ctx, _instruction, approvedToolCalls) => {
+        sent.push(approvedToolCalls);
+        return { summary: "Sent", actionsPerformed: [{ tool: "send_email", result: "Sent", status: "success" }] };
+      },
+    };
+    const approve = (planId: string) => executeCurrentCachedHomePlan({
+      orgId: org.id, threadId: thread.id, settings, executionIntent: "merchant_approved",
+      failureRoute: "test", approver: { clerkUserId: member.clerkUserId }, expectedIdentity: { planId },
+    }, deps);
+
+    await approve((await draft()).planId!);
+    expect(sent).toEqual([rawToolCalls]);
+
+    const stale = await draft();
+    await createTestMessage(thread.id, "Actually, can I change my address?");
+    await expect(approve(stale.planId!)).rejects.toBeInstanceOf(ConflictError);
+    expect(sent).toHaveLength(1);
   });
 
   it("allows only one concurrent durable approval to reach the provider seam", async () => {

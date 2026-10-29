@@ -10,7 +10,7 @@ identity-less operator queue reader under *Later → Production leftovers*.
 
 | Command | Run when |
 | --- | --- |
-| `npm run audit:operator-context-compatibility` | Before removing identity-less queue handling or changing `operator_contexts` shape. Use `--strict` on retirement PRs. |
+| `npm run audit:operator-context-compatibility` | Before removing identity-less queue handling or the legacy tool-call shape, or changing `operator_contexts` shape. A queued plan is identity-less exactly when the queue's own liveness check would drop it as `identity_incomplete`. `--strict` fails while either reader still has a row to read. |
 | `npm run audit:retired-channel-types` | After channel enum migrations: confirms no rows reference retired values and the live Postgres enum matches. Use `--strict` before `db:migrate:deploy` when a migration recreates `ChannelType`. |
 
 **Production channel migrations:** run
@@ -38,7 +38,7 @@ audit that gates a channel retirement must cast to text the same way.
 | Command | Run when |
 | --- | --- |
 | `npm run audit:plan-executions` | During agent execution or ledger rollouts. |
-| `npm run audit:agent-runtime-retirement -- --strict` | Before removing a retained runtime-compatibility reader. Read-only aggregate inventory of task versions, proposals, unknown operations, and current taskless caches; refuses actionable non-v2 state. |
+| `npm run audit:agent-runtime-retirement -- --strict` | Before removing a retained runtime-compatibility reader. Read-only aggregate inventory of task versions, proposals, unknown operations, stored cache versions and current cards; `--strict` fails unless every `licenses` flag holds (no actionable non-v2 work, no approvable card without a durable proposal). |
 
 ## Repo hygiene
 

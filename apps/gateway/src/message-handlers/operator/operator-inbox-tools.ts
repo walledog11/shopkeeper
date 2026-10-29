@@ -1,7 +1,8 @@
 import { db, ThreadStatus } from '@shopkeeper/db';
 import { createHash, randomUUID } from 'node:crypto';
 import { ApiError } from '@shopkeeper/shared/errors';
-import { defineTool, stringArg, toolError, toolNotFound, toolOk, type AgentToolDefinition, type ReceiptV1 } from '@shopkeeper/agent/tools';
+import { defineTool, SEND_EMAIL_FIELDS, stringArg, toolError, toolNotFound, toolOk, type AgentToolDefinition, type ReceiptV1 } from '@shopkeeper/agent/tools';
+import { openEmailThreadFor } from '@shopkeeper/agent/thread-io';
 import { canonicalInboxThreadWhere } from '@shopkeeper/agent/inbox-filter';
 import { wrapUntrusted } from '@shopkeeper/agent/message-history';
 import { getCurrentPlanForThread } from '@shopkeeper/agent/plan-cache-shape';
@@ -39,11 +40,18 @@ interface DraftTicketReplyInput {
   instruction: string;
 }
 
+interface DraftEmailInput {
+  to: string;
+  subject: string;
+  body: string;
+}
+
 interface MarkTicketSpamInput {
   ticket_id: string;
 }
 
 const TICKET_NOT_IN_INBOX = 'Error: no ticket with that id is in the inbox.';
+const EMAIL_ADDRESS = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const LIST_LIMIT = 20;
 const TRANSCRIPT_LIMIT = 10;
@@ -245,7 +253,7 @@ export function buildOperatorInboxTools(
   const draftTicketReply = defineTool({
     name: 'draft_ticket_reply',
     description:
-      'Draft a reply to the customer on one of the inbox tickets. Nothing is sent: the reply is drafted on their ticket and the merchant gets the exact text to approve. Takes any ticket id from the briefing or from list_active_tickets. This is how you answer a customer who already has a ticket; send_email is for contacting someone who does not.',
+      'Draft a reply to the customer on one of the inbox tickets. Nothing is sent: the reply is drafted on their ticket and the merchant gets the exact text to approve. Takes any ticket id from the briefing or from list_active_tickets. This is how you answer a customer who already has a ticket; draft_email is for contacting someone who does not.',
     fields: {
       ticket_id: stringArg('The ticket id from the briefing or list_active_tickets.', { required: true }),
       instruction: stringArg('What the reply should tell the customer, from what the merchant said.', { required: true }),
@@ -277,6 +285,45 @@ export function buildOperatorInboxTools(
         throw error;
       }
       return toolOk('Drafting the reply on that ticket. The merchant gets the exact text to approve; nothing has been sent yet.');
+    },
+  });
+
+  // An email to someone without a ticket is drafted the same way, on their email
+  // ticket, opened for them when there is none. The email the agent writes here
+  // is the draft itself, so the merchant approves exactly these words.
+  const draftEmail = defineTool({
+    name: 'draft_email',
+    description:
+      'Draft an email to someone who has no ticket, such as a customer the merchant wants to tell about a delay. Write the exact email. Nothing is sent: it goes on their email ticket, opened for them if they have none, and the merchant gets that exact email to approve.',
+    fields: SEND_EMAIL_FIELDS,
+    category: 'internal',
+    group: 'messaging',
+    capabilities: [],
+    label: 'Drafted email',
+    planStepLabel: 'Draft email',
+    policy: { categoryPermission: false },
+    execute: async (input: DraftEmailInput, ctx) => {
+      const email = { to: input.to.trim(), subject: input.subject.trim(), body: input.body.trim() };
+      if (!EMAIL_ADDRESS.test(email.to)) {
+        return toolError(`Error: "${email.to}" is not an email address. Nothing was drafted or sent.`);
+      }
+      const thread = await openEmailThreadFor({ organizationId, to: email.to, subject: email.subject });
+      const draftHash = createHash('sha256').update(JSON.stringify(email)).digest('hex').slice(0, 16);
+      const dedupeKey = ctx.agentRequestId
+        ? `operator-email:${ctx.agentRequestId}:${draftHash}`
+        : `operator-email:${randomUUID()}`;
+      try {
+        await submitTicketPlanRequest({
+          organizationId, clerkUserId, threadId: thread.id, dedupeKey,
+          instruction: `Email ${email.to} about "${email.subject}"`, force: false, email,
+        });
+      } catch (error) {
+        if (error instanceof ApiError && error.status < 500) {
+          return toolError(`Error: ${error.message} Nothing was drafted or sent.`);
+        }
+        throw error;
+      }
+      return toolOk('Drafted the email. The merchant gets the exact text to approve; nothing has been sent yet.');
     },
   });
 
@@ -327,6 +374,7 @@ export function buildOperatorInboxTools(
     list_active_tickets: listActiveTickets,
     get_ticket: getTicket,
     draft_ticket_reply: draftTicketReply,
+    draft_email: draftEmail,
     mark_ticket_spam: markTicketSpam,
   };
 }

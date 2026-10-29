@@ -1,24 +1,17 @@
 // The one follow-up attempt queued when an approved message was withheld.
 
 import { randomUUID } from "node:crypto";
-import type { AgentActionDispatchState, Prisma as PrismaTypes } from "@prisma/client";
+import type { Prisma as PrismaTypes } from "@prisma/client";
 import { db, Prisma } from "@shopkeeper/db";
 import { ConflictError } from "../errors.js";
 import type { ApprovedMessageWithheld } from "../agent-context.js";
-import { checkpointContinuity } from "./customer-requests.js";
-import { NO_SUSPENSION, activeTimeDeltaMs, checkpointSourceRequestIds, leaseExpiry, type TaskClaimIdentity } from "./shared.js";
+import { NO_SUSPENSION, UNSETTLED_DISPATCH_STATES, activeTimeDeltaMs, checkpointSourceRequestIds, leaseExpiry, type TaskClaimIdentity } from "./shared.js";
 
 // A support task whose approved message was withheld is queued for one attempt
 // that tells the customer what actually happened. The marker names the
 // execution it follows; a later customer message rewrites the checkpoint, which
 // is what supersedes it.
 export const WITHHELD_MESSAGE_FOLLOW_UP = "withheld_message_follow_up";
-
-// Writes that may not have finished. A follow-up may run beside settled writes,
-// whose outcome is known and on the record, and never beside one of these.
-const UNSETTLED_DISPATCH_STATES: AgentActionDispatchState[] = [
-  "dispatch_authorized", "submitted", "unknown",
-];
 
 export interface WithheldMessageFollowUp {
   executionId: string;
@@ -42,10 +35,8 @@ export function withheldMessageFollowUpCheckpoint(
   checkpoint: unknown,
   followUp: WithheldMessageFollowUp,
 ): PrismaTypes.InputJsonObject {
-  const continuity = checkpointContinuity(checkpoint);
   return {
     sourceRequestIds: checkpointSourceRequestIds(checkpoint),
-    ...(continuity ? { continuity: { ...continuity } } : {}),
     nextWork: WITHHELD_MESSAGE_FOLLOW_UP,
     followUp: { executionId: followUp.executionId, reason: followUp.reason },
   };
@@ -92,9 +83,8 @@ export async function claimWithheldMessageFollowUp(
 
 /**
  * Ends a follow-up that parked nothing, in the outcome the approved execution
- * had. `failAgentTaskClaim` would read the settled writes as consequential and
- * park the task in `reconciling`, which is for uncertainty; there is none here.
- * A stop that arrived meanwhile still wins, as `cancelled`.
+ * had: its writes committed or they failed, and the attempt that only drafted
+ * changes neither. A stop that arrived meanwhile still wins, as `cancelled`.
  */
 export async function finishWithheldMessageFollowUp(input: TaskClaimIdentity & {
   claimToken: string;

@@ -30,6 +30,12 @@ export type RequestDisplay =
     }
   | {
       version: typeof REQUEST_DISPLAY_VERSION;
+      /** A merchant's own ask, for a draft made on their instruction. */
+      kind: 'instruction';
+      text: string;
+    }
+  | {
+      version: typeof REQUEST_DISPLAY_VERSION;
       kind: 'unavailable';
     };
 
@@ -50,6 +56,10 @@ export function systemRequestDisplay(event: SystemRequestKind): RequestDisplay {
   return { version: REQUEST_DISPLAY_VERSION, kind: 'system', event };
 }
 
+export function instructionRequestDisplay(text: string): RequestDisplay {
+  return { version: REQUEST_DISPLAY_VERSION, kind: 'instruction', text: text.trim() };
+}
+
 export function unavailableRequestDisplay(): RequestDisplay {
   return { version: REQUEST_DISPLAY_VERSION, kind: 'unavailable' };
 }
@@ -65,6 +75,7 @@ export function requestDisplayHasContext(
 ): boolean {
   if (!display || display.kind === 'unavailable') return false;
   if (display.kind === 'system') return true;
+  if (display.kind === 'instruction') return display.text !== '';
   return formatFactsBriefingLine(display.facts, null, now, {
     noRequest: display.noRequest,
     topic: display.topic,
@@ -121,6 +132,11 @@ export function readRequestDisplay(value: unknown): RequestDisplay | undefined {
     return event ? systemRequestDisplay(event) : unavailableRequestDisplay();
   }
   if (value.kind === 'unavailable') return unavailableRequestDisplay();
+  if (value.kind === 'instruction') {
+    return typeof value.text === 'string' && value.text.trim()
+      ? instructionRequestDisplay(value.text)
+      : unavailableRequestDisplay();
+  }
   if (value.kind !== 'classified' || typeof value.sourceMessageId !== 'string') {
     return unavailableRequestDisplay();
   }
@@ -150,6 +166,7 @@ export function formatRequestDisplayLine(
     return 'Request details unavailable — open the thread for the original message';
   }
   if (display.kind === 'system') return SYSTEM_REQUEST_LINES[display.event];
+  if (display.kind === 'instruction') return `You asked: ${display.text}`;
   return formatFactsBriefingLine(display.facts, person, now, {
     noRequest: display.noRequest,
     topic: display.topic,

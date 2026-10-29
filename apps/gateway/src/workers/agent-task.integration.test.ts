@@ -42,7 +42,8 @@ vi.mock('../clients/agent-runtime.js', () => ({
 }));
 
 import { processAgentTaskJob } from './agent-task.js';
-import { getContext, updateContext } from '../operator-context.js';
+import { getContext, pendingPlanDropReason, updateContext } from '../operator-context.js';
+import { openEmailThreadFor } from '@shopkeeper/agent/thread-io';
 import { hashInstruction, hashPlan } from '@shopkeeper/agent/agent-actions';
 import { readAgentPlanCacheRecordShape } from '@shopkeeper/agent/plan-cache-shape';
 
@@ -175,6 +176,46 @@ describe('processAgentTaskJob', () => {
     await processAgentTaskJob(job);
     expect(sendPhone).toHaveBeenCalledTimes(2);
     expect(anthropicCreate).toHaveBeenCalledTimes(modelCalls);
+  });
+
+  // The operator agent's email to someone with no ticket used to be sent in its
+  // own turn, unseen by the merchant. It is now parked on a ticket opened for
+  // them, word for word, with no model asked to rewrite it.
+  it('parks an email the request wrote out, exactly as written, as a live phone card', async () => {
+    const org = await createTestOrg();
+    orgId = org.id;
+    const member = await db.orgMember.create({ data: { organizationId: org.id, clerkUserId: randomUUID() } });
+    await db.orgMemberTelegramChat.create({ data: { orgMemberId: member.id, chatId: `email-${randomUUID()}` } });
+    const email = { to: 'new.customer@example.com', subject: 'Your order', body: 'Hi, your order ships Friday.' };
+    const opened = await openEmailThreadFor({ organizationId: org.id, to: email.to, subject: email.subject });
+    expect(opened.replying).toBe(false);
+    const { task, request } = await acceptTicketAgentRequest({
+      organizationId: org.id, clerkUserId: member.clerkUserId, threadId: opened.id,
+      dedupeKey: randomUUID(), instruction: `Email ${email.to} about "${email.subject}"`, force: false, email,
+      budget: { runtimeVersion: 2, modelCallLimit: 10, activeTimeMsLimit: 120_000, spendNanoUsdLimit: 1_000_000_000n },
+    });
+    expect(request.sourceMessageId).toBeNull();
+
+    await processAgentTaskJob({ organizationId: org.id, taskId: task.id, revision: task.revision });
+
+    expect(anthropicCreate).not.toHaveBeenCalled();
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: task.id } }))
+      .toMatchObject({ status: 'waiting_approval' });
+    const thread = await db.thread.findUniqueOrThrow({ where: { id: opened.id } });
+    const cached = readAgentPlanCacheRecordShape(thread.cachedPlan)!;
+    expect(thread.cachedPlanMessageId).toBeNull();
+    expect(cached.plan.rawToolCalls).toEqual([{ id: 'draft_email', name: 'send_email', input: email }]);
+    expect(cached.plan.communication).toMatchObject({
+      mode: 'exact_draft', destination: { kind: 'email', id: email.to }, draft: email.body,
+    });
+    const pending = (await getContext(org.id, `member:${member.id}`)).pendingPlan!;
+    expect(pending).toMatchObject({
+      planId: cached.planId, sourceMessageId: null,
+      requestDisplay: { kind: 'instruction', text: `Email ${email.to} about "${email.subject}"` },
+    });
+    expect(await pendingPlanDropReason(org.id, pending)).toBeNull();
+    expect(sendPhone).toHaveBeenCalledTimes(1);
+    expect(await db.message.count({ where: { threadId: opened.id } })).toBe(0);
   });
 
   // The merchant presses stop while the model is still thinking. Whatever the model

@@ -8,8 +8,9 @@ export type PlanThreadMessage = {
   senderType: string
 }
 
+// Only the current version is read. Every currency check already required it,
+// so an earlier record was never a plan anything could show as live or run.
 export const AGENT_PLAN_CACHE_VERSION = 7
-export const SUPPORTED_AGENT_PLAN_CACHE_VERSIONS = [1, 2, 3, 4, 5, 6, AGENT_PLAN_CACHE_VERSION]
 
 export interface PlanFailureReplanContext {
   parentPlanId: string;
@@ -24,6 +25,12 @@ export interface AgentPlanCacheRecordShape {
   version: number
   planId: string | null
   instruction: string
+  /**
+   * The conversation's latest message when the plan was drafted, whoever sent
+   * it: the customer message a support plan answers, or what a merchant's draft
+   * follows. Null when the thread had none. The plan is current only while this
+   * is still the latest.
+   */
   lastCustomerMessageId: string | null
   settingsFingerprint: string
   plan: AgentPlan
@@ -140,7 +147,7 @@ function isFailureReplanContext(value: unknown): value is PlanFailureReplanConte
   return true
 }
 
-function isAgentPlan(value: unknown, requireCurrentFields: boolean): value is AgentPlan {
+function isAgentPlan(value: unknown): value is AgentPlan {
   if (!isRecord(value)) return false
   if (typeof value.instruction !== "string") return false
   if (!Array.isArray(value.steps) || !value.steps.every(isPlanStep)) return false
@@ -148,10 +155,8 @@ function isAgentPlan(value: unknown, requireCurrentFields: boolean): value is Ag
   if (value.readResults !== undefined && !isStringRecord(value.readResults)) return false
   if (value.warnings !== undefined && (!Array.isArray(value.warnings) || !value.warnings.every(w => typeof w === "string"))) return false
   if (value.signals !== undefined && (!Array.isArray(value.signals) || !value.signals.every(isPlanSignal))) return false
-  if (requireCurrentFields && !isPlanValidation(value.validation)) return false
-  if (value.validation !== undefined && !isPlanValidation(value.validation)) return false
-  if (requireCurrentFields && !isPlanRoutingEvidence(value.routingEvidence)) return false
-  if (value.routingEvidence !== undefined && !isPlanRoutingEvidence(value.routingEvidence)) return false
+  if (!isPlanValidation(value.validation)) return false
+  if (!isPlanRoutingEvidence(value.routingEvidence)) return false
   if (value.namespaceMiss !== undefined && typeof value.namespaceMiss !== "boolean") return false
   if (value.damagePhotos !== undefined && (!Array.isArray(value.damagePhotos) || !value.damagePhotos.every(ref => typeof ref === "string"))) return false
   if (value.communication !== undefined && !isProposalCommunication(value.communication)) return false
@@ -169,11 +174,10 @@ function isAgentPlan(value: unknown, requireCurrentFields: boolean): value is Ag
 export function readAgentPlanCacheRecordShape(value: unknown): AgentPlanCacheRecordShape | null {
   if (!isRecord(value)) return null
   if (
-    typeof value.version !== "number" ||
-    !SUPPORTED_AGENT_PLAN_CACHE_VERSIONS.includes(value.version) ||
+    value.version !== AGENT_PLAN_CACHE_VERSION ||
     typeof value.instruction !== "string" ||
     typeof value.settingsFingerprint !== "string" ||
-    !isAgentPlan(value.plan, value.version === AGENT_PLAN_CACHE_VERSION)
+    !isAgentPlan(value.plan)
   ) {
     return null
   }
@@ -260,11 +264,9 @@ export function getCurrentPlanForThread(
   thread: { cachedPlan: unknown; cachedPlanMessageId: string | null },
   messages: PlanThreadMessage[],
 ): AgentPlan | null {
-  const pendingCustomerMessageId = getPendingCustomerMessageId(messages)
-  if (!pendingCustomerMessageId) return null
-  if (!thread.cachedPlanMessageId || thread.cachedPlanMessageId !== pendingCustomerMessageId) return null
+  if (thread.cachedPlanMessageId !== (getLastConversationMessage(messages)?.id ?? null)) return null
   const cache = readAgentPlanCacheRecordShape(thread.cachedPlan)
-  if (!cache || cache.version !== AGENT_PLAN_CACHE_VERSION) return null
+  if (!cache) return null
   const plan = cache.planId ? { ...cache.plan, planId: cache.planId } : cache.plan
   return plan && (plan.steps.length > 0 || plan.validation?.status === "invalid") ? plan : null
 }

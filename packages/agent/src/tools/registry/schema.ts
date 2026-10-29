@@ -34,6 +34,11 @@ type FieldDefinition =
       kind: "boolean";
       description: string;
       required?: boolean;
+      /**
+       * Left out of the schema the model is shown but still parsed, for a field
+       * removed after inputs carrying it were persisted.
+       */
+      retired?: boolean;
     }
   | {
       kind: "array";
@@ -90,7 +95,7 @@ export function numberArg(description: string, options: { required?: boolean } =
   return { kind: "number", description, ...options };
 }
 
-export function booleanArg(description: string, options: { required?: boolean } = {}): FieldDefinition {
+export function booleanArg(description: string, options: { required?: boolean; retired?: boolean } = {}): FieldDefinition {
   return { kind: "boolean", description, ...options };
 }
 
@@ -105,6 +110,7 @@ export function arrayArg(
 function objectSchema(fields: FieldMap): Anthropic.Tool.InputSchema {
   const modelFields = Object.entries(fields).filter(([, field]) => (
     !((field.kind === "array" || field.kind === "string") && field.runtimeOnly)
+    && !(field.kind === "boolean" && field.retired)
   ));
   const required = modelFields.flatMap(([name, field]) => (
     field.required || (field.kind === "string" && field.modelRequired) ? [name] : []

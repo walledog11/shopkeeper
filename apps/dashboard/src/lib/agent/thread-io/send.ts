@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { db, SenderType, createMessage } from "@shopkeeper/db";
 import { CHANNEL_TYPE, THREAD_STATUS } from "@shopkeeper/agent/thread-constants";
-import { communicationFailure, communicationSuccess, type ThreadSinkContext } from "@shopkeeper/agent/thread-io";
+import { communicationFailure, communicationSuccess, openEmailThreadFor, type ThreadSinkContext } from "@shopkeeper/agent/thread-io";
 import type { SendReplyInput, SendEmailInput } from "@shopkeeper/agent/tools";
 import type { AgentActionMode } from "@shopkeeper/agent/context";
 import type { ReplySource } from "@shopkeeper/analytics";
@@ -150,24 +150,9 @@ export async function sendEmail(
   input: SendEmailInput,
   ctx: ThreadContext
 ): Promise<ToolResult> {
-  // Fetch email integration; simultaneously search for an existing open email thread
-  // for this recipient directly via relation filter (avoids a separate customer lookup
-  // that can miss if the address casing differs from the stored platformId).
-  const [emailIntegrationResult, existingThread] = await Promise.all([
-    resolveEmailIntegration({ organizationId: ctx.orgId, purpose: "proactive" })
-      .then(integration => ({ integration }))
-      .catch(error => ({ error })),
-    db.thread.findFirst({
-      where: {
-        organizationId: ctx.orgId,
-        channelType: CHANNEL_TYPE.EMAIL,
-        status: THREAD_STATUS.OPEN,
-        customer: { platformId: { equals: input.to, mode: "insensitive" } },
-      },
-      include: { customer: true },
-      orderBy: { updatedAt: "desc" },
-    }),
-  ]);
+  const emailIntegrationResult = await resolveEmailIntegration({ organizationId: ctx.orgId, purpose: "proactive" })
+    .then(integration => ({ integration }))
+    .catch(error => ({ error }));
   if ('error' in emailIntegrationResult) {
     const error = emailIntegrationResult.error;
     if (error instanceof EmailNotConfiguredError) {
@@ -180,35 +165,13 @@ export async function sendEmail(
   const fromEmail = emailIntegration.fromEmail || emailIntegration.externalAccountId;
   const provider = getEmailProvider(emailIntegration);
 
-  // For a new thread we need the ID for email headers before calling the provider.
-  // Create the thread shell now (no message) so we can roll back if send fails.
-  let targetThreadId: string;
-  if (existingThread) {
-    targetThreadId = existingThread.id;
-  } else {
-    // No existing thread — upsert the customer then create a new thread shell
-    const customerKey = { organizationId: ctx.orgId, platformId: input.to };
-    let customer = await db.customer.findUnique({ where: { organizationId_platformId: customerKey } });
-    if (!customer) {
-      try {
-        customer = await db.customer.create({ data: { organizationId: ctx.orgId, platformId: input.to } });
-      } catch (err) {
-        if ((err as { code?: string }).code !== 'P2002') throw err;
-        customer = (await db.customer.findUnique({ where: { organizationId_platformId: customerKey } }))!;
-      }
-    }
-    const newThread = await db.thread.create({
-      data: {
-        organizationId: ctx.orgId,
-        customerId: customer.id,
-        channelType: CHANNEL_TYPE.EMAIL,
-        status: THREAD_STATUS.OPEN,
-        subject: input.subject,
-        tag: input.subject,
-      },
-    });
-    targetThreadId = newThread.id;
-  }
+  // An approved draft runs on the ticket it was reviewed on. The ID goes into
+  // the email headers, so a new ticket is opened before the provider is called.
+  const target = await openEmailThreadFor({
+    organizationId: ctx.orgId, to: input.to, subject: input.subject, preferThreadId: ctx.threadId,
+  });
+  const targetThreadId = target.id;
+  const existingThread = target.replying ? target : null;
 
   // Async path (OUTBOUND_EMAIL_ASYNC): pre-create the agent message as `pending`
   // and hand the provider send to the gateway queue. The thread stores

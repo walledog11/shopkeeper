@@ -14,6 +14,38 @@ export const DISPATCHED_STATES: AgentActionDispatchState[] = [
   "dispatch_authorized", "submitted", "unknown", "settled",
 ];
 
+// Writes that may not have finished. Only these put a task in `reconciling`: a
+// settled write's outcome is known and on the record, so there is nothing to
+// reconcile, and a follow-up may run beside one but never beside these.
+export const UNSETTLED_DISPATCH_STATES: AgentActionDispatchState[] = [
+  "dispatch_authorized", "submitted", "unknown",
+];
+
+/**
+ * What a task's actions did at a provider: whether any reached one, which its
+ * failure code records, and whether any of those outcomes is still open, which
+ * is the only thing a stop or failure sends to `reconciling`.
+ */
+export async function taskDispatches(
+  tx: Pick<typeof db, "agentAction">,
+  task: { organizationId: string; taskId: string },
+): Promise<{ dispatched: boolean; unsettled: boolean }> {
+  const states = await tx.agentAction.findMany({
+    where: {
+      organizationId: task.organizationId, taskId: task.taskId,
+      dispatchState: { in: DISPATCHED_STATES },
+    },
+    select: { dispatchState: true },
+    distinct: ["dispatchState"],
+  });
+  return {
+    dispatched: states.length > 0,
+    unsettled: states.some(({ dispatchState }) => (
+      dispatchState !== null && UNSETTLED_DISPATCH_STATES.includes(dispatchState)
+    )),
+  };
+}
+
 export interface TaskBudget {
   runtimeVersion: number;
   modelCallLimit: number;

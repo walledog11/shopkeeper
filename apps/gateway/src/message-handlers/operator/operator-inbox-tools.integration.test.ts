@@ -424,19 +424,18 @@ describe('draft_ticket_reply and mark_ticket_spam', () => {
     expect(mockSubmitTicketPlanRequest).toHaveBeenCalledWith(expect.objectContaining({ threadId: thread.id }));
   });
 
-  // A customer who has already been answered leaves the composer nothing to plan
-  // for. The merchant must hear that nothing was drafted or sent, not that a
-  // draft is on its way.
+  // The merchant must hear that nothing was drafted or sent, not that a draft
+  // is on its way.
   it('reports a ticket the composer cannot draft on', async () => {
-    const thread = await inboxThread('answered@example.com', 'Andy Answered');
+    const thread = await inboxThread('busy@example.com', 'Bea Busy');
     mockSubmitTicketPlanRequest.mockRejectedValueOnce(
-      new ConflictError('This ticket has no unanswered customer message to plan for.'),
+      new ConflictError('Work on this ticket is already underway. Review its outcome before regenerating.'),
     );
 
     const result = await draftReply(thread.id, 'Tell them it shipped.');
 
     expect(result.status).toBe('error');
-    expect(result.message).toContain('no unanswered customer message');
+    expect(result.message).toContain('already underway');
     expect(result.message).toContain('Nothing was drafted or sent');
   });
 

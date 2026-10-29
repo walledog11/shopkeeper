@@ -7,7 +7,6 @@ import { executeAgentTurn, type ExecuteAgentTurnDeps } from "./turn.js";
 import { getLatestConversationMessage, requireOrgThread } from "./thread-auth.js";
 import { isAgentPlanCacheHit, readAgentPlanCache, type AgentPlanCacheRecord } from "./plan-cache.js";
 import type { PlanFailureReplanContext } from "./plan-cache-shape.js";
-import { getPendingCustomerMessageId } from "./plan-cache-shape.js";
 import { hashInstruction, hashPlan, type AgentActionApproval } from "./agent-actions.js";
 import { allowsAutomaticExecution, decideAutonomy, isEscalationOnlyPlan, type AutonomyVerdict } from "./autonomy.js";
 import logger from "./logger.js";
@@ -249,18 +248,16 @@ async function loadCurrentCachedHomePlan(params: {
 }): Promise<CurrentCachedPlan> {
   const thread = await requireOrgThread(params.threadId, params.orgId);
   const cachedPlan = params.proposedCache ?? readAgentPlanCache(thread.cachedPlan);
-  const latestConversation = await getLatestConversationMessage(params.threadId, params.orgId);
-  const pendingCustomerMessageId = latestConversation
-    ? getPendingCustomerMessageId([latestConversation])
-    : null;
+  // The plan is current while the message it was drafted against is still the
+  // conversation's latest, whoever sent either.
+  const sourceMessageId = (await getLatestConversationMessage(params.threadId, params.orgId))?.id ?? null;
   const instruction = cachedPlan?.instruction ?? "";
   const plan = cachedPlan
-    && pendingCustomerMessageId
-    && (params.proposedCache?.lastCustomerMessageId ?? thread.cachedPlanMessageId) === pendingCustomerMessageId
+    && (params.proposedCache ? params.proposedCache.lastCustomerMessageId : thread.cachedPlanMessageId) === sourceMessageId
     && isAgentPlanCacheHit({
       cache: cachedPlan,
       instruction,
-      lastCustomerMessageId: pendingCustomerMessageId,
+      lastCustomerMessageId: sourceMessageId,
       settings: params.settings,
     })
     ? cachedPlan.plan
@@ -402,7 +399,6 @@ export async function supportAttemptSettlement(params: {
   settings: OrgSettings;
   allowMutativeAutoExecute?: boolean;
   merchantQuestion: string | null;
-  customerQuestion?: string | null;
   sourceRequestIds: string[];
   manualReview?: boolean;
   proposedCache?: AgentPlanCacheRecord;
@@ -412,18 +408,6 @@ export async function supportAttemptSettlement(params: {
       status: "waiting_input",
       question: params.merchantQuestion,
       answerer: { kind: "member", key: ANY_MEMBER_ACTOR_KEY },
-    };
-  }
-  if (params.customerQuestion) {
-    const thread = await db.thread.findFirst({
-      where: { id: params.threadId, organizationId: params.orgId },
-      select: { customerId: true },
-    });
-    if (!thread) throw new BadRequestError("Thread not found.");
-    return {
-      status: "waiting_input",
-      question: params.customerQuestion,
-      answerer: { kind: "customer", key: `customer:${thread.customerId}` },
     };
   }
   const proposal = await readParkedProposalForThread(params);
@@ -644,7 +628,7 @@ export async function executeCurrentCachedHomePlan(params: {
     ? "auto_executed"
     : "human_approved";
 
-  if (!current.planId || !current.lastCustomerMessageId) {
+  if (!current.planId || (!current.lastCustomerMessageId && !current.durableProposal)) {
     throw new ConflictError("This plan predates durable approvals. Regenerate it before executing.");
   }
 
@@ -859,6 +843,7 @@ export async function executeCurrentCachedHomePlan(params: {
     failureReplanAllowed
     && isDefinitePlanExecutionFailure(executionOutcome)
     && deps.planAgent
+    && current.lastCustomerMessageId
   ) {
     // The parent's side effects are already committed. Nothing below may throw
     // them away, so a replan that fails for any reason degrades to reporting

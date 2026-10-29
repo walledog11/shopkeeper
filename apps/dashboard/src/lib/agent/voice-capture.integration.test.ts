@@ -1,20 +1,20 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { db } from '@shopkeeper/db';
 import { cleanupTestData, createTestCustomer, createTestOrg, createTestThread } from '@shopkeeper/db/test-helpers';
+import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
 import { captureVoiceEdit } from './voice-capture';
 
 function cachedPlanWithDraft(draft: string) {
-  return {
-    version: 2,
+  return buildAgentPlanCacheRecord({
     instruction: 'reply to customer',
     lastCustomerMessageId: null,
-    settingsFingerprint: 'fp',
+    settings: {},
     plan: {
       instruction: 'reply to customer',
       steps: [],
       rawToolCalls: [{ id: 'tc1', name: 'send_reply', input: { text: draft } }],
     },
-  };
+  });
 }
 
 describe('captureVoiceEdit', () => {

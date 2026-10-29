@@ -92,6 +92,7 @@ describe('executeFreeFormInstruction', () => {
       'answer_operator_question',
       'approve_pending_plan',
       'create_flash_sale',
+      'draft_email',
       'draft_ticket_reply',
       'end_flash_sale',
       'get_order_status',

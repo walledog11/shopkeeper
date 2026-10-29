@@ -16,9 +16,11 @@ export {
   getMemberAgentRequest,
   listMemberAgentRequests,
   requireMemberActorKey,
+  ticketRequestEmail,
 } from "./member-requests.js";
 export type {
   MemberRequestInput,
+  TicketEmailDraft,
 } from "./member-requests.js";
 export {
   acceptCustomerAgentRequest,
@@ -26,7 +28,6 @@ export {
 } from "./customer-requests.js";
 export type {
   CustomerRequestInput,
-  TaskContinuityHint,
 } from "./customer-requests.js";
 export {
   claimAgentTask,

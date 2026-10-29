@@ -4,7 +4,7 @@ import logger from './logger.js';
 import { removePendingPlanForThread } from './operator-context.js';
 import type { AgentTaskJobData } from './types.js';
 import { DURABLE_AGENT_RUNTIME_VERSION } from '@shopkeeper/agent/runtime-modes';
-import { acceptTicketAgentRequest } from '@shopkeeper/agent/task-ledger';
+import { acceptTicketAgentRequest, type TicketEmailDraft } from '@shopkeeper/agent/task-ledger';
 
 export function memberAgentTaskBudget() {
   return {
@@ -40,7 +40,8 @@ export async function ensureAgentTaskEnqueued(task: {
 
 /** A member's instruction to draft a ticket's plan: accepted on the ledger, the
  * ticket's superseded card withdrawn, and the composer task queued. The task
- * publishes the draft to the merchant's devices when it settles. */
+ * publishes the draft to the merchant's devices when it settles. With `email`,
+ * the draft is that email as written. */
 export async function submitTicketPlanRequest(input: {
   organizationId: string;
   clerkUserId: string;
@@ -48,6 +49,7 @@ export async function submitTicketPlanRequest(input: {
   dedupeKey: string;
   instruction: string;
   force: boolean;
+  email?: TicketEmailDraft;
 }) {
   const accepted = await acceptTicketAgentRequest({ ...input, budget: memberAgentTaskBudget() });
   if (!accepted.deduplicated) await removePendingPlanForThread(input.organizationId, input.threadId);

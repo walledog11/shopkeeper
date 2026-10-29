@@ -11,13 +11,12 @@ import {
   getExecutablePlanToolCalls,
   isAutoExecuteEnabled,
   resolvePlanExecutionLedgerMode,
-  supportAttemptSettlement,
   readParkedProposalForThread,
 } from "./plan-execution.js";
 import { resolveAgentSettings } from "./settings.js";
 import { hashInstruction, hashPlan } from "./agent-actions.js";
 import { claimCurrentPlanExecution } from "./execution-ledger.js";
-import { acceptCustomerAgentRequest, claimAgentTask, settleAgentTaskClaim } from "./task-ledger/index.js";
+import { ANY_MEMBER_ACTOR_KEY, acceptCustomerAgentRequest, claimAgentTask, settleAgentTaskClaim } from "./task-ledger/index.js";
 import { updateThreadStatusMutation } from "./thread-io/db-mutations.js";
 import { authorizeAgentProposal } from "./task-approval.js";
 import type { AgentResult } from "./agent-context.js";
@@ -79,8 +78,8 @@ describe("closing a conversation", () => {
       organizationId: org.id, taskId: task.id, expectedRevision: task.revision,
       claimToken: claim!.claimToken, requestId: request.id,
       settlement: {
-        status: "waiting_input", question: "What is the full postal code?",
-        answerer: { kind: "customer", key: `customer:${thread.customerId}` },
+        status: "waiting_input", question: "Should I change the address?",
+        answerer: { kind: "member", key: ANY_MEMBER_ACTOR_KEY },
       },
     })).toBe(true);
 
@@ -140,24 +139,6 @@ describe("closing a conversation", () => {
 });
 
 describe("plan execution helpers", () => {
-  it("records a delivered customer question as a wait on that customer", async () => {
-    const { org, thread, message, settings } = await seedThreadWithPlan();
-    const settlement = await supportAttemptSettlement({
-      orgId: org.id,
-      threadId: thread.id,
-      settings,
-      merchantQuestion: null,
-      customerQuestion: "What is the full postal code?",
-      sourceRequestIds: [message.id],
-    });
-
-    expect(settlement).toEqual({
-      status: "waiting_input",
-      question: "What is the full postal code?",
-      answerer: { kind: "customer", key: `customer:${thread.customerId}` },
-    });
-  });
-
   it("dismisses only the exact cached plan identity", async () => {
     const { org, thread, cache } = await seedThreadWithPlan();
 

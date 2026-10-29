@@ -15,7 +15,7 @@ Customer-facing completion language is conditional until the provider action suc
 - `executionReference`: the approved tool-call ID, provider operation key, or live-read call ID;
 - `sourceTool`: the concrete tool that produced the fact.
 
-Plan validation accepts `proposed` facts only to validate a conditional draft. The runtime send guard accepts only `success` facts. Mutation facts come from validated successful receipts; result prose and mutation inputs cannot establish completion. Current provider order reads can establish already observed state. The model cannot assert its own evidence.
+Plan validation accepts `proposed` facts only to validate a conditional draft; an approved draft's completion values come from its bound receipt placeholders. Result prose and mutation inputs cannot establish completion. Current provider order reads can establish already observed state. The model cannot assert its own evidence.
 
 ## Wording and execution rules
 
@@ -36,7 +36,7 @@ proposal and renewed approval. Missing receipt values withhold the message;
 result-text inference cannot fill them.
 
 Planning may flag unsupported draft language for merchant review. It does not
-rewrite approved exact drafts after execution. Model turns without an approval
-snapshot still ground their wording in receipts and observed provider reads; a
-claim neither supports is refused, never rewritten.
+rewrite approved exact drafts after execution. No customer message is written
+and sent inside a model turn: execution refuses a `send_reply` or `send_email`
+that no approval snapshot binds.
 See [agent-runtime.md](agent-runtime.md) for migration and compatibility policy.

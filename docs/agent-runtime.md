@@ -133,6 +133,15 @@ planning in their host process; they are not queued HTTP submissions. The
 private `/api/agent/ask` surface remains a bounded, synchronous, read-only query.
 It cannot execute writes or authorize a proposal.
 
+A request records its source: the conversation's latest message when it was
+accepted, whoever sent it, or none on a ticket with no messages yet. A customer
+request's source is the message it answers; a merchant's draft follows whatever
+was said last, so it works on an answered ticket. The cached plan, the card and
+the execution claim treat a plan as current only while its source is still the
+latest message, and the claim refuses anything newer, the merchant's own reply
+by hand included. A card on a merchant's draft quotes their instruction when the
+customer's request cannot be shown.
+
 Continuations retain the customer-message source on their durable request and
 use the same base instruction in the cache, card and proposal hash. Cancellation,
 lost or expired claims, and a newer customer message prevent publication.
@@ -189,6 +198,7 @@ Use a task-specific state set: `queued`, `running`, `waiting_input`, `waiting_ap
 | running | Model asks a relevant question | waiting_input; persist question and response before releasing claim |
 | running | Policy requires approval for persisted proposal | waiting_approval; persist proposal and notification intent |
 | waiting_input | Scoped answer matched to question/task | queued; attach request and increment revision |
+| queued/waiting_* (support) | A customer message on the thread | A thread holds one open support task. The newest is queued at the next revision with its proposal superseded, unless it is claimed or reached a provider, which opens a new one; any other wait on the thread is cancelled with its proposal |
 | waiting_approval | Valid decision for current proposal/hash | queued; record approval atomically, then enqueue |
 | waiting_approval | Revision/dismissal | queued or cancelled according to instruction; invalidate pending proposal |
 | running | Submitted write has uncertain outcome | reconciling; retain operation key, receipt if available and spend reservation |
@@ -196,10 +206,10 @@ Use a task-specific state set: `queued`, `running`, `waiting_input`, `waiting_ap
 | running | Objective satisfied; required response persisted | completed; delivery can still be pending/failed |
 | waiting_approval | Approved execution withheld its exact draft — a write definitely failed, or a placeholder had no receipt value — and no outcome is unknown | queued, revision incremented, the follow-up and its execution recorded on the checkpoint |
 | queued (follow-up) | Worker wins the follow-up claim; every write settled, no execution claimed or unknown | running; the attempt may only read and draft, and its draft requires review. With nothing to draft against — conversation closed, customer answered or wrote again — completed or failed as the execution was |
-| queued/running/waiting_* | Authorized stop | cancelled if no uncertain submitted write; otherwise reconciling with cancellation recorded |
+| queued/running/waiting_* | Authorized stop | cancelled if no write's outcome is open (a settled write is not open); otherwise reconciling with cancellation recorded |
 | waiting_input/waiting_approval | Conversation closed, unless its proposal is already approved (decision C) | Authorized stop, in the transaction that closes the conversation; the pending proposal is superseded |
 | running | Definite unrecoverable failure or exhausted budget | failed with reason and resumable facts; uncertainty still takes precedence as reconciling |
-| running | Lease expired on a customer support attempt; no stop, no action dispatched, no execution claimed, committed or unknown | failed (`interrupted_attempt`), charged no time past its last checkpoint. A member task reconciles: its turn can act on other threads. A stopped attempt with nothing dispatched is cancelled |
+| running | Lease expired on a customer support attempt; no stop, no write or execution whose outcome is open | failed (`interrupted_attempt`); charged no time past its last checkpoint when nothing reached a provider. A member task reconciles: its turn can act on other threads. A stopped attempt with no open outcome is cancelled |
 | failed | Its customer message is accepted again (job retry, plan recovery); planning work (`investigate`), no action dispatched, no plan execution for that message, budget left | queued, revision incremented; spent budget carries over |
 
 Completed and cancelled tasks are not reset by a duplicate request, and a failed one only by the row above. A deliberate new instruction can create a new task referencing prior work. A known partial result remains visible even when the overall task fails or is cancelled.
@@ -335,17 +345,22 @@ Activity labels distinguish blocked, failed, and unknown calls. Request polling
 shows a failed/reconciling summary only when its stored response belongs to that
 request, and does not restore approval controls on it.
 
-Versioned cache/receipt decoders, historical journal rows, provider operation
-keys, unknown-action reconciliation, and attributed delivery recovery remain.
-`Thread.cachedPlan` is a presentation projection, not execution authority.
+Versioned receipt decoders, historical journal rows, provider operation keys,
+unknown-action reconciliation, and attributed delivery recovery remain. The plan
+cache decoder reads only the current version (`AGENT_PLAN_CACHE_VERSION`); an
+earlier record reads as no plan, which every currency check already treated it
+as. `Thread.cachedPlan` is a presentation projection, not execution authority.
 Cache digest and missing-plan recovery maintenance still serve current durable
 work. Their presence does not enable the retired runtime.
 
 `npm run audit:agent-runtime-retirement -- --strict` is the read-only inventory
-of task versions/statuses, historical proposals, unknown actions, and current
-taskless caches; it refuses actionable non-v2 state. Run it against the
-intended database before removing any retained compatibility reader, and
-never rewrite or delete the rows it reports.
+of task versions/statuses, historical proposals, unknown actions, stored cache
+versions and current cards without a durable proposal. Each of its `licenses`
+names the compatibility it allows retiring: `runtimeOneExecution` (no
+actionable non-v2 task or unknown action) and `tasklessApproval` (no current
+card a merchant could approve that lacks a durable proposal); `--strict` fails
+unless both hold. Run it against the intended database before removing any
+retained compatibility reader, and never rewrite or delete the rows it reports.
 
 ## Deployment and rollback
 
@@ -381,6 +396,11 @@ letter (F) is not reused.
   Only those placeholders may change, using the approved write's successful
   receipt. A failed write or missing binding withholds the message. The model
   writes the draft before approval; merchant messages may compose after outcomes.
+  Execution refuses a customer message no approval binds, so nothing a model
+  writes in a turn reaches a customer. The operator agent drafts instead: a
+  reply through `draft_ticket_reply`, and an email to someone without a ticket
+  through `draft_email`, which parks that exact email on their email ticket
+  (opened for them if they have none) for approval.
 - **B. A flagged reply is never sent.** Display flags on approval cards. A flag
   on an otherwise unreviewed reply holds it as a proposal. Do not delete the
   flagged sentence and send the rest: validate, do not repair.

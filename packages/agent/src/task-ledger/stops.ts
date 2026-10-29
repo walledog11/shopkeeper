@@ -3,7 +3,7 @@
 import { db, Prisma } from "@shopkeeper/db";
 import { ConflictError, ForbiddenError } from "../errors.js";
 import { requireMemberActorKey } from "./member-requests.js";
-import { DISPATCHED_STATES, NO_SUSPENSION, supersedeActiveProposal } from "./shared.js";
+import { NO_SUSPENSION, supersedeActiveProposal, taskDispatches } from "./shared.js";
 
 /**
  * Records a member stop request at the task-row ordering point shared with
@@ -44,8 +44,9 @@ type TaskStopTx = Pick<typeof db, "agentTask" | "agentProposal" | "agentAction">
 
 /**
  * The authorized-stop row of the task table, written once for every stop. The
- * caller holds the task row lock. No new action starts after it; a task that has
- * touched a provider goes to `reconciling` rather than `cancelled`.
+ * caller holds the task row lock. No new action starts after it; a task with a
+ * write whose outcome is still open goes to `reconciling` rather than
+ * `cancelled`.
  */
 async function recordTaskStop(
   tx: TaskStopTx,
@@ -55,16 +56,13 @@ async function recordTaskStop(
   },
   now: Date,
 ) {
-  const consequential = await tx.agentAction.count({
-    where: {
-      organizationId: task.organizationId, taskId: task.id,
-      dispatchState: { in: DISPATCHED_STATES },
-    },
+  const { dispatched, unsettled } = await taskDispatches(tx, {
+    organizationId: task.organizationId, taskId: task.id,
   });
   const running = task.status === "running";
   const status = running
     ? "running" as const
-    : consequential > 0 ? "reconciling" as const : "cancelled" as const;
+    : unsettled ? "reconciling" as const : "cancelled" as const;
   // A stop that ends an approval wait ends it for the proposal too. A claimed
   // attempt keeps its wait, so it keeps whatever it is parked on.
   if (!running) {
@@ -78,7 +76,7 @@ async function recordTaskStop(
     data: {
       status,
       cancelledAt: task.cancelledAt ?? now,
-      failureCode: consequential > 0 ? "cancelled_after_dispatch" : null,
+      failureCode: dispatched ? "cancelled_after_dispatch" : null,
       lastProgressAt: now,
       // A stop that lands while the merchant is being asked to approve or
       // answer ends that wait. A claimed attempt keeps its own, and clears it

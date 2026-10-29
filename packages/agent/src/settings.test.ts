@@ -6,6 +6,7 @@ import {
   normalizeStoredOrgSettings,
   parseOrgSettingsPatch,
   resolveAgentSettings,
+  resolveAutoExecuteMode,
 } from "./settings.js";
 
 describe("organization settings contract", () => {
@@ -57,6 +58,12 @@ describe("organization settings contract", () => {
         ]),
       );
     }
+  });
+
+  // A workspace left on the retired "shadow" mode had every plan routed to a
+  // person. Beside the older boolean it must not come back as live.
+  it("reads a retired auto-execute mode as off, whatever the old boolean says", () => {
+    expect(resolveAutoExecuteMode({ autoExecuteMode: "shadow", autoExecuteEnabled: true })).toBe("off");
   });
 
   it("repairs malformed historical settings and applies defaults", () => {

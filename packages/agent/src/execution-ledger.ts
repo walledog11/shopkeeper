@@ -161,9 +161,12 @@ export async function claimCurrentPlanExecution(
   identity: PlanExecutionIdentity,
   claimToken: string = randomUUID(),
 ): Promise<PlanExecutionClaim> {
-  if (!identity.threadId || !identity.sourceMessageId) {
+  // A durable proposal drafted before its thread had any message has no source;
+  // every other plan answers one.
+  if (!identity.threadId || (!identity.sourceMessageId && !identity.proposalId)) {
     throw new BadRequestError("Current plan claims require a thread and source message.");
   }
+  const sourceMessageId = identity.sourceMessageId ?? null;
   const execution = await createOrLoadPending(identity);
   assertSameIdentity(execution, identity);
 
@@ -226,17 +229,18 @@ export async function claimCurrentPlanExecution(
           && proposal.task.status === "waiting_approval"
           && proposal.task.activeProposalId === proposal.id
           && proposal.task.cancelledAt === null
-          && latestConversation?.senderType === SENDER_TYPE.CUSTOMER
-          && latestConversation.id === identity.sourceMessageId
+          && (latestConversation?.id ?? null) === sourceMessageId
         );
       }
     }
+    // Anything written on the conversation since the plan was drafted — the
+    // customer again, or a merchant answering by hand — means it no longer
+    // answers it, and running it would send a second reply.
     const cached = readAgentPlanCache(thread.cachedPlan);
-    const cachedCurrent = latestConversation?.senderType === SENDER_TYPE.CUSTOMER
-      && latestConversation.id === identity.sourceMessageId
-      && thread.cachedPlanMessageId === identity.sourceMessageId
+    const cachedCurrent = (latestConversation?.id ?? null) === sourceMessageId
+      && thread.cachedPlanMessageId === sourceMessageId
       && cached?.planId === identity.planId
-      && cached.lastCustomerMessageId === identity.sourceMessageId
+      && cached.lastCustomerMessageId === sourceMessageId
       && hashPlan(cached.plan) === identity.planHash
       && hashInstruction(cached.instruction) === identity.instructionHash;
     const current = durableCurrent || cachedCurrent;

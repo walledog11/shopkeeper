@@ -1,26 +1,35 @@
 import { db } from '@shopkeeper/db';
 import { buildContext } from '@shopkeeper/agent/build-context';
-import { planAgent } from '@shopkeeper/agent/planner';
+import { planAgent, planWrittenDraft } from '@shopkeeper/agent/planner';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { requireOrgThread } from '@shopkeeper/agent/thread-auth';
 import { buildAgentPlanCacheRecord, readAgentPlanCache } from '@shopkeeper/agent/plan-cache';
 import { supportAttemptSettlement } from '@shopkeeper/agent/plan-execution';
-import { settleAgentTaskClaim, type TaskClaimIdentity } from '@shopkeeper/agent/task-ledger';
+import { settleAgentTaskClaim, type TaskClaimIdentity, type TicketEmailDraft } from '@shopkeeper/agent/task-ledger';
 import { captureCommittedPlanOutcome } from '@shopkeeper/agent/request-outcome';
 import { hashInstruction, hashPlan } from '@shopkeeper/agent/agent-actions';
 import type { TaskModelBudget } from '@shopkeeper/agent/context';
 import { gatewayThreadSink } from './agent-thread-sink.js';
 import { publishThreadEvent } from '../../realtime/publish.js';
 import { sendOperatorPlanNotification, sendOperatorQuestionNotification } from './planning-notifications.js';
+import {
+  buildRequestDisplaySnapshot,
+  instructionRequestDisplay,
+  requestDisplayHasContext,
+} from '../shared/request-display.js';
 
 /** Planning stays on the ticket and never executes the proposed writes. The
- * task worker owns the lease, budget, and stop boundary across disconnects. */
+ * task worker owns the lease, budget, and stop boundary across disconnects.
+ * An email the request already wrote out is parked as written; no model is
+ * asked for it. */
 export async function runComposerTask(input: TaskClaimIdentity & {
   claimToken: string;
   requestId: string;
   threadId: string;
-  sourceMessageId: string;
+  /** The conversation's latest message when the merchant asked; null on a ticket with none yet. */
+  sourceMessageId: string | null;
   instruction: string;
+  email?: TicketEmailDraft | null;
   runtimeVersion: number;
   assertExecutionAllowed: () => void;
 }, budget: TaskModelBudget): Promise<void> {
@@ -34,10 +43,11 @@ export async function runComposerTask(input: TaskClaimIdentity & {
   ctx.agentRequestId = input.requestId;
   ctx.agentTaskId = input.taskId;
   ctx.assertExecutionAllowed = input.assertExecutionAllowed;
-  const plan = await planAgent(ctx, input.instruction, settings, {
-    merchantInstruction: true, runtimeVersion: input.runtimeVersion,
-
-  });
+  const plan = input.email
+    ? planWrittenDraft(ctx, input.instruction, [{ id: 'draft_email', name: 'send_email', input: { ...input.email } }])
+    : await planAgent(ctx, input.instruction, settings, {
+      merchantInstruction: true, runtimeVersion: input.runtimeVersion,
+    });
   input.assertExecutionAllowed();
   const cache = buildAgentPlanCacheRecord({
     instruction: input.instruction, lastCustomerMessageId: input.sourceMessageId, settings, plan,
@@ -53,10 +63,14 @@ export async function runComposerTask(input: TaskClaimIdentity & {
   if (!(await settleAgentTaskClaim({
     ...input, settlement, planCache: { threadId: input.threadId, sourceMessageId: input.sourceMessageId, cache },
   }))) throw new Error('Planning task claim was lost before settlement.');
-  await captureCommittedPlanOutcome({
-    orgId: input.organizationId, thread, sourceMessageId: input.sourceMessageId,
-    planId: cache.planId!, instruction: input.instruction, plan, settings, allowMutativeAutoExecute: false,
-  });
+  // An episode is keyed on the message it answers; a draft on a ticket with no
+  // conversation yet answers none.
+  if (input.sourceMessageId) {
+    await captureCommittedPlanOutcome({
+      orgId: input.organizationId, thread, sourceMessageId: input.sourceMessageId,
+      planId: cache.planId!, instruction: input.instruction, plan, settings, allowMutativeAutoExecute: false,
+    });
+  }
   await publishThreadEvent(input.organizationId, input.threadId);
   await notifyCommittedComposerTask(input);
 }
@@ -80,7 +94,7 @@ export async function notifyCommittedComposerTask(input: Pick<TaskClaimIdentity,
     },
   });
   const request = task?.requests[0];
-  if (!task || !request || request.actorKind !== 'member' || !request.sourceMessageId
+  if (!task || !request || request.actorKind !== 'member'
     || !request.payload || typeof request.payload !== 'object' || Array.isArray(request.payload)
     || request.payload.kind !== 'ticket_plan' || !request.actorKey.startsWith('member:')) return;
   const member = await db.orgMember.findFirst({
@@ -100,13 +114,25 @@ export async function notifyCommittedComposerTask(input: Pick<TaskClaimIdentity,
       { planId: cache.planId, sourceMessageId: request.sourceMessageId },
     );
   } else {
+    // The customer's request while this draft still answers it; otherwise —
+    // an answered ticket, or one opened to write to someone — the card is about
+    // the merchant's own ask.
+    const customerRequest = await buildRequestDisplaySnapshot({
+      organizationId: input.organizationId, threadId: task.threadId,
+      sourceMessageId: request.sourceMessageId, rawToolCalls: cache.plan.rawToolCalls,
+    });
     await sendOperatorPlanNotification(
       input.organizationId, task.threadId, task.thread.customer.name, task.thread.channelType,
       task.thread.requestSummary, cache.plan, cache.instruction,
-      { identity: {
-        planId: cache.planId, sourceMessageId: request.sourceMessageId,
-        planHash: hashPlan(cache.plan), instructionHash: hashInstruction(cache.instruction),
-      } },
+      {
+        identity: {
+          planId: cache.planId, sourceMessageId: request.sourceMessageId,
+          planHash: hashPlan(cache.plan), instructionHash: hashInstruction(cache.instruction),
+        },
+        requestDisplay: requestDisplayHasContext(customerRequest)
+          ? customerRequest
+          : instructionRequestDisplay(cache.instruction),
+      },
     );
   }
 }

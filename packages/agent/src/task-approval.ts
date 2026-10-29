@@ -48,7 +48,8 @@ export interface DurableProposalExecutionSource {
   canonicalActions: RawToolCall[];
   communication: ProposalCommunication;
   proposalHash: string;
-  sourceMessageId: string;
+  /** The conversation's latest message when the proposal's request was accepted; null if it had none. */
+  sourceMessageId: string | null;
 }
 
 function canonicalActions(value: unknown): RawToolCall[] {
@@ -113,11 +114,9 @@ export async function readDurableProposalExecutionSource(input: {
   if (!proposal) return null;
   requireDurableAgentRuntime(proposal.task.runtimeVersion);
   const allowedRequestIds = new Set(sourceRequestIds(proposal.sourceRequestIds));
-  const source = proposal.task.requests.find((request) => (
-    allowedRequestIds.has(request.id) && request.sourceMessageId
-  ));
-  if (!source?.sourceMessageId) {
-    throw new ConflictError("The durable proposal has no customer message source. Regenerate it before approving.");
+  const source = proposal.task.requests.find((request) => allowedRequestIds.has(request.id));
+  if (!source) {
+    throw new ConflictError("The durable proposal has no request source. Regenerate it before approving.");
   }
   return {
     proposalId: proposal.id,

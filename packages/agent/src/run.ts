@@ -81,9 +81,12 @@ export interface RunAgentOptions extends RunAgentPolicyOptions {
   approvedCommunication?: ProposalCommunication;
 }
 
+// The operator agent writes to customers through drafts the merchant approves
+// (its draft_ticket_reply and draft_email module tools), never by sending.
 const OPERATOR_HIDDEN_TOOL_NAMES = new Set([
   "escalate_to_human",
   "send_reply",
+  "send_email",
   "add_internal_note",
 ]);
 

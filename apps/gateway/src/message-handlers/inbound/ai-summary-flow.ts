@@ -56,7 +56,7 @@ type PublishDecision =
 async function resolvePublishDecision(
   organizationId: string,
   threadId: string,
-  identity: { planId: string; sourceMessageId: string } | undefined,
+  identity: { planId: string; sourceMessageId: string | null } | undefined,
   skipSummary?: boolean,
   answeredOrderVerification?: boolean,
 ): Promise<PublishDecision> {
@@ -71,17 +71,18 @@ async function resolvePublishDecision(
     && latest.id === identity.sourceMessageId
     && thread.cachedPlanMessageId === identity.sourceMessageId
     && cached?.planId === identity.planId;
-  if (!isCurrent) return { publish: false, reason: 'superseded' };
+  const sourceMessageId = identity.sourceMessageId;
+  if (!isCurrent || !sourceMessageId) return { publish: false, reason: 'superseded' };
 
   // Only a verdict written against this exact request may speak for it. The
   // classifier compare-and-sets the request fields, so a burst that moved
   // underneath it leaves the *previous* request's disposition and summary in
   // place — and suppressing a refund because the message before it was "thanks"
   // is the one failure this gate must never produce.
-  const verdictIsForThisRequest = thread.requestSourceMessageId === identity.sourceMessageId;
+  const verdictIsForThisRequest = thread.requestSourceMessageId === sourceMessageId;
   if (
     verdictIsForThisRequest
-    && shouldSkipRequestWork(thread, burst, identity.sourceMessageId, skipSummary, answeredOrderVerification)
+    && shouldSkipRequestWork(thread, burst, sourceMessageId, skipSummary, answeredOrderVerification)
   ) {
     return { publish: false, reason: 'parks_no_work' };
   }
