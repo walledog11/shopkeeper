@@ -34,8 +34,8 @@ export function MerchantPreferencesSection({
 
   return (
     <SettingsTile
-      label="Merchant preferences"
-      description="Guidance for drafting plans. Does not override caps, policy, or approval rules."
+      label="Preferences"
+      description="How you like things handled."
     >
       <div className="space-y-4">
         {proposed.map((preference) => (
@@ -65,7 +65,7 @@ export function MerchantPreferencesSection({
                     </p>
                     {preference.lastUsedAt ? (
                       <p className="mt-2 text-xs text-faint">
-                        Last used in planning {new Date(preference.lastUsedAt).toLocaleString()}
+                        Last used {new Date(preference.lastUsedAt).toLocaleString()}
                       </p>
                     ) : null}
                   </div>

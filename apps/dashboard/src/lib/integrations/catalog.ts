@@ -74,17 +74,14 @@ export type PersonalDeviceIntegrationDefinition = Extract<IntegrationDefinition,
 export const INTEGRATION_CHANNEL_SECTIONS: {
   kind: IntegrationChannelKind
   title: string
-  description: string
 }[] = [
   {
     kind: "support",
     title: "Support channels",
-    description: "Where customer messages arrive as tickets.",
   },
   {
     kind: "operator",
     title: "Operator channels",
-    description: "Connect your store and manage the agent from your phone.",
   },
 ]
 
@@ -108,7 +105,7 @@ export const INTEGRATION_DEFINITIONS: IntegrationDefinition[] = [
     platform: "shopify",
     name: "Shopify",
     logo: "/logos/shopify.svg",
-    description: "Manage orders, customers, and refunds with live store data.",
+    description: "Orders, customers, and refunds from your store.",
     connectType: "shopify",
     channelKind: "operator",
     details: "shopify",
@@ -126,7 +123,7 @@ export const INTEGRATION_DEFINITIONS: IntegrationDefinition[] = [
     platform: "email",
     name: "Gmail",
     logo: "/logos/gmail.png",
-    description: "Inbound via Gmail sync — customer mail in your connected inbox becomes tickets. Replies send from Gmail.",
+    description: "Customer mail in your Gmail inbox becomes tickets.",
     connectType: "email",
     channelKind: "support",
     details: "gmail",
@@ -148,7 +145,7 @@ export const INTEGRATION_DEFINITIONS: IntegrationDefinition[] = [
     id: "whatsapp",
     name: "WhatsApp",
     logo: "/logos/whatsapp-logo.png",
-    description: "Get customer reply approvals and daily ticket summaries in WhatsApp chats.",
+    description: "Approvals and summaries in WhatsApp.",
     channelKind: "operator",
     details: "unavailable",
     unavailableLabel: "Coming soon",
@@ -160,7 +157,7 @@ export const INTEGRATION_DEFINITIONS: IntegrationDefinition[] = [
     platform: "ig_dm",
     name: "Instagram",
     logo: "/logos/instagram-logo.png",
-    description: "Receive and reply to customer DMs from an Instagram Professional account.",
+    description: "Customer DMs to your Professional account.",
     connectType: "ig",
     channelKind: "support",
     details: "oauth",
@@ -183,7 +180,7 @@ export const INTEGRATION_DEFINITIONS: IntegrationDefinition[] = [
     platform: "tiktok",
     name: "TikTok Shop",
     logo: "/logos/tiktok-logo.png",
-    description: "Manage TikTok Shop buyer messages and send support replies from your connected seller account.",
+    description: "Buyer messages from your TikTok Shop.",
     connectType: "tiktok_shop",
     channelKind: "support",
     details: "oauth",
@@ -205,7 +202,7 @@ export const INTEGRATION_DEFINITIONS: IntegrationDefinition[] = [
     id: "imessage",
     name: "iMessage",
     logo: "/logos/sms.svg",
-    description: "Text your store's agent from iMessage — order lookups, daily digests, and one-tap approvals.",
+    description: "Text Shopkeeper from your iPhone: lookups, briefings, and approvals.",
     channelKind: "operator",
     details: "device-binding",
     device: "imessage",
@@ -220,7 +217,7 @@ export const INTEGRATION_DEFINITIONS: IntegrationDefinition[] = [
     platform: "email",
     name: "Email",
     logo: null,
-    description: "Inbound via forwarding — forward your support inbox to Shopkeeper. Do not use with Gmail sync on the same mailbox.",
+    description: "Forward your support inbox. Don't combine with Gmail on the same mailbox.",
     connectType: "email",
     channelKind: "support",
     details: "forwarding-email",

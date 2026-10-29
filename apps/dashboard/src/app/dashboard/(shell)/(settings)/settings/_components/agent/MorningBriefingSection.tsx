@@ -58,9 +58,7 @@ export function MorningBriefingSection({
       <SettingsTile
         id="briefing"
         label="Briefing"
-        description={phoneLinked
-          ? "A text with what needs you, sent to your linked iPhone."
-          : "Texted to your linked iPhone. Link one above to start getting it."}
+        description={phoneLinked ? undefined : "Link your iPhone above to get it."}
         action={
           <Switch
             checked={settingsState.digestEnabled}
@@ -106,7 +104,6 @@ export function MorningBriefingSection({
                 widthClassName="w-40"
               />
             </div>
-            <p className="text-xs text-faint">Times are in your store timezone.</p>
           </div>
         ) : null}
       </SettingsTile>
@@ -115,7 +112,7 @@ export function MorningBriefingSection({
         <>
           <SettingsTile
             label="Sales pulse"
-            description="Adds orders and revenue since your last briefing, with a prior-week comparison when available."
+            description="Orders and revenue since the last briefing."
             action={
               <Switch
                 checked={settingsState.salesPulseEnabled !== false}
@@ -132,7 +129,6 @@ export function MorningBriefingSection({
 
           <SettingsTile
             label="Low-stock alerts"
-            description="Call out variants at or below a stock threshold in your briefing."
             action={
               <Switch
                 checked={lowStockEnabled}

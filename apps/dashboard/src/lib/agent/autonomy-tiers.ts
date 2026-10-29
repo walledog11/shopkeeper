@@ -13,20 +13,20 @@ export const AUTONOMY_TIERS: AutonomyTierOption[] = [
     id: "watch",
     label: "Draft only",
     cap: 0,
-    blurb: "Drafts only — nothing is sent or changed in Shopify.",
+    blurb: "Drafts everything. Nothing is sent or changed.",
   },
   {
     id: "guarded",
     label: "Ask first",
     cap: 50,
-    blurb: "Routine replies; asks before money, exceptions, or store changes.",
+    blurb: "Answers routine questions. Asks before anything else.",
     recommended: true,
   },
   {
     id: "trusted",
     label: "Trusted",
     cap: 100,
-    blurb: "Sends simple replies on its own; refunds and cancellations still need approval.",
+    blurb: "Sends simple replies. Asks before refunds and cancellations.",
   },
 ];
 

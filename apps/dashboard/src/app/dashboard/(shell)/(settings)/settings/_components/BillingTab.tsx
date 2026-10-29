@@ -255,10 +255,7 @@ export default function BillingTab() {
 
       {isAdmin && !isActive ? <PlanPicker /> : null}
 
-      <SettingsTile
-        label="Invoice history"
-        description="Download receipts and past invoice PDFs."
-      >
+      <SettingsTile label="Invoices">
         <div className="space-y-3">
           {data.invoices.length === 0 ? (
             <p>No invoices yet.</p>

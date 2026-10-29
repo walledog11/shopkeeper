@@ -46,7 +46,7 @@ export function EmailSpamFilterCard() {
     <div className={SOLID_SETTINGS_TILE}>
       <ToggleRow
         label="Filter spam emails"
-        description="When on, filtered emails are hidden from your inbox and purged after 7 days unless you recover them."
+        description="Filtered mail is deleted after 7 days unless you recover it."
         checked={checked}
         onChange={onChange}
         disabled={disabled}

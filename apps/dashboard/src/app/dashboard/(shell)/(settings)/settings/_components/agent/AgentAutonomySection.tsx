@@ -1,28 +1,17 @@
 "use client"
 
-import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
-import { AUTONOMY_TIERS, visibleAutonomyTiers } from "@/lib/agent/autonomy-tiers"
+import { visibleAutonomyTiers } from "@/lib/agent/autonomy-tiers"
 import { SolidSettingsTile as SettingsTile } from "@/app/dashboard/(shell)/(settings)/settings/_components/SettingsTile"
 import { cn } from "@/lib/ui/cn"
 import type { AgentTabController } from "./useAgentTabState"
 
 export function AgentAutonomySection({ controller }: { controller: AgentTabController }) {
-  const {
-    settingsState,
-    payload,
-    explicitOverrideSet,
-    selectTier,
-  } = controller
+  const { settingsState, selectTier } = controller
 
   const tierOptions = visibleAutonomyTiers()
-  const refundOverride = explicitOverrideSet.has("maxRefundAmount") ? payload.maxRefundAmount : null
 
   return (
-    <SettingsTile
-      id="autonomy"
-      label="Trust level"
-      description={`How much ${AGENT_DISPLAY_NAME} can do before asking you.`}
-    >
+    <SettingsTile id="autonomy" label="Trust level">
       <div className="space-y-3">
         <div
           role="radiogroup"
@@ -59,13 +48,6 @@ export function AgentAutonomySection({ controller }: { controller: AgentTabContr
             )
           })}
         </div>
-        {refundOverride != null ? (
-          <p className="text-xs text-faint">
-            Single refund limit: ${refundOverride} (tier default $
-            {AUTONOMY_TIERS.find((tier) => tier.id === settingsState.autonomyTier)?.cap ?? 50}{" "}
-            on {AUTONOMY_TIERS.find((tier) => tier.id === settingsState.autonomyTier)?.label ?? "this tier"}).
-          </p>
-        ) : null}
       </div>
     </SettingsTile>
   )

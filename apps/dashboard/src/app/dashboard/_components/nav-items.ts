@@ -1,6 +1,5 @@
 import { Inbox, Settings2, Box, BrainCircuit, Home, ScanEye, User, MessageCircle } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings";
 import { isRouteActive } from "./sidebar/sidebar-helpers";
 
 export interface NavItem {
@@ -73,7 +72,6 @@ export interface SettingsSection {
   id: string;
   label: string;
   href: string;
-  description: string;
 }
 
 /**
@@ -85,21 +83,21 @@ export const settingsSectionGroups: { heading: string; sections: SettingsSection
   {
     heading: "Store",
     sections: [
-      { id: "general", label: "General", href: "/dashboard/settings/general", description: "Store name and timezone." },
-      { id: "store-profile", label: "Store profile", href: "/dashboard/settings/store-profile", description: `What ${AGENT_DISPLAY_NAME} knows about your store and how it sounds.` },
-      { id: "approvals", label: "Approvals & limits", href: "/dashboard/settings/approvals", description: `What ${AGENT_DISPLAY_NAME} does without asking, and what it never does.` },
-      { id: "hours", label: "Hours & away", href: "/dashboard/settings/hours", description: "Business hours and the message customers get when you're closed." },
-      { id: "briefing", label: "Phone & briefing", href: "/dashboard/settings/briefing", description: "Your linked iPhone and when your briefing arrives." },
-      { id: "channels", label: "Channels", href: "/dashboard/integrations", description: "Where customers reach you, and your Shopify store." },
-      { id: "team", label: "Team", href: "/dashboard/team", description: "Members, roles, and invites." },
-      { id: "billing", label: "Usage & billing", href: "/dashboard/settings/billing", description: "Plan, payment, invoices, and the daily AI limit." },
-      { id: "data", label: "Data & privacy", href: "/dashboard/settings/data", description: "Exports, retention, and deleting the workspace." },
+      { id: "general", label: "General", href: "/dashboard/settings/general" },
+      { id: "store-profile", label: "Store profile", href: "/dashboard/settings/store-profile" },
+      { id: "approvals", label: "Approvals & limits", href: "/dashboard/settings/approvals" },
+      { id: "hours", label: "Hours & away", href: "/dashboard/settings/hours" },
+      { id: "briefing", label: "Phone & briefing", href: "/dashboard/settings/briefing" },
+      { id: "channels", label: "Channels", href: "/dashboard/integrations" },
+      { id: "team", label: "Team", href: "/dashboard/team" },
+      { id: "billing", label: "Usage & billing", href: "/dashboard/settings/billing" },
+      { id: "data", label: "Data & privacy", href: "/dashboard/settings/data" },
     ],
   },
   {
     heading: "You",
     sections: [
-      { id: "account", label: "Account", href: "/dashboard/account", description: "Your profile, sign-in, and devices." },
+      { id: "account", label: "Account", href: "/dashboard/account" },
     ],
   },
 ];

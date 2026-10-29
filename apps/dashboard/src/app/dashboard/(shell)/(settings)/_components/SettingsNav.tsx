@@ -64,10 +64,5 @@ export function SettingsPageTitle() {
   const section = activeSettingsSection(usePathname())
   if (!section) return null
 
-  return (
-    <header className="space-y-1">
-      <h1 className="text-lg font-semibold tracking-tight text-strong">{section.label}</h1>
-      <p className="text-sm text-muted-foreground">{section.description}</p>
-    </header>
-  )
+  return <h1 className="text-lg font-semibold tracking-tight text-strong">{section.label}</h1>
 }

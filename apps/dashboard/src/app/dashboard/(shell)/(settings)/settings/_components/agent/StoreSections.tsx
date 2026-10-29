@@ -21,10 +21,7 @@ export function StoreGeneralSection({ controller }: { controller: AgentTabContro
 
   return (
     <>
-      <SettingsTile
-        label="Business name"
-        description="Shown in support emails and the replies Shopkeeper writes."
-      >
+      <SettingsTile label="Business name">
         <div>
           <Input
             aria-label="Business name"
@@ -38,7 +35,7 @@ export function StoreGeneralSection({ controller }: { controller: AgentTabContro
 
       <SettingsTile
         label="Store timezone"
-        description="Your business hours and briefing times follow it. Daylight saving is handled for you."
+        description="Used for business hours and briefings."
       >
         <TimezoneSelect
           aria-label="Store timezone"
@@ -56,10 +53,7 @@ export function StoreProfileSection({ controller }: { controller: AgentTabContro
 
   return (
     <>
-      <SettingsTile
-        label="About your store"
-        description="Optional. Policies, products, shipping — anything that should show up in replies."
-      >
+      <SettingsTile label="About your store">
         <div>
           <CharacterCountTextarea
             aria-label="About your store"
@@ -73,10 +67,7 @@ export function StoreProfileSection({ controller }: { controller: AgentTabContro
         </div>
       </SettingsTile>
 
-      <SettingsTile
-        label="Brand voice"
-        description="How the agent should sound."
-      >
+      <SettingsTile label="Brand voice">
         <div className="space-y-3">
           {proposal ? (
             <VoiceProposalCard
@@ -124,7 +115,7 @@ function VoiceProposalCard({
         <div className="min-w-0">
           <p className="text-sm font-semibold text-strong">Suggested brand voice update</p>
           <p className="mt-0.5 text-xs text-faint">
-            Learned from {basedOnCount} {basedOnCount === 1 ? "reply you edited" : "replies you edited"}. Review before it takes effect.
+            Learned from {basedOnCount} {basedOnCount === 1 ? "reply you edited" : "replies you edited"}.
           </p>
         </div>
       </div>
