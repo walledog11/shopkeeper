@@ -34,9 +34,9 @@ export const settings: Category = {
           heading: "Where to find them",
           steps: [
             "Open Agent → Configure in the top navigation.",
-            "Under Your store, set your business name, about-your-store details, and brand voice.",
+            "Set your business name, store timezone, about-your-store details, and brand voice.",
             "Choose a trust level.",
-            "Expand Advanced for refund limit overrides.",
+            "Set compensation limits further down. {agent} never issues more than them, even with your approval; anything larger comes to you.",
           ],
         },
         {
@@ -79,7 +79,30 @@ export const settings: Category = {
           steps: [
             "Click your avatar to open Account and update your profile, sign-in methods, or log out.",
             "Open Workspace → Settings for billing, data exports, and GDPR requests.",
-            "Use the danger zone at the bottom of Workspace → Settings to clear ticket history or delete the workspace.",
+            "Use the danger zone at the bottom of Workspace → Settings to archive every ticket or delete the workspace. Archiving deletes nothing; deleting the workspace erases its data.",
+          ],
+        },
+      ],
+    },
+    {
+      id: "briefing",
+      title: "Changing your briefing",
+      body: [
+        {
+          text: "{agent} texts a briefing to your linked iPhone with what needs you. It turns on when you link your first phone.",
+        },
+        {
+          heading: "How to change it",
+          steps: [
+            "Open Agent → Configure and find Briefing.",
+            "Switch it off, or choose once or twice a day, the time, and every day or weekdays only.",
+            "Times follow the store timezone, set near the top of the page.",
+            "Save your changes.",
+          ],
+        },
+        {
+          tips: [
+            "Text SUMMARY anytime for a briefing on demand.",
           ],
         },
       ],

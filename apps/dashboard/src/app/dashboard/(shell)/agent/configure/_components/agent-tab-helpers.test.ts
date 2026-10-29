@@ -25,18 +25,18 @@ function makeSettings(overrides: Partial<OrgSettings> = {}): OrgSettings {
 }
 
 describe("agent tab helpers", () => {
-  it("hydrates legacy timezone offsets into curated IANA timezones", () => {
+  it("hydrates a legacy timezone offset into one curated store timezone", () => {
     const hydrated = hydrateSettings(makeSettings({
       digestTimezone: "Etc/GMT+5",
       digestTimezoneOffset: -5,
-      businessHoursTimezoneOffset: -8,
+      businessHoursTimezoneOffset: 0,
     }));
 
     expect(hydrated.digestTimezone).toBe("America/New_York");
-    expect(hydrated.businessHoursTimezone).toBe("America/Los_Angeles");
+    expect(hydrated.businessHoursTimezone).toBe("America/New_York");
   });
 
-  it("preserves explicit non-curated IANA timezones", () => {
+  it("keeps one store timezone, preferring the one onboarding captured for the briefing", () => {
     const hydrated = hydrateSettings(makeSettings({
       digestTimezone: "America/Tijuana",
       businessHoursTimezone: "Asia/Kolkata",
@@ -45,7 +45,7 @@ describe("agent tab helpers", () => {
     }));
 
     expect(hydrated.digestTimezone).toBe("America/Tijuana");
-    expect(hydrated.businessHoursTimezone).toBe("Asia/Kolkata");
+    expect(hydrated.businessHoursTimezone).toBe("America/Tijuana");
   });
 
   it("builds the API payload from text inputs", () => {

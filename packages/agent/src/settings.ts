@@ -23,9 +23,11 @@ export type BusinessHoursSettings = Pick<
   | "businessHoursDays"
   | "businessHoursStart"
   | "businessHoursEnd"
-  | "businessHoursTimezone"
-  | "businessHoursTimezoneOffset"
->;
+> & StoreTimeZoneSettings;
+
+type StoreTimeZoneSettings = {
+  [K in "businessHoursTimezone" | "businessHoursTimezoneOffset" | "digestTimezone" | "digestTimezoneOffset"]?: unknown;
+};
 
 export const AUTONOMY_OVERRIDE_PATHS = [
   "maxRefundAmount",
@@ -47,7 +49,6 @@ export const AGENT_SETTINGS_DEFAULTS: OrgSettings = {
   brandVoice: "",
   agentName: AGENT_DISPLAY_NAME,
   autoPlanOnOpen: true,
-  defaultInstruction: "",
   toolsEnabled: {
     action: true,
     communication: true,
@@ -146,12 +147,25 @@ export function offsetToIanaFallback(offset: number): string {
   return `Etc/GMT${rounded > 0 ? "-" : "+"}${Math.abs(rounded)}`;
 }
 
-/** The merchant's date and time, in the timezone their briefing is scheduled in. */
-export function merchantLocalTime(
-  settings: Pick<OrgSettings, "digestTimezone" | "digestTimezoneOffset">,
-  now: Date,
-): string {
-  const zone = settings.digestTimezone?.trim() || offsetToIanaFallback(settings.digestTimezoneOffset);
+/**
+ * The store's one timezone. Business hours and the briefing each keep a copy,
+ * which the dashboard edits as a single field and saves to both; every reader
+ * asks here so hours, briefing and greetings can never run on different clocks.
+ * The briefing's copy wins: onboarding captures it from the merchant's browser,
+ * while an older Configure page saved a guessed business-hours zone.
+ */
+export function storeTimeZone(settings: StoreTimeZoneSettings): string {
+  for (const zone of [settings.digestTimezone, settings.businessHoursTimezone]) {
+    if (typeof zone === "string" && zone.trim()) return zone.trim();
+  }
+  const offset = [settings.digestTimezoneOffset, settings.businessHoursTimezoneOffset]
+    .find((value): value is number => typeof value === "number" && Number.isFinite(value));
+  return offsetToIanaFallback(offset ?? 0);
+}
+
+/** The merchant's date and time, in the store's timezone. */
+export function merchantLocalTime(settings: StoreTimeZoneSettings, now: Date): string {
+  const zone = storeTimeZone(settings);
   const format = (timeZone: string) => new Intl.DateTimeFormat("en-US", {
     timeZone,
     weekday: "long",
@@ -202,10 +216,7 @@ export function isWithinBusinessHours(settings: BusinessHoursSettings, now = new
   if (!settings.businessHoursEnabled) return true;
   if (!isValidBusinessHoursWindow(settings.businessHoursStart, settings.businessHoursEnd)) return false;
 
-  const timezone = settings.businessHoursTimezone?.trim()
-    ? settings.businessHoursTimezone
-    : offsetToIanaFallback(settings.businessHoursTimezoneOffset);
-  const { hour, day } = localHourAndDay(timezone, now);
+  const { hour, day } = localHourAndDay(storeTimeZone(settings), now);
   const dayIndex = BUSINESS_HOURS_DAYS.indexOf(day);
   const previousDay = BUSINESS_HOURS_DAYS[(dayIndex + BUSINESS_HOURS_DAYS.length - 1) % BUSINESS_HOURS_DAYS.length];
 

@@ -107,7 +107,8 @@ function GdprExportSection({ state }: { state: WorkspaceTabState }) {
         />
         {gdprError ? <p className="text-xs text-red-600">{gdprError}</p> : null}
         <p className="text-xs">
-          Message data is retained for 90 days, then archived. Archived threads are purged after another 90 days.
+          Closed tickets are archived after 90 days without activity and stay stored until you delete the
+          workspace. Emails caught by the spam filter are deleted after 7 days.
         </p>
       </div>
     </SettingsTile>
@@ -129,8 +130,8 @@ function DangerZone({ orgName, state }: { orgName: string; state: WorkspaceTabSt
     <>
       <SettingsTile
         id="danger"
-        label="Clear all ticket history"
-        description="Permanently deletes all threads and messages for this workspace. This affects every member of the workspace."
+        label="Archive all tickets"
+        description="Takes every ticket out of the inbox and search, for every member. Nothing is deleted: tickets and messages stay in your data export. To erase them, delete the workspace."
         action={
           <Button
             type="button"
@@ -138,12 +139,12 @@ function DangerZone({ orgName, state }: { orgName: string; state: WorkspaceTabSt
             onClick={() => setConfirmClear(true)}
             className={GLASS_SETTINGS_ACTION_DANGER}
           >
-            Clear history
+            Archive all
           </Button>
         }
       >
         {clearError ? <p className="text-xs text-red-600">{clearError}</p> : null}
-        {clearSuccess ? <p className="text-xs text-green-600">All ticket history has been cleared.</p> : null}
+        {clearSuccess ? <p className="text-xs text-green-600">All tickets have been archived.</p> : null}
       </SettingsTile>
 
       <SettingsTile
@@ -203,10 +204,10 @@ function ClearTicketsDialog({ state }: { state: WorkspaceTabState }) {
     >
       <DialogContent className="border-foreground/10">
         <DialogHeader>
-          <DialogTitle className="text-foreground">Clear all ticket history?</DialogTitle>
+          <DialogTitle className="text-foreground">Archive all tickets?</DialogTitle>
           <DialogDescription>
-            Permanently deletes all threads and messages for this workspace. This affects every
-            member of the workspace. This cannot be undone.
+            Every ticket leaves the inbox and search for every member of the workspace. Tickets and
+            messages stay stored and in your data export, but they can&apos;t be brought back to the inbox.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
@@ -225,7 +226,7 @@ function ClearTicketsDialog({ state }: { state: WorkspaceTabState }) {
             disabled={clearing}
             className="bg-red-600 text-[#ffffff] hover:bg-red-700"
           >
-            {clearing ? <Loader2 className="size-4 animate-spin" /> : "Clear history"}
+            {clearing ? <Loader2 className="size-4 animate-spin" /> : "Archive all"}
           </Button>
         </DialogFooter>
       </DialogContent>

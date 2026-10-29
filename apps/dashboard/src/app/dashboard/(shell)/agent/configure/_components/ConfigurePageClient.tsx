@@ -14,6 +14,7 @@ interface Props {
   orgName: string
   voiceProposal: VoiceProposal | null
   shopifyConnected: boolean
+  phoneLinked: boolean
   merchantPreferences: {
     active: MerchantPreferenceRecord[]
     proposed: MerchantPreferenceRecord[]
@@ -33,6 +34,7 @@ export default function ConfigurePageClient(props: Props) {
             orgName={props.orgName}
             voiceProposal={props.voiceProposal}
             shopifyConnected={props.shopifyConnected}
+            phoneLinked={props.phoneLinked}
             merchantPreferences={props.merchantPreferences}
             llmSpend={props.llmSpend}
           />

@@ -9,8 +9,11 @@ import {
   settingsFieldClassName,
   settingsTextareaClassName,
 } from "@/app/dashboard/(shell)/settings/_components/SettingsTile"
+import { settingsSelectClassName } from "@/components/settings-form/class-names"
 import { GLASS_SETTINGS_ACTION } from "@/lib/ui/glass-card-styles"
 import { appPrimaryButtonClassName } from "@/lib/ui/app-button-styles"
+import { storeTimezonePatch } from "./agent-tab-helpers"
+import { TimezoneSelect } from "./TimezoneSelect"
 import type { AgentTabController } from "./useAgentTabState"
 
 export function AgentIdentitySection({ controller }: { controller: AgentTabController }) {
@@ -31,6 +34,18 @@ export function AgentIdentitySection({ controller }: { controller: AgentTabContr
             className={settingsFieldClassName}
           />
         </div>
+      </SettingsTile>
+
+      <SettingsTile
+        label="Store timezone"
+        description="Your business hours and briefing times follow it. Daylight saving is handled for you."
+      >
+        <TimezoneSelect
+          aria-label="Store timezone"
+          value={settingsState.businessHoursTimezone ?? ""}
+          onChange={(value) => dispatch({ type: "set", patch: storeTimezonePatch(value) })}
+          className={settingsSelectClassName("w-full sm:w-80")}
+        />
       </SettingsTile>
 
       <SettingsTile

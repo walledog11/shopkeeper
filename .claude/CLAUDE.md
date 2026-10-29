@@ -77,8 +77,8 @@ approval or execution. Deploys, env, migrations and incident recovery are in
   stored `broad`/`full` tiers read as `trusted`, an invalid `autoExecuteMode` is dropped,
   and the legacy boolean `autoExecuteEnabled` becomes `autoExecuteMode` `off`/`live`. So a
   setting missing from `SETTINGS_KEYS` vanishes on read. `autonomyTier` is
-  `watch`/`guarded`/`trusted` (default `guarded`). `autoPlanOnOpen`, `maxIterations` and
-  `blockCustomLineItems` have no UI. The agent's name is the constant `AGENT_DISPLAY_NAME`.
+  `watch`/`guarded`/`trusted` (default `guarded`). `autoPlanOnOpen` and `maxIterations` have
+  no UI. The agent's name is the constant `AGENT_DISPLAY_NAME`.
 - **Agent modes:** support (ticket threads, plan → approve), operator (dashboard chat and
   iMessage, with approve/reject/revise control tools and a keyword fast path for
   literal yes/no/help), and composer-ask (`runAgent(..., { readOnly: true })`). Read tool

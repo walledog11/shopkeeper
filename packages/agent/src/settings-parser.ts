@@ -31,7 +31,6 @@ const SETTINGS_KEYS = [
   "brandVoice",
   "autoPlanOnOpen",
   "autoExecuteMode",
-  "defaultInstruction",
   "toolsEnabled",
   "maxRefundAmount",
   "dailyRefundCap",
@@ -70,6 +69,7 @@ const OBSOLETE_STORED_SETTINGS_KEYS = [
   "replyLanguage",
   "postResolutionFollowUpEnabled",
   "postResolutionFollowUpDays",
+  "defaultInstruction",
 ] as const;
 
 const BOOLEAN_FIELDS = [
@@ -86,7 +86,6 @@ const BOOLEAN_FIELDS = [
 const STRING_FIELDS = [
   ["aiContext", 2000],
   ["brandVoice", 200],
-  ["defaultInstruction", 2000],
   ["autoAckMessage", 500],
   ["onboardingCompletedAt", 64],
   ["lastSuccessfulDigestAt", 64],

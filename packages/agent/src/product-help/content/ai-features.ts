@@ -81,7 +81,7 @@ export const aiFeatures: Category = {
           steps: [
             "Agent → Configure → Trust level controls how much {agent} does without asking.",
             "At the lowest level it drafts and waits for you on everything.",
-            "Higher levels let it send routine replies on its own, still inside the refund and discount caps you set.",
+            "Higher levels let it send routine replies on its own, still inside the compensation limits you set.",
           ],
         },
         {
