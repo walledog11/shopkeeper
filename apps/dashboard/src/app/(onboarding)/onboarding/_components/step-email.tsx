@@ -205,7 +205,7 @@ export function StepEmail({
           </div>
         )}
       </div>
-      {showStorefrontChat && <div className="mt-4 w-full max-w-[560px] text-left"><ShopifyStorefrontChatSection integration={shopifyRow} shopifyClientId={shopifyClientId} storefrontChatGloballyEnabled={storefrontChatGloballyEnabled} canManageWorkspace onUpdateEnabled={onUpdateStorefrontChat} /></div>}
+      {showStorefrontChat && <div className="mt-4 w-full max-w-[560px] text-left"><ShopifyStorefrontChatSection onboarding integration={shopifyRow} shopifyClientId={shopifyClientId} storefrontChatGloballyEnabled={storefrontChatGloballyEnabled} canManageWorkspace onUpdateEnabled={onUpdateStorefrontChat} /></div>}
     </div>
   );
 }

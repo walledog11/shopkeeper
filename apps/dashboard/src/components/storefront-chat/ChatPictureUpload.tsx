@@ -58,11 +58,12 @@ export function ChatPictureUpload({ url, disabled, onChange, onUploadingChange }
       const body = new FormData();
       body.set('file', picture, picture.type === 'image/webp' ? 'chat-picture.webp' : 'chat-picture.png');
       const result = await requestJson<{ url: string }>('/api/integrations/shopify/storefront-chat/image', {
-        method: 'POST', body, signal: controller.signal,
+        method: 'POST', body, signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]),
       }, 'Could not upload your picture. Please try again.');
       if (!controller.signal.aborted) onChange(result.url);
     } catch (cause) {
-      if (!controller.signal.aborted) setError(errorMessageFromUnknown(cause, 'Could not upload your picture.'));
+      if (!controller.signal.aborted) setError(cause instanceof Error && cause.name === 'TimeoutError'
+        ? 'The upload took too long. Please try again.' : errorMessageFromUnknown(cause, 'Could not upload your picture.'));
     } finally {
       if (!controller.signal.aborted) {
         setUploading(false);

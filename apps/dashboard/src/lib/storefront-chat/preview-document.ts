@@ -21,7 +21,6 @@ export async function chatPreviewDocument(nonce: string): Promise<string> {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Storefront chat preview</title>
-<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@1,2&amp;display=swap">
 <style>html,body{margin:0;height:100%;background:#f5f4f2}body{overflow:hidden}</style>
 </head><body>
 <template id="shopkeeper-preview-styles"><style>${tokens}\n${styles}</style></template>
@@ -29,12 +28,22 @@ export async function chatPreviewDocument(nonce: string): Promise<string> {
 <script nonce="${nonce}">${widget.replace(/<\/script/gi, '<\\/script')}</script>
 <script nonce="${nonce}">
 window.addEventListener('message', function(event) {
-  if (event.source !== window.parent || !event.data || event.data.type !== 'shopkeeper:preview') return;
+  if (event.source !== window.parent || !event.data) return;
+  if (event.data.type === 'shopkeeper:connect') {
+    window.parent.postMessage({ type: 'shopkeeper:ready' }, '*');
+    return;
+  }
+  if (event.data.type !== 'shopkeeper:preview') return;
   var root = document.getElementById('shopkeeper-chat-root');
   root.dataset.shopName = typeof event.data.shopName === 'string' ? event.data.shopName.slice(0, 60) : 'Your store';
   root.dispatchEvent(new CustomEvent('shopkeeper:preview', { detail: event.data }));
   window.parent.postMessage({ type: 'shopkeeper:rendered' }, '*');
 });
 window.parent.postMessage({ type: 'shopkeeper:ready' }, '*');
+// Load typography after the preview is usable, even when the font service is slow.
+var font = document.createElement('link');
+font.rel = 'stylesheet';
+font.href = 'https://api.fontshare.com/v2/css?f[]=general-sans@1,2&display=swap';
+document.head.appendChild(font);
 </script></body></html>`;
 }

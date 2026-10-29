@@ -1077,6 +1077,8 @@
   }
 
   function applyConfiguration(settings) {
+    var previousLogo = logoUrl;
+    var previousPrompts = JSON.stringify(quickPrompts);
     if (settings) {
       greeting = settings.greeting || "";
       launcherLabel = settings.launcherLabel || "Chat with us";
@@ -1109,10 +1111,13 @@
     headerLogo.hidden = !logoUrl;
     headerMark.innerHTML = launcherIconChat;
     headerMark.hidden = Boolean(logoUrl);
-    if (logoUrl) { headerLogo.src = logoUrl; headerLogo.alt = panelTitle; }
+    if (logoUrl) { if (headerLogo.getAttribute("src") !== logoUrl) headerLogo.src = logoUrl; headerLogo.alt = panelTitle; }
     else headerLogo.removeAttribute("src");
     setLauncherOpen(panel.dataset.open === "1");
-    renderPrompts();
+    if (previousPrompts !== JSON.stringify(quickPrompts)) renderPrompts();
+    if (previousLogo !== logoUrl) {
+      log.querySelectorAll(".avatar").forEach(function (avatar) { avatar.replaceWith(createAvatar()); });
+    }
   }
 
   headerLogo.addEventListener("error", function () { headerLogo.hidden = true; headerMark.hidden = false; });
@@ -1121,14 +1126,32 @@
   if (preview) {
     // Only the authenticated editor sets data-preview. No sessions, messages,
     // polling, verification email, or external AI calls are made in this mode.
+    var previewScene = null;
     root.addEventListener("shopkeeper:preview", function (event) {
       var detail = event.detail || {};
       applyConfiguration(detail.settings);
+      // Editing appearance must not erase a conversation, verification form,
+      // draft, or the shopper's open/closed state on every keystroke.
+      if (previewScene === detail.scene) {
+        var welcome = log.querySelector("[data-welcome]");
+        if (welcome) {
+          if (greeting) welcome.querySelector(".bubble").textContent = greeting;
+          else welcome.remove();
+        } else if (greeting) {
+          welcome = append(greeting, "them");
+          welcome.dataset.welcome = "1";
+          log.prepend(welcome);
+        }
+        syncMobilePanelLayout();
+        return;
+      }
+      previewScene = detail.scene;
       hideTyping();
       closeCard();
       log.textContent = "";
       hasSentMessage = false;
       session = { sessionId: "preview", token: "preview", messages: [] };
+      sendBtn.disabled = false;
       setConnection("");
       renderPrompts();
       if (detail.scene === "launcher") { close(); return; }
