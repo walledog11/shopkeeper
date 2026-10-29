@@ -916,7 +916,7 @@ secrets — never on `Integration`, in logs, jobs or client responses.
 
 | Where | Env |
 | --- | --- |
-| Dashboard (Vercel) | `SOCIALAPI_API_KEY` (connect and replies — without it outbound refuses), `SOCIALAPI_ENABLED`, `SOCIALAPI_BRAND_ASSIGNMENTS`, `SOCIALAPI_MAX_ACTIVE_ORGS` (1–8, default 8); `SOCIALAPI_BASE_URL` is ignored in production |
+| Dashboard (Vercel) | `SOCIALAPI_API_KEY` (connect, replies and disconnect — without it outbound refuses and disconnect can't revoke), `SOCIALAPI_ENABLED`, `SOCIALAPI_BRAND_ASSIGNMENTS`, `SOCIALAPI_MAX_ACTIVE_ORGS` (1–8, default 8); `SOCIALAPI_BASE_URL` is ignored in production |
 | Gateway (Railway) | `SOCIALAPI_WEBHOOK_SECRET`; `SOCIALAPI_API_KEY` for display names only (ingest works without it) |
 
 **Registering the webhook.** SocialAPI verifies a new endpoint with an unsigned `webhook.test`
@@ -944,7 +944,14 @@ signature (`x-socialapi-signature-v2` over `<timestamp>.<raw body>`); only `dm.r
 Rolling back admission (remove the assignment, or `SOCIALAPI_ENABLED=false`) stops **new**
 connects only; ingress and replies for connected rows keep working.
 
-**Operator commands.** Until disconnect and recovery are in the product,
+**Disconnect.** The dashboard's disconnect, and workspace deletion, delete the account at SocialAPI
+before removing the row. A revoke that fails leaves the integration `cleanup_failed`, with the
+reason in `integration_disconnects.last_error` and a `provider_cleanup` alert (`provider=socialapi`).
+Fix the cause (usually `SOCIALAPI_API_KEY` on Vercel), or remove the account in SocialAPI by hand,
+then disconnect again: a 404 that the brand's account listing confirms completes it. Removing the
+brand and its `SOCIALAPI_BRAND_ASSIGNMENTS` entry stays an operator step.
+
+**Operator commands.** Until recovery is in the product,
 `npm run spike:socialapi -- <inspect|connect|exchange|send|disconnect|pin> [--execute]` is the tool.
 It reads the git-ignored `.env.socialapi.local` (`SOCIALAPI_API_KEY`, `SOCIALAPI_BRAND_ID`, optional
 `SOCIALAPI_ACCOUNT_ID`, `SOCIALAPI_CONVERSATION_ID`) and prints fingerprints, never raw IDs or text.

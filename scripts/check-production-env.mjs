@@ -45,6 +45,8 @@ const CONTRACTS = {
       'GMAIL_PUBSUB_TOPIC',
       'IMESSAGE_LINE_HANDLE',
       'INSTAGRAM_INTEGRATION_ENABLED',
+      'SOCIALAPI_ENABLED',
+      'SOCIALAPI_API_KEY',
     ],
     absoluteUrlVars: [
       'APP_URL',
@@ -81,6 +83,7 @@ const CONTRACTS = {
       'SPECTRUM_PROJECT_ID',
       'SPECTRUM_PROJECT_SECRET',
       'SPECTRUM_WEBHOOK_SECRET',
+      'SOCIALAPI_WEBHOOK_SECRET',
     ],
     absoluteUrlVars: ['DASHBOARD_URL', 'TWILIO_WEBHOOK_URL', 'POSTHOG_HOST'],
     expectedPathSuffixes: {
@@ -308,6 +311,50 @@ export function validateProductionEnv(target, options = {}) {
         errors.push(`${name} is required when INSTAGRAM_INTEGRATION_ENABLED=true`);
       }
     }
+  }
+  if (target === 'dashboard') {
+    // Mirrors getSocialApiConnectConfig (apps/dashboard/src/lib/socialapi/config.ts),
+    // which closes connect at runtime for every one of these.
+    const socialApiEnabled = readEnv(env, 'SOCIALAPI_ENABLED');
+    if (socialApiEnabled && socialApiEnabled !== 'true' && socialApiEnabled !== 'false') {
+      errors.push('SOCIALAPI_ENABLED must be either true or false');
+    }
+    if (socialApiEnabled === 'true') {
+      if (!readEnv(env, 'SOCIALAPI_API_KEY')) {
+        errors.push('SOCIALAPI_API_KEY is required when SOCIALAPI_ENABLED=true');
+      }
+      const maxActiveOrgsValue = readEnv(env, 'SOCIALAPI_MAX_ACTIVE_ORGS');
+      const maxActiveOrgs = maxActiveOrgsValue ? Number(maxActiveOrgsValue) : 8;
+      if (!Number.isInteger(maxActiveOrgs) || maxActiveOrgs < 1 || maxActiveOrgs > 8) {
+        errors.push('SOCIALAPI_MAX_ACTIVE_ORGS must be an integer from 1 to 8');
+      }
+      const assignedWorkspaces = new Set();
+      for (const entry of (readEnv(env, 'SOCIALAPI_BRAND_ASSIGNMENTS') ?? '').split(',')) {
+        const trimmed = entry.trim();
+        if (!trimmed) continue;
+        const separator = trimmed.indexOf(':');
+        const clerkOrgId = separator === -1 ? '' : trimmed.slice(0, separator).trim();
+        const brandId = separator === -1 ? '' : trimmed.slice(separator + 1).trim();
+        if (!clerkOrgId || !brandId) {
+          errors.push('SOCIALAPI_BRAND_ASSIGNMENTS entries must be clerk_org_id:brand_id');
+        } else if (assignedWorkspaces.has(clerkOrgId)) {
+          errors.push('SOCIALAPI_BRAND_ASSIGNMENTS assigns one workspace two brands');
+        } else {
+          assignedWorkspaces.add(clerkOrgId);
+        }
+      }
+      if (assignedWorkspaces.size === 0) {
+        warnings.push('SOCIALAPI_ENABLED=true admits no workspace until SOCIALAPI_BRAND_ASSIGNMENTS names one');
+      } else if (Number.isInteger(maxActiveOrgs) && assignedWorkspaces.size > maxActiveOrgs) {
+        errors.push('SOCIALAPI_BRAND_ASSIGNMENTS exceeds SOCIALAPI_MAX_ACTIVE_ORGS, which closes connect for every workspace');
+      }
+    }
+    if (readEnv(env, 'SOCIALAPI_BASE_URL')) {
+      warnings.push('SOCIALAPI_BASE_URL is ignored in production; remove it');
+    }
+  }
+  if (target === 'gateway' && !readEnv(env, 'SOCIALAPI_API_KEY')) {
+    warnings.push('SOCIALAPI_API_KEY is unset, so SocialAPI DMs arrive without customer display names');
   }
   const posthogHost = normalizedUrls.POSTHOG_HOST;
   if (isProductAnalyticsEnabled && posthogHost) {
