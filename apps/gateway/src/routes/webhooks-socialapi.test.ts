@@ -4,7 +4,7 @@ import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRegisteredWebhookRouterApp } from '../test-fixtures/webhook-route-test-helpers.js';
 
-const { mockLogger, mockQueueAdd, mockResolveIntegration } = vi.hoisted(() => ({
+const { mockLogger, mockQueueAdd, mockRateLimitIncr, mockResolveIntegration } = vi.hoisted(() => ({
   mockLogger: {
     debug: vi.fn(),
     error: vi.fn(),
@@ -12,13 +12,14 @@ const { mockLogger, mockQueueAdd, mockResolveIntegration } = vi.hoisted(() => ({
     warn: vi.fn(),
   },
   mockQueueAdd: vi.fn(),
+  mockRateLimitIncr: vi.fn(),
   mockResolveIntegration: vi.fn(),
 }));
 
 vi.mock('../logger.js', () => ({ default: mockLogger }));
 vi.mock('./webhooks-shared.js', () => ({
   getRateLimitRedis: () => ({
-    incr: vi.fn().mockResolvedValue(1),
+    incr: mockRateLimitIncr,
     expire: vi.fn().mockResolvedValue(1),
   }),
   getMessageQueue: () => ({ add: mockQueueAdd }),
@@ -55,6 +56,8 @@ describe('SocialAPI webhook spike receiver', () => {
     mockLogger.warn.mockClear();
     mockQueueAdd.mockReset();
     mockQueueAdd.mockResolvedValue({ id: 'job-1' });
+    mockRateLimitIncr.mockReset();
+    mockRateLimitIncr.mockResolvedValue(1);
     mockResolveIntegration.mockReset();
     // Resolve by the account id the payload carries, so a test that changes the
     // account proves the route routed on it rather than on a constant.
@@ -301,6 +304,15 @@ describe('SocialAPI webhook spike receiver', () => {
       expect(response.status).toBe(200);
       expect(mockQueueAdd).not.toHaveBeenCalled();
       expect(mockLogger.warn).toHaveBeenCalled();
+    });
+
+    it('queues a connected account\'s event however busy the workspace is', async () => {
+      mockRateLimitIncr.mockResolvedValue(1_000);
+
+      const response = await postDmReceived(dmReceived());
+
+      expect(response.status).toBe(200);
+      expect(mockQueueAdd).toHaveBeenCalledTimes(1);
     });
 
     it('returns 500 so the vendor retries when queue admission fails', async () => {
