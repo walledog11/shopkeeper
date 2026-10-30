@@ -18,14 +18,13 @@ import {
   type AutonomyOverridePath,
 } from "./agent-tab-helpers"
 import { isValidBusinessHoursWindow, resolveAgentSettings, type AutonomyTier } from "@shopkeeper/agent/settings"
-import type { OrgSettings, OrgSettingsPatch, VoiceProposal } from "@/types"
+import type { OrgSettings, OrgSettingsPatch } from "@/types"
 
 interface UseAgentTabStateProps {
   settings: OrgSettings
   rawSettings: OrgSettingsPatch
   version: string
   orgName: string
-  voiceProposal: VoiceProposal | null
   // Only the page that shows the timezone fills a missing one from the browser;
   // anywhere else the fill would open the page with unsaved changes.
   prefillTimezone: boolean
@@ -36,7 +35,6 @@ export function useAgentTabState({
   rawSettings,
   version,
   orgName,
-  voiceProposal,
   prefillTimezone,
 }: UseAgentTabStateProps) {
   const { mutate } = useSWRConfig()
@@ -66,8 +64,6 @@ export function useAgentTabState({
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [staleVersion, setStaleVersion] = useState(false)
-  const [proposal, setProposal] = useState<VoiceProposal | null>(voiceProposal)
-  const [voiceBusy, setVoiceBusy] = useState<null | "approve" | "dismiss">(null)
   const [explicitOverridePaths, setExplicitOverridePaths] = useState<AutonomyOverridePath[]>(
     () => collectExplicitOverridePaths(rawSettings),
   )
@@ -237,38 +233,6 @@ export function useAgentTabState({
     }
   }
 
-  async function resolveVoiceProposal(action: "approve" | "dismiss") {
-    if (!proposal || voiceBusy) return
-    setVoiceBusy(action)
-    try {
-      const res = await fetch("/api/agent/voice", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
-      })
-      if (!res.ok) throw new Error("Failed")
-      if (action === "approve") {
-        const body = await res.json().catch(() => ({})) as { settings?: OrgSettingsPatch; version?: string }
-        if (body.version) currentVersionRef.current = body.version
-        if (body.settings) applyBaseline(body.settings)
-        void mutate(
-          "/api/org",
-          (current: { settings?: OrgSettingsPatch; version?: string } | undefined) => ({
-            ...(current ?? {}),
-            ...(body.version ? { version: body.version } : {}),
-            ...(body.settings ? { settings: body.settings } : {}),
-          }),
-          { revalidate: false },
-        )
-      }
-      setProposal(null)
-    } catch {
-      setError("Could not update the voice suggestion. Please try again.")
-    } finally {
-      setVoiceBusy(null)
-    }
-  }
-
   return {
     settingsState,
     dispatch,
@@ -298,8 +262,6 @@ export function useAgentTabState({
     saved,
     error,
     staleVersion,
-    proposal,
-    voiceBusy,
     isDirty,
     businessHoursInvalid,
     markExplicit,
@@ -308,7 +270,6 @@ export function useAgentTabState({
     selectTier,
     setAutonomyOverride,
     resetAutonomyOverride,
-    resolveVoiceProposal,
   }
 }
 

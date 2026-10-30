@@ -1,6 +1,7 @@
 import { db, parseVoiceProposal } from '@shopkeeper/db';
 import { normalizeStoredOrgSettings } from '@shopkeeper/agent/settings';
 import type { KnowledgeBase, VoiceProposal } from '@/types';
+import { getMerchantPreferencesPageData, type MerchantPreferencesPageData } from '@/lib/server/merchant-preferences-data';
 
 export interface KbPageData {
   knowledgeBases: KnowledgeBase[];
@@ -10,6 +11,7 @@ export interface KbPageData {
     brandVoice: string;
     voiceProposal: VoiceProposal | null;
   };
+  preferences: MerchantPreferencesPageData;
 }
 
 export async function getKbPageData(org: {
@@ -18,11 +20,14 @@ export async function getKbPageData(org: {
   settings: unknown;
   voiceProposal: unknown;
 }): Promise<KbPageData> {
-  const knowledgeBases = await db.knowledgeBase.findMany({
-    where: { organizationId: org.id },
-    include: { articles: { orderBy: { updatedAt: 'desc' } } },
-    orderBy: { createdAt: 'asc' },
-  });
+  const [knowledgeBases, preferences] = await Promise.all([
+    db.knowledgeBase.findMany({
+      where: { organizationId: org.id },
+      include: { articles: { orderBy: { updatedAt: 'desc' } } },
+      orderBy: { createdAt: 'asc' },
+    }),
+    getMerchantPreferencesPageData(org.id),
+  ]);
 
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const [allTime, lastWeek] = await Promise.all([
@@ -70,5 +75,6 @@ export async function getKbPageData(org: {
       brandVoice: settings.brandVoice ?? '',
       voiceProposal: parseVoiceProposal(org.voiceProposal),
     },
+    preferences,
   };
 }

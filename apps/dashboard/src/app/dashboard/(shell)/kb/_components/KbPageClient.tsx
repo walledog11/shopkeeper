@@ -6,8 +6,10 @@ import { useKbPageState } from "./useKbPageState"
 
 export default function KbPageClient({
   initialKbData,
+  initialBookId,
 }: {
   initialKbData?: KbPageData
+  initialBookId?: string
 }) {
-  return <KbPageView state={useKbPageState(initialKbData)} />
+  return <KbPageView state={useKbPageState(initialKbData, initialBookId)} />
 }

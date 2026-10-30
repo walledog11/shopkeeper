@@ -28,13 +28,13 @@ export const settings: Category = {
       title: "Store context and brand voice",
       body: [
         {
-          text: "Settings → Store profile is where you set how {agent} represents your store and writes replies.",
+          text: "Memory is where you set how {agent} represents your store and writes replies.",
         },
         {
           heading: "Where to find them",
           steps: [
             "Settings → General: your business name and store timezone.",
-            "Settings → Store profile: about-your-store details and brand voice.",
+            "Memory → Store profile, Tone & voice and Preferences: about-your-store details, brand voice, and how you like things handled.",
             "Settings → Approvals & limits: your trust level and compensation limits. {agent} never issues more than them, even with your approval; anything larger comes to you.",
           ],
         },

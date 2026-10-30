@@ -1,17 +1,11 @@
 "use client"
 
-import Link from "next/link"
 import { LazyMotion, domAnimation, m, useReducedMotion } from "motion/react"
 import { formatDate } from "@/lib/format/date"
 import { cn } from "@/lib/ui/cn"
-import { GLASS_CARD_SURFACE } from "@/lib/ui/glass-card-styles"
-import type { MemoryBook, MemoryBookPage } from "./memory-books"
-import { settingsSectionHref } from "@/app/dashboard/_components/nav-items"
-
-const MEMORY_CARD_SHELL = cn(
-  "flex w-full flex-col rounded-3xl px-5 py-5 font-sans",
-  GLASS_CARD_SURFACE,
-)
+import { MEMORY_CARD_SHELL } from "./kb-page-utils"
+import { isProfileBook, type MemoryBook, type MemoryBookPage } from "./memory-books"
+import { ProfileBookPanel, type MemoryProfile } from "./ProfileBookPanel"
 
 function latestUpdate(book: MemoryBook): string | null {
   const latest = book.pages.reduce<string | null>((current, page) => {
@@ -67,7 +61,13 @@ function SourceCard({
       </span>
 
       <span className="flex items-center justify-between gap-3 text-xs">
-        <span className="text-faint">{updated ? `Updated ${updated}` : ""}</span>
+        {source.suggestionCount ? (
+          <span className="font-semibold text-violet-700">
+            {source.suggestionCount} {source.suggestionCount === 1 ? "suggestion" : "suggestions"} to review
+          </span>
+        ) : (
+          <span className="text-faint">{updated ? `Updated ${updated}` : ""}</span>
+        )}
         <span className="font-semibold text-muted-foreground group-hover:text-foreground">{active ? "Collapse" : "Open"}</span>
       </span>
     </button>
@@ -78,7 +78,7 @@ function EntryCard({ page, onOpen }: { page: MemoryBookPage; onOpen: (() => void
   const content = (
     <>
       <span className="flex items-center justify-between gap-3 text-xs text-faint">
-        <span>{page.articleId ? "Note" : "From your settings"}</span>
+        <span>Note</span>
         {page.updatedAt && <span className="shrink-0 tabular-nums">{formatDate(page.updatedAt)}</span>}
       </span>
       <span className="mt-5 block font-sans text-lg font-semibold leading-snug tracking-tight text-foreground line-clamp-2">
@@ -115,18 +115,14 @@ function FanOutPanel({
   onOpenArticle: (id: string) => void
 }) {
   const reduceMotion = useReducedMotion()
-  const settingsSource = source.kind === "store" || source.kind === "tone"
 
   return (
     <div className="w-full pb-2 pt-1 font-sans">
       <div className="flex flex-wrap items-end justify-between gap-3 px-1">
         <div>
-          <h2 className="text-sm font-semibold text-foreground">{settingsSource ? "From your settings" : "Notes"}</h2>
+          <h2 className="text-sm font-semibold text-foreground">Notes</h2>
         </div>
-        <div className="flex items-center gap-2">
-          {source.canAddNote && <button type="button" onClick={onAddNote} className="inline-flex h-8 items-center rounded-md bg-foreground px-3 text-xs font-semibold text-background">Add note</button>}
-          {settingsSource && <Link href={settingsSectionHref("store-profile")} className="inline-flex h-8 items-center rounded-md border border-border px-3 text-xs font-semibold text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground">Edit in Settings</Link>}
-        </div>
+        {source.canAddNote && <button type="button" onClick={onAddNote} className="inline-flex h-8 items-center rounded-md bg-foreground px-3 text-xs font-semibold text-background">Add note</button>}
       </div>
 
       {source.pages.length > 0 ? (
@@ -154,7 +150,7 @@ function FanOutPanel({
       ) : (
         <div className="mt-3 flex min-h-56 flex-col items-center justify-center rounded-3xl border border-dashed border-foreground/[0.10] bg-card/35 px-6 py-10 text-center font-sans">
           <p className="text-sm font-semibold text-muted-foreground">Nothing here yet</p>
-          <p className="mt-1 max-w-sm text-xs leading-relaxed text-faint">{source.canAddNote ? "Add the first note to this source." : settingsSource ? "Fill this in from Settings → Store profile." : "Notes will appear here as this source learns or syncs."}</p>
+          <p className="mt-1 max-w-sm text-xs leading-relaxed text-faint">{source.canAddNote ? "Add the first note to this source." : "Notes will appear here as this source learns or syncs."}</p>
           {source.canAddNote && <button type="button" onClick={onAddNote} className="mt-4 inline-flex h-8 items-center rounded-md bg-foreground px-3 text-xs font-semibold text-background">Add first note</button>}
         </div>
       )}
@@ -170,6 +166,7 @@ export function MemoryLibrary({
   onCloseBook,
   onAddNote,
   onOpenArticle,
+  profile,
 }: {
   books: MemoryBook[]
   hasActiveSearch: boolean
@@ -178,9 +175,10 @@ export function MemoryLibrary({
   onCloseBook: () => void
   onAddNote: () => void
   onOpenArticle: (id: string) => void
+  profile: MemoryProfile
 }) {
   const reduceMotion = useReducedMotion()
-  const populatedSources = books.filter(source => source.pages.length > 0)
+  const populatedSources = books.filter(source => source.pages.length > 0 || isProfileBook(source))
   const selectedSource = selectedBookId ? populatedSources.find(source => source.id === selectedBookId) ?? null : null
 
   return (
@@ -204,7 +202,9 @@ export function MemoryLibrary({
                   />
                   {active && (
                     <div className="mt-3">
-                      <FanOutPanel source={source} onAddNote={onAddNote} onOpenArticle={onOpenArticle} />
+                      {isProfileBook(source)
+                        ? <ProfileBookPanel book={source} profile={profile} />
+                        : <FanOutPanel source={source} onAddNote={onAddNote} onOpenArticle={onOpenArticle} />}
                     </div>
                   )}
                 </m.div>

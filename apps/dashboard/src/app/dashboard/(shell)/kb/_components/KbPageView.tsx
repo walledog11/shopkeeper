@@ -1,5 +1,6 @@
 "use client"
 
+import { useOrganization } from "@clerk/nextjs"
 import { Check, Loader2, Plus } from "lucide-react"
 import { MemoryLibrarySkeleton } from "@/app/dashboard/_components/skeletons"
 import { dashboardChromeColumnClassName } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
@@ -23,8 +24,9 @@ export function KbPageView({ state }: { state: KbPageState }) {
     expandedArticle, expandArticle, handleCreateArticle, handleDeleteArticle, handleUpdateArticle,
     isArticleDeleting, isArticleSaving, isCreatingArticle, isEditSaving, isLoading, search,
     selectedArticle, setArticleDraft, setEditDraft, setSearch, startEdit, visibleBooks,
-    selectedBookId, selectBook, closeBook,
+    selectedBookId, selectBook, closeBook, storeProfile, preferences, refresh,
   } = state
+  const { membership } = useOrganization()
   const mobile = useIsMobile()
   const detailOpen = Boolean(expandedArticle || selectedArticle || isCreatingArticle)
   useMobileChromeOverride(mobile && detailOpen ? "detail" : null)
@@ -66,6 +68,7 @@ export function KbPageView({ state }: { state: KbPageState }) {
                 onCloseBook={closeBook}
                 onAddNote={beginAddContext}
                 onOpenArticle={expandArticle}
+                profile={{ storeProfile, preferences, canEdit: membership?.role === "org:admin", onChanged: refresh }}
               />
             )}
           </div>

@@ -71,9 +71,10 @@ export const aiFeatures: Category = {
         {
           heading: "Where to set it",
           steps: [
-            "Settings → Store profile: About your store — what you sell, your return window, typical shipping times.",
-            "Brand voice: a short instruction on tone, for example 'friendly and direct, never over-apologise'.",
-            "Memory: notes, policies, and anything synced from Shopify. {agent} reads these before every draft.",
+            "Memory → Store profile: what you sell, your return window, typical shipping times.",
+            "Memory → Tone & voice: a short instruction on tone, for example 'friendly and direct, never over-apologise'.",
+            "Memory → Preferences: how you like things handled, for example 'offer store credit before a refund'.",
+            "The rest of Memory: notes, policies, and anything synced from Shopify. {agent} reads these before every draft.",
           ],
         },
         {

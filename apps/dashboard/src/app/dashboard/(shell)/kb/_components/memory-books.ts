@@ -1,9 +1,13 @@
 import { isAgentLearnedKbArticle } from "@shopkeeper/agent/kb-learned"
-import type { KnowledgeBase } from "@/types"
+import {
+  MERCHANT_PREFERENCE_CATEGORY_LABELS,
+  type MerchantPreferenceRecord,
+} from "@shopkeeper/db/merchant-preferences"
+import type { KnowledgeBase, VoiceProposal } from "@/types"
 import type { ArticleWithBase } from "./kb-page-utils"
 import { memoryCardBody, memoryCardTitle } from "./memory-page-utils"
 
-export type MemoryBookKind = "store" | "tone" | "learned" | "shopify" | "notes" | "custom"
+export type MemoryBookKind = "store" | "tone" | "preferences" | "learned" | "shopify" | "notes" | "custom"
 
 export interface MemoryBookPage {
   id: string
@@ -21,12 +25,25 @@ export interface MemoryBook {
   pages: MemoryBookPage[]
   knowledgeBaseId: string | null
   canAddNote: boolean
+  /** What the agent suggested that waits on the merchant: a voice brief, preferences. */
+  suggestionCount?: number
 }
 
 interface StoreProfile {
   name: string
   aiContext: string
   brandVoice: string
+  voiceProposal: VoiceProposal | null
+}
+
+interface MerchantPreferences {
+  active: MerchantPreferenceRecord[]
+  proposed: MerchantPreferenceRecord[]
+}
+
+/** Books the merchant edits in place, shown even before anything is saved. */
+export function isProfileBook(book: MemoryBook): boolean {
+  return book.kind === "store" || book.kind === "tone" || book.kind === "preferences"
 }
 
 const INTERNAL_LEARNED_BOOK_NAMES = new Set([
@@ -60,6 +77,7 @@ export function buildMemoryBooks(
   knowledgeBases: KnowledgeBase[],
   articles: ArticleWithBase[],
   storeProfile: StoreProfile,
+  preferences: MerchantPreferences,
 ): MemoryBook[] {
   const learned = articles.filter(article => isAgentLearnedKbArticle(article.tags ?? []))
   const shopify = articles.filter(article => article.baseSource === "shopify")
@@ -97,6 +115,23 @@ export function buildMemoryBooks(
       }] : [],
       knowledgeBaseId: null,
       canAddNote: false,
+      suggestionCount: storeProfile.voiceProposal ? 1 : 0,
+    },
+    {
+      id: "preferences",
+      kind: "preferences",
+      title: "Preferences",
+      description: "How you like things handled.",
+      pages: preferences.active.map(preference => ({
+        id: `preference:${preference.id}`,
+        title: preference.guidance,
+        body: MERCHANT_PREFERENCE_CATEGORY_LABELS[preference.category],
+        articleId: null,
+        updatedAt: preference.updatedAt,
+      })),
+      knowledgeBaseId: null,
+      canAddNote: false,
+      suggestionCount: preferences.proposed.length,
     },
     {
       id: "agent-learned",
