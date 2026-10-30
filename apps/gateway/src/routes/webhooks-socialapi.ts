@@ -112,7 +112,9 @@ function toInboundJob(
  * Admits one verified `dm.received` to the durable inbound queue before the route
  * acknowledges it, so a queue failure becomes a vendor retry rather than a lost
  * message. Returns `not_routed` when the account maps to no connected workspace
- * — that is an acknowledged no-op, not an error.
+ * — that is an acknowledged no-op, not an error. A connected account's event is
+ * never refused for volume: acknowledging and discarding it loses the customer's
+ * message for good.
  */
 async function admitInboundDm(body: unknown): Promise<IngressOutcome> {
   const inbound = normalizeSocialApiDmReceived(body);
@@ -124,18 +126,6 @@ async function admitInboundDm(body: unknown): Promise<IngressOutcome> {
       logger.warn(
         { accountId: fingerprint(inbound.accountId) },
         '[Webhook] SocialAPI account maps to no active SocialAPI integration — ignoring',
-      );
-      return 'not_routed';
-    }
-
-    const eventRateLimit = await rateLimit(
-      getRateLimitRedis(),
-      `webhook:socialapi:${integration.organizationId}`,
-    );
-    if (!eventRateLimit.success) {
-      logger.warn(
-        { organizationId: integration.organizationId },
-        '[Webhook] SocialAPI event rate limit exceeded — dropping event',
       );
       return 'not_routed';
     }

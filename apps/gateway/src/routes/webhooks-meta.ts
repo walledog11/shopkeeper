@@ -3,7 +3,6 @@ import { createHmac, timingSafeEqual, randomUUID } from 'crypto';
 import { getInstagramWebhookConfig } from '../config/runtime-config.js';
 import logger from '../logger.js';
 import { JOB } from '../constants.js';
-import { rateLimit } from '../rate-limit.js';
 import { isRecord, readString } from '../lib/typing.js';
 import type {
   InstagramInboundAttachment,
@@ -195,18 +194,6 @@ export function registerMetaWebhookRoutes(router: Router): void {
         }
 
         for (const message of messages) {
-          const eventRateLimit = await rateLimit(
-            getRateLimitRedis(),
-            `webhook:ig:${integration.organizationId}`,
-          );
-          if (!eventRateLimit.success) {
-            logger.warn(
-              { organizationId: integration.organizationId },
-              '[Webhook] Instagram event rate limit exceeded — dropping event',
-            );
-            continue;
-          }
-
           const traceId = randomUUID();
           jobs.push({
             name: JOB.IG_DM,
