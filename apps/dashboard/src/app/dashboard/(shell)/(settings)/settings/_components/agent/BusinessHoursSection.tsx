@@ -72,9 +72,8 @@ export function BusinessHoursSection({ controller }: { controller: AgentTabContr
       ) : null}
 
       <CharacterCountTextarea
-        label="Auto-acknowledgment message"
-        hint="max 500 characters"
-        aria-label="Auto-acknowledgment message"
+        label="Away message"
+        aria-label="Away message"
         value={settingsState.autoAckMessage}
         onValueChange={(value) => dispatch({ type: "set", patch: { autoAckMessage: value } })}
         placeholder="Thanks for reaching out! We're currently outside business hours and will get back to you soon."

@@ -49,7 +49,7 @@ function DataExportSection({ state }: { state: WorkspaceTabState }) {
     <SettingsTile
       id="privacy"
       label="Data export"
-      description="Download a JSON snapshot of all customers, tickets, messages, and memory. Useful for backups or migrating off Shopkeeper. Doesn't include integration tokens, billing data, or audit logs."
+      description="All customers, tickets, messages, and memory, as JSON."
       action={
         <div className="flex w-full flex-col items-stretch gap-1 sm:items-start">
           <Button
@@ -81,7 +81,7 @@ function GdprExportSection({ state }: { state: WorkspaceTabState }) {
   return (
     <SettingsTile
       label="Customer data export"
-      description="Download all support tickets and profile data for one customer as JSON."
+      description="One customer's tickets and profile, as JSON."
       action={
         <Button
           type="button"
@@ -107,8 +107,7 @@ function GdprExportSection({ state }: { state: WorkspaceTabState }) {
         />
         {gdprError ? <p className="text-xs text-red-600">{gdprError}</p> : null}
         <p className="text-xs">
-          Closed tickets are archived after 90 days without activity and stay stored until you delete the
-          workspace. Emails caught by the spam filter are deleted after 7 days.
+          Closed tickets are archived after 90 days and kept until you delete the workspace.
         </p>
       </div>
     </SettingsTile>
@@ -131,7 +130,7 @@ function DangerZone({ orgName, state }: { orgName: string; state: WorkspaceTabSt
       <SettingsTile
         id="danger"
         label="Archive all tickets"
-        description="Takes every ticket out of the inbox and search, for every member. Nothing is deleted: tickets and messages stay in your data export. To erase them, delete the workspace."
+        description="Hides every ticket from the inbox. Nothing is deleted."
         action={
           <Button
             type="button"
@@ -151,8 +150,7 @@ function DangerZone({ orgName, state }: { orgName: string; state: WorkspaceTabSt
         label="Delete workspace"
         description={
           <>
-            Permanently delete <span className="font-medium text-strong">{orgName}</span> and all of its
-            data — tickets, customers, integrations, memory, and billing. Every member will lose access.
+            Deletes <span className="font-medium text-strong">{orgName}</span> and all of its data, for every member.
           </>
         }
         action={
@@ -206,8 +204,8 @@ function ClearTicketsDialog({ state }: { state: WorkspaceTabState }) {
         <DialogHeader>
           <DialogTitle className="text-foreground">Archive all tickets?</DialogTitle>
           <DialogDescription>
-            Every ticket leaves the inbox and search for every member of the workspace. Tickets and
-            messages stay stored and in your data export, but they can&apos;t be brought back to the inbox.
+            Every ticket leaves the inbox and search for everyone. Nothing is deleted, but they can&apos;t
+            be brought back.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
@@ -262,7 +260,8 @@ function DeleteWorkspaceDialog({ orgName, state }: { orgName: string; state: Wor
         <DialogHeader>
           <DialogTitle className="text-foreground">Delete {orgName}?</DialogTitle>
           <DialogDescription>
-            This permanently removes the workspace, all tickets, customers, integrations, attachments, and memory. Billing is cancelled before deletion completes. You will switch workspaces while cleanup continues in the background. This cannot be undone.
+            Removes every ticket, customer, integration, attachment, and memory, and cancels billing. This
+            can&apos;t be undone.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">

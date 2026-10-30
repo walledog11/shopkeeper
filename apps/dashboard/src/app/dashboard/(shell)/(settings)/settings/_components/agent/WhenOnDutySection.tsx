@@ -1,6 +1,5 @@
 "use client"
 
-import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import { Switch } from "@/components/ui/switch"
 import { SolidSettingsTile as SettingsTile } from "@/app/dashboard/(shell)/(settings)/settings/_components/SettingsTile"
 import { BusinessHoursSection } from "./BusinessHoursSection"
@@ -15,13 +14,12 @@ export function WhenOnDutySection({
 
   return (
     <SettingsTile
-      label={`When ${AGENT_DISPLAY_NAME} is on duty`}
-      description="Working hours and the away message customers get when you're closed."
+      label="Business hours"
       action={
         <Switch
           checked={settingsState.businessHoursEnabled}
           onChange={(value) => dispatch({ type: "set", patch: { businessHoursEnabled: value } })}
-          ariaLabel="Enable after-hours away message"
+          ariaLabel="Business hours"
         />
       }
     >

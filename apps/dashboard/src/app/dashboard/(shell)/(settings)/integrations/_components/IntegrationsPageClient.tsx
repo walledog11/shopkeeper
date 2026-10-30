@@ -45,15 +45,11 @@ const INTEGRATION_CARD_GRID = "grid items-stretch gap-4 auto-rows-fr grid-cols-[
 function renderIntegrationSkeletonSection(
   sectionKind: IntegrationChannelKind,
   title: string,
-  description: string,
   count: number,
 ) {
   return (
     <section key={sectionKind} className="space-y-4">
-      <div>
-        <h2 className="text-sm font-semibold text-strong">{title}</h2>
-        <p className="mt-1 text-xs text-faint">{description}</p>
-      </div>
+      <h2 className="text-sm font-semibold text-strong">{title}</h2>
       <div className={cn(INTEGRATION_CARD_GRID, "w-full")}>
         {Array.from({ length: count }).map((_, index) => (
           <div key={index} className={CARD_SHELL}>
@@ -297,16 +293,12 @@ function IntegrationsPageContent({
   function renderIntegrationSection(
     sectionKind: IntegrationChannelKind,
     title: string,
-    description: string,
     sectionModels: IntegrationCardModel[],
   ) {
     if (sectionModels.length === 0) return null
     return (
       <section key={sectionKind} className="space-y-4">
-        <div>
-          <h2 className="text-sm font-semibold text-strong">{title}</h2>
-          <p className="mt-1 text-xs text-faint">{description}</p>
-        </div>
+        <h2 className="text-sm font-semibold text-strong">{title}</h2>
         <div className={cn(INTEGRATION_CARD_GRID, "w-full")}>
           {sectionModels.map(renderIntegrationCard)}
         </div>
@@ -320,7 +312,7 @@ function IntegrationsPageContent({
         {!isAdmin ? (
           <div className="flex items-center gap-3 rounded-lg border border-foreground/[0.10] bg-foreground/[0.03] px-4 py-3 text-sm text-muted-foreground">
             <Info className="size-4 shrink-0" />
-            <span>Only workspace admins can connect or disconnect integrations. You can still link your own iMessage.</span>
+            <span>Only admins can change channels. You can still link your own iPhone.</span>
           </div>
         ) : null}
 
@@ -340,10 +332,7 @@ function IntegrationsPageContent({
 
         {loaded && emailConnected ? (
           <section className="space-y-4">
-            <div>
-              <h2 className="text-sm font-semibold text-strong">Inbound email</h2>
-              <p className="mt-1 text-xs text-faint">How customer mail is filtered before it becomes a ticket.</p>
-            </div>
+            <h2 className="text-sm font-semibold text-strong">Inbound email</h2>
             <EmailSpamFilterCard />
           </section>
         ) : null}
@@ -353,7 +342,6 @@ function IntegrationsPageContent({
             {INTEGRATION_CHANNEL_SECTIONS.map((section) => renderIntegrationSection(
               section.kind,
               section.title,
-              section.description,
               modelsByChannelKind[section.kind],
             ))}
           </div>
@@ -362,7 +350,6 @@ function IntegrationsPageContent({
             {INTEGRATION_CHANNEL_SECTIONS.map((section) => renderIntegrationSkeletonSection(
               section.kind,
               section.title,
-              section.description,
               4,
             ))}
           </div>

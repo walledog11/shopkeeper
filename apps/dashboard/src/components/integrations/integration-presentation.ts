@@ -99,7 +99,7 @@ function availabilityFor(
 
 function descriptionFor(definition: IntegrationDefinition, availability: IntegrationAvailability): string {
   if (definition.id === "tiktok-shop" && availability.state === "coming-soon") {
-    return "Buyer messages from your TikTok Shop, answered in the same inbox. Not open yet — we will turn it on for you when it is."
+    return "Buyer messages from your TikTok Shop. Not open yet."
   }
   return definition.description
 }

@@ -1,8 +1,7 @@
 "use client"
 
 import { AUTONOMY_TIERS } from "@/lib/agent/autonomy-tiers"
-import { AGENT_DISPLAY_NAME, type AutonomyTier } from "@shopkeeper/agent/settings"
-import type { OrgSettings } from "@/types"
+import type { AutonomyTier } from "@shopkeeper/agent/settings"
 import {
   readSettingsPath,
   tierDefaultForPath,
@@ -26,40 +25,25 @@ function formatOverrideValue(path: AutonomyOverridePath, value: unknown): string
   return value == null ? "Not set" : String(value)
 }
 
-function OverrideHint({
-  path,
-  tier,
-  payload,
-  explicitOverrideSet,
-  onReset,
-}: {
-  path: AutonomyOverridePath
-  tier: AutonomyTier
-  payload: OrgSettings
-  explicitOverrideSet: Set<AutonomyOverridePath>
-  onReset: (path: AutonomyOverridePath) => void
-}) {
-  const explicit = explicitOverrideSet.has(path)
-  const defaultValue = formatOverrideValue(path, tierDefaultForPath(tier, path))
-  const currentValue = formatOverrideValue(path, readSettingsPath(payload, path))
+/** Only an override that differs from the trust level's default says so. */
+function overrideHint(
+  path: AutonomyOverridePath,
+  { autonomyTier, payload, explicitOverrideSet, resetAutonomyOverride }: AgentTabController,
+) {
+  if (!explicitOverrideSet.has(path)) return null
+  const defaultValue = formatOverrideValue(path, tierDefaultForPath(autonomyTier, path))
+  if (formatOverrideValue(path, readSettingsPath(payload, path)) === defaultValue) return null
 
   return (
     <p className="text-xs text-faint">
-      Default for {tierLabel(tier)}: {defaultValue}
-      {explicit ? (
-        <>
-          <span> · You set: {currentValue}</span>
-          <button
-            type="button"
-            onClick={() => onReset(path)}
-            className="ml-2 font-semibold text-amber-700 hover:text-amber-800"
-          >
-            Reset to tier default
-          </button>
-        </>
-      ) : (
-        <span> · Using tier default</span>
-      )}
+      {tierLabel(autonomyTier)} default: {defaultValue}
+      <button
+        type="button"
+        onClick={() => resetAutonomyOverride(path)}
+        className="ml-2 font-semibold text-amber-700 hover:text-amber-800"
+      >
+        Reset
+      </button>
     </p>
   )
 }
@@ -68,12 +52,8 @@ export function ApprovalLimitsSection({ controller }: { controller: AgentTabCont
   const {
     settingsState,
     dispatch,
-    payload,
-    explicitOverrideSet,
-    autonomyTier,
     maxRefundInput,
     markExplicit,
-    resetAutonomyOverride,
     setAutonomyOverride,
     setMaxRefundInput,
     dailyRefundCapInput,
@@ -84,45 +64,34 @@ export function ApprovalLimitsSection({ controller }: { controller: AgentTabCont
     <>
       <SettingsTile
         label="Compensation limits"
-        description={`${AGENT_DISPLAY_NAME} never issues more than these, even with your approval. Anything larger comes to you to handle in Shopify.`}
+        description="Refunds and gift cards. Never exceeded, even with your approval."
       >
         <div className="space-y-4">
           <div className="space-y-1.5">
             <MoneyInput
-              label="Largest single compensation"
-              hint="leave blank for no limit"
+              label="Largest single"
               aria-label="Largest single compensation"
               value={maxRefundInput}
               onValueChange={(value) => {
                 markExplicit("maxRefundAmount")
                 setMaxRefundInput(value)
               }}
-              placeholder="e.g. 50"
-              description="Caps each exact full refund or explicitly requested gift card."
+              placeholder="No limit"
             />
-            <OverrideHint
-              path="maxRefundAmount"
-              tier={autonomyTier}
-              payload={payload}
-              explicitOverrideSet={explicitOverrideSet}
-              onReset={resetAutonomyOverride}
-            />
+            {overrideHint("maxRefundAmount", controller)}
           </div>
           <MoneyInput
-            label="Daily compensation limit"
-            hint="leave blank for no limit"
-            aria-label="Daily compensation limit"
+            label="Daily total"
+            aria-label="Daily compensation total"
             value={dailyRefundCapInput}
             onValueChange={setDailyRefundCapInput}
-            placeholder="e.g. 200"
-            description="Total the agent can issue per day across exact full refunds and gift cards."
+            placeholder="No limit"
           />
         </div>
       </SettingsTile>
 
       <SettingsTile
         label="Block order cancellations"
-        description="Prevent the agent from cancelling orders. Cancellations will require manual handling."
         action={
           <Switch
             checked={settingsState.blockCancellations}
@@ -131,20 +100,12 @@ export function ApprovalLimitsSection({ controller }: { controller: AgentTabCont
           />
         }
       >
-        <div className="space-y-1.5">
-          <OverrideHint
-            path="blockCancellations"
-            tier={autonomyTier}
-            payload={payload}
-            explicitOverrideSet={explicitOverrideSet}
-            onReset={resetAutonomyOverride}
-          />
-        </div>
+        {overrideHint("blockCancellations", controller)}
       </SettingsTile>
 
       <SettingsTile
         label="Block custom items on new orders"
-        description={`When ${AGENT_DISPLAY_NAME} creates an order, every item must be a product from your catalog, at its catalog price.`}
+        description="Only catalog products, at catalog prices."
         action={
           <Switch
             checked={settingsState.blockCustomLineItems}
@@ -153,25 +114,16 @@ export function ApprovalLimitsSection({ controller }: { controller: AgentTabCont
           />
         }
       >
-        <div className="space-y-1.5">
-          <OverrideHint
-            path="blockCustomLineItems"
-            tier={autonomyTier}
-            payload={payload}
-            explicitOverrideSet={explicitOverrideSet}
-            onReset={resetAutonomyOverride}
-          />
-        </div>
+        {overrideHint("blockCustomLineItems", controller)}
       </SettingsTile>
 
       <SettingsTile
-        label="Ask for a photo before refunding a damaged item"
-        description={`When a customer says an item arrived damaged or doesn't work, ${AGENT_DISPLAY_NAME} asks for a photo first. Without one, the conversation comes to you.`}
+        label="Require a photo for damage claims"
         action={
           <Switch
             checked={settingsState.damageEvidence === "photo_required"}
             onChange={(value) => dispatch({ type: "set", patch: { damageEvidence: value ? "photo_required" : "off" } })}
-            ariaLabel="Ask for a photo before refunding a damaged item"
+            ariaLabel="Require a photo for damage claims"
           />
         }
       />
@@ -192,16 +144,14 @@ export function AiUsageLimitSection({
   const spend = presentLlmSpend(llmSpend, capUsd)
 
   return (
-    <SettingsTile label="AI usage limit">
+    <SettingsTile label="AI usage">
       <div className="space-y-3">
         <MoneyInput
-          label="Daily AI limit"
-          hint="resets at midnight UTC"
+          label="Daily limit"
           aria-label="Daily AI limit"
           value={dailyLLMSpendCapInput}
           onValueChange={setDailyLLMSpendCapInput}
-          placeholder="20"
-          description="A safety limit for model usage across the workspace. Leave blank to use the $20 default."
+          placeholder={String(llmSpend.defaultCapUsd)}
         />
         <div
           role="status"
