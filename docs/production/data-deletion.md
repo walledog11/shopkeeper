@@ -4,7 +4,7 @@ This process covers merchant workspace deletion and merchant customer deletion/e
 
 ## Scope
 
-Shopkeeper stores merchant workspace data, connected integration metadata, customer records, support threads, messages, attachments, AI summaries, and local team-member metadata. Authentication records live in Clerk.com, billing records live in Stripe, email records live in Postmark or the merchant's Gmail, Instagram records live in Meta, and connected commerce records live in Shopify.
+Shopkeeper stores merchant workspace data, connected integration metadata, customer records, support threads, messages, attachments, AI summaries, and local team-member metadata. Authentication records live in Clerk.com, billing records live in Stripe, email records live in Postmark or the merchant's Gmail, Instagram records live in Meta and in SocialAPI (the relay for SocialAPI-connected accounts), iMessage traffic to the merchant passes through Photon, and connected commerce records live in Shopify.
 
 ## Intake
 
@@ -63,9 +63,9 @@ Each step stamps its column, so a retry resumes where the last attempt stopped:
    execution claimed in the last five minutes, so credentials and action records
    outlast in-flight work.
 3. Disconnect every integration through the integration-disconnect ledger
-   (`integration_disconnects`): provider cleanup stops the Gmail watch and
-   unsubscribes Instagram webhooks, then the integration row and its credentials
-   are deleted. Then delete every Vercel Blob object under
+   (`integration_disconnects`): provider cleanup stops the Gmail watch,
+   unsubscribes direct-Meta Instagram webhooks or deletes the SocialAPI account,
+   then the integration row and its credentials are deleted. Then delete every Vercel Blob object under
    `attachments/<organization_id>/`, 100 per pass, including uploads never
    attached to a message (`integrations_cleaned_at`).
 4. Delete the Clerk organization; already gone counts as done (`clerk_deleted_at`).
@@ -80,8 +80,8 @@ with the error text and logs `[WorkspaceDeletion] Cleanup needs retry` with
 exist. Nothing moves a row to `failed`; it retries every minute until it
 completes.
 
-Provider cleanup covers only the Gmail watch and the Instagram webhook
-subscription (`cleanupIntegrationProvider`). The Shopify app stays installed on the
+Provider cleanup covers only the Gmail watch, the direct-Meta Instagram webhook
+subscription, and the remote SocialAPI account (`cleanupIntegrationProvider`). The Shopify app stays installed on the
 merchant's store, and an email forwarding rule keeps forwarding, until the
 merchant removes them. Hand those over with the provider-side items below.
 
@@ -201,7 +201,7 @@ where id in (select id from target_customer);
 commit;
 ```
 
-4. Delete any matching message attachments from Vercel Blob.
+4. The daily purge hard-deletes the soft-deleted rows and their Vercel Blob attachments 90 days later. Delete matching attachments from Vercel Blob now only if the request needs them gone sooner.
 5. Confirm the customer no longer appears in dashboard searches and the GDPR export route no longer returns active conversation data.
 
 This soft delete hides the customer but leaves their agent records (`agent_actions` inputs, operator pending state, storefront chat sessions, return watches, request outcomes) in place. The complete erase is `redactCustomerData` in `apps/gateway/src/routes/shopify-compliance.ts`, and today only a signed Shopify `customers/redact` delivery reaches it.
@@ -210,7 +210,7 @@ Do not hard-delete customer rows manually unless a legal requirement requires it
 
 ## Provider-Side Data
 
-Deletion in Shopkeeper does not delete the merchant's source records in Shopify, Postmark, Google (Gmail), Meta (Instagram), Stripe, or any other connected provider. Tell the merchant which provider-side actions remain their responsibility and record that handoff in the request log.
+Deletion in Shopkeeper does not delete the merchant's source records in Shopify, Postmark, Google (Gmail), Meta (Instagram), SocialAPI, Stripe, or any other connected provider. Tell the merchant which provider-side actions remain their responsibility and record that handoff in the request log.
 
 ## Shopify App Store Privacy Webhooks
 

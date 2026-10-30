@@ -19,7 +19,7 @@ export default function PrivacyPage() {
   return (
     <LegalPage
       title="Privacy Policy"
-      effectiveDate="October 15, 2026"
+      effectiveDate="October 30, 2026"
       intro={privacyIntro}
       sections={[
         {
@@ -68,6 +68,12 @@ export default function PrivacyPage() {
                 abuse, troubleshoot issues, and improve reliability.
               </p>
               <p>
+                Drafts, summaries and plans are written by Anthropic&apos;s Claude models. To produce them, Shopkeeper
+                sends Anthropic the relevant messages, order context and the merchant&apos;s store profile. Anthropic
+                processes that content to return results to us and, under its commercial terms, does not use it to
+                train its models.
+              </p>
+              <p>
                 We do not sell personal information. We do not use merchant customer message content to train general
                 purpose AI models.
               </p>
@@ -97,37 +103,45 @@ export default function PrivacyPage() {
           ),
         },
         {
-          title: 'Meta Platform Data (Instagram)',
+          title: 'Instagram Messages',
           body: (
             <>
               <p>
-                When a merchant connects an Instagram professional account, Shopkeeper requests two permissions.
-                Instagram Business Basic (instagram_business_basic) identifies the connected account so the merchant can
-                confirm which account is linked and so incoming messages route to the correct workspace. Instagram
-                Business Manage Messages (instagram_business_manage_messages) receives the direct messages people send
-                to that account and delivers merchant-approved replies back to the sender. Shopkeeper does not request
-                access to a merchant&apos;s posts, comments, insights, followers, or advertising data.
+                Merchants connect Instagram through SocialAPI, a messaging provider that relays direct messages between
+                Instagram and Shopkeeper. Instagram&apos;s permission screen names SocialAPI as the app being
+                authorized. SocialAPI receives the messages people send to the merchant&apos;s professional account,
+                passes them to Shopkeeper, and delivers the replies the merchant approves. It handles this data for
+                Shopkeeper as a service provider; its own practices are described in the{' '}
+                <a href="https://social-api.ai/privacy" className="underline underline-offset-4">SocialAPI privacy policy</a>.
+                Shopkeeper uses the connection only to receive and answer direct messages. It does not read the
+                merchant&apos;s posts, comments, insights, followers or advertising data.
               </p>
               <p>
-                From those permissions Shopkeeper stores the message text, accepted media attachments, the
-                Instagram-scoped sender identifier, the sender&apos;s Instagram name, username, and profile picture, and
-                the provider timestamps and message identifiers returned by Meta. That data creates the visible support
-                ticket, prevents duplicate tickets, preserves conversation threading, and records that a reply was
-                delivered. Attachments are stored privately and can be opened only by authenticated members of the
-                merchant&apos;s workspace.
+                Shopkeeper also operates its own Meta app, which is closed to new connections. An account connected
+                through it grants two permissions: Instagram Business Basic (instagram_business_basic), which identifies
+                the account so messages reach the right workspace, and Instagram Business Manage Messages
+                (instagram_business_manage_messages), which receives direct messages and sends approved replies.
               </p>
               <p>
-                Meta Platform Data is shared only with the infrastructure and AI service providers needed to provide and
-                secure these user-facing support features, and with authorized members of the merchant&apos;s workspace.
-                It is not sold, not used for advertising or ad targeting, not used to build profiles of people
-                independently of the merchant relationship, and not used to create, train, or improve a general-purpose
-                AI model. Shopkeeper&apos;s use of Meta Platform Data follows the Meta Platform Terms and Developer
-                Policies.
+                Either way, Shopkeeper stores the message text, accepted media attachments, the identifier assigned to
+                the sender for messaging that business, the sender&apos;s Instagram name or username (and, for a direct
+                connection, profile picture), and the timestamps and message identifiers that come with each message.
+                That data creates the support ticket, prevents duplicate tickets, keeps the conversation threaded, and
+                records that a reply was delivered. Attachments are stored privately and can be opened only by
+                authenticated members of the merchant&apos;s workspace.
               </p>
               <p>
-                A merchant can disconnect Instagram at any time from Settings, then Integrations, which revokes
-                Shopkeeper&apos;s access and unsubscribes the account so no further messages are delivered. Deleting
-                data Shopkeeper has already received is covered by our{' '}
+                Meta Platform Data is shared only with the service providers listed below and with authorized members of
+                the merchant&apos;s workspace. It is not sold, not used for advertising or ad targeting, not used to
+                build profiles of people independently of the merchant relationship, and not used to create, train, or
+                improve a general-purpose AI model. Shopkeeper&apos;s use of Meta Platform Data follows the Meta
+                Platform Terms and Developer Policies.
+              </p>
+              <p>
+                A merchant can disconnect Instagram at any time from Settings, then Channels. Disconnecting removes the
+                account from SocialAPI (or, for a direct connection, revokes Shopkeeper&apos;s access) so no further
+                messages arrive. Messages already received stay in the workspace until they are deleted, as described in
+                our{' '}
                 <Link href="/data-deletion" className="font-semibold text-stone-900 underline decoration-stone-400 underline-offset-4">
                   data deletion instructions
                 </Link>
@@ -137,17 +151,44 @@ export default function PrivacyPage() {
           ),
         },
         {
-          title: 'How We Share Information',
+          title: 'Messages to the Merchant’s Phone',
+          body: (
+            <p>
+              A merchant can link a phone number to receive approval requests, questions and briefings by iMessage, and
+              to answer them. These messages are carried by Photon and can include a customer&apos;s name, order
+              details, and the text of a customer message or a proposed reply. Shopkeeper stores the linked phone number
+              and the merchant&apos;s replies.
+            </p>
+          ),
+        },
+        {
+          title: 'Service Providers',
           body: (
             <>
               <p>
-                We share information with service providers that help operate Shopkeeper, including hosting, database,
-                email, product analytics, observability, billing, authentication, and AI infrastructure providers. These
-                providers may only use information to deliver services to us.
+                These providers process personal information on our behalf, only to deliver their service to us:
               </p>
+              <ul className="list-disc space-y-1 pl-5">
+                <li><strong>Neon</strong> &mdash; our database, which holds workspace and support data.</li>
+                <li><strong>Vercel</strong> &mdash; hosts the Shopkeeper dashboard and stores attachments.</li>
+                <li><strong>Railway</strong> &mdash; runs background processing and the queue of messages waiting to be processed.</li>
+                <li><strong>Upstash</strong> &mdash; short-lived counters and locks that keep the dashboard running.</li>
+                <li><strong>Anthropic</strong> &mdash; AI models that read messages and write drafts, summaries and plans.</li>
+                <li><strong>SocialAPI</strong> &mdash; relays Instagram direct messages and replies.</li>
+                <li><strong>Postmark</strong> &mdash; receives forwarded support email and sends replies for stores that use email forwarding.</li>
+                <li><strong>Photon</strong> &mdash; delivers iMessages between Shopkeeper and the merchant&apos;s phone.</li>
+                <li><strong>Clerk</strong> &mdash; sign-in and team accounts.</li>
+                <li><strong>Stripe</strong> &mdash; billing and payments.</li>
+                <li><strong>Sentry</strong> &mdash; error reports from the dashboard.</li>
+                <li><strong>PostHog</strong> &mdash; pseudonymous product analytics, as described above.</li>
+                <li><strong>Loops</strong> &mdash; waitlist and product-update email.</li>
+                <li><strong>ImprovMX</strong> &mdash; forwards email sent to our contact address.</li>
+              </ul>
               <p>
-                We may share information with connected platforms as directed by a merchant, to comply with law, to
-                protect rights and safety, or as part of a merger, financing, or sale of business assets.
+                Shopify, Gmail and Instagram are platforms the merchant connects; data moves to and from them as the
+                merchant directs. We may also share information to comply with law, to protect rights and safety, or as
+                part of a merger, financing, or sale of business assets. We host our database and attachment storage in
+                the United States, and our providers may process data in other countries.
               </p>
             </>
           ),
@@ -155,15 +196,43 @@ export default function PrivacyPage() {
         {
           title: 'Retention and Deletion',
           body: (
-            <p>
-              We retain account, workspace, support, and integration data while the merchant account is active or as
-              needed for legitimate business, legal, security, and compliance purposes. Merchants can request export or
-              deletion by contacting {CONTACT_EMAIL}. Our{' '}
-              <Link href="/data-deletion" className="font-semibold text-stone-900 underline decoration-stone-400 underline-offset-4">
-                data deletion instructions
-              </Link>{' '}
-              explain who may request deletion, what is removed, and how long it takes.
-            </p>
+            <>
+              <ul className="list-disc space-y-1 pl-5">
+                <li>
+                  Support data &mdash; customers, conversations, messages, attachments, AI summaries and the record of
+                  what the agent did &mdash; is kept while the merchant&apos;s workspace exists. Older closed
+                  conversations are archived out of the inbox, not deleted.
+                </li>
+                <li>
+                  Messages the spam filter catches are permanently deleted, with their attachments, 7 days after they
+                  are filtered, unless a merchant reviews them first.
+                </li>
+                <li>
+                  When we delete one person&apos;s data at a verified request, it leaves the workspace at once and is
+                  permanently erased, with its attachments, within 90 days.
+                </li>
+                <li>
+                  Deleting a workspace deletes it and everything in it, including attachments and connected-account
+                  credentials, and cancels its subscription. We keep a record that the deletion happened, without its
+                  contents.
+                </li>
+                <li>
+                  Disconnecting a channel stops new messages arriving; it does not delete messages already received.
+                </li>
+                <li>
+                  Copies of messages in our processing queue expire within 7 days. Database backups, logs and error
+                  reports are kept by our providers on their own rolling schedules.
+                </li>
+                <li>Waitlist details are kept until you unsubscribe or ask us to delete them.</li>
+              </ul>
+              <p>
+                Merchants can request export or deletion by contacting {CONTACT_EMAIL}. Our{' '}
+                <Link href="/data-deletion" className="font-semibold text-stone-900 underline decoration-stone-400 underline-offset-4">
+                  data deletion instructions
+                </Link>{' '}
+                explain who may request deletion, what is removed, and how long it takes.
+              </p>
+            </>
           ),
         },
         {
@@ -172,7 +241,7 @@ export default function PrivacyPage() {
             <p>
               We use administrative, technical, and organizational safeguards designed to protect personal information,
               including tenant-scoped access controls, signed webhooks, production secret separation, encryption in
-              transit, and operational monitoring. No system is perfectly secure, and merchants should keep their own
+              transit, encryption of connected-account credentials at rest, and operational monitoring. No system is perfectly secure, and merchants should keep their own
               account credentials and connected platform access secure.
             </p>
           ),

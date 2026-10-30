@@ -28,9 +28,9 @@ In order. This is the product's critical path.
    it, the photo ask follows, and the merchant gets one card: the confirmation line,
    photos and the proposed resolution.
 3. **Close SocialAPI vendor diligence** before any external merchant's data flows: DPA,
-   written retention/deletion answers, the terms §11.4 contradiction, a "Powered by
-   SocialAPI" notice before the vendor redirect, and `/privacy` naming SocialAPI as a
-   processor. Gates are in [socialapi-s0-diligence](production/socialapi-s0-diligence-2026-09-07.md).
+   written retention/deletion answers, the terms §11.4 contradiction, and a "Powered by
+   SocialAPI" notice before the vendor redirect. When SocialAPI answers, add its
+   retention to `/privacy`. Gates are in [socialapi-s0-diligence](production/socialapi-s0-diligence-2026-09-07.md).
 4. **First live SocialAPI merchant connect** (runbook: *Instagram via SocialAPI*). Closes
    when `verify:production:env` passes, a workspace connects from the dashboard, and its
    next DM routes to it.

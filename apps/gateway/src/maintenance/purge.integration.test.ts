@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { db, ThreadFilterStatus, ThreadFilterFeedback, ChannelType, SenderType } from '@shopkeeper/db';
 import {
   createTestOrg,
@@ -9,6 +9,9 @@ import {
 } from '@shopkeeper/db/test-helpers';
 import { purgeFilteredThreads, FILTERED_PURGE_AFTER_DAYS } from './purge.js';
 import { randomUUID } from 'node:crypto';
+
+const { mockDeleteOrgAttachments } = vi.hoisted(() => ({ mockDeleteOrgAttachments: vi.fn() }));
+vi.mock('../storage/blob.js', () => ({ deleteOrgAttachments: mockDeleteOrgAttachments }));
 
 describe('purgeFilteredThreads', () => {
   const PURGE_NOW = new Date('2026-04-29T12:00:00Z');
@@ -21,6 +24,7 @@ describe('purgeFilteredThreads', () => {
   afterEach(async () => {
     await cleanupTestData(orgId);
     orgId = null;
+    mockDeleteOrgAttachments.mockReset();
   });
 
   async function setupThread(opts: {
@@ -56,6 +60,15 @@ describe('purgeFilteredThreads', () => {
     expect(after).toBeNull();
     const msgs = await db.message.findMany({ where: { threadId: thread.id } });
     expect(msgs).toHaveLength(0);
+  });
+
+  it('deletes the stored files of the messages it purges', async () => {
+    const thread = await setupThread();
+    const message = await createTestMessage(thread.id, 'spam with a file', SenderType.customer);
+    await db.message.update({ where: { id: message.id }, data: { attachments: ['blob:attachments/spam.pdf'] } });
+
+    expect(await purgeFilteredThreads(PURGE_NOW)).toBe(1);
+    expect(mockDeleteOrgAttachments).toHaveBeenCalledWith(['blob:attachments/spam.pdf']);
   });
 
   it('preserves filtered threads recovered to genuine via feedback', async () => {
