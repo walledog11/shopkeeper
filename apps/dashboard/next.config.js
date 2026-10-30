@@ -63,6 +63,11 @@ const nextConfig = {
         destination: '/dashboard/review?tab=audit',
         permanent: false,
       },
+      {
+        source: '/dashboard/settings/store-profile',
+        destination: '/dashboard/kb?book=store-profile',
+        permanent: false,
+      },
     ];
   },
   turbopack: {

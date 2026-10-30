@@ -33,7 +33,7 @@ export const topBarAgentItems: NavItem[] = [
     name: "Memory",
     href: "/dashboard/kb",
     icon: BrainCircuit,
-    description: "Facts, policies, and learned answers",
+    description: "Store profile, brand voice, preferences, and notes",
   },
   {
     name: "Review",
@@ -84,7 +84,6 @@ export const settingsSectionGroups: { heading: string; sections: SettingsSection
     heading: "Store",
     sections: [
       { id: "general", label: "General", href: "/dashboard/settings/general" },
-      { id: "store-profile", label: "Store profile", href: "/dashboard/settings/store-profile" },
       { id: "approvals", label: "Approvals & limits", href: "/dashboard/settings/approvals" },
       { id: "hours", label: "Hours & away", href: "/dashboard/settings/hours" },
       { id: "briefing", label: "Phone & briefing", href: "/dashboard/settings/briefing" },

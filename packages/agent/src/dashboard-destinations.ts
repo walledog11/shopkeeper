@@ -28,7 +28,7 @@ export const DASHBOARD_DESTINATIONS: readonly DashboardDestination[] = [
     id: "memory",
     href: "/dashboard/kb",
     label: "Memory",
-    description: "Facts, policies, and learned answers",
+    description: "Store profile, brand voice, preferences, notes, and learned answers",
   },
   {
     id: "review",
@@ -47,12 +47,6 @@ export const DASHBOARD_DESTINATIONS: readonly DashboardDestination[] = [
     href: "/dashboard/settings/general",
     label: "General settings",
     description: "Store name and timezone",
-  },
-  {
-    id: "store_profile",
-    href: "/dashboard/settings/store-profile",
-    label: "Store profile",
-    description: "About your store, brand voice, and preferences",
   },
   {
     id: "approvals",

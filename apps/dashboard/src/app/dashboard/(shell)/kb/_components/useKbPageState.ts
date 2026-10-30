@@ -20,7 +20,7 @@ import { buildMemoryBooks, filterMemoryBooks } from "./memory-books"
 const emptyArticleDraft = (): { body: string; category: ContextCategory } => ({ body: "", category: "auto" })
 const emptyEditDraft = () => ({ title: "", body: "" })
 
-export function useKbPageState(initialKbData?: KbPageData) {
+export function useKbPageState(initialKbData?: KbPageData, initialBookId?: string) {
   const { data, isLoading, mutate } = useSWR<KbPageData>("/api/kb", fetcher, {
     ...(initialKbData ? { fallbackData: initialKbData } : {}),
   })
@@ -29,9 +29,10 @@ export function useKbPageState(initialKbData?: KbPageData) {
     () => data?.storeProfile ?? { name: "", aiContext: "", brandVoice: "", voiceProposal: null },
     [data?.storeProfile],
   )
+  const preferences = useMemo(() => data?.preferences ?? { active: [], proposed: [] }, [data?.preferences])
   const hasShopifyConnection = knowledgeBases.some(kb => kb.source === "shopify")
 
-  const [selectedBookId, setSelectedBookId] = useState<string | null>(null)
+  const [selectedBookId, setSelectedBookId] = useState<string | null>(initialBookId ?? null)
   const [expandedArticleId, setExpandedArticleId] = useState<string | null>(null)
   const [editingArticleId, setEditingArticleId] = useState<string | null>(null)
   const [sort, setSort] = useState<SortKey>("recent")
@@ -54,8 +55,8 @@ export function useKbPageState(initialKbData?: KbPageData) {
   ), [knowledgeBases])
   const allArticles = useMemo(() => resolveEffectiveMemoryArticles(rawArticles), [rawArticles])
   const memoryBooks = useMemo(
-    () => buildMemoryBooks(knowledgeBases, allArticles, storeProfile),
-    [allArticles, knowledgeBases, storeProfile],
+    () => buildMemoryBooks(knowledgeBases, allArticles, storeProfile, preferences),
+    [allArticles, knowledgeBases, preferences, storeProfile],
   )
   const visibleBooks = useMemo(() => filterMemoryBooks(memoryBooks, search), [memoryBooks, search])
   const visibleArticles = useMemo(() => {
@@ -150,6 +151,7 @@ export function useKbPageState(initialKbData?: KbPageData) {
       setIsArticleDeleting(false)
     }
   }
+  const refresh = async () => { await mutate() }
   return {
     articleCreateError, articleDeleteError, articleDraft, beginAddContext, beginCorrection,
     closeArticleOverlay, closeContextComposer, correctionTarget, editDraft, editError,
@@ -158,6 +160,7 @@ export function useKbPageState(initialKbData?: KbPageData) {
     isLoading, search, selectedArticle, setArticleDraft, setEditDraft, setSearch, setSort,
     setSourceFilter, setTopicFilter, sort, sourceFilter, startEdit, topicFilter, topicFilters,
     visibleArticles, visibleBooks, selectedBookId, selectBook, closeBook,
+    storeProfile, preferences, refresh,
   }
 }
 
