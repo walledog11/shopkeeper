@@ -1,7 +1,7 @@
 import { db } from '@shopkeeper/db';
 import { JOB, QUEUE } from '../constants.js';
 import logger from '../logger.js';
-import { purgeRetainedAgentThreads } from './agent-work-retention.js';
+import { deletePurgedAttachments, purgeRetainedAgentThreads } from './agent-work-retention.js';
 import { closeInactiveOpenThreads } from './inactive-thread-sweep.js';
 import {
   createMaintenanceQueue,
@@ -36,12 +36,13 @@ async function archiveOldClosedThreads(): Promise<void> {
 async function purgeDeletedRecords(): Promise<void> {
   const cutoff = new Date(Date.now() - PURGE_AFTER_DAYS * ONE_DAY_MS);
 
-  const deletedMessages = await db.message.deleteMany({
-    where: {
-      deletedAt: { lt: cutoff },
-      thread: { agentTasks: { none: {} }, agentRequests: { none: {} } },
-    },
-  });
+  const expiredMessages = {
+    deletedAt: { lt: cutoff },
+    thread: { agentTasks: { none: {} }, agentRequests: { none: {} } },
+  };
+  const expiredAttachments = await db.message.findMany({ where: expiredMessages, select: { attachments: true } });
+  const deletedMessages = await db.message.deleteMany({ where: expiredMessages });
+  await deletePurgedAttachments(expiredAttachments.flatMap(message => message.attachments));
   const deletedThreads = await purgeRetainedAgentThreads({
     deletedAt: { lt: cutoff }, messages: { none: { OR: [{ deletedAt: null }, { deletedAt: { gte: cutoff } }] } },
   });

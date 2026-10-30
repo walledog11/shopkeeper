@@ -19,7 +19,7 @@ export default function DataDeletionPage() {
   return (
     <LegalPage
       title="Data Deletion Instructions"
-      effectiveDate="August 30, 2026"
+      effectiveDate="October 30, 2026"
       intro={deletionIntro}
       sections={[
         {
@@ -48,17 +48,18 @@ export default function DataDeletionPage() {
               <p>
                 When you send a direct message to a business that uses Shopkeeper, Shopkeeper receives that message on
                 the business&apos;s behalf and stores it as a support ticket. That includes the message text, any media
-                you attached, your Instagram name, username, profile picture, and the identifier Meta assigns you for
-                messaging that business.
+                you attached, your Instagram name or username, and the identifier assigned to you for messaging that
+                business.
               </p>
               <p>
                 To have it deleted, email {CONTACT_EMAIL}{' '}with the Instagram handle you messaged from and the business
-                you messaged. You can also ask the business directly &mdash; it can delete the conversation from its
-                own Shopkeeper workspace. Either route removes the same records.
+                you messaged. You can also ask the business, which can make the request to us for you.
               </p>
               <p>
                 Deleting the copy Shopkeeper holds does not delete the conversation from Instagram itself. Messages
-                still in the Instagram app are held by Meta and by the business, and are removed there.
+                still in the Instagram app are held by Meta and by the business, and are removed there. Messages reach
+                Shopkeeper through SocialAPI, which handles its own copies under the{' '}
+                <a href="https://social-api.ai/privacy" className="underline underline-offset-4">SocialAPI privacy policy</a>.
               </p>
             </>
           ),
@@ -85,10 +86,10 @@ export default function DataDeletionPage() {
           title: "Deleting One Person's Conversation Data",
           body: (
             <p>
-              We remove the customer record, its support threads, the messages in them, and any stored attachments.
-              After deletion the person no longer appears in dashboard search and no longer appears in the
-              merchant&apos;s data export. If a merchant or the person asked for a copy of the data before deletion, we
-              provide the export first.
+              We remove the customer record, its support threads, the messages in them, and any stored attachments. The
+              person leaves the merchant&apos;s workspace as soon as we act on the request &mdash; no longer in dashboard
+              search or the merchant&apos;s data export &mdash; and the records are permanently erased within 90 days.
+              If a merchant or the person asked for a copy of the data before deletion, we provide the export first.
             </p>
           ),
         },
@@ -96,10 +97,11 @@ export default function DataDeletionPage() {
           title: 'Disconnecting a Channel',
           body: (
             <p>
-              A merchant can disconnect any connected channel at any time from Settings, then Integrations.
-              Disconnecting Instagram revokes Shopkeeper&apos;s access token and unsubscribes the account so Meta stops
-              delivering messages to us. Disconnecting stops new data arriving; it does not by itself delete data
-              already received, which is what a deletion request covers.
+              A merchant can disconnect any connected channel at any time from Settings, then Channels.
+              Disconnecting Instagram removes the account from SocialAPI (or, for an account connected directly,
+              revokes Shopkeeper&apos;s access token and unsubscribes it) so no more messages are delivered.
+              Disconnecting stops new data arriving; it does not by itself delete data already received, which is what
+              a deletion request covers.
             </p>
           ),
         },
@@ -108,8 +110,8 @@ export default function DataDeletionPage() {
           body: (
             <p>
               Deleting data in Shopkeeper does not delete the merchant&apos;s source records held by Instagram, Meta,
-              Shopify, Google, our email provider, or any other connected platform. Those are requested from that
-              platform directly, under its own policy. Shopify stores send automated privacy requests to us, and we
+              SocialAPI, Shopify, Google, our email provider, or any other connected platform. Those are requested
+              from that platform directly, under its own policy. Shopify stores send automated privacy requests to us, and we
               action customer redaction and store redaction on the schedule Shopify sets.
             </p>
           ),
@@ -118,8 +120,10 @@ export default function DataDeletionPage() {
           title: 'How Long It Takes',
           body: (
             <p>
-              We complete verified deletion requests within 30 days of verifying them, unless a stricter legal deadline
-              applies, in which case we meet the shorter one. We confirm by email when the request is complete.
+              We act on verified deletion requests within 30 days of verifying them, unless a stricter legal deadline
+              applies, in which case we meet the shorter one, and confirm by email when we have. Records removed from a
+              workspace are permanently erased within 90 days; a deleted workspace is erased in full when its deletion
+              finishes.
             </p>
           ),
         },
