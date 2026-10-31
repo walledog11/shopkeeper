@@ -50,6 +50,8 @@
     "audit:operator-events": "node ./scripts/audit-operator-events.mjs",
     "audit:outbound-email": "node ./scripts/audit-outbound-email-rollout.mjs",
     "audit:shopify-webhooks": "tsx ./apps/gateway/src/scripts/inspect-shopify-webhooks.ts",
+    "erase:customer": "tsx ./apps/gateway/src/scripts/erase-customer.ts",
+    "live-test:preflight": "tsx ./apps/gateway/src/scripts/live-test-preflight.ts",
     "audit:unknown-outcomes": "node ./scripts/audit-unknown-outcomes.mjs",
     "audit:agent-runtime-retirement": "node ./scripts/audit-agent-runtime-retirement.mjs",
     "audit:production-dependencies": "npm audit --omit=dev --audit-level=high",

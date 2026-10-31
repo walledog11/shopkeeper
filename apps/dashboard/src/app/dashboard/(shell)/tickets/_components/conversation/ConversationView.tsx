@@ -265,6 +265,7 @@ export default function ConversationView({
             onResolve={onResolve}
             onReopen={onReopen}
             onOpenContext={thread ? () => setOpenContextSection("customer") : undefined}
+            threadId={thread?.id}
             embedded={embedded}
             flush
           />

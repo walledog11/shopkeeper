@@ -899,6 +899,21 @@ deletion removes only that org's member row. Detail: [data-deletion.md](data-del
 
 ### Live testing on the dev store
 
+Each run starts from a known state and finishes in one sitting, or its result describes the last
+run instead of this one. Run both commands with production env (`railway run --service shopkeeper
+--environment production -- …`):
+
+1. `npm run live-test:preflight -- --workspace <clerk_org_id> --instagram <test handle>` and fix
+   every `FAIL`: unapplied migrations, a second workspace on the same Instagram account, a missing
+   Shopify connection or phone, an unfinished workspace deletion, test-customer history. It lists
+   orders a full refund can use, with the email and zip the order confirmation asks for.
+2. `npm run erase:customer -- --workspace <clerk_org_id> --instagram <test handle> --execute`
+   erases the test customer, so the DM opens a new conversation with no photo asks, confirmations
+   or waiting cards left from an earlier run. Run preflight again; it should read *Ready*.
+3. One scenario per run, on one order from the list, with its messages written down beforehand.
+   When something looks wrong, copy the ticket's timeline (the ⋯ menu in the ticket header → *Copy
+   timeline*) and paste it into the report.
+
 - Use a fresh Instagram DM for each run: Instagram refuses business replies more than 24 hours
   after the customer's last message.
 - Read orders back with `/api/orders?limit=50` from page JS; the route caps `limit` at 50.

@@ -103,8 +103,7 @@ In order. This is the product's critical path.
 - **Deletion gaps:** a merchant whose only workspace it is gets account deletion, which
   removes only their membership — confirm whether Clerk deletes the org (and so the
   workspace and any Stripe subscription); `failWorkspaceDeletion` has no caller, so a
-  revoked Gmail/Instagram grant makes the sweep retry every minute forever; a non-Shopify
-  erasure request has no path to the full `redactCustomerData` erase.
+  revoked Gmail/Instagram grant makes the sweep retry every minute forever.
 - **Orphaned workspaces:** 12 rows stay `active` that Clerk no longer has (April's `org_test_*`
   rows from tests run against production, and abandoned onboarding workspaces). Finish them through
   the deletion ledger ([data-deletion](production/data-deletion.md), *Recovery*).

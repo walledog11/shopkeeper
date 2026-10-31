@@ -167,46 +167,24 @@ The export includes customer identity, thread metadata, summaries, and non-delet
 
 ## Customer Deletion Or Redaction
 
-For v1, customer deletion/redaction is an operator task:
+For v1, customer deletion/redaction is an operator task. It performs the same erase as a Shopify
+`customers/redact` delivery (`eraseCustomers` in `apps/gateway/src/routes/shopify-compliance.ts`):
+conversations, messages and attachments, order confirmations, waiting phone cards and agent records.
 
-1. Identify the organization and customer by `organization_id` and customer email/platform ID.
-2. Export data first if the merchant or customer requested access before deletion.
-3. Soft-delete the customer, related threads, and related messages with a single timestamp:
+1. Export data first if the merchant or customer requested access before deletion.
+2. With production env, dry-run, read what it matched, then erase:
 
-```sql
-begin;
-with target_customer as (
-  select id
-  from customers
-  where organization_id = '<organization_uuid>'
-    and lower(platform_id) = lower('<customer_email_or_platform_id>')
-),
-target_threads as (
-  select id
-  from threads
-  where organization_id = '<organization_uuid>'
-    and customer_id in (select id from target_customer)
-)
-update messages
-set deleted_at = now()
-where thread_id in (select id from target_threads);
-
-update threads
-set deleted_at = now(), archived_at = coalesce(archived_at, now())
-where id in (select id from target_threads);
-
-update customers
-set deleted_at = now()
-where id in (select id from target_customer);
-commit;
+```bash
+railway run --service shopkeeper --environment production -- \
+  npm run erase:customer -- --workspace <clerk_org_id> --email <address>        # or --instagram <handle>
+# repeat with --execute
 ```
 
-4. The daily purge hard-deletes the soft-deleted rows and their Vercel Blob attachments 90 days later. Delete matching attachments from Vercel Blob now only if the request needs them gone sooner.
-5. Confirm the customer no longer appears in dashboard searches and the GDPR export route no longer returns active conversation data.
+3. Confirm the customer no longer appears in dashboard search and the GDPR export route returns
+   nothing for them.
 
-This soft delete hides the customer but leaves their agent records (`agent_actions` inputs, operator pending state, storefront chat sessions, return watches, request outcomes) in place. The complete erase is `redactCustomerData` in `apps/gateway/src/routes/shopify-compliance.ts`, and today only a signed Shopify `customers/redact` delivery reaches it.
-
-Do not hard-delete customer rows manually unless a legal requirement requires it and the data owner approves the resulting audit-trail impact.
+Rows soft-deleted by the earlier manual procedure, and their attachments, are hard-deleted by the
+daily purge 90 days later. Do not hard-delete customer rows by hand.
 
 ## Provider-Side Data
 

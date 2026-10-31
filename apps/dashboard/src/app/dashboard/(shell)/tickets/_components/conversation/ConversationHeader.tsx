@@ -14,6 +14,7 @@ import {
 import { needsYouMetaPillShellClassName } from "@/app/dashboard/_components/home/needs-you-card-styles"
 import { merchantSandInkHoverClass } from "@/lib/ui/merchant-palette"
 import type { TicketCocoAction } from "../../_lib/resolve-ticket-coco-action"
+import { TicketTimelineMenu } from "./TicketTimelineMenu"
 
 interface Props {
   activeTab: "open" | "closed"
@@ -24,6 +25,7 @@ interface Props {
   onResolve: () => void
   onReopen: () => void
   onOpenContext?: () => void
+  threadId?: string
   embedded?: boolean
   flush?: boolean
 }
@@ -45,6 +47,7 @@ export default function ConversationHeader({
   onResolve,
   onReopen,
   onOpenContext,
+  threadId,
   embedded = false,
   flush = false,
 }: Props) {
@@ -102,6 +105,7 @@ export default function ConversationHeader({
           </Button>
         </div>
       )}
+      {threadId ? <TicketTimelineMenu threadId={threadId} /> : null}
     </div>
   )
 

@@ -21,9 +21,10 @@ export interface ManageDropdownItem {
 
 interface ManageDropdownProps {
   items: ManageDropdownItem[]
+  label?: string
 }
 
-export function ManageDropdown({ items }: ManageDropdownProps) {
+export function ManageDropdown({ items, label = "Manage customer" }: ManageDropdownProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -51,8 +52,8 @@ export function ManageDropdown({ items }: ManageDropdownProps) {
         className={cn(contextIconButtonClassName, open && merchantSandInkClass)}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label="Manage customer"
-        title="Manage customer"
+        aria-label={label}
+        title={label}
       >
         <MoreHorizontal className="size-3.5" />
       </button>

@@ -113,6 +113,33 @@ async function resolveShopifyOrganizationId(shopDomain: string): Promise<string 
   return disconnected?.organizationId ?? null;
 }
 
+function customerThreadsSelect(organizationId: string) {
+  return {
+    id: true,
+    threads: {
+      where: { organizationId },
+      select: {
+        id: true,
+        messages: { select: { attachments: true } },
+      },
+    },
+  } as const;
+}
+
+function customerSelection(
+  customers: ReadonlyArray<{ id: string; threads: ReadonlyArray<{ id: string; messages: ReadonlyArray<{ attachments: string[] }> }> }>,
+): CustomerDataSelection {
+  const threads = customers.flatMap(customer => customer.threads);
+  return {
+    customerIds: customers.map(customer => customer.id),
+    threadIds: threads.map(thread => thread.id),
+    attachmentRefs: [...new Set(
+      threads.flatMap(thread => thread.messages.flatMap(message => message.attachments)),
+    )],
+    messageCount: threads.reduce((count, thread) => count + thread.messages.length, 0),
+  };
+}
+
 async function selectCustomerData(
   organizationId: string,
   shopDomain: string,
@@ -142,27 +169,10 @@ async function selectCustomerData(
           : []),
       ],
     },
-    select: {
-      id: true,
-      threads: {
-        where: { organizationId },
-        select: {
-          id: true,
-          messages: { select: { attachments: true } },
-        },
-      },
-    },
+    select: customerThreadsSelect(organizationId),
   });
 
-  const threads = customers.flatMap(customer => customer.threads);
-  return {
-    customerIds: customers.map(customer => customer.id),
-    threadIds: threads.map(thread => thread.id),
-    attachmentRefs: [...new Set(
-      threads.flatMap(thread => thread.messages.flatMap(message => message.attachments)),
-    )],
-    messageCount: threads.reduce((count, thread) => count + thread.messages.length, 0),
-  };
+  return customerSelection(customers);
 }
 
 async function deleteSelectedCustomerData(
@@ -433,6 +443,26 @@ export async function preserveShopifyUninstallTombstone(shopDomain: string): Pro
 }
 
 /** Erases a customer's threads, messages and agent records, as Shopify's customers/redact requires. */
+/**
+ * Erases these customers the way customers/redact does: their conversations,
+ * messages and attachments, order confirmations, waiting phone cards and the
+ * agent's records of them. For a verified erasure request that did not come
+ * through Shopify, and for resetting the controlled test customer before a live
+ * run (`npm run erase:customer`).
+ */
+export async function eraseCustomers(
+  organizationId: string,
+  customerIds: readonly string[],
+): Promise<CustomerDataSelection> {
+  const customers = customerIds.length === 0 ? [] : await db.customer.findMany({
+    where: { organizationId, id: { in: [...customerIds] } },
+    select: customerThreadsSelect(organizationId),
+  });
+  const selection = customerSelection(customers);
+  await deleteSelectedCustomerData(organizationId, '', selection, {});
+  return selection;
+}
+
 async function redactCustomerData(
   organizationId: string,
   shopDomain: string,

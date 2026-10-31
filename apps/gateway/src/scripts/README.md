@@ -12,6 +12,8 @@ Prefer `railway run` (or the env file noted in each file) over copying secrets l
 | npm script | Script |
 | --- | --- |
 | `npm run audit:shopify-webhooks` | `inspect-shopify-webhooks.ts` |
+| `npm run erase:customer` | `erase-customer.ts` |
+| `npm run live-test:preflight` | `live-test-preflight.ts` |
 | `npm run canary:outbound-gmail -w apps/gateway` | `canary-outbound-gmail.ts` |
 
 ## Scripts and what uses them
@@ -23,6 +25,8 @@ Prefer `railway run` (or the env file noted in each file) over copying secrets l
 | `inspect-failed-queue-jobs.ts`, `remove-failed-queue-job.ts` | Runbook *BullMQ Failed Jobs* |
 | `set-telegram-webhook.ts` | Runbook *Telegram operator channel* |
 | `inspect-shopify-webhooks.ts` | Runbook *Webhook Routing* and *Channel Smoke Tests and Recovery* |
+| `erase-customer.ts` | [Data deletion](../../../../docs/production/data-deletion.md) *Customer Deletion Or Redaction*; runbook *Live testing on the dev store* |
+| `live-test-preflight.ts` | Runbook *Live testing on the dev store* |
 | `inspect-turn-usage.ts` | [docs/audit-commands.md](../../../../docs/audit-commands.md) |
 | `measure-agent-prompt.ts` | Per-section prompt token counts (`count_tokens`, no spend) before changing tool schemas |
 | `inspect-flash-sales.ts` | The only live-store check of the `end_flash_sale` discount query |
