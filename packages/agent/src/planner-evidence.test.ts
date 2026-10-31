@@ -239,7 +239,11 @@ describe("buildPlanRoutingEvidence", () => {
       readResultsMap: new Map(),
       settings: resolveAgentSettings({ maxRefundAmount: 50 }),
     }).evidence;
-    expect(evidence).toMatchObject({ codes: ["compensation_over_cap"] });
+    // The merchant compares the amount with their limit, so the reason names both.
+    expect(evidence).toMatchObject({
+      codes: ["compensation_over_cap"],
+      escalationReason: "Shopify's full refund, which includes shipping and tax, is $200.00, over the $50 limit for one compensation — needs human review.",
+    });
   });
 
   it("asks about the knowledge-base search that missed, not the customer's words", () => {

@@ -21,6 +21,7 @@ import {
 import { AWAIT_ORDER_VERIFICATION_TOOL, getToolDefinition, TOOL_CATEGORIES } from "./tools/registry/index.js";
 import type { ToolStatus } from "./tools/result.js";
 import { shopMoneyAmountOf } from "./tools/static-policy.js";
+import { formatMoney } from "./money.js";
 import { escalationReasonFor } from "./routing-evidence.js";
 import type {
   ClassifierAlignmentState,
@@ -89,17 +90,44 @@ function resumedRequest(input: Pick<BuildPlanRoutingEvidenceInput, "orderVerific
   return input.orderVerification?.kind === "verified" ? input.orderVerification.resumedRequest : null;
 }
 
-function planExceedsCompensationCap(
+interface CompensationOverCap {
+  toolName: string;
+  amount: number;
+  cap: number;
+  /** The amount's currency when the input names the shop's; otherwise the limit's own. */
+  currency: string | undefined;
+}
+
+function compensationOverCap(
   rawToolCalls: readonly RawToolCall[],
   settings: OrgSettings | undefined,
-): boolean {
+): CompensationOverCap | null {
   const cap = settings?.maxRefundAmount;
-  if (cap === null || cap === undefined || cap <= 0) return false;
-  return rawToolCalls.some((toolCall) => {
-    if (!getToolDefinition(toolCall.name)?.policy.refundAmountLimits) return false;
-    const amount = Number(shopMoneyAmountOf((toolCall.input ?? {}) as Parameters<typeof shopMoneyAmountOf>[0]));
-    return Number.isFinite(amount) && amount > cap;
-  });
+  if (cap === null || cap === undefined || cap <= 0) return null;
+  for (const toolCall of rawToolCalls) {
+    if (!getToolDefinition(toolCall.name)?.policy.refundAmountLimits) continue;
+    const input = (toolCall.input ?? {}) as Parameters<typeof shopMoneyAmountOf>[0] & { currency?: string };
+    const amount = Number(shopMoneyAmountOf(input));
+    if (Number.isFinite(amount) && amount > cap) {
+      return {
+        toolName: toolCall.name,
+        amount,
+        cap,
+        currency: input.approval_shop_amount === undefined ? input.currency : undefined,
+      };
+    }
+  }
+  return null;
+}
+
+// The merchant compares the amount with their limit, so the reason names both. A
+// full refund is Shopify's whole refundable balance, shipping and tax included,
+// which is why it can exceed a limit the item price is under.
+function compensationOverCapReason({ toolName, amount, cap, currency }: CompensationOverCap): string {
+  const subject = toolName === "create_refund"
+    ? "Shopify's full refund, which includes shipping and tax,"
+    : "The planned compensation";
+  return `${subject} is ${formatMoney(amount, currency, { exact: true })}, over the ${formatMoney(cap, currency)} limit for one compensation — needs human review.`;
 }
 
 function hasExplicitCompensationRequest(
@@ -121,7 +149,7 @@ function requestedWriteEscalationCode(input: BuildPlanRoutingEvidenceInput): Pla
   if (shouldEscalateFulfilledAddressChangeRequest(ctx, rawToolCalls)) return "fulfilled_address_change_request";
   if (refundTargetsAlreadyFullyRefunded(ctx, rawToolCalls)) return "already_refunded_request";
   if (refundTargetsNonPaidOrder(ctx, rawToolCalls)) return "non_paid_refund_request";
-  if (planExceedsCompensationCap(rawToolCalls, input.settings)) return "compensation_over_cap";
+  if (compensationOverCap(rawToolCalls, input.settings)) return "compensation_over_cap";
   if (damagePhotoMissing(input)) return "damage_photo_missing";
   if (input.orderVerification?.kind === "locked") return "order_unconfirmed";
   const shape = planShape(rawToolCalls);
@@ -279,8 +307,13 @@ export function buildPlanRoutingEvidence(
   if (kbMissNeedsMerchant(input)) codes.push("kb_gap");
 
   const uniqueCodes = [...new Set(codes)];
+  const overCap = uniqueCodes.includes("compensation_over_cap")
+    ? compensationOverCap(input.rawToolCalls, input.settings)
+    : null;
   const escalationReasons = uniqueCodes
-    .map(escalationReasonFor)
+    .map((code) => (code === "compensation_over_cap" && overCap
+      ? compensationOverCapReason(overCap)
+      : escalationReasonFor(code)))
     .filter((reason): reason is string => Boolean(reason));
   const needsQuestion = uniqueCodes.includes("policy_gap") || uniqueCodes.includes("kb_gap");
   return {

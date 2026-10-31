@@ -1,4 +1,6 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
+import { getE2EAuthIdentity } from "@/lib/e2e-auth";
 import { normalizeImessageLineHandle } from "@/lib/integrations/imessage-visibility";
 import { isShopifySimulatorEnabled } from "@/lib/integrations/shopify-simulator";
 import { getShopifyOAuthAuthorizeConfig } from "@/lib/env";
@@ -15,6 +17,15 @@ import { parseOAuthOutcome } from "@/lib/integrations/oauth-contract";
 function parseResumeStep(value: string | string[] | undefined): OnboardingResumeStep | null {
   if (value === "shopify" || value === "email" || value === "connect" || value === "plan") return value;
   return null;
+}
+
+// The wizard creates a workspace for someone who has none. A member with no
+// workspace selected picks theirs instead: creating one here is how one merchant
+// ended up with four workspaces named after the same store.
+async function belongsToAWorkspace(userId: string): Promise<boolean> {
+  const client = await clerkClient();
+  const { totalCount } = await client.users.getOrganizationMembershipList({ userId, limit: 1 });
+  return totalCount > 0;
 }
 
 // Every OAuth hop returns to `/onboarding?step=…`. Resolving it here rather than
@@ -37,7 +48,10 @@ export default async function OnboardingPage({
     ? resolveOnboardingStepIndex(resumeStep, 0, STEPS.map(s => s.id))
     : null;
 
-  const { orgId } = await auth();
+  const { orgId, userId } = await auth();
+  if (!orgId && userId && !getE2EAuthIdentity() && await belongsToAWorkspace(userId)) {
+    redirect("/select-org");
+  }
   const imessageHandle = normalizeImessageLineHandle(process.env.IMESSAGE_LINE_HANDLE);
   const shopifySimulatorEnabled = isShopifySimulatorEnabled();
   const instagramConnectAvailable = resolveInstagramConnectTransport(orgId) !== null;

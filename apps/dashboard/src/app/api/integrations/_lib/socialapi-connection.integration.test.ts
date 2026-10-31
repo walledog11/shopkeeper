@@ -12,13 +12,13 @@ async function seedOrg() {
   return db.organization.create({ data: { clerkOrgId, name: 'SocialAPI Connect Fixture' } });
 }
 
-function connectInput(organizationId: string, providerAccountId: string) {
+function connectInput(organizationId: string, providerAccountId: string, username = `merchant_${randomUUID()}`) {
   return {
     brandId: 'brand_1',
     connectedAt: new Date(),
     organizationId,
     providerAccountId,
-    username: 'merchant',
+    username,
   };
 }
 
@@ -124,5 +124,29 @@ describe('persistSocialApiConnection', () => {
     const rows = await db.integration.findMany({ where: { providerAccountId } });
     expect(rows).toHaveLength(1);
     expect(rows[0]!.organizationId).toBe(owner.id);
+  });
+
+  // 2026-10-30: one Instagram account was connected directly in one workspace and
+  // through SocialAPI in another. Both received every DM and both replied.
+  it('refuses an Instagram account another workspace holds through the direct Meta app', async () => {
+    const owner = await seedOrg();
+    const intruder = await seedOrg();
+    const username = `shop_${randomUUID()}`;
+    await db.integration.create({
+      data: {
+        organizationId: owner.id,
+        platform: 'ig_dm',
+        externalAccountId: `1784${randomUUID()}`,
+        accessToken: 'meta-token',
+        fromEmail: username,
+        metadata: { instagram: { authModel: 'instagram_login', username } },
+      },
+    });
+
+    await expect(
+      persistSocialApiConnection(connectInput(intruder.id, `acc_${randomUUID()}`, username.toUpperCase())),
+    ).rejects.toBeInstanceOf(InstagramAccountInUseError);
+
+    expect(await db.integration.count({ where: { organizationId: intruder.id } })).toBe(0);
   });
 });
