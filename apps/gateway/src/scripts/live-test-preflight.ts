@@ -2,19 +2,23 @@
  * Checks a workspace is ready for a live Instagram test before the first message
  * is sent: migrations applied, one Instagram connection that no other workspace
  * shares, Shopify and a phone connected, the approval settings the run expects,
- * no unfinished workspace deletion, and the test customer starting with no
- * history. Lists paid, unrefunded orders under the compensation limit, with the
- * email and zip the order confirmation will ask for. Read-only.
+ * no unfinished workspace deletion, no Instagram customer history and nothing
+ * waiting on the phone from an earlier run. Lists paid, unrefunded orders under
+ * the compensation limit, with the email and zip the order confirmation will
+ * ask for. Read-only.
  *
  *   railway run --service shopkeeper --environment production -- \
  *     npm run live-test:preflight -- --workspace <clerk_org_id> --instagram <test handle>
- * Needs DATABASE_URL and TOKEN_ENCRYPTION_KEY (to read the Shopify token).
+ * Needs DATABASE_URL, TOKEN_ENCRYPTION_KEY (to read the Shopify token) and
+ * SOCIALAPI_API_KEY (to find the test handle).
  */
 import { readdirSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { db } from '@shopkeeper/db';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { shopifyRestJson } from '@shopkeeper/agent/shopify';
+import { readPendingPlanArray, readPendingQuestion } from '../operator-context/serialization.js';
+import { findInstagramSenderIds } from './live-test-instagram.js';
 
 const { values } = parseArgs({
   options: {
@@ -124,25 +128,56 @@ async function main(): Promise<void> {
   }
   if (deletions.length === 0) ok('No unfinished workspace deletions');
 
-  if (handle) {
-    const customers = await db.customer.findMany({
-      where: {
-        organizationId: organization.id,
-        name: { equals: handle, mode: 'insensitive' },
-        threads: { some: { channelType: 'ig_dm' } },
+  // Whatever an earlier run left changes this one: an order confirmed last time
+  // is not asked about again, and a waiting card turns "yes" into "which one?".
+  // A live-test workspace has no other Instagram customers, so this checks them
+  // all rather than the test customer by name, which is empty when its lookup
+  // failed.
+  const instagramCustomers = await db.customer.findMany({
+    where: { organizationId: organization.id, threads: { some: { channelType: 'ig_dm' } } },
+    select: {
+      name: true,
+      platformId: true,
+      threads: {
+        where: { organizationId: organization.id },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, status: true },
       },
-      select: { threads: { where: { organizationId: organization.id }, select: { status: true } } },
-    });
-    const conversations = customers.flatMap(customer => customer.threads);
-    if (conversations.length === 0) {
-      ok(`Test customer ${handle} has no history`);
-    } else {
-      fail(
-        `Test customer ${handle} has ${conversations.length} conversation(s), `
-        + `${conversations.filter(thread => thread.status === 'open').length} open. Reset first: `
-        + `npm run erase:customer -- --workspace ${organization.clerkOrgId} --instagram ${handle} --execute`,
-      );
-    }
+    },
+  });
+  if (instagramCustomers.length === 0) ok('No Instagram customer history');
+  for (const customer of instagramCustomers) {
+    fail(
+      `Instagram customer ${customer.name ?? `(no name, sender ${customer.platformId})`} has `
+      + `${customer.threads.length} conversation(s), ${customer.threads.filter(thread => thread.status === 'open').length} open. `
+      + `Reset: npm run erase:customer -- --workspace ${organization.clerkOrgId} --thread ${customer.threads[0]?.id} --execute`,
+    );
+  }
+
+  const contexts = await db.operatorContext.findMany({
+    where: { organizationId: organization.id },
+    select: { pendingPlans: true, pendingQuestion: true },
+  });
+  const waitingThreadIds = [...new Set(contexts.flatMap(context => [
+    ...readPendingPlanArray(context.pendingPlans).map(plan => plan.threadId),
+    ...[readPendingQuestion(context.pendingQuestion)?.threadId].filter((id): id is string => Boolean(id)),
+  ]))];
+  const waitingThreads = await db.thread.findMany({
+    where: { organizationId: organization.id, id: { in: waitingThreadIds } },
+    select: { id: true, channelType: true },
+  });
+  // An Instagram ticket's card goes with the reset above.
+  const otherWaiting = waitingThreadIds.filter(id => !waitingThreads.some(thread => thread.id === id && thread.channelType === 'ig_dm'));
+  if (waitingThreadIds.length === 0) ok('Nothing waiting on the phone');
+  else if (otherWaiting.length > 0) {
+    warn(`Still waiting on the phone for ticket(s) ${otherWaiting.join(', ')}: a bare "yes" will ask which one you mean`);
+  }
+
+  if (handle) {
+    const senders = await findInstagramSenderIds(organization.id, handle);
+    if (!senders.ok) warn(`Could not look up ${handle} in SocialAPI: ${senders.reason}`);
+    else if (senders.senderIds.length === 0) warn(`SocialAPI has no conversation named ${handle}: its tickets will say "The customer"`);
+    else ok(`SocialAPI knows ${handle} (sender ${senders.senderIds.join(', ')})`);
   }
 
   if (shopify?.accessToken) {
