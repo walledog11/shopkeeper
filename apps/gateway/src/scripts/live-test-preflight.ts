@@ -152,20 +152,24 @@ async function main(): Promise<void> {
         current_total_price: string;
         currency: string;
         cancelled_at: string | null;
+        closed_at: string | null;
+        customer?: { first_name?: string | null; last_name?: string | null } | null;
         refunds?: unknown[];
         email: string | null;
         shipping_address?: { zip?: string | null } | null;
       }>;
     }>({ shop: shopify.externalAccountId, accessToken: shopify.accessToken }, 'orders.json', {
       query: {
-        status: 'any',
         financial_status: 'paid',
         limit: 50,
-        fields: 'name,current_total_price,currency,cancelled_at,refunds,email,shipping_address',
+        fields: 'name,current_total_price,currency,cancelled_at,closed_at,refunds,email,shipping_address,customer',
+        status: 'open',
       },
     });
+    // Open orders only: an archived order is one the merchant has finished with.
     const eligible = orders.filter(order => (
       !order.cancelled_at
+      && !order.closed_at
       && (order.refunds?.length ?? 0) === 0
       && (limit === null || Number(order.current_total_price) <= limit)
     ));
@@ -174,7 +178,8 @@ async function main(): Promise<void> {
     } else {
       ok(`Orders a full refund can use (total including shipping and tax, under the limit):`);
       for (const order of eligible.slice(0, 5)) {
-        console.log(`        ${order.name}  ${order.current_total_price} ${order.currency}  email ${order.email ?? '-'}  zip ${order.shipping_address?.zip ?? '-'}`);
+        const customer = [order.customer?.first_name, order.customer?.last_name].filter(Boolean).join(' ') || '(no customer)';
+        console.log(`        ${order.name}  ${order.current_total_price} ${order.currency}  ${customer}  email ${order.email ?? '-'}  zip ${order.shipping_address?.zip ?? '-'}`);
       }
     }
   }
