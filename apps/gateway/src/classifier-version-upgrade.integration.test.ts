@@ -213,7 +213,7 @@ describe('persisted classifier versions still render', () => {
     expect(card).toContain('cracked lid');
     expect(card).not.toContain('Request details unavailable');
     expect(card).toMatch(/refund/i);
-    expect(card).toContain('Sound good?');
+    expect(card).toContain('OK to go ahead?');
   });
 
   it('never asks a card to be approved when the request cannot be shown', async () => {
@@ -244,8 +244,8 @@ describe('persisted classifier versions still render', () => {
     expect(card).toContain('Request details unavailable');
     expect(card).toMatch(/refund/i);
     expect(card).toContain('open the thread first');
-    expect(card).not.toContain('Sound good?');
-    expect(card).not.toContain('Good to send?');
+    expect(card).not.toContain('OK to go ahead?');
+    expect(card).not.toContain('OK to send?');
   });
 
   it('never asks a legacy row to be decided when it cannot be shown', async () => {

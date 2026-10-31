@@ -51,6 +51,55 @@ function v5Signals(ask: 'refund' | 'address_change' = 'refund') {
 }
 
 describe('buildRequestDisplaySnapshot', () => {
+  // 2026-10-31: the card for a zip that confirmed #1051 read "Verification Code
+  // For Refund Request", the title of the zip message, not the refund it resumed.
+  it('describes the request a confirming answer resumed, not the answer itself', async () => {
+    const customer = await createTestCustomer(org.id, 'ig_sender_display');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.ig_dm);
+    const answer = await createTestMessage(thread.id, '97201');
+    const signals = v5Signals();
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        requestSourceMessageId: answer.id,
+        classifierSignals: {
+          ...signals,
+          intents: { ...signals.intents, no_request: true },
+          requestFacts: { ...signals.requestFacts, ask: 'none', subject: null, order: null },
+        },
+        aiTitle: 'Verification Code For Refund Request',
+      },
+    });
+    await db.orderVerification.create({
+      data: {
+        organizationId: org.id,
+        customerId: customer.id,
+        shopDomain: 'display.myshopify.com',
+        threadId: thread.id,
+        orderName: '#1051',
+        orderId: '9001',
+        method: 'zip',
+        requestedAt: new Date(),
+        attempts: 1,
+        answeredMessageId: answer.id,
+        verifiedAt: new Date(),
+        requestFacts: { ...signals.requestFacts, order: '#1051', subject: null, reason: 'changed_mind' },
+      },
+    });
+
+    const display = await buildRequestDisplaySnapshot({
+      organizationId: org.id,
+      threadId: thread.id,
+      sourceMessageId: answer.id,
+    });
+
+    expect(display).toEqual(expect.objectContaining({
+      kind: 'classified',
+      noRequest: false,
+      facts: expect.objectContaining({ ask: 'refund', order: '#1051', reason: 'changed_mind' }),
+    }));
+  });
+
   it('persists actionable classified fields when v5 is aligned to the plan source', async () => {
     const customer = await createTestCustomer(org.id, 'snapshot@example.com');
     const thread = await createTestThread(org.id, customer.id, ChannelType.email);

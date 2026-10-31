@@ -91,10 +91,19 @@ async function loadCardPhotos(
   };
 }
 
+// A profile lookup that came back empty is not a customer without a name.
+async function storedCustomerName(organizationId: string, threadId: string): Promise<string | null> {
+  const thread = await db.thread.findFirst({
+    where: { id: threadId, organizationId },
+    select: { customer: { select: { name: true } } },
+  }).catch(() => null);
+  return thread?.customer.name ?? null;
+}
+
 export async function sendOperatorPlanNotification(
   organizationId: string,
   threadId: string,
-  customerName: string | null,
+  lookupName: string | null,
   channelType: DbChannelType,
   _requestSummary: string | null,
   plan: AgentPlan,
@@ -113,6 +122,7 @@ export async function sendOperatorPlanNotification(
     logger.info({ organizationId }, '[Worker] No bound operator members — skipping plan notification');
     return;
   }
+  const customerName = lookupName ?? await storedCustomerName(organizationId, threadId);
 
   const stage = await getConversationStage(threadId);
   const confirmedOrders = await listConfirmedOrders(organizationId, threadId, channelType);

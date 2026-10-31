@@ -19,6 +19,13 @@ type ReceiptFor<TTool extends ReceiptSuccessV1["tool"]> = Extract<ReceiptSuccess
 interface PlaceholderSource<TTool extends ReceiptSuccessV1["tool"] = ReceiptSuccessV1["tool"]> {
   field: string;
   read: (receipt: ReceiptFor<TTool>) => string | null;
+  /**
+   * The value the approval already binds, for a call whose execution refuses to
+   * produce any other (a refund whose Shopify amount moved is `amount_mismatch`).
+   * The card shows it in the slot; the customer still gets the receipt's value,
+   * which this guarantees is the same.
+   */
+  quote?: (input: Record<string, unknown>) => string | null;
 }
 
 type PlaceholderSources = { [TTool in ReceiptSuccessV1["tool"]]?: PlaceholderSource<TTool> };
@@ -40,14 +47,28 @@ const refundAmount = (receipt: { facts: { amount: string; currency: string } }) 
   formatMoney(receipt.facts.amount, receipt.facts.currency, { exact: true })
 );
 
+const quotedMoney = (amount: unknown, currency: unknown) => (
+  typeof amount === "string" && amount.trim()
+    ? formatMoney(amount, typeof currency === "string" ? currency : null, { exact: true })
+    : null
+);
+
 const PLACEHOLDERS: Record<ReplyPlaceholderName, PlaceholderDefinition> = {
   refund_amount: {
     label: "refund amount",
     describes: "the amount the refund actually returns",
     customerFacing: true,
     sources: {
-      create_refund: { field: "facts.amount", read: refundAmount },
-      create_partial_refund: { field: "facts.amount", read: refundAmount },
+      create_refund: {
+        field: "facts.amount",
+        read: refundAmount,
+        quote: (input) => quotedMoney(input.amount, input.currency),
+      },
+      create_partial_refund: {
+        field: "facts.amount",
+        read: refundAmount,
+        quote: (input) => quotedMoney(input.approval_amount, input.approval_currency),
+      },
       cancel_order: {
         field: "facts.refund.amount",
         read: (receipt) => (receipt.facts.refund ? refundAmount({ facts: receipt.facts.refund }) : null),
@@ -154,12 +175,27 @@ export function isResultBinding(value: unknown): value is ResultBinding {
 
 /**
  * The draft as the merchant sees it before approval: each placeholder shown by
- * what it will hold, so the card never presents a token as finished text.
+ * what it will hold, so the card never presents a token as finished text. Given
+ * the bindings and calls, a slot whose call binds its value already (a refund's
+ * Shopify quote) shows that value instead of its label.
  */
-export function displayApprovedDraft(draft: string): string {
-  return draft.replace(PLACEHOLDER_TOKEN, (token, name: string) => (
-    isPlaceholderName(name) ? `[${PLACEHOLDERS[name].label}]` : token
-  ));
+export function displayApprovedDraft(
+  draft: string,
+  bound?: {
+    bindings: readonly ResultBinding[];
+    rawToolCalls: readonly { id?: string; name: string; input?: unknown }[];
+  },
+): string {
+  return draft.replace(PLACEHOLDER_TOKEN, (token, name: string) => {
+    if (!isPlaceholderName(name)) return token;
+    const binding = bound?.bindings.find((candidate) => candidate.placeholder === name);
+    const call = binding && bound?.rawToolCalls.find((candidate) => (
+      candidate.id === binding.toolCallId && candidate.name === binding.tool
+    ));
+    const input = call?.input && typeof call.input === "object" ? call.input as Record<string, unknown> : null;
+    const quoted = binding && input ? sourceFor(name, binding.tool)?.quote?.(input) : null;
+    return quoted ?? `[${PLACEHOLDERS[name].label}]`;
+  });
 }
 
 /**

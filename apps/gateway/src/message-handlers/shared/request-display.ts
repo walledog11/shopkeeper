@@ -1,6 +1,7 @@
 import { db } from '@shopkeeper/db';
 import {
   parseClassifierSignals,
+  parseRequestFacts,
   type RequestFacts,
 } from '@shopkeeper/agent/classifier-signals';
 import { formatFactsBriefingLine } from '../../maintenance/briefing-fields.js';
@@ -82,6 +83,17 @@ export function requestDisplayHasContext(
   }) !== null;
 }
 
+// On the turn a sender's email or zip confirms their order, their message asks
+// nothing; the request it resumed was kept on the confirmation. A failed read
+// leaves the card describing the message itself, as before.
+async function resumedRequestFacts(organizationId: string, sourceMessageId: string): Promise<RequestFacts | null> {
+  const confirmation = await db.orderVerification.findFirst({
+    where: { organizationId, answeredMessageId: sourceMessageId, verifiedAt: { not: null } },
+    select: { requestFacts: true },
+  }).catch(() => null);
+  return confirmation?.requestFacts ? parseRequestFacts(confirmation.requestFacts) : null;
+}
+
 export async function buildRequestDisplaySnapshot(params: {
   organizationId: string;
   threadId: string;
@@ -111,12 +123,16 @@ export async function buildRequestDisplaySnapshot(params: {
     return unavailableRequestDisplay();
   }
 
+  // A request the answer makes itself comes first.
+  const resumed = signals.requestFacts.ask === 'none'
+    ? await resumedRequestFacts(params.organizationId, params.sourceMessageId)
+    : null;
   return {
     version: REQUEST_DISPLAY_VERSION,
     kind: 'classified',
     sourceMessageId: params.sourceMessageId,
-    facts: signals.requestFacts,
-    noRequest: signals.intents.no_request,
+    facts: resumed ?? signals.requestFacts,
+    noRequest: resumed ? false : signals.intents.no_request,
     topic: boundedTopic(thread.aiTitle),
   };
 }
