@@ -168,7 +168,29 @@ describe('formatOperatorPlanMessage with an exact draft', () => {
     });
 
     expect(message).toContain(draft);
-    expect(message).toContain('Sound good?');
+    expect(message).toContain('OK to go ahead?');
+  });
+
+  // 2026-10-31: the card showed "a full refund of [refund amount]" beside a step
+  // that already said $24.95. Execution refuses any other amount, so the card
+  // can show the quote.
+  it('shows a refund slot as the amount the approval binds', () => {
+    const message = formatOperatorPlanMessage('Jane Doe', ChannelType.ig_dm, requestDisplay('Refund'), [
+      { id: 'refund', category: 'action', tool: 'create_refund', description: 'Refund the order', label: 'Refund order', enabled: true },
+      { id: 'reply', category: 'communication', tool: 'send_reply', description: 'Tell the customer', label: 'Reply', enabled: true },
+    ], {
+      rawToolCalls: [
+        { id: 'refund', name: 'create_refund', input: { order_id: '9001', amount: '24.95', currency: 'USD', reason: 'Changed mind' } },
+        { id: 'reply', name: 'send_reply', input: { text: 'Done' } },
+      ],
+      communication: {
+        ...exact("I've refunded {{refund_amount}} for order #1051."),
+        allowedResultBindings: [{ placeholder: 'refund_amount', toolCallId: 'refund', tool: 'create_refund', field: 'facts.amount' }],
+      },
+    });
+
+    expect(message).toContain("I've refunded $24.95 for order #1051.");
+    expect(message).not.toContain('[refund amount]');
   });
 
   it('does not ask for approval of a message too long to show', () => {
@@ -183,7 +205,7 @@ describe('formatOperatorPlanMessage with an exact draft', () => {
 
     expect(message).not.toContain(longDraft.slice(0, 200));
     expect(message).toContain('open the thread to read it before approving');
-    expect(message).not.toContain('Sound good?');
+    expect(message).not.toContain('OK to go ahead?');
   });
 });
 
@@ -228,7 +250,7 @@ describe('sendOperatorPlanNotification', () => {
     const [, , body] = notifyOperatorSpy.mock.calls[0] ?? [];
     expect(body).toContain('cracked lid');
     expect(body).not.toContain('Request details unavailable');
-    expect(body).toContain('Good to send?');
+    expect(body).toContain('OK to send?');
   });
 
   it('drops the approval question when nothing can show the request', async () => {
@@ -247,8 +269,8 @@ describe('sendOperatorPlanNotification', () => {
     const [, , body] = notifyOperatorSpy.mock.calls[0] ?? [];
     expect(body).toContain('Request details unavailable');
     expect(body).toContain('open the thread first');
-    expect(body).not.toContain('Good to send?');
-    expect(body).not.toContain('Sound good?');
+    expect(body).not.toContain('OK to send?');
+    expect(body).not.toContain('OK to go ahead?');
   });
 
   // A superseded message is not what the merchant is being asked about, so the
@@ -271,7 +293,7 @@ describe('sendOperatorPlanNotification', () => {
     const [, , body] = notifyOperatorSpy.mock.calls[0] ?? [];
     expect(body).not.toContain('Ignore that');
     expect(body).toContain('Request details unavailable');
-    expect(body).not.toContain('Good to send?');
+    expect(body).not.toContain('OK to send?');
   });
 
   it('parks the plan with its identity, under the critical policy, for each bound operator', async () => {
@@ -344,7 +366,7 @@ describe('sendOperatorPlanNotification', () => {
 
     const [, , body, , notifyOptions] = notifyOperatorSpy.mock.calls[0] ?? [];
     expect(body).toContain("couldn't produce a safe executable draft");
-    expect(body).not.toContain('Good to send?');
+    expect(body).not.toContain('OK to send?');
     expect(notifyOptions?.appendPlan?.plan?.validation).toEqual(invalidPlan.validation);
   });
 
@@ -394,7 +416,7 @@ describe('sendOperatorPlanNotification', () => {
     expect(firstBody).toContain('Their photo of the damage is above.');
     expect(notifyOptions?.images).toBeUndefined();
     expect(body).toContain("They sent a photo of the damage that I can't show here.");
-    expect(body).not.toContain('Good to send?');
+    expect(body).not.toContain('OK to send?');
     expect(notifyOptions?.appendPlan?.plan?.needsThreadReview).toBe(true);
     // A later run that can show the photos is a different card, not a duplicate.
     expect(notifyOptions?.idempotencyKey).not.toBe(firstOptions?.idempotencyKey);
@@ -417,7 +439,7 @@ describe('sendOperatorPlanNotification', () => {
     expect(notifyOptions?.images).toBeUndefined();
     expect(body).toContain("They sent 2 photos of the damage that I can't show here.");
     expect(body).toContain('Open the thread to see the photos before approving.');
-    expect(body).not.toContain('Good to send?');
+    expect(body).not.toContain('OK to send?');
     expect(notifyOptions?.appendPlan?.plan?.needsThreadReview).toBe(true);
   });
 

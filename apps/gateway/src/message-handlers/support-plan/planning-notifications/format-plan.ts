@@ -4,8 +4,10 @@ import {
   classifyPerson,
   customerFirstName,
   personObject,
+  personSubject,
   type PersonName,
 } from '@shopkeeper/agent/person-name';
+import type { RequestReason } from '@shopkeeper/agent/classifier-signals';
 import { lowerFirst } from '../../../lib/sentence-case.js';
 import { formatBlockedTicketLine } from '../../../maintenance/digest-briefing/ticket-lines.js';
 import type { ConfirmedOrder } from '../../../storefront-chat-verified-orders.js';
@@ -17,6 +19,7 @@ import {
   outstandingMerchantFollowUps,
 } from '@shopkeeper/agent/merchant-follow-up';
 import { firstDraftExcerpt } from '../../operator/operator-ledger.js';
+import { formatDeadlineLead, formatRequestPhrase } from '../../../maintenance/briefing-fields.js';
 import { requestDisplayHasContext, type RequestDisplay } from '../../shared/request-display.js';
 import { FRESH_STAGE } from './conversation-stage.js';
 import { channelRepliedPhrase, endSentence, formatRequestHeaderLines } from './headers.js';
@@ -45,23 +48,77 @@ function emailSubject(rawToolCalls: readonly { name: string; input?: unknown }[]
   return typeof subject === 'string' && subject.trim() ? subject.trim() : null;
 }
 
-// Where the approved message goes, as the lead-in to the message itself. The
-// merchant approves the destination along with the words.
-function exactDraftLead(
-  draft: ExactDraft,
+// Where the approved message goes, finishing "I'd …": the merchant approves the
+// destination along with the words.
+function replyPhrase(
+  step: PlanStep,
+  draft: ExactDraft | null,
   person: PersonName,
+  channelType: DbChannelType,
   rawToolCalls: readonly { name: string; input?: unknown }[],
-  replyOnly: boolean,
 ): string {
-  if (draft.destination.kind === 'email') {
+  if (draft?.destination.kind === 'email') {
     const subject = emailSubject(rawToolCalls);
-    const to = `${replyOnly ? "I'd email" : 'The email to'} ${draft.destination.id}`;
-    return subject ? `${to}, subject "${subject}":` : `${to}:`;
+    return `email ${draft.destination.id}${subject ? `, subject "${subject}"` : ''}`;
   }
-  const where = channelRepliedPhrase(draft.destination.channel as DbChannelType);
-  return replyOnly
-    ? `I'd reply to ${personObject(person)} ${where}:`
-    : `The reply to ${personObject(person)}, ${where}:`;
+  if (draft) return `reply ${channelRepliedPhrase(draft.destination.channel as DbChannelType)}`;
+  return step.tool === 'send_email' ? `email ${personObject(person)}` : `reply ${channelRepliedPhrase(channelType)}`;
+}
+
+// Why the customer wants it, as the merchant would say it. A reason the
+// classifier did not name says nothing.
+const REASON_SENTENCES: Partial<Record<RequestReason, string>> = {
+  damaged: 'It arrived damaged.',
+  defective: "They say it doesn't work.",
+  wrong_item: 'They got the wrong item.',
+  not_received: "It hasn't arrived.",
+  late: "It's running late.",
+  changed_mind: 'They changed their mind.',
+};
+
+// The opening a colleague would write: who it is, what they confirmed, what they
+// want and why, from the request's fields. A request with no ask the card can
+// name keeps the request line it always had.
+function openingLines(input: {
+  person: PersonName;
+  display: RequestDisplay;
+  confirmations: readonly string[];
+  confirmedOrderNames: readonly string[];
+  fallback: string;
+  now: Date;
+}): string[] {
+  const subject = personSubject(input.person);
+  const confirmed = input.confirmations.length > 0 ? `confirmed ${input.confirmations.join(' and ')}` : null;
+  const facts = input.display.kind === 'classified' && input.display.facts.ask !== 'none' && input.display.facts.ask !== 'other'
+    ? input.display.facts
+    : null;
+  if (!facts) {
+    return confirmed ? [input.fallback, `${subject} ${confirmed}.`] : [input.fallback];
+  }
+  const order = facts.order && !input.confirmedOrderNames.includes(facts.order) ? ` on ${facts.order}` : '';
+  const asked = `${formatRequestPhrase(facts)}${order}`;
+  const lines = [`${subject} ${[confirmed, asked].filter(Boolean).join(' and ')}.`];
+  const reason = facts.reason ? REASON_SENTENCES[facts.reason] : undefined;
+  const deadline = formatDeadlineLead(facts, input.now);
+  if (reason || deadline) lines[0] = [lines[0], reason, deadline ? endSentence(deadline) : null].filter(Boolean).join(' ');
+  return lines;
+}
+
+// One action as the rest of "I'd …": the items it changes when the planner bound
+// them from Shopify, else its label.
+function actionPhrase(step: PlanStep, person: PersonName, rawToolCalls: readonly CardToolCall[] | undefined): string {
+  const items = lineItemSentence(step, rawToolCalls);
+  if (items) return lowerFirst(items);
+  return parkedActionLabel([step], person) ?? lowerFirst(step.label || step.description);
+}
+
+const COUNT_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six'];
+function countWord(count: number): string {
+  return COUNT_WORDS[count] ?? String(count);
+}
+
+function capitalizeFirst(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 // Why the plan escalated, so the card can say what the agent concluded instead
@@ -163,19 +220,20 @@ export function formatOperatorPlanMessage(
   const actionableSteps = steps.filter((step) => step.category !== 'read');
 
   // The actual draft the merchant is approving, so approval is not sight-unseen.
-  // An exact draft is shown whole; a legacy draft keeps its excerpt.
-  // Its receipt placeholders are shown by what they will hold.
+  // An exact draft is shown whole; a legacy draft keeps its excerpt. A receipt
+  // placeholder shows the value its call already binds (a refund's Shopify
+  // quote), or else what it will hold.
   const exactDraft = options?.communication?.mode === 'exact_draft' ? options.communication : null;
-  const exactDraftText = exactDraft ? displayApprovedDraft(exactDraft.draft) : null;
+  const exactDraftText = exactDraft
+    ? displayApprovedDraft(exactDraft.draft, {
+        bindings: exactDraft.allowedResultBindings,
+        rawToolCalls: options?.rawToolCalls ?? [],
+      })
+    : null;
   const exactDraftHidden = requiresDashboardDraftReview(options?.communication);
   const draftBody = exactDraftText !== null
     ? (exactDraftHidden ? null : exactDraftText)
     : options?.rawToolCalls ? firstDraftExcerpt(options.rawToolCalls) : null;
-  const draftLines = (replyOnly: boolean, legacyLead: string): string[] => {
-    if (!draftBody) return [];
-    if (!exactDraft) return replyOnly ? [legacyLead, `"${draftBody}"`] : [`${legacyLead} "${draftBody}"`];
-    return [exactDraftLead(exactDraft, person, options?.rawToolCalls ?? [], replyOnly), `"${draftBody}"`];
-  };
 
   // A thread still on a classifier version older than requestFacts renders no
   // structured request, but the customer's message is on the thread either way.
@@ -192,14 +250,23 @@ export function formatOperatorPlanMessage(
     : null;
   const canShowRequest = requestDisplayHasContext(requestDisplay, now) || sourceQuote !== null;
 
-  const lines: string[] = formatRequestHeaderLines(
+  const confirmedBy = (method: ConfirmedOrder['method']) => confirmedOrders
+    .filter(order => order.method === method)
+    .map(order => order.orderName);
+  const lines: string[] = openingLines({
     person,
-    channelType,
-    requestDisplay,
-    stage,
+    display: requestDisplay,
+    confirmations: [
+      ...(confirmedBy('email').length > 0 ? [`the email on ${confirmedBy('email').join(', ')}`] : []),
+      ...(confirmedBy('zip').length > 0 ? [`the shipping zip on ${confirmedBy('zip').join(', ')}`] : []),
+    ],
+    confirmedOrderNames: verifiedOrders,
+    fallback: formatRequestHeaderLines(person, channelType, requestDisplay, stage, now, sourceQuote)[1]!,
     now,
-    sourceQuote,
-  );
+  });
+  const threadLink = options?.threadId && options.dashboardUrl
+    ? `${options.dashboardUrl}/dashboard/tickets?thread=${options.threadId}`
+    : null;
 
   if (options?.validation?.status === 'invalid') {
     lines.push(
@@ -207,27 +274,12 @@ export function formatOperatorPlanMessage(
       "I couldn't produce a safe executable draft:",
       ...options.validation.issues.map((issue) => `- ${issue.message}`),
     );
-    if (options?.threadId && options.dashboardUrl) {
-      lines.push('', `Open the thread to regenerate or take over: ${options.dashboardUrl}/dashboard/tickets?thread=${options.threadId}`);
+    if (threadLink) {
+      lines.push('', `Open the thread to regenerate or take over: ${threadLink}`);
     }
     lines.push('', "Nothing can run from this draft. Tell me what to change, or dismiss it.");
     return lines.join('\n');
   }
-
-  // Directly under the header, because it qualifies the header: everything above
-  // describes an anonymous storefront visitor, and this is the one fact that
-  // makes disclosing order details to them correct rather than a leak. It still
-  // names the mechanism — an email they had to receive — so the merchant can
-  // judge what it is worth, but in the register a colleague would use. The
-  // earlier "Verified: entered a code emailed to the address on #1024." asked
-  // them to audit an authentication scheme to answer a shipping question.
-  const confirmedBy = (method: ConfirmedOrder['method']) => confirmedOrders
-    .filter(order => order.method === method)
-    .map(order => order.orderName);
-  const byEmail = confirmedBy('email');
-  const byZip = confirmedBy('zip');
-  if (byEmail.length > 0) lines.push(`They confirmed the email on ${byEmail.join(', ')}.`);
-  if (byZip.length > 0) lines.push(`They confirmed the shipping zip on ${byZip.join(', ')}.`);
 
   // The evidence the plan was made on, beside the request it supports.
   const photos = options?.damagePhotos;
@@ -241,42 +293,37 @@ export function formatOperatorPlanMessage(
 
   // Escalation is never something the merchant approves — it is the statement
   // that the thread is theirs now. Alone it is the whole card. Alongside a reply
-  // it is context for that reply, not item 2 in a list they are asked to
-  // authorise, so it comes out of the numbered steps either way. (A guest
-  // storefront escalation always arrives paired with a reply, because a shopper
-  // sitting in an open chat window cannot be left in silence.)
+  // it is context for that reply, not an action they are asked to authorise.
+  // (A guest storefront escalation always arrives paired with a reply, because a
+  // shopper sitting in an open chat window cannot be left in silence.)
   const escalationStep = actionableSteps.find((step) => step.tool === 'escalate_to_human');
   const approvableSteps = actionableSteps.filter((step) => step.tool !== 'escalate_to_human');
   const escalateOnly = escalationStep !== undefined && approvableSteps.length === 0;
+  const sendStep = approvableSteps.find(isSendStep);
+  const actionSteps = approvableSteps.filter((step) => !isSendStep(step));
 
   if (escalateOnly) {
     const reason = options?.rawToolCalls ? escalationReason(options.rawToolCalls) : null;
     lines.push('', reason
       ? `This one needs you: ${endSentence(reason)}`
       : "This one needs you — I can't answer it myself.");
-  } else if (approvableSteps.length === 1 && isSendStep(approvableSteps[0]!) && draftBody) {
-    lines.push('', ...draftLines(true, "I'd reply:"));
-  } else if (approvableSteps.length === 1) {
-    // One step is not a list. Numbering a single item is the tell that a machine
-    // wrote the card; say it as a sentence instead. parkedActionLabel already
-    // renders the phrase that completes "I won't …", which completes "I'd …" too.
-    // A step that names its items says them instead; the header already names
-    // the customer.
-    const itemsSentence = lineItemSentence(approvableSteps[0]!, options?.rawToolCalls);
-    const only = parkedActionLabel(approvableSteps, person);
-    const fallback = approvableSteps[0]!.label || approvableSteps[0]!.description;
-    lines.push('', itemsSentence
-      ? `I'd ${lowerFirst(itemsSentence)}.`
-      : only ? `I'd ${only}.` : `I'd ${lowerFirst(fallback)}.`);
-    if (draftBody) lines.push('', ...draftLines(false, 'The reply:'));
   } else if (approvableSteps.length > 0) {
-    const stepLines = approvableSteps.map((step, index) => {
-      if (step.tool === 'send_reply') return `${index + 1}. Reply to ${personObject(person)}`;
-      if (step.tool === 'send_email') return `${index + 1}. Email ${personObject(person)}`;
-      return `${index + 1}. ${lineItemSentence(step, options?.rawToolCalls) ?? (step.label || step.description)}`;
-    });
-    lines.push('', "Here's what I'd do:", ...stepLines);
-    if (draftBody) lines.push('', ...draftLines(false, 'The reply:'));
+    // What a colleague would say: the actions and the reply in one sentence, the
+    // reply quoted under it. A list only once there are too many actions for one.
+    const reply = sendStep
+      ? replyPhrase(sendStep, exactDraft, person, channelType, options?.rawToolCalls ?? [])
+      : null;
+    const actions = actionSteps.map((step) => actionPhrase(step, person, options?.rawToolCalls));
+    const opensDraft = reply && draftBody ? ':' : '.';
+    if (actions.length <= 2) {
+      const doing = actions.join(' and ');
+      const sentence = doing && reply ? `${doing}, then ${reply}` : doing || reply!;
+      lines.push('', `I'd ${sentence}${opensDraft}`);
+    } else {
+      lines.push('', `I'd do ${countWord(actions.length)} things:`, ...actions.map((action, index) => `${index + 1}. ${capitalizeFirst(action)}`));
+      if (reply) lines.push(`Then I'd ${reply}${opensDraft}`);
+    }
+    if (reply && draftBody) lines.push(`"${draftBody}"`);
   }
 
   // What approving still leaves to them, said before they approve it.
@@ -292,10 +339,6 @@ export function formatOperatorPlanMessage(
     lines.push('', reason
       ? `Then it's yours: ${endSentence(reason)}`
       : "Then it's yours — I can't take it further myself.");
-  }
-
-  if (options?.threadId && options.dashboardUrl) {
-    lines.push('', `Full thread: ${options.dashboardUrl}/dashboard/tickets?thread=${options.threadId}`);
   }
 
   if (options?.queueNotice) {
@@ -314,28 +357,30 @@ export function formatOperatorPlanMessage(
     }
   }
 
+  let closing: string;
   if (escalateOnly) {
     // No question, because there is nothing to answer: approving an escalation
     // approves handing the merchant a thread they are already holding. Tell them
     // where it sits instead of asking them to authorise it.
-    lines.push('', "Nothing's gone out — it's waiting on you.");
+    closing = "Nothing's gone out — it's waiting on you.";
   } else if (exactDraftHidden) {
     // The same rule as an unshowable request: the approval would send words the
     // merchant has not seen.
-    lines.push('', "The message is too long to show here — open the thread to read it before approving.");
+    closing = 'The message is too long to show here — open the thread to read it before approving.';
   } else if (photosHidden) {
     // The approval would judge a claim on evidence the merchant has not seen.
-    lines.push('', 'Open the thread to see the photos before approving.');
+    closing = 'Open the thread to see the photos before approving.';
   } else if (!canShowRequest) {
     // Never ask someone to approve what cannot be shown. The card still names
     // the action, because the plan is real even when the request rendering is
     // not — what it drops is the question, which is the half that asked for a
     // blind decision. Same call the briefing makes with needsThreadReview.
-    lines.push('', "I can't show you what they asked — open the thread first.");
+    closing = "I can't show you what they asked — open the thread first.";
   } else {
     const replyOnly = approvableSteps.length > 0 && approvableSteps.every(isSendStep);
-    lines.push('', replyOnly ? 'Good to send?' : 'Sound good?');
+    closing = replyOnly ? 'OK to send?' : 'OK to go ahead?';
   }
+  lines.push('', threadLink ? `${closing} (thread: ${threadLink})` : closing);
 
   return lines.join('\n');
 }
