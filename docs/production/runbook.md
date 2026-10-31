@@ -906,11 +906,14 @@ built (`npx turbo run build --filter=shopkeeper-gateway^...`), with production e
 
 1. `npm run live-test:preflight -- --workspace <clerk_org_id> --instagram <test handle>` and fix
    every `FAIL`: unapplied migrations, a second workspace on the same Instagram account, a missing
-   Shopify connection or phone, an unfinished workspace deletion, test-customer history. It lists
-   orders a full refund can use, with the email and zip the order confirmation asks for.
+   Shopify connection or phone, an unfinished workspace deletion, any Instagram customer history
+   (each with the command that erases it). It lists orders a full refund can use, with the email
+   and zip the order confirmation asks for.
 2. `npm run erase:customer -- --workspace <clerk_org_id> --instagram <test handle> --execute`
    erases the test customer, so the DM opens a new conversation with no photo asks, confirmations
-   or waiting cards left from an earlier run. Run preflight again; it should read *Ready*.
+   or waiting cards left from an earlier run. The handle matches the stored name or the sender id
+   SocialAPI shows for it; a customer neither finds is erased by ticket (`--thread <id or link>`),
+   as preflight prints. Run preflight again; it should read *Ready*.
 3. One scenario per run, on one order from the list, with its messages written down beforehand.
    When something looks wrong, copy the ticket's timeline (the ⋯ menu in the ticket header → *Copy
    timeline*) and paste it into the report.
