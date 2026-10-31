@@ -11,6 +11,32 @@ export class InstagramAccountInUseError extends Error {
   }
 }
 
+/**
+ * One Instagram account answers in one workspace. The direct and SocialAPI rows
+ * cannot be compared by account id, because SocialAPI never returns Instagram's
+ * own, so the username both transports record is what decides. Without this, an
+ * account connected directly in one workspace and through SocialAPI in another
+ * received every DM twice, and each workspace planned and sent its own reply.
+ */
+export async function assertInstagramUsernameUnclaimed(
+  tx: Pick<typeof db, 'integration'>,
+  organizationId: string,
+  username: string,
+): Promise<void> {
+  const claimed = await tx.integration.findFirst({
+    where: {
+      platform: ChannelType.ig_dm,
+      organizationId: { not: organizationId },
+      OR: [
+        { fromEmail: { equals: username, mode: 'insensitive' } },
+        { metadata: { path: ['instagram', 'username'], equals: username } },
+      ],
+    },
+    select: { id: true },
+  });
+  if (claimed) throw new InstagramAccountInUseError();
+}
+
 export interface InstagramConnectionState {
   existingForOrganization: Integration | null;
 }
@@ -106,6 +132,7 @@ export async function persistInstagramConnection(
       if (accountRows[0] && accountRows[0].organizationId !== input.organizationId) {
         throw new InstagramAccountInUseError();
       }
+      await assertInstagramUsernameUnclaimed(tx, input.organizationId, input.username);
 
       const existing = organizationRows[0] ?? null;
       const data = {

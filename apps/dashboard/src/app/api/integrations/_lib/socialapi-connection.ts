@@ -2,7 +2,7 @@ import { ChannelType, db, Prisma } from '@shopkeeper/db';
 import type { Integration, Prisma as PrismaTypes } from '@prisma/client';
 
 import { AmbiguousInstagramIntegrationError } from '@shopkeeper/integrations/instagram';
-import { InstagramAccountInUseError } from './instagram-connection';
+import { assertInstagramUsernameUnclaimed, InstagramAccountInUseError } from './instagram-connection';
 
 export interface PersistSocialApiConnectionInput {
   brandId: string;
@@ -72,6 +72,7 @@ export async function persistSocialApiConnection(
       if (providerRows[0] && providerRows[0].organizationId !== input.organizationId) {
         throw new InstagramAccountInUseError();
       }
+      await assertInstagramUsernameUnclaimed(tx, input.organizationId, input.username);
 
       const existing = organizationRows[0] ?? null;
       const data = {

@@ -60,6 +60,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true, deletionPending: Boolean(started) })
     }
 
+    // The workspace name is copied from Clerk when the workspace is first seen. A
+    // rename made in Clerk has to follow, or the dashboard header and the name
+    // Shopkeeper uses drift apart.
+    case 'organization.updated': {
+      const clerkOrgId = event.data.id
+      const name = event.data.name?.trim()
+      if (!clerkOrgId || !name || name.length > 255) {
+        logger.warn({ eventType: event.type }, '[Clerk Webhook] Organization update without a usable name')
+        return NextResponse.json({ received: true, skipped: true })
+      }
+
+      const result = await db.organization.updateMany({
+        where: { clerkOrgId, name: { not: name } },
+        data: { name },
+      })
+      return NextResponse.json({ received: true, updated: result.count })
+    }
+
     case 'user.deleted': {
       const clerkUserId = event.data.id
       if (!clerkUserId) {

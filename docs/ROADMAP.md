@@ -7,7 +7,7 @@ Technical contracts and settled engineering decisions live with the code they go
 ([agent-runtime](agent-runtime.md), [runbook](production/runbook.md),
 [transport plan](socialapi-transport-plan.md)), not here.
 
-Last updated: 2026-10-30.
+Last updated: 2026-10-31.
 
 ## Next — the first real merchant
 
@@ -105,6 +105,9 @@ In order. This is the product's critical path.
   workspace and any Stripe subscription); `failWorkspaceDeletion` has no caller, so a
   revoked Gmail/Instagram grant makes the sweep retry every minute forever; a non-Shopify
   erasure request has no path to the full `redactCustomerData` erase.
+- **Orphaned workspaces:** 12 rows stay `active` that Clerk no longer has (April's `org_test_*`
+  rows from tests run against production, and abandoned onboarding workspaces). Finish them through
+  the deletion ledger ([data-deletion](production/data-deletion.md), *Recovery*).
 - **Console residue:** Clerk application name (and delete the unused dev app), Shopify
   Partner app name and privacy URL, Postmark sender branding, the Telegram bot rename to
   `@useshopkeeperbot`, and Stripe product names, statement descriptor and receipts —

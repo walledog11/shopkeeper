@@ -891,11 +891,11 @@ identity attached, and confirm a message whose `external_message_id` is `shopify
 appearance in the dashboard.
 
 **Clerk lifecycle.** Point a Clerk webhook at `https://<dashboard>/api/webhooks/clerk`, subscribed to
-`organization.deleted`, `user.deleted` and `organizationMembership.deleted`; store its secret as
-`CLERK_WEBHOOK_SECRET`; confirm a `200` from Clerk's testing tab or a staging org deletion. An org
-deletion starts the workspace-deletion ledger (finished by the gateway sweep); a user deletion removes
-that user's `org_members`; a membership deletion removes only that org's member row. Detail:
-[data-deletion.md](data-deletion.md).
+`organization.updated`, `organization.deleted`, `user.deleted` and `organizationMembership.deleted`;
+store its secret as `CLERK_WEBHOOK_SECRET`; confirm a `200` from Clerk's testing tab or a staging org
+deletion. A rename in Clerk renames the workspace; an org deletion starts the workspace-deletion ledger
+(finished by the gateway sweep); a user deletion removes that user's `org_members`; a membership
+deletion removes only that org's member row. Detail: [data-deletion.md](data-deletion.md).
 
 ### Live testing on the dev store
 

@@ -96,6 +96,22 @@ describe('POST /api/webhooks/clerk', () => {
     expect(cleanup.stripeCanceledAt).toBeNull()
   })
 
+  // 2026-10-30: a workspace renamed in Clerk kept its old name in Shopkeeper, so
+  // the merchant's "Palette" was "Linen & Loom" everywhere Shopkeeper named it.
+  it('follows a workspace rename made in Clerk', async () => {
+    const testOrg = await createOrg()
+
+    const response = await POST(createSignedRequest({
+      object: 'event',
+      type: 'organization.updated',
+      data: { object: 'organization', id: testOrg.clerkOrgId, name: '  Palette  ' },
+    }))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ received: true, updated: 1 })
+    expect((await db.organization.findUniqueOrThrow({ where: { id: testOrg.id } })).name).toBe('Palette')
+  })
+
   it('removes local org memberships when Clerk deletes a user', async () => {
     const testOrg = await createOrg()
 
