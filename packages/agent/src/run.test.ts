@@ -372,6 +372,36 @@ it('keeps a completed action journaled when the following model call fails', asy
   expect(recordAgentTurnUsage).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'error' }));
 });
 
+// Live run 2026-11-02: the approval refunded and replied, the wrap-up model
+// call then failed (the API account was out of credit), and the merchant was
+// told the instruction could not be finished.
+it('reports an approval that already ran when the operator turn fails after it', async () => {
+  const { recordAgentTurnUsage } = await import('./agent-actions.js');
+  const approve = defineTool({
+    name: 'approve_pending_plan',
+    description: 'Approve the pending plan.',
+    fields: { plan_ref: stringArg('Which plan.') },
+    category: 'action',
+    group: 'thread',
+    capabilities: [],
+    label: 'Approved pending plan',
+    planStepLabel: 'Approve pending plan',
+    policy: { categoryPermission: false },
+    execute: vi.fn().mockResolvedValue({ status: 'ok', message: 'Refunded $24.95 to Raj. Sent the reply to Raj.' }),
+  });
+  mockCreate
+    .mockResolvedValueOnce(toolUse('approve_pending_plan', {}))
+    .mockRejectedValueOnce(new Error('Your credit balance is too low'));
+  const ctx = makeCtx({
+    thread: { id: 'operator_thread', status: 'open', channelType: 'operator', tag: 'Support', aiSummary: null, shopifyCustomerId: null },
+  });
+
+  const result = await runAgent(ctx, 'Yes go ahead', undefined, undefined, { moduleTools: { approve_pending_plan: approve } });
+
+  expect(result.summary).toBe('Refunded $24.95 to Raj. Sent the reply to Raj.\n\nI hit an error after that and stopped.');
+  expect(recordAgentTurnUsage).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'error' }));
+});
+
 // The exact draft an approved plan binds for its "hello" reply.
 const APPROVED_HELLO = {
   approvedCommunication: {

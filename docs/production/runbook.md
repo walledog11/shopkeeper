@@ -900,9 +900,11 @@ deletion removes only that org's member row. Detail: [data-deletion.md](data-del
 ### Live testing on the dev store
 
 Each run starts from a known state and finishes in one sitting, or its result describes the last
-run instead of this one. Run both commands from an up-to-date `master` checkout whose packages are
-built (`npx turbo run build --filter=shopkeeper-gateway^...`), with production env (`railway run
---service shopkeeper --environment production -- …`):
+run instead of this one. Run both commands from an up-to-date `master` checkout whose Prisma client
+and packages are built (`npx prisma generate --schema=packages/db/prisma/schema.prisma && npx turbo
+run build --filter=shopkeeper-gateway^...`; the package build does not regenerate the client after a
+schema change), with production env (`railway run --service shopkeeper --environment production --
+…`):
 
 1. `npm run live-test:preflight -- --workspace <clerk_org_id> --instagram <test handle>` and fix
    every `FAIL`: unapplied migrations, a second workspace on the same Instagram account, a missing

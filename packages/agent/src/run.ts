@@ -44,7 +44,7 @@ import {
   selectExecutableApprovedToolCalls,
   summarizeApprovedDashboardActions,
 } from "./run-approved-actions.js";
-import { summarizeOperatorTurnDispatchFailure } from "./message-dispatch.js";
+import { summarizeCommittedApproval, summarizeOperatorTurnDispatchFailure } from "./message-dispatch.js";
 import {
   createAgentFailureRecorder,
   executeAgentToolCalls,
@@ -406,6 +406,13 @@ export async function runAgent(
         }, "end_turn");
     }
   } catch (error) {
+    // The merchant's approval already ran and only the rest of the turn failed
+    // (its wrap-up, usually): say what was done, not that nothing finished.
+    const approved = gatewayOperatorMode ? summarizeCommittedApproval(actionsPerformed) : null;
+    if (approved) {
+      logger.error({ err: error, orgId: ctx.orgId }, "[agent] operator turn failed after its approval ran");
+      return finish({ summary: `${approved}\n\nI hit an error after that and stopped.`, actionsPerformed }, "error");
+    }
     await finish({
       summary: "Execution stopped unexpectedly. Review the recorded actions before retrying.",
       actionsPerformed,

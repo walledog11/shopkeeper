@@ -1,4 +1,5 @@
 import type { ActionEntry } from "./agent-context.js";
+import { hasUnknownProviderOutcome } from "./execution-outcome.js";
 
 export const INTERNAL_REQUEST_ID_HEADER = "x-shopkeeper-request-id";
 
@@ -33,6 +34,21 @@ export function formatOperatorDispatchFailure(
  * have to remember to register itself here to be reported honestly; declaring
  * its category is enough.
  */
+/**
+ * What an approval the merchant gave in this turn did, when it committed: the
+ * approved run's own summary, which is the approval's result. Null when no
+ * approval committed, or when any outcome in the turn is unknown, which is
+ * reported as unknown and never as done.
+ */
+export function summarizeCommittedApproval(actions: readonly ActionEntry[]): string | null {
+  if (hasUnknownProviderOutcome(actions)) return null;
+  for (let index = actions.length - 1; index >= 0; index -= 1) {
+    const action = actions[index]!;
+    if (action.tool === "approve_pending_plan" && action.status === "success") return action.result;
+  }
+  return null;
+}
+
 export function summarizeOperatorTurnDispatchFailure(actions: ActionEntry[]): string | null {
   for (let index = actions.length - 1; index >= 0; index -= 1) {
     const action = actions[index]!;
