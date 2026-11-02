@@ -23,6 +23,7 @@ import type {
 } from '../../types.js';
 import { parseInboundEmailJobData } from '@shopkeeper/email';
 import { emptyRequestFacts } from '@shopkeeper/agent/classifier-signals';
+import { recordStepTiming } from '@shopkeeper/agent/step-timings';
 import { uploadOrgAttachment } from '../../storage/blob.js';
 import { applyInboundAttachmentBudget, mapWithConcurrency } from '../../storage/attachment-budget.js';
 import { getInboundAttachmentLimits } from '../../config/runtime-config.js';
@@ -205,6 +206,7 @@ export async function handleIgDmJob(job: Job<InboundJobData>, aiSummaryQueue: Qu
       return;
     }
 
+    const timed: { nameLookup?: { startedAt: Date; durationMs: number } } = {};
     // Each transport reads the shopper's display name from its own surface: Meta's
     // Graph API for a direct row, and SocialAPI's conversation list for a provider
     // row, which is the only place SocialAPI carries it.
@@ -231,6 +233,7 @@ export async function handleIgDmJob(job: Job<InboundJobData>, aiSummaryQueue: Qu
       // A display name is worth one bounded read, never the message: a failed
       // lookup leaves the ticket under its platform-id label and is retried by
       // the next inbound message, which merges the name onto the same customer.
+      const lookupStartedAt = new Date();
       try {
         const profile = await fetchSocialApiParticipantProfile({
           accountId: integration.instagramAccountId,
@@ -249,6 +252,8 @@ export async function handleIgDmJob(job: Job<InboundJobData>, aiSummaryQueue: Qu
           '[Worker] SocialAPI profile enrichment failed',
         );
         return null;
+      } finally {
+        timed.nameLookup = { startedAt: lookupStartedAt, durationMs: Date.now() - lookupStartedAt.getTime() };
       }
     };
 
@@ -266,7 +271,7 @@ export async function handleIgDmJob(job: Job<InboundJobData>, aiSummaryQueue: Qu
       ),
     ]);
 
-    await processInboundMessage(
+    const saved = await processInboundMessage(
       organizationId,
       senderIgsid,
       CHANNEL.IG_DM,
@@ -283,6 +288,19 @@ export async function handleIgDmJob(job: Job<InboundJobData>, aiSummaryQueue: Qu
         ...(providerConversationId ? { externalSpaceId: providerConversationId } : {}),
       },
     );
+    if (saved) {
+      // From the webhook enqueueing the message to it being saved on its ticket.
+      await recordStepTiming({
+        organizationId,
+        threadId: saved.thread.id,
+        step: 'instagram_ingest',
+        startedAt: new Date(job.timestamp),
+        durationMs: Date.now() - job.timestamp,
+      });
+      if (timed.nameLookup) {
+        await recordStepTiming({ organizationId, threadId: saved.thread.id, step: 'customer_name_lookup', ...timed.nameLookup });
+      }
+    }
     logger.info(
       { senderIgsid, organizationId, traceId, transport },
       '[Worker] Successfully saved Instagram DM',

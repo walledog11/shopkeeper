@@ -2,6 +2,7 @@ import type { AgentTaskStatus } from '@prisma/client';
 import { db } from '@shopkeeper/db';
 import { requireOrgThread, getLatestConversationMessage } from '@shopkeeper/agent/thread-auth';
 import { buildContext } from '@shopkeeper/agent/build-context';
+import { timeStep } from '@shopkeeper/agent/step-timings';
 import { planAgent } from '@shopkeeper/agent/planner';
 import { DURABLE_AGENT_RUNTIME_VERSION } from '@shopkeeper/agent/runtime-modes';
 import { decideAutonomy } from '@shopkeeper/agent/autonomy';
@@ -344,10 +345,13 @@ async function runPlanAttempt(scope: PlanAttemptScope): Promise<GeneratedThreadP
   // A cache without this task's persisted proposal is historical display data.
   // A claimed planning attempt always drafts against its current source; duplicate
   // jobs read their existing plan through readCurrentPlanWithoutWork above.
-  const ctx = await buildContext(threadId, organizationId, gatewayThreadSink,
-    scope.durableTurn?.runtimeVersion !== undefined
-      ? { runtimeVersion: scope.durableTurn.runtimeVersion }
-      : undefined);
+  const ctx = await timeStep(
+    { organizationId, threadId, step: 'plan_context' },
+    () => buildContext(threadId, organizationId, gatewayThreadSink,
+      scope.durableTurn?.runtimeVersion !== undefined
+        ? { runtimeVersion: scope.durableTurn.runtimeVersion }
+        : undefined),
+  );
   const taskBudget = supportTaskModelBudget(organizationId, scope.durableTurn);
   if (taskBudget) ctx.taskBudget = taskBudget;
   const plan = await planAgent(

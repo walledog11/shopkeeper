@@ -33,6 +33,7 @@ import {
   markOperatorNotifyDelivered,
   wasOperatorNotifyDelivered,
 } from './operator-notify-idempotency.js';
+import { timeStep } from '@shopkeeper/agent/step-timings';
 
 export type OperatorNotifyPolicy = 'critical' | 'best-effort';
 
@@ -195,7 +196,10 @@ export async function notifyOperator(
     // before any card is sent.
     await persistContextPatch();
 
-    const sent = await sendToBinding(organizationId, member, body, options);
+    const sent = await timeStep(
+      { organizationId, threadId: options.threadId ?? null, step: 'phone_send', detail: member.channel },
+      () => sendToBinding(organizationId, member, body, options),
+    );
     if (!sent) {
       if (policy === 'critical') {
         throw new OperatorNotifyError(`${label} send failed`);

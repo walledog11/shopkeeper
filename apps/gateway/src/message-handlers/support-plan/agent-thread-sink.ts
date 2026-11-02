@@ -5,6 +5,7 @@ import logger from '../../logger.js';
 import { recordAgentFailureInBackground } from '../../agent-failure-alerts.js';
 import { postDashboardInternal } from '../../clients/dashboard-internal.js';
 import { DASHBOARD_DISPATCH_FAILED } from '@shopkeeper/agent/message-dispatch';
+import { timeStep } from '@shopkeeper/agent/step-timings';
 import { pushOperatorEscalation } from '../../operator-escalation.js';
 import { publishThreadEvent } from '../../realtime/publish.js';
 
@@ -52,18 +53,21 @@ async function dispatchAgentSend(
 ): Promise<ToolResult> {
   const requestId = randomUUID();
   try {
-    const response = await postDashboardInternal<ToolResult>('/api/agent/io-send-internal', {
-      orgId: ctx.orgId,
-      threadId: ctx.threadId,
-      orgName: ctx.orgName,
-      op,
-      input,
-      agentActionMode: ctx.agentActionMode,
-      operationId: ctx.operationId,
-      executionId: ctx.executionId,
-      agentRequestId: ctx.agentRequestId,
-      agentTaskId: ctx.agentTaskId,
-    }, { requestId });
+    const response = await timeStep(
+      { organizationId: ctx.orgId, threadId: ctx.threadId, step: 'send_via_dashboard', detail: op },
+      () => postDashboardInternal<ToolResult>('/api/agent/io-send-internal', {
+        orgId: ctx.orgId,
+        threadId: ctx.threadId,
+        orgName: ctx.orgName,
+        op,
+        input,
+        agentActionMode: ctx.agentActionMode,
+        operationId: ctx.operationId,
+        executionId: ctx.executionId,
+        agentRequestId: ctx.agentRequestId,
+        agentTaskId: ctx.agentTaskId,
+      }, { requestId }),
+    );
     if (!response.ok) {
       logger.warn(
         {

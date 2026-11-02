@@ -315,6 +315,7 @@ model Organization {
   requestEpisodeOutcomes RequestEpisodeOutcome[]
   merchantPreferences    MerchantPreference[]
   agentTurnUsage         AgentTurnUsage[]
+  stepTimings            StepTiming[]
 
   @@index([clerkOrgId])
   @@index([lifecycleStatus])
@@ -633,6 +634,7 @@ model Thread {
   messages         Message[]
   kbCitations      KbCitation[]
   agentTurnUsage          AgentTurnUsage[]
+  stepTimings             StepTiming[]
   agentActions     AgentAction[]
   agentRequests AgentRequest[]
   agentTasks AgentTask[]
@@ -1467,6 +1469,30 @@ model AgentTurnUsage {
   @@index([organizationId, outcome, createdAt(sort: Desc)])
   @@index([threadId])
   @@map("agent_turn_usage")
+}
+
+// How long each step between a customer's message and the reply took, so a slow
+// reply is traced to the step that made it slow instead of guessed at. Written
+// best-effort by the gateway, the dashboard and the agent core (recordStepTiming
+// in packages/db/step-timings.ts); read by the ticket timeline. Holds no message
+// content: a step code, a model or operation name, and times. Rows go with their
+// thread.
+model StepTiming {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  threadId       String?  @map("thread_id") @db.Uuid
+  step           String   @db.VarChar(48)
+  detail         String?  @db.VarChar(120)
+  startedAt      DateTime @map("started_at") @db.Timestamptz
+  durationMs     Int      @map("duration_ms")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  thread       Thread?      @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, startedAt])
+  @@index([organizationId, startedAt])
+  @@map("step_timings")
 }
 
 

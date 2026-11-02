@@ -3,6 +3,7 @@ import { anthropic } from "./ai/anthropic.js";
 import logger from "./logger.js";
 import { resolveModelTuning } from "./model-tuning.js";
 import { recordSpend } from "./spend.js";
+import { timeStep } from "./step-timings.js";
 import {
   createModelUsageMetrics,
   recordModelUsage,
@@ -292,7 +293,13 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
     // because it depends on the model and on the mode (thinking is only tuned
     // for planning).
     const tuning = resolveModelTuning(model, mode);
-    const response = await anthropic.messages.create({
+    const response = await timeStep({
+      organizationId: ctx.orgId,
+      // Thread-optional: a support or operator turn's timings go with its thread.
+      threadId: "thread" in ctx ? (ctx as AgentContext).thread.id : null,
+      step: "model_call",
+      detail: `${mode} ${model}`,
+    }, () => anthropic.messages.create({
       model,
       max_tokens: maxTokensPerCall,
       system: systemPromptBlocks,
@@ -310,7 +317,7 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
       // Nothing the model sees changes.
       cache_control: { type: "ephemeral" },
       ...tuning,
-    }, params.signal ? { signal: params.signal } : undefined);
+    }, params.signal ? { signal: params.signal } : undefined));
 
     const toolUseBlocks = response.content.filter(
       (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",

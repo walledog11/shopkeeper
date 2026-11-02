@@ -23,6 +23,7 @@ import {
 } from '../support-plan/planning-notifications.js';
 import { autoExecutionOnlyHandedOff, shouldNotifyAutoExecution } from '../support-plan/planning-types.js';
 import type { AiSummaryJobData } from '../../types.js';
+import { timeStep } from '@shopkeeper/agent/step-timings';
 
 export function resolveAiSummarySourceMessageId(
   queuedSourceMessageId: string,
@@ -154,7 +155,10 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
   // answer is still uncompared; any other failure leaves the ask pending and the
   // turn planned as if nothing was answered, so a missing table never stops
   // planning.
-  const answeredOrderVerification = await evaluateOrderVerificationAnswers(organizationId, threadId)
+  const answeredOrderVerification = await timeStep(
+    { organizationId, threadId, step: 'order_check' },
+    () => evaluateOrderVerificationAnswers(organizationId, threadId),
+  )
     .catch((err: unknown) => {
       if (err instanceof OrderVerificationLookupError) throw err;
       logger.warn(

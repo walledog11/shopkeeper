@@ -5,10 +5,23 @@ import { isAgentTurnContent } from '@shopkeeper/agent/tools';
 
 const MESSAGE_LIMIT = 200;
 const ACTION_LIMIT = 100;
+const TIMING_LIMIT = 400;
 const TEXT_LIMIT = 600;
+// The phone side of a ticket (cards, the merchant's replies) runs on the
+// workspace's operator thread; its timings inside this window belong to the run.
+const PHONE_WINDOW_BEFORE_MS = 60_000;
+const PHONE_WINDOW_AFTER_MS = 10 * 60_000;
 
 function at(value: Date | null | undefined): string {
   return value ? value.toISOString().replace('T', ' ').slice(0, 19) : '-';
+}
+
+function clock(value: Date): string {
+  return value.toISOString().slice(11, 23);
+}
+
+function seconds(ms: number): string {
+  return `${(ms / 1000).toFixed(1)}s`;
 }
 
 function oneLine(text: string | null | undefined): string {
@@ -29,10 +42,88 @@ function factsLine(value: unknown): string {
     .join(' ') || '-';
 }
 
+type TimingLine = { at: Date; text: string };
+
+const TIMED_SENDERS = ['customer', 'agent'] as const;
+
+/**
+ * Every timed step for the ticket in order, among its messages for reference:
+ * the hops in step_timings and the agent turns in agent_turn_usage, plus the
+ * same for the workspace's phone thread while the ticket was active. Null when
+ * nothing was timed.
+ */
+async function loadTimingLines(
+  organizationId: string,
+  threadId: string,
+  messages: ReadonlyArray<{ sentAt: Date; senderType: string }>,
+): Promise<TimingLine[] | null> {
+  const first = messages[0]?.sentAt;
+  const last = messages.at(-1)?.sentAt;
+  const phoneWindow = first && last
+    ? { gte: new Date(first.getTime() - PHONE_WINDOW_BEFORE_MS), lte: new Date(last.getTime() + PHONE_WINDOW_AFTER_MS) }
+    : null;
+  const phoneThread = { organizationId, channelType: 'operator' as const };
+  const stepSelect = { step: true, detail: true, startedAt: true, durationMs: true } as const;
+  const turnSelect = { purpose: true, outcome: true, modelCalls: true, durationMs: true, createdAt: true } as const;
+  const [steps, turns, phoneSteps, phoneTurns, phoneMessages] = await Promise.all([
+    db.stepTiming.findMany({ where: { organizationId, threadId }, orderBy: { startedAt: 'asc' }, take: TIMING_LIMIT, select: stepSelect }),
+    db.agentTurnUsage.findMany({ where: { organizationId, threadId }, orderBy: { createdAt: 'asc' }, take: TIMING_LIMIT, select: turnSelect }),
+    phoneWindow
+      ? db.stepTiming.findMany({
+        where: { organizationId, startedAt: phoneWindow, thread: phoneThread },
+        orderBy: { startedAt: 'asc' },
+        take: TIMING_LIMIT,
+        select: stepSelect,
+      })
+      : [],
+    phoneWindow
+      ? db.agentTurnUsage.findMany({
+        where: { organizationId, createdAt: phoneWindow, thread: phoneThread },
+        orderBy: { createdAt: 'asc' },
+        take: TIMING_LIMIT,
+        select: turnSelect,
+      })
+      : [],
+    phoneWindow
+      ? db.message.findMany({
+        where: { organizationId, sentAt: phoneWindow, senderType: { in: [...TIMED_SENDERS] }, thread: phoneThread },
+        orderBy: { sentAt: 'asc' },
+        take: TIMING_LIMIT,
+        select: { sentAt: true, senderType: true },
+      })
+      : [],
+  ]);
+  if (steps.length + turns.length + phoneSteps.length + phoneTurns.length === 0) return null;
+
+  const stepLine = (prefix: string) => (row: (typeof steps)[number]): TimingLine => ({
+    at: row.startedAt,
+    text: `${prefix}${row.step} ${seconds(row.durationMs)}${row.detail ? ` · ${row.detail}` : ''}`,
+  });
+  // A turn's row is written when it ends.
+  const turnLine = (prefix: string) => (row: (typeof turns)[number]): TimingLine => ({
+    at: new Date(row.createdAt.getTime() - row.durationMs),
+    text: `${prefix}${row.purpose} turn ${seconds(row.durationMs)} · ${row.modelCalls} model call(s), ${row.outcome}`,
+  });
+  return [
+    ...messages
+      .filter(message => (TIMED_SENDERS as readonly string[]).includes(message.senderType))
+      .map(message => ({ at: message.sentAt, text: `${message.senderType} message` })),
+    ...steps.map(stepLine('')),
+    ...turns.map(turnLine('')),
+    ...phoneMessages.map(message => ({
+      at: message.sentAt,
+      text: `phone · ${message.senderType === 'customer' ? 'merchant' : 'agent'} message`,
+    })),
+    ...phoneSteps.map(stepLine('phone · ')),
+    ...phoneTurns.map(turnLine('phone · ')),
+  ].sort((a, b) => a.at.getTime() - b.at.getTime());
+}
+
 /**
  * One ticket as plain text for diagnosing a run: what the customer and agent
  * said, how the classifier read the request, how the current plan was routed and
- * why, what the agent did, and where order confirmation stands. The merchant
+ * why, what the agent did, where order confirmation stands, and how long each
+ * step took. The merchant
  * copies it from the ticket; nothing here is shown to the customer.
  */
 export async function loadTicketTimeline(organizationId: string, threadId: string): Promise<string | null> {
@@ -118,6 +209,13 @@ export async function loadTicketTimeline(organizationId: string, threadId: strin
       + `${action.errorDetail ? ` · ${oneLine(action.errorDetail)}` : ''}`,
     );
   }
+
+  lines.push('', 'Timings (start, step, duration):');
+  // Diagnostics only: unreadable timings never cost the rest of the timeline.
+  const timings = await loadTimingLines(organizationId, thread.id, thread.messages).catch(() => undefined);
+  if (timings === undefined) lines.push('  unavailable');
+  else if (timings === null) lines.push('  none recorded');
+  for (const line of timings ?? []) lines.push(`  ${clock(line.at)}  ${line.text}`);
 
   const cache = readAgentPlanCacheRecordShape(thread.cachedPlan);
   lines.push('', 'Current plan:');

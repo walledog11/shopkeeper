@@ -1,5 +1,6 @@
 import { db, SenderType } from "@shopkeeper/db"
 import { CHANNEL_TYPE } from "@shopkeeper/agent/thread-constants"
+import { timeStep } from "@shopkeeper/agent/step-timings"
 import { isRecord } from "@shopkeeper/shared/guards"
 import {
   INSTAGRAM_REQUIRED_SCOPES,
@@ -114,11 +115,14 @@ async function sendThroughSocialApi(input: {
     return { ok: false, error: SOCIALAPI_UNCONFIGURED }
   }
 
-  const result = await createSocialApiClient({ apiKey }).sendInstagramText({
-    accountId: input.accountId,
-    conversationId: input.conversationId,
-    text: input.text,
-  })
+  const result = await timeStep(
+    { organizationId: input.organizationId, threadId: input.threadId, step: "instagram_send" },
+    () => createSocialApiClient({ apiKey }).sendInstagramText({
+      accountId: input.accountId,
+      conversationId: input.conversationId,
+      text: input.text,
+    }),
+  )
   if (!result.ok) {
     logger.error(
       {
