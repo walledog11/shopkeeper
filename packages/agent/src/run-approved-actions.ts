@@ -21,9 +21,10 @@ function recipientOf(action: ActionEntry, customer: string): string {
   return destination?.kind === "email" ? destination.id : customer;
 }
 
-// What one action that took effect did, from its receipt and its registered label.
+// What one action that took effect did, from its receipt and its registered
+// label, as a clause the summary joins: "issued refund ($24.95)".
 function doneClause(action: ActionEntry, customer: string): string {
-  const label = TOOL_LABELS[action.tool] ?? action.tool;
+  const label = lowerFirst(TOOL_LABELS[action.tool] ?? action.tool);
   if (actionCategory(action) === "communication") {
     const queued = communicationFacts(action)?.deliveryState === "accepted"
       ? " (queued, not yet delivered)"
@@ -31,9 +32,19 @@ function doneClause(action: ActionEntry, customer: string): string {
     return `${label} to ${recipientOf(action, customer)}${queued}`;
   }
   const shown = action.receipt?.outcome === "succeeded"
-    ? receiptPlaceholderValues(action.receipt).map(({ label: name, value }) => `${name} ${value}`)
+    ? receiptPlaceholderValues(action.receipt).map(({ value }) => value)
     : [];
   return shown.length > 0 ? `${label} (${shown.join(", ")})` : label;
+}
+
+function lowerFirst(text: string): string {
+  return text.charAt(0).toLowerCase() + text.slice(1);
+}
+
+function joinClauses(clauses: readonly string[]): string {
+  return clauses.length <= 1
+    ? clauses.join("")
+    : `${clauses.slice(0, -1).join(", ")} and ${clauses[clauses.length - 1]}`;
 }
 
 /**
@@ -66,9 +77,9 @@ export function summarizeApprovedDashboardActions(
   if (!cause) {
     const untold = ran
       .filter((action) => actionCategory(action) === "communication" && !isCommittedAction(action))
-      .map((action) => `The message to ${recipientOf(action, who)} wasn't sent, so they haven't been told`);
-    const summary = [...done, ...untold].join(". ");
-    return summary ? `${summary}.${followUps}` : "Approved plan executed.";
+      .map((action) => `The message to ${recipientOf(action, who)} wasn't sent, so they haven't been told.`);
+    const sentences = [...(done.length > 0 ? [`Done: ${joinClauses(done)}.`] : []), ...untold];
+    return sentences.length > 0 ? `${sentences.join(" ")}${followUps}` : "Approved plan executed.";
   }
 
   const lead = formatOperatorDispatchFailure(cause);

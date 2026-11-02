@@ -44,7 +44,11 @@ import {
   selectExecutableApprovedToolCalls,
   summarizeApprovedDashboardActions,
 } from "./run-approved-actions.js";
-import { summarizeCommittedApproval, summarizeOperatorTurnDispatchFailure } from "./message-dispatch.js";
+import {
+  summarizeApprovalOnlyTurn,
+  summarizeCommittedApproval,
+  summarizeOperatorTurnDispatchFailure,
+} from "./message-dispatch.js";
 import {
   createAgentFailureRecorder,
   executeAgentToolCalls,
@@ -401,7 +405,7 @@ export async function runAgent(
         return finish({
           summary: readOnly
             ? (loop.finalText?.trim() || "I do not have enough information to answer that.")
-            : (loop.finalText ?? "Done."),
+            : ((gatewayOperatorMode ? summarizeApprovalOnlyTurn(actionsPerformed) : null) ?? loop.finalText ?? "Done."),
           actionsPerformed,
         }, "end_turn");
     }

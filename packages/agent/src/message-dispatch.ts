@@ -49,6 +49,17 @@ export function summarizeCommittedApproval(actions: readonly ActionEntry[]): str
   return null;
 }
 
+/**
+ * The reply to a turn whose only action was an approval that committed: the
+ * approved run's summary, the same words a bare "yes" gets, rather than the
+ * model's retelling of it.
+ */
+export function summarizeApprovalOnlyTurn(actions: readonly ActionEntry[]): string | null {
+  return actions.length > 0 && actions.every((action) => action.tool === "approve_pending_plan")
+    ? summarizeCommittedApproval(actions)
+    : null;
+}
+
 export function summarizeOperatorTurnDispatchFailure(actions: ActionEntry[]): string | null {
   for (let index = actions.length - 1; index >= 0; index -= 1) {
     const action = actions[index]!;

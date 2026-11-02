@@ -20,8 +20,9 @@ import { withInternalRoute } from '@/lib/api/internal-route';
 import { parseAutoAckBody } from '@/app/api/messages/_lib/validation';
 
 // The storefront widget's waiting notice, so a customer handed to a person reads
-// the same promise on every messaging channel.
-const HANDOFF_ACKNOWLEDGEMENT = 'Thanks for your message! Someone from the shop is looking at this and will follow up here.';
+// the same promise on every messaging channel. In the agent's own voice, and not
+// a thank-you: the reply that follows the merchant's decision thanks them.
+const HANDOFF_ACKNOWLEDGEMENT = "Got it. I'm looking into this and will get back to you here shortly.";
 
 export const POST = withInternalRoute(
   {

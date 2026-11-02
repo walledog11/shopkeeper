@@ -222,6 +222,44 @@ describe("getHomeSummary", () => {
     expect(summary.repeatCustomers.every(customer => customer.ticketCount === 3)).toBe(true)
   })
 
+  // 2026-11-03: home said "1 refund is waiting on your call" for a Returns
+  // ticket whose refund had already gone through, while the only waiting plan
+  // was a shipping reply.
+  it("counts refunds waiting in a plan, not tickets tagged Returns", async () => {
+    await createThread({ createdAt: TODAY, updatedAt: TODAY, tag: "Returns" })
+    await createThread({ createdAt: TODAY, updatedAt: TODAY, tag: "Returns" })
+    await createNeedsAttentionThread(TODAY)
+    const refundThread = await createThread({ createdAt: TODAY, updatedAt: TODAY, tag: "Billing" })
+    const message = await addMessage(refundThread.id, SenderType.customer, TODAY)
+    const refundPlan: AgentPlan = {
+      instruction: "Refund",
+      steps: [
+        { id: "refund_1", tool: "create_refund", label: "Refund order", description: "Refund", category: "action", enabled: true },
+        ...QUICK_REPLY_PLAN.steps,
+      ],
+      rawToolCalls: [
+        { id: "refund_1", name: "create_refund", input: { order_id: "1", amount: "24.95", currency: "USD" } },
+        ...QUICK_REPLY_PLAN.rawToolCalls,
+      ],
+    }
+    await db.thread.update({
+      where: { id: refundThread.id },
+      data: {
+        cachedPlanMessageId: message.id,
+        cachedPlan: buildAgentPlanCacheRecord({
+          instruction: "Refund",
+          lastCustomerMessageId: message.id,
+          settings: resolveAgentSettings(null),
+          plan: refundPlan,
+        }) as unknown as Parameters<typeof db.thread.update>[0]["data"]["cachedPlan"],
+      },
+    })
+
+    const summary = await getHomeSummary(org.id, null, NOW)
+
+    expect(summary.metrics.refundsPending).toBe(1)
+  })
+
   it("surfaces a zero-step invalid plan as fix-only merchant work", async () => {
     const thread = await createThread({ createdAt: TODAY, updatedAt: TODAY })
     const message = await addMessage(thread.id, SenderType.customer, TODAY)

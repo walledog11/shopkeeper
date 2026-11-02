@@ -1,3 +1,7 @@
+// What a merchant can do about a compensation over their limit, which holds even
+// with their approval.
+export const OVER_CAP_NEXT_STEP = "Issue it yourself in Shopify, or raise the limit in Settings → Approvals & limits.";
+
 /**
  * Every plan routing evidence code, with the fixed merchant-facing reason for
  * each one that escalates. A code with a reason makes `decideAutonomy` escalate;
@@ -19,7 +23,7 @@ const PLAN_ROUTING_EVIDENCE = {
   compensation_exception: "Compensation was requested but the plan contains no safe compensation action — needs human review.",
   ambiguous_customer: "Multiple matching customers found — needs a human to confirm identity.",
   critical_planning_read_failure: "Order or customer lookup failed — could not verify details to act safely.",
-  compensation_over_cap: "Compensation above the workspace limit was planned — needs human review.",
+  compensation_over_cap: `The amount is over your limit for a single refund or gift card. ${OVER_CAP_NEXT_STEP}`,
   damage_photo_missing: "Customer reports a damaged or defective item without a photo — over to you.",
   order_unconfirmed: "The sender could not confirm the order is theirs — over to you.",
   policy_gap: null,

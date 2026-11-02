@@ -22,7 +22,7 @@ import { AWAIT_ORDER_VERIFICATION_TOOL, getToolDefinition, TOOL_CATEGORIES } fro
 import type { ToolStatus } from "./tools/result.js";
 import { shopMoneyAmountOf } from "./tools/static-policy.js";
 import { formatMoney } from "./money.js";
-import { escalationReasonFor } from "./routing-evidence.js";
+import { escalationReasonFor, OVER_CAP_NEXT_STEP } from "./routing-evidence.js";
 import type {
   ClassifierAlignmentState,
   MerchantContinuationKind,
@@ -120,14 +120,16 @@ function compensationOverCap(
   return null;
 }
 
-// The merchant compares the amount with their limit, so the reason names both. A
-// full refund is Shopify's whole refundable balance, shipping and tax included,
-// which is why it can exceed a limit the item price is under.
+// The merchant compares the amount with their limit, so the reason names both,
+// and says what they can do: the limit holds even with their approval. A full
+// refund is Shopify's whole refundable balance, shipping and tax included, which
+// is why it can exceed a limit the item price is under.
 function compensationOverCapReason({ toolName, amount, cap, currency }: CompensationOverCap): string {
-  const subject = toolName === "create_refund"
-    ? "Shopify's full refund, which includes shipping and tax,"
-    : "The planned compensation";
-  return `${subject} is ${formatMoney(amount, currency, { exact: true })}, over the ${formatMoney(cap, currency)} limit for one compensation — needs human review.`;
+  const total = formatMoney(amount, currency, { exact: true });
+  const limit = formatMoney(cap, currency);
+  return toolName === "create_refund"
+    ? `The full refund is ${total} with shipping and tax, over your ${limit} limit for a single refund. Refund it yourself in Shopify, or raise the limit in Settings → Approvals & limits.`
+    : `This comes to ${total}, over your ${limit} limit for a single refund or gift card. ${OVER_CAP_NEXT_STEP}`;
 }
 
 function hasExplicitCompensationRequest(
