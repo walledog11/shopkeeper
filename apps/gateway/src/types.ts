@@ -85,6 +85,9 @@ export interface AiSummaryJobData {
   // round-trip in generateThreadIntelligence, but still run plan precompute +
   // operator notification downstream.
   skipSummary?: boolean;
+  // When the model provider first refused this job (epoch ms). The job waits
+  // for it to recover, up to a bound, instead of spending its attempts.
+  modelOutageSince?: number;
 }
 
 export interface OrderReviewJobData {

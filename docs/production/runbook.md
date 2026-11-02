@@ -625,6 +625,14 @@ cd apps/gateway
 NODE_ENV=production npx tsx src/scripts/inspect-failed-queue-jobs.ts inbound-messages
 ```
 
+**Model provider outage.** When Anthropic refuses or cannot be reached (an out-of-credit account
+included), an `ai-summary` job is not failed: it waits as `delayed` and retries every two minutes
+for up to a day without spending an attempt (`waitOutModelOutage`), so recovery is automatic once
+the provider accepts again. Each workspace's bound phones get one notice when the first message is
+held and one when one is handled again, and the first hold logs an ops alert. Restore the provider
+(top up credit; turn on auto-reload) rather than replaying anything. Past a day the job fails
+normally and plan recovery owns the message.
+
 If the evidence does not fit the safe condition, escalate instead of replaying:
 
 | Queue | Truth to inspect | Replay rule |
