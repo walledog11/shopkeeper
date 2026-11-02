@@ -296,7 +296,7 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
     const response = await timeStep({
       organizationId: ctx.orgId,
       // Thread-optional: a support or operator turn's timings go with its thread.
-      threadId: "thread" in ctx ? (ctx as AgentContext).thread.id : null,
+      threadId: (ctx as Partial<AgentContext>).thread?.id ?? null,
       step: "model_call",
       detail: `${mode} ${model}`,
     }, () => anthropic.messages.create({
