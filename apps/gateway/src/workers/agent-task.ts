@@ -1,4 +1,5 @@
 import { Worker } from 'bullmq';
+import { recordStepTiming } from '@shopkeeper/agent/step-timings';
 import { db } from '@shopkeeper/db';
 import {
   claimAgentTask,
@@ -59,7 +60,7 @@ async function processWithheldMessageFollowUp(data: AgentTaskJobData): Promise<b
   return true;
 }
 
-export async function processAgentTaskJob(data: AgentTaskJobData): Promise<void> {
+export async function processAgentTaskJob(data: AgentTaskJobData, enqueuedAt?: number): Promise<void> {
   if (await processWithheldMessageFollowUp(data)) return;
   const claimed = await claimAgentTask({
     organizationId: data.organizationId,
@@ -72,6 +73,15 @@ export async function processAgentTaskJob(data: AgentTaskJobData): Promise<void>
       organizationId: data.organizationId, taskId: data.taskId, expectedRevision: data.revision,
     });
     return;
+  }
+  if (enqueuedAt !== undefined) {
+    await recordStepTiming({
+      organizationId: data.organizationId,
+      threadId: claimed.task.threadId,
+      step: 'task_queue_wait',
+      startedAt: new Date(enqueuedAt),
+      durationMs: Date.now() - enqueuedAt,
+    });
   }
 
   // Newest first: a resumed task carries both the original instruction and the
@@ -252,7 +262,7 @@ export async function processAgentTaskJob(data: AgentTaskJobData): Promise<void>
 export function createAgentTaskWorker(options: { workerOptions: SharedGatewayWorkerOptions }) {
   const worker = new Worker<AgentTaskJobData>(
     QUEUE.AGENT_TASK,
-    async (job) => processAgentTaskJob(job.data),
+    async (job) => processAgentTaskJob(job.data, job.timestamp),
     { ...options.workerOptions, concurrency: 4 },
   );
   registerJobFailureLogging(worker, {

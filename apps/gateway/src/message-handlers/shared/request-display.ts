@@ -123,10 +123,10 @@ export async function buildRequestDisplaySnapshot(params: {
     return unavailableRequestDisplay();
   }
 
-  // A request the answer makes itself comes first.
-  const resumed = signals.requestFacts.ask === 'none'
-    ? await resumedRequestFacts(params.organizationId, params.sourceMessageId)
-    : null;
+  // A message that answered an order confirmation resumes the request the agent
+  // asked about, however the classifier read the answer ("97201" can read as
+  // asking nothing or as something else). The planner resumes it the same way.
+  const resumed = await resumedRequestFacts(params.organizationId, params.sourceMessageId);
   return {
     version: REQUEST_DISPLAY_VERSION,
     kind: 'classified',

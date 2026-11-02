@@ -7,26 +7,19 @@ Technical contracts and settled engineering decisions live with the code they go
 ([agent-runtime](agent-runtime.md), [runbook](production/runbook.md),
 [transport plan](socialapi-transport-plan.md)), not here.
 
-Last updated: 2026-10-31.
+Last updated: 2026-11-02.
 
 ## Next — the first real merchant
 
 In order. This is the product's critical path.
 
-1. **Run one Instagram DM through phone approval to a reply the customer receives.**
-   Fresh DM from a controlled account (Instagram refuses business replies after 24h)
-   asking for a refund on a real dev-store order — it must carry an action-category call,
-   or the plan auto-sends and never reaches the phone. Revise once from the phone, then
-   approve on iMessage. Closes when the parked plan survives to the reply,
-   `approve_pending_plan` finds it, a `PlanExecution` exists with `executionId` on the
-   action rows and a named approver, the refund commits in the charged currency, and the
-   reply shows in the customer's app. Run a photographed damage claim the same way, and
-   confirm the SocialAPI gallery photo is stored on the ticket.
-2. **Run an unlinked Instagram sender's damage claim through order confirmation** (built:
-   decision Q in agent-runtime). Apply `20261020120000_add_order_verifications` first.
-   Closes when the agent asks for the order, then its email or zip, the reply confirms
-   it, the photo ask follows, and the merchant gets one card: the confirmation line,
-   photos and the proposed resolution.
+1. **Revise a card once from the phone, then approve it.** Closes when a revision sent
+   on iMessage produces a new card for the same ticket, approving it sends the revised
+   reply, and the action rows carry the approver.
+2. **Run an unlinked Instagram sender's damage claim with a photo** through order
+   confirmation. Closes when the agent asks for the order, then its email or zip, then a
+   photo; the SocialAPI gallery photo is stored on the ticket; and the merchant gets one
+   card: the confirmation line, photos and the proposed resolution.
 3. **Close SocialAPI vendor diligence** before any external merchant's data flows: DPA,
    written retention/deletion answers, the terms §11.4 contradiction, and a "Powered by
    SocialAPI" notice before the vendor redirect. When SocialAPI answers, add its
@@ -50,8 +43,11 @@ In order. This is the product's critical path.
   `dm.sent` correlation (a reply typed in the Instagram app never reaches the thread),
   missed-delivery recovery, account health probing, failed-connect compensation, and a
   reconnect that switches accounts, which deletes the old row without revoking it.
-- **Instagram reply latency:** measure per hop, then make the order-confirmation ask one
-  model call. SocialAPI has no typing or "Seen" for Instagram; ask the vendor.
+- **Instagram reply latency:** about 21s from a DM to the first reply. Sending one
+  message takes 4–6s (gateway → dashboard → SocialAPI), 7–10s pass before planning
+  starts, and a free-form approval from the phone adds about 5s of model time; planning
+  itself is 3.5–7s. Every step is now timed in *Copy timeline*: take one timed run and
+  cut the largest step. SocialAPI has no typing or "Seen" for Instagram; ask the vendor.
 - **Agent rough edges seen live:** the operator agent's own chat question is reported as
   an escalation and the merchant's answer errors (`answer_operator_question` only knows
   ticket questions); cards on already-escalated threads print the raw

@@ -25,6 +25,7 @@ import { getConversationStage } from './conversation-stage.js';
 import { notifyCriticalToAllOperators } from './delivery.js';
 import { formatOperatorPlanMessage, parkedActionLabel, requiresDashboardDraftReview } from './format-plan.js';
 import type { OperatorNotificationExclude, QueueNotice } from './types.js';
+import { recordStepTiming } from '@shopkeeper/agent/step-timings';
 
 /**
  * The customer's message behind this plan, for the card to quote when the
@@ -122,6 +123,7 @@ export async function sendOperatorPlanNotification(
     logger.info({ organizationId }, '[Worker] No bound operator members — skipping plan notification');
     return;
   }
+  const cardStartedAt = new Date();
   const customerName = lookupName ?? await storedCustomerName(organizationId, threadId);
 
   const stage = await getConversationStage(threadId);
@@ -244,4 +246,12 @@ export async function sendOperatorPlanNotification(
     'Plan notification',
     options?.exclude,
   );
+  // Building the card and delivering it to every bound phone.
+  await recordStepTiming({
+    organizationId,
+    threadId,
+    step: 'phone_card',
+    startedAt: cardStartedAt,
+    durationMs: Date.now() - cardStartedAt.getTime(),
+  });
 }

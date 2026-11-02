@@ -22,6 +22,7 @@ import {
 } from './classification.js';
 import { listVerifiedOrderNames } from '../../storefront-chat-verified-orders.js';
 import { getConversationBurst } from './conversation-burst.js';
+import { timeStep } from '@shopkeeper/agent/step-timings';
 
 export async function generateThreadIntelligence(
   threadId: string,
@@ -86,19 +87,22 @@ export async function generateThreadIntelligence(
       fullThread.channelType,
     );
 
-    const aiResponse = await anthropic.messages.create({
-      model: HAIKU_MODEL,
-      max_tokens: CLASSIFIER_MAX_TOKENS,
-      thinking: { type: 'disabled' },
-      system: classifierSystemPrompt(fullThread.channelType, verifiedOrderNames),
-      output_config: {
-        format: {
-          type: 'json_schema',
-          schema: CLASSIFIER_OUTPUT_SCHEMA,
+    const aiResponse = await timeStep(
+      { organizationId: fullThread.organizationId, threadId: fullThread.id, step: 'read_message', detail: HAIKU_MODEL },
+      () => anthropic.messages.create({
+        model: HAIKU_MODEL,
+        max_tokens: CLASSIFIER_MAX_TOKENS,
+        thinking: { type: 'disabled' },
+        system: classifierSystemPrompt(fullThread.channelType, verifiedOrderNames),
+        output_config: {
+          format: {
+            type: 'json_schema',
+            schema: CLASSIFIER_OUTPUT_SCHEMA,
+          },
         },
-      },
-      messages: [{ role: 'user', content: classifierUserInput(conversationText) }],
-    });
+        messages: [{ role: 'user', content: classifierUserInput(conversationText) }],
+      }),
+    );
     const usage = readModelUsage(aiResponse);
     await recordSpend(fullThread.organizationId, usage, HAIKU_MODEL);
     logger.info({

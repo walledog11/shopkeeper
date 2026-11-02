@@ -54,6 +54,10 @@
       "types": "./dist/spend.d.ts",
       "default": "./dist/spend.js"
     },
+    "./step-timings": {
+      "types": "./dist/step-timings.d.ts",
+      "default": "./dist/step-timings.js"
+    },
     "./usage": {
       "types": "./dist/usage.d.ts",
       "default": "./dist/usage.js"

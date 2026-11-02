@@ -53,8 +53,10 @@ function v5Signals(ask: 'refund' | 'address_change' = 'refund') {
 describe('buildRequestDisplaySnapshot', () => {
   // 2026-10-31: the card for a zip that confirmed #1051 read "Verification Code
   // For Refund Request", the title of the zip message, not the refund it resumed.
-  it('describes the request a confirming answer resumed, not the answer itself', async () => {
-    const customer = await createTestCustomer(org.id, 'ig_sender_display');
+  // The classifier reads a bare zip as asking nothing or as something else; the
+  // card resumes the confirmed request either way, as the planner does.
+  it.each(['none', 'other'] as const)('describes the request a confirming answer resumed when the answer reads as %s', async (answerAsk) => {
+    const customer = await createTestCustomer(org.id, `ig_sender_display_${answerAsk}`);
     const thread = await createTestThread(org.id, customer.id, ChannelType.ig_dm);
     const answer = await createTestMessage(thread.id, '97201');
     const signals = v5Signals();
@@ -65,7 +67,7 @@ describe('buildRequestDisplaySnapshot', () => {
         classifierSignals: {
           ...signals,
           intents: { ...signals.intents, no_request: true },
-          requestFacts: { ...signals.requestFacts, ask: 'none', subject: null, order: null },
+          requestFacts: { ...signals.requestFacts, ask: answerAsk, subject: null, order: null },
         },
         aiTitle: 'Verification Code For Refund Request',
       },

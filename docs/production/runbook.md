@@ -916,7 +916,8 @@ built (`npx turbo run build --filter=shopkeeper-gateway^...`), with production e
    as preflight prints. Run preflight again; it should read *Ready*.
 3. One scenario per run, on one order from the list, with its messages written down beforehand.
    When something looks wrong, copy the ticket's timeline (the ⋯ menu in the ticket header → *Copy
-   timeline*) and paste it into the report.
+   timeline*) and paste it into the report. Its *Timings* section shows how long each step took,
+   phone side included, for a reply that was slow.
 
 - Use a fresh Instagram DM for each run: Instagram refuses business replies more than 24 hours
   after the customer's last message.

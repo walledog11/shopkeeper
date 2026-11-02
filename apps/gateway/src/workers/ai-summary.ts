@@ -1,4 +1,5 @@
 import { Worker } from 'bullmq';
+import { recordStepTiming } from '@shopkeeper/agent/step-timings';
 import { QUEUE } from '../constants.js';
 import { processAiSummaryJob } from '../message-handlers/inbound/ai-summary-flow.js';
 import type { AiSummaryJobData } from '../types.js';
@@ -7,6 +8,14 @@ import type { SharedGatewayWorkerOptions } from './resources.js';
 
 export function createAiSummaryWorker(workerOptions: SharedGatewayWorkerOptions): Worker<AiSummaryJobData> {
   const worker = new Worker<AiSummaryJobData>(QUEUE.AI_SUMMARY, async (job) => {
+    // Includes the short debounce that lets a burst of messages land together.
+    await recordStepTiming({
+      organizationId: job.data.organizationId,
+      threadId: job.data.threadId,
+      step: 'read_queue_wait',
+      startedAt: new Date(job.timestamp),
+      durationMs: Date.now() - job.timestamp,
+    });
     await processAiSummaryJob(job.data);
   }, workerOptions);
 
