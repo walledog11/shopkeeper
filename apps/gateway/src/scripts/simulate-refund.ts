@@ -358,7 +358,7 @@ async function main(): Promise<void> {
       `        Gateway        ${gateway}`,
       `        Customer       ${handle} (sender ${conversation!.participantId}), last message ${lastMessageAt!.toISOString()}`,
       `        Order          ${order!.name}  ${order!.current_total_price} ${order!.currency}  zip ${order!.shipping_address!.zip}`,
-      `        Refund timing  ${refundTiming ? `"${refundTiming}" if the card asks` : 'not given: answer on your phone if the card asks'}`,
+      `        Refund timing  ${refundTiming ? `"${refundTiming}" if the card asks (the script answers it, so don't reply on your phone)` : 'not given: answer on your phone if the card asks'}`,
     ].join('\n'));
     return {
       webhookSecret: webhookSecret!,

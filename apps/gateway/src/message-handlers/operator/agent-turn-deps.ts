@@ -16,17 +16,14 @@ import { gatewayThreadSink } from '../support-plan/agent-thread-sink.js';
 // and via the "[agent] tool error"/"[agent] tool result" logs. Whole-turn throws
 // are logged by the Telegram route handlers ("[Telegram] Operator agent turn
 // failed ..."), which catch and reply rather than failing the job.
-
+//
+// Every turn option reaches the core as given. Copying them one by one is how
+// the merchant's answer to a card's blank was dropped on its way to the reply
+// (2026-11-03): the refund ran and the reply was withheld for its empty blank.
 const gatewayRunAgent: ExecuteTurnRunAgent = (ctx, instruction, approvedToolCalls, settings, options) =>
   runAgent(ctx, instruction, approvedToolCalls, settings, {
-    turnId: options.turnId,
-    mode: options.mode,
-    approval: options.approval,
-    executionId: options.executionId,
-    taskAuthority: options.taskAuthority,
-    approvedCommunication: options.approvedCommunication,
+    ...options,
     onActionsPersisted: captureAgentActionsCompleted,
-    ...(options.moduleTools ? { moduleTools: options.moduleTools } : {}),
   });
 
 export function buildGatewayTurnDeps(): ExecuteAgentTurnDeps {
