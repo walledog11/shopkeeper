@@ -5,6 +5,10 @@ import {
 } from '../../../operator-notify-idempotency.js';
 import { listOperatorBindings } from '../../../operator-notify.js';
 import { removePendingPlanForThread } from '../../../operator-context.js';
+import { getGatewayDashboardUrl } from '../../../config/env.js';
+import { listConfirmedOrders } from '../../../storefront-chat-verified-orders.js';
+import { buildRequestDisplaySnapshot, requestDisplayHasContext } from '../../shared/request-display.js';
+import { loadRequestSourceText, storedCustomerName } from './card-context.js';
 import { getConversationStage } from './conversation-stage.js';
 import { notifyCriticalToAllOperators } from './delivery.js';
 import { formatQuestionMessage } from './format-question.js';
@@ -17,9 +21,10 @@ export async function sendOperatorQuestionNotification(
   threadId: string,
   customerName: string | null,
   channelType: DbChannelType,
-  requestSummary: string | null,
+  // The card opens from the structured request, as the approval card does.
+  _requestSummary: string | null,
   question: string,
-  instruction: string,
+  _instruction: string,
   options?: {
     planId?: string | null;
     sourceMessageId?: string | null;
@@ -32,9 +37,25 @@ export async function sendOperatorQuestionNotification(
     return;
   }
 
-  const summary = requestSummary || instruction;
-  const stage = await getConversationStage(threadId);
-  const message = formatQuestionMessage(customerName, channelType, summary, question, stage);
+  const [name, stage, verifiedOrders, requestDisplay] = await Promise.all([
+    customerName ? Promise.resolve(customerName) : storedCustomerName(organizationId, threadId),
+    getConversationStage(threadId),
+    listConfirmedOrders(organizationId, threadId, channelType),
+    buildRequestDisplaySnapshot({ organizationId, threadId, sourceMessageId: options?.sourceMessageId }),
+  ]);
+  const sourceMessageText = requestDisplayHasContext(requestDisplay)
+    ? null
+    : await loadRequestSourceText(organizationId, threadId, options?.sourceMessageId).catch(() => null);
+  const message = formatQuestionMessage({
+    customerName: name,
+    channelType,
+    requestDisplay,
+    question,
+    stage,
+    verifiedOrders,
+    sourceMessageText,
+    threadLink: `${getGatewayDashboardUrl()}/dashboard/tickets?thread=${threadId}`,
+  });
   const idempotencyKey = questionNotificationIdempotencyKey(organizationId, threadId, question);
 
   // This thread's plan (if any) is superseded by the question. Remove only its

@@ -170,6 +170,67 @@ export function parkedActionLabel(steps: PlanStep[], person: PersonName): string
   return `${lowerFirst(label)}${forCustomer}`;
 }
 
+/**
+ * The opening every card shares: who wrote, what they asked and why, and the
+ * orders they confirmed. `canShowRequest` is false when neither the structured
+ * request nor the customer's own words can be shown, and a card must then not
+ * ask for a decision.
+ */
+export function formatCardOpening(input: {
+  customerName: string | null;
+  channelType: DbChannelType;
+  requestDisplay: RequestDisplay;
+  stage?: ConversationStage;
+  now?: Date;
+  verifiedOrders?: readonly ConfirmedOrder[];
+  sourceMessageText?: string | null;
+}): { lines: string[]; person: PersonName; canShowRequest: boolean } {
+  const { customerName, channelType, requestDisplay } = input;
+  const stage = input.stage ?? FRESH_STAGE;
+  const now = input.now ?? new Date();
+  const confirmedOrders = input.verifiedOrders ?? [];
+  const verifiedOrders = confirmedOrders.map(order => order.orderName);
+  // The card states the verified orders on their own line below, so the name
+  // does not repeat them: a verified shopper is "the customer" here, not "the
+  // customer on #1024 … They confirmed the email on #1024".
+  const person = classifyPerson({
+    customerName,
+    channelType,
+    verifiedOrders,
+    followingText: verifiedOrders.join(', '),
+  });
+  // A thread still on a classifier version older than requestFacts renders no
+  // structured request, but the customer's message is on the thread either way.
+  // The briefing has quoted it since Milestone 1; the card printed "Request
+  // details unavailable" and then asked "Good to send?" underneath it.
+  const sourceMessageText = input.sourceMessageText?.trim() ? input.sourceMessageText : null;
+  const sourceQuote = !requestDisplayHasContext(requestDisplay, now) && sourceMessageText
+    ? formatBlockedTicketLine({
+        customer: { name: customerName },
+        channelType,
+        verifiedOrders,
+        pendingMessage: sourceMessageText,
+      }, now)
+    : null;
+  const canShowRequest = requestDisplayHasContext(requestDisplay, now) || sourceQuote !== null;
+
+  const confirmedBy = (method: ConfirmedOrder['method']) => confirmedOrders
+    .filter(order => order.method === method)
+    .map(order => order.orderName);
+  const lines = openingLines({
+    person,
+    display: requestDisplay,
+    confirmations: [
+      ...(confirmedBy('email').length > 0 ? [`the email on ${confirmedBy('email').join(', ')}`] : []),
+      ...(confirmedBy('zip').length > 0 ? [`the shipping zip on ${confirmedBy('zip').join(', ')}`] : []),
+    ],
+    confirmedOrderNames: verifiedOrders,
+    fallback: formatRequestHeaderLines(person, channelType, requestDisplay, stage, now, sourceQuote)[1]!,
+    now,
+  });
+  return { lines, person, canShowRequest };
+}
+
 export function formatOperatorPlanMessage(
   customerName: string | null,
   channelType: DbChannelType,
@@ -204,18 +265,14 @@ export function formatOperatorPlanMessage(
     damagePhotos?: { count: number; shown: boolean };
   },
 ): string {
-  const stage = options?.stage ?? FRESH_STAGE;
-  const now = options?.now ?? new Date();
-  const confirmedOrders = options?.verifiedOrders ?? [];
-  const verifiedOrders = confirmedOrders.map(order => order.orderName);
-  // The card states the verified orders on their own line below, so the name
-  // does not repeat them: a verified shopper is "the customer" here, not "the
-  // customer on #1024 … They confirmed the email on #1024".
-  const person = classifyPerson({
+  const { lines, person, canShowRequest } = formatCardOpening({
     customerName,
     channelType,
-    verifiedOrders,
-    followingText: verifiedOrders.join(', '),
+    requestDisplay,
+    ...(options?.stage ? { stage: options.stage } : {}),
+    ...(options?.now ? { now: options.now } : {}),
+    ...(options?.verifiedOrders ? { verifiedOrders: options.verifiedOrders } : {}),
+    ...(options?.sourceMessageText ? { sourceMessageText: options.sourceMessageText } : {}),
   });
   const actionableSteps = steps.filter((step) => step.category !== 'read');
 
@@ -235,35 +292,6 @@ export function formatOperatorPlanMessage(
     ? (exactDraftHidden ? null : exactDraftText)
     : options?.rawToolCalls ? firstDraftExcerpt(options.rawToolCalls) : null;
 
-  // A thread still on a classifier version older than requestFacts renders no
-  // structured request, but the customer's message is on the thread either way.
-  // The briefing has quoted it since Milestone 1; the card printed "Request
-  // details unavailable" and then asked "Good to send?" underneath it.
-  const sourceMessageText = options?.sourceMessageText?.trim() ? options.sourceMessageText : null;
-  const sourceQuote = !requestDisplayHasContext(requestDisplay, now) && sourceMessageText
-    ? formatBlockedTicketLine({
-        customer: { name: customerName },
-        channelType,
-        verifiedOrders,
-        pendingMessage: sourceMessageText,
-      }, now)
-    : null;
-  const canShowRequest = requestDisplayHasContext(requestDisplay, now) || sourceQuote !== null;
-
-  const confirmedBy = (method: ConfirmedOrder['method']) => confirmedOrders
-    .filter(order => order.method === method)
-    .map(order => order.orderName);
-  const lines: string[] = openingLines({
-    person,
-    display: requestDisplay,
-    confirmations: [
-      ...(confirmedBy('email').length > 0 ? [`the email on ${confirmedBy('email').join(', ')}`] : []),
-      ...(confirmedBy('zip').length > 0 ? [`the shipping zip on ${confirmedBy('zip').join(', ')}`] : []),
-    ],
-    confirmedOrderNames: verifiedOrders,
-    fallback: formatRequestHeaderLines(person, channelType, requestDisplay, stage, now, sourceQuote)[1]!,
-    now,
-  });
   const threadLink = options?.threadId && options.dashboardUrl
     ? `${options.dashboardUrl}/dashboard/tickets?thread=${options.threadId}`
     : null;
@@ -271,13 +299,13 @@ export function formatOperatorPlanMessage(
   if (options?.validation?.status === 'invalid') {
     lines.push(
       '',
-      "I couldn't produce a safe executable draft:",
+      "I couldn't put together a reply that's safe to send:",
       ...options.validation.issues.map((issue) => `- ${issue.message}`),
     );
     if (threadLink) {
-      lines.push('', `Open the thread to regenerate or take over: ${threadLink}`);
+      lines.push('', `Open the conversation to try again or reply yourself: ${threadLink}`);
     }
-    lines.push('', "Nothing can run from this draft. Tell me what to change, or dismiss it.");
+    lines.push('', "Nothing will go out from this. Tell me what to change, or say no to drop it.");
     return lines.join('\n');
   }
 
@@ -346,11 +374,11 @@ export function formatOperatorPlanMessage(
     if (notice.kind === 'stacked') {
       const name = customerFirstName(customerName);
       lines.push('', name
-        ? `(You have ${notice.waiting} plans waiting, so say whose you mean, like "yes ${name}".)`
-        : `(You have ${notice.waiting} plans waiting, so say which one you mean when you answer.)`);
+        ? `(${notice.waiting} are waiting on you, so say whose you mean, like "yes ${name}".)`
+        : `(${notice.waiting} are waiting on you, so say which one you mean when you answer.)`);
     } else {
       const earlierName = customerFirstName(notice.customerName);
-      const earlier = earlierName ? `${earlierName}'s plan` : 'The earlier plan';
+      const earlier = earlierName ? `${earlierName}'s request` : 'The earlier request';
       lines.push('', notice.kind === 'replaces'
         ? `(${earlier} is off your phone now, so yes or no here only answers this one. It's still on your dashboard.)`
         : `(${earlier} is off your phone now to keep your list short. It's still on your dashboard.)`);

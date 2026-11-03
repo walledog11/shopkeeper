@@ -44,7 +44,7 @@ describe('POST /webhooks/telegram — help & summary', () => {
     return `member:${member.id}`;
   }
 
-  it('"help" leads with what to say and keeps commands as a trailing hint', async () => {
+  it('"help" says what to text, without command shortcuts', async () => {
     const chatId = '7500001';
     await bindMember(chatId);
 
@@ -59,10 +59,8 @@ describe('POST /webhooks/telegram — help & summary', () => {
     expect(text).toMatch(/^Text me like you'd text an employee:/);
     expect(text).toMatch(/refund #1234/);
     expect(text).toMatch(/reply yes or no/);
-    // Commands still documented, but below the capabilities.
-    expect(text).toMatch(/SUMMARY/);
-    expect(text).toMatch(/OPEN <n>/);
-    expect(text.indexOf('SUMMARY')).toBeGreaterThan(text.indexOf('refund #1234'));
+    // The commands still work; a merchant texting like an employee never needs them.
+    expect(text).not.toMatch(/SUMMARY|OPEN <n>/);
   });
 
   it('"summary" sends the live inbox digest and seeds pendingDigest', async () => {

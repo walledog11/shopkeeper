@@ -42,6 +42,15 @@ describe('conversation paragraphs', () => {
     expect(brief.draft).toBeNull();
   });
 
+  // 2026-11-03 audit: cards read "asked to return linen shirt".
+  it('gives a bare subject an article and keeps one that has its own', () => {
+    const request = (subject: string) => buildConversationBrief({ customerName: 'Sarah', now,
+      facts: { ask: 'return', subject, order: null, alternative: null, deadline: null, deadlineText: null } }).request;
+    expect(request('linen shirt')).toBe('Sarah asked to return the linen shirt.');
+    expect(request('her blue mug')).toBe('Sarah asked to return her blue mug.');
+    expect(request('2 candles')).toBe('Sarah asked to return 2 candles.');
+  });
+
   it('numbers paragraphs only when names are ambiguous and preserves their ledger order', () => {
     const items: BriefingItem[] = ['old', 'new'].map((threadId) => ({ threadId, kind: 'decision',
       conversation: buildConversationBrief({ customerName: 'Sarah', sourceText: threadId, now }) }));

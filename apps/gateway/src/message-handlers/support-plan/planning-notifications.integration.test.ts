@@ -365,7 +365,7 @@ describe('sendOperatorPlanNotification', () => {
     );
 
     const [, , body, , notifyOptions] = notifyOperatorSpy.mock.calls[0] ?? [];
-    expect(body).toContain("couldn't produce a safe executable draft");
+    expect(body).toContain("couldn't put together a reply that's safe to send");
     expect(body).not.toContain('OK to send?');
     expect(notifyOptions?.appendPlan?.plan?.validation).toEqual(invalidPlan.validation);
   });

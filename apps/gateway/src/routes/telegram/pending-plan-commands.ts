@@ -1,6 +1,7 @@
 import { db, SenderType } from '@shopkeeper/db';
 import { resolveOperatorThread } from '@shopkeeper/agent/internal-thread';
 import logger from '../../logger.js';
+import { getGatewayDashboardUrl } from '../../config/env.js';
 import {
   extractOrderNumber,
   expectedPlanIdentity,
@@ -16,6 +17,10 @@ import { runApprovedPendingPlan, clearPendingPlan } from '../../message-handlers
 import { ConflictError } from '@shopkeeper/shared/errors';
 import type { PendingPlanCommand } from './command-parser.js';
 import type { OperatorMessageContext } from '../operator-message.js';
+
+function threadLink(threadId: string): string {
+  return `${getGatewayDashboardUrl()}/dashboard/tickets?thread=${threadId}`;
+}
 
 // A bare yes/no answers whatever the merchant read last. Cards, questions and
 // digests are pushed and mirrored onto the operator thread without a task; the
@@ -53,7 +58,7 @@ export async function handlePendingPlanCommand(
     if (context.pendingQuestion) return false;
     logger.info({ chatId, command: command.type }, '[Operator] Decision with nothing queued');
     await reply(
-      "Nothing is waiting for your approval right now — that draft is gone, so I haven't done anything. If you still want it, open the conversation and I'll write it up again.",
+      "Nothing is waiting for your approval right now, so I haven't done anything. If you still want it done, open the conversation and ask me again.",
     );
     return true;
   }
@@ -69,14 +74,14 @@ export async function handlePendingPlanCommand(
       .sort((a, b) => (a.ordinal ?? Number.MAX_SAFE_INTEGER) - (b.ordinal ?? Number.MAX_SAFE_INTEGER))
       .map(({ ordinal, summary }) => (ordinal ? `${ordinal}. ${summary}` : summary));
     await reply([
-      `You have ${context.pendingPlans.length} plans waiting, so I haven't done anything yet. Which one did you mean?`,
+      `${context.pendingPlans.length} are waiting on you, so I haven't done anything yet. Which one did you mean?`,
       ...lines,
       'Tell me which, by number or name.',
     ].join('\n'));
     return true;
   }
   if (pendingPlanNeedsThreadReview(pendingPlan, context.pendingDigest)) {
-    await reply('The request details were unavailable in the briefing. Open the thread before deciding what to do with this plan.');
+    await reply(`I can't show you what they asked here, so open the conversation before deciding: ${threadLink(pendingPlan.threadId)}`);
     return true;
   }
   const { threadId, instruction, rawToolCalls } = pendingPlan;
@@ -84,24 +89,24 @@ export async function handlePendingPlanCommand(
     try {
       const dismissed = await clearPendingPlan(organizationId, memberKey, clerkUserId, pendingPlan);
       if (!dismissed) {
-        await reply('That plan was already replaced or resolved.');
+        await reply('That one was already handled or replaced, so there was nothing to cancel.');
         return true;
       }
     } catch (error) {
       if (error instanceof ConflictError) {
-        await reply("That plan is already running or completed, so it can't be dismissed.");
+        await reply("That's already underway or done, so I can't stop it now.");
         return true;
       }
       throw error;
     }
     // Older parked plans carry no actionLabel.
-    const dismissed = pendingPlan.actionLabel ? `Dismissed — I won't ${pendingPlan.actionLabel}.` : 'Plan dismissed.';
+    const dismissed = pendingPlan.actionLabel ? `OK, I won't ${pendingPlan.actionLabel}.` : "OK, I won't do it.";
     await reply(dismissed);
     return true;
   }
 
   if (isPendingPlanInvalid(pendingPlan)) {
-    await reply("This draft failed validation, so I can't run or partially run it. Tell me what to change, or reply no to dismiss it.");
+    await reply("I can't run this one: part of it isn't valid, so none of it will go through. Tell me what to change, or say no to drop it.");
     return true;
   }
 
@@ -130,7 +135,9 @@ export async function handlePendingPlanCommand(
     );
   } catch (err) {
     logger.error({ err }, '[Operator] Operator agent turn failed (plan approval)');
-    await reply('Something went wrong running the plan. Please try again.');
+    // It failed partway, so some of it may have gone through: never suggest a
+    // blind retry, which is how a customer gets refunded twice.
+    await reply(`Something went wrong partway through, and I can't tell what went through. Check the conversation before trying again: ${threadLink(threadId)}`);
     return true;
   }
 

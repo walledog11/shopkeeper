@@ -44,7 +44,7 @@ export default function HomeChannelNudge({
   }
 
   if (!hasPhoneBound) {
-    return <ChannelConnectBanner>Get plan approvals on your phone —</ChannelConnectBanner>
+    return <ChannelConnectBanner>Approve replies and refunds from your phone —</ChannelConnectBanner>
   }
 
   return null
