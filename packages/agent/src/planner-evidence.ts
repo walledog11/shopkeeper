@@ -159,8 +159,11 @@ function requestedWriteEscalationCode(input: BuildPlanRoutingEvidenceInput): Pla
   // the sender's next message decides, so a turn that sends nothing waits too.
   const awaitingOrder = rawToolCalls.length === 0
     && input.orderVerification?.kind === "asked" && input.orderVerification.orderName === null;
+  // A question to the merchant (how long refunds take, say) sends nothing and
+  // runs nothing: the merchant answers, and the re-drafted plan carries the
+  // compensation through every check above.
   if (
-    !shape.hasAction && !shape.hasEscalation && !shape.hasEvidenceRequest && !awaitingOrder
+    !shape.hasAction && !shape.hasEscalation && !shape.hasEvidenceRequest && !shape.hasAskOperator && !awaitingOrder
     && hasExplicitCompensationRequest(input)
   ) {
     return "compensation_exception";

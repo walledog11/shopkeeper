@@ -125,6 +125,25 @@ describe("buildPlanRoutingEvidence", () => {
     expect(build(ctx).codes).toContain("compensation_exception");
   });
 
+  // 2026-11-03 live run: asked how long refunds take before proposing a refund,
+  // the agent's question to the merchant was turned into a handoff.
+  it("lets a refund request wait on a question to the merchant", () => {
+    const ctx = context({
+      recentMessages: [{ senderType: "customer", contentText: "I'd like a full refund on order #1052." }],
+      classifierSignals: {
+        version: 6, language: "en",
+        intents: { ...emptyIntents(), mutative_request: true, compensation_request: true },
+        requestFacts: { ...emptyRequestFacts(), ask: "refund", order: "#1052" },
+      },
+    });
+    const evidence = buildPlanRoutingEvidence({
+      ctx,
+      rawToolCalls: [{ id: "ask", name: "ask_operator", input: { question: "How long do refunds take to arrive?" } }],
+      readBlocks: [], readStatusMap: new Map(), readResultsMap: new Map(),
+    }).evidence;
+    expect(evidence.codes).not.toContain("compensation_exception");
+  });
+
   it("persists closed typed evidence for aligned classifier facts", () => {
     expect(build(context())).toMatchObject({
       classifierState: "aligned",

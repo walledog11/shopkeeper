@@ -119,18 +119,24 @@ const JOB = {
 };
 
 // 2026-11-03 audit: the customer's "78703" retitled a refund ticket "Refund
-// Verification For Order 1050" in the inbox.
+// Verification For Order 1050" in the inbox. A live run the same day: it also
+// blanked the request, so the handoff that followed told the merchant only "I
+// couldn't complete this request".
 describe('processAiSummaryJob ticket title', () => {
-  it('keeps the title of the request an order-confirmation answer resumes', async () => {
-    mocks.findThread.mockResolvedValue({ id: 'thread_1', aiTitle: 'Refund for order 1050' });
+  it('keeps the title and request an order-confirmation answer resumes', async () => {
+    mocks.findThread.mockResolvedValue({
+      id: 'thread_1',
+      aiTitle: 'Refund for order 1050',
+      requestSummary: 'Customer asks for a full refund on order #1050.',
+    });
     mocks.answeredOrderConfirmation.mockResolvedValue(true);
     mocks.precompute.mockResolvedValue(null);
 
     await processAiSummaryJob(JOB);
 
     expect(mocks.updateThreads).toHaveBeenCalledWith({
-      where: { id: 'thread_1', organizationId: 'org_1' },
-      data: { aiTitle: 'Refund for order 1050' },
+      where: { id: 'thread_1', organizationId: 'org_1', requestSourceMessageId: 'message_1' },
+      data: { aiTitle: 'Refund for order 1050', requestSummary: 'Customer asks for a full refund on order #1050.' },
     });
   });
 
