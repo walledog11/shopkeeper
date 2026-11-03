@@ -929,6 +929,18 @@ schema change), with production env (`railway run --service shopkeeper --environ
    timeline*) and paste it into the report. Its *Timings* section shows how long each step took,
    phone side included, for a reply that was slow.
 
+The refund scenario runs without a phone in hand: `npm run simulate:refund -- --workspace
+<clerk_org_id> --instagram <test handle> [--refund-timing "<store's refund timing>"] --execute`
+(dry run without `--execute`). It erases the test customer, picks an order as preflight does (or
+`--order #1051`), sends the refund request and then the zip as signed SocialAPI webhooks, answers
+the agent's question to the merchant with `--refund-timing` (saved to Memory; without it, answer on
+the phone), approves the card through the dashboard's approve route, and checks Shopify for the
+refund and Instagram delivery for the reply. It prints each step as PASS or FAIL, every message the
+customer and the phone got, and the ticket's timings. The customer's side is injected and never
+shows in Instagram; the replies are real sends, so DM the store from the test handle first if its
+last message is near 24 hours old (the run stops and says so). Each run is a real refund. The
+gateway URL comes from `RAILWAY_PUBLIC_DOMAIN` under `railway run`, or `--gateway`.
+
 - Use a fresh Instagram DM for each run: Instagram refuses business replies more than 24 hours
   after the customer's last message.
 - Read orders back with `/api/orders?limit=50` from page JS; the route caps `limit` at 50.

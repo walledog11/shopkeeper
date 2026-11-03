@@ -5,17 +5,19 @@
  * handle, which is the id every message from that account is stored under.
  */
 import { db } from '@shopkeeper/db';
-import { createSocialApiClient } from '@shopkeeper/integrations/socialapi';
+import { createSocialApiClient, type SocialApiInstagramConversation } from '@shopkeeper/integrations/socialapi';
 import { getSocialApiApiKey } from '../config/runtime-config.js';
 
 const PAGE_SIZE = 100;
 const MAX_PAGES = 20;
 
-type InstagramSenderLookup =
-  | { ok: true; senderIds: string[] }
-  | { ok: false; reason: string };
+type Lookup<T> = ({ ok: true } & T) | { ok: false; reason: string };
 
-export async function findInstagramSenderIds(organizationId: string, handle: string): Promise<InstagramSenderLookup> {
+/** The store's SocialAPI conversations with `handle`, newest first. */
+export async function findInstagramConversations(
+  organizationId: string,
+  handle: string,
+): Promise<Lookup<{ accountId: string; conversations: SocialApiInstagramConversation[] }>> {
   const apiKey = getSocialApiApiKey();
   if (!apiKey) return { ok: false, reason: 'SOCIALAPI_API_KEY is not set' };
   const integration = await db.integration.findFirst({
@@ -26,7 +28,7 @@ export async function findInstagramSenderIds(organizationId: string, handle: str
 
   const client = createSocialApiClient({ apiKey });
   const wanted = handle.toLowerCase();
-  const senderIds = new Set<string>();
+  const conversations: SocialApiInstagramConversation[] = [];
   let cursor: string | undefined;
   for (let page = 0; page < MAX_PAGES; page += 1) {
     const result = await client.listInstagramConversations({
@@ -35,13 +37,18 @@ export async function findInstagramSenderIds(organizationId: string, handle: str
       ...(cursor ? { cursor } : {}),
     });
     if (!result.ok) return { ok: false, reason: `SocialAPI returned ${result.error.category}` };
-    for (const conversation of result.data.data) {
-      if (conversation.participantName?.replace(/^@/, '').toLowerCase() === wanted) {
-        senderIds.add(conversation.participantId);
-      }
-    }
+    conversations.push(...result.data.data.filter(conversation => (
+      conversation.participantName?.replace(/^@/, '').toLowerCase() === wanted
+    )));
     if (!result.data.hasMore || !result.data.nextCursor) break;
     cursor = result.data.nextCursor;
   }
-  return { ok: true, senderIds: [...senderIds] };
+  conversations.sort((a, b) => Date.parse(b.lastMessageAt) - Date.parse(a.lastMessageAt));
+  return { ok: true, accountId: integration.providerAccountId, conversations };
+}
+
+export async function findInstagramSenderIds(organizationId: string, handle: string): Promise<Lookup<{ senderIds: string[] }>> {
+  const found = await findInstagramConversations(organizationId, handle);
+  if (!found.ok) return found;
+  return { ok: true, senderIds: [...new Set(found.conversations.map(conversation => conversation.participantId))] };
 }
