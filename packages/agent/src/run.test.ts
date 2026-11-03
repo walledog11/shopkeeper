@@ -402,6 +402,33 @@ it('reports an approval that already ran when the operator turn fails after it',
   expect(recordAgentTurnUsage).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'error' }));
 });
 
+// 2026-11-03 audit: a bare "yes" got the approved run's summary while "Yes go
+// ahead" got the model's own retelling, so one action had two confirmations.
+it('answers an approval in the merchant\'s own words with the approved run\'s summary', async () => {
+  const approve = defineTool({
+    name: 'approve_pending_plan',
+    description: 'Approve the pending plan.',
+    fields: { plan_ref: stringArg('Which plan.') },
+    category: 'action',
+    group: 'thread',
+    capabilities: [],
+    label: 'Approved pending plan',
+    planStepLabel: 'Approve pending plan',
+    policy: { categoryPermission: false },
+    execute: vi.fn().mockResolvedValue({ status: 'ok', message: 'Done: issued refund ($24.95) and sent reply to Raj.' }),
+  });
+  mockCreate
+    .mockResolvedValueOnce(toolUse('approve_pending_plan', {}))
+    .mockResolvedValueOnce(endTurn('Done, refunded $24.95 and the reply is out to Raj.'));
+  const ctx = makeCtx({
+    thread: { id: 'operator_thread', status: 'open', channelType: 'operator', tag: 'Support', aiSummary: null, shopifyCustomerId: null },
+  });
+
+  const result = await runAgent(ctx, 'Yes go ahead', undefined, undefined, { moduleTools: { approve_pending_plan: approve } });
+
+  expect(result.summary).toBe('Done: issued refund ($24.95) and sent reply to Raj.');
+});
+
 // The exact draft an approved plan binds for its "hello" reply.
 const APPROVED_HELLO = {
   approvedCommunication: {

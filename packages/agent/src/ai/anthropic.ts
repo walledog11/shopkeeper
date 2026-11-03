@@ -17,6 +17,15 @@ let anthropicClient: Anthropic | null = null;
 const REQUEST_TIMEOUT_MS = 60_000;
 const MAX_RETRIES = 1;
 
+/**
+ * The model provider refused a request or could not be reached: any error the
+ * SDK raises for one, connection failures and an exhausted credit balance
+ * included. Read from the error's class, never its message.
+ */
+export function isModelProviderError(error: unknown): boolean {
+  return error instanceof Anthropic.APIError;
+}
+
 function resolveAnthropicClient(): Anthropic {
   if (!anthropicClient) {
     anthropicClient = new Anthropic({

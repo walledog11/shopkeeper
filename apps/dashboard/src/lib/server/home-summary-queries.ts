@@ -83,6 +83,23 @@ export function getHomeSummaryWindows(now: Date): HomeSummaryWindows {
   }
 }
 
+// A refund waiting on the merchant is a refund step in a plan that is waiting on
+// them, not a ticket's tag: a Returns ticket whose refund already went through
+// waits on nobody.
+const REFUND_TOOLS = ["create_refund", "create_partial_refund"] as const
+
+function planStepsUseTool(tools: readonly string[]) {
+  return Prisma.sql`
+    CASE WHEN jsonb_typeof(t.cached_plan #> '{plan,steps}') = 'array'
+      THEN EXISTS (
+        SELECT 1 FROM jsonb_array_elements(t.cached_plan #> '{plan,steps}') AS step
+        WHERE step->>'tool' IN (${Prisma.join(tools)})
+      )
+      ELSE FALSE
+    END
+  `
+}
+
 export function currentPlanPredicate(organizationId: string) {
   return Prisma.sql`
     t.status = 'open'
@@ -206,7 +223,12 @@ export async function loadHomeSummaryRows(
           FROM threads t
           WHERE ${currentPlanPredicate(organizationId)}
         ) AS needs_you_count,
-        COUNT(*) FILTER (WHERE t.status = 'open' AND t.tag = 'Returns')::bigint AS refunds_pending,
+        (
+          SELECT COUNT(*)::bigint
+          FROM threads t
+          WHERE ${currentPlanPredicate(organizationId)}
+            AND ${planStepsUseTool(REFUND_TOOLS)}
+        ) AS refunds_pending,
         (
           SELECT COUNT(*)::bigint
           FROM inbox_threads vip_thread

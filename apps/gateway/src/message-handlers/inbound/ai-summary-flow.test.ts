@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   findThread: vi.fn(),
+  updateThreads: vi.fn(),
+  answeredOrderConfirmation: vi.fn(),
   findOrganization: vi.fn(),
   latestConversation: vi.fn(),
   requireOrgThread: vi.fn(),
@@ -23,7 +25,7 @@ vi.mock('@shopkeeper/db', async (importOriginal) => {
     ...actual,
     db: {
       ...actual.db,
-      thread: { ...actual.db.thread, findUnique: mocks.findThread },
+      thread: { ...actual.db.thread, findUnique: mocks.findThread, updateMany: mocks.updateThreads },
       organization: { ...actual.db.organization, findUnique: mocks.findOrganization },
     },
   };
@@ -50,6 +52,10 @@ vi.mock('@shopkeeper/agent/settings', () => ({
 
 vi.mock('./intelligence.js', () => ({ generateThreadIntelligence: mocks.intelligence }));
 vi.mock('./conversation-burst.js', () => ({ getConversationBurst: mocks.burst }));
+vi.mock('./order-verification-answers.js', () => ({
+  evaluateOrderVerificationAnswers: mocks.answeredOrderConfirmation,
+  OrderVerificationLookupError: class OrderVerificationLookupError extends Error {},
+}));
 vi.mock('../support-plan/planning.js', async (importOriginal) => ({
   ...await importOriginal<typeof import('../support-plan/planning.js')>(),
   precomputeThreadPlan: mocks.precompute,
@@ -73,6 +79,8 @@ beforeEach(() => {
     requestSourceMessageId: null,
   });
   mocks.findOrganization.mockResolvedValue({ settings: {} });
+  mocks.answeredOrderConfirmation.mockResolvedValue(false);
+  mocks.updateThreads.mockResolvedValue({ count: 1 });
   mocks.latestConversation.mockResolvedValue({ id: 'message_1', senderType: 'customer' });
   mocks.intelligence.mockResolvedValue({
     filterStatus: 'genuine',
@@ -109,6 +117,32 @@ const JOB = {
   customerName: null,
   channelType: 'email' as const,
 };
+
+// 2026-11-03 audit: the customer's "78703" retitled a refund ticket "Refund
+// Verification For Order 1050" in the inbox.
+describe('processAiSummaryJob ticket title', () => {
+  it('keeps the title of the request an order-confirmation answer resumes', async () => {
+    mocks.findThread.mockResolvedValue({ id: 'thread_1', aiTitle: 'Refund for order 1050' });
+    mocks.answeredOrderConfirmation.mockResolvedValue(true);
+    mocks.precompute.mockResolvedValue(null);
+
+    await processAiSummaryJob(JOB);
+
+    expect(mocks.updateThreads).toHaveBeenCalledWith({
+      where: { id: 'thread_1', organizationId: 'org_1' },
+      data: { aiTitle: 'Refund for order 1050' },
+    });
+  });
+
+  it('lets a message that is not an answer retitle the ticket', async () => {
+    mocks.findThread.mockResolvedValue({ id: 'thread_1', aiTitle: 'Refund for order 1050' });
+    mocks.precompute.mockResolvedValue(null);
+
+    await processAiSummaryJob(JOB);
+
+    expect(mocks.updateThreads).not.toHaveBeenCalled();
+  });
+});
 
 describe('processAiSummaryJob merchant-work gate', () => {
   beforeEach(() => {

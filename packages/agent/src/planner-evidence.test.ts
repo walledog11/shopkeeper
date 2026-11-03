@@ -242,7 +242,7 @@ describe("buildPlanRoutingEvidence", () => {
     // The merchant compares the amount with their limit, so the reason names both.
     expect(evidence).toMatchObject({
       codes: ["compensation_over_cap"],
-      escalationReason: "Shopify's full refund, which includes shipping and tax, is $200.00, over the $50 limit for one compensation — needs human review.",
+      escalationReason: "The full refund is $200.00 with shipping and tax, over your $50 limit for a single refund. Refund it yourself in Shopify, or raise the limit in Settings → Approvals & limits.",
     });
   });
 
