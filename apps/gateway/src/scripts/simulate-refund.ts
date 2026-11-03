@@ -25,6 +25,7 @@ import { createHmac, randomUUID } from 'node:crypto';
 import { parseArgs } from 'node:util';
 import { db } from '@shopkeeper/db';
 import { memberOperatorKey } from '@shopkeeper/agent/internal-thread';
+import { getAgentTurnPrefixLength } from '@shopkeeper/agent/tools';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { shopifyRestJson } from '@shopkeeper/agent/shopify';
 import { createSocialApiClient, type SocialApiInstagramConversation } from '@shopkeeper/integrations/socialapi';
@@ -58,6 +59,18 @@ const runStartedAt = Date.now();
 const since = (at: number) => `+${((at - runStartedAt) / 1_000).toFixed(1)}s`;
 const seconds = (ms: number) => `${(ms / 1_000).toFixed(1)}s`;
 const indent = (text: string) => text.split('\n').map(line => `        ${line}`).join('\n');
+
+/** An agent run record shows as its summary, not its stored JSON. */
+function displayText(text: string): string {
+  const prefix = getAgentTurnPrefixLength(text);
+  if (prefix === null) return text;
+  try {
+    const summary = (JSON.parse(text.slice(prefix)) as { summary?: unknown }).summary;
+    return `Agent run: ${typeof summary === 'string' ? summary : '(no summary)'}`;
+  } catch {
+    return 'Agent run: (unreadable record)';
+  }
+}
 
 const steps: Array<{ name: string; ok: boolean; ms: number; detail?: string }> = [];
 async function step<T>(name: string, run: () => Promise<T>): Promise<T> {
@@ -109,7 +122,7 @@ async function printNewMessages(organizationId: string, after: Date): Promise<vo
     const toCustomer = !onPhone && (message.senderType === 'agent' || message.senderType === 'ai');
     if (toCustomer && message.sendStatus && !SEND_DONE.has(message.sendStatus)) continue;
     watched.seen.add(message.id);
-    const text = message.contentText ?? '';
+    const text = displayText(message.contentText ?? '');
     let label: string;
     if (onPhone) {
       label = message.senderType === 'customer' ? 'You → Shopkeeper (phone)' : 'Shopkeeper → your phone';
@@ -402,7 +415,11 @@ async function main(): Promise<void> {
   const lastPhoneMessage = () => watched.phone.at(-1)?.text ?? '(nothing reached the phone)';
   const handedOff = async () => {
     const ticket = await readTicket();
-    return ticket?.escalatedAt ? `The agent handed the ticket to you instead. Phone:\n${lastPhoneMessage()}` : null;
+    if (!ticket?.escalatedAt) return null;
+    // The handoff reaches the phone a few seconds after the ticket is escalated.
+    const texted = watched.phone.some(message => message.at >= ticket.escalatedAt!);
+    if (!texted && Date.now() - ticket.escalatedAt.getTime() < 30_000) return null;
+    return `The agent handed the ticket to you instead. Phone:\n${lastPhoneMessage()}`;
   };
 
   const refundRequest = `I changed my mind, I'd like a full refund on order ${order.name}`;

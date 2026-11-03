@@ -106,7 +106,7 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
   logger.info({ threadId, organizationId, traceId }, '[AISummary] Processing job');
 
   const [threadExists, latestConversation] = await Promise.all([
-    db.thread.findUnique({ where: { id: threadId }, select: { id: true, aiTitle: true } }),
+    db.thread.findUnique({ where: { id: threadId }, select: { id: true, aiTitle: true, requestSummary: true } }),
     getLatestConversationMessage(threadId, organizationId),
   ]);
   if (!threadExists) {
@@ -168,17 +168,23 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
       return false;
     });
 
-  // An answer to the order confirmation ("78703") is not a new request, so the
-  // ticket keeps the title of the request it answers, as the card and the planner
-  // resume that request.
-  if (answeredOrderVerification && threadExists.aiTitle) {
+  // An answer to the order confirmation ("78703") is not a new request: the
+  // ticket keeps the title and summary of the request it answers, which the
+  // planner, the card and a handoff all resume. Only this burst's own verdict is
+  // replaced; a newer message's stands.
+  const resumesRequest = answeredOrderVerification && Boolean(threadExists.aiTitle || threadExists.requestSummary);
+  if (resumesRequest) {
     await db.thread.updateMany({
-      where: { id: threadId, organizationId },
-      data: { aiTitle: threadExists.aiTitle },
+      where: { id: threadId, organizationId, requestSourceMessageId: sourceMessageId },
+      data: {
+        ...(threadExists.aiTitle ? { aiTitle: threadExists.aiTitle } : {}),
+        ...(threadExists.requestSummary ? { requestSummary: threadExists.requestSummary } : {}),
+      },
     }).catch((err: unknown) => {
-      logger.warn({ err: err instanceof Error ? err.message : String(err), threadId }, '[AISummary] Ticket title not restored');
+      logger.warn({ err: err instanceof Error ? err.message : String(err), threadId }, '[AISummary] Resumed request not restored');
     });
   }
+  const requestSummary = (resumesRequest ? threadExists.requestSummary : null) ?? updatedThread?.requestSummary ?? null;
 
   if (!withinBusinessHours) {
     const planResult = await precomputeThreadPlan(organizationId, threadId, settings, {
@@ -197,7 +203,7 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
           threadId,
           customerName,
           channelType,
-          updatedThread?.requestSummary ?? null,
+          requestSummary,
           planResult,
         );
       }
@@ -233,7 +239,7 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
         threadId,
         customerName,
         channelType,
-        updatedThread?.requestSummary ?? null,
+        requestSummary,
         planResult,
       );
     }
@@ -249,7 +255,7 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
           threadId,
           customerName,
           channelType,
-          updatedThread?.requestSummary ?? null,
+          requestSummary,
           planResult.plan,
           planResult.instruction,
           planResult.identity ? { identity: planResult.identity } : undefined,
