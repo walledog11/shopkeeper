@@ -932,7 +932,8 @@ schema change), with production env (`railway run --service shopkeeper --environ
 The refund scenario runs without a phone in hand: `npm run simulate:refund -- --workspace
 <clerk_org_id> --instagram <test handle> [--refund-timing "5-10 business days"] --execute`
 (dry run without `--execute`). It erases the test customer, picks an order as preflight does (or
-`--order #1051`), sends the refund request and then the zip as signed SocialAPI webhooks, and
+`--order #1051`; on a development store with none left, `--execute` creates a paid test order for the
+cheapest product under the limit), sends the refund request and then the zip as signed SocialAPI webhooks, and
 approves the card through the dashboard's approve route. While the store's refund timing is not in
 Memory the card leaves it blank, and the approval fills it with `--refund-timing` (saved to Memory;
 without it, answer the card on the phone). It then checks Instagram delivery for the reply and

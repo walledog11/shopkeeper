@@ -28,7 +28,7 @@ import { db } from '@shopkeeper/db';
 import { memberOperatorKey } from '@shopkeeper/agent/internal-thread';
 import { getAgentTurnPrefixLength } from '@shopkeeper/agent/tools';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
-import { shopifyRestJson } from '@shopkeeper/agent/shopify';
+import { shopifyGraphql, shopifyRestJson } from '@shopkeeper/agent/shopify';
 import { createSocialApiClient, type SocialApiInstagramConversation } from '@shopkeeper/integrations/socialapi';
 import { blankAnswersInCalls, merchantAnswerSlotsInCalls } from '@shopkeeper/agent/reply-placeholders';
 import { getSocialApiApiKey } from '../config/runtime-config.js';
@@ -242,6 +242,89 @@ interface ShopifyOrder {
   shipping_address?: { zip?: string | null } | null;
 }
 
+// Plans Shopify uses for development and sandbox stores, as the mutation canary
+// lists them: the only stores this script creates an order on.
+const DEVELOPMENT_PLANS = new Set([
+  'partner_test', 'affiliate', 'staff', 'staff_business', 'trial', 'plus_partner_sandbox', 'shopify_alumni',
+]);
+
+const ORDER_FIELDS = 'id,name,current_total_price,currency,cancelled_at,closed_at,refunds,shipping_address';
+
+const CREATE_TEST_ORDER = `mutation SimulateRefundOrder($order: OrderCreateOrderInput!, $options: OrderCreateOptionsInput) {
+  orderCreate(order: $order, options: $options) {
+    order { id name test }
+    userErrors { field message }
+  }
+}`;
+
+type ShopifyCredentials = { shop: string; accessToken: string };
+interface OrderToCreate { variantId: string; title: string; price: string; currency: string }
+
+/**
+ * A product a fresh test order can carry, when the store has no order a full
+ * refund can use: the cheapest active one under the refund limit. Null with the
+ * reason on a store that is not a development store, where nothing is created.
+ */
+async function planTestOrder(shopify: ShopifyCredentials, limit: number | null): Promise<OrderToCreate | string> {
+  const { shop } = await shopifyRestJson<{ shop?: { plan_name?: string; currency?: string } }>(
+    shopify, 'shop.json', { query: { fields: 'plan_name,currency' } },
+  );
+  const plan = String(shop?.plan_name ?? 'unknown');
+  if (!DEVELOPMENT_PLANS.has(plan.toLowerCase())) {
+    return `the store is on the ${plan} plan, so no test order is created; place one in Shopify first`;
+  }
+  const { products = [] } = await shopifyRestJson<{
+    products?: Array<{ title?: string; variants?: Array<{ id: number; title?: string; price?: string }> }>;
+  }>(shopify, 'products.json', { query: { status: 'active', limit: 250, fields: 'title,variants' } });
+  const variants = products.flatMap(product => (product.variants ?? []).map(variant => ({
+    variantId: String(variant.id),
+    title: `${product.title ?? 'Product'}${variant.title && variant.title !== 'Default Title' ? ` - ${variant.title}` : ''}`,
+    price: variant.price ?? '0',
+    currency: shop?.currency ?? 'USD',
+  })));
+  const affordable = variants
+    .filter(variant => Number(variant.price) > 0 && (limit === null || Number(variant.price) <= limit))
+    .sort((a, b) => Number(a.price) - Number(b.price));
+  return affordable[0] ?? `no active product costs less than the ${limit ?? 'refund'} limit`;
+}
+
+/** A paid test order Shopify can refund: one item, a shipping zip, no receipts. */
+async function createTestOrder(shopify: ShopifyCredentials, item: OrderToCreate): Promise<ShopifyOrder> {
+  const address = {
+    firstName: 'Simulated', lastName: 'Customer', address1: '1 Simulation St',
+    city: 'Austin', provinceCode: 'TX', zip: '78703', countryCode: 'US',
+  };
+  const data = await shopifyGraphql<{
+    orderCreate?: { order?: { id: string; name: string; test: boolean } | null; userErrors?: Array<{ message: string }> };
+  }>(shopify, CREATE_TEST_ORDER, {
+    order: {
+      email: `shopkeeper-simulate-refund+${Date.now()}@example.com`,
+      test: true,
+      financialStatus: 'PAID',
+      lineItems: [{ variantId: `gid://shopify/ProductVariant/${item.variantId}`, quantity: 1 }],
+      transactions: [{
+        amountSet: { shopMoney: { amount: item.price, currencyCode: item.currency } },
+        gateway: 'shopkeeper_simulation',
+        kind: 'SALE',
+        status: 'SUCCESS',
+        test: true,
+      }],
+      shippingAddress: address,
+      billingAddress: address,
+      tags: ['shopkeeper-simulate-refund'],
+    },
+    options: { sendReceipt: false, sendFulfillmentReceipt: false },
+  }, { maxRetries: 0 });
+  const errors = data.orderCreate?.userErrors ?? [];
+  if (errors.length > 0) throw new Error(`Shopify refused the test order: ${errors.map(error => error.message).join(', ')}`);
+  const created = data.orderCreate?.order;
+  if (!created?.id || created.test !== true) throw new Error('Shopify returned no test order');
+  const id = created.id.split('/').pop();
+  const { order } = await shopifyRestJson<{ order?: ShopifyOrder }>(shopify, `orders/${id}.json`, { query: { fields: ORDER_FIELDS } });
+  if (!order) throw new Error(`Shopify created ${created.name} but it could not be read back`);
+  return order;
+}
+
 async function lastCustomerMessageAt(conversation: SocialApiInstagramConversation): Promise<Date | null> {
   const client = createSocialApiClient({ apiKey: getSocialApiApiKey() ?? '' });
   let latest: Date | null = null;
@@ -322,6 +405,7 @@ async function main(): Promise<void> {
       select: { externalAccountId: true, accessToken: true },
     });
     let order: ShopifyOrder | undefined;
+    let orderToCreate: OrderToCreate | undefined;
     if (!shopify?.accessToken) {
       problems.push('Shopify is not connected');
     } else {
@@ -332,7 +416,7 @@ async function main(): Promise<void> {
         {
           query: {
             ...(wanted ? { name: wanted, status: 'any' } : { financial_status: 'paid', status: 'open', limit: 50 }),
-            fields: 'id,name,current_total_price,currency,cancelled_at,closed_at,refunds,shipping_address',
+            fields: ORDER_FIELDS,
           },
         },
       );
@@ -346,10 +430,17 @@ async function main(): Promise<void> {
         && Boolean(candidate.shipping_address?.zip)
       ));
       order = eligible[0];
-      if (!order) {
-        problems.push(wanted
-          ? `${wanted} is not an open, unrefunded order under the ${limit ?? 'compensation'} limit with a shipping zip`
-          : `No open, paid, unrefunded order under the ${limit ?? 'compensation'} limit has a shipping zip`);
+      if (!order && wanted) {
+        problems.push(`${wanted} is not an open, unrefunded order under the ${limit ?? 'compensation'} limit with a shipping zip`);
+      } else if (!order) {
+        // Every run refunds an order, so a store runs out; a development store
+        // gets a fresh one rather than stopping the test.
+        const planned = await planTestOrder({ shop: shopify.externalAccountId, accessToken: shopify.accessToken }, limit);
+        if (typeof planned === 'string') {
+          problems.push(`No open, paid, unrefunded order under the ${limit ?? 'compensation'} limit has a shipping zip, and ${planned}`);
+        } else {
+          orderToCreate = planned;
+        }
       }
     }
 
@@ -357,7 +448,9 @@ async function main(): Promise<void> {
     console.log([
       `        Gateway        ${gateway}`,
       `        Customer       ${handle} (sender ${conversation!.participantId}), last message ${lastMessageAt!.toISOString()}`,
-      `        Order          ${order!.name}  ${order!.current_total_price} ${order!.currency}  zip ${order!.shipping_address!.zip}`,
+      order
+        ? `        Order          ${order.name}  ${order.current_total_price} ${order.currency}  zip ${order.shipping_address!.zip}`
+        : `        Order          none left to refund: --execute creates a paid test order for ${orderToCreate!.title} (${orderToCreate!.price} ${orderToCreate!.currency})`,
       `        Refund timing  ${refundTiming ? `"${refundTiming}" if the card asks (the script answers it, so don't reply on your phone)` : 'not given: answer on your phone if the card asks'}`,
     ].join('\n'));
     return {
@@ -366,7 +459,8 @@ async function main(): Promise<void> {
       conversation: conversation!,
       member: binding!.orgMember,
       shopify: { shop: shopify!.externalAccountId, accessToken: shopify!.accessToken! },
-      order: order!,
+      order,
+      orderToCreate,
     };
   });
 
@@ -375,11 +469,16 @@ async function main(): Promise<void> {
     return;
   }
 
-  const { conversation, member, order } = setup;
+  const { conversation, member } = setup;
   const senderId = conversation.participantId;
   const memberKey = memberOperatorKey(member.id);
-  const zip = order.shipping_address!.zip!;
   const runStart = new Date();
+  const order = setup.order ?? await step('Create a test order to refund', async () => {
+    const created = await createTestOrder(setup.shopify, setup.orderToCreate!);
+    console.log(`        ${created.name}  ${created.current_total_price} ${created.currency}  zip ${created.shipping_address?.zip ?? '-'}`);
+    return created;
+  });
+  const zip = order.shipping_address!.zip!;
 
   await step(`Reset ${handle}`, async () => {
     const customers = await db.customer.findMany({
