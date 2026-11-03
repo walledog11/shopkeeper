@@ -1,3 +1,4 @@
+import { merchantAnswerSlotsInCalls } from "@shopkeeper/agent/reply-placeholders"
 import { db, SenderType } from "@shopkeeper/db"
 import type { ChannelType, OrgSettings } from "@/types"
 import { getCurrentPlanForThread } from "@shopkeeper/agent/plan-cache-shape"
@@ -101,6 +102,7 @@ export async function loadNeedsAttention(
       actionText: copy.actionText,
       actionDisplay: buildHomeActionDisplay(plan),
       replyText: planReplyText(plan),
+      blanks: merchantAnswerSlotsInCalls(plan.rawToolCalls),
       question: verdict.kind === "needs_merchant_input" ? verdict.question : null,
       orderRef: copy.orderRef,
       tag: thread.tag,

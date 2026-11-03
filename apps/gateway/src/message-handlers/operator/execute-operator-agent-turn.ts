@@ -8,7 +8,7 @@ import {
 import { hashInstruction } from '@shopkeeper/agent/agent-actions';
 import type { AgentActionTaskAuthority } from '@shopkeeper/agent/agent-actions';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
-import type { PlanExecutionOutcome, RawToolCall } from '@shopkeeper/agent/types';
+import type { MerchantAnswers, PlanExecutionOutcome, RawToolCall } from '@shopkeeper/agent/types';
 import type { AgentToolDefinition } from '@shopkeeper/agent/tools';
 import type { TaskModelBudget } from '@shopkeeper/agent/context';
 import { db } from '@shopkeeper/db';
@@ -56,6 +56,7 @@ export async function executeOperatorApprovedCachedPlan(params: {
   clerkUserId?: string;
   approvedToolCalls: RawToolCall[];
   expectedIdentity?: ExpectedPlanIdentity;
+  merchantAnswers?: MerchantAnswers;
 }): Promise<ExecuteOperatorApprovedCachedPlanResult> {
   await assertBillingWriteAllowedForOrgId(params.orgId);
   const [org, approver] = await Promise.all([
@@ -73,6 +74,7 @@ export async function executeOperatorApprovedCachedPlan(params: {
     failureRoute: FAILURE_ROUTE,
     approvedToolCalls: params.approvedToolCalls,
     ...(params.expectedIdentity ? { expectedIdentity: params.expectedIdentity } : {}),
+    ...(params.merchantAnswers ? { merchantAnswers: params.merchantAnswers } : {}),
     ...(approver ? { approver } : {}),
   }, buildGatewayPlanExecutionDeps());
 

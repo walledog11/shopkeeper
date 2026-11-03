@@ -56,13 +56,14 @@ export const POST = withOrgRoute(
     const { userId } = await auth();
     if (!userId) throw new UnauthorizedError();
 
-    const { planId, decision } = parseAgentPlanDecisionBody(await readRequiredJsonObject(request));
+    const { planId, decision, merchantAnswers } = parseAgentPlanDecisionBody(await readRequiredJsonObject(request));
 
     const { status, payload } = await postGatewayPlanDecision({
       organizationId: org.id,
       clerkUserId: userId,
       planId,
       decision,
+      ...(merchantAnswers ? { merchantAnswers } : {}),
     });
 
     // A reached gateway's 4xx is the merchant's answer (409: someone already

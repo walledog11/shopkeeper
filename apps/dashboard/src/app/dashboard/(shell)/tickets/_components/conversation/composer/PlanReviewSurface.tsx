@@ -2,6 +2,7 @@
 
 import MerchantAnswerForm from "@/components/agent/MerchantAnswerForm"
 import { NeedsYouCardFooter } from "@/app/dashboard/_components/home/needs-you-card-ui"
+import type { MerchantAnswers } from "@shopkeeper/agent/types"
 import type { AgentPlan, PlanCardOutcome, RawToolCall } from "@/types"
 import ActionPlanCard from "./ActionPlanCard"
 
@@ -27,7 +28,7 @@ export function PlanReviewSurface({
   layout?: "default" | "mobile-sticky"
   executionOutcome: PlanCardOutcome | null
   onAnswered: (result?: { saveToKb: boolean }) => void
-  onApprove: (approvedToolCalls: RawToolCall[]) => Promise<void>
+  onApprove: (approvedToolCalls: RawToolCall[], merchantAnswers?: MerchantAnswers) => Promise<void>
   onDismiss?: () => void
   onEdit?: () => void
   onFocusShopifyLink?: () => void

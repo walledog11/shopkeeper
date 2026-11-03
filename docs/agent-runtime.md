@@ -260,7 +260,7 @@ The approved snapshot binds organization, task and revision, proposal ID/version
 Communication approval has two modes; decision A fixes customer messages to
 `exact_draft`:
 
-- `exact_draft`: display the destination and exact draft before approval. After execution, only explicitly displayed placeholders may be substituted from validated successful receipts. If an action fails or a binding is unavailable, do not send the success draft; compose a new status/proposal and apply normal communication policy.
+- `exact_draft`: display the destination and exact draft before approval. After execution, only explicitly displayed placeholders may be substituted: from validated successful receipts, or a displayed blank from the merchant's answer given with the approval (decision A). If an action fails or a binding is unavailable, do not send the success draft; compose a new status/proposal and apply normal communication policy.
 - `intent`: record what the merchant authorized communicating, to whom, and any wording limits. Compose after actual outcomes. This mode is available only where existing policy allows it; it is not an automatic replacement for exact-draft approval.
 
 Approval execution must load the persisted proposal, verify current membership and proposal revision/hash, recheck applicable policy and provider state, and acquire the existing execution claim. Buttons and conversational approval call this same boundary. A terse “yes” with two plausible pending proposals triggers clarification; never use “latest card wins” to authorize money or recipient changes.
@@ -394,7 +394,15 @@ letter (F) is not reused.
   customer message proposed alongside a write is an `exact_draft`, shown on the
   card and bound into its hash with destination and labeled result placeholders.
   Only those placeholders may change, using the approved write's successful
-  receipt. A failed write or missing binding withholds the message. The model
+  receipt. A failed write or missing binding withholds the message. Amended
+  2026-11-03: a store fact the knowledge base lacks (`{{refund_timing}}`, the
+  `MERCHANT_ANSWERS` table in `reply-placeholders.ts`) is a blank the card shows
+  with its question, and answering it is the approval. The merchant's answer
+  fills the blank as given: on the phone it must be words of their message, a
+  bare yes fills nothing, and a message that also asks for a change revises
+  instead. A plan with a blank never runs on its own, execution refuses it
+  before claiming anything until every blank has an answer, and the answer is
+  saved to the knowledge base so the next draft has no blank. The model
   writes the draft before approval; merchant messages may compose after outcomes.
   Execution refuses a customer message no approval binds, so nothing a model
   writes in a turn reaches a customer. The operator agent drafts instead: a

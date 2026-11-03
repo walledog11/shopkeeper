@@ -2,6 +2,11 @@ import { db } from "@shopkeeper/db";
 import { memberOperatorKey } from "@shopkeeper/agent/internal-thread";
 import { getPlanExecution } from "@shopkeeper/agent/execution-ledger";
 import { isReadToolName, PLAN_STEP_LABELS } from "@shopkeeper/agent/tools";
+import {
+  displayApprovedDraft,
+  merchantAnswerSlotsInCalls,
+  type MerchantAnswerSlot,
+} from "@shopkeeper/agent/reply-placeholders";
 
 const DRAFT_EXCERPT_LIMIT = 600;
 
@@ -15,6 +20,8 @@ export interface PendingPlanView {
   instruction: string;
   steps: string[];
   draft: string | null;
+  /** Blanks in the draft the merchant fills as they approve it. */
+  blanks?: MerchantAnswerSlot[];
 }
 
 interface StoredPlan {
@@ -45,7 +52,8 @@ function draftExcerpt(calls: Array<{ name: string; input?: unknown }>): string |
         ? (input as { body?: unknown }).body
         : null;
     if (typeof body !== "string") continue;
-    const trimmed = body.trim();
+    // Placeholders shown by what they will hold, as on every other card.
+    const trimmed = displayApprovedDraft(body).trim();
     if (!trimmed) continue;
     return trimmed.length > DRAFT_EXCERPT_LIMIT ? `${trimmed.slice(0, DRAFT_EXCERPT_LIMIT)}…` : trimmed;
   }
@@ -91,6 +99,7 @@ export async function getOperatorPendingPlans(
     }
 
     const calls = toolCalls(plan?.rawToolCalls);
+    const blanks = merchantAnswerSlotsInCalls(calls);
     views.push({
       planId,
       threadId,
@@ -101,6 +110,7 @@ export async function getOperatorPendingPlans(
         .filter((call) => !isReadToolName(call.name))
         .map((call) => PLAN_STEP_LABELS[call.name] ?? call.name),
       draft: draftExcerpt(calls),
+      ...(blanks.length > 0 ? { blanks } : {}),
     });
   }
 

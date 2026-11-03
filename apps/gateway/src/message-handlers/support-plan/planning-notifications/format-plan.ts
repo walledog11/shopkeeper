@@ -12,7 +12,7 @@ import { lowerFirst } from '../../../lib/sentence-case.js';
 import { formatBlockedTicketLine } from '../../../maintenance/digest-briefing/ticket-lines.js';
 import type { ConfirmedOrder } from '../../../storefront-chat-verified-orders.js';
 import type { AgentPlan, PlanStep, ProposalCommunication } from '@shopkeeper/agent/types';
-import { displayApprovedDraft } from '@shopkeeper/agent/reply-placeholders';
+import { displayApprovedDraft, merchantAnswerSlots, type MerchantAnswerSlot } from '@shopkeeper/agent/reply-placeholders';
 import { lineItemWriteSentence } from '@shopkeeper/agent/line-item-display';
 import {
   merchantFollowUpBeforeApproval,
@@ -32,6 +32,13 @@ function isSendStep(step: PlanStep): boolean {
 // Past this an exact draft is not shown in a text message, and a message that
 // cannot be shown is not one to approve from here.
 const EXACT_DRAFT_DISPLAY_LIMIT = 3000;
+
+// "How long do refunds take to reach your customers? Your answer fills in
+// [refund timing] and approves this. I'll remember it for next time."
+export function blankQuestion(slots: readonly MerchantAnswerSlot[]): string {
+  const blanks = slots.map((slot) => `[${slot.label}]`).join(' and ');
+  return `${slots.map((slot) => slot.question).join(' ')} Your answer fills in ${blanks} and approves this. I'll remember it for next time.`;
+}
 
 export function requiresDashboardDraftReview(communication?: ProposalCommunication): boolean {
   return communication?.mode === 'exact_draft'
@@ -404,6 +411,10 @@ export function formatOperatorPlanMessage(
     // not — what it drops is the question, which is the half that asked for a
     // blind decision. Same call the briefing makes with needsThreadReview.
     closing = "I can't show you what they asked — open the thread first.";
+  } else if (exactDraft && merchantAnswerSlots(exactDraft.allowedResultBindings).length > 0) {
+    // The draft leaves a store fact blank. Answering is approving, so the card
+    // asks the question instead of "OK to go ahead?".
+    closing = blankQuestion(merchantAnswerSlots(exactDraft.allowedResultBindings));
   } else {
     const replyOnly = approvableSteps.length > 0 && approvableSteps.every(isSendStep);
     closing = replyOnly ? 'OK to send?' : 'OK to go ahead?';

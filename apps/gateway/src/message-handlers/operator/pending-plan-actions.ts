@@ -1,4 +1,4 @@
-import type { RawToolCall } from '@shopkeeper/agent/types';
+import type { MerchantAnswers, RawToolCall } from '@shopkeeper/agent/types';
 import { resolvePendingPlanContexts, type PendingPlan } from '../../operator-context.js';
 import {
   dismissCurrentCachedPlan,
@@ -31,6 +31,8 @@ export async function runApprovedPendingPlan(params: {
   approvedToolCalls: RawToolCall[];
   expectedIdentity?: ExpectedPlanIdentity;
   pendingPlan: PendingPlan;
+  /** The merchant's answers to the card's blanks, which approve it. */
+  merchantAnswers?: MerchantAnswers;
 }): Promise<ExecuteOperatorApprovedCachedPlanResult> {
   let execution: ExecuteOperatorApprovedCachedPlanResult;
   try {
@@ -41,6 +43,7 @@ export async function runApprovedPendingPlan(params: {
       approvedToolCalls: params.approvedToolCalls,
       clerkUserId: params.clerkUserId,
       ...(params.expectedIdentity ? { expectedIdentity: params.expectedIdentity } : {}),
+      ...(params.merchantAnswers ? { merchantAnswers: params.merchantAnswers } : {}),
     });
   } catch (error) {
     // A stable plan that is stale, already claimed, or terminal is no longer

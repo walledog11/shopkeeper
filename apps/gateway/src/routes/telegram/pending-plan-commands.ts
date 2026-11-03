@@ -15,6 +15,8 @@ import {
 } from '../../operator-context.js';
 import { runApprovedPendingPlan, clearPendingPlan } from '../../message-handlers/operator/pending-plan-actions.js';
 import { ConflictError } from '@shopkeeper/shared/errors';
+import { merchantAnswerSlotsInCalls } from '@shopkeeper/agent/reply-placeholders';
+import { blankQuestion } from '../../message-handlers/support-plan/planning-notifications/format-plan.js';
 import type { PendingPlanCommand } from './command-parser.js';
 import type { OperatorMessageContext } from '../operator-message.js';
 
@@ -107,6 +109,14 @@ export async function handlePendingPlanCommand(
 
   if (isPendingPlanInvalid(pendingPlan)) {
     await reply("I can't run this one: part of it isn't valid, so none of it will go through. Tell me what to change, or say no to drop it.");
+    return true;
+  }
+
+  // A card with a blank is approved by answering it. "Yes" fills nothing, so
+  // nothing runs: the merchant is asked the question again.
+  const blanks = merchantAnswerSlotsInCalls(rawToolCalls);
+  if (blanks.length > 0) {
+    await reply(`I need your answer before this can go out. ${blankQuestion(blanks)}`);
     return true;
   }
 

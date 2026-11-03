@@ -1,5 +1,6 @@
 "use client"
 
+import type { MerchantAnswers } from "@shopkeeper/agent/types"
 import { useEffect, useReducer, useRef, useState } from "react"
 import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import { planReplyText } from "@shopkeeper/agent/plan-preview"
@@ -162,7 +163,7 @@ export function useConversationAgentFlow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticket.id])
 
-  const executeApprovedPlan = async (plan: AgentPlan, approvedToolCalls: RawToolCall[]) => {
+  const executeApprovedPlan = async (plan: AgentPlan, approvedToolCalls: RawToolCall[], merchantAnswers?: MerchantAnswers) => {
     const instruction = plan.instruction
     const executionIdentity = {
       ticketId: ticket.id,
@@ -176,7 +177,7 @@ export function useConversationAgentFlow({
     onAgentRunningChange(true)
 
     try {
-      const result = await executeApprovedAgentPlan(ticket.id, instruction, approvedToolCalls, plan.planId)
+      const result = await executeApprovedAgentPlan(ticket.id, instruction, approvedToolCalls, plan.planId, merchantAnswers)
       const replyNotSent = result.ok && result.replyNotSent
       setPlanExecutionState({ ...executionIdentity, outcome: replyNotSent ? "reply_not_sent" : result.outcome })
       const turn = createAgentTurn({ ...result.turn, instruction: NO_MERCHANT_INSTRUCTION })
@@ -266,9 +267,9 @@ export function useConversationAgentFlow({
     onSend(noteArg)
   }
 
-  const handlePlanApprove = async (approvedToolCalls: RawToolCall[]) => {
+  const handlePlanApprove = async (approvedToolCalls: RawToolCall[], merchantAnswers?: MerchantAnswers) => {
     if (!pendingPlan) return
-    await executeApprovedPlan(pendingPlan, approvedToolCalls)
+    await executeApprovedPlan(pendingPlan, approvedToolCalls, merchantAnswers)
   }
 
   const handlePlanDismiss = async () => {

@@ -8,7 +8,7 @@ import type { AgentContext, AgentActionMode, AgentResult, TaskModelBudget } from
 import type { AgentActionApproval } from "./agent-actions.js";
 import type { AgentActionTaskAuthority } from "./agent-actions.js";
 import type { AgentToolDefinition } from "./tools/registry/index.js";
-import type { OrgSettings, ProposalCommunication, RawToolCall } from "./types.js";
+import type { MerchantAnswers, OrgSettings, ProposalCommunication, RawToolCall } from "./types.js";
 
 // Options executeAgentTurn forwards to the injected runAgent. The host's runAgent
 // wrapper resolves `failureRoute` into its ops-alert recorder and builds the
@@ -21,6 +21,7 @@ export interface ExecuteTurnRunOptions {
   executionId?: string;
   taskAuthority?: AgentActionTaskAuthority;
   approvedCommunication?: ProposalCommunication;
+  merchantAnswers?: MerchantAnswers;
   // Host-injected control tools for this turn (e.g. the gateway's operator
   // control tools). Forwarded to runAgent; ignored on the approved-execution and
   // read-only paths. Keeps host-specific tools out of the shared registry.
@@ -78,6 +79,8 @@ export interface ExecuteAgentTurnParams {
   executionId?: string;
   /** The communication an approved runtime-v2 proposal binds; absent for legacy plans. */
   approvedCommunication?: ProposalCommunication;
+  /** The merchant's values for that communication's blanks, given with their approval. */
+  merchantAnswers?: MerchantAnswers;
   // Operator freeform turns only: the host-rendered pending-state ledger passed
   // into buildContext, and the operator control tools passed into runAgent.
   operatorLedger?: string;
@@ -150,6 +153,7 @@ export async function executeAgentTurn(
         ...(params.executionId ? { executionId: params.executionId } : {}),
         ...(params.taskAuthority ? { taskAuthority: params.taskAuthority } : {}),
         ...(params.approvedCommunication ? { approvedCommunication: params.approvedCommunication } : {}),
+        ...(params.merchantAnswers ? { merchantAnswers: params.merchantAnswers } : {}),
         ...(params.moduleTools ? { moduleTools: params.moduleTools } : {}),
       }
     );

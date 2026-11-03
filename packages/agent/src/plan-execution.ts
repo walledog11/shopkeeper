@@ -26,7 +26,7 @@ import {
   type PlanAgentFn,
 } from "./plan-failure-replan.js";
 import type { AgentResult } from "./agent-context.js";
-import type { AgentPlan, OrgSettings, PlanExecutionOutcome, RawToolCall } from "./types.js";
+import type { AgentPlan, MerchantAnswers, OrgSettings, PlanExecutionOutcome, RawToolCall } from "./types.js";
 import {
   claimCurrentPlanExecution,
   completePlanExecution,
@@ -42,7 +42,9 @@ import {
   type DurableProposalExecutionSource,
 } from "./task-approval.js";
 import { buildPlanSteps } from "./planner-steps.js";
-import { deriveProposalCommunication, planCommunication } from "./proposal-communication.js";
+import { communicationIdentity, deriveProposalCommunication, planCommunication } from "./proposal-communication.js";
+import { merchantAnswerSlots, missingMerchantAnswers, type MerchantAnswerSlot } from "./reply-placeholders.js";
+import { saveMerchantAnswerToKb } from "./merchant-answer-kb.js";
 
 export type PlanExecutionDeps = ExecuteAgentTurnDeps & {
   planAgent?: PlanAgentFn;
@@ -557,6 +559,43 @@ export interface DurableTurnIdentity {
   claimToken: string;
 }
 
+// Only the answers this approval's blanks ask for travel to the message.
+function blankAnswers(
+  blanks: readonly MerchantAnswerSlot[],
+  answers: MerchantAnswers | undefined,
+): MerchantAnswers | undefined {
+  if (blanks.length === 0 || !answers) return undefined;
+  return Object.fromEntries(blanks.map((blank) => [blank.name, answers[blank.name]!.trim()]));
+}
+
+// Saved under the card's question, so the next plan finds the fact in the
+// knowledge base and leaves no blank. Losing it costs the merchant a repeat
+// question, never this approval.
+async function rememberMerchantAnswers(
+  blanks: readonly MerchantAnswerSlot[],
+  answers: MerchantAnswers | undefined,
+  thread: { id: string; organizationId: string; channelType: string; tag: string | null; aiSummary: string | null },
+): Promise<void> {
+  for (const blank of blanks) {
+    const answer = answers?.[blank.name];
+    if (!answer) continue;
+    await saveMerchantAnswerToKb({
+      organizationId: thread.organizationId,
+      threadId: thread.id,
+      question: blank.question,
+      answer,
+      threadTag: thread.tag,
+      channelType: thread.channelType,
+      threadSummary: thread.aiSummary,
+    }).catch((error: unknown) => {
+      logger.warn(
+        { err: error instanceof Error ? error.message : String(error), threadId: thread.id, blank: blank.name },
+        "[plan-execution] Merchant answer not saved to the knowledge base",
+      );
+    });
+  }
+}
+
 export async function executeCurrentCachedHomePlan(params: {
   orgId: string;
   threadId: string;
@@ -571,6 +610,11 @@ export async function executeCurrentCachedHomePlan(params: {
   failureReplanAllowed?: boolean;
   /** The durable task this execution belongs to, for hosts that have one. */
   durableTurn?: DurableTurnIdentity;
+  /**
+   * The merchant's values for the approved message's blanks. A plan with a
+   * blank runs only on a merchant's approval that fills every one.
+   */
+  merchantAnswers?: MerchantAnswers;
 }, deps: PlanExecutionDeps): Promise<ExecutedCachedPlan> {
   const thread = await requireOrgThread(params.threadId, params.orgId);
   if (shouldBlockTrustedSendActions(thread.filterStatus)) {
@@ -620,6 +664,16 @@ export async function executeCurrentCachedHomePlan(params: {
   validateCustomerFacingApprovalSet(current.plan, requestedToolCalls);
   validateApprovedCommunication(current.plan, requestedToolCalls, thread);
   const approvedCommunication = planCommunication(current.plan);
+  // Checked before anything is claimed: a refund that ran and then a reply
+  // withheld for its empty blank is the outcome this order prevents.
+  const blanks = merchantAnswerSlots(communicationIdentity(approvedCommunication)?.allowedResultBindings);
+  const missingAnswer = missingMerchantAnswers(blanks, params.merchantAnswers)[0];
+  if (missingAnswer) {
+    throw new BadRequestError(params.executionIntent === "automatic"
+      ? "This plan leaves a blank for the merchant and cannot run on its own."
+      : `This one needs your answer first: ${missingAnswer.question}`);
+  }
+  const merchantAnswers = blankAnswers(blanks, params.merchantAnswers);
   if (executableCalls(requestedToolCalls).length === 0) {
     throw new BadRequestError("The current plan has no executable tool calls");
   }
@@ -702,6 +756,8 @@ export async function executeCurrentCachedHomePlan(params: {
   }
   const executionId = claim.execution.id;
   const claimToken = claim.claimToken;
+  // The approval stands from here, and so does the store fact it stated.
+  await rememberMerchantAnswers(blanks, merchantAnswers, thread);
 
   let result: AgentResult;
   let terminalExecutionStatus: "committed" | "failed" | "unknown" = "committed";
@@ -749,6 +805,7 @@ export async function executeCurrentCachedHomePlan(params: {
       // The same snapshot validateApprovedCommunication checked the calls
       // against, and the one the approval hash binds.
       ...(approvedCommunication ? { approvedCommunication } : {}),
+      ...(merchantAnswers ? { merchantAnswers } : {}),
       ...(approval ? { approval } : {}),
     }, deps);
     terminalExecutionStatus = terminalStatusForResult(result);

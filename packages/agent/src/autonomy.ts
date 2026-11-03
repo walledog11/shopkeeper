@@ -6,7 +6,8 @@ import {
 } from "./settings.js";
 import { merchantGapQuestion } from "./plan-preview.js";
 import { planSignals } from "./plan-signals.js";
-import { planCommunication } from "./proposal-communication.js";
+import { communicationIdentity, planCommunication } from "./proposal-communication.js";
+import { merchantAnswerSlots } from "./reply-placeholders.js";
 import { checkStaticToolPolicy } from "./tools/static-policy.js";
 import { isEscalationEvidence } from "./routing-evidence.js";
 import { AWAIT_CUSTOMER_PHOTO_TOOL, AWAIT_ORDER_VERIFICATION_TOOL, TOOL_CATEGORIES } from "./tools/registry/index.js";
@@ -44,7 +45,8 @@ export type AutonomyReasonCode =
   | "safe_quick_reply"
   | "review_fallback"
   | "explicit_escalation"
-  | "explicit_merchant_question";
+  | "explicit_merchant_question"
+  | "merchant_answer_blank";
 
 export interface AutonomyContext {
   filterStatus?: string | null
@@ -285,6 +287,12 @@ export function decideAutonomy(
       approvalAllowed: true,
       toolCalls: calls,
     };
+  }
+
+  // A blank only the merchant can fill holds the plan for them however routine
+  // the rest of it is: approving it is answering it.
+  if (merchantAnswerSlots(communicationIdentity(planCommunication(plan))?.allowedResultBindings).length > 0) {
+    return { kind: "needs_review", reasons: ["merchant_answer_blank"], approvalAllowed: true, toolCalls: calls };
   }
 
   const mutativeCalls = plan.rawToolCalls.filter((call) => TOOL_CATEGORIES[call.name] === "action");

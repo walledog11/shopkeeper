@@ -1,3 +1,4 @@
+import type { MerchantAnswers } from "@shopkeeper/agent/types"
 import { ApiRequestError, requestJson } from "@/lib/api/fetcher"
 import { committedWithUnsentReply, planExecutionOutcomeForActions } from "@shopkeeper/agent/execution-outcome"
 import { handsOffToPlanning } from "@shopkeeper/agent/composer-plan-handoff"
@@ -131,6 +132,7 @@ export async function executeApprovedAgentPlan(
   instruction: string,
   approvedToolCalls: RawToolCall[],
   planId?: string | null,
+  merchantAnswers?: MerchantAnswers,
 ): Promise<AgentRequestResult> {
   try {
     const payload = await requestJson<AgentActionPayload>(
@@ -138,7 +140,11 @@ export async function executeApprovedAgentPlan(
       {
         method: "POST",
         headers: JSON_HEADERS,
-        body: JSON.stringify({ threadId, instruction, approvedToolCalls, ...(planId ? { planId } : {}) }),
+        body: JSON.stringify({
+          threadId, instruction, approvedToolCalls,
+          ...(planId ? { planId } : {}),
+          ...(merchantAnswers ? { merchantAnswers } : {}),
+        }),
       },
       "Agent failed.",
     )

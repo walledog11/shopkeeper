@@ -1,5 +1,7 @@
 import { BadRequestError, type ApiErrorDetail } from "@/lib/api/errors";
 import { requireTrimmedInstruction } from "@shopkeeper/agent/thread-auth";
+import { parseMerchantAnswers } from "@shopkeeper/agent/reply-placeholders";
+import type { MerchantAnswers } from "@shopkeeper/agent/types";
 import { decodeAgentActionCursor, type AgentActionCursor } from "@/lib/agent/api/action-log";
 import type { RawToolCall } from "@/types";
 
@@ -9,6 +11,14 @@ function invalidField(field: string, message: string, code = "invalid"): never {
 
 function invalidBody(message = "Request body must be a JSON object"): never {
   throw new BadRequestError("Validation failed", [{ code: "invalid_body", message }]);
+}
+
+// The merchant's answers to a card's blanks, given as they approve it. Absent
+// unless the request carried some, so a card without a blank parses as before.
+function optionalMerchantAnswers(value: unknown): { merchantAnswers?: MerchantAnswers } {
+  const answers = parseMerchantAnswers(value);
+  if (!answers) invalidField("merchantAnswers", "Each answer must be a short single line.");
+  return Object.keys(answers).length > 0 ? { merchantAnswers: answers } : {};
 }
 
 function requireObject(body: unknown): Record<string, unknown> {
@@ -102,6 +112,7 @@ export function parseAgentRouteBody(body: unknown) {
     // The durable proposal approval binds to. A card without one predates
     // durable approvals and has to be regenerated, so it is refused here.
     planId: requireNonEmptyString(candidate.planId, "planId"),
+    ...optionalMerchantAnswers(candidate.merchantAnswers),
   };
 }
 
@@ -119,6 +130,7 @@ export function parseAgentQuickApproveBody(body: unknown) {
   return {
     threadId: requireNonEmptyString(candidate.threadId, "threadId"),
     planId: requireNonEmptyString(candidate.planId, "planId"),
+    ...optionalMerchantAnswers(candidate.merchantAnswers),
   };
 }
 
@@ -152,6 +164,7 @@ export function parseAgentPlanDecisionBody(body: unknown) {
   return {
     planId: requireNonEmptyString(candidate.planId, "planId"),
     decision: decision as "approve" | "dismiss",
+    ...optionalMerchantAnswers(candidate.merchantAnswers),
   };
 }
 

@@ -165,11 +165,17 @@ export type ReplyPlaceholderName =
   | 'gift_card_amount'
   | 'tracking_number'
 
+/** A value an exact draft may leave blank for the merchant to fill as they approve. */
+export type MerchantAnswerName = 'refund_timing'
+
+/** The merchant's values for a draft's blanks, given with their approval. */
+export type MerchantAnswers = Partial<Record<MerchantAnswerName, string>>
+
 /**
  * One placeholder in an exact draft, bound to the approved call whose
  * successful receipt fills it and the receipt field it reads.
  */
-export interface ResultBinding {
+export interface ReceiptResultBinding {
   placeholder: ReplyPlaceholderName
   toolCallId: string
   tool: string
@@ -177,11 +183,23 @@ export interface ResultBinding {
 }
 
 /**
+ * A blank in an exact draft that the merchant's approval fills: the card shows
+ * the draft with the blank and asks for it, and approving means answering.
+ */
+export interface MerchantAnswerBinding {
+  placeholder: MerchantAnswerName
+  source: 'merchant'
+}
+
+export type ResultBinding = ReceiptResultBinding | MerchantAnswerBinding
+
+/**
  * What a proposal authorizes saying to the customer. `none` authorizes nothing:
  * the approved writes run and no message follows them. `exact_draft` is the
  * message the merchant was shown, byte for byte, and the only one that may be
  * sent on this approval; the only change after approval is filling its
- * `allowedResultBindings` from the approved writes' receipts.
+ * `allowedResultBindings`: from the approved writes' receipts, and a blank from
+ * the value the merchant gave as they approved.
  */
 export type ProposalCommunication =
   | { mode: 'none' }

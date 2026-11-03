@@ -9,6 +9,8 @@ import {
 import { needsYouSecondaryButtonClassName } from "@/app/dashboard/_components/home/needs-you-card-styles"
 import { toAttachmentDisplayUrl } from "@/lib/attachments/blob-ref"
 import { cn } from "@/lib/ui/cn"
+import { BlankAnswerFields } from "@/components/agent/BlankAnswerFields"
+import type { MerchantAnswers } from "@shopkeeper/agent/types"
 import type { AgentPlan, PlanCardOutcome, RawToolCall } from "@/types"
 import { ActionPlanBody } from "./ActionPlanBody"
 import { useActionPlanReviewState } from "./useActionPlanReviewState"
@@ -22,7 +24,7 @@ interface Props {
   isExecuting: boolean
   isRegenerating?: boolean
   layout?: "default" | "mobile-sticky"
-  onApprove: (approvedToolCalls: RawToolCall[]) => Promise<void>
+  onApprove: (approvedToolCalls: RawToolCall[], merchantAnswers?: MerchantAnswers) => Promise<void>
   onDismiss?: () => void
   onEdit?: () => void
   onFocusShopifyLink?: () => void
@@ -110,6 +112,7 @@ interface ActionPlanControlsProps {
     inReviewFlow: boolean
     executionOutcome: PlanCardOutcome | null
     isRunning: boolean
+    answersMissing: boolean
     primaryNeedsCaution: boolean
     showEditTakeover: boolean
     warningsReviewed: boolean
@@ -237,7 +240,7 @@ function ActionPlanControls({
           type="button"
           data-testid="action-plan-run"
           onClick={onApproveClick}
-          disabled={status.isRunning || Boolean(status.executionOutcome)}
+          disabled={status.isRunning || Boolean(status.executionOutcome) || status.answersMissing}
           confirming={
             status.inReviewFlow || (status.hasBlockingSignals && status.warningsReviewed)
           }
@@ -376,6 +379,17 @@ export default function ActionPlanCard({
               showReplyHero={showReplyHero}
             />}
 
+            {!planInvalid && !executionOutcome && (
+              <div className="mt-4">
+                <BlankAnswerFields
+                  answers={review.answers}
+                  blanks={review.blanks}
+                  disabled={isRunning}
+                  onChange={review.setAnswer}
+                />
+              </div>
+            )}
+
             <ActionPlanControls
               onApproveClick={onApproveClick}
               onCancelReview={onCancelReview}
@@ -388,6 +402,7 @@ export default function ActionPlanCard({
                 hasBlockingSignals,
                 inReviewFlow,
                 isRunning,
+                answersMissing: review.answersMissing,
                 primaryNeedsCaution,
                 showEditTakeover,
                 warningsReviewed: state.warningsReviewed,

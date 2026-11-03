@@ -12,7 +12,7 @@ import { planAgent } from "@shopkeeper/agent/planner";
 import { buildDashboardTurnDeps } from "@/lib/agent/api/turn-deps";
 import type { AgentFailureAlertRoute } from "@/lib/server/agent-failure-alerts";
 import type { OrgSettings } from "@/types";
-import type { RawToolCall } from "@shopkeeper/agent/types";
+import type { MerchantAnswers, RawToolCall } from "@shopkeeper/agent/types";
 
 function buildDashboardPlanExecutionDeps(): PlanExecutionDeps {
   return {
@@ -30,6 +30,7 @@ export function executeCurrentCachedHomePlan(params: {
   approver?: ApproverIdentity;
   approvedToolCalls?: RawToolCall[];
   expectedIdentity?: ExpectedPlanIdentity;
+  merchantAnswers?: MerchantAnswers;
 }) {
   return coreExecuteCurrentCachedHomePlan(params, buildDashboardPlanExecutionDeps());
 }

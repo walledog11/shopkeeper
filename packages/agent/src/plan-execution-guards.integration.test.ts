@@ -296,6 +296,42 @@ describe("exact-draft proposals", () => {
     expect(runAgent.mock.calls[0]?.[4].approvedCommunication).toMatchObject({ allowedResultBindings: [binding] });
   });
 
+  // The one-reply refund card: answering its blank is approving it. Without the
+  // answer nothing is claimed, so a refund never runs ahead of a reply that would
+  // then be withheld for its empty blank.
+  it("runs a card with a blank only on an approval that fills it, and saves the answer", async () => {
+    const reply: RawToolCall = { ...sendReplyCall, input: { text: "Your refund should reach you within {{refund_timing}}." } };
+    const authored: AgentPlan = {
+      instruction: "Issue the refund and tell the customer",
+      steps: buildPlanSteps([refundCall, reply]),
+      rawToolCalls: [refundCall, reply],
+      routingEvidence: { classifierState: "not_applicable", codes: [] },
+      validation: { status: "valid", issues: [] },
+    };
+    const support = await seedSupportCardParkedOnTask(2, authored);
+    const runAgent = vi.fn(async () => okResult);
+    const approve = (merchantAnswers?: { refund_timing: string }) => executeCurrentCachedHomePlan({
+      orgId: support.org.id,
+      threadId: support.thread.id,
+      settings: support.settings,
+      executionIntent: "merchant_approved",
+      failureRoute: "test",
+      approver: { clerkUserId: support.member.clerkUserId, displayName: null },
+      expectedIdentity: cardIdentity(support, support.plan),
+      ...(merchantAnswers ? { merchantAnswers } : {}),
+    }, makeDeps({ runAgent }));
+
+    await expect(approve()).rejects.toBeInstanceOf(BadRequestError);
+    expect(runAgent).not.toHaveBeenCalled();
+    expect(await db.planExecution.count({ where: { organizationId: support.org.id } })).toBe(0);
+
+    await approve({ refund_timing: "1-2 business days" });
+    expect(runAgent.mock.calls[0]?.[4].merchantAnswers).toEqual({ refund_timing: "1-2 business days" });
+    expect(await db.kbArticle.count({
+      where: { organizationId: support.org.id, body: { contains: "1-2 business days" } },
+    })).toBe(1);
+  });
+
   it("requires regeneration of a legacy reply before approval can send it", async () => {
     const { org, thread, settings } = await seedThreadWithPlan({ plan: mutativePlan() });
     await expect(executeCurrentCachedHomePlan({

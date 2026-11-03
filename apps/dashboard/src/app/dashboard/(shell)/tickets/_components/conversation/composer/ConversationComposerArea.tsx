@@ -1,5 +1,6 @@
 "use client"
 
+import type { MerchantAnswers } from "@shopkeeper/agent/types"
 import { useCallback, useMemo, useState, type Ref } from "react"
 import { AnimatePresence, LazyMotion, domAnimation, m } from "motion/react"
 import { decideAutonomy } from "@shopkeeper/agent/autonomy"
@@ -20,7 +21,7 @@ interface Props {
   isRegenerating: boolean
   onChange: (text: string) => void
   onClearAgentMode: () => void
-  onPlanApprove: (approvedToolCalls: RawToolCall[]) => Promise<void>
+  onPlanApprove: (approvedToolCalls: RawToolCall[], merchantAnswers?: MerchantAnswers) => Promise<void>
   onPlanEdit?: () => void | Promise<void>
   onPlanDismiss?: () => void | Promise<void>
   onFocusShopifyLink?: () => void

@@ -1,7 +1,7 @@
 import { getGatewayBaseUrl } from "@/lib/server/gateway-url";
 import { fetchProviderWithDeadline } from "@/lib/server/provider-fetch";
 import type { ActionEntry } from "@shopkeeper/agent/context";
-import type { AgentPlan } from "@shopkeeper/agent/types";
+import type { AgentPlan, MerchantAnswers } from "@shopkeeper/agent/types";
 
 // Just under the route's maxDuration so a hung gateway surfaces as a timeout
 // here rather than the platform killing the function mid-request.
@@ -139,6 +139,7 @@ export async function postGatewayPlanDecision(params: {
   clerkUserId: string;
   planId: string;
   decision: "approve" | "dismiss";
+  merchantAnswers?: MerchantAnswers;
 }): Promise<GatewayOperatorTurnResponse> {
   const base = getGatewayBaseUrl({ required: true });
 

@@ -55,6 +55,7 @@ export async function runOperatorFreeFormTurn(
       memberKey: senderRef,
       ...(deliveryRef ? { deliveryRef } : {}),
       context,
+      merchantMessage: body,
     }),
     ...buildOperatorInboxTools({ organizationId, clerkUserId, pendingDigest: context.pendingDigest }),
     ...buildOperatorActionHistoryTools({ organizationId }),

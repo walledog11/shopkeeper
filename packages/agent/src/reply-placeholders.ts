@@ -1,6 +1,14 @@
 import type { ActionEntry } from "./agent-context.js";
 import type { ReceiptSuccessV1 } from "./tools/result.js";
-import type { RawToolCall, ReplyPlaceholderName, ResultBinding } from "./types.js";
+import type {
+  MerchantAnswerBinding,
+  MerchantAnswerName,
+  MerchantAnswers,
+  RawToolCall,
+  ReceiptResultBinding,
+  ReplyPlaceholderName,
+  ResultBinding,
+} from "./types.js";
 import { formatMoney } from "./money.js";
 
 /**
@@ -12,6 +20,11 @@ import { formatMoney } from "./money.js";
  * labeled placeholder, bound into the approval, and filled after execution from
  * the successful receipt of the one approved call it names. Nothing else in the
  * approved text changes.
+ *
+ * A store fact the knowledge base does not hold — how long refunds take — is a
+ * blank the merchant fills: `{{refund_timing}}` is shown on the card with the
+ * question it answers, and the merchant's answer is their approval. The customer
+ * receives the approved words with the merchant's own words in the blank.
  */
 
 type ReceiptFor<TTool extends ReceiptSuccessV1["tool"]> = Extract<ReceiptSuccessV1, { tool: TTool }>;
@@ -114,12 +127,43 @@ const PLACEHOLDERS: Record<ReplyPlaceholderName, PlaceholderDefinition> = {
   },
 };
 
+interface MerchantAnswerDefinition {
+  /** What the card and the dashboard show in its place. */
+  label: string;
+  /** The question the card asks; also the question the answer is saved under. */
+  question: string;
+  /** What the model is told it holds, and when to use it. */
+  describes: string;
+  /** An example answer, shown where the merchant types it. */
+  example: string;
+}
+
+const MERCHANT_ANSWERS: Record<MerchantAnswerName, MerchantAnswerDefinition> = {
+  refund_timing: {
+    label: "refund timing",
+    question: "How long do refunds take to reach your customers?",
+    describes: "how long the refund takes to reach the customer, only when the knowledge base does not say; written into a sentence such as \"It should reach you within {{refund_timing}}.\"",
+    example: "5-10 business days",
+  },
+};
+
+/** Longest blank answer accepted: a phrase, not a message. */
+export const MERCHANT_ANSWER_MAX_LENGTH = 120;
+
 // Any double-braced token counts, so an unknown name is refused rather than
 // reaching the customer as literal braces.
 const PLACEHOLDER_TOKEN = /\{\{\s*([^{}]*?)\s*\}\}/g;
 
 function isPlaceholderName(name: string): name is ReplyPlaceholderName {
   return Object.hasOwn(PLACEHOLDERS, name);
+}
+
+function isMerchantAnswerName(name: string): name is MerchantAnswerName {
+  return Object.hasOwn(MERCHANT_ANSWERS, name);
+}
+
+function isMerchantAnswerBinding(binding: ResultBinding): binding is MerchantAnswerBinding {
+  return "source" in binding;
 }
 
 function tokenNames(draft: string): string[] {
@@ -142,6 +186,10 @@ export function bindReplyPlaceholders(
   const bindings: ResultBinding[] = [];
   const unbound: string[] = [];
   for (const name of tokenNames(draft)) {
+    if (isMerchantAnswerName(name)) {
+      bindings.push({ placeholder: name, source: "merchant" });
+      continue;
+    }
     if (!isPlaceholderName(name) || !PLACEHOLDERS[name].customerFacing) {
       unbound.push(name);
       continue;
@@ -165,6 +213,11 @@ export function hasReplyPlaceholders(draft: string): boolean {
 export function isResultBinding(value: unknown): value is ResultBinding {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const binding = value as Record<string, unknown>;
+  if (binding.source === "merchant") {
+    return Object.keys(binding).length === 2
+      && typeof binding.placeholder === "string"
+      && isMerchantAnswerName(binding.placeholder);
+  }
   return Object.keys(binding).length === 4
     && typeof binding.placeholder === "string"
     && isPlaceholderName(binding.placeholder)
@@ -187,8 +240,11 @@ export function displayApprovedDraft(
   },
 ): string {
   return draft.replace(PLACEHOLDER_TOKEN, (token, name: string) => {
+    if (isMerchantAnswerName(name)) return `[${MERCHANT_ANSWERS[name].label}]`;
     if (!isPlaceholderName(name)) return token;
-    const binding = bound?.bindings.find((candidate) => candidate.placeholder === name);
+    const binding = bound?.bindings.find((candidate): candidate is ReceiptResultBinding => (
+      candidate.placeholder === name && !isMerchantAnswerBinding(candidate)
+    ));
     const call = binding && bound?.rawToolCalls.find((candidate) => (
       candidate.id === binding.toolCallId && candidate.name === binding.tool
     ));
@@ -229,9 +285,16 @@ export function fillApprovedDraft(
   draft: string,
   bindings: readonly ResultBinding[],
   actionsPerformed: readonly ActionEntry[],
+  merchantAnswers: MerchantAnswers = {},
 ): FilledDraft {
   const values = new Map<string, string>();
   for (const binding of bindings) {
+    if (isMerchantAnswerBinding(binding)) {
+      const answer = merchantAnswers[binding.placeholder]?.trim();
+      if (!answer) return { status: "unfilled", placeholder: binding.placeholder };
+      values.set(binding.placeholder, answer);
+      continue;
+    }
     const action = actionsPerformed.find((candidate) => (
       candidate.toolCallId === binding.toolCallId && candidate.tool === binding.tool
     ));
@@ -264,8 +327,74 @@ export function replyPlaceholderInstructions(): string {
     .map(([name, definition]) => (
       `- {{${name}}}: ${definition.describes} (${Object.keys(definition.sources).join(" or ")})`
     ));
+  const blanks = (Object.entries(MERCHANT_ANSWERS) as [MerchantAnswerName, MerchantAnswerDefinition][])
+    .map(([name, definition]) => `- {{${name}}}: ${definition.describes}`);
   return `## Customer message approval
 The merchant approves your customer message word for word, together with the actions, and it is sent only if every one of those actions succeeds. Write it as it should read once they have. A value that only exists after an action runs is written as a placeholder, filled from that action's result and nothing else:
 ${lines.join("\n")}
-Use a placeholder only when the plan has exactly one action that fills it, and use no other double-brace names.`;
+Use a placeholder only when the plan has exactly one action that fills it.
+A store fact only the merchant knows is left as a blank they fill in when they approve, so you can still propose the whole plan instead of asking first:
+${blanks.join("\n")}
+Use no other double-brace names.`;
+}
+
+/** A blank the merchant fills as they approve, with what to show and ask. */
+export interface MerchantAnswerSlot {
+  name: MerchantAnswerName;
+  label: string;
+  question: string;
+  example: string;
+}
+
+/** The blanks an approved message leaves for the merchant, in draft order. */
+export function merchantAnswerSlots(bindings: readonly ResultBinding[] | null | undefined): MerchantAnswerSlot[] {
+  return (bindings ?? [])
+    .filter(isMerchantAnswerBinding)
+    .map((binding) => {
+      const { label, question, example } = MERCHANT_ANSWERS[binding.placeholder];
+      return { name: binding.placeholder, label, question, example };
+    });
+}
+
+/**
+ * Reads blank answers from a request body. Null when the value is not an object
+ * of known blanks to single-line phrases; an answer that cannot be put in front
+ * of a customer is refused, never trimmed down to one that can.
+ */
+export function parseMerchantAnswers(value: unknown): MerchantAnswers | null {
+  if (value === undefined || value === null) return {};
+  if (typeof value !== "object" || Array.isArray(value)) return null;
+  const answers: MerchantAnswers = {};
+  for (const [name, answer] of Object.entries(value as Record<string, unknown>)) {
+    if (!isMerchantAnswerName(name) || typeof answer !== "string") return null;
+    const text = answer.trim();
+    if (!text || text.length > MERCHANT_ANSWER_MAX_LENGTH || /[\r\n]|\{\{|\}\}/.test(text)) return null;
+    answers[name] = text;
+  }
+  return answers;
+}
+
+/** The blanks among `slots` that `answers` leaves empty. */
+export function missingMerchantAnswers(
+  slots: readonly MerchantAnswerSlot[],
+  answers: MerchantAnswers | undefined,
+): MerchantAnswerSlot[] {
+  return slots.filter((slot) => !answers?.[slot.name]?.trim());
+}
+
+/**
+ * The blanks a plan's customer message leaves for the merchant, read from its
+ * calls: what a parked card, which carries calls rather than a snapshot, asks.
+ */
+export function merchantAnswerSlotsInCalls(
+  rawToolCalls: readonly { name: string; input?: unknown }[],
+): MerchantAnswerSlot[] {
+  const names = new Set<MerchantAnswerName>();
+  for (const call of rawToolCalls) {
+    const input = call.input && typeof call.input === "object" ? call.input as Record<string, unknown> : null;
+    const draft = call.name === "send_reply" ? input?.text : call.name === "send_email" ? input?.body : null;
+    if (typeof draft !== "string") continue;
+    for (const name of tokenNames(draft)) if (isMerchantAnswerName(name)) names.add(name);
+  }
+  return merchantAnswerSlots([...names].map((placeholder) => ({ placeholder, source: "merchant" as const })));
 }
