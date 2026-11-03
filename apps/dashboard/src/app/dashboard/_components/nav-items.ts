@@ -52,9 +52,10 @@ export const shopNavItem: NavItem = {
 
 export const topBarShopItems: NavItem[] = [shopNavItem];
 
+// "Website chat", not "Chat": the page sets up the chat on the store's site, and
+// "Chat" read as the place to talk to the agent, which is the ask box.
 export const chatNavItem: NavItem = {
-  name: "Chat",
-  mobileName: "Website chat",
+  name: "Website chat",
   href: "/dashboard/chat",
   icon: MessageCircle,
   description: "Customize the chat on your website",
