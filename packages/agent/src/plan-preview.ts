@@ -65,12 +65,13 @@ function replyTextFromToolCall(toolCall: RawToolCall | null): string | null {
 }
 
 // The reply as a merchant reads it: receipt placeholders are shown by what they
-// will hold, never as raw tokens.
+// will hold, and a blank by the store's saved answer bound on the call, never as
+// raw tokens.
 export function planReplyText(plan: AgentPlan | null): string | null {
   if (!plan) return null
   for (const name of REPLY_TOOL_NAMES) {
     const text = replyTextFromToolCall(plan.rawToolCalls.find(toolCall => toolCall.name === name) ?? null)
-    if (text) return displayApprovedDraft(text)
+    if (text) return displayApprovedDraft(text, { bindings: [], rawToolCalls: plan.rawToolCalls })
   }
   return null
 }

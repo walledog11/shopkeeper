@@ -1,6 +1,14 @@
 import { db, getOrCreateNotesKnowledgeBase } from "@shopkeeper/db";
 import { AGENT_LEARNED_KB_TAG, buildMerchantAnswerKbTags } from "./kb-learned.js";
-import { NOTES_KB_FOLDER, resolveTopicFolderName } from "./kb-memory.js";
+import {
+  LEARNED_KB_FOLDER,
+  MEMORY_OVERRIDE_TAG,
+  NOTES_KB_FOLDER,
+  memoryOverrideTargetId,
+  resolveTopicFolderName,
+} from "./kb-memory.js";
+import { MERCHANT_ANSWER_NAMES, merchantAnswerQuestion, readBlankAnswer } from "./reply-placeholders.js";
+import type { MerchantAnswerName, MerchantAnswers } from "./types.js";
 import { DISCOUNT_POLICY_QUESTION_RES, SHIPPING_COVERAGE_QUESTION_RES } from "./intent.js";
 import { channelDisplayName } from "./thread-constants.js";
 
@@ -280,4 +288,75 @@ export async function saveMerchantAnswerToKb(
     created: true,
     updated: false,
   };
+}
+
+const STORE_FACT_TAG_PREFIX = "store-fact:";
+
+function storeFactTag(name: MerchantAnswerName): string {
+  return `${STORE_FACT_TAG_PREFIX}${name}`;
+}
+
+/**
+ * A blank's answer, kept as one Memory entry: the card's question as its title
+ * and the merchant's answer as its body, so the merchant sees and corrects it
+ * where they see everything else the agent learned. A new answer replaces the
+ * entry, and replaces an untyped learned note saved under the same question
+ * before answers were kept this way, so two answers never disagree.
+ */
+export async function saveStoreFact(input: {
+  organizationId: string;
+  name: MerchantAnswerName;
+  answer: string;
+}): Promise<void> {
+  const question = merchantAnswerQuestion(input.name);
+  const knowledgeBaseId = await resolveKnowledgeBaseIdByName(input.organizationId, LEARNED_KB_FOLDER);
+  await db.$transaction(async (tx) => {
+    await tx.kbArticle.deleteMany({
+      where: {
+        organizationId: input.organizationId,
+        OR: [
+          { tags: { has: storeFactTag(input.name) } },
+          { title: question, tags: { has: AGENT_LEARNED_KB_TAG } },
+        ],
+      },
+    });
+    await tx.kbArticle.create({
+      data: {
+        organizationId: input.organizationId,
+        knowledgeBaseId,
+        title: question,
+        body: input.answer,
+        tags: [AGENT_LEARNED_KB_TAG, storeFactTag(input.name)],
+      },
+    });
+  });
+}
+
+/**
+ * The store's saved blank answers. A correction the merchant made in Memory
+ * replaces its entry's answer. An answer that cannot go in front of a customer
+ * as written is not an answer, so its blank is asked again.
+ */
+export async function readStoreFacts(organizationId: string): Promise<MerchantAnswers> {
+  const [facts, corrections] = await Promise.all([
+    db.kbArticle.findMany({
+      where: { organizationId, tags: { hasSome: MERCHANT_ANSWER_NAMES.map(storeFactTag) } },
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+      select: { id: true, body: true, tags: true },
+    }),
+    db.kbArticle.findMany({
+      where: { organizationId, tags: { has: MEMORY_OVERRIDE_TAG } },
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+      select: { body: true, tags: true },
+    }),
+  ]);
+  const answers: MerchantAnswers = {};
+  for (const name of MERCHANT_ANSWER_NAMES) {
+    const fact = facts.find((article) => article.tags.includes(storeFactTag(name)));
+    if (!fact) continue;
+    const correction = corrections.find((article) => memoryOverrideTargetId(article.tags) === fact.id);
+    const answer = readBlankAnswer(correction ? correction.body : fact.body);
+    if (answer) answers[name] = answer;
+  }
+  return answers;
 }

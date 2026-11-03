@@ -44,7 +44,7 @@ import {
 import { buildPlanSteps } from "./planner-steps.js";
 import { communicationIdentity, deriveProposalCommunication, planCommunication } from "./proposal-communication.js";
 import { merchantAnswerSlots, missingMerchantAnswers, type MerchantAnswerSlot } from "./reply-placeholders.js";
-import { saveMerchantAnswerToKb } from "./merchant-answer-kb.js";
+import { saveStoreFact } from "./merchant-answer-kb.js";
 
 export type PlanExecutionDeps = ExecuteAgentTurnDeps & {
   planAgent?: PlanAgentFn;
@@ -568,29 +568,21 @@ function blankAnswers(
   return Object.fromEntries(blanks.map((blank) => [blank.name, answers[blank.name]!.trim()]));
 }
 
-// Saved under the card's question, so the next plan finds the fact in the
-// knowledge base and leaves no blank. Losing it costs the merchant a repeat
-// question, never this approval.
+// Saved as the store's answer to the blank, so the next draft's blank is filled
+// from it at planning. Losing it costs the merchant a repeat question, never
+// this approval.
 async function rememberMerchantAnswers(
   blanks: readonly MerchantAnswerSlot[],
   answers: MerchantAnswers | undefined,
-  thread: { id: string; organizationId: string; channelType: string; tag: string | null; aiSummary: string | null },
+  thread: { id: string; organizationId: string },
 ): Promise<void> {
   for (const blank of blanks) {
     const answer = answers?.[blank.name];
     if (!answer) continue;
-    await saveMerchantAnswerToKb({
-      organizationId: thread.organizationId,
-      threadId: thread.id,
-      question: blank.question,
-      answer,
-      threadTag: thread.tag,
-      channelType: thread.channelType,
-      threadSummary: thread.aiSummary,
-    }).catch((error: unknown) => {
+    await saveStoreFact({ organizationId: thread.organizationId, name: blank.name, answer }).catch((error: unknown) => {
       logger.warn(
         { err: error instanceof Error ? error.message : String(error), threadId: thread.id, blank: blank.name },
-        "[plan-execution] Merchant answer not saved to the knowledge base",
+        "[plan-execution] Merchant answer not saved to Memory",
       );
     });
   }

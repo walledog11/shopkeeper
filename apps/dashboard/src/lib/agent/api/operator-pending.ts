@@ -53,7 +53,7 @@ function draftExcerpt(calls: Array<{ name: string; input?: unknown }>): string |
         : null;
     if (typeof body !== "string") continue;
     // Placeholders shown by what they will hold, as on every other card.
-    const trimmed = displayApprovedDraft(body).trim();
+    const trimmed = displayApprovedDraft(body, { bindings: [], rawToolCalls: calls }).trim();
     if (!trimmed) continue;
     return trimmed.length > DRAFT_EXCERPT_LIMIT ? `${trimmed.slice(0, DRAFT_EXCERPT_LIMIT)}…` : trimmed;
   }
