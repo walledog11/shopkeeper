@@ -23,10 +23,12 @@ export function buildComposerPlaceholder({
   customerName: string
   isMobile: boolean
 }) {
-  const placeholderParts = [
+  const mention = `@${AGENT_DISPLAY_NAME.toLowerCase()}`
+  // One line on a phone: the shortcut and the long form of the hint wrap there.
+  if (isMobile) return `Reply to ${customerName}… or type ${mention}`
+  return [
     `Reply to ${customerName}…`,
-    `type @${AGENT_DISPLAY_NAME.toLowerCase()} to invoke ${AGENT_DISPLAY_NAME}`,
-    ...(isMobile ? [] : ["⌘↵ to send"]),
-  ]
-  return placeholderParts.join("  ·  ")
+    `type ${mention} to ask ${AGENT_DISPLAY_NAME}`,
+    "⌘↵ to send",
+  ].join("  ·  ")
 }
