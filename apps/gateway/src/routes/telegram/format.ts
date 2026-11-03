@@ -2,8 +2,6 @@ export const HELP_TEXT = [
   "Text me like you'd text an employee:",
   '  "refund #1234" · "where is #1234?" · "how many tickets came in last week?"',
   'I\'ll check with you before anything customer-facing — reply yes or no to whatever I propose.',
-  '',
-  'Shortcuts: SUMMARY for your inbox, then OPEN <n> · SPAM <n> · REPLY <n> <text> · REVIEW to re-list.',
 ].join('\n');
 
 export function relativeAge(ms: number | null): string {

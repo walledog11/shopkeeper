@@ -110,7 +110,9 @@ export function WalkthroughCard({
               }
             >
               {actions.pending === "approve" && <Loader2 className="size-3.5 animate-spin" />}
-              {actions.pending === "approve" ? "Approving" : actions.confirming ? "Confirm approve" : "Approve"}
+              {item.kind === "quick_reply"
+                ? (actions.pending === "approve" ? "Sending" : actions.confirming ? "Confirm send" : "Send reply")
+                : (actions.pending === "approve" ? "Approving" : actions.confirming ? "Confirm approve" : "Approve")}
             </Button>
           )}
 

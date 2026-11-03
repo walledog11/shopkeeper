@@ -243,7 +243,7 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
     await waitForReplies(1);
 
     expect(executeOperatorAgentTurnSpy).not.toHaveBeenCalled();
-    expect(lastReplyText()).toContain('You have 2 plans waiting');
+    expect(lastReplyText()).toContain('2 are waiting on you');
     expect(lastReplyText()).toContain('1. Sam — open a return on order #2\n2. Rajbir — refund order #1');
     expect((await getContext(org.id, memberKey)).pendingPlans).toHaveLength(2);
   });
@@ -275,7 +275,7 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
     await processPendingOperatorEvents(org.id);
     await waitForReplies(1);
 
-    expect(lastReplyText()).toContain('Open the thread before deciding');
+    expect(lastReplyText()).toContain('open the conversation before deciding');
     expect(executeOperatorAgentTurnSpy).not.toHaveBeenCalled();
     expect((await getContext(org.id, memberKey)).pendingPlan).toMatchObject({ planId: expectedIdentity.planId });
   });
@@ -301,7 +301,7 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
     await processPendingOperatorEvents(org.id);
     await waitForReplies(1);
     expect(executeOperatorAgentTurnSpy).not.toHaveBeenCalled();
-    expect(lastReplyText()).toContain('failed validation');
+    expect(lastReplyText()).toContain('none of it will go through');
     expect((await getContext(org.id, memberKey)).pendingPlans.at(-1)?.threadId).toBe(threadId);
   });
 
@@ -321,7 +321,7 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
 
     await processPendingOperatorEvents(org.id);
     await waitForReplies(1);
-    expect(lastReplyText()).toBe('Plan dismissed.');
+    expect(lastReplyText()).toBe("OK, I won't do it.");
     expect(executeOperatorAgentTurnSpy).not.toHaveBeenCalled();
     const ctx = await getContext(org.id, memberKey);
     expect(ctx.pendingPlan).toBeNull();
@@ -344,7 +344,7 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
 
     await processPendingOperatorEvents(org.id);
     await waitForReplies(1);
-    expect(lastReplyText()).toBe("Dismissed — I won't reply to Sarah.");
+    expect(lastReplyText()).toBe("OK, I won't reply to Sarah.");
     expect(executeOperatorAgentTurnSpy).not.toHaveBeenCalled();
     const ctx = await getContext(org.id, memberKey);
     expect(ctx.pendingPlan).toBeNull();

@@ -110,7 +110,10 @@ export function NeedsYouCard({
     primary = (
       <NeedsYouPrimaryButton confirming={actions.confirming} disabled={busy} onClick={actions.approve}>
         {actions.pending === "approve" && <Loader2 aria-hidden className="size-4 animate-spin" />}
-        {actions.pending === "approve" ? "Approving" : actions.confirming ? "Confirm approve" : "Approve"}
+        {/* The inbox names a reply-only draft "Send reply"; the same card says so here. */}
+        {item.kind === "quick_reply"
+          ? (actions.pending === "approve" ? "Sending" : actions.confirming ? "Confirm send" : "Send reply")
+          : (actions.pending === "approve" ? "Approving" : actions.confirming ? "Confirm approve" : "Approve")}
       </NeedsYouPrimaryButton>
     )
     if (actions.confirming) {

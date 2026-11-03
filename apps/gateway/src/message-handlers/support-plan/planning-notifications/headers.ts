@@ -38,7 +38,7 @@ export function endSentence(text: string): string {
 // Two lines, not one joined by an em-dash. The summary is model-written prose
 // that routinely carries its own commas, colons and quotes, so splicing it after
 // a dash produces a sentence with three kinds of punctuation fighting.
-export function formatHeaderLines(
+function formatHeaderLines(
   person: PersonName,
   channelType: DbChannelType,
   summary: string,

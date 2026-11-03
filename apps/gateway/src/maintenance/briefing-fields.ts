@@ -88,13 +88,28 @@ function formatAskPhrase(facts: RequestFacts): string | null {
   return facts.subject ? `${asks} — ${facts.subject}` : asks;
 }
 
+// The classifier names a subject as it reads in the message, with or without
+// its own determiner ("linen shirt", "the lavender candle", "my order"). Inside a
+// sentence it needs one, so a bare noun phrase gets "the"; display only.
+const DETERMINERS = new Set([
+  'the', 'a', 'an', 'my', 'your', 'his', 'her', 'their', 'our', 'its',
+  'this', 'that', 'these', 'those', 'some', 'both', 'all', 'each', 'every',
+]);
+
+function inSentence(subject: string | null): string | null {
+  const trimmed = subject?.trim();
+  if (!trimmed) return null;
+  const first = trimmed.split(/\s+/)[0]!.toLowerCase();
+  return DETERMINERS.has(first) || /^\d/.test(first) ? trimmed : `the ${trimmed}`;
+}
+
 /** Verb phrase following a person subject, e.g. "has a question about …". */
 export function formatRequestPhrase(facts: RequestFacts): string {
-  const subject = facts.subject;
+  const subject = inSentence(facts.subject);
   switch (facts.ask) {
     case 'product_question': return `has a question about ${subject || 'a product'}`;
     case 'policy_question': return `has a question about ${subject || 'a store policy'}`;
-    case 'cancel': return `asked to cancel ${subject || 'an order'}`;
+    case 'cancel': return `asked to cancel ${subject || 'the order'}`;
     case 'return': return subject ? `asked to return ${subject}` : 'asked to make a return';
     case 'address_change': return `asked to change the delivery address${subject ? ` for ${subject}` : ''}`;
     case 'complaint': return `reported a problem${subject ? ` with ${subject}` : ''}`;
