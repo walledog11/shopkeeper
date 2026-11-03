@@ -53,6 +53,7 @@
     "erase:customer": "tsx ./apps/gateway/src/scripts/erase-customer.ts",
     "live-test:preflight": "tsx ./apps/gateway/src/scripts/live-test-preflight.ts",
     "simulate:refund": "tsx ./apps/gateway/src/scripts/simulate-refund.ts",
+    "inspect:ticket-memory": "tsx ./apps/gateway/src/scripts/inspect-ticket-memory.ts",
     "audit:unknown-outcomes": "node ./scripts/audit-unknown-outcomes.mjs",
     "audit:agent-runtime-retirement": "node ./scripts/audit-agent-runtime-retirement.mjs",
     "audit:production-dependencies": "npm audit --omit=dev --audit-level=high",
