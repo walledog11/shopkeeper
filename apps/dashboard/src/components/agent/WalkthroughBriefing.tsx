@@ -1,5 +1,6 @@
 "use client"
 
+import { BlankAnswerFields } from "@/components/agent/BlankAnswerFields"
 import Link from "next/link"
 import { AlertCircle, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -94,12 +95,18 @@ export function WalkthroughCard({
           </p>
         )}
 
+        {approvable && actions.blanks.length > 0 && (
+          <div className="mt-2.5">
+            <BlankAnswerFields answers={actions.answers} blanks={actions.blanks} disabled={busy} onChange={actions.setAnswer} />
+          </div>
+        )}
+
         <div className="mt-2.5 flex flex-wrap gap-2">
           {approvable && (
             <Button
               type="button"
               size="sm"
-              disabled={busy}
+              disabled={busy || actions.answersMissing}
               onClick={actions.approve}
               className={
                 actions.confirming

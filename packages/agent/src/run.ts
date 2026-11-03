@@ -10,7 +10,7 @@ import {
 } from "./agent-actions.js";
 import { buildCachedSystemPrompt, buildSplitCachedSystemPrompt } from "./ai/anthropic.js";
 import { pickModel } from "./ai/index.js";
-import type { OrgSettings, ProposalCommunication, RawToolCall } from "./types.js";
+import type { MerchantAnswers, OrgSettings, ProposalCommunication, RawToolCall } from "./types.js";
 import {
   AWAIT_ORDER_VERIFICATION_TOOL,
   selectAgentTools,
@@ -83,6 +83,9 @@ export interface RunAgentOptions extends RunAgentPolicyOptions {
   // message is sent exactly as approved, placeholders filled from receipts, and
   // only if every approved write succeeded. Absent for legacy plans.
   approvedCommunication?: ProposalCommunication;
+  // The merchant's values for the approved message's blanks, given with their
+  // approval. Filled into the message exactly as given.
+  merchantAnswers?: MerchantAnswers;
 }
 
 // The operator agent writes to customers through drafts the merchant approves
@@ -238,6 +241,7 @@ export async function runAgent(
       const approvedMessage: ApprovedMessage | undefined = options?.approvedCommunication
         ? {
           communication: options.approvedCommunication,
+          ...(options.merchantAnswers ? { merchantAnswers: options.merchantAnswers } : {}),
           writeCallIds: executableToolCalls
             .filter((call) => TOOL_CATEGORIES[call.name] === "action")
             .map((call) => call.id),

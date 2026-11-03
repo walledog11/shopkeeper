@@ -4,6 +4,7 @@ import type { ReactNode } from "react"
 import Link from "next/link"
 import { AlertCircle, Loader2 } from "lucide-react"
 import MerchantAnswerForm from "@/components/agent/MerchantAnswerForm"
+import { BlankAnswerFields } from "@/components/agent/BlankAnswerFields"
 import { AttachmentList } from "@/app/dashboard/_components/AttachmentList"
 import { cn } from "@/lib/ui/cn"
 import { canQuickApprove } from "@/lib/home/walkthrough"
@@ -105,10 +106,11 @@ export function NeedsYouCard({
             {fallbackBubbleText}
           </NeedsYouBubble>
         )}
+        <BlankAnswerFields answers={actions.answers} blanks={actions.blanks} disabled={busy} onChange={actions.setAnswer} />
       </>
     )
     primary = (
-      <NeedsYouPrimaryButton confirming={actions.confirming} disabled={busy} onClick={actions.approve}>
+      <NeedsYouPrimaryButton confirming={actions.confirming} disabled={busy || actions.answersMissing} onClick={actions.approve}>
         {actions.pending === "approve" && <Loader2 aria-hidden className="size-4 animate-spin" />}
         {/* The inbox names a reply-only draft "Send reply"; the same card says so here. */}
         {item.kind === "quick_reply"

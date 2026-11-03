@@ -1,10 +1,12 @@
 "use client"
 
-import { useReducer, useRef } from "react"
+import { useReducer, useRef, useState } from "react"
 import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import { planReplyText } from "@shopkeeper/agent/plan-preview"
 import { planSignalTiers } from "@shopkeeper/agent/plan-signals"
 import { TOOL_CATEGORIES } from "@shopkeeper/agent/tools"
+import { merchantAnswerSlotsInCalls } from "@shopkeeper/agent/reply-placeholders"
+import type { MerchantAnswerName, MerchantAnswers } from "@shopkeeper/agent/types"
 import type { AgentPlan, PlanCardOutcome, RawToolCall } from "@/types"
 import { getPlanCollapsedPreview } from "./plan-step-display"
 import { planRecipientDisplay } from "./plan-recipient-display"
@@ -57,7 +59,7 @@ export function useActionPlanReviewState({
   customerName?: string | null
   executionOutcome: PlanCardOutcome | null
   isExecuting: boolean
-  onApprove: (approvedToolCalls: RawToolCall[]) => Promise<void>
+  onApprove: (approvedToolCalls: RawToolCall[], merchantAnswers?: MerchantAnswers) => Promise<void>
   plan: AgentPlan
 }) {
   const [state, dispatch] = useReducer(reducer, undefined, () => ({
@@ -68,6 +70,11 @@ export function useActionPlanReviewState({
     submitting: false,
   }))
   const submissionStarted = useRef(false)
+  // A blank in the reply is filled by the merchant, and filling it is part of
+  // approving: the card cannot run until every blank has an answer.
+  const blanks = merchantAnswerSlotsInCalls(plan.rawToolCalls)
+  const [answers, setAnswers] = useState<MerchantAnswers>({})
+  const answersMissing = blanks.some(blank => !answers[blank.name]?.trim())
 
   // The merchant approves the whole card or none of it: its proposal hash binds
   // every step, so a card with a step switched off could never be approved.
@@ -104,11 +111,12 @@ export function useActionPlanReviewState({
     if (submissionStarted.current) return
     submissionStarted.current = true
     dispatch({ type: "submit" })
-    await onApprove(plan.rawToolCalls)
+    if (blanks.length > 0) await onApprove(plan.rawToolCalls, answers)
+    else await onApprove(plan.rawToolCalls)
   }
 
   const onApproveClick = () => {
-    if (planInvalid) return
+    if (planInvalid || answersMissing) return
     if (needsWarningReview) {
       dispatch({ type: "setWarningsReviewed", value: true })
       return
@@ -132,8 +140,12 @@ export function useActionPlanReviewState({
 
   return {
     actionSteps,
+    answers,
+    answersMissing,
+    blanks,
     blockingSignals,
     collapsedPreview: getPlanCollapsedPreview(plan),
+    setAnswer: (name: MerchantAnswerName, value: string) => setAnswers(current => ({ ...current, [name]: value })),
     hasBlockingSignals,
     headerLabel,
     advisorySignals,

@@ -138,7 +138,13 @@ describe("approved exact drafts at execution", () => {
   async function sendApproved(
     draft: string,
     actionsPerformed: ActionEntry[],
-    options: { sentText?: string; bindings?: boolean; writeCallIds?: string[] } = {},
+    options: {
+      sentText?: string;
+      bindings?: boolean;
+      writeCallIds?: string[];
+      blank?: boolean;
+      merchantAnswers?: { refund_timing?: string };
+    } = {},
   ) {
     const { ctx, sendReply } = context();
     await executeAgentToolCall({
@@ -156,11 +162,15 @@ describe("approved exact drafts at execution", () => {
           mode: "exact_draft",
           destination: { kind: "thread", id: "thread_1", channel: "email" },
           draft,
-          allowedResultBindings: options.bindings
-            ? [{ placeholder: "refund_amount", toolCallId: "refund_1", tool: "create_refund", field: "facts.amount" }]
-            : [],
+          allowedResultBindings: [
+            ...(options.bindings
+              ? [{ placeholder: "refund_amount" as const, toolCallId: "refund_1", tool: "create_refund", field: "facts.amount" }]
+              : []),
+            ...(options.blank ? [{ placeholder: "refund_timing" as const, source: "merchant" as const }] : []),
+          ],
         },
         writeCallIds: options.writeCallIds ?? actionsPerformed.map((action) => action.toolCallId!),
+        ...(options.merchantAnswers ? { merchantAnswers: options.merchantAnswers } : {}),
       },
       recordAgentFailure: vi.fn(),
       setEscalationReason: vi.fn(),
@@ -199,6 +209,18 @@ describe("approved exact drafts at execution", () => {
     );
 
     expect(result.sendReply).toHaveBeenCalledWith({ text: "Hi Ada, we refunded $18.40 to your card." });
+  });
+
+  it("fills a blank with the merchant's answer and sends nothing without one", async () => {
+    const draft = "Your refund of {{refund_amount}} should reach you within {{refund_timing}}.";
+    const answered = await sendApproved(draft, [refundAction()], {
+      bindings: true, blank: true, merchantAnswers: { refund_timing: "1-2 business days" },
+    });
+    expect(answered.sendReply).toHaveBeenCalledWith({ text: "Your refund of $18.40 should reach you within 1-2 business days." });
+
+    const unanswered = await sendApproved(draft, [refundAction()], { bindings: true, blank: true });
+    expect(unanswered.sendReply).not.toHaveBeenCalled();
+    expect(unanswered.actionsPerformed.at(-1)?.withheld).toBe("placeholder_unfilled");
   });
 
   it("does not send when the bound write left only a result string (D18)", async () => {

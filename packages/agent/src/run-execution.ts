@@ -29,7 +29,7 @@ import {
   type PersistedAgentAction,
 } from "./agent-actions.js";
 import type { ModelUsageMetrics } from "./usage.js";
-import type { ProposalCommunication } from "./types.js";
+import type { MerchantAnswers, ProposalCommunication } from "./types.js";
 import { fillApprovedDraft } from "./reply-placeholders.js";
 
 export type AgentToolCall = {
@@ -89,6 +89,8 @@ export interface ApprovedMessage {
   communication: ProposalCommunication;
   /** The approved writes the message waits on. It is sent only if all succeeded. */
   writeCallIds: readonly string[];
+  /** The merchant's values for the draft's blanks, given with their approval. */
+  merchantAnswers?: MerchantAnswers;
 }
 
 /**
@@ -120,7 +122,12 @@ function prepareApprovedMessage(
       withheld: "approved_action_failed",
     };
   }
-  const filled = fillApprovedDraft(communication.draft, communication.allowedResultBindings, actionsPerformed);
+  const filled = fillApprovedDraft(
+    communication.draft,
+    communication.allowedResultBindings,
+    actionsPerformed,
+    approved.merchantAnswers,
+  );
   if (filled.status === "unfilled") {
     return {
       refusal: `Error: skipped ${toolCall.name} because its ${filled.placeholder} placeholder has no value from a successful action receipt.`,

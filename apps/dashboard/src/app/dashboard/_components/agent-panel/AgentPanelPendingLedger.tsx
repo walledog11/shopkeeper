@@ -1,5 +1,7 @@
 "use client"
 
+import { BlankAnswerFields } from "@/components/agent/BlankAnswerFields"
+import type { MerchantAnswers } from "@shopkeeper/agent/types"
 import Link from "next/link"
 import { useState } from "react"
 import useSWR from "swr"
@@ -30,16 +32,24 @@ function PendingPlanCard({
 }) {
   const [busy, setBusy] = useState<"approve" | "dismiss" | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [answers, setAnswers] = useState<MerchantAnswers>({})
+  const blanks = plan.blanks ?? []
+  const answersMissing = blanks.some(blank => !answers[blank.name]?.trim())
 
   async function decide(decision: "approve" | "dismiss") {
     if (busy || !plan.planId) return
+    if (decision === "approve" && answersMissing) return
     setBusy(decision)
     setError(null)
     try {
       await requestJson("/api/agent/pending", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planId: plan.planId, decision }),
+        body: JSON.stringify({
+          planId: plan.planId,
+          decision,
+          ...(decision === "approve" && blanks.length > 0 ? { merchantAnswers: answers } : {}),
+        }),
       }, "Could not record that. Try again.")
       onResolved()
     } catch (err) {
@@ -69,13 +79,24 @@ function PendingPlanCard({
         </p>
       )}
 
+      {plan.planId && blanks.length > 0 && (
+        <div className="mt-2.5">
+          <BlankAnswerFields
+            answers={answers}
+            blanks={blanks}
+            disabled={busy !== null}
+            onChange={(name, value) => setAnswers(current => ({ ...current, [name]: value }))}
+          />
+        </div>
+      )}
+
       <div className="mt-2.5 flex flex-wrap gap-2">
         {plan.planId ? (
           <>
             <Button
               type="button"
               size="sm"
-              disabled={busy !== null}
+              disabled={busy !== null || answersMissing}
               onClick={() => void decide("approve")}
               className="rounded-full bg-green-600 text-primary-foreground hover:bg-green-700"
             >

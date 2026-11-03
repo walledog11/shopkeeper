@@ -24,6 +24,7 @@ import { internalJsonParser } from './body-parsers.js';
 import { authorizeInternalRequest } from './internal-auth.js';
 import { ensureAgentTaskEnqueued, memberAgentTaskBudget, submitTicketPlanRequest } from '../agent-task-ingest.js';
 import { readAgentPlanCache } from '@shopkeeper/agent/plan-cache';
+import { parseMerchantAnswers } from '@shopkeeper/agent/reply-placeholders';
 
 function stringField(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -300,6 +301,11 @@ export function registerInternalOperatorRoutes(router: Router): void {
         error: 'organizationId, clerkUserId, planId, and decision (approve|dismiss) are required',
       });
     }
+    // The values for a card's blanks, typed by the merchant as they approve.
+    const merchantAnswers = parseMerchantAnswers(body.merchantAnswers);
+    if (!merchantAnswers) {
+      return res.status(400).json({ error: 'merchantAnswers must be a short one-line answer for each blank' });
+    }
 
     try {
       const memberKey = await resolveOperatorMemberKey(organizationId, clerkUserId);
@@ -334,6 +340,7 @@ export function registerInternalOperatorRoutes(router: Router): void {
         approvedToolCalls: normalizeApprovedToolCalls(plan.rawToolCalls),
         ...(identity ? { expectedIdentity: identity } : {}),
         pendingPlan: plan,
+        ...(Object.keys(merchantAnswers).length > 0 ? { merchantAnswers } : {}),
       });
       return res.status(200).json({ summary });
     } catch (err) {

@@ -1,3 +1,4 @@
+import type { MerchantAnswerSlot } from "@shopkeeper/agent/reply-placeholders"
 import type { HomeActionDisplay } from "@shopkeeper/agent/plan-preview"
 
 export const HOME_SUMMARY_REFRESH_INTERVAL_MS =
@@ -29,6 +30,8 @@ export interface HomeNeedsAttentionItem {
   actionText: string | null
   actionDisplay: HomeActionDisplay | null
   replyText: string | null
+  /** Blanks in the reply the merchant fills as they approve (how long refunds take). */
+  blanks?: MerchantAnswerSlot[]
   question: string | null
   orderRef: string | null
   tag: string | null

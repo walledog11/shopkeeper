@@ -2,10 +2,11 @@
  * Runs the live Instagram refund test end to end against a deployed gateway, so
  * nobody has to type it on a phone: resets the test customer, sends "I'd like a
  * full refund on order #…" as a signed SocialAPI webhook, answers the zip ask
- * with the order's zip, answers the agent's question to the merchant (with
- * --refund-timing, saved to Memory) if it asks one, approves the refund card the
- * way the dashboard's Approve does, then checks Shopify holds the refund and the
- * reply reached Instagram. Prints each step as PASS or FAIL, every message the
+ * with the order's zip, approves the refund card the way the dashboard's Approve
+ * does (filling its refund-timing blank with --refund-timing while the store's
+ * timing is not in Memory, which saves it), then checks the reply reached
+ * Instagram and Shopify holds the refund. Without --refund-timing, answer the
+ * card on the phone. Prints each step as PASS or FAIL, every message the
  * customer and the phone got, and the timings.
  *
  * The customer's messages are injected, so they do not show in Instagram; the
@@ -16,7 +17,7 @@
  *
  *   railway run --service shopkeeper --environment production -- \
  *     npm run simulate:refund -- --workspace <clerk_org_id> --instagram <test handle> \
- *       [--refund-timing "<your store's refund timing>"] [--order #1051] [--execute]
+ *       [--refund-timing "5-10 business days"] [--order #1051] [--execute]
  * Dry run (checks only) unless --execute. Needs DATABASE_URL, TOKEN_ENCRYPTION_KEY,
  * SOCIALAPI_API_KEY, SOCIALAPI_WEBHOOK_SECRET, INTERNAL_API_SECRET and the
  * gateway's public URL (RAILWAY_PUBLIC_DOMAIN, or --gateway).
@@ -29,6 +30,7 @@ import { getAgentTurnPrefixLength } from '@shopkeeper/agent/tools';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { shopifyRestJson } from '@shopkeeper/agent/shopify';
 import { createSocialApiClient, type SocialApiInstagramConversation } from '@shopkeeper/integrations/socialapi';
+import { merchantAnswerSlotsInCalls } from '@shopkeeper/agent/reply-placeholders';
 import { getSocialApiApiKey } from '../config/runtime-config.js';
 import { readPendingPlanArray, readPendingQuestion, type PendingPlan } from '../operator-context/serialization.js';
 import { eraseCustomers } from '../routes/shopify-compliance.js';
@@ -49,7 +51,9 @@ const { values } = parseArgs({
 const POLL_MS = 1_500;
 // Margin under Instagram's 24 hours, so the window cannot close mid-run.
 const REPLY_WINDOW_MS = 23 * 60 * 60 * 1_000;
-const REFUND_TOOLS = new Set(['create_refund', 'create_partial_refund']);
+// Writes that return the customer's money. Cancelling an unshipped paid order
+// refunds it (decision H), so a card may carry cancel_order instead of a refund.
+const REFUND_TOOLS = new Set(['create_refund', 'create_partial_refund', 'cancel_order']);
 const SEND_DONE = new Set(['sent', 'failed', 'unknown', 'bounced']);
 const stepTimeoutMs = Number(values.timeout) * 1_000;
 
@@ -119,6 +123,11 @@ async function printNewMessages(organizationId: string, after: Date): Promise<vo
   for (const message of messages) {
     if (watched.seen.has(message.id)) continue;
     const onPhone = message.threadId === watched.operatorThreadId;
+    // The operator turn's run record repeats its reply and never reaches the phone.
+    if (onPhone && getAgentTurnPrefixLength(message.contentText ?? '') !== null) {
+      watched.seen.add(message.id);
+      continue;
+    }
     const toCustomer = !onPhone && (message.senderType === 'agent' || message.senderType === 'ai');
     if (toCustomer && message.sendStatus && !SEND_DONE.has(message.sendStatus)) continue;
     watched.seen.add(message.id);
@@ -349,7 +358,7 @@ async function main(): Promise<void> {
       `        Gateway        ${gateway}`,
       `        Customer       ${handle} (sender ${conversation!.participantId}), last message ${lastMessageAt!.toISOString()}`,
       `        Order          ${order!.name}  ${order!.current_total_price} ${order!.currency}  zip ${order!.shipping_address!.zip}`,
-      `        Refund timing  ${refundTiming ? `"${refundTiming}" if the agent asks` : 'not given: answer on your phone if the agent asks'}`,
+      `        Refund timing  ${refundTiming ? `"${refundTiming}" if the card asks` : 'not given: answer on your phone if the card asks'}`,
     ].join('\n'));
     return {
       webhookSecret: webhookSecret!,
@@ -473,10 +482,12 @@ async function main(): Promise<void> {
     const handoff = await handedOff();
     if (handoff) throw new Error(handoff);
     const context = await readContext();
-    if (context.question) return { question: context.question.question, plan: null };
-    // The plan is parked before its card is sent; the card is mirrored once sent.
+    // A card or question is parked before it is sent and mirrored once sent, so
+    // nothing is answered or approved before the phone shows it.
     const cardSent = watched.phone.some(message => message.at > cardAfter);
-    return context.plan && cardSent ? { question: null, plan: context.plan } : null;
+    if (!cardSent) return null;
+    if (context.question) return { question: context.question.question, plan: null };
+    return context.plan ? { question: null, plan: context.plan } : null;
   });
 
   let next = await step('A card or a question reaches your phone', () => (
@@ -514,13 +525,30 @@ async function main(): Promise<void> {
     return parked;
   });
 
+  // A card that leaves the refund timing blank is approved by answering it.
+  const blanks = merchantAnswerSlotsInCalls(plan.rawToolCalls);
   const approvedAt = new Date();
-  await step('Approve the refund', async () => {
-    const { summary } = await callOperatorRoute<{ summary: string }>('plan-decision', {
-      organizationId, clerkUserId: member.clerkUserId, planId: plan.planId, decision: 'approve',
+  if (blanks.length > 0 && !refundTiming) {
+    console.log(`\nThe card asks you on your phone:\n${indent(blanks.map(blank => blank.question).join(' '))}\nAnswer it there; waiting up to ${seconds(stepTimeoutMs)}.\n`);
+  } else {
+    await step(blanks.length > 0 ? 'Approve the refund by answering the card' : 'Approve the refund', async () => {
+      if (blanks.length > 0) console.log(`        Answer: ${refundTiming}`);
+      const { summary } = await callOperatorRoute<{ summary: string }>('plan-decision', {
+        organizationId, clerkUserId: member.clerkUserId, planId: plan.planId, decision: 'approve',
+        ...(blanks.length > 0 ? { merchantAnswers: Object.fromEntries(blanks.map(blank => [blank.name, refundTiming])) } : {}),
+      });
+      console.log(`        Phone reply: ${summary}`);
     });
-    console.log(`        Phone reply: ${summary}`);
-  });
+  }
+
+  // The reply goes out only once the refund succeeded, so it is waited for first.
+  await step('Reply reaches the customer on Instagram', () => waitFor('the reply was not sent', organizationId, runStart, async () => {
+    const sends = await customerSends(approvedAt);
+    const done = sends.find(send => send.sendStatus && SEND_DONE.has(send.sendStatus));
+    if (!done) return null;
+    if (done.sendStatus !== 'sent') throw new Error(`The reply was not delivered (${done.sendStatus}): ${done.sendError ?? 'no detail'}`);
+    return true;
+  }));
 
   await step(`Refund recorded in Shopify on ${order.name}`, async () => {
     const { refunds = [] } = await shopifyRestJson<{
@@ -535,13 +563,17 @@ async function main(): Promise<void> {
     console.log(`        Refunded ${amount.toFixed(2)} ${order.currency} of ${order.current_total_price}`);
   });
 
-  await step('Reply reaches the customer on Instagram', () => waitFor('the reply was not sent', organizationId, runStart, async () => {
-    const sends = await customerSends(approvedAt);
-    const done = sends.find(send => send.sendStatus && SEND_DONE.has(send.sendStatus));
-    if (!done) return null;
-    if (done.sendStatus !== 'sent') throw new Error(`The reply was not delivered (${done.sendStatus}): ${done.sendError ?? 'no detail'}`);
-    return true;
-  }));
+  if (blanks.length > 0) {
+    await step('Refund timing saved to Memory', async () => {
+      const saved = await db.kbArticle.findFirst({
+        where: { organizationId, updatedAt: { gte: approvedAt } },
+        orderBy: { updatedAt: 'desc' },
+        select: { title: true },
+      });
+      if (!saved) throw new Error('No Memory entry was written with the answer');
+      console.log(`        ${saved.title}`);
+    });
+  }
 }
 
 async function printTimings(): Promise<void> {

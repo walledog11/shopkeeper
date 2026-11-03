@@ -1,6 +1,8 @@
 import { defineTool, stringArg, toolError, toolOk, toolUnknown, type AgentToolDefinition, type ToolResult } from '@shopkeeper/agent/tools';
 import { ConflictError } from '@shopkeeper/shared/errors';
 import { withdrawActionAuthority, type SupportContext } from '@shopkeeper/agent/context';
+import { merchantAnswerSlotsInCalls, parseMerchantAnswers } from '@shopkeeper/agent/reply-placeholders';
+import type { MerchantAnswers } from '@shopkeeper/agent/types';
 import logger from '../../logger.js';
 import {
   expectedPlanIdentity,
@@ -33,10 +35,38 @@ export interface OperatorSessionToolDeps {
   // pending plan / question the control tools act on; the model interprets the
   // merchant's intent and fires the matching tool.
   context: OperatorContext;
+  /** The merchant's message this turn answers: a blank's value must be in it. */
+  merchantMessage: string;
 }
 
 interface PlanRefInput {
   plan_ref?: string;
+}
+
+interface ApproveInput extends PlanRefInput {
+  answer?: string;
+}
+
+/**
+ * The merchant's answer to a card's blank, as the customer will read it: words
+ * of their own message, copied, never words the model chose. Null with a reason
+ * when the answer cannot fill the blank.
+ */
+export function blankAnswersFromMessage(
+  rawToolCalls: readonly { name: string; input?: unknown }[],
+  answer: string | undefined,
+  merchantMessage: string,
+): { answers: MerchantAnswers } | { error: string } {
+  const slots = merchantAnswerSlotsInCalls(rawToolCalls);
+  if (slots.length === 0) return { answers: {} };
+  const text = answer?.trim();
+  if (!text) return { error: `Error: this plan has a blank. Ask the merchant: ${slots.map((slot) => slot.question).join(' ')}` };
+  if (!merchantMessage.includes(text)) {
+    return { error: "Error: answer must be words copied exactly from the merchant's message." };
+  }
+  // One blank today; its value is the merchant's answer.
+  const answers = parseMerchantAnswers(Object.fromEntries(slots.map((slot) => [slot.name, text])));
+  return answers ? { answers } : { error: 'Error: that answer is too long to put in the reply. Ask the merchant for a short answer.' };
 }
 
 interface ReviseGuidanceInput extends PlanRefInput {
@@ -67,20 +97,26 @@ const planRefField = stringArg(
 export function buildOperatorSessionTools(
   deps: OperatorSessionToolDeps,
 ): Record<string, AgentToolDefinition> {
-  const { organizationId, clerkUserId, memberKey, deliveryRef, context } = deps;
+  const { organizationId, clerkUserId, memberKey, deliveryRef, context, merchantMessage } = deps;
 
   const approvePendingPlan = defineTool({
     name: 'approve_pending_plan',
     description:
-      'Approve and execute a plan the merchant is being shown. Call this when the merchant clearly agrees to send it as drafted (yes / send it / go ahead / looks good). It runs exactly the drafted actions — you cannot change them. When more than one plan is pending, set plan_ref to the one they mean.',
-    fields: { plan_ref: planRefField },
+      'Approve and execute a plan the merchant is being shown. Call this when the merchant clearly agrees to send it as drafted (yes / send it / go ahead / looks good). It runs exactly the drafted actions — you cannot change them. When more than one plan is pending, set plan_ref to the one they mean. When the plan has a blank, the merchant approves it by answering the blank\'s question: set answer to the words of their message that answer it.',
+    fields: {
+      plan_ref: planRefField,
+      answer: stringArg(
+        'Only for a plan with a blank: the words of the merchant\'s message that answer its question, copied exactly (for "it takes 1-2 business days", "1-2 business days"). They go into the customer\'s reply as written.',
+        { required: false },
+      ),
+    },
     category: 'action',
     group: 'thread',
     capabilities: [],
     label: 'Approved pending plan',
     planStepLabel: 'Approve pending plan',
     policy: { categoryPermission: false },
-    execute: async (input: PlanRefInput, ctx) => {
+    execute: async (input: ApproveInput, ctx) => {
       // The merchant's decision authorized one drafted plan. Whenever that plan
       // does not run to completion, nothing else in this turn is approved either,
       // or the model answers the failed approval by doing the work itself.
@@ -99,6 +135,9 @@ export function buildOperatorSessionTools(
       if (isPendingPlanInvalid(pendingPlan)) {
         return notApproved(NOTHING_RAN, toolError('Error: this draft failed validation and cannot be approved. Revise it, dismiss it, or take over in the dashboard.'));
       }
+
+      const blanks = blankAnswersFromMessage(pendingPlan.rawToolCalls, input.answer, merchantMessage);
+      if ('error' in blanks) return notApproved(NOTHING_RAN, toolError(blanks.error));
 
       // The operator turn holds the operator thread's lock; approval runs on the
       // ticket thread's lock — different thread ids, no deadlock. Guard the
@@ -119,6 +158,7 @@ export function buildOperatorSessionTools(
           approvedToolCalls: normalizeApprovedToolCalls(pendingPlan.rawToolCalls),
           ...(expectedPlanIdentity(pendingPlan) ? { expectedIdentity: expectedPlanIdentity(pendingPlan) } : {}),
           pendingPlan,
+          ...(Object.keys(blanks.answers).length > 0 ? { merchantAnswers: blanks.answers } : {}),
         });
       } catch (err) {
         logger.error({ err, organizationId, threadId: pendingPlan.threadId }, '[Operator] approve_pending_plan failed');

@@ -50,6 +50,7 @@ async function buildTools(memberKey: string, clerkUserId = 'usr_1') {
     memberKey,
     deliveryRef: 'telegram:chat_1',
     context,
+    merchantMessage: 'yes',
   });
 }
 
