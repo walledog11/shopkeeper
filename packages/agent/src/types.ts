@@ -183,12 +183,15 @@ export interface ReceiptResultBinding {
 }
 
 /**
- * A blank in an exact draft that the merchant's approval fills: the card shows
- * the draft with the blank and asks for it, and approving means answering.
+ * A blank in an exact draft for a store fact only the merchant knows. With an
+ * `answer` it was filled at planning from the store's saved answer, which the
+ * card shows and the approval binds; without one the card asks for it, and
+ * approving means answering.
  */
 export interface MerchantAnswerBinding {
   placeholder: MerchantAnswerName
   source: 'merchant'
+  answer?: string
 }
 
 export type ResultBinding = ReceiptResultBinding | MerchantAnswerBinding

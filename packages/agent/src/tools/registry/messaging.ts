@@ -1,3 +1,4 @@
+import { blankAnswerField, MERCHANT_ANSWER_NAMES } from "../../reply-placeholders.js";
 import { noThread } from "./helpers.js";
 import { booleanArg, defineTool, stringArg } from "./schema.js";
 import type { SendEmailInput, SendReplyInput } from "./types.js";
@@ -7,6 +8,14 @@ import type { SendEmailInput, SendReplyInput } from "./types.js";
 const CUSTOMER_MESSAGE_TEXT =
   "Exactly what they read. Write it the way a person at the shop would: warm, plain, short sentences, no em dashes (—), bullet characters or markdown. Never describe their photos or attachments back to them. Order and tracking numbers are the only store references to mention; leave out internal ones such as a return's.";
 
+// A blank's saved answer, bound on the message by planning so the card shows it
+// and the approval binds it. Never offered to the model: only the store's own
+// answer fills a blank.
+const BLANK_ANSWER_FIELDS = Object.fromEntries(MERCHANT_ANSWER_NAMES.map((name) => [
+  blankAnswerField(name),
+  stringArg("Runtime-supplied: the store's saved answer for this blank, bound for approval.", { runtimeOnly: true }),
+]));
+
 // What an email to a customer is made of. The operator's draft_email parks
 // exactly this input as the send_email the merchant approves, so the two read
 // and validate it the same way.
@@ -14,6 +23,7 @@ export const SEND_EMAIL_FIELDS = {
   to: stringArg("Recipient email address in user@domain format (e.g. 'jane@example.com'). Must be a valid SMTP address — never a name or phone number.", { required: true, nonBlank: true }),
   subject: stringArg("Email subject line.", { required: true, nonBlank: true }),
   body: stringArg(CUSTOMER_MESSAGE_TEXT, { required: true, nonBlank: true }),
+  ...BLANK_ANSWER_FIELDS,
 };
 
 export const MESSAGING_TOOL_DEFINITIONS = [
@@ -25,6 +35,7 @@ export const MESSAGING_TOOL_DEFINITIONS = [
       text: stringArg(CUSTOMER_MESSAGE_TEXT, { required: true, nonBlank: true }),
       await_response: booleanArg("Retired; parked replies may still carry it.", { retired: true }),
       promises_follow_up: booleanArg("Set true when this reply tells the customer that you or anyone at the store will do something later, such as look into it, pass it along, or get back to them. Nothing does that work on its own, so the merchant approves the reply before it is sent."),
+      ...BLANK_ANSWER_FIELDS,
     },
     category: "communication",
     group: "messaging",

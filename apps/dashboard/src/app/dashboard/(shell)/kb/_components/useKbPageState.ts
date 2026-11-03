@@ -146,7 +146,7 @@ export function useKbPageState(initialKbData?: KbPageData, initialBookId?: strin
       closeArticleOverlay()
       await mutate()
     } catch (error) {
-      setArticleDeleteError(errorMessageFromUnknown(error, "Failed to delete note."))
+      setArticleDeleteError(errorMessageFromUnknown(error, "Failed to delete this memory."))
     } finally {
       setIsArticleDeleting(false)
     }

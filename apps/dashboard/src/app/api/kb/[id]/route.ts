@@ -4,6 +4,7 @@ import { ForbiddenError, NotFoundError } from '@/lib/api/errors';
 import { readRequiredJsonObject } from '@/lib/api/body';
 import { withOrgRoute } from '@/lib/api/route';
 import { parseUpdateKbArticleBody } from '@/app/api/kb/_lib/validation';
+import { memoryOverrideTargetTag } from '@shopkeeper/agent/kb-memory';
 
 export const PATCH = withOrgRoute<{ id: string }>(
   { context: 'KB PATCH', errorMessage: 'Failed to update article', requireBillingWriteAllowed: true },
@@ -44,7 +45,12 @@ export const DELETE = withOrgRoute<{ id: string }>(
     if (existing.knowledgeBase.source !== 'user') {
       throw new ForbiddenError('Synced knowledge base articles are read-only');
     }
-    await db.kbArticle.delete({ where: { id } });
+    // A correction the merchant wrote on this memory goes with it; left behind,
+    // it would read as a note of its own about something no longer remembered.
+    await db.$transaction([
+      db.kbArticle.deleteMany({ where: { organizationId: org.id, tags: { has: memoryOverrideTargetTag(id) } } }),
+      db.kbArticle.delete({ where: { id } }),
+    ]);
     return NextResponse.json({ ok: true });
   },
 );

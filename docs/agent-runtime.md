@@ -400,9 +400,14 @@ letter (F) is not reused.
   with its question, and answering it is the approval. The merchant's answer
   fills the blank as given: on the phone it must be words of their message, a
   bare yes fills nothing, and a message that also asks for a change revises
-  instead. A plan with a blank never runs on its own, execution refuses it
-  before claiming anything until every blank has an answer, and the answer is
-  saved to the knowledge base so the next draft has no blank. The model
+  instead. A plan with an unanswered blank never runs on its own, and execution
+  refuses it before claiming anything until every blank has an answer. The
+  answer is saved as the store's answer to that blank, one typed Memory entry
+  (`saveStoreFact`), and from then on planning fills the blank from it
+  (`readStoreFacts`, honoring a correction made in Memory): the value is bound
+  on the reply call as runtime-only input, so the card shows it and the
+  approval binds it, and a value the model writes there is dropped. Recall of a
+  blank never depends on the model reading Memory. The model
   writes the draft before approval; merchant messages may compose after outcomes.
   Execution refuses a customer message no approval binds, so nothing a model
   writes in a turn reaches a customer. The operator agent drafts instead: a

@@ -30,7 +30,7 @@ import { getAgentTurnPrefixLength } from '@shopkeeper/agent/tools';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { shopifyRestJson } from '@shopkeeper/agent/shopify';
 import { createSocialApiClient, type SocialApiInstagramConversation } from '@shopkeeper/integrations/socialapi';
-import { merchantAnswerSlotsInCalls } from '@shopkeeper/agent/reply-placeholders';
+import { blankAnswersInCalls, merchantAnswerSlotsInCalls } from '@shopkeeper/agent/reply-placeholders';
 import { getSocialApiApiKey } from '../config/runtime-config.js';
 import { readPendingPlanArray, readPendingQuestion, type PendingPlan } from '../operator-context/serialization.js';
 import { eraseCustomers } from '../routes/shopify-compliance.js';
@@ -522,6 +522,9 @@ async function main(): Promise<void> {
       throw new Error(`The card has no refund: ${parked.rawToolCalls.map(call => call.name).join(', ') || 'no actions'}`);
     }
     if (!parked.planId) throw new Error('The card has no plan id to approve');
+    for (const [name, answer] of Object.entries(blankAnswersInCalls(parked.rawToolCalls))) {
+      console.log(`        ${name} filled from Memory: ${answer}`);
+    }
     return parked;
   });
 

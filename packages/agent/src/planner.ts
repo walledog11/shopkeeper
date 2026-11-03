@@ -29,6 +29,8 @@ import { validatePlan } from "./plan-validation.js";
 import { buildPlanSignals, replyPromisesUnownedFollowUp } from "./plan-signals.js";
 import { buildPlanSteps } from "./planner-steps.js";
 import { deriveProposalCommunication } from "./proposal-communication.js";
+import { readStoreFacts } from "./merchant-answer-kb.js";
+import { merchantAnswerSlotsInCalls, withStoreAnswers } from "./reply-placeholders.js";
 import { buildSystemPromptParts } from "./prompt.js";
 export { DISCOVERY_TOOL_NAME } from "./planner-tool-selection.js";
 import { requireDurableAgentRuntime } from "./runtime-modes.js";
@@ -201,6 +203,27 @@ async function bindProviderApprovalFacts(
   return { rawToolCalls: bound, unnamedTargetIds };
 }
 
+
+// A blank the store has already answered is filled from that saved answer, so
+// the card shows it and the approval binds it; only an unanswered blank is
+// asked. A blank answer the model wrote itself is dropped first. Reading Memory
+// as free text left this to the model, which drafted a blank beside the saved
+// answer it had been given (2026-11-03).
+async function bindStoreAnswers(
+  orgId: string,
+  rawToolCalls: AgentPlan["rawToolCalls"],
+): Promise<AgentPlan["rawToolCalls"]> {
+  const unbound = rawToolCalls.map((call) => withStoreAnswers(call, {}));
+  if (merchantAnswerSlotsInCalls(unbound).length === 0) return unbound;
+  const saved = await readStoreFacts(orgId).catch((error: unknown) => {
+    logger.warn(
+      { err: error instanceof Error ? error.message : String(error), orgId },
+      "[planner] Saved blank answers not read; the card asks for them",
+    );
+    return {};
+  });
+  return unbound.map((call) => withStoreAnswers(call, saved));
+}
 
 export async function planAgent(
   ctx: AgentContext,
@@ -474,7 +497,7 @@ export async function planAgent(
     unnamedTargetIds,
   });
   let validation = authoredValidation;
-  let rawToolCalls = bound.rawToolCalls;
+  let rawToolCalls = await bindStoreAnswers(ctx.orgId, bound.rawToolCalls);
 
   const signalCodes: ProducedPlanSignalCode[] = [];
   // Blocking, so `decideAutonomy` sends this draft to the merchant: a customer
