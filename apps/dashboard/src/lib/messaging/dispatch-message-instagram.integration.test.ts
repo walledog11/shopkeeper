@@ -381,6 +381,28 @@ describe('dispatchMessage — SocialAPI Instagram transport', () => {
     expect(mockFetch.mock.calls.filter(([url]) => String(url).includes('social-api.ai'))).toHaveLength(1);
   });
 
+  // 2026-11-04: a reply SocialAPI refused for Instagram's 24-hour window read
+  // only "Failed to send via Instagram", on the ticket and in the live test.
+  it("says why SocialAPI refused the reply", async () => {
+    const { customer, thread } = await socialApiThread();
+    mockFetch
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: { code: 'response_window_closed', message: 'Outside the 24-hour messaging window' },
+      }), { status: 403 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: { code: 'invalid_recipient', message: 'The recipient cannot receive messages' },
+      }), { status: 418 }));
+
+    await expect(dispatchMessage({ ...thread, customer }, org, 'SocialAPI reply.')).resolves.toMatchObject({
+      ok: false,
+      error: "Instagram only allows replies within 24 hours of the customer's last message",
+    });
+    await expect(dispatchMessage({ ...thread, customer }, org, 'SocialAPI reply.')).resolves.toMatchObject({
+      ok: false,
+      error: 'Instagram refused the reply: The recipient cannot receive messages',
+    });
+  });
+
   it('never retries a SocialAPI failure through Meta', async () => {
     const { customer, integration, thread } = await socialApiThread();
     mockFetch.mockResolvedValueOnce(new Response('{"error":"nope"}', { status: 502 }));
