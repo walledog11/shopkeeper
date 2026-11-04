@@ -940,7 +940,8 @@ without it, answer the card on the phone). It then checks Instagram delivery for
 Shopify for the refund. It prints each step as PASS or FAIL, every message the
 customer and the phone got, and the ticket's timings. The customer's side is injected and never
 shows in Instagram; the replies are real sends, so DM the store from the test handle first if its
-last message is near 24 hours old (the run stops and says so). Each run is a real refund. The
+last message is near 24 hours old (the run shows the newest real DM SocialAPI and the gateway each
+saw, and warns). Each run is a real refund. The
 gateway URL comes from `RAILWAY_PUBLIC_DOMAIN` under `railway run`, or `--gateway`.
 
 - Use a fresh Instagram DM for each run: Instagram refuses business replies more than 24 hours

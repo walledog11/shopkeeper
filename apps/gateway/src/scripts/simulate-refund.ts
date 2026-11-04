@@ -11,8 +11,9 @@
  *
  * The customer's messages are injected, so they do not show in Instagram; the
  * agent's replies are real sends and do. Instagram only lets the store reply
- * within 24 hours of the customer's last real message, so the run stops first if
- * that window is closed. The card is still texted to the phone. Each run issues
+ * within 24 hours of the customer's last real message: the run prints the newest
+ * real DM SocialAPI and the gateway each saw, warns when both are older, and lets
+ * the first reply be the test. The card is still texted to the phone. Each run issues
  * a real refund on the store and spends a few cents of model calls.
  *
  *   railway run --service shopkeeper --environment production -- \
@@ -54,6 +55,7 @@ const { values } = parseArgs({
 const POLL_MS = 1_500;
 // Margin under Instagram's 24 hours, so the window cannot close mid-run.
 const REPLY_WINDOW_MS = 23 * 60 * 60 * 1_000;
+const SIMULATED_MESSAGE_PREFIX = 'simulated-';
 // Writes that return the customer's money. Cancelling an unshipped paid order
 // refunds it (decision H), so a card may carry cancel_order instead of a refund.
 const REFUND_TOOLS = new Set(['create_refund', 'create_partial_refund', 'cancel_order']);
@@ -187,7 +189,7 @@ async function sendCustomerDm(input: {
   text: string;
 }): Promise<Date> {
   const receivedAt = new Date();
-  const messageId = `simulated-${randomUUID()}`;
+  const messageId = `${SIMULATED_MESSAGE_PREFIX}${randomUUID()}`;
   const body = JSON.stringify({
     event: 'dm.received',
     data: {
@@ -351,6 +353,28 @@ async function lastCustomerMessageAt(conversation: SocialApiInstagramConversatio
   return latest;
 }
 
+// The newest DM the gateway received from the customer, simulated ones aside:
+// what the store's own records say, beside what SocialAPI's message list says.
+async function lastGatewayDmAt(organizationId: string, senderIds: readonly string[]): Promise<Date | null> {
+  if (senderIds.length === 0) return null;
+  const message = await db.message.findFirst({
+    where: {
+      organizationId,
+      senderType: 'customer',
+      deletedAt: null,
+      thread: { channelType: 'ig_dm', customer: { platformId: { in: [...senderIds] } } },
+      NOT: { externalMessageId: { startsWith: SIMULATED_MESSAGE_PREFIX } },
+    },
+    orderBy: { sentAt: 'desc' },
+    select: { sentAt: true },
+  });
+  return message?.sentAt ?? null;
+}
+
+// Set when neither source shows a DM inside Instagram's reply window, so a
+// refused reply says what to do about it.
+let replyWindowLikelyClosed = false;
+
 async function main(): Promise<void> {
   const workspace = values.workspace?.trim();
   const handle = values.instagram?.trim().replace(/^@/, '');
@@ -395,14 +419,17 @@ async function main(): Promise<void> {
     const conversation = found.ok ? found.conversations[0] : undefined;
     if (!found.ok) problems.push(`Could not look up ${handle} in SocialAPI: ${found.reason}`);
     else if (!conversation) problems.push(`SocialAPI has no conversation with ${handle}. Send the store a DM from ${handle} first`);
-    const lastMessageAt = conversation ? await lastCustomerMessageAt(conversation) : null;
-    if (conversation && (!lastMessageAt || Date.now() - lastMessageAt.getTime() > REPLY_WINDOW_MS)) {
-      problems.push(
-        `Instagram only lets the store reply within 24 hours of ${handle}'s last message`
-        + `${lastMessageAt ? ` (last one ${lastMessageAt.toISOString()})` : ''}. `
-        + `Send the store any DM from ${handle}, then run this again`,
-      );
-    }
+    // Instagram decides whether a reply is inside its 24-hour window. Both
+    // readings are shown, and a stale one is a warning, never a stop: the first
+    // real reply is the test of it, and a refusal says so.
+    const fromSocialApi = conversation ? await lastCustomerMessageAt(conversation) : null;
+    const fromGateway = found.ok
+      ? await lastGatewayDmAt(organizationId, found.conversations.map(candidate => candidate.participantId))
+      : null;
+    const newest = [fromSocialApi, fromGateway].filter((at): at is Date => at !== null)
+      .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+    replyWindowLikelyClosed = !newest || Date.now() - newest.getTime() > REPLY_WINDOW_MS;
+    const lastDmLine = `        Last real DM   SocialAPI ${fromSocialApi?.toISOString() ?? 'none'} · received by the gateway ${fromGateway?.toISOString() ?? 'none'}`;
 
     const shopify = await db.integration.findFirst({
       where: { organizationId, platform: 'shopify', lifecycleStatus: 'active' },
@@ -451,7 +478,11 @@ async function main(): Promise<void> {
     if (problems.length > 0) throw new Error(problems.join('\n'));
     console.log([
       `        Gateway        ${gateway}`,
-      `        Customer       ${handle} (sender ${conversation!.participantId}), last message ${lastMessageAt!.toISOString()}`,
+      `        Customer       ${handle} (sender ${conversation!.participantId})`,
+      lastDmLine,
+      ...(replyWindowLikelyClosed
+        ? [`WARN  Neither shows a DM from ${handle} in the last 23 hours, so Instagram may refuse the store's replies. The run goes ahead; if the first reply is refused, DM the store from ${handle} and run again.`]
+        : []),
       order
         ? `        Order          ${order.name}  ${order.current_total_price} ${order.currency}  zip ${order.shipping_address!.zip}`
         : `        Order          none left to refund: --execute creates a paid test order for ${orderToCreate!.title} (${orderToCreate!.price} ${orderToCreate!.currency})`,
@@ -550,7 +581,10 @@ async function main(): Promise<void> {
     }
     const sends = await customerSends(firstDmAt);
     const failed = sends.find(send => send.sendStatus && send.sendStatus !== 'sent' && SEND_DONE.has(send.sendStatus));
-    if (failed) throw new Error(`The reply was not delivered (${failed.sendStatus}): ${failed.sendError ?? 'no detail'}`);
+    if (failed) {
+      throw new Error(`The reply was not delivered (${failed.sendStatus}): ${failed.sendError ?? 'no detail'}`
+        + (replyWindowLikelyClosed ? `\nNo DM from ${handle} was seen in the last 23 hours: DM the store from ${handle} and run again.` : ''));
+    }
     const handoff = await handedOff();
     if (handoff) throw new Error(handoff);
     const { plan } = await readContext();
