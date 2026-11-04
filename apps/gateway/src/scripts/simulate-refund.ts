@@ -17,7 +17,7 @@
  *
  *   railway run --service shopkeeper --environment production -- \
  *     npm run simulate:refund -- --workspace <clerk_org_id> --instagram <test handle> \
- *       [--refund-timing "5-10 business days"] [--order #1051] [--execute]
+ *       [--refund-timing "5-10 business days"] [--order #1051] [--allow-live-store] [--execute]
  * Dry run (checks only) unless --execute. Needs DATABASE_URL, TOKEN_ENCRYPTION_KEY,
  * SOCIALAPI_API_KEY, SOCIALAPI_WEBHOOK_SECRET, INTERNAL_API_SECRET and the
  * gateway's public URL (RAILWAY_PUBLIC_DOMAIN, or --gateway).
@@ -45,6 +45,9 @@ const { values } = parseArgs({
     gateway: { type: 'string' },
     timeout: { type: 'string', default: '180' },
     execute: { type: 'boolean', default: false },
+    // The mutation canary's flag: create a test order on a store whose plan is
+    // not a development plan. Only with the store owner's say-so.
+    'allow-live-store': { type: 'boolean', default: false },
   },
 });
 
@@ -262,16 +265,17 @@ interface OrderToCreate { variantId: string; title: string; price: string; curre
 
 /**
  * A product a fresh test order can carry, when the store has no order a full
- * refund can use: the cheapest active one under the refund limit. Null with the
- * reason on a store that is not a development store, where nothing is created.
+ * refund can use: the cheapest active one under the refund limit. The reason
+ * instead on a store that is not a development store, unless --allow-live-store
+ * says to create the test order there anyway.
  */
 async function planTestOrder(shopify: ShopifyCredentials, limit: number | null): Promise<OrderToCreate | string> {
   const { shop } = await shopifyRestJson<{ shop?: { plan_name?: string; currency?: string } }>(
     shopify, 'shop.json', { query: { fields: 'plan_name,currency' } },
   );
   const plan = String(shop?.plan_name ?? 'unknown');
-  if (!DEVELOPMENT_PLANS.has(plan.toLowerCase())) {
-    return `the store is on the ${plan} plan, so no test order is created; place one in Shopify first`;
+  if (!DEVELOPMENT_PLANS.has(plan.toLowerCase()) && !values['allow-live-store']) {
+    return `the store is on the ${plan} plan, so no test order is created. Place one in Shopify, or add --allow-live-store to create a test order there`;
   }
   const { products = [] } = await shopifyRestJson<{
     products?: Array<{ title?: string; variants?: Array<{ id: number; title?: string; price?: string }> }>;
