@@ -47,10 +47,11 @@
     "vitest": "^4.1.3"
   },
   "dependencies": {
-    "@shopkeeper/shared": "*",
     "@neondatabase/serverless": "0.10.4",
     "@prisma/adapter-neon": "6.19.3",
+    "@prisma/adapter-pg": "6.19.3",
     "@prisma/client": "6.19.3",
+    "@shopkeeper/shared": "*",
     "prisma": "6.19.3"
   }
 }

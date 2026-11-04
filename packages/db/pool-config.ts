@@ -17,19 +17,20 @@ export function databasePoolConfig(env: NodeJS.ProcessEnv = process.env) {
   // tests, builds collecting routes, scripts). Without a URL there is nothing to
   // configure; Prisma reports the missing variable on the first query instead.
   if (!env.DATABASE_URL) return null;
-  const url = new URL(env.DATABASE_URL);
-  url.searchParams.set('connection_limit', String(max));
-  url.searchParams.set('connect_timeout', String(Math.ceil(connectTimeoutMs / 1000)));
-  url.searchParams.set('pool_timeout', String(Math.ceil(poolWaitTimeoutMs / 1000)));
-  url.searchParams.set('socket_timeout', String(Math.ceil(queryTimeoutMs / 1000)));
+  const shared = {
+    connectionString: env.DATABASE_URL,
+    max,
+    connectionTimeoutMillis: Math.min(connectTimeoutMs, poolWaitTimeoutMs),
+    query_timeout: queryTimeoutMs,
+  };
   return {
-    nativeUrl: url.toString(),
-    driver: {
-      connectionString: env.DATABASE_URL, max,
-      connectionTimeoutMillis: Math.min(connectTimeoutMs, poolWaitTimeoutMs),
-      idleTimeoutMillis: 10_000,
-      statement_timeout: queryTimeoutMs,
-      query_timeout: queryTimeoutMs,
-    },
+    // node-postgres behind Neon's PgBouncer. The deadline stays client-side, as
+    // it was under Prisma's engine: PgBouncer refuses a startup parameter it is
+    // not configured to accept, and statement_timeout is one. Idle connections
+    // stay open across the gaps between messages, so a reply does not pay a
+    // fresh TLS handshake and login.
+    pg: { ...shared, idleTimeoutMillis: 300_000, keepAlive: true, allowExitOnIdle: true },
+    driver: { ...shared, idleTimeoutMillis: 10_000, statement_timeout: queryTimeoutMs },
+    schema: new URL(env.DATABASE_URL).searchParams.get('schema') ?? undefined,
   };
 }

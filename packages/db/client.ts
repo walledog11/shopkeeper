@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import { PrismaPg } from '@prisma/adapter-pg';
 import type { PrismaClient as PrismaClientType } from '@prisma/client';
 import { decryptToken, encryptToken } from './crypto.js';
 import { PrismaClient } from './prisma-enums.js';
@@ -94,8 +95,15 @@ function createClient() {
     const { PrismaNeon } = require('@prisma/adapter-neon') as typeof import('@prisma/adapter-neon');
     const adapter = new PrismaNeon(pool?.driver ?? { connectionString: process.env.DATABASE_URL! });
     base = new PrismaClient({ adapter, log });
+  } else if (pool) {
+    // One round trip per query. Prisma's own engine, told pgbouncer=true, wraps
+    // every query in BEGIN, prepare, execute, DEALLOCATE ALL and COMMIT: five
+    // round trips for a single lookup, measured against Postgres on 2026-11-04.
+    // node-postgres sends unnamed statements, which PgBouncer passes through.
+    const adapter = new PrismaPg(pool.pg, pool.schema ? { schema: pool.schema } : undefined);
+    base = new PrismaClient({ adapter, log });
   } else {
-    base = new PrismaClient({ log, ...(pool ? { datasources: { db: { url: pool.nativeUrl } } } : {}) });
+    base = new PrismaClient({ log });
   }
 
   return base.$extends({
