@@ -7,7 +7,7 @@ import {
   sendInstagramTextMessage,
   type InstagramProviderError,
 } from "@shopkeeper/integrations/instagram"
-import { createSocialApiClient } from "@shopkeeper/integrations/socialapi"
+import { createSocialApiClient, type SocialApiError } from "@shopkeeper/integrations/socialapi"
 import logger from "@/lib/server/logger"
 import { recordOutboundCall } from "@/lib/server/outbound-recorder"
 import { recordInstagramSendFailure } from "@/lib/messaging/provider-send-failures"
@@ -82,6 +82,32 @@ function mapInstagramProviderError(error: InstagramProviderError): {
   return { detail: "Instagram provider returned an unknown error", error: "Failed to send via Instagram" }
 }
 
+// SocialAPI's refusal in the merchant's words, as the direct path maps Meta's.
+// Every refusal used to read "Failed to send via Instagram", which hid a closed
+// 24-hour window from the merchant and from the person testing (2026-11-04).
+function mapSocialApiError(error: SocialApiError): { detail: string; error: string } {
+  const said = error.message.trim()
+  switch (error.category) {
+    case "response_window":
+      return { detail: "Outside Instagram 24-hour messaging window", error: OUTSIDE_REPLY_WINDOW }
+    case "authentication":
+      return { detail: "SocialAPI rejected the workspace API key", error: SOCIALAPI_UNCONFIGURED }
+    case "permission":
+      return { detail: "Instagram messaging permission missing", error: MISSING_PERMISSION }
+    case "isolation":
+      return { detail: "SocialAPI account is outside this workspace's brand", error: DISCONNECTED_CONVERSATION }
+    case "rate_limit":
+      return { detail: "Instagram rate limit exceeded", error: "Instagram is rate limiting replies — try again later" }
+    case "transient_provider_failure":
+      return { detail: "Instagram provider temporarily unavailable", error: "Instagram is temporarily unavailable — try again later" }
+    default:
+      return {
+        detail: `SocialAPI send failed (${error.category})`,
+        error: said ? `Instagram refused the reply: ${said}` : "Failed to send via Instagram",
+      }
+  }
+}
+
 function socialApiAccountId(metadata: Record<string, unknown>): string | null {
   const value = metadata.socialApiAccountId
   return typeof value === "string" && value.trim() ? value.trim() : null
@@ -127,6 +153,8 @@ async function sendThroughSocialApi(input: {
     logger.error(
       {
         category: result.error.category,
+        code: result.error.code,
+        message: result.error.message,
         httpStatus: result.error.httpStatus,
         integrationId: input.integrationId,
         outcomeUnknown: result.error.outcomeUnknown,
@@ -135,8 +163,9 @@ async function sendThroughSocialApi(input: {
       },
       "[dispatchMessage] SocialAPI send failed",
     )
+    const refusal = mapSocialApiError(result.error)
     await recordFailure({
-      detail: `SocialAPI send failed (${result.error.category})`,
+      detail: `${refusal.detail}: ${result.error.message}`,
       integrationId: input.integrationId,
       organizationId: input.organizationId,
       threadId: input.threadId,
@@ -146,7 +175,7 @@ async function sendThroughSocialApi(input: {
       ok: false,
       ...(result.error.outcomeUnknown
         ? { outcome: "unknown" as const, error: DELIVERY_UNCONFIRMED }
-        : { error: "Failed to send via Instagram" }),
+        : { error: refusal.error }),
       ...(result.error.httpStatus > 0 && { providerStatus: result.error.httpStatus }),
     }
   }
