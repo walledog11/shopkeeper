@@ -241,14 +241,20 @@ function executionError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+type OrgThread = Awaited<ReturnType<typeof requireOrgThread>>;
+
+// A caller that has just loaded the thread passes it in. Each re-read cost a
+// round trip per relation, four times over in one automatic send, and settled
+// nothing: the execution claim checks the plan is still current in its own
+// transaction.
 async function loadCurrentCachedHomePlan(params: {
   orgId: string;
   threadId: string;
   settings: OrgSettings;
   allowMutativeAutoExecute?: boolean;
   proposedCache?: AgentPlanCacheRecord;
-}): Promise<CurrentCachedPlan> {
-  const thread = await requireOrgThread(params.threadId, params.orgId);
+}, loadedThread?: OrgThread): Promise<CurrentCachedPlan> {
+  const thread = loadedThread ?? await requireOrgThread(params.threadId, params.orgId);
   const cachedPlan = params.proposedCache ?? readAgentPlanCache(thread.cachedPlan);
   // The plan is current while the message it was drafted against is still the
   // conversation's latest, whoever sent either.
@@ -296,7 +302,7 @@ async function loadExecutionSource(params: {
   executionIntent: ExecutionIntent;
   expectedIdentity?: ExpectedPlanIdentity;
   allowMutativeAutoExecute?: boolean;
-}): Promise<CurrentCachedPlan> {
+}, thread: OrgThread): Promise<CurrentCachedPlan> {
   const durable = params.executionIntent === "merchant_approved" && params.expectedIdentity?.planId
     ? await readDurableProposalExecutionSource({
         organizationId: params.orgId,
@@ -304,10 +310,9 @@ async function loadExecutionSource(params: {
         proposalId: params.expectedIdentity.planId,
       })
     : null;
-  if (!durable) return loadCurrentCachedHomePlan(params);
+  if (!durable) return loadCurrentCachedHomePlan(params, thread);
 
   validateDurableExpectedIdentity(durable, params.expectedIdentity!);
-  const thread = await requireOrgThread(params.threadId, params.orgId);
   // The proposal was judged when it was parked, but the card it was parked from
   // still has the last word on validity: a draft that failed validation never
   // runs, whichever record the approval names.
@@ -613,7 +618,7 @@ export async function executeCurrentCachedHomePlan(params: {
     throw new BadRequestError("Review the sender before sending");
   }
 
-  const current = await loadExecutionSource(params);
+  const current = await loadExecutionSource(params, thread);
 
   if (current.plan && isInvalidPlan(current.plan)) {
     throw new BadRequestError(
@@ -996,7 +1001,7 @@ export async function maybeAutoExecuteCurrentCachedHomePlan(params: {
     return null;
   }
 
-  const current = await loadCurrentCachedHomePlan(params);
+  const current = await loadCurrentCachedHomePlan(params, thread);
   if (!current.plan) {
     return null;
   }

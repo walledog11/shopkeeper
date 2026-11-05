@@ -53,6 +53,9 @@
     "packages/integrations": {
       "project": ["src/**/*.ts"]
     },
+    "packages/messaging": {
+      "project": ["src/**/*.ts"]
+    },
     "packages/shared": {
       "project": ["src/**/*.ts"]
     }

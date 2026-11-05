@@ -31,6 +31,7 @@
     "@shopkeeper/db": "*",
     "@shopkeeper/email": "*",
     "@shopkeeper/integrations": "*",
+    "@shopkeeper/messaging": "*",
     "@shopkeeper/shared": "*",
     "@upstash/redis": "^1.37.0",
     "@vercel/blob": "^2.3.3",

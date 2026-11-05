@@ -1,68 +1,34 @@
 import { createHash } from "node:crypto";
-import { db, SenderType, createMessage } from "@shopkeeper/db";
+import { SenderType, createMessage } from "@shopkeeper/db";
 import { CHANNEL_TYPE, THREAD_STATUS } from "@shopkeeper/agent/thread-constants";
 import { communicationFailure, communicationSuccess, openEmailThreadFor, type ThreadSinkContext } from "@shopkeeper/agent/thread-io";
 import type { SendReplyInput, SendEmailInput } from "@shopkeeper/agent/tools";
-import type { AgentActionMode } from "@shopkeeper/agent/context";
-import type { ReplySource } from "@shopkeeper/analytics";
 import type { ToolResult } from "@shopkeeper/agent/tools";
-import { toolError, toolNotFound, toolOk, toolUnknown } from "@shopkeeper/agent/tools";
-import { recordOutboundCall } from "@/lib/server/outbound-recorder";
+import {
+  agentReplySource,
+  loadAgentReplyThread,
+  markAgentMessageSendFailed,
+  markLogicalResponseAttempted,
+  markLogicalResponseSent,
+  markPendingAgentMessageSendUnknown,
+  recordOutboundCall,
+  sendAgentReply,
+} from "@shopkeeper/messaging";
 import logger from "@/lib/server/logger";
 import { getEmailProvider } from "@shopkeeper/email/providers";
 import { buildThreadReplyHeaders, formatReplySubject } from "@shopkeeper/email/reply";
 import { getEmailSender } from "@shopkeeper/email/senders";
 import { EmailNotConfiguredError } from "@shopkeeper/email/types";
 import { resolveEmailIntegration } from "@shopkeeper/email/integration-resolution";
-import { dispatchMessage, type DispatchMessageResult } from "@/lib/messaging/dispatch-message";
+import { dispatchMessage } from "@/lib/messaging/dispatch-message";
 import {
   enqueueOutboundEmail,
   isOutboundEmailAsyncEnabled,
 } from "@/lib/messaging/enqueue-outbound-email";
 import { recordEmailSendFailure } from "@/lib/messaging/provider-send-failures";
-import {
-  markAgentMessageSendFailed,
-  markLogicalResponseAttempted,
-  markLogicalResponseSent,
-  markPendingAgentMessageSendUnknown,
-} from "@/lib/messaging/dispatch-message-common";
 import { captureDashboardOutboundReplySent } from "@/lib/server/product-analytics";
 
 type ThreadContext = ThreadSinkContext;
-
-function agentReplySource(mode: AgentActionMode | undefined): ReplySource {
-  return mode === 'auto_executed' ? 'agent_automatic' : 'agent_approved';
-}
-
-function agentReplyDispatchError(
-  channelType: string,
-  result: Extract<DispatchMessageResult, { ok: false }>,
-): ToolResult {
-  if (result.outcome === "unknown") {
-    return toolUnknown(`Unknown: ${result.error}. Do not send it again automatically.`);
-  }
-  if (channelType === CHANNEL_TYPE.TIKTOK && result.providerStatus !== undefined) {
-    return toolError(`Error: TikTok Shop dispatch failed (${result.providerStatus}).`);
-  }
-  if (result.error === "Email not configured" && result.detail) {
-    return toolError(`Error: email not configured — ${result.detail}`);
-  }
-  if (result.error === "Email dispatch failed" && result.detail) {
-    return toolError(`Error: email dispatch failed — ${result.detail}`);
-  }
-
-  const agentMessage = {
-    "No Instagram integration configured": "no Instagram integration configured",
-    "No TikTok Shop integration configured": "no TikTok Shop integration configured",
-    "TikTok Shop messaging is not configured": "TikTok Shop messaging is not configured",
-    "TikTok Shop token expired": "TikTok Shop token expired",
-    "No email integration configured": "no email integration configured",
-    "Email not configured": "email not configured",
-    "Email dispatch failed": "email dispatch failed",
-  }[result.error] ?? result.error;
-  return toolError(`Error: ${agentMessage}.`);
-}
-
 
 // ── send_reply ────────────────────────────────────────────────────────────────
 
@@ -70,78 +36,7 @@ export async function sendReply(
   input: SendReplyInput,
   ctx: ThreadContext
 ): Promise<ToolResult> {
-  const thread = await db.thread.findFirst({
-    where: { id: ctx.threadId, organizationId: ctx.orgId },
-    include: { customer: true },
-  }).catch(() => null);
-
-  if (!thread) return communicationFailure(ctx, 'send_reply', { kind: 'thread', id: ctx.threadId }, 'not_found', 'thread_not_found', "Error: thread not found.");
-  if (
-    thread.channelType !== CHANNEL_TYPE.IG_DM &&
-    thread.channelType !== CHANNEL_TYPE.TIKTOK &&
-    thread.channelType !== CHANNEL_TYPE.EMAIL &&
-    thread.channelType !== CHANNEL_TYPE.SHOPIFY_CHAT
-  ) {
-    return communicationFailure(ctx, 'send_reply', { kind: 'thread', id: ctx.threadId }, 'failed', 'unsupported_channel', `Error: channel dispatch not implemented for ${thread.channelType}.`);
-  }
-
-  const result = await dispatchMessage(
-    thread,
-    { id: ctx.orgId, name: ctx.orgName },
-    input.text,
-    {
-      source: "agent_send_reply",
-      analyticsReplySource: agentReplySource(ctx.agentActionMode),
-      emailSubjectFallback: thread.tag || "Your inquiry",
-      agentRequestId: ctx.agentRequestId,
-      agentTaskId: ctx.agentTaskId,
-    },
-  );
-  if (!result.ok) {
-    const display = agentReplyDispatchError(thread.channelType, result);
-    const failure = communicationFailure(
-      ctx,
-      'send_reply',
-      { kind: 'thread', id: thread.id },
-      result.outcome === 'unknown' ? 'unknown' : 'failed',
-      result.code ?? (result.outcome === 'unknown' ? 'delivery_unknown' : 'delivery_failed'),
-      display.message,
-    );
-    if (result.outcome !== 'unknown' || !result.message || !ctx.operationId || !ctx.executionId) {
-      return failure;
-    }
-    return {
-      ...failure,
-      receipt: {
-        version: 1,
-        operationId: ctx.operationId,
-        executionId: ctx.executionId,
-        tool: 'send_reply',
-        target: { kind: 'thread', id: thread.id },
-        observedAt: new Date().toISOString(),
-        providerReference: result.message.id,
-        outcome: 'unknown',
-        code: result.code ?? 'delivery_unknown',
-        facts: {
-          logicalResponseId: result.message.id,
-          messageId: result.message.id,
-          threadId: thread.id,
-          destination: { kind: 'thread', id: thread.id },
-          contentSha256: createHash('sha256').update(input.text).digest('hex'),
-          deliveryState: 'unknown',
-          providerMessageId: result.message.providerMessageId ?? null,
-        },
-      },
-    };
-  }
-
-  if (thread.channelType === CHANNEL_TYPE.IG_DM) {
-    return communicationSuccess(ctx, 'send_reply', { threadId: thread.id, destination: { kind: 'thread', id: thread.id }, text: input.text, message: result.message }, `Reply sent to customer via Instagram DM.`);
-  }
-  if (thread.channelType === CHANNEL_TYPE.TIKTOK) {
-    return communicationSuccess(ctx, 'send_reply', { threadId: thread.id, destination: { kind: 'thread', id: thread.id }, text: input.text, message: result.message }, `Reply sent to customer via TikTok Shop.`);
-  }
-  return communicationSuccess(ctx, 'send_reply', { threadId: thread.id, destination: { kind: 'thread', id: thread.id }, text: input.text, message: result.message }, `Reply sent to customer via email.`);
+  return sendAgentReply(input, ctx, await loadAgentReplyThread(ctx), dispatchMessage);
 }
 
 // ── send_email ────────────────────────────────────────────────────────────────

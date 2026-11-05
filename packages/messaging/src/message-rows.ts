@@ -1,6 +1,6 @@
 import { createMessage, db, SenderType } from "@shopkeeper/db"
 import { THREAD_STATUS } from "@shopkeeper/agent/thread-constants"
-import type { DispatchThread } from "./dispatch-message-types"
+import type { DispatchThread } from "./types.js"
 
 interface AgentMessageAttribution {
   agentRequestId?: string

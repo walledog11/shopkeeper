@@ -44,7 +44,7 @@ vi.mock('@/lib/server/provider-send-alerts', () => ({
 
 import { POST } from './route';
 import { ServerClient } from 'postmark';
-import { readOutboundRecords } from '@/lib/server/outbound-recorder';
+import { readOutboundRecords } from '@shopkeeper/messaging';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
 let tempDir: string | null = null;

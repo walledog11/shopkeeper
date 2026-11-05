@@ -1,0 +1,32 @@
+{
+  "name": "@shopkeeper/messaging",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc -p tsconfig.json --noEmit --pretty false",
+    "dev": "tsc --watch --preserveWatchOutput",
+    "test:unit": "vitest run --config vitest.config.ts",
+    "lint": "cd ../.. && eslint packages/messaging/src packages/messaging/vitest.config.ts --max-warnings 0"
+  },
+  "dependencies": {
+    "@shopkeeper/agent": "*",
+    "@shopkeeper/analytics": "*",
+    "@shopkeeper/db": "*",
+    "@shopkeeper/integrations": "*",
+    "@shopkeeper/shared": "*"
+  },
+  "devDependencies": {
+    "typescript": "latest",
+    "vitest": "^4.1.3"
+  }
+}

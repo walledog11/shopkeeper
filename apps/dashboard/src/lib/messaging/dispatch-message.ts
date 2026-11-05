@@ -1,33 +1,28 @@
-import { CHANNEL_TYPE, THREAD_STATUS } from "@shopkeeper/agent/thread-constants"
-import { recordManualMerchantReplyForThread } from "@shopkeeper/agent/request-outcome"
-import { db, SenderType } from "@shopkeeper/db"
-import logger from "@/lib/server/logger"
-import { isOutboundEmailAsyncEnabled } from "@/lib/messaging/enqueue-outbound-email"
+import { CHANNEL_TYPE } from "@shopkeeper/agent/thread-constants"
+import { db } from "@shopkeeper/db"
 import {
-  createPendingLogicalResponse,
-  createSentAgentMessage,
-  markAgentMessageSendFailed,
-  markLogicalResponseAttempted,
-  markLogicalResponseSent,
-  markPendingAgentMessageSendUnknown,
-} from "./dispatch-message-common"
+  assertCurrentEpisode,
+  deliverMessage,
+  dispatchAcknowledgement as acknowledgeOnChannel,
+  dispatchInstagramDirect,
+  type DispatchFailure,
+  type DispatchMessageOptions,
+  type DispatchMessageResult,
+  type DispatchOrg,
+  type DispatchProviderResult,
+  type DispatchSource,
+  type DispatchThread,
+} from "@shopkeeper/messaging"
+import { isOutboundEmailAsyncEnabled } from "@/lib/messaging/enqueue-outbound-email"
 import {
   dispatchEmailViaGatewayQueue,
   sendEmailSynchronously,
 } from "./email-dispatch"
-import { dispatchInstagramDirect } from "./instagram-dispatch"
+import { dashboardMessagingHost } from "./messaging-host"
 import { dispatchTikTokShopMessage } from "./tiktok-shop-dispatch"
-import type {
-  DispatchFailure,
-  DispatchMessageOptions,
-  DispatchMessageResult,
-  DispatchOrg,
-  DispatchThread,
-} from "./dispatch-message-types"
-import { captureDashboardOutboundReplySent } from "@/lib/server/product-analytics"
 import { isStorefrontChatGloballyEnabled, isStorefrontChatEnabledForIntegration } from "@/lib/storefront-chat/enabled"
 
-export type { DispatchMessageResult } from "./dispatch-message-types"
+export type { DispatchMessageResult } from "@shopkeeper/messaging"
 
 // Storefront chat has no outbound provider: the widget polls for new messages,
 // so "delivery" is persisting the row that createSentAgentMessage writes next.
@@ -70,79 +65,57 @@ async function resolveStorefrontChatDelivery(
   return { ok: false, error: "Storefront chat session is closed, expired, or disabled" }
 }
 
-// Refuse before the provider is touched. A draft or approval written against an
-// episode that has since rolled over describes a conversation the customer has
-// moved past, so it is neither sent to the old thread nor quietly rerouted onto
-// the new one — rerouting would put model-authored text into a conversation it
-// was not written for.
-async function assertCurrentEpisode(thread: DispatchThread): Promise<DispatchFailure | null> {
-  const current = await db.thread.findUnique({
-    where: { id: thread.id },
-    select: { status: true, closedReason: true },
-  })
-  if (current?.status === THREAD_STATUS.CLOSED && current.closedReason === "episode_rollover") {
-    return {
-      ok: false,
-      code: "episode_superseded",
-      error: "This conversation has ended and the shopper has started a new one",
-    }
-  }
-  return null
-}
-
 /**
  * Tells a messaging-channel customer that a person is looking at their message.
- * It is delivered like a reply but recorded as an internal note: it answers
- * nothing, so the thread must keep awaiting a real reply and the plan the merchant
- * is reviewing must stay current — an outbound message would end both.
- *
- * Once per wait: the note is keyed to the latest real reply, which an
- * acknowledgement never moves, so a customer who writes again before anyone
- * answers is not told the same thing twice. The key is claimed before the send
- * and released if the provider definitely refuses it.
+ * Once per wait; see `dispatchAcknowledgement` in `@shopkeeper/messaging`.
  */
-export async function dispatchAcknowledgement(
+export function dispatchAcknowledgement(
   thread: DispatchThread,
   org: DispatchOrg,
   text: string,
 ): Promise<DispatchFailure | { ok: true; skipped: boolean }> {
-  const superseded = await assertCurrentEpisode(thread)
-  if (superseded) return superseded
-  if (thread.channelType !== CHANNEL_TYPE.IG_DM && thread.channelType !== CHANNEL_TYPE.TIKTOK) {
-    return { ok: false, error: "Unsupported channel" }
-  }
+  return acknowledgeOnChannel(
+    thread,
+    text,
+    thread.channelType === CHANNEL_TYPE.IG_DM
+      ? () => dispatchInstagramDirect(thread, org, text, "auto_ack", dashboardMessagingHost)
+      : thread.channelType === CHANNEL_TYPE.TIKTOK
+        ? () => dispatchTikTokShopMessage(thread, org, text, "auto_ack")
+        : null,
+  )
+}
 
-  const lastReply = await db.message.findFirst({
-    where: {
-      organizationId: thread.organizationId,
-      threadId: thread.id,
-      senderType: { in: [SenderType.agent, SenderType.ai] },
-      deletedAt: null,
-    },
-    orderBy: [{ sentAt: "desc" }, { id: "desc" }],
-    select: { id: true },
-  })
-  const key = `handoff-ack:${thread.id}:${lastReply?.id ?? "start"}`
-  const claimed = await db.message.createMany({
-    data: {
-      threadId: thread.id,
-      organizationId: thread.organizationId,
-      senderType: SenderType.note,
-      externalMessageId: key,
-      contentText: `Sent automatically to the customer: "${text}"`,
-    },
-    skipDuplicates: true,
-  })
-  if (claimed.count === 0) return { ok: true, skipped: true }
-
-  const providerResult = thread.channelType === CHANNEL_TYPE.IG_DM
-    ? await dispatchInstagramDirect(thread, org, text, "auto_ack")
-    : await dispatchTikTokShopMessage(thread, org, text, "auto_ack")
-  // An unknown outcome may have reached the customer, so it keeps the claim.
-  if (!providerResult.ok && providerResult.outcome !== "unknown") {
-    await db.message.deleteMany({ where: { organizationId: thread.organizationId, externalMessageId: key } })
+function sendOnChannel(
+  thread: DispatchThread,
+  org: DispatchOrg,
+  text: string,
+  source: DispatchSource,
+  options: DispatchMessageOptions,
+): Promise<DispatchProviderResult> {
+  const attachments = options.attachments ?? []
+  switch (thread.channelType) {
+    case CHANNEL_TYPE.IG_DM:
+      return dispatchInstagramDirect(thread, org, text, source, dashboardMessagingHost)
+    case CHANNEL_TYPE.TIKTOK:
+      return dispatchTikTokShopMessage(thread, org, text, source)
+    case CHANNEL_TYPE.EMAIL:
+      return sendEmailSynchronously(thread, org, text, {
+        source,
+        subjectFallback: options.emailSubjectFallback,
+        attachments,
+      })
+    case CHANNEL_TYPE.SHOPIFY:
+      return sendEmailSynchronously(thread, org, text, {
+        source,
+        subjectFallback: options.emailSubjectFallback,
+        originalChannel: CHANNEL_TYPE.SHOPIFY,
+        attachments,
+      })
+    case CHANNEL_TYPE.SHOPIFY_CHAT:
+      return resolveStorefrontChatDelivery(thread)
+    default:
+      return Promise.resolve({ ok: false as const, error: "Unsupported channel" })
   }
-  return providerResult.ok ? { ok: true, skipped: false } : providerResult
 }
 
 /**
@@ -187,81 +160,11 @@ export async function dispatchMessage(
     )
   }
 
-  const persistBeforeSynchronousAgentSend = source === "agent_send_reply"
-    && !(isEmailChannel && isOutboundEmailAsyncEnabled())
-  const pendingResponse = persistBeforeSynchronousAgentSend
-    ? await createPendingLogicalResponse(thread, text, attachments, {
-        agentRequestId: options.agentRequestId,
-        agentTaskId: options.agentTaskId,
-      })
-    : null
-
-  if (pendingResponse) await markLogicalResponseAttempted(pendingResponse.id)
-
-  const providerResult = thread.channelType === CHANNEL_TYPE.IG_DM
-    ? await dispatchInstagramDirect(thread, org, text, source)
-    : thread.channelType === CHANNEL_TYPE.TIKTOK
-      ? await dispatchTikTokShopMessage(thread, org, text, source)
-    : thread.channelType === CHANNEL_TYPE.EMAIL
-      ? await sendEmailSynchronously(thread, org, text, {
-        source,
-        subjectFallback: options.emailSubjectFallback,
-        attachments,
-      })
-      : thread.channelType === CHANNEL_TYPE.SHOPIFY
-        ? await sendEmailSynchronously(thread, org, text, {
-          source,
-          subjectFallback: options.emailSubjectFallback,
-          originalChannel: CHANNEL_TYPE.SHOPIFY,
-          attachments,
-        })
-        : thread.channelType === CHANNEL_TYPE.SHOPIFY_CHAT
-          ? await resolveStorefrontChatDelivery(thread)
-          : { ok: false as const, error: "Unsupported channel" }
-
-  if (!providerResult.ok) {
-    if (!pendingResponse) return providerResult
-    if (providerResult.outcome === "unknown") {
-      await markPendingAgentMessageSendUnknown(pendingResponse.id, providerResult.error)
-    } else {
-      await markAgentMessageSendFailed(pendingResponse.id, providerResult.error)
-    }
-    return { ...providerResult, message: { ...pendingResponse, sendStatus: providerResult.outcome === "unknown" ? "unknown" : "failed" } }
-  }
-
-  const message = pendingResponse
-    ? await markLogicalResponseSent(
-        pendingResponse.id,
-        providerResult.integrationId,
-        providerResult.providerMessageId,
-      )
-    : await createSentAgentMessage(
-        thread,
-        text,
-        providerResult.integrationId,
-        providerResult.providerMessageId,
-        attachments,
-        { agentRequestId: options.agentRequestId, agentTaskId: options.agentTaskId },
-      )
-  const replySource = options.analyticsReplySource
-    ?? (source === "agent_send_reply" ? "agent_approved" : "manual")
-  if (replySource === "manual" && source !== "auto_ack") {
-    void recordManualMerchantReplyForThread({
-      orgId: thread.organizationId,
-      threadId: thread.id,
-      outgoingMessageId: message.id,
-    }).catch((err) => {
-      logger.error(
-        { err, threadId: thread.id, organizationId: thread.organizationId },
-        "[dispatch-message] Failed to record manual reply outcome",
-      );
-    });
-  }
-  void captureDashboardOutboundReplySent({
-    channel: thread.channelType,
-    messageId: message.id,
-    organizationId: org.id,
-    replySource,
-  })
-  return { ok: true, message }
+  return deliverMessage(
+    thread,
+    text,
+    options,
+    () => sendOnChannel(thread, org, text, source, options),
+    dashboardMessagingHost,
+  )
 }

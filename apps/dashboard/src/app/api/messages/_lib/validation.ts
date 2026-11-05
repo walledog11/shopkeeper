@@ -1,4 +1,5 @@
 import { BadRequestError } from '@/lib/api/errors';
+import type { AutoAckKind } from '@shopkeeper/messaging';
 import { requireJsonObject } from '@/lib/api/body';
 import {
   normalizeStringArray,
@@ -28,11 +29,15 @@ export function parseInternalSendMessageBody(body: unknown) {
   };
 }
 
+function isAutoAckKind(value: unknown): value is AutoAckKind {
+  return value === 'after_hours' || value === 'handoff';
+}
+
 export function parseAutoAckBody(body: unknown) {
   const candidate = requireJsonObject(body, { message: 'Validation failed' });
   // Absent means after hours: a gateway deployed before `handoff` existed sends none.
   const kind = candidate.kind ?? 'after_hours';
-  if (kind !== 'after_hours' && kind !== 'handoff') {
+  if (!isAutoAckKind(kind)) {
     throw new BadRequestError('kind must be after_hours or handoff');
   }
   return {

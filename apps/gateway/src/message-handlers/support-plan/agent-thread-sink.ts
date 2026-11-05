@@ -1,4 +1,6 @@
+import { CHANNEL_TYPE } from '@shopkeeper/agent/thread-constants';
 import { composeThreadSink, dispatchFailureReceipt, type ThreadSink, type ThreadSinkContext } from '@shopkeeper/agent/thread-io';
+import { loadAgentReplyThread, sendAgentReply, type AgentReplyThread } from '@shopkeeper/messaging';
 import { randomUUID } from 'node:crypto';
 import type { SendEmailInput, SendReplyInput, ToolResult } from '@shopkeeper/agent/tools';
 import logger from '../../logger.js';
@@ -8,6 +10,7 @@ import { DASHBOARD_DISPATCH_FAILED } from '@shopkeeper/agent/message-dispatch';
 import { timeStep } from '@shopkeeper/agent/step-timings';
 import { pushOperatorEscalation } from '../../operator-escalation.js';
 import { publishThreadEvent } from '../../realtime/publish.js';
+import { dispatchInstagramReply, sendsInstagramInProcess } from './instagram-delivery.js';
 
 // Gateway worker ThreadSink: DB-only tools (note / tag / status / escalate) run
 // in-process because the gateway already owns operator notify. Provider-coupled
@@ -103,11 +106,35 @@ async function dispatchAgentSend(
   }
 }
 
+// An Instagram reply is sent here rather than from the dashboard. Past its
+// checks a throw may come after SocialAPI accepted the message, so it is an
+// unknown outcome, as a lost dashboard response is.
+async function sendInstagramReply(
+  input: SendReplyInput,
+  ctx: ThreadSinkContext,
+  thread: NonNullable<AgentReplyThread>,
+): Promise<ToolResult> {
+  try {
+    return await timeStep(
+      { organizationId: ctx.orgId, threadId: ctx.threadId, step: 'instagram_reply' },
+      () => sendAgentReply(input, ctx, thread, dispatchInstagramReply),
+    );
+  } catch (err) {
+    const message = (err as Error).message;
+    logger.error({ err: message, threadId: ctx.threadId }, '[agent-sink] Instagram send errored');
+    recordDispatchFailure('send_reply', ctx, 'tool_exception', message);
+    return dispatchFailureReceipt(ctx, 'send_reply', { kind: 'thread', id: ctx.threadId }, 'unknown', 'send_exception_unknown', 'Unknown: the reply may have been sent before sending it failed. Do not send it again automatically.');
+  }
+}
+
 // The thread's own rows are written by the shared mutations, as on the
 // dashboard; the gateway adds its live-inbox push and its operator escalation.
 export const gatewayThreadSink: ThreadSink = composeThreadSink({
   async sendReply(input, ctx) {
-    const result = await dispatchAgentSend('send_reply', ctx, input);
+    const thread = sendsInstagramInProcess() ? await loadAgentReplyThread(ctx) : null;
+    const result = thread?.channelType === CHANNEL_TYPE.IG_DM
+      ? await sendInstagramReply(input, ctx, thread)
+      : await dispatchAgentSend('send_reply', ctx, input);
     if (result.status !== 'error') await publishThreadEvent(ctx.orgId, ctx.threadId);
     return result;
   },

@@ -8,15 +8,15 @@ import {
   type InstagramProviderError,
 } from "@shopkeeper/integrations/instagram"
 import { createSocialApiClient, type SocialApiError } from "@shopkeeper/integrations/socialapi"
-import logger from "@/lib/server/logger"
-import { recordOutboundCall } from "@/lib/server/outbound-recorder"
-import { recordInstagramSendFailure } from "@/lib/messaging/provider-send-failures"
+import logger from "@shopkeeper/agent/logger"
+import { recordOutboundCall } from "./outbound-recorder.js"
+import type { MessagingHost } from "./host.js"
 import type {
   DispatchOrg,
   DispatchProviderResult,
   DispatchSource,
   DispatchThread,
-} from "./dispatch-message-types"
+} from "./types.js"
 
 const INSTAGRAM_REPLY_WINDOW_MS = 24 * 60 * 60 * 1000
 const OUTSIDE_REPLY_WINDOW =
@@ -121,7 +121,7 @@ function socialApiAccountId(metadata: Record<string, unknown>): string | null {
  * never retried through Meta — a SocialAPI merchant has not authorized Shopkeeper's
  * Meta app, so the two transports are not interchangeable.
  */
-async function sendThroughSocialApi(input: {
+async function sendThroughSocialApi(host: MessagingHost, input: {
   accountId: string
   conversationId: string
   integrationId: string
@@ -131,7 +131,7 @@ async function sendThroughSocialApi(input: {
 }): Promise<DispatchProviderResult> {
   const apiKey = process.env.SOCIALAPI_API_KEY?.trim()
   if (!apiKey) {
-    await recordFailure({
+    await recordFailure(host, {
       detail: "SOCIALAPI_API_KEY is not configured",
       integrationId: input.integrationId,
       organizationId: input.organizationId,
@@ -164,7 +164,7 @@ async function sendThroughSocialApi(input: {
       "[dispatchMessage] SocialAPI send failed",
     )
     const refusal = mapSocialApiError(result.error)
-    await recordFailure({
+    await recordFailure(host, {
       detail: `${refusal.detail}: ${result.error.message}`,
       integrationId: input.integrationId,
       organizationId: input.organizationId,
@@ -191,7 +191,7 @@ async function sendThroughSocialApi(input: {
   }
 }
 
-async function recordFailure(input: {
+async function recordFailure(host: MessagingHost, input: {
   detail: string
   integrationId: string | null
   organizationId: string
@@ -199,7 +199,7 @@ async function recordFailure(input: {
   transport?: "meta" | "socialapi"
 }): Promise<void> {
   try {
-    await recordInstagramSendFailure(input)
+    await host.recordInstagramSendFailure(input)
   } catch (error) {
     logger.error(
       { err: error, integrationId: input.integrationId, threadId: input.threadId },
@@ -213,6 +213,7 @@ export async function dispatchInstagramDirect(
   org: DispatchOrg,
   text: string,
   source: DispatchSource,
+  host: MessagingHost,
 ): Promise<DispatchProviderResult> {
   const recipientId = thread.customer.platformId
   const threadRoute = await db.thread.findFirst({
@@ -234,7 +235,7 @@ export async function dispatchInstagramDirect(
   })
 
   if (!threadRoute?.replyIntegrationId) {
-    await recordFailure({
+    await recordFailure(host, {
       detail: "Instagram thread has no reply integration",
       integrationId: null,
       organizationId: org.id,
@@ -260,7 +261,7 @@ export async function dispatchInstagramDirect(
   })
 
   if (!igIntegration) {
-    await recordFailure({
+    await recordFailure(host, {
       detail: "Instagram reply integration was disconnected or replaced",
       integrationId: threadRoute.replyIntegrationId,
       organizationId: org.id,
@@ -272,7 +273,7 @@ export async function dispatchInstagramDirect(
   const metadata = instagramMetadata(igIntegration.metadata)
   const isSocialApi = metadata?.transport === "socialapi"
   if (!isSocialApi && metadata?.authModel !== "instagram_login") {
-    await recordFailure({
+    await recordFailure(host, {
       detail: "Legacy Instagram integration cannot send replies",
       integrationId: igIntegration.id,
       organizationId: org.id,
@@ -284,7 +285,7 @@ export async function dispatchInstagramDirect(
   const healthReconnect = isSocialApi ? null : reconnectRequiredByHealth(metadata)
   if (healthReconnect) {
     const permissionFailure = healthReconnect === "permission"
-    await recordFailure({
+    await recordFailure(host, {
       detail: permissionFailure
         ? "Instagram health check found missing messaging access"
         : "Instagram health check requires reconnect",
@@ -296,7 +297,7 @@ export async function dispatchInstagramDirect(
   }
 
   if (!isSocialApi && !hasVerifiedMessagingPermission(metadata)) {
-    await recordFailure({
+    await recordFailure(host, {
       detail: "Instagram messaging permission missing",
       integrationId: igIntegration.id,
       organizationId: org.id,
@@ -314,7 +315,7 @@ export async function dispatchInstagramDirect(
       || igIntegration.tokenExpiresAt.getTime() <= Date.now()
     )
   ) {
-    await recordFailure({
+    await recordFailure(host, {
       detail: "Instagram token expired or missing",
       integrationId: igIntegration.id,
       organizationId: org.id,
@@ -325,7 +326,7 @@ export async function dispatchInstagramDirect(
 
   const lastCustomerMessageAt = threadRoute.messages[0]?.sentAt
   if (!lastCustomerMessageAt) {
-    await recordFailure({
+    await recordFailure(host, {
       detail: "Instagram thread has no inbound customer message",
       integrationId: igIntegration.id,
       organizationId: org.id,
@@ -337,7 +338,7 @@ export async function dispatchInstagramDirect(
     }
   }
   if (Date.now() - lastCustomerMessageAt.getTime() >= INSTAGRAM_REPLY_WINDOW_MS) {
-    await recordFailure({
+    await recordFailure(host, {
       detail: "Outside Instagram 24-hour messaging window",
       integrationId: igIntegration.id,
       organizationId: org.id,
@@ -349,7 +350,7 @@ export async function dispatchInstagramDirect(
   const providerAccountId = isSocialApi && metadata ? socialApiAccountId(metadata) : null
   const conversationId = threadRoute.externalSpaceId
   if (isSocialApi && (!providerAccountId || !conversationId)) {
-    await recordFailure({
+    await recordFailure(host, {
       detail: providerAccountId
         ? "SocialAPI thread has no provider conversation id"
         : "SocialAPI integration has no provider account id",
@@ -378,7 +379,7 @@ export async function dispatchInstagramDirect(
   if (recorded) return { ok: true, integrationId: igIntegration.id }
 
   if (isSocialApi) {
-    return sendThroughSocialApi({
+    return sendThroughSocialApi(host, {
       accountId: providerAccountId!,
       conversationId: conversationId!,
       integrationId: igIntegration.id,
@@ -409,7 +410,7 @@ export async function dispatchInstagramDirect(
       },
       "[dispatchMessage] Instagram API failed",
     )
-    await recordFailure({
+    await recordFailure(host, {
       detail: mapped.detail,
       integrationId: igIntegration.id,
       organizationId: org.id,

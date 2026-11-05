@@ -1,5 +1,5 @@
 import type { createMessage } from "@shopkeeper/db"
-import type { OutboundSource } from "@/lib/server/outbound-recorder"
+import type { OutboundSource } from "./outbound-recorder.js"
 import type { ReplySource } from "@shopkeeper/analytics"
 
 export interface DispatchThread {

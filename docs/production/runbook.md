@@ -174,7 +174,7 @@ daily LLM spend cap (`llm_daily_spend`).
     (no Postmark inbound creds). Legacy `hybrid` reads as `standard`.
   - `INSTAGRAM_WEBHOOK_APP_SECRET` (the parent Meta app secret that owns the webhook subscription,
     not the Instagram Login secret), `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` — direct-Meta DM webhooks.
-  - `SOCIALAPI_WEBHOOK_SECRET` (returned once when `/webhooks/socialapi` is registered), `SOCIALAPI_API_KEY` (display-name enrichment only).
+  - `SOCIALAPI_WEBHOOK_SECRET` (returned once when `/webhooks/socialapi` is registered), `SOCIALAPI_API_KEY` (display names, and Instagram replies sent from the gateway).
   - Storefront-chat containment, counted in shopper messages: `STOREFRONT_CHAT_MAX_MESSAGES_PER_SESSION`
     (30), `STOREFRONT_CHAT_MAX_MESSAGES_PER_SHOP_DAY` (200), `STOREFRONT_CHAT_BURST_PER_SESSION` (5),
     `STOREFRONT_CHAT_BURST_PER_IP` (20), `STOREFRONT_CHAT_BURST_WINDOW_SECS` (60).
@@ -962,7 +962,7 @@ secrets — never on `Integration`, in logs, jobs or client responses.
 | Where | Env |
 | --- | --- |
 | Dashboard (Vercel) | `SOCIALAPI_API_KEY` (connect, replies and disconnect — without it outbound refuses and disconnect can't revoke), `SOCIALAPI_ENABLED`, `SOCIALAPI_BRAND_ASSIGNMENTS`, `SOCIALAPI_MAX_ACTIVE_ORGS` (1–8, default 8); `SOCIALAPI_BASE_URL` is ignored in production |
-| Gateway (Railway) | `SOCIALAPI_WEBHOOK_SECRET`; `SOCIALAPI_API_KEY` for display names only (ingest works without it) |
+| Gateway (Railway) | `SOCIALAPI_WEBHOOK_SECRET`; `SOCIALAPI_API_KEY` on both services for display names and Instagram replies (without it the gateway hands its Instagram sends to the dashboard; ingest works either way) |
 
 **Registering the webhook.** SocialAPI verifies a new endpoint with an unsigned `webhook.test`
 before it reveals the secret, and the gateway accepts that ping only while
