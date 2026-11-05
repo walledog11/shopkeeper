@@ -49,6 +49,11 @@ In order. This is the product's critical path.
   SocialAPI's send (about 1.2s) and the gateway's task bookkeeping (about 80 queries at
   20ms each before the first reply). Every step is timed in *Copy timeline*. SocialAPI
   has no typing or "Seen" for Instagram; ask the vendor.
+- **iMessage card latency:** the gateway now builds its Spectrum app at startup; the
+  first card after a deploy used to wait 6–7s for it. Still open: Spectrum's iMessage
+  provider passes no gRPC channel options, so the connection closes after 30 idle
+  minutes and the next card reconnects (1.3–2.0s against 0.4–0.6s warm). Ask Photon to
+  expose `channelOptions` or a keep-alive.
 - **Agent rough edges seen live:** the operator agent's own chat question is reported as
   an escalation and the merchant's answer errors (`answer_operator_question` only knows
   ticket questions); cards on already-escalated threads print the raw

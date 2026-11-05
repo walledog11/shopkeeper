@@ -35,6 +35,11 @@ export type TimedStep =
   | "instagram_send"
   /** Building a card for the merchant's phone and delivering it. */
   | "phone_card"
+  /**
+   * An iMessage send that waited for the Spectrum app: Photon's project and
+   * line-token calls, made once per process.
+   */
+  | "imessage_setup"
   /** The provider call that delivers one message to a phone. */
   | "phone_send";
 

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { onShutdownSignals } from '../shutdown-signals.js';
 import type { ImessageSpectrumApp } from './spectrum.js';
 import {
   clearSpectrumAppCache,
@@ -66,6 +67,35 @@ describe('platform Spectrum app', () => {
 
     expect(mocks.spectrum).toHaveBeenCalledTimes(2);
     await vi.waitFor(() => expect((oldApp as unknown as { stop: ReturnType<typeof vi.fn> }).stop).toHaveBeenCalledTimes(1));
+  });
+
+  it('removes the shutdown handlers Spectrum adds and keeps the gateway ones', async () => {
+    const earlierHandler = () => {};
+    const gatewayHandler = () => {};
+    const spectrumHandler = () => {};
+    process.on('SIGTERM', earlierHandler);
+    let removeGatewayHandler = () => {};
+    mocks.spectrum.mockImplementationOnce(async () => {
+      // A worker can register its shutdown while a job is building the app.
+      removeGatewayHandler = onShutdownSignals(gatewayHandler);
+      process.on('SIGINT', spectrumHandler);
+      process.on('SIGTERM', spectrumHandler);
+      return { id: 'spectrum_app_signals' } as unknown as ImessageSpectrumApp;
+    });
+
+    try {
+      await getPlatformSpectrumApp();
+
+      expect(process.listeners('SIGTERM')).toEqual(expect.arrayContaining([earlierHandler, gatewayHandler]));
+      expect(process.listeners('SIGINT')).toContain(gatewayHandler);
+      expect(process.listeners('SIGTERM')).not.toContain(spectrumHandler);
+      expect(process.listeners('SIGINT')).not.toContain(spectrumHandler);
+    } finally {
+      removeGatewayHandler();
+      process.off('SIGTERM', earlierHandler);
+      process.off('SIGINT', spectrumHandler);
+      process.off('SIGTERM', spectrumHandler);
+    }
   });
 
   it('evicts a rejected initialization so the next call can retry', async () => {

@@ -1,5 +1,6 @@
 import type { Queue, Worker, WorkerOptions } from 'bullmq';
 import logger from '../logger.js';
+import { onShutdownSignals } from '../shutdown-signals.js';
 
 type ShutdownCloseResult = void | Promise<void>;
 
@@ -157,15 +158,7 @@ export function createGatewayWorkerShutdown(
 }
 
 export function registerGatewayShutdownSignals(shutdown: GatewayWorkerShutdown): () => void {
-  const shutdownOnSignal = () => {
+  return onShutdownSignals(() => {
     void shutdown(true);
-  };
-
-  process.on('SIGTERM', shutdownOnSignal);
-  process.on('SIGINT', shutdownOnSignal);
-
-  return () => {
-    process.off('SIGTERM', shutdownOnSignal);
-    process.off('SIGINT', shutdownOnSignal);
-  };
+  });
 }
