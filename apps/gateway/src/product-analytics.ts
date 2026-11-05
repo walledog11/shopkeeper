@@ -122,7 +122,7 @@ export function captureAgentActionsCompleted(actions: PersistedAgentAction[]): v
 }
 
 export async function captureOutboundReplySent(args: {
-  channel: DbChannelType;
+  channel: string;
   messageId: string;
   organizationId: string;
   replySource: ReplySource;

@@ -32,6 +32,8 @@ const repoNodeTsFiles = [
   "packages/integrations/vitest.config.ts",
   "packages/email/src/**/*.ts",
   "packages/email/vitest.config.ts",
+  "packages/messaging/src/**/*.ts",
+  "packages/messaging/vitest.config.ts",
   "packages/db/*.ts",
   "packages/shared/src/**/*.ts",
   "playwright.browser.config.ts",

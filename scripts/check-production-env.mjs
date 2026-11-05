@@ -84,6 +84,7 @@ const CONTRACTS = {
       'SPECTRUM_PROJECT_SECRET',
       'SPECTRUM_WEBHOOK_SECRET',
       'SOCIALAPI_WEBHOOK_SECRET',
+      'SOCIALAPI_API_KEY',
     ],
     absoluteUrlVars: ['DASHBOARD_URL', 'TWILIO_WEBHOOK_URL', 'POSTHOG_HOST'],
     expectedPathSuffixes: {

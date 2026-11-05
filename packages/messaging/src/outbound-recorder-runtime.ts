@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { appendFile, mkdir, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
-import type { OutboundRecord, OutboundRecordInput } from './outbound-recorder';
+import type { OutboundRecord, OutboundRecordInput } from './outbound-recorder.js';
 
 export async function recordOutboundCallToFile(
   input: OutboundRecordInput,

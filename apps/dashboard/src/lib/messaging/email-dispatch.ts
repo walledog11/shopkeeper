@@ -11,14 +11,14 @@ import {
 import { EmailNotConfiguredError } from "@shopkeeper/email/types"
 import { resolveEmailIntegration } from "@shopkeeper/email/integration-resolution"
 import logger from "@/lib/server/logger"
-import { recordOutboundCall } from "@/lib/server/outbound-recorder"
 import { recordEmailSendFailure } from "@/lib/messaging/provider-send-failures"
 import { enqueueOutboundEmail } from "@/lib/messaging/enqueue-outbound-email"
 import {
   createPendingAgentMessage,
   markAgentMessageSendFailed,
   markPendingAgentMessageSendUnknown,
-} from "./dispatch-message-common"
+  recordOutboundCall,
+} from "@shopkeeper/messaging"
 import type {
   DispatchFailure,
   DispatchOrg,
@@ -26,7 +26,7 @@ import type {
   DispatchSource,
   DispatchThread,
   DispatchMessageResult,
-} from "./dispatch-message-types"
+} from "@shopkeeper/messaging"
 import type { ReplySource } from "@shopkeeper/analytics"
 
 // Dashboard records the pending message, then hands provider delivery to the

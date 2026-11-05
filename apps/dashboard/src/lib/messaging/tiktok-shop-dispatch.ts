@@ -1,7 +1,7 @@
 import { db } from "@shopkeeper/db"
 import { CHANNEL_TYPE } from "@shopkeeper/agent/thread-constants"
 import logger from "@/lib/server/logger"
-import { recordOutboundCall } from "@/lib/server/outbound-recorder"
+import { recordOutboundCall } from "@shopkeeper/messaging"
 import { getTikTokShopApiConfig } from "@/lib/tiktok-shop/config"
 import {
   sendTikTokShopTextMessage,
@@ -13,7 +13,7 @@ import type {
   DispatchProviderResult,
   DispatchSource,
   DispatchThread,
-} from "./dispatch-message-types"
+} from "@shopkeeper/messaging"
 
 export async function dispatchTikTokShopMessage(
   thread: DispatchThread,

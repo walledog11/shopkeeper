@@ -32,6 +32,7 @@
     "@shopkeeper/db": "*",
     "@shopkeeper/email": "*",
     "@shopkeeper/integrations": "*",
+    "@shopkeeper/messaging": "*",
     "@shopkeeper/shared": "*",
     "@vercel/blob": "2.3.3",
     "bullmq": "5.76.6",

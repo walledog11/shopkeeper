@@ -35,8 +35,11 @@ approval or execution. Deploys, env, migrations and incident recovery are in
 - `packages/agent/` (`@shopkeeper/agent/*` subpath exports) is the agent core, used by
   both apps. Host-specific locks, logging, alerts and delivery are injected at the
   package boundary. Keep the core host-agnostic and thread-optional.
-- `apps/gateway` runs durable inbound, planning and module work (BullMQ workers).
-  `apps/dashboard` (Next.js) owns interactive UI and provider-coupled delivery.
+- `apps/gateway` runs durable inbound, planning and module work (BullMQ workers), and
+  sends the agent's Instagram replies and acknowledgements itself. `apps/dashboard`
+  (Next.js) owns interactive UI and the rest of provider delivery. Both send through
+  `packages/messaging/` (`@shopkeeper/messaging`), each supplying its own alerting and
+  analytics.
 - **Modules:** support is v1. Order-ops is monitoring-only behind
   `ORDER_RISK_MONITOR_ENABLED` (read tools + `flag_order` only, outside autonomy tiers).
   Shop management (flash sales, repricing) is operator-only: its write tools live in

@@ -3,7 +3,10 @@ import type { OrgSettings } from '@shopkeeper/agent/types';
 import { STATUS } from '../../constants.js';
 import logger from '../../logger.js';
 import { getConversationBurst, type ConversationBurst } from '../inbound/conversation-burst.js';
-import { requestAutoAck, type AutoAckKind } from './planning-dashboard-client.js';
+import { CHANNEL_TYPE } from '@shopkeeper/agent/thread-constants';
+import { loadAutoAckThread, sendAutoAcknowledgement, type AutoAckKind } from '@shopkeeper/messaging';
+import { requestAutoAck } from './planning-dashboard-client.js';
+import { instagramAutoAckSenders, sendsInstagramInProcess } from './instagram-delivery.js';
 import { generateThreadPlan } from './generate-thread-plan.js';
 import { degradeForConversationLimit } from './plan-limit.js';
 import { mayParkMerchantWork, type PrecomputedPlanResult } from './planning-types.js';
@@ -123,6 +126,26 @@ export async function precomputeThreadPlan(
   }
 }
 
+type AutoAckOutcome =
+  | { sent: true; skipped: boolean }
+  | { sent: false; unknown: boolean; status?: number | null };
+
+// An Instagram thread is acknowledged from here; any other channel through the
+// dashboard, which owns those providers.
+async function acknowledge(threadId: string, kind: AutoAckKind): Promise<AutoAckOutcome> {
+  const thread = sendsInstagramInProcess() ? await loadAutoAckThread(threadId) : null;
+  if (thread?.channelType === CHANNEL_TYPE.IG_DM) {
+    const result = await sendAutoAcknowledgement(thread, kind, instagramAutoAckSenders);
+    return result.ok
+      ? { sent: true, skipped: result.skipped }
+      : { sent: false, unknown: result.outcome === 'unknown' };
+  }
+  const response = await requestAutoAck(threadId, kind);
+  return response.ok
+    ? { sent: true, skipped: Boolean(response.data.skipped) }
+    : { sent: false, unknown: response.outcome === 'unknown', status: response.status };
+}
+
 // Best-effort customer auto-ack: failures are logged only so the ai-summary job
 // still completes.
 export async function sendAutoAck(
@@ -131,18 +154,18 @@ export async function sendAutoAck(
   kind: AutoAckKind = 'after_hours',
 ): Promise<void> {
   try {
-    const response = await requestAutoAck(threadId, kind);
-    if (!response.ok) {
+    const outcome = await acknowledge(threadId, kind);
+    if (!outcome.sent) {
       logger.warn(
-        { status: response.status, outcome: response.outcome, threadId, organizationId, kind },
-        response.outcome === 'unknown'
+        { status: outcome.status, outcome: outcome.unknown ? 'unknown' : 'failed', threadId, organizationId, kind },
+        outcome.unknown
           ? '[Worker] Auto-ack dispatch outcome unknown'
           : '[Worker] Auto-ack dispatch failed',
       );
-    } else if (response.data.skipped) {
+    } else if (outcome.skipped) {
       logger.info({ threadId, organizationId, kind }, kind === 'handoff'
         ? '[Worker] Auto-ack skipped — customer already acknowledged while waiting'
-        : '[Worker] Auto-ack skipped by dashboard — no auto-acknowledgment message configured');
+        : '[Worker] Auto-ack skipped — no auto-acknowledgment message configured');
     } else {
       logger.info({ threadId, organizationId, kind }, '[Worker] Auto-ack sent to customer');
     }

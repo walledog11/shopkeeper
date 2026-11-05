@@ -9,8 +9,8 @@ import {
 } from '@shopkeeper/agent/observability';
 import { emitOpsAlert, incrementOpsAlertWindow } from './ops-alerts.js';
 
-export type ProviderSendAlertProvider = 'telegram' | 'imessage';
-export type ProviderSendAlertChannel = 'operator_notify';
+export type ProviderSendAlertProvider = 'telegram' | 'imessage' | 'meta' | 'socialapi';
+export type ProviderSendAlertChannel = 'operator_notify' | 'ig_dm';
 
 export interface ProviderSendAlertDependencies {
   counterClient: OpsAlertCounterClient;
@@ -19,6 +19,7 @@ export interface ProviderSendAlertDependencies {
   incrementWindow?: typeof incrementOpsAlertWindow;
   nowMs?: number;
   threadId?: string | null;
+  integrationId?: string | null;
   detail?: string | null;
   extra?: Record<string, unknown>;
 }
@@ -37,6 +38,7 @@ export async function recordProviderSendFailure(
     channel,
     orgId,
     threadId: deps.threadId,
+    integrationId: deps.integrationId,
     detail: deps.detail,
     ...(deps.extra ? { extra: deps.extra } : {}),
   }, {

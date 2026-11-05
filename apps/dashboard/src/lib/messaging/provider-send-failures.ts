@@ -1,4 +1,4 @@
-import type { OutboundProvider } from '@/lib/server/outbound-recorder';
+import type { OutboundProvider } from '@shopkeeper/messaging';
 import { recordProviderSendFailure } from '@/lib/server/provider-send-alerts';
 import { getRedis } from '@/lib/server/redis';
 

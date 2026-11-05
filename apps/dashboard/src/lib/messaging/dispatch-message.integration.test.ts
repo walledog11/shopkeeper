@@ -35,7 +35,7 @@ vi.mock('@/lib/server/provider-send-alerts', () => ({
 }));
 
 import { dispatchMessage } from './dispatch-message';
-import { readOutboundRecords } from '@/lib/server/outbound-recorder';
+import { readOutboundRecords } from '@shopkeeper/messaging';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
 let tempDir: string | null = null;

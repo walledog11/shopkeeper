@@ -12,6 +12,7 @@ const { mockDispatchMessage } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/messaging/dispatch-message', () => ({
+  dispatchAcknowledgement: vi.fn(),
   dispatchMessage: mockDispatchMessage,
 }));
 

@@ -43,12 +43,12 @@ In order. This is the product's critical path.
   `dm.sent` correlation (a reply typed in the Instagram app never reaches the thread),
   missed-delivery recovery, account health probing, failed-connect compensation, and a
   reconnect that switches accounts, which deletes the old row without revoking it.
-- **Instagram reply latency:** about 21s from a DM to the first reply before the
-  database driver change (every query had taken five round trips). What remains: one
-  dashboard send makes about 22 sequential queries from Vercel `iad1` (Virginia), so
-  the database's distance from `iad1` is paid 22 times per send; and model time (read
-  about 2.5s, plan 2–4s). Every step is timed in *Copy timeline*. SocialAPI has no
-  typing or "Seen" for Instagram; ask the vendor.
+- **Instagram reply latency:** about 10s from a DM to the first reply (21s before the
+  database driver change). Instagram sends now leave from the gateway, not a cold
+  dashboard function. What remains: model time (read about 2.3s, plan 1.6s a call),
+  SocialAPI's send (about 1.2s) and the gateway's task bookkeeping (about 80 queries at
+  20ms each before the first reply). Every step is timed in *Copy timeline*. SocialAPI
+  has no typing or "Seen" for Instagram; ask the vendor.
 - **Agent rough edges seen live:** the operator agent's own chat question is reported as
   an escalation and the merchant's answer errors (`answer_operator_question` only knows
   ticket questions); cards on already-escalated threads print the raw

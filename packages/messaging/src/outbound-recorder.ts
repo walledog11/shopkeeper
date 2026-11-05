@@ -38,7 +38,7 @@ export async function recordOutboundCall(input: OutboundRecordInput): Promise<Ou
     return null;
   }
 
-  const runtime = await import('./outbound-recorder-runtime');
+  const runtime = await import('./outbound-recorder-runtime.js');
   return runtime.recordOutboundCallToFile(input, getOutboundRecordPath());
 }
 
@@ -47,7 +47,7 @@ export async function readOutboundRecords(): Promise<OutboundRecord[]> {
     return [];
   }
 
-  const runtime = await import('./outbound-recorder-runtime');
+  const runtime = await import('./outbound-recorder-runtime.js');
   return runtime.readOutboundRecordsFromFile(getOutboundRecordPath());
 }
 
@@ -56,7 +56,7 @@ export async function clearOutboundRecords(): Promise<void> {
     return;
   }
 
-  const runtime = await import('./outbound-recorder-runtime');
+  const runtime = await import('./outbound-recorder-runtime.js');
   await runtime.clearOutboundRecordsFile(getOutboundRecordPath());
 }
 

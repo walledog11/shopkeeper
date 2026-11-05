@@ -7,7 +7,7 @@ import {
   isOutboundRecordingEnabled,
   readOutboundRecords,
   recordOutboundCall,
-} from './outbound-recorder';
+} from './outbound-recorder.js';
 
 let tempDir: string | null = null;
 
