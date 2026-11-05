@@ -11,6 +11,7 @@
  */
 import { NextResponse } from "next/server";
 import { INTERNAL_REQUEST_ID_HEADER } from "@shopkeeper/agent/message-dispatch";
+import { recordStepTiming } from "@shopkeeper/agent/step-timings";
 import { db } from "@shopkeeper/db";
 import { sendReply, sendEmail } from "@/lib/agent/thread-io/send";
 import type { SendReplyInput, SendEmailInput } from "@shopkeeper/agent/tools";
@@ -21,6 +22,9 @@ import { withInternalRoute } from "@/lib/api/internal-route";
 import logger from "@/lib/server/logger";
 
 export const maxDuration = 60;
+
+// The first request a function instance serves paid its cold start.
+let instanceServed = false;
 
 function readRequestId(request: Request): string | undefined {
   const value = request.headers.get(INTERNAL_REQUEST_ID_HEADER)?.trim();
@@ -91,6 +95,9 @@ export const POST = withInternalRoute(
     errorMessage: "Failed to dispatch agent message",
   },
   async ({ request }) => {
+    const receivedAt = new Date();
+    const coldStart = !instanceServed;
+    instanceServed = true;
     const requestId = readRequestId(request);
     const {
       agentActionMode, orgId, threadId, op, input, operationId, executionId,
@@ -142,6 +149,15 @@ export const POST = withInternalRoute(
         { status: 404 },
       );
     }
+
+    await recordStepTiming({
+      organizationId: orgId,
+      threadId,
+      step: "send_route",
+      detail: coldStart ? "cold start" : "warm",
+      startedAt: receivedAt,
+      durationMs: Date.now() - receivedAt.getTime(),
+    });
 
     try {
       const ctx = {

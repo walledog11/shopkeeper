@@ -24,6 +24,11 @@ export type TimedStep =
   | "task_queue_wait"
   /** Gateway → dashboard → provider and back, for one customer send. */
   | "send_via_dashboard"
+  /**
+   * The dashboard's ownership checks for one send, timed from when the request
+   * reaches its code. The detail says whether the function started cold for it.
+   */
+  | "send_route"
   /** The dashboard's SocialAPI call for one Instagram message. */
   | "instagram_send"
   /** Building a card for the merchant's phone and delivering it. */
