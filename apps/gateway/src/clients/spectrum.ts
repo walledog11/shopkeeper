@@ -259,9 +259,7 @@ function isPlatformSpectrumAppReady(): boolean {
 }
 
 // Builds the app when the process starts, so the first iMessage after a deploy
-// does not wait for Photon's project and token calls. In production (2026-11),
-// cards that had to build the app took 6–7s to send; cards on a built app took
-// 0.4–2s.
+// does not wait for Photon's project and token calls.
 export function warmPlatformSpectrumApp(): void {
   if (!isImessageConfigured()) return;
   const startedAt = Date.now();
