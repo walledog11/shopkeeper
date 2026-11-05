@@ -10,7 +10,7 @@ import {
   getGatewayBullMqWorkerConnection,
 } from './clients/redis-client.js';
 import { runGatewayEntry } from './bootstrap.js';
-import { stopAllSpectrumApps } from './clients/spectrum.js';
+import { stopAllSpectrumApps, warmPlatformSpectrumApp } from './clients/spectrum.js';
 import { createCoreWorkerResources } from './workers/core.js';
 import { createWorkerHeartbeatResource } from './workers/heartbeat.js';
 import {
@@ -76,6 +76,7 @@ export async function startWorkerRuntime() {
   });
   const shutdown = createGatewayWorkerShutdown(resources);
   registerGatewayShutdownSignals(shutdown);
+  warmPlatformSpectrumApp();
 
   logger.info('[Worker] Engine started. Listening for incoming messages...');
 

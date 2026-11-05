@@ -12,7 +12,7 @@ import { registerHealthRoutes } from './health.js';
 import logger from './logger.js';
 import { closeGatewayBullMqQueues } from './clients/gateway-queues.js';
 import { closeGatewayRedisConnections, getGatewayRedis } from './clients/redis-client.js';
-import { stopAllSpectrumApps } from './clients/spectrum.js';
+import { stopAllSpectrumApps, warmPlatformSpectrumApp } from './clients/spectrum.js';
 import { mountRealtime } from './realtime/sse.js';
 import { runGatewayEntry } from './bootstrap.js';
 import {
@@ -91,6 +91,7 @@ export async function startGatewayServer() {
     createProductAnalyticsShutdownResource(),
   ]);
   registerGatewayServerShutdownSignals(shutdown);
+  warmPlatformSpectrumApp();
 
   return { app, server, shutdown };
 }

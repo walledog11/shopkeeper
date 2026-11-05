@@ -1,9 +1,11 @@
 import { createHash } from 'node:crypto';
+import { recordStepTiming } from '@shopkeeper/agent/step-timings';
 import { attachment, Spectrum, type ContentInput, type SpectrumInstance } from 'spectrum-ts';
 import { imessage } from 'spectrum-ts/providers/imessage';
 import { getSpectrumConfig, type SpectrumConfig } from '../config/runtime-config.js';
 import logger from '../logger.js';
 import { recordProviderSendFailureInBackground } from '../provider-send-alerts.js';
+import { isGatewayShutdownListener } from '../shutdown-signals.js';
 
 type ImessageProviderConfig = ReturnType<typeof imessage.config>;
 
@@ -32,7 +34,12 @@ export interface ImessageSendAlertContext {
 interface CachedSpectrumApp {
   credHash: string;
   app: Promise<ImessageSpectrumApp>;
+  ready: boolean;
 }
+
+type ShutdownSignal = 'SIGINT' | 'SIGTERM';
+const SHUTDOWN_SIGNALS: readonly ShutdownSignal[] = ['SIGINT', 'SIGTERM'];
+type SignalListeners = Record<ShutdownSignal, NodeJS.SignalsListener[]>;
 
 let platformApp: CachedSpectrumApp | null = null;
 
@@ -181,6 +188,25 @@ function credentialHash(credentials: SpectrumConfig): string {
     .digest('hex');
 }
 
+function signalListeners(): SignalListeners {
+  return { SIGINT: process.listeners('SIGINT'), SIGTERM: process.listeners('SIGTERM') };
+}
+
+// Spectrum() adds SIGINT and SIGTERM handlers that exit the process as soon as
+// Spectrum has stopped itself, which cuts the gateway's own shutdown short: the
+// worker waits for in-flight jobs and the server for open requests. Both stop
+// this app at the end of that shutdown (stopAllSpectrumApps), so the handlers
+// added while it was being built are removed, except the gateway's own: a worker
+// can take a job, and build this app, before it registers them.
+function removeSignalListenersAddedSince(before: SignalListeners): void {
+  for (const signal of SHUTDOWN_SIGNALS) {
+    for (const listener of process.listeners(signal)) {
+      if (before[signal].includes(listener) || isGatewayShutdownListener(listener)) continue;
+      process.off(signal, listener);
+    }
+  }
+}
+
 // The single platform-wide Spectrum app. Cloud mode wants a long-lived process,
 // and the gateway is that process, so one cached app serves webhook verification,
 // attachment rehydration, and outbound for every org.
@@ -200,20 +226,49 @@ export function getPlatformSpectrumApp(): Promise<ImessageSpectrumApp> {
     void platformApp.app.then((app) => app.stop()).catch(() => {});
   }
 
+  const listenersBefore = signalListeners();
   const appPromise = Spectrum({
     projectId: credentials.projectId,
     projectSecret: credentials.projectSecret,
     webhookSecret: credentials.webhookSecret,
     providers: [imessage.config()],
-  }).catch((error) => {
-    if (platformApp?.app === appPromise) {
-      platformApp = null;
-    }
-    throw error;
-  });
+  }).then(
+    (app) => {
+      removeSignalListenersAddedSince(listenersBefore);
+      if (platformApp?.app === appPromise) platformApp.ready = true;
+      return app;
+    },
+    (error: unknown) => {
+      removeSignalListenersAddedSince(listenersBefore);
+      if (platformApp?.app === appPromise) {
+        platformApp = null;
+      }
+      throw error;
+    },
+  );
 
-  platformApp = { credHash, app: appPromise };
+  platformApp = { credHash, app: appPromise, ready: false };
   return appPromise;
+}
+
+function isPlatformSpectrumAppReady(): boolean {
+  const credentials = getSpectrumConfig();
+  return credentials !== null
+    && platformApp?.credHash === credentialHash(credentials)
+    && platformApp.ready;
+}
+
+// Builds the app when the process starts, so the first iMessage after a deploy
+// does not wait for Photon's project and token calls. In production (2026-11),
+// cards that had to build the app took 6–7s to send; cards on a built app took
+// 0.4–2s.
+export function warmPlatformSpectrumApp(): void {
+  if (!isImessageConfigured()) return;
+  const startedAt = Date.now();
+  getPlatformSpectrumApp().then(
+    () => logger.info({ durationMs: Date.now() - startedAt }, '[Spectrum] App ready'),
+    (error: unknown) => logger.warn({ err: error }, '[Spectrum] App build at startup failed; the first send builds it'),
+  );
 }
 
 // Graceful shutdown: stop the cached Spectrum app so its connection is torn down
@@ -242,9 +297,19 @@ export async function sendImessageToSpace(
   images: readonly ImessageImage[] = [],
 ): Promise<void> {
   const contextWithSpace: ImessageSendAlertContext = { ...alertContext, spaceId };
+  const setupStartedAt = isPlatformSpectrumAppReady() ? null : new Date();
   let space: ImessageSendTarget;
   try {
     space = await loadImessageSpace(spaceId);
+    if (setupStartedAt && alertContext?.orgId) {
+      void recordStepTiming({
+        organizationId: alertContext.orgId,
+        threadId: alertContext.threadId ?? null,
+        step: 'imessage_setup',
+        startedAt: setupStartedAt,
+        durationMs: Date.now() - setupStartedAt.getTime(),
+      });
+    }
   } catch (error) {
     logger.warn(
       {

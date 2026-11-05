@@ -1,5 +1,6 @@
 import type { Server } from 'node:http';
 import logger from './logger.js';
+import { onShutdownSignals } from './shutdown-signals.js';
 
 type ShutdownCloseResult = void | Promise<void>;
 
@@ -127,15 +128,7 @@ export function createGatewayServerShutdown(
 }
 
 export function registerGatewayServerShutdownSignals(shutdown: GatewayServerShutdown): () => void {
-  const shutdownOnSignal = () => {
+  return onShutdownSignals(() => {
     void shutdown(true);
-  };
-
-  process.on('SIGTERM', shutdownOnSignal);
-  process.on('SIGINT', shutdownOnSignal);
-
-  return () => {
-    process.off('SIGTERM', shutdownOnSignal);
-    process.off('SIGINT', shutdownOnSignal);
-  };
+  });
 }
