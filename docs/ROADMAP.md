@@ -15,7 +15,8 @@ In order. This is the product's critical path.
 
 1. **Revise a card once from the phone, then approve it.** Closes when a revision sent
    on iMessage produces a new card for the same ticket, approving it sends the revised
-   reply, and the action rows carry the approver.
+   reply, and the action rows carry the approver. `simulate:refund --phone` checks all
+   three while you text the change and the approval.
 2. **Run an unlinked Instagram sender's damage claim with a photo** through order
    confirmation. Closes when the agent asks for the order, then its email or zip, then a
    photo; the SocialAPI gallery photo is stored on the ticket; and the merchant gets one
