@@ -9,6 +9,11 @@
  * card on the phone. Prints each step as PASS or FAIL, every message the
  * customer and the phone got, and the timings.
  *
+ * With --phone the card is yours instead: text one change to it from your phone,
+ * then approve the new card there. The run checks that the change produced a new
+ * card for the same ticket without running the first one, that approving ran the
+ * new card and sent its reply, and that every action row names you as approver.
+ *
  * The customer's messages are injected, so they do not show in Instagram; the
  * agent's replies are real sends and do. Instagram only lets the store reply
  * within 24 hours of the customer's last real message: the run prints the newest
@@ -18,7 +23,7 @@
  *
  *   railway run --service shopkeeper --environment production -- \
  *     npm run simulate:refund -- --workspace <clerk_org_id> --instagram <test handle> \
- *       [--refund-timing "5-10 business days"] [--order #1051] [--allow-live-store] [--execute]
+ *       [--refund-timing "5-10 business days"] [--order #1051] [--allow-live-store] [--phone] [--execute]
  * Dry run (checks only) unless --execute. Needs DATABASE_URL, TOKEN_ENCRYPTION_KEY,
  * SOCIALAPI_API_KEY, SOCIALAPI_WEBHOOK_SECRET, INTERNAL_API_SECRET and the
  * gateway's public URL (RAILWAY_PUBLIC_DOMAIN, or --gateway).
@@ -49,6 +54,7 @@ const { values } = parseArgs({
     // The mutation canary's flag: create a test order on a store whose plan is
     // not a development plan. Only with the store owner's say-so.
     'allow-live-store': { type: 'boolean', default: false },
+    phone: { type: 'boolean', default: false },
   },
 });
 
@@ -106,8 +112,10 @@ interface Watched {
   operatorThreadId: string | null;
   seen: Set<string>;
   phone: Array<{ at: Date; text: string }>;
+  /** What the merchant texted Shopkeeper from the phone. */
+  fromPhone: Array<{ at: Date; text: string }>;
 }
-const watched: Watched = { ticketId: null, memberKey: null, operatorThreadId: null, seen: new Set(), phone: [] };
+const watched: Watched = { ticketId: null, memberKey: null, operatorThreadId: null, seen: new Set(), phone: [], fromPhone: [] };
 
 /** Prints each new message once: customer sends once their delivery settles. */
 async function printNewMessages(organizationId: string, after: Date): Promise<void> {
@@ -140,7 +148,7 @@ async function printNewMessages(organizationId: string, after: Date): Promise<vo
     let label: string;
     if (onPhone) {
       label = message.senderType === 'customer' ? 'You → Shopkeeper (phone)' : 'Shopkeeper → your phone';
-      if (message.senderType !== 'customer') watched.phone.push({ at: message.sentAt, text });
+      (message.senderType === 'customer' ? watched.fromPhone : watched.phone).push({ at: message.sentAt, text });
     } else if (message.senderType === 'customer') {
       label = 'Customer → store';
     } else if (message.senderType === 'note') {
@@ -382,7 +390,7 @@ async function main(): Promise<void> {
   if (!workspace || !handle || !Number.isFinite(stepTimeoutMs) || stepTimeoutMs <= 0) {
     throw new Error(
       'Usage: --workspace <clerk_org_id or id> --instagram <test handle> '
-      + '[--refund-timing "<refund timing>"] [--order #1051] [--gateway https://…] [--timeout 180] [--execute]',
+      + '[--refund-timing "<refund timing>"] [--order #1051] [--gateway https://…] [--timeout 180] [--phone] [--execute]',
     );
   }
 
@@ -486,7 +494,10 @@ async function main(): Promise<void> {
       order
         ? `        Order          ${order.name}  ${order.current_total_price} ${order.currency}  zip ${order.shipping_address!.zip}`
         : `        Order          none left to refund: --execute creates a paid test order for ${orderToCreate!.title} (${orderToCreate!.price} ${orderToCreate!.currency})`,
-      `        Refund timing  ${refundTiming ? `"${refundTiming}" if the card asks (the script answers it, so don't reply on your phone)` : 'not given: answer on your phone if the card asks'}`,
+      `        Refund timing  ${refundTiming
+        ? `"${refundTiming}" if the card asks (the script answers it${values.phone ? '' : ', so don\'t reply on your phone'})`
+        : 'not given: answer on your phone if the card asks'}`,
+      `        Approval       ${values.phone ? 'yours: text one change to the card from your phone, then approve the new card there' : 'by the script, the way the dashboard\'s Approve does'}`,
     ].join('\n'));
     return {
       webhookSecret: webhookSecret!,
@@ -665,10 +676,71 @@ async function main(): Promise<void> {
     return parked;
   });
 
+  // The first card run on this ticket since a moment: what a decision executed.
+  const executionSince = (after: Date) => db.planExecution.findFirst({
+    where: { organizationId, threadId: watched.ticketId!, createdAt: { gte: after } },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true, planId: true, createdAt: true },
+  });
+  const sameActions = (a: PendingPlan, b: PendingPlan) => {
+    const key = (parked: PendingPlan) => JSON.stringify(parked.rawToolCalls.map(call => [call.name, call.input ?? null]));
+    return key(a) === key(b);
+  };
+
   // A card that leaves the refund timing blank is approved by answering it.
   const blanks = merchantAnswerSlotsInCalls(plan.rawToolCalls);
-  const approvedAt = new Date();
-  if (blanks.length > 0 && !refundTiming) {
+  let approvedAt = new Date();
+  let approvedPlanId = plan.planId!;
+  if (values.phone) {
+    const cardAt = watched.phone.at(-1)?.at ?? approvedAt;
+    console.log(`\nOn your phone, text one change to the card's reply, for example: make it warmer.\nWaiting up to ${seconds(stepTimeoutMs)}.\n`);
+    const changedAt = await step('You text a change to the card', () => waitFor('no text came from your phone', organizationId, runStart, async () => (
+      watched.fromPhone.find(message => message.at > cardAt)?.at ?? null
+    )));
+
+    const revised = await step('A new card for the same ticket reaches your phone', async () => {
+      const questionBefore = JSON.stringify((await readContext()).question);
+      const parked = await waitFor('no new card reached the phone after your change', organizationId, runStart, async () => {
+        const handoff = await handedOff();
+        if (handoff) throw new Error(handoff);
+        if ((await executionSince(changedAt))?.planId === plan.planId) {
+          throw new Error('Your text approved the first card instead of changing it');
+        }
+        const context = await readContext();
+        if (context.question && JSON.stringify(context.question) !== questionBefore) {
+          throw new Error(`The agent asked instead of re-drafting the card:\n${context.question.question}`);
+        }
+        if (!context.plan?.planId || context.plan.planId === plan.planId) return null;
+        // Parked before it is sent, so it counts once the phone has it.
+        return watched.phone.some(message => message.at > changedAt) ? context.plan : null;
+      }).catch((error: unknown) => {
+        throw new Error(`${(error as Error).message}\nLast on your phone:\n${lastPhoneMessage()}`);
+      });
+      if (parked.validation?.status === 'invalid') throw new Error('The new card failed validation and cannot be approved');
+      if (parked.needsThreadReview) throw new Error('The new card could not be shown in full on your phone, so it waits in the dashboard');
+      if (!parked.rawToolCalls.some(call => REFUND_TOOLS.has(call.name))) {
+        throw new Error(`The new card has no refund:${parked.rawToolCalls.map(call => call.name).join(', ') || 'no actions'}. Change the reply's wording, not the refund, for this test`);
+      }
+      if (sameActions(parked, plan)) throw new Error('The new card is the same as the first: your change was not applied');
+      return parked;
+    });
+
+    const revisedBlanks = merchantAnswerSlotsInCalls(revised.rawToolCalls);
+    console.log(revisedBlanks.length > 0
+      ? `\nApprove the new card on your phone by answering it: ${revisedBlanks.map(blank => blank.question).join(' ')}\nWaiting up to ${seconds(stepTimeoutMs)}.\n`
+      : `\nApprove the new card on your phone: reply yes. Waiting up to ${seconds(stepTimeoutMs)}.\n`);
+    const execution = await step('You approve the new card on your phone', () => waitFor('the new card was not approved', organizationId, runStart, async () => {
+      const handoff = await handedOff();
+      if (handoff) throw new Error(handoff);
+      const ran = await executionSince(changedAt);
+      if (!ran) return null;
+      if (ran.planId === plan.planId) throw new Error('The first card ran, not the new one');
+      if (ran.planId !== revised.planId) console.log('        A later card than the new one ran: you changed it again');
+      return ran;
+    }));
+    approvedAt = execution.createdAt;
+    approvedPlanId = execution.planId;
+  } else if (blanks.length > 0 && !refundTiming) {
     console.log(`\nThe card asks you on your phone:\n${indent(blanks.map(blank => blank.question).join(' '))}\nAnswer it there; waiting up to ${seconds(stepTimeoutMs)}.\n`);
   } else {
     await step(blanks.length > 0 ? 'Approve the refund by answering the card' : 'Approve the refund', async () => {
@@ -689,6 +761,30 @@ async function main(): Promise<void> {
     if (done.sendStatus !== 'sent') throw new Error(`The reply was not delivered (${done.sendStatus}): ${done.sendError ?? 'no detail'}`);
     return true;
   }));
+
+  await step('Every action names you as the approver', async () => {
+    const execution = await db.planExecution.findFirst({
+      where: { organizationId, threadId: watched.ticketId!, planId: approvedPlanId },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
+    if (!execution) throw new Error('No run of the approved card was recorded');
+    const actions = await db.agentAction.findMany({
+      where: { organizationId, executionId: execution.id },
+      orderBy: { createdAt: 'asc' },
+      select: { tool: true, approverId: true },
+    });
+    if (actions.length === 0) throw new Error('The approved card recorded no actions');
+    // Stored as the Clerk user id, with the display name after a colon.
+    const yours = (approverId: string | null) => (
+      approverId === member.clerkUserId || Boolean(approverId?.startsWith(`${member.clerkUserId}:`))
+    );
+    const others = actions.filter(action => !yours(action.approverId));
+    if (others.length > 0) {
+      throw new Error(others.map(action => `${action.tool}: ${action.approverId ?? 'no approver'}`).join('\n'));
+    }
+    console.log(`        ${actions.map(action => action.tool).join(', ')}: approved by ${actions[0]!.approverId}`);
+  });
 
   await step(`Refund recorded in Shopify on ${order.name}`, async () => {
     const { refunds = [] } = await shopifyRestJson<{
