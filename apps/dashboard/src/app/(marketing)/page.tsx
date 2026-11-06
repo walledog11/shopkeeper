@@ -1,28 +1,17 @@
 import type { Metadata } from "next";
 import { Navbar } from "./_components/Navbar";
 import { Hero } from "./_components/Hero";
-import { MerchantTasks } from "./_components/MerchantTasks";
-import { CustomerSupportShowcase } from "./_components/CustomerSupportShowcase";
-import { ConversationBento } from "./_components/ConversationBento";
-import { Onboarding } from "./_components/Onboarding";
-import { ProactiveOperations, TrustSection } from "./_components/ProactiveOperations";
+import { Handles } from "./_components/Handles";
+import { Limits } from "./_components/Limits";
+import { MorningText } from "./_components/MorningText";
 import { Pricing } from "./_components/Pricing";
 import { FAQ as Faq } from "./_components/FAQ";
 import { CTA as Cta } from "./_components/CTA";
 import { Footer } from "./_components/Footer";
 
-const title = "Shopkeeper — manage your Shopify store by text";
-const description = "An AI agent for orders, stock checks, sales, and customer messages. Give Shopkeeper work through iMessage or the dashboard, with your store knowledge and action limits.";
-
+// Title, description and the link preview are the site defaults in the root layout.
 export const metadata: Metadata = {
-  title,
-  description,
   alternates: { canonical: "/" },
-  openGraph: {
-    title, description, url: "/", type: "website", siteName: "Shopkeeper",
-    images: [{ url: "/og.png", width: 1200, height: 630, alt: title }],
-  },
-  twitter: { title, description, card: "summary_large_image", images: ["/og.png"] },
 };
 
 export default function Home() {
@@ -31,21 +20,14 @@ export default function Home() {
       <Navbar />
       <Hero />
       <div className="m-chapter m-chapter--alt">
-        <MerchantTasks />
+        <Handles />
       </div>
-      <CustomerSupportShowcase />
+      <Limits />
       <div className="m-chapter m-chapter--alt">
-        <ConversationBento />
-      </div>
-      <Onboarding />
-      <div className="m-chapter m-chapter--dark">
-        <ProactiveOperations />
+        <MorningText />
       </div>
       <Pricing />
-      <div className="m-chapter m-chapter--alt">
-        <TrustSection />
-      </div>
-      <div className="m-chapter m-chapter--alt">
+      <div className="border-t border-[color:var(--m-line)]">
         <Faq />
       </div>
       <Cta />

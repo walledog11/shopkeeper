@@ -13,6 +13,8 @@ export const publicRoutePatterns = [
   "/data-deletion",
   "/product(.*)",
   "/sitemap.xml",
+  // The site-wide link preview image; crawlers fetch it signed out.
+  "/opengraph-image(-[a-z0-9]+)?",
   "/login(.*)",
   "/signup(.*)",
   "/api/health(.*)",

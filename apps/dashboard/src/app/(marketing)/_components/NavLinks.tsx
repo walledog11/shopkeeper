@@ -1,213 +1,33 @@
 "use client";
 
 import Link from "next/link";
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useUser } from "@clerk/nextjs";
-import {
-  ArrowRight,
-  ChevronDown,
-  ChevronRight,
-  Menu,
-  Store,
-  X,
-} from "lucide-react";
+import { Menu, Store, X } from "lucide-react";
 import { PRIMARY_CTA_LABEL, PRODUCT_NAME } from "@/lib/brand";
-import { cn } from "@/lib/ui/cn";
 import { ButtonLink } from "./ButtonLink";
-import { NavPreview } from "./NavPreviews";
-import { productCards } from "./nav-config";
 
-/* Slot under the navbar bar, so the Product panel spans the content column
-   instead of hanging off the trigger's box. */
-export const MegaMenuSlotContext = createContext<HTMLElement | null>(null);
-
-/* Menu keyboard behavior shared by the desktop dropdowns and the mobile menu:
-   outside-click / Escape to close (Escape hands focus back to the trigger),
-   ArrowDown on the trigger opens and focuses the first item, ArrowUp/ArrowDown
-   cycle through the items. */
-function useMenuKeyboard(
-  open: boolean,
-  setOpen: (value: boolean) => void,
-  rootRef: React.RefObject<HTMLDivElement | null>,
-  triggerRef: React.RefObject<HTMLButtonElement | null>,
-  panelRef?: React.RefObject<HTMLDivElement | null>,
-) {
-  const focusFirstOnOpen = useRef(false);
-
-  useEffect(() => {
-    if (!open) return;
-
-    if (focusFirstOnOpen.current) {
-      focusFirstOnOpen.current = false;
-      (panelRef?.current ?? rootRef.current)
-        ?.querySelector<HTMLElement>("[role=menuitem]")
-        ?.focus();
-    }
-
-    function onPointerDown(event: MouseEvent) {
-      const target = event.target as Node;
-      if (rootRef.current?.contains(target) || panelRef?.current?.contains(target)) return;
-      setOpen(false);
-    }
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key !== "Escape") return;
-      if (
-        rootRef.current?.contains(document.activeElement) ||
-        panelRef?.current?.contains(document.activeElement)
-      ) {
-        triggerRef.current?.focus();
-      }
-      setOpen(false);
-    }
-
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open, setOpen, rootRef, triggerRef, panelRef]);
-
-  return function onArrowKeys(event: React.KeyboardEvent) {
-    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-    event.preventDefault();
-    if (!open) {
-      focusFirstOnOpen.current = true;
-      setOpen(true);
-      return;
-    }
-    const items = Array.from(
-      (panelRef?.current ?? rootRef.current)?.querySelectorAll<HTMLElement>("[role=menuitem]") ?? [],
-    );
-    if (items.length === 0) return;
-    const index = items.indexOf(document.activeElement as HTMLElement);
-    const next =
-      event.key === "ArrowDown"
-        ? items[(index + 1) % items.length]
-        : items[index <= 0 ? items.length - 1 : index - 1];
-    next.focus();
-  };
-}
-
-/* Open immediately; delay close so the pointer can cross the gap between the
-   Product trigger and a panel that's positioned against the whole bar. */
-function useHoverMenu(setOpen: (value: boolean) => void) {
-  const timeoutRef = useRef<number>(0);
-
-  useEffect(() => () => window.clearTimeout(timeoutRef.current), []);
-
-  return {
-    openMenu() {
-      window.clearTimeout(timeoutRef.current);
-      setOpen(true);
-    },
-    closeMenu() {
-      window.clearTimeout(timeoutRef.current);
-      timeoutRef.current = window.setTimeout(() => setOpen(false), 180);
-    },
-  };
-}
-
-function ProductMenu() {
-  const [open, setOpen] = useState(false);
-  const [active, setActive] = useState(0);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
-  const slot = useContext(MegaMenuSlotContext);
-  const onArrowKeys = useMenuKeyboard(open, setOpen, rootRef, triggerRef, panelRef);
-  const { openMenu, closeMenu } = useHoverMenu(setOpen);
-
-  useEffect(() => {
-    if (open) setActive(0);
-  }, [open]);
-
-  const panel = (
-    <div
-      ref={panelRef}
-      className={cn("m-nav-pop m-nav-pop-glass pt-2", open && "m-nav-pop-open")}
-      onMouseEnter={openMenu}
-      onMouseLeave={closeMenu}
-    >
-      <div id="m-nav-product-menu" className="m-nav-mega" role="menu">
-        <div className="m-nav-mega-list">
-          {productCards.map((card, index) => (
-            <Link
-              key={card.title}
-              href={card.href}
-              role="menuitem"
-              className={cn("m-nav-mega-item", index === active && "is-active")}
-              onMouseEnter={() => setActive(index)}
-              onFocus={() => setActive(index)}
-              onClick={() => setOpen(false)}
-            >
-              <span className="m-nav-mega-title">{card.title}</span>
-              <ArrowRight className="m-nav-mega-arrow size-4" strokeWidth={1.75} aria-hidden />
-              <span className="m-nav-mega-desc">{card.subtitle}</span>
-            </Link>
-          ))}
-        </div>
-
-        <div aria-hidden className="m-nav-mega-stage">
-          {productCards.map((card, index) => (
-            <div key={card.title} className={cn("m-nav-mega-scene", index === active && "is-active")}>
-              <NavPreview kind={card.preview} />
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-
-
-  return (
-    <div ref={rootRef} className="flex w-fit shrink-0" onKeyDown={onArrowKeys}>
-      <button
-        ref={triggerRef}
-        type="button"
-        aria-expanded={open}
-        aria-haspopup="menu"
-        aria-controls="m-nav-product-menu"
-        className="m-nav-trigger"
-        onClick={() => setOpen((value) => !value)}
-        onMouseEnter={openMenu}
-        onMouseLeave={closeMenu}
-      >
-        Product
-        <ChevronDown
-          className={cn("size-4 stroke-[2.25] transition-transform duration-200", open && "rotate-180")}
-          aria-hidden
-        />
-      </button>
-      {slot ? createPortal(panel, slot) : null}
-    </div>
-  );
-}
+const links = [
+  { href: "/#how-it-works", label: "How it works" },
+  { href: "/#pricing", label: "Pricing" },
+  { href: "/#faq", label: "FAQ" },
+] as const;
 
 export function NavLinks() {
   return (
     <div className="m-nav-links">
-      <ProductMenu />
-      <Link href="/product/security" className="m-nav-link">
-        Security
-      </Link>
-      <Link href="/#pricing" className="m-nav-link">
-        Pricing
-      </Link>
-      <Link href="/#faq" className="m-nav-link">
-        FAQ
-      </Link>
+      {links.map((link) => (
+        <Link key={link.href} href={link.href} className="m-nav-link">
+          {link.label}
+        </Link>
+      ))}
     </div>
   );
 }
 
-const WORDMARK = PRODUCT_NAME.toLowerCase();
-
 export function MobileNav() {
   const [open, setOpen] = useState(false);
-  const [productOpen, setProductOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const sheetRef = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -218,10 +38,7 @@ export function MobileNav() {
   const { isSignedIn } = useUser();
 
   useEffect(() => {
-    if (!open) {
-      setProductOpen(false);
-      return;
-    }
+    if (!open) return;
 
     // A native modal dialog makes the page behind it inert and handles Escape.
     const sheet = sheetRef.current;
@@ -265,7 +82,7 @@ export function MobileNav() {
         <Link href="/" aria-label={PRODUCT_NAME} className="m-nav-logo" onClick={close}>
           <Store className="size-7" strokeWidth={1.75} aria-hidden />
           <span className="m-nav-wordmark" aria-hidden>
-            {WORDMARK}
+            {PRODUCT_NAME.toLowerCase()}
           </span>
         </Link>
         <button
@@ -280,52 +97,14 @@ export function MobileNav() {
       </div>
 
       <nav className="m-nav-sheet-list">
-        <button
-          type="button"
-          className="m-nav-sheet-item"
-          aria-expanded={productOpen}
-          onClick={() => setProductOpen((value) => !value)}
-        >
-          Product
-          <ChevronRight
-            className={cn("size-5 shrink-0 transition-transform duration-200", productOpen && "rotate-90")}
-            strokeWidth={2}
-            aria-hidden
-          />
-        </button>
-        {productOpen ? (
-          <div className="m-nav-sheet-sub">
-            {productCards.map((card) => (
-              <Link
-                key={card.title}
-                href={card.href}
-                className="m-nav-sheet-subitem"
-                onClick={close}
-              >
-                {card.title}
-              </Link>
-            ))}
-          </div>
-        ) : null}
-
-        <Link href="/product/security" className="m-nav-sheet-item" onClick={close}>
-          Security
-        </Link>
-        <Link href="/#pricing" className="m-nav-sheet-item" onClick={close}>
-          Pricing
-        </Link>
-        <Link href="/#faq" className="m-nav-sheet-item" onClick={close}>
-          FAQ
-        </Link>
-        {isSignedIn ? (
-          <Link href="/dashboard" className="m-nav-sheet-item" onClick={close}>
-            Dashboard
+        {links.map((link) => (
+          <Link key={link.href} href={link.href} className="m-nav-sheet-item" onClick={close}>
+            {link.label}
           </Link>
-        ) : (
-          <Link href="/login" className="m-nav-sheet-item" onClick={close}>
-            Log in
-          </Link>
-        )}
+        ))}
+        <Link href={isSignedIn ? "/dashboard" : "/login"} className="m-nav-sheet-item" onClick={close}>
+          {isSignedIn ? "Dashboard" : "Log in"}
+        </Link>
       </nav>
 
       <ButtonLink href="/#waitlist" variant="primary" size="lg" className="m-nav-sheet-cta" onClick={close}>

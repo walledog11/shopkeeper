@@ -1,115 +1,55 @@
 import { Check } from "lucide-react";
+import { PLANS } from "@/lib/billing/plans";
+import { CONTACT_EMAIL, PRIMARY_CTA_LABEL } from "@/lib/brand";
 import { ButtonLink } from "./ButtonLink";
-import { MarketingSection } from "./MarketingSection";
-import { MarketingSectionHeader } from "./MarketingSectionHeader";
-import { Reveal } from "./Reveal";
-import { PRIMARY_CTA_LABEL } from "@/lib/brand";
 
-// Both plans run the whole product. `PLAN_LIMITS` in `packages/db/plan-limits.ts`
-// sells volume and seats and gates no tool or capability, so a $19 subscriber
-// already gets Shopify actions, phone approvals and voice training. Do not add a
-// feature bullet that implies otherwise — "Everything in Starter", "Shopify order
-// actions", "Approvals through iMessage" were exactly that, removed once in
-// `c558c788` and restored by a later redesign. Two bullets per card is thin on
-// purpose: there is nothing else true to put there, and the shared line above the
-// cards plus the conversation definition below are what fill the section.
-const tiers = [
-  {
-    name: "Starter",
-    badge: null,
-    price: "$19",
-    per: "/mo",
-    desc: "For one person answering their own messages.",
-    features: [
-      "500 customer conversations a month",
-      "One seat",
-    ],
-    cta: PRIMARY_CTA_LABEL,
-    href: "/#waitlist",
-    featured: false,
-  },
-  {
-    name: "Pro",
-    badge: "Recommended",
-    price: "$49",
-    per: "/mo",
-    desc: "For a store past 500 a month, or a second person on the inbox.",
-    features: [
-      "No conversation limit",
-      "Two seats",
-    ],
-    cta: PRIMARY_CTA_LABEL,
-    href: "/#waitlist",
-    featured: true,
-  },
-];
-
+// Every plan runs the whole product: `PLANS` sells conversations and seats only.
+// Do not add a feature bullet here (decision 2026-08-19, `c558c788`).
 export function Pricing() {
   return (
-    <MarketingSection id="pricing" className="text-center">
-      <Reveal>
-        <MarketingSectionHeader
-          title={
-            <>
-              The whole product, <span className="m-tail">on either plan.</span>
-            </>
-          }
-          body="Join the waitlist to hear when early access opens."
-          titleClassName="max-w-[20ch]"
-          bodyClassName="mb-8 max-w-[48ch]"
-        />
-
-        <p className="mx-auto mb-12 max-w-[62ch] rounded-2xl border border-[color:var(--m-line)] bg-[color:var(--m-bg-alt)] px-5 py-4 text-[15px] leading-relaxed text-[color:var(--m-ink-2)]">
-          Both plans include everything: the customer inbox, texting your shopkeeper
-          over iMessage, Shopify actions, store memory, and briefings. They differ
-          only in conversations and seats.
-        </p>
-      </Reveal>
-
-      <div className="mx-auto grid max-w-4xl gap-5 text-left md:grid-cols-2">
-        {tiers.map((tier, i) => (
-          <Reveal key={tier.name} delay={i * 100} className="h-full">
-            <div
-              className={`relative flex h-full flex-col rounded-3xl border p-8 ${
-                tier.featured ? "m-chapter--dark border-transparent" : "m-card"
-              }`}
-            >
-              {tier.badge && (
-                <span className="m-eyebrow absolute right-7 top-8 rounded-full border border-[color:var(--m-line-strong)] px-3 py-1 text-[11px]">
-                  {tier.badge}
-                </span>
-              )}
-              <p className="mb-5 text-[15px] font-medium text-[color:var(--m-ink-2)]">{tier.name}</p>
-              <div className="m-display mb-3 flex items-baseline gap-1.5 text-[3.5rem] leading-none">
-                {tier.price}
-                <small className="text-sm font-normal text-[color:var(--m-ink-3)] [font-family:var(--m-font-sans)]">{tier.per}</small>
-              </div>
-              <p className="mb-7 min-h-10 text-[14px] leading-relaxed text-[color:var(--m-ink-2)]">{tier.desc}</p>
-              <ul className="m-0 mb-8 flex list-none flex-col gap-3 p-0 text-[14px] leading-snug">
-                {tier.features.map((f) => (
-                  <li key={f} className="flex items-start gap-2.5">
-                    <Check aria-hidden className="mt-[2px] size-4 shrink-0 text-[color:var(--m-good)]" strokeWidth={2.25} />
-                    {f}
-                  </li>
-                ))}
-              </ul>
-              <ButtonLink
-                href={tier.href}
-                size="lg"
-                variant={tier.featured ? "light" : "outline"}
-                className="mt-auto w-full"
-              >
-                {tier.cta}
-              </ButtonLink>
-            </div>
-          </Reveal>
-        ))}
+    <section id="pricing" aria-labelledby="pricing-heading" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-20 sm:px-8 sm:py-28">
+      <div className="max-w-2xl">
+        <h2 id="pricing-heading" className="m-display m-h2">Every plan includes everything.</h2>
+        <p className="m-lede mt-5 text-[1.125rem]">You pay for conversations and seats, and nothing else.</p>
       </div>
 
-      <p className="mx-auto mt-8 max-w-[58ch] text-[14px] leading-relaxed text-[color:var(--m-ink-3)]">
-        A conversation is a new customer thread opened in the calendar month, however long it runs. Your own
-        messages to Shopkeeper don’t count.
-      </p>
-    </MarketingSection>
+      <div className="mt-14 grid gap-4 md:grid-cols-3">
+        {PLANS.map((plan) => (
+          <div key={plan.tier} className="m-plan">
+            <p className="text-[15px] font-medium text-[color:var(--m-ink)]">{plan.name}</p>
+            <p className="mt-6 flex items-baseline gap-1.5">
+              <span className="m-display text-[3.25rem] leading-none">{plan.price}</span>
+              <span className="text-[14px] text-[color:var(--m-ink-3)]">/month</span>
+            </p>
+            <ul className="mt-8 flex flex-col gap-3 text-[15px] text-[color:var(--m-ink)]">
+              {plan.limits.map((limit) => (
+                <li key={limit} className="flex items-center gap-2.5">
+                  <Check aria-hidden className="size-4 shrink-0 text-[color:var(--m-good)]" strokeWidth={2.25} />
+                  {limit}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-auto pt-10">
+              <ButtonLink href="/#waitlist" variant={plan.tier === "pro" ? "primary" : "outline"} className="w-full">
+                {PRIMARY_CTA_LABEL}
+              </ButtonLink>
+            </div>
+          </div>
+        ))}
+
+        <div className="m-plan">
+          <p className="text-[15px] font-medium text-[color:var(--m-ink)]">Custom</p>
+          <p className="m-display mt-6 text-[3.25rem] leading-none">Let’s talk</p>
+          <p className="mt-8 text-[15px] leading-relaxed text-[color:var(--m-ink-2)]">
+            For larger teams, or more than one store.
+          </p>
+          <div className="mt-auto pt-10">
+            <ButtonLink href={`mailto:${CONTACT_EMAIL}`} variant="outline" className="w-full">
+              Contact sales
+            </ButtonLink>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }

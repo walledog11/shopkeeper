@@ -65,7 +65,7 @@ export function MarketingFaq({
   }
 
   return (
-    <div className={cardClassName}>
+    <div className="border-y border-[color:var(--m-line)]">
       {items.map((item) => (
         <AccordionFaqItem key={item.q} {...item} />
       ))}

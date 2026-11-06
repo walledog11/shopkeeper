@@ -19,7 +19,7 @@ export default function PrivacyPage() {
   return (
     <LegalPage
       title="Privacy Policy"
-      effectiveDate="October 30, 2026"
+      effectiveDate="November 6, 2026"
       intro={privacyIntro}
       sections={[
         {
@@ -28,7 +28,9 @@ export default function PrivacyPage() {
             <>
               <p>
                 If you join our early-access waitlist, we collect your email address, signup time, and campaign tags
-                to contact you about early access and understand how people find Shopkeeper. If you choose to receive
+                to contact you about early access and understand how people find Shopkeeper. If you tell us about
+                your store, we also keep its web address, where your customers message you, and roughly how many
+                messages you get a week, to decide who to onboard first. If you choose to receive
                 product updates, we also record that preference. We use Loops to manage subscriptions, confirm your
                 email address, and send these emails. You can unsubscribe using the link in an email. Joining does not
                 create an account or connect your store. To request deletion, email{' '}
@@ -54,6 +56,11 @@ export default function PrivacyPage() {
                 key support workflows succeeded. We do not send names, email addresses, message content, prompts,
                 integration credentials, or connected-platform payloads to PostHog, and we do not use PostHog browser
                 tracking, cookies, session replay, or person profiles.
+              </p>
+              <p>
+                On our public website, Vercel Web Analytics counts page visits and a few actions, such as joining the
+                waitlist. It does not use cookies or collect names or email addresses, and it does not run inside the
+                Shopkeeper dashboard.
               </p>
             </>
           ),
@@ -170,7 +177,7 @@ export default function PrivacyPage() {
               </p>
               <ul className="list-disc space-y-1 pl-5">
                 <li><strong>Neon</strong> &mdash; our database, which holds workspace and support data.</li>
-                <li><strong>Vercel</strong> &mdash; hosts the Shopkeeper dashboard and stores attachments.</li>
+                <li><strong>Vercel</strong> &mdash; hosts the Shopkeeper website and dashboard, stores attachments, and counts website visits.</li>
                 <li><strong>Railway</strong> &mdash; runs background processing and the queue of messages waiting to be processed.</li>
                 <li><strong>Upstash</strong> &mdash; short-lived counters and locks that keep the dashboard running.</li>
                 <li><strong>Anthropic</strong> &mdash; AI models that read messages and write drafts, summaries and plans.</li>
