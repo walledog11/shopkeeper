@@ -1,122 +1,54 @@
-import { ButtonLink } from "./ButtonLink";
-import { marketingRiseStyle } from "./marketingMotion";
+import { Bubble, ChatPanel, Stamp } from "./Chat";
 import { WaitlistForm } from "./WaitlistForm";
-import { MessageSquareText } from "lucide-react";
 
-// Fixed positions so server and client render the same sparkle field.
-const sparkles = [
-  { top: "14%", left: "9%", delay: "0s", size: 6 },
-  { top: "28%", left: "22%", delay: "1.4s", size: 4 },
-  { top: "62%", left: "12%", delay: "2.6s", size: 5 },
-  { top: "80%", left: "30%", delay: "0.8s", size: 3 },
-  { top: "18%", left: "78%", delay: "2s", size: 5 },
-  { top: "40%", left: "90%", delay: "0.4s", size: 4 },
-  { top: "70%", left: "84%", delay: "3.1s", size: 6 },
-  { top: "86%", left: "66%", delay: "1.8s", size: 3 },
-  { top: "48%", left: "4%", delay: "3.6s", size: 3 },
-  { top: "8%", left: "56%", delay: "2.9s", size: 4 },
-] as const;
-
-function SparkIcon({ className }: { className?: string }) {
+// The approval text follows the card the product sends (`formatOperatorPlanMessage`
+// in the gateway): the request, what it would do, the exact reply, then the question.
+function HeroDemo() {
   return (
-    <svg viewBox="0 0 16 16" aria-hidden className={className} fill="currentColor">
-      <path d="M7 1.5c.3 2.9 1.6 4.2 4.5 4.5-2.9.3-4.2 1.6-4.5 4.5C6.7 7.6 5.4 6.3 2.5 6 5.4 5.7 6.7 4.4 7 1.5Z" />
-      <path d="M12.5 9c.15 1.5.85 2.2 2.3 2.35-1.45.15-2.15.85-2.3 2.35-.15-1.5-.85-2.2-2.35-2.35 1.5-.15 2.2-.85 2.35-2.35Z" />
-    </svg>
-  );
-}
+    <div
+      role="img"
+      aria-label="Maya messages a store on Instagram at 2:14 AM asking to swap her jumpsuit from a Medium to a Small. Shopkeeper texts the owner the exact reply it would send and asks OK to go ahead. At 7:02 AM the owner replies yes, the order is updated in Shopify, and Maya gets her answer."
+      className="m-demo"
+    >
+      <ChatPanel app="instagram" name="Maya Chen" initials="MC" className="m-demo-customer">
+        <Stamp>2:14 AM</Stamp>
+        <Bubble from="them" delay="[animation-delay:300ms]">hi! I ordered the linen jumpsuit in M but I need an S</Bubble>
+        <Bubble from="them" delay="[animation-delay:800ms]">can you switch it before it ships?</Bubble>
+        <Stamp delay="[animation-delay:3.4s]">7:02 AM</Stamp>
+        <Bubble from="me" delay="[animation-delay:4.4s]">Done! Your order #3102 is now a Small, same price.</Bubble>
+        <Bubble from="them" delay="[animation-delay:5.2s]">omg thank you!!</Bubble>
+      </ChatPanel>
 
-function HeroFlow() {
-  return (
-    <div className="mx-auto mt-14 w-full max-w-6xl sm:mt-16" style={marketingRiseStyle(260)}>
-      <div
-        className="m-shimmer-panel relative overflow-hidden rounded-[1.75rem] px-5 pb-10 pt-10 sm:pt-12"
-        role="img"
-        aria-label="A customer asks to switch their jumpsuit to a small. Shopkeeper checks the order in Shopify and asks the merchant, who approves from iMessage. The order is then updated in Shopify."
-      >
-        <div aria-hidden className="m-shimmer-sheen" />
-        {sparkles.map((s, i) => (
-          <span
-            key={i}
-            aria-hidden
-            className="m-sparkle"
-            style={{ top: s.top, left: s.left, width: s.size, height: s.size, animationDelay: s.delay }}
-          />
-        ))}
-        <div className="relative flex flex-col items-center">
-          <div className="relative flex w-full justify-center">
-            <span aria-hidden className="absolute left-1/2 top-1/2 h-px w-[300vw] -translate-x-1/2 bg-white/12" />
-            <div className="m-flow-step m-flow-card" style={{ animationDelay: "500ms" }}>
-              <span className="grid size-7 shrink-0 place-items-center rounded-full bg-[#e9c9a8] text-[12px] font-semibold text-[#5a3a1e] ring-2 ring-white/70">
-                M
-              </span>
-              <span>Can I switch my jumpsuit to S?</span>
-            </div>
-          </div>
-
-          <span aria-hidden className="m-flow-line" />
-
-          <div className="m-flow-step m-flow-chip" style={{ animationDelay: "900ms" }}>
-            Checking order #3102 in Shopify
-          </div>
-
-          <span aria-hidden className="m-flow-line" />
-
-          <div className="m-flow-step m-flow-card" style={{ animationDelay: "1300ms" }}>
-            <span className="grid size-7 shrink-0 place-items-center rounded-full bg-white/80 text-stone-800">
-              <SparkIcon className="size-3.5" />
-            </span>
-            <span>Maya wants a Small, and it’s in stock. Swap it?</span>
-          </div>
-
-          <span aria-hidden className="m-flow-line" />
-
-          <div className="m-flow-step m-flow-pill" style={{ animationDelay: "1700ms" }}>
-            <svg viewBox="0 0 16 16" aria-hidden className="size-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M1.5 8.5 4.5 11.5 10 5" />
-              <path d="M7.5 11.5 13.5 5" />
-            </svg>
-            Approved from iMessage
-          </div>
-
-          <span aria-hidden className="m-flow-line is-short" />
-          <span aria-hidden className="m-flow-dot" />
-          <p className="m-flow-step mt-2 text-[12.5px] font-medium text-white/90" style={{ animationDelay: "2000ms" }}>
-            Order updated in Shopify
-          </p>
-          <span aria-hidden className="m-flow-dot mt-2" />
-          <span aria-hidden className="m-flow-line is-fade" />
-        </div>
-      </div>
+      <ChatPanel app="imessage" name="Shopkeeper" initials="S" className="m-demo-owner">
+        <Stamp delay="[animation-delay:1.5s]">2:14 AM</Stamp>
+        <Bubble from="them" wide delay="[animation-delay:1.7s]">
+          <span className="block">Maya Chen asked to swap her linen jumpsuit from M to S on #3102. It hasn’t shipped, and the Small is in stock.</span>
+          <span className="mt-2 block">I’d swap the Medium for the Small, then reply on Instagram:</span>
+          <span className="mt-2 block">“Done! Your order #3102 is now a Small, same price.”</span>
+          <span className="mt-2 block">OK to go ahead?</span>
+        </Bubble>
+        <Stamp delay="[animation-delay:3.4s]">7:02 AM</Stamp>
+        <Bubble from="me" delay="[animation-delay:3.6s]">yes</Bubble>
+        <Bubble from="them" delay="[animation-delay:4.1s]">Done. #3102 is updated in Shopify, and Maya has her reply.</Bubble>
+      </ChatPanel>
     </div>
   );
 }
 
 export function Hero() {
   return (
-    <section className="relative isolate px-5 pb-8 pt-14 text-center sm:px-6 sm:pt-20 md:pb-12">
-      <h1 className="m-display m-h1 mx-auto mb-5 max-w-[min(900px,94vw)]" style={marketingRiseStyle(0)}>
-        The AI shopkeeper built for solo Shopify stores
-      </h1>
-
-      <p className="m-lede mx-auto mb-4 max-w-[640px]" style={marketingRiseStyle(80)}>
-        Shopkeeper answers your customers and does the work in Shopify.
-        Give it instructions from iMessage or the dashboard.
-      </p>
-
-      <div id="waitlist" className="scroll-mt-24" style={marketingRiseStyle(160)}>
-        <WaitlistForm
-          source="hero"
-          secondaryAction={
-            <ButtonLink href="#workflow" variant="outline" size="lg">
-              <MessageSquareText aria-hidden className="size-4" />
-              See what you can ask
-            </ButtonLink>
-          }
-        />
+    <section className="mx-auto grid max-w-6xl items-center gap-14 px-5 pb-20 pt-12 sm:px-8 sm:pt-20 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.08fr)] lg:gap-12 lg:pb-28 lg:pt-24">
+      <div className="max-w-[36rem]">
+        <h1 className="m-display m-hero-title max-w-[7.8em]">Customer support that texts you before it acts.</h1>
+        <p className="m-lede mt-6 text-[1.125rem] sm:text-[1.1875rem]">
+          Shopkeeper answers your Instagram DMs and emails using your real orders in Shopify. Routine
+          questions get answered on their own. Changes and refunds wait for your yes.
+        </p>
+        <div id="waitlist" className="mt-9 scroll-mt-28">
+          <WaitlistForm source="hero" />
+        </div>
       </div>
-
-      <HeroFlow />
+      <HeroDemo />
     </section>
   );
 }

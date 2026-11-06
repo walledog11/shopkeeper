@@ -12,6 +12,7 @@ import { GLASS_SETTINGS_ACTION, SOLID_SETTINGS_TILE } from "@/lib/ui/glass-card-
 import { cn } from "@/lib/ui/cn"
 import { appPrimaryButtonClassName } from "@/lib/ui/app-button-styles"
 import { SettingsTile } from "./SettingsTile"
+import { PLANS } from "@/lib/billing/plans"
 
 interface BillingInfo {
   status: "active" | "trialing" | "past_due" | "canceled" | "none"
@@ -51,11 +52,6 @@ async function openBillingPortal() {
   const { url } = await res.json()
   window.location.href = url
 }
-
-const PLANS = [
-  { tier: "starter", name: "Starter", price: "$19", blurb: "500 customer conversations a month and one seat." },
-  { tier: "pro", name: "Pro", price: "$49", blurb: "For higher conversation volume and a second seat." },
-] as const
 
 const settingsPrimaryButtonClass = appPrimaryButtonClassName
 
@@ -132,7 +128,7 @@ function PlanPicker() {
                     <span className="text-sm font-semibold text-strong">{plan.name}</span>
                     <span className="text-xs text-faint">{plan.price}/mo</span>
                   </span>
-                  <span className="mt-0.5 block text-xs leading-relaxed">{plan.blurb}</span>
+                  <span className="mt-0.5 block text-xs leading-relaxed">{plan.limits.join(" · ")}</span>
                 </span>
               </button>
             )

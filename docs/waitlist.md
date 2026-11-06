@@ -1,6 +1,6 @@
 # Shopkeeper waitlist
 
-The original landing page collects addresses in its hero and closing section.
+The landing page collects addresses in its hero and closing section.
 Early-access email is the default; an unchecked checkbox offers optional product
 updates. Joining does not create an app account or connect a store.
 
@@ -23,7 +23,12 @@ updates. Joining does not create an app account or connect a store.
 5. Signed Loops webhooks reconcile preferences promptly. Unsubscribes are honored;
    routine sync updates metadata only and never sets `subscribed` or mailing-list
    subscriptions. Deleted and suppressed contacts are not recreated.
-6. A launch campaign delivery marks a visitor `invited`. A signed Clerk
+6. After the email, the form asks for the store's web address, where customers
+   message the store, and weekly message volume. `PATCH /api/waitlist` stores them
+   on the entry (`store_url`, `customer_channels`, `weekly_messages`). The first
+   answer wins, and the reply is the same whether or not the email is on the list.
+   These fields stay in the database and are not sent to Loops.
+7. A launch campaign delivery marks a visitor `invited`. A signed Clerk
    `user.created` or `user.updated` event with a verified primary email marks them
    `signed_up`, removing them from the waiting-for-access segment.
 

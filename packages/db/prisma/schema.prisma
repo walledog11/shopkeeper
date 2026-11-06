@@ -36,6 +36,12 @@ model WaitlistEntry {
   syncLeaseToken String? @map("sync_lease_token") @db.Uuid
   syncLeaseUntil DateTime? @map("sync_lease_until") @db.Timestamptz
   lastSyncError String? @map("last_sync_error") @db.VarChar(80)
+  // What the signup told us about their store, after their email. Codes, not
+  // display text: `WAITLIST_CHANNELS` and `WAITLIST_VOLUMES` own the labels.
+  storeUrl String? @map("store_url") @db.VarChar(255)
+  customerChannels String[] @default([]) @map("customer_channels") @db.VarChar(20)
+  weeklyMessages String? @map("weekly_messages") @db.VarChar(20)
+  profileSubmittedAt DateTime? @map("profile_submitted_at") @db.Timestamptz
 
   @@index([createdAt])
   @@index([syncAfter])

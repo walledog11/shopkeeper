@@ -17,9 +17,9 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-const title = "Shopkeeper for Shopify — customer support that fixes the order";
+const title = "Shopkeeper — customer support that texts you before it acts";
 const description =
-  "Shopkeeper handles routine customer support, completes supported Shopify order work, and asks the merchant when a decision needs approval.";
+  "Shopkeeper answers your Instagram DMs and emails using your real orders in Shopify. Routine questions get answered on their own. Changes and refunds wait for your yes, by text.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(getDashboardAppUrl()),
@@ -35,13 +35,11 @@ export const metadata: Metadata = {
     siteName: "Shopkeeper",
     title,
     description,
-    images: [{ url: "/og.png", width: 1200, height: 630, alt: title }],
   },
   twitter: {
     card: "summary_large_image",
     title,
     description,
-    images: ["/og.png"],
   },
 };
 

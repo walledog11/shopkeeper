@@ -8,12 +8,15 @@ const COPYRIGHT_YEAR = 2026;
 const footerGroups = [
   {
     label: "Product",
-    links: productPages.map(({ href, label }) => ({ href, label })),
+    links: [
+      { href: "/#how-it-works", label: "How it works" },
+      { href: "/#pricing", label: "Pricing" },
+      ...productPages.map(({ href, label }) => ({ href, label })),
+    ],
   },
   {
     label: "Company",
     links: [
-      { href: "/#pricing", label: "Pricing" },
       { href: "/#faq", label: "FAQ" },
       { href: `mailto:${CONTACT_EMAIL}`, label: "Contact" },
     ],
@@ -30,27 +33,20 @@ const footerGroups = [
 
 export function Footer() {
   return (
-    <footer className="m-chapter m-chapter--dark px-5 pb-10 sm:px-6">
+    <footer className="m-chapter m-chapter--dark px-5 pb-10 sm:px-8">
       <div className="mx-auto max-w-6xl border-t border-[color:var(--m-line)] pt-14">
-        <div className="grid gap-12 md:grid-cols-[1.1fr_2fr]">
-          <div>
-            <Link href="/" aria-label={PRODUCT_NAME} className="m-nav-logo">
-              <Store className="size-7" strokeWidth={1.75} aria-hidden />
-              <span className="m-nav-wordmark" aria-hidden>
-                {PRODUCT_NAME.toLowerCase()}
-              </span>
-            </Link>
-            <p className="mt-4 max-w-[26ch] text-[15px] leading-relaxed text-[color:var(--m-ink-2)]">
-              An AI agent for your Shopify store.
-            </p>
-          </div>
+        <div className="grid gap-12 md:grid-cols-[1fr_2fr]">
+          <Link href="/" aria-label={PRODUCT_NAME} className="m-nav-logo self-start">
+            <Store className="size-7" strokeWidth={1.75} aria-hidden />
+            <span className="m-nav-wordmark" aria-hidden>
+              {PRODUCT_NAME.toLowerCase()}
+            </span>
+          </Link>
 
-          <nav aria-label="Footer" className="grid gap-x-8 gap-y-10 sm:grid-cols-3">
+          <nav aria-label="Footer" className="grid grid-cols-2 gap-x-8 gap-y-10 sm:grid-cols-3">
             {footerGroups.map((group) => (
               <div key={group.label}>
-                <h2 className="text-[12px] font-medium uppercase tracking-[0.04em] text-[color:var(--m-ink-3)] [font-family:var(--m-font-mono)]">
-                  {group.label}
-                </h2>
+                <h2 className="text-[13px] font-medium text-[color:var(--m-ink-3)]">{group.label}</h2>
                 <ul className="mt-3 text-[15px]">
                   {group.links.map((link) => (
                     <li key={link.label}>
@@ -68,7 +64,7 @@ export function Footer() {
           </nav>
         </div>
 
-        <p className="mt-14 border-t border-[color:var(--m-line)] pt-6 text-[13px] text-[color:var(--m-ink-3)]">
+        <p className="mt-14 text-[13px] text-[color:var(--m-ink-3)]">
           © {COPYRIGHT_YEAR} {PRODUCT_NAME}
         </p>
       </div>
