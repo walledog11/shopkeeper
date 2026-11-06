@@ -25,7 +25,7 @@ import { buildPlanRoutingEvidence, completesAtMerchantFollowUp, kbMissNeedsMerch
 import { decideAutonomy } from "./autonomy.js";
 import { recordMerchantPreferenceUsage } from "./merchant-preferences.js";
 import { detectUngroundedReplyText } from "./plan-grounding.js";
-import { validatePlan } from "./plan-validation.js";
+import { unfillableReplyPlaceholders, validatePlan } from "./plan-validation.js";
 import { buildPlanSignals, replyPromisesUnownedFollowUp } from "./plan-signals.js";
 import { buildPlanSteps } from "./planner-steps.js";
 import { deriveProposalCommunication } from "./proposal-communication.js";
@@ -99,6 +99,11 @@ const DAMAGE_PHOTO_ASK_REFUSAL =
 
 const ORDER_VERIFICATION_ASK_REFUSAL =
   "Not sent. The sender has not confirmed an order is theirs. Call await_order_verification beside the reply that asks: with order_name when asking for the email address or shipping zip on that order, without it when asking which order. Propose nothing for the order yet, or call escalate_to_human if they cannot give either.";
+
+function unfillablePlaceholderRefusal(placeholders: readonly string[], offersDiscovery: boolean): string {
+  const tokens = placeholders.map(name => `{{${name}}}`).join(", ");
+  return `Not sent. This reply uses ${tokens}, which no action in your plan can fill: a placeholder takes its value from the one approved action that produces it. Propose the action the reply describes${offersDiscovery ? ` (call ${DISCOVERY_TOOL_NAME} first if it is not in your tools)` : ""}, then send the reply, or write the reply without the placeholder.`;
+}
 
 const TERSE_REFERENT = /^(?:yes|yeah|yep|yup|ok(?:ay)?|sure|go ahead|do it|that one|it)[.!?\s]*$/i;
 
@@ -391,6 +396,12 @@ export async function planAgent(
     ) {
       return ORDER_VERIFICATION_ASK_REFUSAL;
     }
+    // Validation would refuse this plan after the turn, when the action the
+    // reply promises can no longer be proposed.
+    const unfillable = [...new Set(proposal.rawToolCalls
+      .filter(call => call.name === "send_reply")
+      .flatMap(call => unfillableReplyPlaceholders(call, proposal.rawToolCalls)))];
+    if (unfillable.length > 0) return unfillablePlaceholderRefusal(unfillable, offersDiscovery);
     return null;
   };
   // A return the merchant must finish, when the agent has nothing from the store
