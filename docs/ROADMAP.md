@@ -7,35 +7,31 @@ Technical contracts and settled engineering decisions live with the code they go
 ([agent-runtime](agent-runtime.md), [runbook](production/runbook.md),
 [transport plan](socialapi-transport-plan.md)), not here.
 
-Last updated: 2026-11-02.
+Last updated: 2026-11-05.
 
 ## Next — the first real merchant
 
 In order. This is the product's critical path.
 
-1. **Revise a card once from the phone, then approve it.** Closes when a revision sent
-   on iMessage produces a new card for the same ticket, approving it sends the revised
-   reply, and the action rows carry the approver. `simulate:refund --phone` checks all
-   three while you text the change and the approval.
-2. **Run an unlinked Instagram sender's damage claim with a photo** through order
+1. **Run an unlinked Instagram sender's damage claim with a photo** through order
    confirmation. Closes when the agent asks for the order, then its email or zip, then a
    photo; the SocialAPI gallery photo is stored on the ticket; and the merchant gets one
    card: the confirmation line, photos and the proposed resolution.
-3. **Close SocialAPI vendor diligence** before any external merchant's data flows: DPA,
+2. **Close SocialAPI vendor diligence** before any external merchant's data flows: DPA,
    written retention/deletion answers, the terms §11.4 contradiction, and a "Powered by
    SocialAPI" notice before the vendor redirect. When SocialAPI answers, add its
    retention to `/privacy`. Gates are in [socialapi-s0-diligence](production/socialapi-s0-diligence-2026-09-07.md).
-4. **First live SocialAPI merchant connect** (runbook: *Instagram via SocialAPI*). Closes
+3. **First live SocialAPI merchant connect** (runbook: *Instagram via SocialAPI*). Closes
    when `verify:production:env` passes, a workspace connects from the dashboard, and its
    next DM routes to it.
-5. **Disconnect and reconnect the controlled SocialAPI account** (built: disconnect and
+4. **Disconnect and reconnect the controlled SocialAPI account** (built: disconnect and
    workspace deletion revoke the remote account). Closes when the account is gone from
    the brand's listing and, after reconnecting, the same sender's next DM lands on the
    same customer and a reply reaches them. If SocialAPI issues new author IDs on
    reconnect, record that in the transport plan (invariant 6) instead.
-6. **Install the Shopify app on a real, non-dev store.** Closes when the install grants
+5. **Install the Shopify app on a real, non-dev store.** Closes when the install grants
    every `SHOPIFY_OAUTH_SCOPES` scope and a missing scope shows the reconnect path.
-7. **Two supervised external merchants** complete real approved loops with no
+6. **Two supervised external merchants** complete real approved loops with no
    wrong-recipient, unauthorized-money, duplicate-action or lost-message incident.
 
 ## Later
@@ -50,12 +46,6 @@ In order. This is the product's critical path.
   SocialAPI's send (about 1.2s) and the gateway's task bookkeeping (about 80 queries at
   20ms each before the first reply). Every step is timed in *Copy timeline*. SocialAPI
   has no typing or "Seen" for Instagram; ask the vendor.
-- **iMessage card latency:** a card takes 6–7s to send once the line has carried no
-  message for about an hour, against 0.4–2.0s otherwise. The time is inside Photon's
-  send call: step timings rule out the Spectrum app's setup and the reconnect. Ask Photon
-  whether the line goes cold and whether there is a supported keep-warm. Separately,
-  Spectrum's provider passes no gRPC channel options, so the connection closes after 30
-  idle minutes and the next card pays about 1s to reconnect.
 - **Agent rough edges seen live:** the operator agent's own chat question is reported as
   an escalation and the merchant's answer errors (`answer_operator_question` only knows
   ticket questions); cards on already-escalated threads print the raw
