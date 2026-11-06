@@ -12,6 +12,8 @@ export type SocialApiErrorCategory =
   | 'permission'
   | 'response_window'
   | 'rate_limit'
+  /** The plan's interaction allowance is spent until its period ends; nothing was sent. */
+  | 'allowance_exhausted'
   | 'transient_provider_failure'
   | 'validation'
   | 'isolation'
@@ -59,6 +61,14 @@ export interface SocialApiAccount {
 export interface SocialApiSendResult {
   messageId: string;
   messageIds: string[];
+}
+
+/** The plan's interaction allowance: each DM sent is one interaction. */
+export interface SocialApiUsage {
+  interactionsUsed: number;
+  /** -1 when the plan has no allowance. */
+  interactionsLimit: number;
+  periodEnd: string;
 }
 
 export interface SocialApiInstagramConversation {
@@ -146,6 +156,7 @@ function classifyError(httpStatus: number, code: string | number | null): Social
     if (normalized.includes('brand') || normalized.includes('scope')) return 'isolation';
     return 'permission';
   }
+  if (httpStatus === 429 && normalized.includes('interaction_limit_exhausted')) return 'allowance_exhausted';
   if (httpStatus === 429) return 'rate_limit';
   if (httpStatus >= 500 || httpStatus === 0) return 'transient_provider_failure';
   if (httpStatus === 400 || httpStatus === 404 || httpStatus === 422) return 'validation';
@@ -280,6 +291,14 @@ function parseAccounts(payload: unknown): SocialApiAccount[] | null {
   if (!isRecord(payload) || !Array.isArray(payload.data)) return null;
   const accounts = payload.data.map(parseAccount);
   return accounts.every((account): account is SocialApiAccount => account !== null) ? accounts : null;
+}
+
+function parseUsage(payload: unknown): SocialApiUsage | null {
+  if (!isRecord(payload)) return null;
+  const { interactions_used: used, interactions_limit: limit } = payload;
+  const periodEnd = readString(payload.period_end);
+  if (!Number.isInteger(used) || !Number.isInteger(limit) || !periodEnd) return null;
+  return { interactionsUsed: used as number, interactionsLimit: limit as number, periodEnd };
 }
 
 function parseSend(payload: unknown): SocialApiSendResult | null {
@@ -435,6 +454,11 @@ export function createSocialApiClient(options: SocialApiClientOptions) {
     listInstagramAccounts(brandId: string) {
       const query = new URLSearchParams({ brand_id: brandId });
       return requestJson(config, `/accounts?${query}`, { method: 'GET' }, parseAccounts);
+    },
+
+    /** Costs no interaction. */
+    getUsage() {
+      return requestJson(config, '/usage', { method: 'GET' }, parseUsage);
     },
 
     async getInstagramAccount(input: { accountId: string; brandId: string }): Promise<SocialApiResult<SocialApiAccount>> {

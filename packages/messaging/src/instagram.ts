@@ -26,6 +26,7 @@ const LEGACY_CONVERSATION = "This legacy Instagram conversation is read-only"
 const EXPIRED_CONNECTION = "Instagram connection expired — reconnect Instagram to reply"
 const MISSING_PERMISSION = "Instagram messaging permission is missing — reconnect Instagram"
 const SOCIALAPI_UNCONFIGURED = "Instagram replies are not configured — contact support"
+const SOCIALAPI_ALLOWANCE_EXHAUSTED = "Instagram replies are paused: the messaging allowance is used up — contact support"
 const SOCIALAPI_NO_CONVERSATION = "This Instagram conversation cannot be replied to yet"
 const DELIVERY_UNCONFIRMED = "Instagram didn't confirm this message, so it may already have reached the customer. Check Instagram before sending it again"
 
@@ -97,7 +98,17 @@ function mapSocialApiError(error: SocialApiError): { detail: string; error: stri
     case "isolation":
       return { detail: "SocialAPI account is outside this workspace's brand", error: DISCONNECTED_CONVERSATION }
     case "rate_limit":
-      return { detail: "Instagram rate limit exceeded", error: "Instagram is rate limiting replies — try again later" }
+      return {
+        detail: said ? `Instagram rate limit exceeded: ${said}` : "Instagram rate limit exceeded",
+        error: "Instagram is rate limiting replies — try again later",
+      }
+    // Shopkeeper's SocialAPI plan, not the merchant's account: every send is
+    // refused until the plan's period ends, so waiting minutes does not help.
+    case "allowance_exhausted":
+      return {
+        detail: `SocialAPI interaction allowance used up${said ? `: ${said}` : ""}`,
+        error: SOCIALAPI_ALLOWANCE_EXHAUSTED,
+      }
     case "transient_provider_failure":
       return { detail: "Instagram provider temporarily unavailable", error: "Instagram is temporarily unavailable — try again later" }
     default:
