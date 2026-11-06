@@ -14,6 +14,12 @@
  * card for the same ticket without running the first one, that approving ran the
  * new card and sent its reply, and that every action row names you as approver.
  *
+ * With --damage the customer reports a damaged item and names no order. The run
+ * checks the agent asks which order, then its email or zip, then for a photo,
+ * which you send from the customer's Instagram account; that the photo is stored
+ * on the ticket; and that the card shows it with the refund. The order is a
+ * shipped one, or a test order the run creates and marks shipped.
+ *
  * The customer's messages are injected, so they do not show in Instagram; the
  * agent's replies are real sends and do. Instagram only lets the store reply
  * within 24 hours of the customer's last real message: the run prints the newest
@@ -23,7 +29,7 @@
  *
  *   railway run --service shopkeeper --environment production -- \
  *     npm run simulate:refund -- --workspace <clerk_org_id> --instagram <test handle> \
- *       [--refund-timing "5-10 business days"] [--order #1051] [--allow-live-store] [--phone] [--execute]
+ *       [--refund-timing "5-10 business days"] [--order #1051] [--allow-live-store] [--phone] [--damage] [--execute]
  * Dry run (checks only) unless --execute. Needs DATABASE_URL, TOKEN_ENCRYPTION_KEY,
  * SOCIALAPI_API_KEY, SOCIALAPI_WEBHOOK_SECRET, INTERNAL_API_SECRET and the
  * gateway's public URL (RAILWAY_PUBLIC_DOMAIN, or --gateway).
@@ -34,7 +40,8 @@ import { db } from '@shopkeeper/db';
 import { memberOperatorKey } from '@shopkeeper/agent/internal-thread';
 import { getAgentTurnPrefixLength } from '@shopkeeper/agent/tools';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
-import { shopifyGraphql, shopifyRestJson } from '@shopkeeper/agent/shopify';
+import { readAgentPlanCache } from '@shopkeeper/agent/plan-cache';
+import { fulfillOrder, shopifyGraphql, shopifyRestJson } from '@shopkeeper/agent/shopify';
 import { createSocialApiClient, type SocialApiInstagramConversation } from '@shopkeeper/integrations/socialapi';
 import { blankAnswersInCalls, merchantAnswerSlotsInCalls } from '@shopkeeper/agent/reply-placeholders';
 import { getSocialApiApiKey } from '../config/runtime-config.js';
@@ -55,6 +62,7 @@ const { values } = parseArgs({
     // not a development plan. Only with the store owner's say-so.
     'allow-live-store': { type: 'boolean', default: false },
     phone: { type: 'boolean', default: false },
+    damage: { type: 'boolean', default: false },
   },
 });
 
@@ -85,6 +93,17 @@ function displayText(text: string): string {
   } catch {
     return 'Agent run: (unreadable record)';
   }
+}
+
+/** Why a card cannot be approved: its issue codes, its actions and the reply it drafted. */
+function invalidCardDetail(parked: PendingPlan): string {
+  const issues = parked.validation?.status === 'invalid' ? parked.validation.issues : [];
+  const reply = parked.rawToolCalls.find(call => call.name === 'send_reply')?.input as { text?: unknown } | undefined;
+  return [
+    ...issues.map(issue => `- ${issue.code}${issue.tool ? ` on ${issue.tool}` : ''}`),
+    `Actions: ${parked.rawToolCalls.map(call => call.name).join(', ') || 'none'}`,
+    ...(typeof reply?.text === 'string' ? [`Reply draft: ${reply.text}`] : []),
+  ].join('\n');
 }
 
 const steps: Array<{ name: string; ok: boolean; ms: number; detail?: string }> = [];
@@ -251,6 +270,7 @@ interface ShopifyOrder {
   currency: string;
   cancelled_at: string | null;
   closed_at: string | null;
+  fulfillment_status?: string | null;
   refunds?: unknown[];
   shipping_address?: { zip?: string | null } | null;
 }
@@ -261,7 +281,7 @@ const DEVELOPMENT_PLANS = new Set([
   'partner_test', 'affiliate', 'staff', 'staff_business', 'trial', 'plus_partner_sandbox', 'shopify_alumni',
 ]);
 
-const ORDER_FIELDS = 'id,name,current_total_price,currency,cancelled_at,closed_at,refunds,shipping_address';
+const ORDER_FIELDS = 'id,name,current_total_price,currency,cancelled_at,closed_at,fulfillment_status,refunds,shipping_address';
 
 const CREATE_TEST_ORDER = `mutation SimulateRefundOrder($order: OrderCreateOrderInput!, $options: OrderCreateOptionsInput) {
   orderCreate(order: $order, options: $options) {
@@ -390,7 +410,7 @@ async function main(): Promise<void> {
   if (!workspace || !handle || !Number.isFinite(stepTimeoutMs) || stepTimeoutMs <= 0) {
     throw new Error(
       'Usage: --workspace <clerk_org_id or id> --instagram <test handle> '
-      + '[--refund-timing "<refund timing>"] [--order #1051] [--gateway https://…] [--timeout 180] [--phone] [--execute]',
+      + '[--refund-timing "<refund timing>"] [--order #1051] [--gateway https://…] [--timeout 180] [--phone] [--damage] [--execute]',
     );
   }
 
@@ -412,6 +432,9 @@ async function main(): Promise<void> {
     })();
 
     const settings = resolveAgentSettings(organization.settings);
+    if (values.damage && settings.damageEvidence !== 'photo_required') {
+      problems.push('Damage claims do not need a photo in this workspace. Turn on "Require a photo for damage claims" for this test');
+    }
     if (settings.autonomyTier === 'trusted') {
       problems.push('Trust level is trusted: the refund can run without a card. Set it to guarded for this test');
     }
@@ -454,7 +477,9 @@ async function main(): Promise<void> {
         'orders.json',
         {
           query: {
-            ...(wanted ? { name: wanted, status: 'any' } : { financial_status: 'paid', status: 'open', limit: 50 }),
+            ...(wanted
+              ? { name: wanted, status: 'any' }
+              : { financial_status: 'paid', status: 'open', limit: 50, ...(values.damage ? { fulfillment_status: 'shipped' } : {}) }),
             fields: ORDER_FIELDS,
           },
         },
@@ -467,16 +492,18 @@ async function main(): Promise<void> {
         && (candidate.refunds?.length ?? 0) === 0
         && (limit === null || Number(candidate.current_total_price) <= limit)
         && Boolean(candidate.shipping_address?.zip)
+        // A damaged item arrived, so the order has shipped.
+        && (!values.damage || candidate.fulfillment_status === 'fulfilled')
       ));
       order = eligible[0];
       if (!order && wanted) {
-        problems.push(`${wanted} is not an open, unrefunded order under the ${limit ?? 'compensation'} limit with a shipping zip`);
+        problems.push(`${wanted} is not an open, unrefunded${values.damage ? ', shipped' : ''} order under the ${limit ?? 'compensation'} limit with a shipping zip`);
       } else if (!order) {
         // Every run refunds an order, so a store runs out; a development store
         // gets a fresh one rather than stopping the test.
         const planned = await planTestOrder({ shop: shopify.externalAccountId, accessToken: shopify.accessToken }, limit);
         if (typeof planned === 'string') {
-          problems.push(`No open, paid, unrefunded order under the ${limit ?? 'compensation'} limit has a shipping zip, and ${planned}`);
+          problems.push(`No open, paid, unrefunded${values.damage ? ', shipped' : ''} order under the ${limit ?? 'compensation'} limit has a shipping zip, and ${planned}`);
         } else {
           orderToCreate = planned;
         }
@@ -493,10 +520,11 @@ async function main(): Promise<void> {
         : []),
       order
         ? `        Order          ${order.name}  ${order.current_total_price} ${order.currency}  zip ${order.shipping_address!.zip}`
-        : `        Order          none left to refund: --execute creates a paid test order for ${orderToCreate!.title} (${orderToCreate!.price} ${orderToCreate!.currency})`,
+        : `        Order          none left to refund: --execute creates a paid test order for ${orderToCreate!.title} (${orderToCreate!.price} ${orderToCreate!.currency})${values.damage ? ' and marks it shipped' : ''}`,
       `        Refund timing  ${refundTiming
         ? `"${refundTiming}" if the card asks (the script answers it${values.phone ? '' : ', so don\'t reply on your phone'})`
         : 'not given: answer on your phone if the card asks'}`,
+      ...(values.damage ? [`        Photo          yours: send one from ${handle} on Instagram when the agent asks`] : []),
       `        Approval       ${values.phone ? 'yours: text one change to the card from your phone, then approve the new card there' : 'by the script, the way the dashboard\'s Approve does'}`,
     ].join('\n'));
     return {
@@ -519,9 +547,13 @@ async function main(): Promise<void> {
   const senderId = conversation.participantId;
   const memberKey = memberOperatorKey(member.id);
   const runStart = new Date();
-  const order = setup.order ?? await step('Create a test order to refund', async () => {
+  const order = setup.order ?? await step(values.damage ? 'Create a shipped test order to refund' : 'Create a test order to refund', async () => {
     const created = await createTestOrder(setup.shopify, setup.orderToCreate!);
-    console.log(`        ${created.name}  ${created.current_total_price} ${created.currency}  zip ${created.shipping_address?.zip ?? '-'}`);
+    if (values.damage) {
+      const shipped = await fulfillOrder({ order_id: String(created.id), notify_customer: false }, setup.shopify);
+      if (shipped.status !== 'ok') throw new Error(`Shopify did not mark ${created.name} shipped: ${shipped.message}`);
+    }
+    console.log(`        ${created.name}  ${created.current_total_price} ${created.currency}  zip ${created.shipping_address?.zip ?? '-'}${values.damage ? '  shipped' : ''}`);
     return created;
   });
   const zip = order.shipping_address!.zip!;
@@ -556,7 +588,7 @@ async function main(): Promise<void> {
   };
   const readTicket = () => db.thread.findUnique({
     where: { id: watched.ticketId! },
-    select: { status: true, escalatedAt: true, customerId: true },
+    select: { status: true, escalatedAt: true, customerId: true, awaitingCustomer: true, awaitingCustomerSince: true },
   });
   const customerSends = (after: Date) => db.message.findMany({
     where: {
@@ -576,42 +608,66 @@ async function main(): Promise<void> {
     return `The agent handed the ticket to you instead. Phone:\n${lastPhoneMessage()}`;
   };
 
-  const refundRequest = `I changed my mind, I'd like a full refund on order ${order.name}`;
-  const firstDmAt = await step('Customer asks for a refund', () => sendCustomerDm({
-    secret: setup.webhookSecret, accountId: setup.accountId, conversationId: conversation.id, senderId, text: refundRequest,
-  }));
-
-  await step('Agent asks the customer to confirm the order', () => waitFor('no confirmation ask reached Instagram', organizationId, runStart, async () => {
-    if (!watched.ticketId) {
-      watched.ticketId = (await db.thread.findFirst({
-        where: { organizationId, channelType: 'ig_dm', customer: { platformId: senderId } },
-        orderBy: { createdAt: 'desc' },
-        select: { id: true },
-      }))?.id ?? null;
-      if (!watched.ticketId) return null;
-    }
-    const sends = await customerSends(firstDmAt);
+  const findTicket = async () => {
+    watched.ticketId ??= (await db.thread.findFirst({
+      where: { organizationId, channelType: 'ig_dm', customer: { platformId: senderId } },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    }))?.id ?? null;
+    return watched.ticketId;
+  };
+  // A reply Instagram refused ends the run there, with the reason.
+  const deliveredSends = async (after: Date) => {
+    const sends = await customerSends(after);
     const failed = sends.find(send => send.sendStatus && send.sendStatus !== 'sent' && SEND_DONE.has(send.sendStatus));
     if (failed) {
       throw new Error(`The reply was not delivered (${failed.sendStatus}): ${failed.sendError ?? 'no detail'}`
         + (replyWindowLikelyClosed ? `\nNo DM from ${handle} was seen in the last 23 hours: DM the store from ${handle} and run again.` : ''));
     }
+    return sends;
+  };
+  const customerSays = (text: string) => sendCustomerDm({
+    secret: setup.webhookSecret, accountId: setup.accountId, conversationId: conversation.id, senderId, text,
+  });
+
+  // A damage claim names no order, so the agent has to ask which one.
+  const firstDmAt = await step(values.damage ? 'Customer reports a damaged order without naming it' : 'Customer asks for a refund', () => (
+    customerSays(values.damage
+      ? "Hi, my order arrived damaged: the item has a tear in it. I'd like a full refund."
+      : `I changed my mind, I'd like a full refund on order ${order.name}`)
+  ));
+
+  // The ask for which order is recorded with no order name, the ask for its email
+  // or zip with one, each just before the message carrying it is sent.
+  const waitForOrderAsk = (what: string, named: boolean, after: Date) => waitFor(what, organizationId, runStart, async () => {
+    if (!(await findTicket())) return null;
+    const sends = await deliveredSends(after);
     const handoff = await handedOff();
     if (handoff) throw new Error(handoff);
     const { plan } = await readContext();
     if (plan) throw new Error('The agent drafted a card without confirming the order first');
     const ticket = await readTicket();
-    // The ask is recorded just before the message carrying it is sent.
+    if (ticket?.awaitingCustomer) throw new Error('The agent asked for a photo before the order was confirmed');
     const asked = await db.orderVerification.findFirst({
-      where: { organizationId, customerId: ticket!.customerId, threadId: watched.ticketId, verifiedAt: null },
+      where: {
+        organizationId, customerId: ticket!.customerId, threadId: watched.ticketId, verifiedAt: null,
+        orderName: named ? { not: null } : null,
+      },
       select: { requestedAt: true },
     });
     return asked && sends.some(send => send.sendStatus === 'sent' && send.sentAt >= asked.requestedAt) ? true : null;
-  }));
+  });
 
-  const zipSentAt = await step(`Customer answers with the zip (${zip})`, () => sendCustomerDm({
-    secret: setup.webhookSecret, accountId: setup.accountId, conversationId: conversation.id, senderId, text: zip,
-  }));
+  let confirmAskAfter = firstDmAt;
+  if (values.damage) {
+    await step('Agent asks which order', () => waitForOrderAsk('no ask for the order reached Instagram', false, firstDmAt));
+    confirmAskAfter = await step(`Customer gives the order number (${order.name})`, () => customerSays(`It's ${order.name}`));
+  }
+  await step('Agent asks the customer to confirm the order', () => (
+    waitForOrderAsk('no confirmation ask reached Instagram', true, confirmAskAfter)
+  ));
+
+  const zipSentAt = await step(`Customer answers with the zip (${zip})`, () => customerSays(zip));
 
   await step('Order confirmed', () => waitFor('the zip was not compared with the order', organizationId, runStart, async () => {
     const ticket = await readTicket();
@@ -626,6 +682,49 @@ async function main(): Promise<void> {
   }));
 
   let cardAfter = zipSentAt;
+  let photo: { at: Date; references: string[] } | null = null;
+  if (values.damage) {
+    const askedAt = await step('Agent asks for a photo', () => waitFor('no ask for a photo reached Instagram', organizationId, runStart, async () => {
+      const handoff = await handedOff();
+      if (handoff) throw new Error(handoff);
+      if ((await readContext()).plan) throw new Error('A card reached your phone before the photo');
+      const ticket = await readTicket();
+      if (ticket?.awaitingCustomer !== 'damage_photo' || !ticket.awaitingCustomerSince) return null;
+      const sends = await deliveredSends(zipSentAt);
+      return sends.some(send => send.sendStatus === 'sent') ? ticket.awaitingCustomerSince : null;
+    }));
+
+    // Real messages from the customer since the ask: injected ones carry the prefix.
+    const realMessagesSince = (after: Date) => db.message.findMany({
+      where: {
+        organizationId, threadId: watched.ticketId!, senderType: 'customer', deletedAt: null, sentAt: { gt: after },
+        NOT: { externalMessageId: { startsWith: SIMULATED_MESSAGE_PREFIX } },
+      },
+      orderBy: { sentAt: 'asc' },
+      select: { attachments: true, contentText: true, sentAt: true },
+    });
+    console.log(`\nFrom ${handle} on Instagram, send the store a photo of the item (any photo works).\nWaiting up to ${seconds(stepTimeoutMs)}.\n`);
+    photo = await step('Your photo is stored on the ticket', async () => {
+      try {
+        return await waitFor('no photo arrived from Instagram', organizationId, runStart, async () => {
+          const handoff = await handedOff();
+          if (handoff) throw new Error(handoff);
+          const withPhoto = (await realMessagesSince(askedAt)).find(message => message.attachments.length > 0);
+          if (withPhoto) return { at: withPhoto.sentAt, references: withPhoto.attachments };
+          if ((await readContext()).plan) throw new Error('A card reached your phone before the photo');
+          return null;
+        });
+      } catch (error) {
+        // An image whose download or upload failed arrives as text alone.
+        const without = await realMessagesSince(askedAt);
+        throw new Error((error as Error).message + (without.length > 0
+          ? `\nArrived without a stored photo:\n${without.map(message => message.contentText ?? '(no text)').join('\n')}`
+          : ''));
+      }
+    });
+    console.log(`        ${photo.references.length} photo(s) stored`);
+    cardAfter = photo.at;
+  }
   const waitForCardOrQuestion = (what: string) => waitFor(what, organizationId, runStart, async () => {
     const handoff = await handedOff();
     if (handoff) throw new Error(handoff);
@@ -665,11 +764,19 @@ async function main(): Promise<void> {
   const plan = await step('The card is the refund, ready to approve', async () => {
     const parked = next.plan as PendingPlan;
     console.log(`        Card:\n${indent(indent(lastPhoneMessage()))}`);
-    if (parked.validation?.status === 'invalid') throw new Error('The card failed validation and cannot be approved');
+    if (parked.validation?.status === 'invalid') throw new Error(`The card failed validation and cannot be approved:\n${invalidCardDetail(parked)}`);
     if (!parked.rawToolCalls.some(call => REFUND_TOOLS.has(call.name))) {
       throw new Error(`The card has no refund: ${parked.rawToolCalls.map(call => call.name).join(', ') || 'no actions'}`);
     }
     if (!parked.planId) throw new Error('The card has no plan id to approve');
+    if (photo) {
+      const ticket = await db.thread.findUnique({ where: { id: watched.ticketId! }, select: { cachedPlan: true } });
+      const onCard = readAgentPlanCache(ticket?.cachedPlan)?.plan.damagePhotos ?? [];
+      const missing = photo.references.filter(reference => !onCard.includes(reference));
+      if (missing.length > 0) throw new Error(`The card was not made on your photo: ${missing.length} of ${photo.references.length} missing`);
+      if (parked.needsThreadReview) throw new Error('The card could not be shown in full on your phone, so it waits in the dashboard');
+      console.log(`        ${onCard.length} photo(s) sent with the card`);
+    }
     for (const [name, answer] of Object.entries(blankAnswersInCalls(parked.rawToolCalls))) {
       console.log(`        ${name} filled from Memory: ${answer}`);
     }
@@ -716,7 +823,7 @@ async function main(): Promise<void> {
       }).catch((error: unknown) => {
         throw new Error(`${(error as Error).message}\nLast on your phone:\n${lastPhoneMessage()}`);
       });
-      if (parked.validation?.status === 'invalid') throw new Error('The new card failed validation and cannot be approved');
+      if (parked.validation?.status === 'invalid') throw new Error(`The new card failed validation and cannot be approved:\n${invalidCardDetail(parked)}`);
       if (parked.needsThreadReview) throw new Error('The new card could not be shown in full on your phone, so it waits in the dashboard');
       if (!parked.rawToolCalls.some(call => REFUND_TOOLS.has(call.name))) {
         throw new Error(`The new card has no refund:${parked.rawToolCalls.map(call => call.name).join(', ') || 'no actions'}. Change the reply's wording, not the refund, for this test`);

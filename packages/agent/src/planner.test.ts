@@ -274,6 +274,30 @@ describe("planAgent capture loop", () => {
     expect(plan.communication).toBeUndefined();
   });
 
+  it("returns a reply whose placeholder no proposed action fills, so the action can still be proposed", async () => {
+    installAgentLogger(makeLogger());
+    const reply = "I'm processing a full refund of {{refund_amount}} for you now.";
+    mockCreate
+      .mockResolvedValueOnce(singleToolUse("send_reply", { text: reply }, "tu_reply_unfillable"))
+      .mockResolvedValueOnce(singleToolUse("create_refund", { order_id: "123", amount: "10.00" }, "tu_refund"))
+      .mockResolvedValueOnce(singleToolUse("send_reply", { text: reply }, "tu_reply"));
+
+    const plan = await planAgent(makeCtx(), "It arrived damaged, I'd like a full refund", AGENT_SETTINGS_DEFAULTS, {
+
+    });
+
+    expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual(["create_refund", "send_reply"]);
+    expect(plan.validation).toEqual({ status: "valid", issues: [] });
+    const sent = (mockCreate.mock.calls.at(-1)![0] as { messages: Array<{ content: unknown }> }).messages
+      .flatMap((message) => (Array.isArray(message.content) ? message.content : []));
+    expect(sent).toContainEqual(expect.objectContaining({
+      type: "tool_result",
+      tool_use_id: "tu_reply_unfillable",
+      is_error: true,
+      content: expect.stringContaining("{{refund_amount}}"),
+    }));
+  });
+
   it("re-prompts an exact-draft plan when no write or terminal tool was proposed", async () => {
     const injectedLogger = makeLogger();
     installAgentLogger(injectedLogger);

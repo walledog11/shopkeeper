@@ -16,7 +16,8 @@ In order. This is the product's critical path.
 1. **Run an unlinked Instagram sender's damage claim with a photo** through order
    confirmation. Closes when the agent asks for the order, then its email or zip, then a
    photo; the SocialAPI gallery photo is stored on the ticket; and the merchant gets one
-   card: the confirmation line, photos and the proposed resolution.
+   card: the confirmation line, photos and the proposed resolution. `simulate:refund
+   --damage` checks it while you send the photo from the customer's Instagram account.
 2. **Close SocialAPI vendor diligence** before any external merchant's data flows: DPA,
    written retention/deletion answers, the terms §11.4 contradiction, and a "Powered by
    SocialAPI" notice before the vendor redirect. When SocialAPI answers, add its

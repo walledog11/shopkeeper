@@ -81,7 +81,7 @@ export function validatePlan(params: {
     const draft = customerDraft(toolCall);
     if (!draft) continue;
     const unfillable = params.singleCustomerMessage
-      ? bindReplyPlaceholders(draft, rawToolCalls).unbound.length > 0
+      ? unfillableReplyPlaceholders(toolCall, rawToolCalls).length > 0
       : hasReplyPlaceholders(draft);
     if (unfillable) issues.push(issue("unbound_reply_placeholder", toolCall));
   }
@@ -115,6 +115,20 @@ function customerDraft(toolCall: RawToolCall): string | null {
     : toolCall.name === "send_email" ? input.body
     : null;
   return typeof draft === "string" ? draft : null;
+}
+
+/**
+ * The placeholders in one customer message of an exact-draft plan that no single
+ * call in `rawToolCalls` can fill. Validation refuses a plan with any; the
+ * planner returns such a reply inside the turn, while the action can still be
+ * proposed.
+ */
+export function unfillableReplyPlaceholders(
+  toolCall: RawToolCall,
+  rawToolCalls: readonly RawToolCall[],
+): string[] {
+  const draft = customerDraft(toolCall);
+  return draft ? bindReplyPlaceholders(draft, rawToolCalls).unbound : [];
 }
 
 export function isInvalidPlan(
