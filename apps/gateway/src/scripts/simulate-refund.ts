@@ -95,6 +95,17 @@ function displayText(text: string): string {
   }
 }
 
+/** Why a card cannot be approved: its issue codes, its actions and the reply it drafted. */
+function invalidCardDetail(parked: PendingPlan): string {
+  const issues = parked.validation?.status === 'invalid' ? parked.validation.issues : [];
+  const reply = parked.rawToolCalls.find(call => call.name === 'send_reply')?.input as { text?: unknown } | undefined;
+  return [
+    ...issues.map(issue => `- ${issue.code}${issue.tool ? ` on ${issue.tool}` : ''}`),
+    `Actions: ${parked.rawToolCalls.map(call => call.name).join(', ') || 'none'}`,
+    ...(typeof reply?.text === 'string' ? [`Reply draft: ${reply.text}`] : []),
+  ].join('\n');
+}
+
 const steps: Array<{ name: string; ok: boolean; ms: number; detail?: string }> = [];
 async function step<T>(name: string, run: () => Promise<T>): Promise<T> {
   const startedAt = Date.now();
@@ -753,7 +764,7 @@ async function main(): Promise<void> {
   const plan = await step('The card is the refund, ready to approve', async () => {
     const parked = next.plan as PendingPlan;
     console.log(`        Card:\n${indent(indent(lastPhoneMessage()))}`);
-    if (parked.validation?.status === 'invalid') throw new Error('The card failed validation and cannot be approved');
+    if (parked.validation?.status === 'invalid') throw new Error(`The card failed validation and cannot be approved:\n${invalidCardDetail(parked)}`);
     if (!parked.rawToolCalls.some(call => REFUND_TOOLS.has(call.name))) {
       throw new Error(`The card has no refund: ${parked.rawToolCalls.map(call => call.name).join(', ') || 'no actions'}`);
     }
@@ -812,7 +823,7 @@ async function main(): Promise<void> {
       }).catch((error: unknown) => {
         throw new Error(`${(error as Error).message}\nLast on your phone:\n${lastPhoneMessage()}`);
       });
-      if (parked.validation?.status === 'invalid') throw new Error('The new card failed validation and cannot be approved');
+      if (parked.validation?.status === 'invalid') throw new Error(`The new card failed validation and cannot be approved:\n${invalidCardDetail(parked)}`);
       if (parked.needsThreadReview) throw new Error('The new card could not be shown in full on your phone, so it waits in the dashboard');
       if (!parked.rawToolCalls.some(call => REFUND_TOOLS.has(call.name))) {
         throw new Error(`The new card has no refund:${parked.rawToolCalls.map(call => call.name).join(', ') || 'no actions'}. Change the reply's wording, not the refund, for this test`);
