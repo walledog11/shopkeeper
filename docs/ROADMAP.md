@@ -24,7 +24,8 @@ In order. This is the product's critical path.
    retention to `/privacy`. Gates are in [socialapi-s0-diligence](production/socialapi-s0-diligence-2026-09-07.md).
 3. **First live SocialAPI merchant connect** (runbook: *Instagram via SocialAPI*). Closes
    when `verify:production:env` passes, a workspace connects from the dashboard, and its
-   next DM routes to it.
+   next DM routes to it. Needs a paid SocialAPI plan: Free allows 50 replies per billing
+   period across every workspace, then refuses all of them until the period ends.
 4. **Disconnect and reconnect the controlled SocialAPI account** (built: disconnect and
    workspace deletion revoke the remote account). Closes when the account is gone from
    the brand's listing and, after reconnecting, the same sender's next DM lands on the

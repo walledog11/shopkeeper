@@ -236,6 +236,7 @@ describe('SocialAPI client', () => {
     [403, 'brand_scope_denied', 'isolation'],
     [403, 'outside_messaging_window', 'response_window'],
     [429, 'rate_limited', 'rate_limit'],
+    [429, 'validation.interaction_limit_exhausted', 'allowance_exhausted'],
     [503, 'unavailable', 'transient_provider_failure'],
   ] as const)('classifies HTTP %s / %s as %s', async (status, code, category) => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({

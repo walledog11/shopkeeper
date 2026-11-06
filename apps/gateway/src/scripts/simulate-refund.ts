@@ -74,6 +74,11 @@ const SIMULATED_MESSAGE_PREFIX = 'simulated-';
 // refunds it (decision H), so a card may carry cancel_order instead of a refund.
 const REFUND_TOOLS = new Set(['create_refund', 'create_partial_refund', 'cancel_order']);
 const SEND_DONE = new Set(['sent', 'failed', 'unknown', 'bounced']);
+// The most replies a run sends to the customer: the confirmation ask, the
+// waiting notice and the reply; a damage claim adds the asks for the order and
+// for the photo. Each one spends a SocialAPI interaction.
+const REFUND_RUN_REPLIES = 3;
+const DAMAGE_RUN_REPLIES = 5;
 const stepTimeoutMs = Number(values.timeout) * 1_000;
 
 class StepFailed extends Error {}
@@ -462,6 +467,23 @@ async function main(): Promise<void> {
     replyWindowLikelyClosed = !newest || Date.now() - newest.getTime() > REPLY_WINDOW_MS;
     const lastDmLine = `        Last real DM   SocialAPI ${fromSocialApi?.toISOString() ?? 'none'} · received by the gateway ${fromGateway?.toISOString() ?? 'none'}`;
 
+    // A plan with an interaction allowance refuses every reply once it is spent,
+    // until its period ends, so a run that would run out stops here instead.
+    const repliesNeeded = values.damage ? DAMAGE_RUN_REPLIES : REFUND_RUN_REPLIES;
+    const socialApiKey = getSocialApiApiKey();
+    const usage = socialApiKey ? await createSocialApiClient({ apiKey: socialApiKey }).getUsage() : null;
+    let allowanceLine = '        Replies left   unknown: SocialAPI usage could not be read';
+    if (usage?.ok && usage.data.interactionsLimit < 0) {
+      allowanceLine = '        Replies left   no limit on the SocialAPI plan';
+    } else if (usage?.ok) {
+      const { interactionsLimit: limit, interactionsUsed: used, periodEnd } = usage.data;
+      const left = Math.max(0, limit - used);
+      allowanceLine = `        Replies left   ${left} of ${limit} on the SocialAPI plan until ${periodEnd}`;
+      if (left < repliesNeeded) {
+        problems.push(`SocialAPI has ${left} of ${limit} replies left until ${periodEnd}, and this run sends up to ${repliesNeeded}. Upgrade the SocialAPI plan, or run after then`);
+      }
+    }
+
     const shopify = await db.integration.findFirst({
       where: { organizationId, platform: 'shopify', lifecycleStatus: 'active' },
       select: { externalAccountId: true, accessToken: true },
@@ -479,7 +501,9 @@ async function main(): Promise<void> {
           query: {
             ...(wanted
               ? { name: wanted, status: 'any' }
-              : { financial_status: 'paid', status: 'open', limit: 50, ...(values.damage ? { fulfillment_status: 'shipped' } : {}) }),
+              // Shopify can archive an order once it is fulfilled, so a shipped
+              // one is looked for among archived orders too.
+              : { financial_status: 'paid', status: values.damage ? 'any' : 'open', limit: 50, ...(values.damage ? { fulfillment_status: 'shipped' } : {}) }),
             fields: ORDER_FIELDS,
           },
         },
@@ -488,7 +512,7 @@ async function main(): Promise<void> {
       const eligible = orders.filter(candidate => (
         (!wanted || candidate.name === wanted)
         && !candidate.cancelled_at
-        && !candidate.closed_at
+        && (values.damage || !candidate.closed_at)
         && (candidate.refunds?.length ?? 0) === 0
         && (limit === null || Number(candidate.current_total_price) <= limit)
         && Boolean(candidate.shipping_address?.zip)
@@ -515,6 +539,7 @@ async function main(): Promise<void> {
       `        Gateway        ${gateway}`,
       `        Customer       ${handle} (sender ${conversation!.participantId})`,
       lastDmLine,
+      allowanceLine,
       ...(replyWindowLikelyClosed
         ? [`WARN  Neither shows a DM from ${handle} in the last 23 hours, so Instagram may refuse the store's replies. The run goes ahead; if the first reply is refused, DM the store from ${handle} and run again.`]
         : []),
