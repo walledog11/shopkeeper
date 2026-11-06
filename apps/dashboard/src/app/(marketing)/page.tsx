@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Navbar } from "./_components/Navbar";
-import { Hero } from "./_components/Hero";
-import { Handles } from "./_components/Handles";
+import { Story } from "./_components/Story";
 import { Limits } from "./_components/Limits";
 import { MorningText } from "./_components/MorningText";
 import { Pricing } from "./_components/Pricing";
@@ -17,11 +16,8 @@ export const metadata: Metadata = {
 export default function Home() {
   return (
     <main className="relative">
-      <Navbar />
-      <Hero />
-      <div className="m-chapter m-chapter--alt">
-        <Handles />
-      </div>
+      <Navbar tone="dark" />
+      <Story />
       <Limits />
       <div className="m-chapter m-chapter--alt">
         <MorningText />
