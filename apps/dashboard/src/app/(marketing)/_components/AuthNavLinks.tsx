@@ -5,6 +5,7 @@ import { useClerk, useUser } from "@clerk/nextjs";
 import { LayoutDashboard, LogOut } from "lucide-react";
 import { OrgAvatar } from "@/components/OrgAvatar";
 import { PRIMARY_CTA_LABEL } from "@/lib/brand";
+import { DASHBOARD_HREF, LOGIN_HREF } from "./app-links";
 import { marketingButtonClass } from "./ButtonLink";
 import {
   DropdownMenu,
@@ -57,7 +58,7 @@ function AccountMenu() {
         className="w-44 rounded-xl border-[color:var(--m-line)] bg-white p-1.5 text-[color:var(--m-ink)] shadow-xl"
       >
         <DropdownMenuItem asChild className="cursor-pointer rounded-lg px-2.5 py-2">
-          <Link href="/dashboard">
+          <Link href={DASHBOARD_HREF}>
             <LayoutDashboard className="size-4" />
             Dashboard
           </Link>
@@ -85,7 +86,7 @@ export function AuthNavLinks() {
   if (!isSignedIn) {
     return (
       <>
-        <Link href="/login" className={quietLinkClass}>
+        <Link href={LOGIN_HREF} className={quietLinkClass}>
           Log in
         </Link>
         <Link href="/#waitlist" className={primaryLinkClass}>
