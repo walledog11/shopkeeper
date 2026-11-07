@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import { Navbar } from "./_components/Navbar";
 import { Story } from "./_components/Story";
+import { Requests } from "./_components/Requests";
 import { Limits } from "./_components/Limits";
+import { Features } from "./_components/Features";
 import { MorningText } from "./_components/MorningText";
+import { Setup } from "./_components/Setup";
 import { Pricing } from "./_components/Pricing";
 import { FAQ as Faq } from "./_components/FAQ";
 import { CTA as Cta } from "./_components/CTA";
@@ -18,9 +21,16 @@ export default function Home() {
     <main className="relative">
       <Navbar tone="dark" />
       <Story />
-      <Limits />
+      <Requests />
+      <div className="border-t border-[color:var(--m-line)]">
+        <Limits />
+      </div>
       <div className="m-chapter m-chapter--alt">
-        <MorningText />
+        <Features />
+      </div>
+      <MorningText />
+      <div className="m-chapter m-chapter--alt">
+        <Setup />
       </div>
       <Pricing />
       <div className="border-t border-[color:var(--m-line)]">

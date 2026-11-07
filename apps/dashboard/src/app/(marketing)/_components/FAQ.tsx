@@ -2,6 +2,14 @@ import { MarketingFaq } from "./MarketingFaq";
 
 const faqs = [
   {
+    q: "How is it different from a helpdesk?",
+    a: "A helpdesk gives you a queue to work through. Shopkeeper works the queue: it answers what it can, prepares the rest and texts you when it needs a decision.",
+  },
+  {
+    q: "What can it do in Shopify?",
+    a: "Look up orders, tracking and stock, swap items or fix an address before an order ships, cancel and refund, open returns and exchanges, and send gift cards as store credit, all within the limits you set.",
+  },
+  {
     q: "What counts as a conversation?",
     a: "A new customer thread in a calendar month, however long it runs. Your own messages to Shopkeeper don’t count.",
   },
