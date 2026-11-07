@@ -372,15 +372,28 @@ export function PinnedScene({ beat }: { beat: Beat }) {
   );
 }
 
-/** One beat's picture on narrow screens, in normal flow under its text. */
+/** One beat's picture on narrow screens, in normal flow under its text. The
+ *  whole phone shows once, in the hero; the approval beat shows its top (the
+ *  text that arrived) and the yes beat its bottom (the reply), each faded where
+ *  it is cut, so the three phones don't stack up a whole screen each. */
 export function InlineScene({ beat }: { beat: Beat }) {
   const classes = cn("m-scene", `m-scene--b${beat}`, beatClasses(beat));
   if (beat === 1) return <div className={classes}><OrderCard /></div>;
   if (beat === 4) return <div className={classes}><ActivityCard /></div>;
+  if (beat === 0) {
+    return (
+      <div className={classes}>
+        <IgCard className="m-scene-ig" />
+        <StoryPhone />
+      </div>
+    );
+  }
   return (
     <div className={classes}>
-      {beat !== 2 ? <IgCard className="m-scene-ig" /> : null}
-      <StoryPhone />
+      <div className={cn("m-scene-crop", beat === 2 ? "is-top" : "is-bottom")}>
+        <StoryPhone />
+      </div>
+      {beat === 3 ? <IgCard className="m-scene-ig" /> : null}
     </div>
   );
 }

@@ -267,7 +267,8 @@ html:has(.m-page) {
 .m-waitlist-fields > input:focus-visible { outline: 2px solid var(--m-focus); outline-offset: -2px; }
 .m-waitlist-fields > button { flex-shrink: 0; }
 .m-waitlist-fields > button:disabled { opacity: 0.65; cursor: wait; }
-.m-waitlist--dark .m-waitlist-fields { background: rgb(255 255 255 / 0.04); }
+/* Blurred behind, so the hero's stars don't show through the field. */
+.m-waitlist--dark .m-waitlist-fields { background: rgb(255 255 255 / 0.04); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
 
 .m-waitlist-opt-in { display: flex; align-items: flex-start; justify-content: flex-start; gap: 8px; width: 100%; margin-top: 12px; color: var(--m-ink-2); font-size: 12px; line-height: 1.6; cursor: pointer; }
 .m-waitlist-opt-in input { width: 14px; height: 14px; margin-top: 3px; accent-color: var(--m-ink); flex-shrink: 0; }
@@ -290,9 +291,13 @@ html:has(.m-page) {
 .m-waitlist-input::placeholder { color: var(--m-ink-3); }
 .m-waitlist-input:focus-visible { outline: 2px solid var(--m-focus); outline-offset: 1px; }
 
+/* Phones: the field and the button as two full-width pills, not one box. */
 @media (max-width: 420px) {
-  .m-waitlist-fields { flex-direction: column; padding: 5px; border-radius: 24px; }
-  .m-waitlist-fields > input { text-align: center; }
+  .m-waitlist-fields { flex-direction: column; align-items: stretch; gap: 10px; padding: 0; border: 0; border-radius: 0; background: none; }
+  .m-waitlist--dark .m-waitlist-fields { background: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .m-waitlist-fields > input { padding-inline: 1.25rem; border: 1px solid var(--m-line-strong); background: var(--m-bg); }
+  .m-waitlist--dark .m-waitlist-fields > input { background: rgb(255 255 255 / 0.06); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+  .m-waitlist-fields > input:focus-visible { outline-offset: 2px; }
   .m-waitlist-fields > button { width: 100%; }
 }
 
@@ -792,6 +797,20 @@ html:has(.m-page) {
   padding-block: 3.5rem 4.5rem;
 }
 
+.m-works-with {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.875rem;
+  margin-top: 2rem;
+  color: var(--m-ink-3);
+  font-size: 13px;
+}
+
+.m-works-with img {
+  border-radius: 4px;
+}
+
 /* Where the navbar turns dark: the night blocks on narrow screens, one zone on
    wide ones (NavTone.tsx skips whichever is not displayed). */
 .m-story-zone {
@@ -805,7 +824,13 @@ html:has(.m-page) {
 
 .m-story-beat {
   position: relative;
-  padding-block: 4.5rem;
+  padding-block: 3.75rem;
+}
+
+@media (min-width: 640px) {
+  .m-story-beat {
+    padding-block: 4.5rem;
+  }
 }
 
 .m-story-title {
@@ -1093,7 +1118,43 @@ html:has(.m-page) {
 .m-scene-ig {
   position: relative;
   width: min(100%, 268px);
-  margin-bottom: 1.75rem;
+  margin: 0 auto 1.75rem;
+}
+
+.m-scene--b3 .m-scene-ig {
+  margin: 1.5rem auto 0;
+}
+
+/* Part of the phone, faded where it is cut (see InlineScene). */
+.m-scene-crop {
+  display: flex;
+  flex-direction: column;
+  height: 23rem;
+  overflow: hidden;
+}
+
+.m-scene-crop > .m-phone {
+  flex: none;
+}
+
+.m-scene-crop.is-top {
+  justify-content: flex-start;
+  height: 25rem;
+  -webkit-mask-image: linear-gradient(180deg, #000 84%, transparent);
+  mask-image: linear-gradient(180deg, #000 84%, transparent);
+}
+
+.m-scene-crop.is-bottom {
+  justify-content: flex-end;
+  height: 25rem;
+  padding-bottom: 2rem;
+  -webkit-mask-image: linear-gradient(0deg, #000 82%, transparent);
+  mask-image: linear-gradient(0deg, #000 82%, transparent);
+}
+
+/* The approval beat's crop keeps the top, so its thread reads from the top. */
+.m-scene--b2 .m-msgs-thread {
+  justify-content: flex-start;
 }
 
 /* The phone: titanium frame, thin bezel, buttons, Dynamic Island, home bar and
@@ -1951,5 +2012,590 @@ html:has(.m-page) {
 @media (max-width: 639px) {
   .m-morning-phone {
     zoom: 0.86;
+  }
+}
+
+/* ── Product sections (Requests.tsx, Features.tsx, Setup.tsx) ──
+   Pieces of the product at a glance, drawn in the same fixed app colors as the
+   story's cards and set on the page's warm neutrals. */
+
+/* Requests: one lane per routing outcome. Side by side on wide screens and
+   stacked below; on phones each lane's cards scroll sideways. */
+.m-lanes {
+  display: grid;
+  gap: 1rem;
+}
+
+.m-lane {
+  --lane: #2f7a4a;
+  padding: 1.25rem;
+  border-radius: 1.5rem;
+  background: var(--m-bg-alt);
+}
+
+.m-lane.is-ask { --lane: #b0690a; }
+.m-lane.is-you { --lane: #57534e; }
+
+.m-lane-head {
+  padding: 0.125rem 0.25rem 1.125rem;
+}
+
+.m-lane-title {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  color: var(--m-ink);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.m-lane-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: var(--lane);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--lane) 16%, transparent);
+}
+
+.m-lane-note {
+  margin-top: 0.3rem;
+  padding-left: 1.125rem;
+  color: var(--m-ink-3);
+  font-size: 14px;
+}
+
+.m-lane-list {
+  display: grid;
+  gap: 0.625rem;
+}
+
+.m-req {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  padding: 0.875rem;
+  border-radius: 1rem;
+  background: #fff;
+  box-shadow:
+    0 0 0 1px rgba(27, 26, 25, 0.06),
+    0 12px 28px -24px rgba(27, 26, 25, 0.45);
+}
+
+.m-req-from {
+  display: flex;
+  align-items: center;
+  gap: 0.4375rem;
+  color: var(--m-ink-3);
+  font-size: 12.5px;
+}
+
+.m-req-from img {
+  border-radius: 3px;
+}
+
+.m-req-text {
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 0.5rem 0.8125rem;
+  border-radius: 1.125rem 1.125rem 1.125rem 0.375rem;
+  background: #efeff0;
+  color: #0b0b0c;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", var(--m-font-sans);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.m-req-outcome {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-top: 0.125rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--m-line);
+  color: var(--m-ink);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.m-req-outcome svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  color: var(--lane);
+}
+
+@media (min-width: 640px) and (max-width: 1023px) {
+  .m-lane-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .m-lanes {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1.25rem;
+  }
+}
+
+@media (max-width: 639px) {
+  .m-lanes {
+    gap: 2rem;
+  }
+
+  .m-lane {
+    padding: 0;
+    border-radius: 0;
+    background: none;
+  }
+
+  .m-lane-head {
+    padding: 0 0 0.75rem;
+  }
+
+  .m-lane-list {
+    display: flex;
+    margin-inline: -1.25rem;
+    padding: 0.25rem 1.25rem 1.25rem;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: 1.25rem;
+    scrollbar-width: none;
+  }
+
+  .m-lane-list::-webkit-scrollbar {
+    display: none;
+  }
+
+  .m-lane-list > .m-req {
+    flex: 0 0 80%;
+    scroll-snap-align: start;
+  }
+}
+
+/* Features: a bento of app fragments, one wide tile then a row of three. */
+.m-tiles {
+  display: grid;
+  gap: 1rem;
+}
+
+.m-tile {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--m-line);
+  border-radius: 1.5rem;
+  background: #fff;
+}
+
+.m-tile-visual {
+  display: grid;
+  place-items: center;
+  height: 17rem;
+  padding: 1.25rem;
+  overflow: hidden;
+  border-bottom: 1px solid var(--m-line);
+  background:
+    radial-gradient(110% 90% at 50% 0%, #fdf0e6 0%, rgba(253, 240, 230, 0) 72%),
+    #f8f6f3;
+}
+
+/* The inbox runs on past the tile, as a list does. */
+.m-tile.is-wide .m-tile-visual {
+  place-items: start center;
+  padding-top: 1.75rem;
+  padding-bottom: 0;
+}
+
+.m-tile.is-wide .m-inbox {
+  -webkit-mask-image: linear-gradient(180deg, #000 72%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 72%, transparent 100%);
+}
+
+.m-tile-copy {
+  padding: 1.375rem 1.5rem 1.625rem;
+}
+
+.m-tile-title {
+  color: var(--m-ink);
+  font-size: 17px;
+  font-weight: 500;
+}
+
+.m-tile-body {
+  margin-top: 0.375rem;
+  color: var(--m-ink-2);
+  font-size: 15px;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+@media (min-width: 640px) {
+  .m-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .m-tile.is-wide {
+    grid-column: span 2;
+  }
+}
+
+@media (min-width: 1024px) {
+  .m-tiles {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1.25rem;
+  }
+}
+
+/* The fragments inside the tiles: an inbox, a customer's store context, two
+   short threads and a voice suggestion. */
+.m-inbox,
+.m-ctx,
+.m-voice {
+  width: 100%;
+  border-radius: 0.875rem;
+  background: #fff;
+  box-shadow:
+    0 0 0 1px rgba(27, 26, 25, 0.07),
+    0 22px 44px -30px rgba(27, 26, 25, 0.5);
+  color: #1b1a19;
+}
+
+.m-inbox {
+  max-width: 36rem;
+  overflow: hidden;
+}
+
+.m-inbox-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.625rem 0.875rem;
+  border-bottom: 1px solid rgba(27, 26, 25, 0.07);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.m-inbox-tabs {
+  display: flex;
+  gap: 2px;
+  color: #77716a;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.m-inbox-tabs span {
+  padding: 3px 9px;
+  border-radius: 9999px;
+}
+
+.m-inbox-tabs .is-active {
+  background: #f1efec;
+  color: #1b1a19;
+}
+
+.m-inbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5625rem 0.875rem;
+}
+
+.m-inbox-row + .m-inbox-row {
+  border-top: 1px solid rgba(27, 26, 25, 0.05);
+}
+
+.m-inbox-avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  background: #f2dccb;
+  color: #6b3f1f;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.m-inbox-row:nth-child(2) .m-inbox-avatar { background: #dce7f5; color: #2b4a72; }
+.m-inbox-row:nth-child(3) .m-inbox-avatar { background: #dcefe2; color: #2d5c3e; }
+.m-inbox-row:nth-child(4) .m-inbox-avatar { background: #ebe3f6; color: #573d82; }
+
+.m-inbox-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.m-inbox-name img {
+  border-radius: 3px;
+}
+
+.m-inbox-time {
+  margin-left: auto;
+  color: #8a857e;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.m-inbox-text {
+  display: block;
+  margin-top: 1px;
+  overflow: hidden;
+  color: #57534e;
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.m-inbox-status {
+  flex: none;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.m-inbox-status.is-auto { background: #e3f4e8; color: #1f6a3c; }
+.m-inbox-status.is-ask { background: #fdefd3; color: #8a5300; }
+.m-inbox-status.is-you { background: #eeecea; color: #44403c; }
+
+.m-ctx,
+.m-voice,
+.m-mini {
+  max-width: 17.5rem;
+}
+
+.m-ctx {
+  font-size: 12.5px;
+}
+
+.m-ctx-head {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.75rem 0.875rem;
+  border-bottom: 1px solid rgba(27, 26, 25, 0.07);
+}
+
+.m-ctx-orders {
+  padding: 0.25rem 0.875rem;
+}
+
+.m-ctx-orders li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+}
+
+.m-ctx-orders li + li {
+  border-top: 1px solid rgba(27, 26, 25, 0.05);
+}
+
+.m-ctx-policy {
+  display: flex;
+  align-items: center;
+  gap: 0.4375rem;
+  margin: 0.25rem 0.625rem 0.625rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.625rem;
+  background: #f6f6f7;
+  color: #4a4a4a;
+  font-size: 12px;
+}
+
+.m-ctx-policy svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: #6d7175;
+}
+
+.m-mini {
+  width: 100%;
+  border-radius: 1.25rem;
+}
+
+.m-mini .m-chat-thread {
+  gap: 0.375rem;
+  padding: 0.875rem 0.75rem;
+}
+
+.m-mini-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  margin-top: 0.375rem;
+  color: #1f6a3c;
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+.m-mini-note svg {
+  width: 13px;
+  height: 13px;
+}
+
+.m-voice {
+  padding: 0.875rem;
+}
+
+.m-voice-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #57534e;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.m-voice-label svg {
+  width: 14px;
+  height: 14px;
+  color: #8b5cf6;
+}
+
+.m-voice-text {
+  margin-top: 0.5rem;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.m-voice-meta {
+  margin-top: 0.375rem;
+  color: #8a857e;
+  font-size: 11.5px;
+}
+
+.m-voice-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 0.75rem;
+}
+
+.m-voice-actions span {
+  padding: 5px 12px;
+  border: 1px solid rgba(27, 26, 25, 0.14);
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.m-voice-actions .is-primary {
+  border-color: #1b1a19;
+  background: #1b1a19;
+  color: #fff;
+}
+
+/* Setup: the four onboarding steps. */
+.m-steps {
+  display: grid;
+  gap: 1rem;
+}
+
+.m-step {
+  position: relative;
+  padding: 1.5rem 1.5rem 1.625rem;
+  border: 1px solid var(--m-line);
+  border-radius: 1.25rem;
+  background: #fff;
+}
+
+.m-step-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.m-step-logos {
+  display: flex;
+  gap: 0.375rem;
+}
+
+.m-step-logo {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 0.75rem;
+  background: #fff;
+  box-shadow:
+    0 0 0 1px rgba(27, 26, 25, 0.08),
+    0 8px 16px -12px rgba(27, 26, 25, 0.45);
+}
+
+.m-step-logo img {
+  border-radius: 4px;
+}
+
+.m-step-num {
+  color: var(--m-ink-3);
+  font-family: var(--m-font-display);
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.m-step-copy {
+  margin-top: 1.5rem;
+}
+
+@media (min-width: 640px) {
+  .m-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .m-steps {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1.25rem;
+  }
+}
+
+@media (max-width: 639px) {
+  .m-tile-visual {
+    height: 16rem;
+    padding: 1rem;
+  }
+
+  .m-tile-copy {
+    padding: 1.25rem 1.25rem 1.375rem;
+  }
+
+  .m-inbox-time {
+    display: none;
+  }
+
+  /* Setup steps read across on phones: the logos, then the words. */
+  .m-step {
+    display: flex;
+    gap: 1rem;
+    padding: 1.25rem;
+  }
+
+  .m-step-top {
+    flex: none;
+    align-items: flex-start;
+  }
+
+  .m-step-logos {
+    flex-direction: column;
+  }
+
+  .m-step-num {
+    display: none;
+  }
+
+  .m-step-copy {
+    margin-top: 0.125rem;
   }
 }

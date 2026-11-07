@@ -30,6 +30,13 @@ const beats: { title: string; body: string; tone: string }[] = [
   },
 ];
 
+const worksWith = [
+  { src: "/logos/shopify.svg", alt: "Shopify", width: 16, height: 18 },
+  { src: "/logos/instagram-logo.png", alt: "Instagram", width: 18, height: 18 },
+  { src: "/logos/gmail.png", alt: "Gmail", width: 18, height: 18 },
+  { src: "/logos/imessage.svg", alt: "iMessage", width: 18, height: 18 },
+] as const;
+
 export function Story() {
   return (
     <section aria-labelledby="hero-heading" className="m-story">
@@ -57,6 +64,12 @@ export function Story() {
               <div id="waitlist" className="mt-9 scroll-mt-28">
                 <WaitlistForm source="hero" dark />
               </div>
+              <p className="m-works-with">
+                Works with
+                {worksWith.map((logo) => (
+                  <Image key={logo.alt} src={logo.src} alt={logo.alt} title={logo.alt} width={logo.width} height={logo.height} />
+                ))}
+              </p>
             </div>
             <div role="img" aria-label={STORY_SCENE_LABEL} className="mt-14 lg:hidden">
               <div aria-hidden>
