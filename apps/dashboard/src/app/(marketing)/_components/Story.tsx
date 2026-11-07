@@ -42,7 +42,7 @@ export function Story() {
         <span className="m-story-grain m-grain" />
       </div>
 
-      <div className="relative mx-auto grid max-w-6xl px-5 sm:px-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-12">
+      <div className="m-story-grid relative mx-auto grid px-5 sm:px-8 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] lg:gap-14">
         <div className="min-w-0">
           <div className="m-story-hero m-tone-night">
             <span aria-hidden data-nav-dark className="m-story-zone" />
@@ -79,7 +79,7 @@ export function Story() {
                 {number === 3 ? <span aria-hidden data-nav-dark className="m-story-dusk-zone" /> : null}
                 <div className="max-w-[27rem]">
                   <h3 className="m-display m-story-title">{beat.title}</h3>
-                  <p className="m-lede mt-4 text-[1.125rem]">{beat.body}</p>
+                  <p className="m-lede mt-5 text-[1.1875rem]">{beat.body}</p>
                 </div>
                 <div aria-hidden className="mt-12 lg:hidden">
                   <InlineScene beat={number} />

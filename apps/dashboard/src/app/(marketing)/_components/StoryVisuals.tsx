@@ -12,17 +12,19 @@ import {
   Plus,
   Send,
   Smartphone,
-  Store,
+  Video,
 } from "lucide-react";
 import { cn } from "@/lib/ui/cn";
 
-/* The phone and the cards around it in the hero story (Story.tsx). Every state
-   is drawn up front; a beat only switches classes on the scene, so moving
-   between beats is CSS transitions and the server render is the hero frame.
+/* The phone and the cards around it in the hero story (Story.tsx), and the
+   morning lock screen (MorningText.tsx). Every state is drawn up front; a beat
+   only switches classes on the scene, so moving between beats is CSS
+   transitions and the server render is the hero frame.
 
    Beats: 0 the hero (a DM, then a text on the lock screen), 1 the order check,
    2 the approval text, 3 the "yes" and the result, 4 the record. The approval
-   text follows the card the gateway sends (`formatOperatorPlanMessage`). */
+   text follows the card the gateway sends (`formatOperatorPlanMessage`); the
+   briefing follows `formatHandledSection` and `formatSalesPulseLine`. */
 
 export type Beat = 0 | 1 | 2 | 3 | 4;
 
@@ -54,154 +56,200 @@ function Typing({ at }: { at: 2 | 3 }) {
   );
 }
 
-function ContactAvatar({ className }: { className?: string }) {
+/** Shopkeeper's contact photo is its app icon; on the lock screen it carries the Messages badge. */
+function ShopkeeperPhoto({ badge = false, className }: { badge?: boolean; className?: string }) {
   return (
-    <span className={cn("m-ios-avatar", className)}>
-      <Store strokeWidth={2} />
+    <span className={cn("m-ios-photo", className)}>
+      <span className="m-ios-photo-img">
+        <Image src="/logos/shopkeeper-shop-logo.png" alt="" fill sizes="48px" />
+      </span>
+      {badge ? <Image src="/logos/imessage.svg" alt="" width={16} height={16} className="m-ios-badge" /> : null}
     </span>
   );
 }
 
-function StatusBar() {
+/** Laid out around the Dynamic Island the way iOS does: time centred in the left
+ *  ear, signal, Wi-Fi and battery centred in the right one. */
+function StatusBar({ time }: { time: ReactNode }) {
   return (
     <div className="m-ios-status">
+      <span className="m-ios-status-time">{time}</span>
+      <span />
+      <span className="m-ios-status-icons">
+        <svg viewBox="0 0 17 11" className="h-[8.5px] w-[13px]" fill="currentColor">
+          <rect x="0" y="7.5" width="3" height="3.5" rx="0.8" />
+          <rect x="4.6" y="5.2" width="3" height="5.8" rx="0.8" />
+          <rect x="9.2" y="2.8" width="3" height="8.2" rx="0.8" />
+          <rect x="13.8" y="0" width="3" height="11" rx="0.8" />
+        </svg>
+        <svg viewBox="0 0 15 11" className="h-[8.5px] w-[12px]" fill="currentColor">
+          <path d="M7.5 2.1c2.2 0 4.2.8 5.8 2.3l1.1-1.2A10 10 0 0 0 7.5.4 10 10 0 0 0 .6 3.2l1.1 1.2a8.4 8.4 0 0 1 5.8-2.3Zm0 3.4c1.3 0 2.6.5 3.6 1.4l1.1-1.2a7 7 0 0 0-9.4 0L3.9 6.9a5.3 5.3 0 0 1 3.6-1.4Zm0 3.3c.6 0 1.1.2 1.5.6L7.5 11 6 9.4c.4-.4.9-.6 1.5-.6Z" />
+        </svg>
+        <span className="m-ios-battery">
+          <span />
+        </span>
+      </span>
+    </div>
+  );
+}
+
+function LockActions() {
+  return (
+    <div className="m-lock-actions">
       <span>
-        <span className="m-time-night">2:14</span>
-        <span className="m-time-day">7:02</span>
+        <Flashlight strokeWidth={2} />
       </span>
-      <span className="flex items-center gap-[5px]">
-        <svg viewBox="0 0 18 12" className="h-[10px] w-[15px]" fill="currentColor">
-          <rect x="0" y="8" width="3" height="4" rx="1" />
-          <rect x="5" y="5.5" width="3" height="6.5" rx="1" />
-          <rect x="10" y="3" width="3" height="9" rx="1" />
-          <rect x="15" y="0" width="3" height="12" rx="1" />
-        </svg>
-        <svg viewBox="0 0 16 12" className="h-[10px] w-[13px]" fill="currentColor">
-          <path d="M8 2.3c2.4 0 4.6.9 6.3 2.5l1.2-1.3A10.8 10.8 0 0 0 8 .5 10.8 10.8 0 0 0 .5 3.5l1.2 1.3A9 9 0 0 1 8 2.3Zm0 3.6c1.5 0 2.9.6 4 1.6l1.2-1.3a7.6 7.6 0 0 0-10.4 0L4 7.5a5.8 5.8 0 0 1 4-1.6Zm0 3.6c.6 0 1.2.2 1.6.6L8 12 6.4 10.1c.4-.4 1-.6 1.6-.6Z" />
-        </svg>
-        <span className="relative inline-flex h-[11px] w-[22px] items-center rounded-[3.5px] border border-current/40 p-[1.5px]">
-          <span className="h-full w-[75%] rounded-[1.5px] bg-current" />
-          <span className="absolute -right-[3px] top-1/2 h-[4px] w-[1.5px] -translate-y-1/2 rounded-r-sm bg-current/40" />
-        </span>
+      <span>
+        <Camera strokeWidth={2} />
       </span>
     </div>
   );
 }
 
-function LockScreen() {
+function Notification({ children }: { children: ReactNode }) {
   return (
-    <div className="m-lock">
-      <Image src="/atmosphere/footer-dawn.jpg" alt="" fill sizes="300px" className="m-lock-wall" />
-      <p className="m-lock-date">Friday, November 6</p>
-      <p className="m-lock-time">2:14</p>
-      <div className="m-notif">
-        <ContactAvatar className="m-notif-avatar" />
-        <div className="min-w-0">
-          <p className="m-notif-head">
-            <span>Shopkeeper</span>
-            <span>now</span>
-          </p>
-          <p className="m-notif-body">
-            Maya Chen asked to swap her linen jumpsuit from M to S on #3102. It hasn’t shipped, and the Small is in stock.
-          </p>
-        </div>
-      </div>
-      <div className="m-lock-actions">
-        <span>
-          <Flashlight strokeWidth={2} />
-        </span>
-        <span>
-          <Camera strokeWidth={2} />
-        </span>
+    <div className="m-notif">
+      <ShopkeeperPhoto badge className="m-notif-photo" />
+      <div className="min-w-0 flex-1">
+        <p className="m-notif-head">
+          <span>Shopkeeper</span>
+          <span>now</span>
+        </p>
+        <p className="m-notif-body">{children}</p>
       </div>
     </div>
   );
 }
 
-function MessagesScreen() {
+function Phone({ className, children }: { className?: string; children: ReactNode }) {
   return (
-    <div className="m-msgs">
-      <div className="m-msgs-head">
-        <ChevronLeft className="m-msgs-back" strokeWidth={2.5} />
-        <ContactAvatar />
-        <p className="m-msgs-name">
-          Shopkeeper
-          <ChevronRight strokeWidth={2.5} />
-        </p>
-      </div>
-      <div className="m-msgs-thread">
-        <p className="m-ib-stamp">
-          <b>iMessage</b>
-          <br />
-          Today 2:14 AM
-        </p>
-        <Typing at={2} />
-        <Arrive at={2} delay="[--d:.9s]">
-          <div className="m-ib m-ib-them m-ib-tail">
-            <span>Maya Chen asked to swap her linen jumpsuit from M to S on #3102. It hasn’t shipped, and the Small is in stock.</span>
-            <span>I’d swap the Medium for the Small, then reply on Instagram:</span>
-            <span>“Done! Your order #3102 is now a Small, same price.”</span>
-            <span>OK to go ahead?</span>
-          </div>
-        </Arrive>
-        <Arrive at={3}>
-          <p className="m-ib-stamp">Today 7:02 AM</p>
-        </Arrive>
-        <Arrive at={3} delay="[--d:.15s]" end>
-          <div className="m-ib m-ib-me m-ib-tail">
-            <span>yes</span>
-          </div>
-        </Arrive>
-        <Arrive at={3} delay="[--d:.55s]" end>
-          <p className="m-ib-receipt">Read 7:02 AM</p>
-        </Arrive>
-        <Typing at={3} />
-        <Arrive at={3} delay="[--d:1.7s]">
-          <div className="m-ib m-ib-them m-ib-tail">
-            <span>Done. #3102 is updated in Shopify, and Maya has her reply.</span>
-          </div>
-        </Arrive>
-      </div>
-      <div className="m-msgs-input">
-        <span className="m-msgs-plus">
-          <Plus strokeWidth={2.5} />
-        </span>
-        <span className="m-msgs-field">
-          iMessage
-          <Mic strokeWidth={2} />
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function Phone() {
-  return (
-    <div className="m-phone">
+    <div className={cn("m-phone", className)}>
       <span className="m-phone-btn is-action" />
       <span className="m-phone-btn is-up" />
       <span className="m-phone-btn is-down" />
       <span className="m-phone-btn is-power" />
       <div className="m-phone-screen">
-        <LockScreen />
-        <MessagesScreen />
-        <StatusBar />
+        {children}
         <span className="m-phone-island" />
         <span className="m-phone-home" />
+        <span className="m-phone-glare" />
       </div>
     </div>
   );
 }
 
-function InstagramGlyph() {
+function StoryPhone() {
   return (
-    <span className="m-ig-glyph">
-      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">
-        <rect x="5" y="5" width="14" height="14" rx="4.5" />
-        <circle cx="12" cy="12" r="3.4" />
-        <circle cx="16.3" cy="7.7" r="0.4" fill="#fff" />
-      </svg>
-    </span>
+    <Phone>
+      <div className="m-lock">
+        <Image src="/atmosphere/footer-dawn.jpg" alt="" fill sizes="320px" className="m-lock-wall" />
+        <p className="m-lock-date">Friday, November 6</p>
+        <p className="m-lock-time">2:14</p>
+        <div className="m-notif-stack m-notif-arrive">
+          <Notification>
+            Maya Chen asked to swap her linen jumpsuit from M to S on #3102. It hasn’t shipped, and the Small is in stock.
+          </Notification>
+        </div>
+        <LockActions />
+      </div>
+
+      <div className="m-msgs">
+        <div className="m-msgs-head">
+          <span className="m-msgs-back">
+            <ChevronLeft strokeWidth={2.6} />
+          </span>
+          <span className="m-msgs-contact">
+            <ShopkeeperPhoto />
+            <span className="m-msgs-name">
+              Shopkeeper
+              <ChevronRight strokeWidth={2.6} />
+            </span>
+          </span>
+          <Video className="m-msgs-facetime" strokeWidth={2} />
+        </div>
+        <div className="m-msgs-thread">
+          <p className="m-ib-stamp">
+            iMessage
+            <br />
+            <b>Today</b> 2:14 AM
+          </p>
+          <Typing at={2} />
+          <Arrive at={2} delay="[--d:.9s]">
+            <div className="m-ib m-ib-them m-ib-tail">
+              <span>Maya Chen asked to swap her linen jumpsuit from M to S on #3102. It hasn’t shipped, and the Small is in stock.</span>
+              <span>I’d swap the Medium for the Small, then reply on Instagram:</span>
+              <span>“Done! Your order #3102 is now a Small, same price.”</span>
+              <span>OK to go ahead?</span>
+            </div>
+          </Arrive>
+          <Arrive at={3}>
+            <p className="m-ib-stamp">
+              <b>Today</b> 7:02 AM
+            </p>
+          </Arrive>
+          <Arrive at={3} delay="[--d:.15s]" end>
+            <div className="m-ib m-ib-me m-ib-tail">
+              <span>yes</span>
+            </div>
+          </Arrive>
+          <Arrive at={3} delay="[--d:.55s]" end>
+            <p className="m-ib-receipt">
+              <b>Read</b> 7:02 AM
+            </p>
+          </Arrive>
+          <Typing at={3} />
+          <Arrive at={3} delay="[--d:1.7s]">
+            <div className="m-ib m-ib-them m-ib-tail">
+              <span>Done. #3102 is updated in Shopify, and Maya has her reply.</span>
+            </div>
+          </Arrive>
+        </div>
+        <div className="m-msgs-input">
+          <span className="m-msgs-plus">
+            <Plus strokeWidth={2.4} />
+          </span>
+          <span className="m-msgs-field">
+            iMessage
+            <Mic strokeWidth={2} />
+          </span>
+        </div>
+      </div>
+
+      <StatusBar
+        time={
+          <>
+            <span className="m-time-night">2:14</span>
+            <span className="m-time-day">7:02</span>
+          </>
+        }
+      />
+    </Phone>
+  );
+}
+
+const briefing = [
+  "Since your last briefing I handled six things, including four replies and a refund. Five of those ran without needing you.",
+  "Riley asked to change the delivery address for #3107.",
+  "9 orders and $684 since your last briefing. This time last week it was 6 orders and $455.",
+] as const;
+
+/** The briefing as it lands: three texts on the lock screen at 7:00. */
+export function MorningPhone() {
+  return (
+    <Phone className="m-phone--morning">
+      <div className="m-lock is-morning">
+        <Image src="/atmosphere/footer-dawn.jpg" alt="" fill sizes="320px" className="m-lock-wall" />
+        <p className="m-lock-date">Friday, November 6</p>
+        <p className="m-lock-time">7:00</p>
+        <div className="m-notif-stack">
+          {briefing.map((text) => (
+            <Notification key={text}>{text}</Notification>
+          ))}
+        </div>
+        <LockActions />
+      </div>
+      <StatusBar time="7:00" />
+    </Phone>
   );
 }
 
@@ -210,8 +258,11 @@ function IgCard({ className }: { className?: string }) {
     <div className={cn("m-chat m-chat--instagram m-ig", className)}>
       <div className="m-chat-head">
         <span className="m-chat-avatar">MC</span>
-        <span className="m-chat-name">Maya Chen</span>
-        <InstagramGlyph />
+        <span className="min-w-0">
+          <span className="m-chat-name block">Maya Chen</span>
+          <span className="m-ig-handle">maya.chen</span>
+        </span>
+        <Image src="/logos/instagram-logo.png" alt="" width={20} height={20} className="m-card-logo" />
       </div>
       <div className="m-chat-thread">
         <p className="m-chat-stamp">2:14 AM</p>
@@ -242,6 +293,7 @@ function OrderCard({ className }: { className?: string }) {
         <span className="m-order-num">#3102</span>
         <span className="m-badge is-paid">Paid</span>
         <span className="m-badge is-open">Unfulfilled</span>
+        <Image src="/logos/shopify.svg" alt="" width={16} height={18} className="m-card-logo" />
       </div>
       <p className="m-order-meta">Maya Chen · Instagram</p>
       <div className="m-order-line">
@@ -311,7 +363,7 @@ export function PinnedScene({ beat }: { beat: Beat }) {
   return (
     <div className="m-stage-fit">
       <div className={cn("m-stage", beatClasses(beat))} data-beat={beat}>
-        <Phone />
+        <StoryPhone />
         <IgCard className="m-stage-ig" />
         <OrderCard className="m-stage-order" />
         <ActivityCard className="m-stage-log" />
@@ -328,7 +380,7 @@ export function InlineScene({ beat }: { beat: Beat }) {
   return (
     <div className={classes}>
       {beat !== 2 ? <IgCard className="m-scene-ig" /> : null}
-      <Phone />
+      <StoryPhone />
     </div>
   );
 }

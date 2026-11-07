@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import { useUser } from "@clerk/nextjs";
 import { Menu, Store, X } from "lucide-react";
 import { PRIMARY_CTA_LABEL, PRODUCT_NAME } from "@/lib/brand";
+import { DASHBOARD_HREF, LOGIN_HREF } from "./app-links";
 import { ButtonLink } from "./ButtonLink";
 
 const links = [
@@ -102,7 +103,7 @@ export function MobileNav() {
             {link.label}
           </Link>
         ))}
-        <Link href={isSignedIn ? "/dashboard" : "/login"} className="m-nav-sheet-item" onClick={close}>
+        <Link href={isSignedIn ? DASHBOARD_HREF : LOGIN_HREF} className="m-nav-sheet-item" onClick={close}>
           {isSignedIn ? "Dashboard" : "Log in"}
         </Link>
       </nav>

@@ -315,16 +315,22 @@ html:has(.m-page) {
   justify-content: space-between;
   gap: 0.75rem;
   height: 3.5rem;
-  max-width: 72rem;
+  max-width: 80rem;
   margin: 0 auto;
   padding: 0 1.25rem;
+}
+
+@media (min-width: 1800px) and (min-height: 940px) {
+  .m-nav-bar {
+    max-width: 92rem;
+  }
 }
 
 @media (min-width: 768px) {
   .m-nav-bar {
     display: grid;
     grid-template-columns: 1fr auto 1fr;
-    padding: 0 1.5rem;
+    padding: 0 2rem;
   }
 }
 
@@ -677,7 +683,8 @@ html:has(.m-page) {
    One section from night to dawn: a customer writes at 2:14 AM, the owner says
    yes at 7:02. On wide screens the phone is pinned while four beats scroll past
    and the sky behind it warms with the scroll. Block heights are viewport units
-   (--h the hero, --b one beat) so the gradient's stops land between beats. */
+   (--h the hero including the nav, --b one beat) so the gradient's stops land
+   between the beats' text. */
 .m-story {
   position: relative;
   isolation: isolate;
@@ -695,23 +702,62 @@ html:has(.m-page) {
   pointer-events: none;
 }
 
-.m-story-stars {
+/* Two star fields: a faint dust and a sparse set of brighter stars, a few of
+   which breathe. Both fade out before the dawn. */
+.m-story-stars,
+.m-night-stars {
   position: absolute;
   inset: 0 0 auto;
   height: 1500px;
-  opacity: 0.6;
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.55) 40%, transparent 75%);
+  mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.55) 40%, transparent 75%);
+}
+
+.m-story-stars::before,
+.m-story-stars::after,
+.m-night-stars::before,
+.m-night-stars::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.m-story-stars::before,
+.m-night-stars::before {
+  opacity: 0.35;
   background-image:
     radial-gradient(1px 1px at 23px 41px, #fff 50%, transparent 51%),
     radial-gradient(1px 1px at 97px 113px, #fff 50%, transparent 51%),
-    radial-gradient(1.3px 1.3px at 151px 27px, #fff 50%, transparent 51%),
     radial-gradient(1px 1px at 211px 173px, #fff 50%, transparent 51%),
     radial-gradient(1px 1px at 61px 229px, #fff 50%, transparent 51%),
-    radial-gradient(1.5px 1.5px at 287px 251px, #fff 50%, transparent 51%),
     radial-gradient(1px 1px at 331px 89px, #fff 50%, transparent 51%),
-    radial-gradient(1.2px 1.2px at 173px 311px, #fff 50%, transparent 51%);
-  background-size: 260px 260px, 260px 260px, 260px 260px, 260px 260px, 370px 370px, 370px 370px, 370px 370px, 370px 370px;
-  -webkit-mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.55) 40%, transparent 75%);
-  mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.55) 40%, transparent 75%);
+    radial-gradient(1px 1px at 173px 311px, #fff 50%, transparent 51%);
+  background-size: 233px 241px, 283px 271px, 317px 293px, 367px 349px, 409px 383px, 457px 431px;
+}
+
+.m-story-stars::after,
+.m-night-stars::after {
+  opacity: 0.8;
+  background-image:
+    radial-gradient(circle at 140px 60px, rgba(255, 255, 255, 0.95) 0 1px, rgba(255, 255, 255, 0.25) 1.6px, transparent 3.5px),
+    radial-gradient(circle at 520px 210px, rgba(255, 255, 255, 0.9) 0 1px, rgba(255, 255, 255, 0.2) 1.5px, transparent 3px),
+    radial-gradient(circle at 330px 470px, rgba(255, 245, 230, 0.9) 0 1.2px, rgba(255, 245, 230, 0.2) 1.8px, transparent 3.5px),
+    radial-gradient(circle at 760px 330px, rgba(255, 255, 255, 0.85) 0 0.9px, rgba(255, 255, 255, 0.2) 1.4px, transparent 3px),
+    radial-gradient(circle at 1180px 120px, rgba(255, 255, 255, 0.9) 0 1px, rgba(255, 255, 255, 0.2) 1.5px, transparent 3px),
+    radial-gradient(circle at 1420px 520px, rgba(255, 245, 230, 0.85) 0 1.1px, rgba(255, 245, 230, 0.2) 1.7px, transparent 3.5px),
+    radial-gradient(circle at 960px 640px, rgba(255, 255, 255, 0.8) 0 0.9px, rgba(255, 255, 255, 0.2) 1.4px, transparent 3px),
+    radial-gradient(circle at 1530px 250px, rgba(255, 255, 255, 0.9) 0 1px, rgba(255, 255, 255, 0.2) 1.5px, transparent 3px);
+  /* Wide tiles of different sizes, so no star repeats within a screen and the
+     field never lines up into rows. */
+  background-size:
+    1601px 1187px, 1709px 1259px, 1823px 1307px, 1931px 1361px,
+    1663px 1229px, 1777px 1283px, 1871px 1327px, 1997px 1399px;
+  animation: m-twinkle 7s ease-in-out infinite alternate;
+}
+
+@keyframes m-twinkle {
+  from { opacity: 0.45; }
+  to { opacity: 0.95; }
 }
 
 .m-story-dawn {
@@ -733,6 +779,12 @@ html:has(.m-page) {
   --m-line-strong: rgba(255, 255, 255, 0.26);
   --m-focus: #fff;
   color: var(--m-ink);
+}
+
+/* The story's own width: wider than the page's 72rem, so the pinned scene has
+   room on large screens. The navbar uses the same width. */
+.m-story-grid {
+  max-width: 80rem;
 }
 
 .m-story-hero {
@@ -757,8 +809,8 @@ html:has(.m-page) {
 }
 
 .m-story-title {
-  font-size: clamp(2rem, 3.4vw, 2.85rem);
-  line-height: 1.06;
+  font-size: clamp(2rem, 3.6vw, 3.1rem);
+  line-height: 1.05;
   letter-spacing: -0.026em;
 }
 
@@ -803,7 +855,7 @@ html:has(.m-page) {
 @media (min-width: 1024px) {
   .m-story {
     --h: 100svh;
-    --b: 80svh;
+    --b: 72svh;
     background: linear-gradient(
       180deg,
       #090c1a 0,
@@ -860,11 +912,17 @@ html:has(.m-page) {
 
   /* Room for the pinned phone to stay put while the last beat is read. */
   .m-story-beat:last-child {
-    min-height: calc(var(--b) + 20svh);
+    min-height: calc(var(--b) + 24svh);
   }
 
   .m-story-dusk-zone {
     display: none;
+  }
+}
+
+@media (min-width: 1800px) and (min-height: 940px) {
+  .m-story-grid {
+    max-width: 92rem;
   }
 }
 
@@ -896,23 +954,37 @@ html:has(.m-page) {
   background: #fff;
 }
 
-/* The pinned scene: the phone, with the customer's thread, the order and the
-   record around it. A beat shows and hides layers; nothing is re-rendered. */
+/* The closing section keeps the night sky, ending in the footer's colour. */
+.m-cta-night {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: linear-gradient(180deg, #0b0e1f 0%, #141832 45%, #1b1a19 100%);
+}
+
+.m-cta-night .m-night-stars {
+  z-index: -1;
+  height: 100%;
+}
+
+/* The pinned scene: the phone on the right, the customer's thread, the order
+   and the record to its left with clear air between them. A beat shows and
+   hides layers; nothing is re-rendered. */
 .m-stage {
   position: relative;
-  width: 560px;
-  height: 640px;
+  width: 700px;
+  height: 700px;
 }
 
 .m-stage > .m-phone {
   position: absolute;
-  top: 24px;
-  right: 20px;
+  top: 40px;
+  right: 10px;
   transition: transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .m-stage[data-beat="2"] > .m-phone {
-  transform: translateX(-116px);
+  transform: translateX(-190px);
 }
 
 .m-stage-ig,
@@ -927,33 +999,29 @@ html:has(.m-page) {
 }
 
 .m-stage-ig {
-  top: 70px;
-  left: 12px;
-  width: 252px;
+  top: 84px;
+  right: 362px;
+  width: 268px;
 }
 
 .m-stage-order {
-  top: 400px;
-  left: 0;
-  width: 284px;
-  opacity: 0;
-  transform: translateY(18px);
-}
-
-.m-stage-log {
-  bottom: 48px;
-  left: -40px;
+  top: 470px;
+  right: 362px;
   width: 300px;
   opacity: 0;
   transform: translateY(18px);
 }
 
-.m-stage[data-beat="1"] .m-stage-order {
-  top: 334px;
+.m-stage-log {
+  top: 230px;
+  right: 362px;
+  width: 330px;
+  opacity: 0;
+  transform: translateY(18px);
 }
 
-.m-stage[data-beat="3"] .m-stage-order {
-  top: 432px;
+.m-stage[data-beat="1"] .m-stage-order {
+  top: 372px;
 }
 
 .m-stage[data-beat="1"] .m-stage-order,
@@ -969,25 +1037,48 @@ html:has(.m-page) {
   transform: translateX(-18px);
 }
 
+.m-stage-fit {
+  zoom: 0.9;
+}
+
 @media (max-width: 1279px) {
   .m-stage-fit {
-    zoom: 0.86;
+    zoom: 0.8;
   }
 }
 
-@media (max-height: 780px) {
+@media (max-width: 1150px) {
+  .m-stage-fit {
+    zoom: 0.7;
+  }
+}
+
+@media (min-width: 1800px) and (min-height: 940px) {
+  .m-stage-fit {
+    zoom: 1.04;
+  }
+}
+
+@media (max-height: 860px) {
   .m-stage {
-    zoom: 0.88;
+    zoom: 0.92;
   }
 }
 
-@media (max-height: 690px) {
+@media (max-height: 760px) {
   .m-stage {
-    zoom: 0.78;
+    zoom: 0.82;
   }
 }
 
-/* One beat's picture on narrow screens. */
+@media (max-height: 680px) {
+  .m-stage {
+    zoom: 0.74;
+  }
+}
+
+/* One beat's picture on narrow screens: the customer's thread above the phone,
+   with air between them. */
 .m-scene {
   position: relative;
   max-width: 23rem;
@@ -1001,25 +1092,28 @@ html:has(.m-page) {
 
 .m-scene-ig {
   position: relative;
-  z-index: 2;
-  width: 232px;
-  margin-bottom: -44px;
+  width: min(100%, 268px);
+  margin-bottom: 1.75rem;
 }
 
-/* The phone: frame, buttons, screen, island and home bar. */
+/* The phone: titanium frame, thin bezel, buttons, Dynamic Island, home bar and
+   a faint glare across the glass. Sized from an iPhone 15 Pro at 0.71x. Its
+   shadow spreads less than the 52px gap to the stage cards: one that reaches a
+   card gets cut off square where Chrome composites the two together. */
 .m-phone {
   position: relative;
-  width: 288px;
-  height: 592px;
-  padding: 11px;
-  border-radius: 54px;
-  background: linear-gradient(145deg, #4b4a50 0%, #1e1e21 18%, #2b2b2f 52%, #141416 82%, #3c3c41 100%);
+  width: 300px;
+  height: 616px;
+  padding: 9px;
+  border-radius: 56px;
+  background: linear-gradient(150deg, #8b8a8f 0%, #3a393d 9%, #232326 30%, #2f2f33 58%, #1b1b1d 82%, #6c6b70 100%);
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.2),
-    inset 0 0 0 3.5px #0b0b0c,
-    0 0 0 1px rgba(0, 0, 0, 0.5),
-    0 44px 90px -30px rgba(4, 6, 18, 0.75),
-    0 70px 120px -50px rgba(236, 107, 79, 0.32);
+    inset 0 0 0 1px rgba(255, 255, 255, 0.28),
+    inset 0 0 0 2.5px #0d0d0f,
+    inset 0 0 0 4px #1f1f22,
+    0 0 0 0.5px rgba(0, 0, 0, 0.6),
+    0 34px 60px -24px rgba(4, 6, 18, 0.6),
+    0 64px 72px -42px rgba(236, 107, 79, 0.28);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", var(--m-font-sans);
   -webkit-font-smoothing: antialiased;
 }
@@ -1028,21 +1122,22 @@ html:has(.m-page) {
   position: absolute;
   width: 3px;
   border-radius: 2px;
-  background: linear-gradient(90deg, #2a2a2e, #4a494e);
+  background: linear-gradient(90deg, #4a494e, #7d7c82 60%, #3a393d);
 }
 
-.m-phone-btn.is-action { top: 104px; left: -3px; height: 24px; }
-.m-phone-btn.is-up { top: 146px; left: -3px; height: 44px; }
-.m-phone-btn.is-down { top: 200px; left: -3px; height: 44px; }
-.m-phone-btn.is-power { top: 168px; right: -3px; height: 68px; }
+.m-phone-btn.is-action { top: 108px; left: -2.5px; height: 22px; }
+.m-phone-btn.is-up { top: 150px; left: -2.5px; height: 46px; }
+.m-phone-btn.is-down { top: 206px; left: -2.5px; height: 46px; }
+.m-phone-btn.is-power { top: 172px; right: -2.5px; height: 72px; }
 
 .m-phone-screen {
   position: relative;
   isolation: isolate;
   height: 100%;
   overflow: hidden;
-  border-radius: 43px;
+  border-radius: 47px;
   background: #000;
+  box-shadow: 0 0 0 2px #000;
 }
 
 .m-phone-island {
@@ -1050,7 +1145,7 @@ html:has(.m-page) {
   top: 10px;
   left: 50%;
   z-index: 5;
-  width: 88px;
+  width: 90px;
   height: 26px;
   border-radius: 9999px;
   background: #000;
@@ -1062,7 +1157,7 @@ html:has(.m-page) {
   bottom: 7px;
   left: 50%;
   z-index: 5;
-  width: 104px;
+  width: 108px;
   height: 4px;
   border-radius: 9999px;
   background: rgba(255, 255, 255, 0.85);
@@ -1074,44 +1169,109 @@ html:has(.m-page) {
   background: #111;
 }
 
+.m-phone-glare {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  background: linear-gradient(118deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.03) 22%, transparent 34%);
+}
+
+/* iOS status bar: the time centred in the left ear, the icons in the right,
+   both on the island's centre line. */
 .m-ios-status {
   position: absolute;
-  inset: 0 0 auto;
+  inset: 10px 0 auto;
   z-index: 4;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 90px 1fr;
   align-items: center;
-  justify-content: space-between;
-  height: 46px;
-  padding: 6px 26px 0 32px;
+  height: 26px;
   color: #fff;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: -0.01em;
   transition: color 0.4s ease;
 }
 
-.is-b2 .m-ios-status { color: #000; }
+.is-b2 .m-ios-status {
+  color: #000;
+}
+
+.m-ios-status-time {
+  justify-self: center;
+  padding-left: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.m-ios-status-icons {
+  display: flex;
+  justify-self: center;
+  align-items: center;
+  gap: 4px;
+  padding-right: 6px;
+}
+
+.m-ios-battery {
+  position: relative;
+  display: inline-flex;
+  width: 20px;
+  height: 9.5px;
+  padding: 1.5px;
+  border: 1px solid color-mix(in srgb, currentColor 40%, transparent);
+  border-radius: 3px;
+}
+
+.m-ios-battery span {
+  width: 78%;
+  border-radius: 1.5px;
+  background: currentColor;
+}
+
+.m-ios-battery::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: -3px;
+  width: 1.5px;
+  height: 3.5px;
+  border-radius: 0 1px 1px 0;
+  background: color-mix(in srgb, currentColor 45%, transparent);
+  transform: translateY(-50%);
+}
+
 .m-time-day { display: none; }
 .is-b3 .m-time-night { display: none; }
 .is-b3 .m-time-day { display: inline; }
 
-.m-ios-avatar {
-  display: grid;
+.m-ios-photo {
+  position: relative;
+  display: inline-block;
   flex-shrink: 0;
-  place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 42px;
+  height: 42px;
+}
+
+.m-ios-photo-img {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
   border-radius: 9999px;
-  background: linear-gradient(160deg, #f4a48c 0%, #ec6b4f 55%, #cf563d 100%);
-  color: #fff;
+  background: #2b221d;
 }
 
-.m-ios-avatar svg {
-  width: 46%;
-  height: 46%;
+.m-ios-badge {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.35);
 }
 
-/* Lock screen at 2:14 AM, the dawn photo dimmed to night. */
+/* Lock screens: 2:14 AM with the dawn photo dimmed to night, and 7:00 AM with
+   it in full light. */
 .m-lock,
 .m-msgs {
   position: absolute;
@@ -1144,40 +1304,65 @@ html:has(.m-page) {
   background: linear-gradient(180deg, rgba(10, 12, 32, 0.6) 0%, rgba(10, 12, 32, 0.15) 45%, rgba(10, 12, 32, 0.55) 100%);
 }
 
+.m-lock.is-morning .m-lock-wall {
+  filter: saturate(1.05);
+}
+
+.m-lock.is-morning::after {
+  background: linear-gradient(180deg, rgba(120, 70, 60, 0.18) 0%, rgba(255, 255, 255, 0) 40%, rgba(80, 50, 40, 0.18) 100%);
+}
+
 .m-lock-date {
-  margin-top: 60px;
-  font-size: 14px;
+  margin-top: 58px;
+  font-size: 14.5px;
   font-weight: 600;
-  opacity: 0.88;
+  opacity: 0.9;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.12);
 }
 
 .m-lock-time {
-  font-size: 74px;
+  font-size: 80px;
   font-weight: 700;
-  line-height: 1.02;
-  letter-spacing: -0.02em;
-  opacity: 0.94;
+  line-height: 1;
+  letter-spacing: -0.025em;
+  opacity: 0.95;
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.1);
+}
+
+.m-notif-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  width: calc(100% - 18px);
+  margin-top: auto;
+  margin-bottom: 100px;
+}
+
+.m-notif-arrive {
+  animation: m-notif-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 1.4s both;
 }
 
 .m-notif {
   display: flex;
   gap: 10px;
-  width: calc(100% - 18px);
-  margin-top: auto;
-  margin-bottom: 98px;
   padding: 10px 12px 11px;
-  border-radius: 20px;
+  border-radius: 21px;
   background: rgba(245, 245, 255, 0.22);
-  -webkit-backdrop-filter: blur(20px) saturate(170%);
-  backdrop-filter: blur(20px) saturate(170%);
+  -webkit-backdrop-filter: blur(22px) saturate(170%);
+  backdrop-filter: blur(22px) saturate(170%);
   box-shadow: 0 10px 30px -14px rgba(0, 0, 0, 0.45);
   text-align: left;
-  animation: m-notif-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 1.4s both;
 }
 
-.m-notif .m-ios-avatar {
-  width: 34px;
-  height: 34px;
+.m-lock.is-morning .m-notif {
+  background: rgba(255, 255, 255, 0.6);
+  color: #111;
+  box-shadow: 0 10px 30px -16px rgba(60, 30, 20, 0.35);
+}
+
+.m-notif .m-ios-photo {
+  width: 36px;
+  height: 36px;
 }
 
 .m-notif-head {
@@ -1191,7 +1376,7 @@ html:has(.m-page) {
 .m-notif-head span + span {
   font-size: 11px;
   font-weight: 400;
-  opacity: 0.7;
+  opacity: 0.65;
 }
 
 .m-notif-body {
@@ -1211,9 +1396,9 @@ html:has(.m-page) {
 
 .m-lock-actions {
   position: absolute;
-  right: 30px;
-  bottom: 28px;
-  left: 30px;
+  right: 32px;
+  bottom: 30px;
+  left: 32px;
   display: flex;
   justify-content: space-between;
 }
@@ -1221,17 +1406,21 @@ html:has(.m-page) {
 .m-lock-actions span {
   display: grid;
   place-items: center;
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   border-radius: 9999px;
   background: rgba(255, 255, 255, 0.16);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
 }
 
+.m-lock.is-morning .m-lock-actions span {
+  background: rgba(255, 255, 255, 0.28);
+}
+
 .m-lock-actions svg {
-  width: 17px;
-  height: 17px;
+  width: 18px;
+  height: 18px;
 }
 
 .is-b2 .m-lock {
@@ -1239,7 +1428,8 @@ html:has(.m-page) {
   transform: translateY(-8%) scale(1.04);
 }
 
-/* Messages: the approval text, the yes, and the confirmation. */
+/* Messages, as iOS 17 draws it: back, the contact centred with their photo,
+   FaceTime on the right; then the approval text, the yes, and the result. */
 .m-msgs {
   background: #fff;
   color: #000;
@@ -1256,58 +1446,75 @@ html:has(.m-page) {
   position: absolute;
   inset: 0 0 auto;
   z-index: 2;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
   align-items: center;
-  gap: 3px;
-  padding: 50px 12px 8px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-  background: rgba(246, 246, 248, 0.94);
+  padding: 44px 6px 8px;
+  border-bottom: 0.5px solid rgba(0, 0, 0, 0.12);
+  background: rgba(247, 247, 249, 0.94);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
 }
 
 .m-msgs-back {
-  position: absolute;
-  top: 64px;
-  left: 8px;
-  width: 20px;
-  height: 20px;
+  display: grid;
+  place-items: center;
   color: #0a84ff;
 }
 
-.m-msgs-name {
+.m-msgs-back svg {
+  width: 24px;
+  height: 24px;
+}
+
+.m-msgs-contact {
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.m-msgs-name {
+  display: inline-flex;
   align-items: center;
   gap: 1px;
   color: #1c1c1e;
-  font-size: 10.5px;
+  font-size: 11px;
 }
 
 .m-msgs-name svg {
-  width: 10px;
-  height: 10px;
-  color: #8e8e93;
+  width: 9px;
+  height: 9px;
+  color: #a1a1a6;
+}
+
+.m-msgs-facetime {
+  justify-self: center;
+  width: 22px;
+  height: 22px;
+  color: #0a84ff;
 }
 
 .m-msgs-thread {
   position: absolute;
-  top: 122px;
+  top: 120px;
   right: 0;
-  bottom: 58px;
+  bottom: 60px;
   left: 0;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
   overflow: hidden;
   padding: 0 12px 6px;
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.32;
 }
 
 .m-msgs-input {
   position: absolute;
-  right: 10px;
-  bottom: 22px;
-  left: 10px;
+  right: 12px;
+  bottom: 24px;
+  left: 12px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1315,18 +1522,19 @@ html:has(.m-page) {
 
 .m-msgs-plus {
   display: grid;
+  flex-shrink: 0;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   border-radius: 9999px;
-  background: #e9e9eb;
-  color: #7c7c80;
+  background: #eeeef0;
+  color: #8e8e93;
 }
 
 .m-msgs-plus svg,
 .m-msgs-field svg {
-  width: 14px;
-  height: 14px;
+  width: 15px;
+  height: 15px;
 }
 
 .m-msgs-field {
@@ -1334,19 +1542,19 @@ html:has(.m-page) {
   flex: 1;
   align-items: center;
   justify-content: space-between;
-  height: 30px;
-  padding: 0 10px 0 12px;
-  border: 1px solid #d6d6db;
+  height: 32px;
+  padding: 0 10px 0 13px;
+  border: 1px solid #dcdce0;
   border-radius: 9999px;
-  color: #a1a1a6;
-  font-size: 12.5px;
+  color: #b0b0b5;
+  font-size: 13px;
 }
 
 .m-ib {
   position: relative;
   max-width: 80%;
-  padding: 6px 11px;
-  border-radius: 17px;
+  padding: 7px 12px;
+  border-radius: 18px;
   overflow-wrap: anywhere;
 }
 
@@ -1379,31 +1587,33 @@ html:has(.m-page) {
 
 .m-ib-stamp {
   align-self: center;
-  margin: 8px 0 2px;
+  margin: 10px 0 4px;
   color: #8a8a8e;
-  font-size: 10px;
+  font-size: 10.5px;
   line-height: 1.35;
   text-align: center;
 }
 
-.m-ib-stamp b {
+.m-ib-stamp b,
+.m-ib-receipt b {
   font-weight: 600;
 }
 
 .m-ib-receipt {
+  margin-top: 1px;
   color: #8a8a8e;
-  font-size: 10px;
+  font-size: 10.5px;
 }
 
 .m-ib-typing {
   display: inline-flex;
   gap: 3px;
-  padding: 9px 11px;
+  padding: 10px 12px;
 }
 
 .m-ib-typing i {
-  width: 6px;
-  height: 6px;
+  width: 6.5px;
+  height: 6.5px;
   border-radius: 9999px;
   background: #8e8e93;
   animation: m-dot 1.2s ease-in-out infinite;
@@ -1460,7 +1670,24 @@ html:has(.m-page) {
   100% { grid-template-rows: 0fr; opacity: 0; }
 }
 
-/* The customer's Instagram thread, floating beside the phone. */
+/* The customer's Instagram thread and the cards beside the phone. Each carries
+   its app's real logo. */
+.m-card-logo {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.m-ig .m-chat-head {
+  padding-block: 0.7rem;
+}
+
+.m-ig-handle {
+  display: block;
+  color: #8e8e93;
+  font-size: 0.6875rem;
+  line-height: 1.2;
+}
+
 .m-ig .m-chat-thread {
   gap: 0;
 }
@@ -1470,21 +1697,6 @@ html:has(.m-page) {
   flex-direction: column;
   align-items: flex-start;
   padding-top: 0.3rem;
-}
-
-.m-ig-glyph {
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  margin-left: auto;
-  border-radius: 5.5px;
-  background: radial-gradient(circle at 30% 107%, #fdc468 0%, #df4996 50%, #6a3fd3 100%);
-}
-
-.m-ig-glyph svg {
-  width: 14px;
-  height: 14px;
 }
 
 /* The order, drawn the way the Shopify admin shows it. */
@@ -1727,8 +1939,17 @@ html:has(.m-page) {
   .m-stage-ig,
   .m-stage-order,
   .m-stage-log,
-  .m-nav {
+  .m-nav,
+  .m-story-stars::after,
+  .m-night-stars::after {
     transition: none !important;
     animation: none !important;
+  }
+}
+
+/* The morning phone (MorningText.tsx) at phone widths. */
+@media (max-width: 639px) {
+  .m-morning-phone {
+    zoom: 0.86;
   }
 }

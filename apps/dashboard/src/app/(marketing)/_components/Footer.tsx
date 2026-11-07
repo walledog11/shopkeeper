@@ -33,7 +33,7 @@ const footerGroups = [
 
 export function Footer() {
   return (
-    <footer className="m-chapter m-chapter--dark px-5 pb-10 sm:px-8">
+    <footer data-nav-dark className="m-chapter m-chapter--dark px-5 pb-10 sm:px-8">
       <div className="mx-auto max-w-6xl border-t border-[color:var(--m-line)] pt-14">
         <div className="grid gap-12 md:grid-cols-[1fr_2fr]">
           <Link href="/" aria-label={PRODUCT_NAME} className="m-nav-logo self-start">
