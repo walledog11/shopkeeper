@@ -137,6 +137,49 @@ describe('storefront widget delivery and conversation boundaries', () => {
     expect(input.value).toBe('Unsent draft');
   });
 
+  it.each([false, true])('refreshes expired credentials without replaying a send into a different session (rotated: %s)', async (rotated) => {
+    let bootstraps = 0;
+    const sends: { authorization: string; body: string }[] = [];
+    vi.spyOn(window, 'setInterval').mockReturnValue(fakeTimer);
+    vi.spyOn(window, 'setTimeout').mockReturnValue(fakeTimer);
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/bootstrap')) {
+        bootstraps += 1;
+        return response({
+          sessionId: rotated && bootstraps > 1 ? 'new-session' : 'original-session',
+          token: `token-${bootstraps}`, messages: [],
+        });
+      }
+      sends.push({ authorization: new Headers(init?.headers).get('Authorization')!, body: String(init?.body) });
+      return sends.length === 1 ? response({}, 401) : response({ accepted: true }, 202);
+    }));
+    window.eval(await readFile(widgetSourcePath, 'utf8'));
+    const shadow = document.getElementById('shopkeeper-chat-root')!.shadowRoot!;
+    shadow.querySelector<HTMLButtonElement>('.launcher')!.click();
+    await flushPromises();
+    const input = shadow.querySelector<HTMLTextAreaElement>('textarea')!;
+    input.value = 'Where is my order?';
+    shadow.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await flushPromises();
+
+    expect(bootstraps).toBe(2);
+    expect(sends[0].authorization).toBe('Bearer token-1');
+    if (rotated) {
+      expect(sends).toHaveLength(1);
+      expect(input.value).toBe('Where is my order?');
+      expect(shadow.querySelector('.conversation-boundary')).not.toBeNull();
+      shadow.querySelector<HTMLButtonElement>('.retry-send')!.click();
+      await flushPromises();
+      expect(sends).toHaveLength(1);
+      expect(shadow.querySelector('.connection-status')!.textContent).toContain('previous chat ended');
+    } else {
+      expect(sends).toHaveLength(2);
+      expect(sends[1]).toEqual({ authorization: 'Bearer token-2', body: sends[0].body });
+      expect(input.value).toBe('');
+      expect(shadow.querySelector('.retry-send')).toBeNull();
+    }
+  });
+
   it('marks a rollover and does not let an old optimistic echo suppress new-episode text', async () => {
     let postCount = 0;
     let getCount = 0;

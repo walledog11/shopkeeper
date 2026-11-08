@@ -1,28 +1,22 @@
 import { db, isSpendCapError, SenderType } from '@shopkeeper/db';
 import logger from '../../logger.js';
 import { publishThreadEvent } from '../../realtime/publish.js';
-import { enforceSpendCap, recordSpend } from '@shopkeeper/agent/spend';
-import { readModelUsage } from '@shopkeeper/agent/usage';
-import { anthropic, HAIKU_MODEL } from '@shopkeeper/agent/ai';
+import { enforceSpendCap } from '@shopkeeper/agent/spend';
 import {
   CONTEXT_BUDGETS,
   buildBoundedClassifierConversation,
 } from '@shopkeeper/agent/context-budget';
 import {
-  CLASSIFIER_MAX_TOKENS,
-  CLASSIFIER_OUTPUT_SCHEMA,
   classifiedEpisodeFields,
   classifiedFilterFields,
   classifierUserInput,
   logClassificationAttemptUnresolved,
   logClassificationRequestWrite,
-  classifierSystemPrompt,
-  parseClassifierJson,
+  runClassifier,
   requestFieldsForBurst,
 } from './classification.js';
 import { listVerifiedOrderNames } from '../../storefront-chat-verified-orders.js';
 import { getConversationBurst } from './conversation-burst.js';
-import { timeStep } from '@shopkeeper/agent/step-timings';
 
 export async function generateThreadIntelligence(
   threadId: string,
@@ -87,38 +81,13 @@ export async function generateThreadIntelligence(
       fullThread.channelType,
     );
 
-    const aiResponse = await timeStep(
-      { organizationId: fullThread.organizationId, threadId: fullThread.id, step: 'read_message', detail: HAIKU_MODEL },
-      () => anthropic.messages.create({
-        model: HAIKU_MODEL,
-        max_tokens: CLASSIFIER_MAX_TOKENS,
-        thinking: { type: 'disabled' },
-        system: classifierSystemPrompt(fullThread.channelType, verifiedOrderNames),
-        output_config: {
-          format: {
-            type: 'json_schema',
-            schema: CLASSIFIER_OUTPUT_SCHEMA,
-          },
-        },
-        messages: [{ role: 'user', content: classifierUserInput(conversationText) }],
-      }),
-    );
-    const usage = readModelUsage(aiResponse);
-    await recordSpend(fullThread.organizationId, usage, HAIKU_MODEL);
-    logger.info({
+    const aiData = await runClassifier(fullThread.organizationId, classifierUserInput(conversationText), {
+      channelType: fullThread.channelType,
+      verifiedOrderNames,
       threadId,
-      organizationId: fullThread.organizationId,
       purpose: 'thread_intelligence',
-      inputTokens: usage.inputTokens,
-      outputTokens: usage.outputTokens,
-      cacheCreationInputTokens: usage.cacheCreationInputTokens,
-      cacheReadInputTokens: usage.cacheReadInputTokens,
       inputChars: conversationText.length,
-    }, '[Worker] AI model usage');
-
-    const block = aiResponse.content.find((part) => part.type === 'text');
-    if (!block || block.type !== 'text') throw new Error('Unexpected AI response type');
-    const aiData = parseClassifierJson(block.text);
+    });
 
     // filterDecidedAt is the lock: once any path commits a decision, subsequent
     // summaries refresh aiSummary/tag but don't reclassify. Which channels are

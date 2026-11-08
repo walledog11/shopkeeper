@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useReducer, useRef, useState } from "react"
+import { useEffect, useMemo, useReducer, useRef, useState, type SetStateAction } from "react"
 import { useSWRConfig } from "swr"
 import {
   agentSettingsReducer,
@@ -16,6 +16,7 @@ import {
   storeTimezonePatch,
   writeSettingsPath,
   type AutonomyOverridePath,
+  type RawInputs,
 } from "./agent-tab-helpers"
 import { isValidBusinessHoursWindow, resolveAgentSettings, type AutonomyTier } from "@shopkeeper/agent/settings"
 import type { OrgSettings, OrgSettingsPatch } from "@/types"
@@ -50,15 +51,13 @@ export function useAgentTabState({
   }, [prefillTimezone, settingsState.businessHoursTimezone])
   const [businessName, setBusinessName] = useState(orgName)
   const initialNameRef = useRef(orgName)
-  const initialRaw = useMemo(() => rawInputsFor(settings), [settings])
-  const [maxRefundInput, setMaxRefundInput] = useState<string>(initialRaw.maxRefund)
-  const [dailyRefundCapInput, setDailyRefundCapInput] = useState<string>(initialRaw.dailyRefundCap)
-  const [dailyLLMSpendCapInput, setDailyLLMSpendCapInput] = useState<string>(initialRaw.dailyLLMSpendCap)
-  const [digestHourInput, setDigestHourInput] = useState<string>(initialRaw.digestHour)
-  const [digestSecondHourInput, setDigestSecondHourInput] = useState<string>(initialRaw.digestSecondHour)
-  const [lowStockThresholdInput, setLowStockThresholdInput] = useState<string>(initialRaw.lowStockThreshold)
-  const [businessHoursStartInput, setBusinessHoursStartInput] = useState<string>(initialRaw.bhStart)
-  const [businessHoursEndInput, setBusinessHoursEndInput] = useState<string>(initialRaw.bhEnd)
+  const [rawInputs, setRawInputs] = useState(() => rawInputsFor(settings))
+  function setRawInput(key: keyof RawInputs, value: SetStateAction<string>) {
+    setRawInputs(current => ({
+      ...current,
+      [key]: typeof value === "function" ? value(current[key]) : value,
+    }))
+  }
   const currentVersionRef = useRef(version)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -69,27 +68,8 @@ export function useAgentTabState({
   )
 
   const payload = useMemo(
-    () => buildSettingsPayload(settingsState, {
-      maxRefund: maxRefundInput,
-      dailyRefundCap: dailyRefundCapInput,
-      dailyLLMSpendCap: dailyLLMSpendCapInput,
-      digestHour: digestHourInput,
-      digestSecondHour: digestSecondHourInput,
-      lowStockThreshold: lowStockThresholdInput,
-      bhStart: businessHoursStartInput,
-      bhEnd: businessHoursEndInput,
-    }),
-    [
-      settingsState,
-      maxRefundInput,
-      dailyRefundCapInput,
-      dailyLLMSpendCapInput,
-      digestHourInput,
-      digestSecondHourInput,
-      lowStockThresholdInput,
-      businessHoursStartInput,
-      businessHoursEndInput,
-    ],
+    () => buildSettingsPayload(settingsState, rawInputs),
+    [settingsState, rawInputs],
   )
 
   const settingsPatch = useMemo(
@@ -123,14 +103,7 @@ export function useAgentTabState({
     const raw = rawInputsFor(hydrated)
     dispatch({ type: "reset", payload: hydrated })
     setExplicitOverridePaths(explicit)
-    setMaxRefundInput(raw.maxRefund)
-    setDailyRefundCapInput(raw.dailyRefundCap)
-    setDailyLLMSpendCapInput(raw.dailyLLMSpendCap)
-    setDigestHourInput(raw.digestHour)
-    setDigestSecondHourInput(raw.digestSecondHour)
-    setLowStockThresholdInput(raw.lowStockThreshold)
-    setBusinessHoursStartInput(raw.bhStart)
-    setBusinessHoursEndInput(raw.bhEnd)
+    setRawInputs(raw)
     setBusinessName(initialNameRef.current)
     baselineRawRef.current = target
     initialPatchRef.current = JSON.stringify(buildAgentSettingsPatch(buildSettingsPayload(hydrated, raw), explicit))
@@ -147,7 +120,7 @@ export function useAgentTabState({
     const next = applyTierDefaultsToInheritedSettings(settingsState, tier, explicitOverridePaths)
     dispatch({ type: "reset", payload: next })
     if (!explicitOverrideSet.has("maxRefundAmount")) {
-      setMaxRefundInput(rawInputsFor(next).maxRefund)
+      setRawInput("maxRefund", rawInputsFor(next).maxRefund)
     }
   }
 
@@ -161,7 +134,7 @@ export function useAgentTabState({
     const next = resetPathToTierDefault(settingsState, path)
     dispatch({ type: "reset", payload: next })
     if (path === "maxRefundAmount") {
-      setMaxRefundInput(rawInputsFor(next).maxRefund)
+      setRawInput("maxRefund", rawInputsFor(next).maxRefund)
     }
   }
 
@@ -242,22 +215,8 @@ export function useAgentTabState({
     businessName,
     setBusinessName,
     businessNameInvalid,
-    maxRefundInput,
-    setMaxRefundInput,
-    dailyRefundCapInput,
-    setDailyRefundCapInput,
-    dailyLLMSpendCapInput,
-    setDailyLLMSpendCapInput,
-    digestHourInput,
-    setDigestHourInput,
-    digestSecondHourInput,
-    setDigestSecondHourInput,
-    lowStockThresholdInput,
-    setLowStockThresholdInput,
-    businessHoursStartInput,
-    setBusinessHoursStartInput,
-    businessHoursEndInput,
-    setBusinessHoursEndInput,
+    rawInputs,
+    setRawInput,
     saving,
     saved,
     error,

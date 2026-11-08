@@ -7,15 +7,15 @@ import type { HomeActionDisplay } from "@shopkeeper/agent/plan-preview"
 import {
   BUBBLE_TONE,
   isInboundTone,
-  needsYouSoftShadowClassName,
-  needsYouCardFooterClassName,
-  needsYouCardShellClassName,
-  needsYouConversationSurfaceClassName,
+  supportCardSoftShadowClassName,
+  supportCardFooterClassName,
+  supportCardShellClassName,
+  supportCardConversationSurfaceClassName,
   type BubbleTone,
-  type NeedsYouCardVariant,
-} from "./needs-you-card-styles"
+  type SupportCardVariant,
+} from "@/components/support-card/styles"
 
-export function NeedsYouCardShell({
+export function SupportCardShell({
   confirming = false,
   variant = "front",
   minHeight,
@@ -24,7 +24,7 @@ export function NeedsYouCardShell({
   children,
 }: {
   confirming?: boolean
-  variant?: NeedsYouCardVariant
+  variant?: SupportCardVariant
   minHeight?: number
   pointerEventsNone?: boolean
   className?: string
@@ -33,7 +33,7 @@ export function NeedsYouCardShell({
   return (
     <Card
       className={cn(
-        needsYouCardShellClassName(variant),
+        supportCardShellClassName(variant),
         pointerEventsNone && "pointer-events-none",
         className,
       )}
@@ -50,7 +50,7 @@ export function NeedsYouCardShell({
   )
 }
 
-export function NeedsYouCardHeader({
+export function SupportCardHeader({
   children,
   className,
 }: {
@@ -69,16 +69,16 @@ export function NeedsYouCardHeader({
   )
 }
 
-export const NeedsYouCardBody = forwardRef<HTMLDivElement, {
+export const SupportCardBody = forwardRef<HTMLDivElement, {
   children: ReactNode
   className?: string
-}>(function NeedsYouCardBody({ children, className }, ref) {
+}>(function SupportCardBody({ children, className }, ref) {
   return (
     <div
       ref={ref}
       className={cn(
         "relative z-10 flex min-h-0 flex-1 flex-col gap-2.5 overflow-hidden px-4 py-3 sm:gap-3 sm:px-5 sm:py-4 md:px-6",
-        needsYouConversationSurfaceClassName(),
+        supportCardConversationSurfaceClassName(),
         className,
       )}
     >
@@ -87,7 +87,7 @@ export const NeedsYouCardBody = forwardRef<HTMLDivElement, {
   )
 })
 
-export function NeedsYouCardFooter({
+export function SupportCardFooter({
   children,
   className,
 }: {
@@ -98,7 +98,7 @@ export function NeedsYouCardFooter({
     <div
       className={cn(
         "relative z-10 mt-auto px-5 py-4 sm:px-6",
-        needsYouCardFooterClassName,
+        supportCardFooterClassName,
         className,
       )}
     >
@@ -107,11 +107,11 @@ export function NeedsYouCardFooter({
   )
 }
 
-export function NeedsYouEscalationCallout({ reason }: { reason: string | null }) {
+export function SupportCardEscalationCallout({ reason }: { reason: string | null }) {
   return (
     <div
       className={cn(
-        needsYouSoftShadowClassName,
+        supportCardSoftShadowClassName,
         "mt-3 rounded-2xl border border-amber-600/20 bg-[#fff4e5] px-4 py-3",
       )}
     >
@@ -127,7 +127,7 @@ export function NeedsYouEscalationCallout({ reason }: { reason: string | null })
   )
 }
 
-export function NeedsYouInfoCallout({
+export function SupportCardInfoCallout({
   children,
   actionLabel,
   onAction,
@@ -141,7 +141,7 @@ export function NeedsYouInfoCallout({
   return (
     <div
       className={cn(
-        needsYouSoftShadowClassName,
+        supportCardSoftShadowClassName,
         "rounded-2xl border border-amber-600/20 bg-[#fff4e5] px-4 py-3",
       )}
     >
@@ -164,7 +164,7 @@ export function NeedsYouInfoCallout({
   )
 }
 
-export function NeedsYouActionReceipt({
+export function SupportCardActionReceipt({
   display,
   hideOrderRef = false,
 }: {
@@ -177,7 +177,7 @@ export function NeedsYouActionReceipt({
   return (
     <div
       className={cn(
-        needsYouSoftShadowClassName,
+        supportCardSoftShadowClassName,
         "inline-flex max-w-full rounded-2xl bg-white px-3 py-2",
       )}
     >
@@ -200,7 +200,7 @@ export function NeedsYouActionReceipt({
   )
 }
 
-export function NeedsYouBubble({
+export function SupportCardBubble({
   tone,
   children,
   flush = false,
@@ -232,7 +232,7 @@ export function NeedsYouBubble({
   )
 }
 
-export function NeedsYouPrimaryButton({
+export function SupportCardPrimaryButton({
   children,
   className,
   confirming = false,

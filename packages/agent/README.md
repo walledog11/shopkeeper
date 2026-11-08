@@ -28,6 +28,12 @@ Implementation files under `src/` that are not listed in `package.json` `exports
 are private. Do not import them directly from apps; add or extend a subpath export
 when a module becomes part of the public contract.
 
+The `task-ledger` entry point delegates to `src/task-ledger/`: request intake, claims,
+continuations, settlement, follow-ups, and maintenance. The `plan-execution`
+entry point delegates to `src/execution/`: validation, plan sources, durable
+claim preparation, cache writes, and dispatch. Keep transaction and lock ordering
+inside these operations when extending them; the public entry points remain stable.
+
 When adding a new public module, update `package.json` `exports`, keep `src/index.ts`
 limited to shared domain types unless the root contract intentionally expands, and
 update this note in the same change.

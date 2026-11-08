@@ -62,7 +62,6 @@ export const sendReadyTicket = inboxStreamTicket({
         description: "Reply",
         enabled: true,
       }],
-      warnings: [],
       rawToolCalls: [{
         id: "s1",
         name: "send_reply",

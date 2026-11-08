@@ -10,7 +10,7 @@ import {
   type ShopifyGraphqlUserError,
 } from "./client.js";
 import { toolError, toolOk, toolPolicyBlock, toolUnknown, type ReceiptV1, type ToolResult } from "../tools/result.js";
-import { shopifyFailureReceipt, shopifyReceiptEnvelope } from "./receipts.js";
+import { shopifyReceiptResults, shopifyFailureReceipt, shopifyReceiptEnvelope } from "./receipts.js";
 import { committedShopCents, refundShopCents } from "./refund-shop-money.js";
 import type {
   ShopifyCalculatedRefundLineItem,
@@ -19,6 +19,8 @@ import type {
   ShopifyTransaction,
 } from "./types.js";
 import { centsToMoney, moneyToCents, optionalString, requireAmount, requireNumericId, ShopifyInputError } from "./validation.js";
+
+const refundReceipts = shopifyReceiptResults("create_refund", "order");
 
 interface RefundCalculation {
   refund?: {
@@ -189,22 +191,6 @@ function graphqlRefundTransactions(orderId: string, transactions: ShopifyTransac
       ? { parentId: gid("OrderTransaction", transaction.parent_id) }
       : {}),
   }));
-}
-
-function unknownRefundReceipt(
-  ctx: ShopifyContext,
-  orderId: string,
-  code: string,
-  providerReference: string | null = null,
-): ReceiptV1 | undefined {
-  const envelope = shopifyReceiptEnvelope(ctx, { kind: "order", id: orderId });
-  return envelope ? {
-    ...envelope,
-    tool: "create_refund",
-    outcome: "unknown",
-    code,
-    providerReference,
-  } : undefined;
 }
 
 function refundNoEffect(
@@ -398,7 +384,7 @@ export async function createRefund(
 
     const refund = data.refundCreate.refund;
     if (!refund) {
-      const receipt = unknownRefundReceipt(ctx, orderId, "provider_refund_missing");
+      const receipt = refundReceipts.unknown(ctx, orderId, "provider_refund_missing");
       return {
         ...toolUnknown(`Unknown: Shopify accepted the refund request for order ${orderId} but did not return a refund. Do not retry or confirm it to the customer until it is reconciled.`),
         refundedCents: null,
@@ -411,7 +397,7 @@ export async function createRefund(
       .map((transaction) => transaction.status?.toUpperCase())
       .filter((status): status is string => Boolean(status));
     if (transactionStatuses.length === 0 || transactionStatuses.some((status) => status !== "SUCCESS")) {
-      const receipt = unknownRefundReceipt(ctx, orderId, "transaction_not_successful", refund.id);
+      const receipt = refundReceipts.unknown(ctx, orderId, "transaction_not_successful", refund.id);
       return {
         ...toolUnknown(`Unknown: Shopify created refund ${refund.id} for order ${orderId}, but its payment status is ${transactionStatuses.join(", ") || "unavailable"}. Do not retry or confirm it to the customer until it is reconciled.`),
         refundedCents: null,
@@ -421,7 +407,7 @@ export async function createRefund(
 
     const refundedAmount = refund.totalRefundedSet?.presentmentMoney?.amount;
     if (!refundedAmount) {
-      const receipt = unknownRefundReceipt(ctx, orderId, "committed_amount_missing", refund.id);
+      const receipt = refundReceipts.unknown(ctx, orderId, "committed_amount_missing", refund.id);
       return {
         ...toolUnknown(`Unknown: Shopify created refund ${refund.id} for order ${orderId}, but did not return the committed amount. Do not retry or confirm it to the customer until it is reconciled.`),
         refundedCents: null,
@@ -432,7 +418,7 @@ export async function createRefund(
       .map((transaction) => transaction.id?.trim())
       .filter((id): id is string => Boolean(id));
     if (!refund.id?.trim() || transactionReferences.length !== transactionNodes.length) {
-      const receipt = unknownRefundReceipt(
+      const receipt = refundReceipts.unknown(
         ctx,
         orderId,
         "provider_reference_missing",
@@ -472,7 +458,7 @@ export async function createRefund(
     };
   } catch (err) {
     if (mutationStarted && isAmbiguousShopifyMutationError(err)) {
-      const receipt = unknownRefundReceipt(ctx, input.order_id, "provider_response_ambiguous");
+      const receipt = refundReceipts.unknown(ctx, input.order_id, "provider_response_ambiguous");
       return {
         ...toolUnknown(`Unknown: the refund request may have committed at Shopify, but its final state could not be confirmed. Do not retry or confirm it to the customer until it is reconciled. ${formatShopifyToolError("refund reconciliation failed", err)}`),
         refundedCents: null,

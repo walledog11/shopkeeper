@@ -13,11 +13,11 @@ import {
   type BriefingOpsNote,
 } from "@/lib/agent/panel-briefing"
 import {
-  NeedsYouCardFooter,
-  NeedsYouCardShell,
-  NeedsYouPrimaryButton,
-} from "./needs-you-card-ui"
-import { needsYouSecondaryButtonClassName } from "./needs-you-card-styles"
+  SupportCardFooter,
+  SupportCardShell,
+  SupportCardPrimaryButton,
+} from "@/components/support-card/card"
+import { supportCardSecondaryButtonClassName } from "@/components/support-card/styles"
 
 interface Props {
   greeting: string
@@ -77,7 +77,7 @@ export default function ConciergeBriefing({
   const opsNotes = buildBriefingOpsNotes(briefingInput)
 
   return (
-    <NeedsYouCardShell variant="briefing">
+    <SupportCardShell variant="briefing">
       <div className="px-5 py-3 sm:px-6 sm:py-4">
         <h1 className="font-sans text-xl font-semibold leading-tight tracking-tight text-foreground sm:text-2xl">
           {greeting}{userName ? <>, <span className="italic text-muted-foreground">{userName}</span></> : ""}.
@@ -101,7 +101,7 @@ export default function ConciergeBriefing({
         )}
       </div>
 
-      <NeedsYouCardFooter className="px-5 py-3 sm:px-6 sm:py-4">
+      <SupportCardFooter className="px-5 py-3 sm:px-6 sm:py-4">
         <div className="flex gap-2">
           {isLoading ? (
             <>
@@ -110,7 +110,7 @@ export default function ConciergeBriefing({
             </>
           ) : (
             <>
-              <NeedsYouPrimaryButton
+              <SupportCardPrimaryButton
                 className="min-w-0 flex-1 text-sm sm:text-base"
                 onClick={() =>
                   open(
@@ -130,10 +130,10 @@ export default function ConciergeBriefing({
                 ) : (
                   `Ask ${AGENT_DISPLAY_NAME}`
                 )}
-              </NeedsYouPrimaryButton>
+              </SupportCardPrimaryButton>
               <Link
                 href="/dashboard/tickets"
-                className={cn(needsYouSecondaryButtonClassName, "min-w-0 flex-1 text-sm sm:text-base")}
+                className={cn(supportCardSecondaryButtonClassName, "min-w-0 flex-1 text-sm sm:text-base")}
               >
                 <span className="sm:hidden">All tickets</span>
                 <span className="hidden sm:inline">Browse all tickets</span>
@@ -141,7 +141,7 @@ export default function ConciergeBriefing({
             </>
           )}
         </div>
-      </NeedsYouCardFooter>
-    </NeedsYouCardShell>
+      </SupportCardFooter>
+    </SupportCardShell>
   )
 }

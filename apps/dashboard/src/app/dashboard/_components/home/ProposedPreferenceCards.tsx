@@ -4,15 +4,16 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Check, Loader2, Sparkles, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { updatePreference } from "@/lib/agent/preference-requests"
 import { MERCHANT_PREFERENCE_CATEGORY_LABELS } from "@shopkeeper/db/merchant-preferences"
 import type { HomeProposedPreferenceItem } from "@/lib/home/summary-contract"
 import {
-  NeedsYouCardBody,
-  NeedsYouCardFooter,
-  NeedsYouCardHeader,
-  NeedsYouCardShell,
-} from "./needs-you-card-ui"
-import { needsYouSecondaryButtonClassName } from "./needs-you-card-styles"
+  SupportCardBody,
+  SupportCardFooter,
+  SupportCardHeader,
+  SupportCardShell,
+} from "@/components/support-card/card"
+import { supportCardSecondaryButtonClassName } from "@/components/support-card/styles"
 import { appPrimaryButtonClassName } from "@/lib/ui/app-button-styles"
 
 export function ProposedPreferenceCards({
@@ -37,13 +38,7 @@ export function ProposedPreferenceCards({
     setBusyId(id)
     setError(null)
     try {
-      const res = await fetch(`/api/agent/preferences/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
-      })
-      const body = await res.json().catch(() => ({})) as { error?: string }
-      if (!res.ok) throw new Error(body.error ?? "Failed to update preference")
+      await updatePreference(id, action)
       setLocalItems((current) => current.filter((item) => item.id !== id))
       onUpdated()
     } catch (resolveError) {
@@ -56,8 +51,8 @@ export function ProposedPreferenceCards({
   return (
     <div className="flex flex-col gap-3">
       {localItems.map((item) => (
-        <NeedsYouCardShell key={item.id} variant="shell">
-          <NeedsYouCardHeader className="pb-3">
+        <SupportCardShell key={item.id} variant="shell">
+          <SupportCardHeader className="pb-3">
             <div className="flex items-start gap-2.5">
               <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-violet-700/15">
                 <Sparkles className="size-3.5 text-violet-700" />
@@ -69,8 +64,8 @@ export function ProposedPreferenceCards({
                 </p>
               </div>
             </div>
-          </NeedsYouCardHeader>
-          <NeedsYouCardBody>
+          </SupportCardHeader>
+          <SupportCardBody>
             <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-strong">
               {item.guidance}
             </p>
@@ -79,8 +74,8 @@ export function ProposedPreferenceCards({
                 {item.proposedRationale}
               </p>
             ) : null}
-          </NeedsYouCardBody>
-          <NeedsYouCardFooter>
+          </SupportCardBody>
+          <SupportCardFooter>
             <Button
               type="button"
               onClick={() => void resolvePreference(item.id, "confirm")}
@@ -95,16 +90,16 @@ export function ProposedPreferenceCards({
               variant="outline"
               onClick={() => void resolvePreference(item.id, "reject")}
               disabled={busyId !== null}
-              className={needsYouSecondaryButtonClassName}
+              className={supportCardSecondaryButtonClassName}
             >
               {busyId === item.id ? <Loader2 className="size-4 animate-spin" /> : <X className="size-4" />}
               Dismiss
             </Button>
-            <Link href="/dashboard/kb?book=preferences" className={needsYouSecondaryButtonClassName}>
+            <Link href="/dashboard/kb?book=preferences" className={supportCardSecondaryButtonClassName}>
               Review in Memory
             </Link>
-          </NeedsYouCardFooter>
-        </NeedsYouCardShell>
+          </SupportCardFooter>
+        </SupportCardShell>
       ))}
       {error ? <p className="text-xs text-red-600">{error}</p> : null}
     </div>

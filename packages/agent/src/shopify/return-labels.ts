@@ -17,8 +17,10 @@ import {
   type ReceiptV1,
   type ToolResult,
 } from "../tools/result.js";
-import { shopifyFailureReceipt, shopifyReceiptEnvelope } from "./receipts.js";
+import { shopifyReceiptResults, shopifyReceiptEnvelope } from "./receipts.js";
 import { optionalString, requireNonEmptyString, requireNumericId, ShopifyInputError } from "./validation.js";
+
+const returnLabelReceipts = shopifyReceiptResults("attach_return_label", "order");
 
 // Exported so the reconciliation probe decides "is this return open?" with the
 // same predicate the tool commits on rather than a second copy of it.
@@ -92,38 +94,6 @@ export const REVERSE_DELIVERY_CREATE_WITH_SHIPPING_MUTATION = `mutation reverseD
         }
       }`;
 
-function returnLabelFailure(
-  ctx: ShopifyContext,
-  orderId: string,
-  result: ToolResult,
-  outcome: "not_found" | "rejected" | "failed",
-  code: string,
-): ToolResult {
-  const receipt = shopifyFailureReceipt(
-    ctx,
-    { kind: "order", id: orderId },
-    "attach_return_label",
-    outcome,
-    code,
-  );
-  return receipt ? { ...result, receipt } : result;
-}
-
-function unknownReturnLabelReceipt(
-  ctx: ShopifyContext,
-  orderId: string,
-  code: string,
-): ReceiptV1 | undefined {
-  const envelope = shopifyReceiptEnvelope(ctx, { kind: "order", id: orderId });
-  return envelope ? {
-    ...envelope,
-    tool: "attach_return_label",
-    outcome: "unknown",
-    code,
-    providerReference: null,
-  } : undefined;
-}
-
 export async function attachReturnLabel(
   input: AttachReturnLabelInput,
   ctx: ShopifyContext
@@ -144,7 +114,7 @@ export async function attachReturnLabel(
     );
 
     if (!data.order) {
-      return returnLabelFailure(
+      return returnLabelReceipts.failure(
         ctx,
         orderId,
         toolNotFound(`Error: failed to attach return label - order ${orderId} was not found.`),
@@ -158,7 +128,7 @@ export async function attachReturnLabel(
       .find((node) => OPEN_RETURN_STATUSES.has(node.status ?? "") && (node.reverseFulfillmentOrders?.edges.length ?? 0) > 0);
 
     if (!openReturn) {
-      return returnLabelFailure(
+      return returnLabelReceipts.failure(
         ctx,
         orderId,
         toolPolicyBlock(`Error: could not attach return label - order ${orderId} has no open return. Open one with create_return or create_exchange first.`),
@@ -183,7 +153,7 @@ export async function attachReturnLabel(
     const payload = created.reverseDeliveryCreateWithShipping;
     const userErrors = formatUserErrors(payload?.userErrors);
     if (userErrors) {
-      return returnLabelFailure(
+      return returnLabelReceipts.failure(
         ctx,
         orderId,
         toolError(`Error: could not attach return label - ${userErrors}`),
@@ -197,7 +167,7 @@ export async function attachReturnLabel(
       const result = toolUnknown(
         `Unknown: Shopify accepted the return-label request for order ${orderId}, but did not return a reverse delivery. Do not attach another label, retry, or send the customer a label link until the return is reviewed.`,
       );
-      const receipt = unknownReturnLabelReceipt(ctx, orderId, "provider_reverse_delivery_missing");
+      const receipt = returnLabelReceipts.unknown(ctx, orderId, "provider_reverse_delivery_missing");
       return receipt ? { ...result, receipt } : result;
     }
 
@@ -228,14 +198,14 @@ export async function attachReturnLabel(
       const result = toolUnknown(
         `Unknown: the return label may have been attached at Shopify, but it could not be confirmed. Do not attach another label, retry, or send the customer a label link until the return on order ${input.order_id} is reviewed. ${formatShopifyToolError("return label reconciliation failed", err)}`,
       );
-      const receipt = unknownReturnLabelReceipt(
+      const receipt = returnLabelReceipts.unknown(
         ctx,
         input.order_id.trim() || "invalid",
         "ambiguous_provider_response",
       );
       return receipt ? { ...result, receipt } : result;
     }
-    return returnLabelFailure(
+    return returnLabelReceipts.failure(
       ctx,
       input.order_id.trim() || "invalid",
       toolError(formatShopifyToolError("failed to attach return label", err)),

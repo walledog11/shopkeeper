@@ -9,7 +9,7 @@ import {
   type ShopifyGraphqlUserError,
 } from "./client.js";
 import { toolError, toolOk, toolPolicyBlock, toolUnknown, type ReceiptV1 } from "../tools/result.js";
-import { shopifyFailureReceipt, shopifyReceiptEnvelope } from "./receipts.js";
+import { shopifyReceiptResults, shopifyFailureReceipt, shopifyReceiptEnvelope } from "./receipts.js";
 import { committedShopCents, refundShopCents } from "./refund-shop-money.js";
 import {
   ShopifyInputError,
@@ -22,6 +22,8 @@ import type { ApprovalLineItem, CreatePartialRefundInput } from "../tools/regist
 import type { OrgSettings } from "../types.js";
 import type { ShopifyOrder, ShopifyOrderLineItem } from "./types.js";
 import { orderLineItemName } from "./approval-line-items.js";
+
+const partialRefundReceipts = shopifyReceiptResults("create_partial_refund", "order");
 
 /**
  * Refunding some of an order, deliberately kept apart from `createRefund`.
@@ -158,22 +160,6 @@ function graphqlRefundLineItems(items: readonly RequestedRefundItem[]) {
     quantity: item.quantity,
     restockType: "NO_RESTOCK",
   }));
-}
-
-function unknownPartialRefundReceipt(
-  ctx: ShopifyContext,
-  orderId: string,
-  code: string,
-  providerReference: string | null = null,
-): ReceiptV1 | undefined {
-  const envelope = shopifyReceiptEnvelope(ctx, { kind: "order", id: orderId });
-  return envelope ? {
-    ...envelope,
-    tool: "create_partial_refund",
-    outcome: "unknown",
-    code,
-    providerReference,
-  } : undefined;
 }
 
 function partialRefundNoEffect(
@@ -427,7 +413,7 @@ export async function createPartialRefund(
 
     const refund = data.refundCreate.refund;
     if (!refund) {
-      const receipt = unknownPartialRefundReceipt(ctx, orderId, "provider_refund_missing");
+      const receipt = partialRefundReceipts.unknown(ctx, orderId, "provider_refund_missing");
       return {
         ...toolUnknown(`Unknown: Shopify accepted the partial refund for order ${orderId} but did not return a refund. Do not retry or confirm it to the customer until it is reconciled.`),
         refundedCents: null,
@@ -440,7 +426,7 @@ export async function createPartialRefund(
       .map((transaction) => transaction.status?.toUpperCase())
       .filter((status): status is string => Boolean(status));
     if (statuses.length === 0 || statuses.some((status) => status !== "SUCCESS")) {
-      const receipt = unknownPartialRefundReceipt(ctx, orderId, "transaction_not_successful", refund.id);
+      const receipt = partialRefundReceipts.unknown(ctx, orderId, "transaction_not_successful", refund.id);
       return {
         ...toolUnknown(`Unknown: Shopify created refund ${refund.id} for order ${orderId}, but its payment status is ${statuses.join(", ") || "unavailable"}. Do not retry or confirm it to the customer until it is reconciled.`),
         refundedCents: null,
@@ -450,7 +436,7 @@ export async function createPartialRefund(
 
     const refundedAmount = refund.totalRefundedSet?.presentmentMoney?.amount;
     if (!refundedAmount) {
-      const receipt = unknownPartialRefundReceipt(ctx, orderId, "committed_amount_missing", refund.id);
+      const receipt = partialRefundReceipts.unknown(ctx, orderId, "committed_amount_missing", refund.id);
       return {
         ...toolUnknown(`Unknown: Shopify created refund ${refund.id} for order ${orderId}, but did not return the committed amount. Do not retry or confirm it to the customer until it is reconciled.`),
         refundedCents: null,
@@ -462,7 +448,7 @@ export async function createPartialRefund(
       .map((transaction) => transaction.id?.trim())
       .filter((id): id is string => Boolean(id));
     if (!refund.id?.trim() || transactionReferences.length !== transactionNodes.length) {
-      const receipt = unknownPartialRefundReceipt(
+      const receipt = partialRefundReceipts.unknown(
         ctx,
         orderId,
         "provider_reference_missing",
@@ -510,7 +496,7 @@ export async function createPartialRefund(
       return partialRefundNoEffect(ctx, input.order_id.trim() || "invalid", toolError(`Error: ${err.message}`), "failed", "invalid_refund_input");
     }
     if (mutationStarted && isAmbiguousShopifyMutationError(err)) {
-      const receipt = unknownPartialRefundReceipt(ctx, orderId || input.order_id, "provider_response_ambiguous");
+      const receipt = partialRefundReceipts.unknown(ctx, orderId || input.order_id, "provider_response_ambiguous");
       return {
         ...toolUnknown(`Unknown: a partial refund for order ${orderId} may have been created at Shopify but could not be confirmed. Do not retry or confirm it to the customer until it is reconciled. ${formatShopifyToolError("partial refund reconciliation failed", err)}`),
         refundedCents: null,

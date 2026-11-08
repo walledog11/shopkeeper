@@ -3,7 +3,7 @@
 import { useRef } from "react"
 import { ArrowUp, Bot, Loader2, Paperclip, X } from "lucide-react"
 import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
-import { NeedsYouCardFooter } from "@/app/dashboard/_components/home/needs-you-card-ui"
+import { SupportCardFooter } from "@/components/support-card/card"
 import { useComposerState } from "./composer-state"
 import type { ComposerProps } from "./composer-types"
 
@@ -36,7 +36,7 @@ export default function Composer(props: ComposerProps) {
   } = useComposerState(props)
 
   return (
-    <NeedsYouCardFooter className="pointer-events-auto shrink-0 p-0">
+    <SupportCardFooter className="pointer-events-auto shrink-0 p-0">
       <div className="px-4 py-3 sm:px-6 sm:py-4">
         {igWindowExpired && (
           <div className="mb-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-700">
@@ -155,6 +155,6 @@ export default function Composer(props: ComposerProps) {
           </span>
         </div>
       </div>
-    </NeedsYouCardFooter>
+    </SupportCardFooter>
   )
 }

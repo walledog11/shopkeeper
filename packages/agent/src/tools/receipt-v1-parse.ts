@@ -78,36 +78,6 @@ function parseBaseReceipt(value: Record<string, unknown>): ReceiptBaseV1 {
   return value as unknown as ReceiptBaseV1;
 }
 
-function requireRegisteredReceiptTool(tool: string): asserts tool is ReceiptToolV1 {
-  if (
-    tool !== "create_refund"
-    && tool !== "create_partial_refund"
-    && tool !== "cancel_order"
-    && tool !== "create_return"
-    && tool !== "create_exchange"
-    && tool !== "attach_return_label"
-    && tool !== "fulfill_order"
-    && tool !== "update_shopify_order_address"
-    && tool !== "edit_shopify_order"
-    && tool !== "create_shopify_order"
-    && tool !== "update_shopify_customer_info"
-    && tool !== "add_shopify_customer_note"
-    && tool !== "create_gift_card"
-    && tool !== "create_flash_sale"
-    && tool !== "end_flash_sale"
-    && tool !== "set_variant_prices"
-    && tool !== "add_internal_note"
-    && tool !== "update_thread_status"
-    && tool !== "update_thread_tag"
-    && tool !== "mark_ticket_spam"
-    && tool !== "send_reply"
-    && tool !== "send_email"
-    && tool !== "send_ticket_reply"
-  ) {
-    throw new ReceiptValidationError(`no receipt validator is registered for ${tool}`);
-  }
-}
-
 function parseCommunicationFacts(value: unknown): CommunicationReceiptFactsV1 {
   if (!isRecord(value)) throw new ReceiptValidationError("communication facts must be an object");
   requireNonEmptyString(value.logicalResponseId, "facts.logicalResponseId");
@@ -643,321 +613,148 @@ function parseCancellationFacts(value: unknown): CancellationReceiptFactsV1 {
   return value as unknown as CancellationReceiptFactsV1;
 }
 
+type ReceiptValidator = (base: ReceiptBaseV1, value: Record<string, unknown>) => void;
+interface ReceiptContract {
+  targetKind: string;
+  failureTargets?: readonly string[];
+  succeeded: ReceiptValidator;
+  partial?: { label: string; validate: ReceiptValidator };
+}
+
+/** Shared identity checks; each fact parser still owns its domain invariants. */
+function factIdentity<Facts extends object>(
+  parse: (value: unknown) => Facts,
+  label: string,
+  targetKey: keyof Facts | null,
+  providerKey?: keyof Facts,
+): ReceiptValidator {
+  return (base, value) => {
+    if (providerKey) requireNonEmptyString(value.providerReference, "providerReference");
+    const facts = parse(value.facts);
+    if (targetKey && base.target.id !== facts[targetKey]) {
+      throw new ReceiptValidationError(`${label} target must match facts.${String(targetKey)}`);
+    }
+    if (providerKey && value.providerReference !== facts[providerKey]) {
+      throw new ReceiptValidationError(`${label} providerReference must match facts.${String(providerKey)}`);
+    }
+  };
+}
+
+function threadStateIdentity(parse: (value: unknown) => { threadId: string }, label: string): ReceiptValidator {
+  return (base, value) => {
+    requireNonEmptyString(value.providerReference, "providerReference");
+    const facts = parse(value.facts);
+    if (base.target.id !== facts.threadId || value.providerReference !== facts.threadId) {
+      throw new ReceiptValidationError(`${label} identities must match the target thread`);
+    }
+  };
+}
+
+function validateCommunication(base: ReceiptBaseV1, value: Record<string, unknown>): void {
+  requireNonEmptyString(value.providerReference, "providerReference");
+  const facts = parseCommunicationFacts(value.facts);
+  if (base.target.kind !== "thread" || base.target.id !== facts.threadId) {
+    throw new ReceiptValidationError("communication target must match facts.threadId");
+  }
+  if (value.providerReference !== facts.messageId || facts.logicalResponseId !== facts.messageId) {
+    throw new ReceiptValidationError("communication response identities must match the persisted message");
+  }
+  if (value.outcome === "succeeded" && facts.deliveryState === "unknown") {
+    throw new ReceiptValidationError("successful communication cannot have unknown delivery state");
+  }
+  if (value.outcome === "unknown" && facts.deliveryState !== "unknown") {
+    throw new ReceiptValidationError("unknown communication receipts require unknown delivery state");
+  }
+}
+
+function validateVariantPriceReceipt(base: ReceiptBaseV1, value: Record<string, unknown>): void {
+  requireNonEmptyString(value.providerReference, "providerReference");
+  if (value.providerReference !== base.target.id) {
+    throw new ReceiptValidationError("variant price providerReference must match the shop target");
+  }
+  const facts = parseVariantPriceFacts(value.facts);
+  if (value.outcome === "succeeded" && facts.batches.some(batch => batch.outcome !== "succeeded")) {
+    throw new ReceiptValidationError("successful variant price receipts require successful batches");
+  }
+}
+
+const validateOrderAddressReceipt = factIdentity(parseOrderAddressFacts, "order address", "orderId", "orderId");
+const communicationContract: ReceiptContract = {
+  targetKind: "thread",
+  succeeded: validateCommunication,
+  partial: { label: "communication", validate: validateCommunication },
+};
+
+// Adding a receipt tool requires a complete success/failure contract here. The
+// success union uses the same tool keys, so a validator cannot silently be absent.
+const RECEIPT_CONTRACTS: Record<ReceiptToolV1, ReceiptContract> = {
+  create_refund: { targetKind: "order", succeeded: factIdentity(value => parseRefundFacts(value, false), "refund", "orderId", "refundId") },
+  create_partial_refund: { targetKind: "order", succeeded: factIdentity(value => parseRefundFacts(value, true), "refund", "orderId", "refundId") },
+  cancel_order: { targetKind: "order", succeeded: factIdentity(parseCancellationFacts, "cancellation", "orderId") },
+  create_return: { targetKind: "order", succeeded: factIdentity(parseReturnFacts, "return", "orderId", "returnId") },
+  create_exchange: { targetKind: "order", succeeded: factIdentity(parseExchangeFacts, "exchange", "orderId", "returnId") },
+  attach_return_label: { targetKind: "order", succeeded: factIdentity(parseReturnLabelFacts, "return label", "orderId", "reverseDeliveryId") },
+  fulfill_order: { targetKind: "order", succeeded: factIdentity(parseFulfillmentFacts, "fulfillment", "orderId", "fulfillmentId") },
+  update_shopify_order_address: {
+    targetKind: "order", succeeded: validateOrderAddressReceipt,
+    partial: { label: "partial order address", validate: validateOrderAddressReceipt },
+  },
+  edit_shopify_order: {
+    targetKind: "order",
+    succeeded: factIdentity(value => parseOrderEditFacts(value, { requireCommitted: true }), "order edit", "orderId", "orderId"),
+    partial: {
+      label: "partial order edit",
+      validate: factIdentity(value => parseOrderEditFacts(value, { requireCommitted: false }), "order edit", "orderId", "orderId"),
+    },
+  },
+  create_shopify_order: {
+    targetKind: "order", failureTargets: ["order", "email"],
+    succeeded: factIdentity(parseOrderCreationFacts, "order creation", "orderId", "orderId"),
+  },
+  update_shopify_customer_info: { targetKind: "customer", succeeded: factIdentity(parseCustomerInfoFacts, "customer info", "customerId", "customerId") },
+  add_shopify_customer_note: { targetKind: "customer", succeeded: factIdentity(parseCustomerNoteFacts, "customer note", "customerId", "customerId") },
+  create_gift_card: { targetKind: "customer", succeeded: factIdentity(parseGiftCardFacts, "gift card", "customerId", "giftCardId") },
+  create_flash_sale: { targetKind: "shop", succeeded: factIdentity(parseFlashSaleFacts, "flash sale", null, "flashSaleId") },
+  end_flash_sale: {
+    targetKind: "discount", failureTargets: ["shop", "discount"],
+    succeeded: factIdentity(parseEndFlashSaleFacts, "ended flash sale", "flashSaleId", "flashSaleId"),
+  },
+  set_variant_prices: {
+    targetKind: "shop", succeeded: validateVariantPriceReceipt,
+    partial: { label: "partial variant price", validate: validateVariantPriceReceipt },
+  },
+  add_internal_note: { targetKind: "thread", succeeded: factIdentity(parseInternalNoteFacts, "internal note", "threadId", "messageId") },
+  update_thread_status: { targetKind: "thread", succeeded: threadStateIdentity(parseThreadStatusFacts, "thread status") },
+  update_thread_tag: { targetKind: "thread", succeeded: threadStateIdentity(parseThreadTagFacts, "thread tag") },
+  mark_ticket_spam: { targetKind: "thread", succeeded: threadStateIdentity(parseTicketSpamFacts, "ticket spam") },
+  send_reply: communicationContract,
+  send_email: { ...communicationContract, failureTargets: ["thread", "email"] },
+  send_ticket_reply: communicationContract,
+};
+
 export function parseReceiptV1(value: unknown): ReceiptV1 {
   if (!isRecord(value)) throw new ReceiptValidationError("receipt must be an object");
   const base = parseBaseReceipt(value);
-  requireRegisteredReceiptTool(base.tool);
-  if (
-    (
-      base.tool === "update_shopify_customer_info"
-      || base.tool === "add_shopify_customer_note"
-      || base.tool === "create_gift_card"
-    )
-    && base.target.kind !== "customer"
-  ) {
-    throw new ReceiptValidationError(`${base.tool} receipt target must be a customer`);
+  if (!Object.hasOwn(RECEIPT_CONTRACTS, base.tool)) {
+    throw new ReceiptValidationError(`no receipt validator is registered for ${base.tool}`);
   }
-  if (
-    base.tool !== "create_shopify_order"
-    && base.tool !== "update_shopify_customer_info"
-    && base.tool !== "add_shopify_customer_note"
-    && base.tool !== "create_gift_card"
-    && base.tool !== "create_flash_sale"
-    && base.tool !== "end_flash_sale"
-    && base.tool !== "set_variant_prices"
-    && base.tool !== "add_internal_note"
-    && base.tool !== "update_thread_status"
-    && base.tool !== "update_thread_tag"
-    && base.tool !== "mark_ticket_spam"
-    && base.tool !== "send_reply"
-    && base.tool !== "send_email"
-    && base.tool !== "send_ticket_reply"
-    && base.target.kind !== "order"
-  ) {
-    throw new ReceiptValidationError(`${base.tool} receipt target must be an order`);
+  const contract = RECEIPT_CONTRACTS[base.tool as ReceiptToolV1];
+  const succeeded = value.outcome === "succeeded";
+  const targets = succeeded ? [contract.targetKind] : contract.failureTargets ?? [contract.targetKind];
+  if (!targets.includes(base.target.kind)) {
+    const article = targets[0] === "order" ? "an" : "a";
+    throw new ReceiptValidationError(`${base.tool} receipt target must be ${article} ${targets.join(" or ")}`);
   }
-  if (value.outcome === "succeeded") {
-    if (base.tool === "create_refund" || base.tool === "create_partial_refund") {
-      requireNonEmptyString(value.providerReference, "providerReference");
-      const facts = parseRefundFacts(value.facts, base.tool === "create_partial_refund");
-      if (base.target.kind !== "order" || base.target.id !== facts.orderId) {
-        throw new ReceiptValidationError("refund target must match facts.orderId");
-      }
-      if (value.providerReference !== facts.refundId) {
-        throw new ReceiptValidationError("refund providerReference must match facts.refundId");
-      }
-    } else if (base.tool === "cancel_order") {
-      const facts = parseCancellationFacts(value.facts);
-      if (base.target.kind !== "order" || base.target.id !== facts.orderId) {
-        throw new ReceiptValidationError("cancellation target must match facts.orderId");
-      }
-    } else if (base.tool === "create_return") {
-      requireNonEmptyString(value.providerReference, "providerReference");
-      const facts = parseReturnFacts(value.facts);
-      if (base.target.id !== facts.orderId) {
-        throw new ReceiptValidationError("return target must match facts.orderId");
-      }
-      if (value.providerReference !== facts.returnId) {
-        throw new ReceiptValidationError("return providerReference must match facts.returnId");
-      }
-    } else if (base.tool === "create_exchange") {
-      requireNonEmptyString(value.providerReference, "providerReference");
-      const facts = parseExchangeFacts(value.facts);
-      if (base.target.id !== facts.orderId) {
-        throw new ReceiptValidationError("exchange target must match facts.orderId");
-      }
-      if (value.providerReference !== facts.returnId) {
-        throw new ReceiptValidationError("exchange providerReference must match facts.returnId");
-      }
-    } else if (base.tool === "attach_return_label") {
-      requireNonEmptyString(value.providerReference, "providerReference");
-      const facts = parseReturnLabelFacts(value.facts);
-      if (base.target.id !== facts.orderId) {
-        throw new ReceiptValidationError("return label target must match facts.orderId");
-      }
-      if (value.providerReference !== facts.reverseDeliveryId) {
-        throw new ReceiptValidationError(
-          "return label providerReference must match facts.reverseDeliveryId",
-        );
-      }
-    } else if (base.tool === "fulfill_order") {
-      requireNonEmptyString(value.providerReference, "providerReference");
-      const facts = parseFulfillmentFacts(value.facts);
-      if (base.target.id !== facts.orderId) {
-        throw new ReceiptValidationError("fulfillment target must match facts.orderId");
-      }
-      if (value.providerReference !== facts.fulfillmentId) {
-        throw new ReceiptValidationError(
-          "fulfillment providerReference must match facts.fulfillmentId",
-        );
-      }
-    } else if (base.tool === "update_shopify_order_address") {
-      requireNonEmptyString(value.providerReference, "providerReference");
-      const facts = parseOrderAddressFacts(value.facts);
-      if (base.target.id !== facts.orderId) {
-        throw new ReceiptValidationError("order address target must match facts.orderId");
-      }
-      if (value.providerReference !== facts.orderId) {
-        throw new ReceiptValidationError("order address providerReference must match facts.orderId");
-      }
-    } else if (base.tool === "edit_shopify_order") {
-      requireNonEmptyString(value.providerReference, "providerReference");
-      const facts = parseOrderEditFacts(value.facts, { requireCommitted: true });
-      if (base.target.id !== facts.orderId) {
-        throw new ReceiptValidationError("order edit target must match facts.orderId");
-      }
-      if (value.providerReference !== facts.orderId) {
-        throw new ReceiptValidationError("order edit providerReference must match facts.orderId");
-      }
-    } else if (base.tool === "create_shopify_order") {
-      requireNonEmptyString(value.providerReference, "providerReference");
-      const facts = parseOrderCreationFacts(value.facts);
-      if (base.target.kind !== "order" || base.target.id !== facts.orderId) {
-        throw new ReceiptValidationError("order creation target must match facts.orderId");
-      }
-      if (value.providerReference !== facts.orderId) {
-        throw new ReceiptValidationError("order creation providerReference must match facts.orderId");
-      }
-    } else if (base.tool === "update_shopify_customer_info") {
-      requireNonEmptyString(value.providerReference, "providerReference");
-      const facts = parseCustomerInfoFacts(value.facts);
-      if (base.target.id !== facts.customerId) {
-        throw new ReceiptValidationError("customer info target must match facts.customerId");
-      }
-      if (value.providerReference !== facts.customerId) {
-        throw new ReceiptValidationError("customer info providerReference must match facts.customerId");
-      }
-    } else if (base.tool === "add_shopify_customer_note") {
-      requireNonEmptyString(value.providerReference, "providerReference");
-      const facts = parseCustomerNoteFacts(value.facts);
-      if (base.target.id !== facts.customerId) {
-        throw new ReceiptValidationError("customer note target must match facts.customerId");
-      }
-      if (value.providerReference !== facts.customerId) {
-        throw new ReceiptValidationError("customer note providerReference must match facts.customerId");
-      }
-    } else if (base.tool === "create_gift_card") {
-      requireNonEmptyString(value.providerReference, "providerReference");
-      const facts = parseGiftCardFacts(value.facts);
-      if (base.target.id !== facts.customerId) {
-        throw new ReceiptValidationError("gift card target must match facts.customerId");
-      }
-      if (value.providerReference !== facts.giftCardId) {
-        throw new ReceiptValidationError("gift card providerReference must match facts.giftCardId");
-      }
-    } else if (base.tool === "create_flash_sale") {
-      if (base.target.kind !== "shop") {
-        throw new ReceiptValidationError("create_flash_sale receipt target must be a shop");
-      }
-      requireNonEmptyString(value.providerReference, "providerReference");
-      const facts = parseFlashSaleFacts(value.facts);
-      if (value.providerReference !== facts.flashSaleId) {
-        throw new ReceiptValidationError("flash sale providerReference must match facts.flashSaleId");
-      }
-    } else if (base.tool === "end_flash_sale") {
-      if (base.target.kind !== "discount") {
-        throw new ReceiptValidationError("end_flash_sale receipt target must be a discount");
-      }
-      requireNonEmptyString(value.providerReference, "providerReference");
-      const facts = parseEndFlashSaleFacts(value.facts);
-      if (base.target.id !== facts.flashSaleId) {
-        throw new ReceiptValidationError("ended flash sale target must match facts.flashSaleId");
-      }
-      if (value.providerReference !== facts.flashSaleId) {
-        throw new ReceiptValidationError("ended flash sale providerReference must match facts.flashSaleId");
-      }
-    } else if (base.tool === "set_variant_prices") {
-      if (base.target.kind !== "shop") {
-        throw new ReceiptValidationError("set_variant_prices receipt target must be a shop");
-      }
-      requireNonEmptyString(value.providerReference, "providerReference");
-      if (value.providerReference !== base.target.id) {
-        throw new ReceiptValidationError("variant price providerReference must match the shop target");
-      }
-      const facts = parseVariantPriceFacts(value.facts);
-      if (facts.batches.some((batch) => batch.outcome !== "succeeded")) {
-        throw new ReceiptValidationError("successful variant price receipts require successful batches");
-      }
-    } else if (base.tool === "add_internal_note") {
-      if (base.target.kind !== "thread") throw new ReceiptValidationError("internal note target must be a thread");
-      requireNonEmptyString(value.providerReference, "providerReference");
-      const facts = parseInternalNoteFacts(value.facts);
-      if (base.target.id !== facts.threadId) throw new ReceiptValidationError("internal note target must match facts.threadId");
-      if (value.providerReference !== facts.messageId) throw new ReceiptValidationError("internal note providerReference must match facts.messageId");
-    } else if (base.tool === "update_thread_status") {
-      if (base.target.kind !== "thread") throw new ReceiptValidationError("thread status target must be a thread");
-      requireNonEmptyString(value.providerReference, "providerReference");
-      const facts = parseThreadStatusFacts(value.facts);
-      if (base.target.id !== facts.threadId || value.providerReference !== facts.threadId) {
-        throw new ReceiptValidationError("thread status identities must match the target thread");
-      }
-    } else if (base.tool === "update_thread_tag") {
-      if (base.target.kind !== "thread") throw new ReceiptValidationError("thread tag target must be a thread");
-      requireNonEmptyString(value.providerReference, "providerReference");
-      const facts = parseThreadTagFacts(value.facts);
-      if (base.target.id !== facts.threadId || value.providerReference !== facts.threadId) {
-        throw new ReceiptValidationError("thread tag identities must match the target thread");
-      }
-    } else if (base.tool === "mark_ticket_spam") {
-      if (base.target.kind !== "thread") throw new ReceiptValidationError("ticket spam target must be a thread");
-      requireNonEmptyString(value.providerReference, "providerReference");
-      const facts = parseTicketSpamFacts(value.facts);
-      if (base.target.id !== facts.threadId || value.providerReference !== facts.threadId) {
-        throw new ReceiptValidationError("ticket spam identities must match the target thread");
-      }
-    } else if (base.tool === "send_reply" || base.tool === "send_email" || base.tool === "send_ticket_reply") {
-      if (base.target.kind !== "thread") throw new ReceiptValidationError("communication target must be a thread");
-      requireNonEmptyString(value.providerReference, "providerReference");
-      const facts = parseCommunicationFacts(value.facts);
-      if (base.target.id !== facts.threadId) throw new ReceiptValidationError("communication target must match facts.threadId");
-      if (value.providerReference !== facts.messageId || facts.logicalResponseId !== facts.messageId) {
-        throw new ReceiptValidationError("communication response identities must match the persisted message");
-      }
-      if (facts.deliveryState === "unknown") {
-        throw new ReceiptValidationError("successful communication cannot have unknown delivery state");
-      }
-    }
-  } else if (
-    value.outcome === "not_found"
-    || value.outcome === "rejected"
-    || value.outcome === "failed"
-    || value.outcome === "unknown"
-  ) {
+  if (succeeded) {
+    contract.succeeded(base, value);
+  } else if (["not_found", "rejected", "failed", "unknown"].includes(value.outcome as string)) {
     requireNonEmptyString(value.code, "code");
-    if (
-      base.tool === "create_shopify_order"
-      && base.target.kind !== "order"
-      && base.target.kind !== "email"
-    ) {
-      throw new ReceiptValidationError("create_shopify_order failure target must be an order or email");
-    }
-    if (base.tool === "create_flash_sale" && base.target.kind !== "shop") {
-      throw new ReceiptValidationError("create_flash_sale failure target must be a shop");
-    }
-    if (base.tool === "set_variant_prices" && base.target.kind !== "shop") {
-      throw new ReceiptValidationError("set_variant_prices failure target must be a shop");
-    }
-    if (
-      (base.tool === "add_internal_note"
-        || base.tool === "update_thread_status"
-        || base.tool === "update_thread_tag"
-        || base.tool === "mark_ticket_spam")
-      && base.target.kind !== "thread"
-    ) {
-      throw new ReceiptValidationError(`${base.tool} failure target must be a thread`);
-    }
-    if (
-      (base.tool === "send_reply" || base.tool === "send_ticket_reply")
-      && base.target.kind !== "thread"
-    ) {
-      throw new ReceiptValidationError(`${base.tool} failure target must be a thread`);
-    }
-    if (base.tool === "send_email" && base.target.kind !== "thread" && base.target.kind !== "email") {
-      throw new ReceiptValidationError("send_email failure target must be a thread or email");
-    }
-    if (
-      base.tool === "end_flash_sale"
-      && base.target.kind !== "shop"
-      && base.target.kind !== "discount"
-    ) {
-      throw new ReceiptValidationError("end_flash_sale failure target must be a shop or discount");
-    }
     if (value.facts !== undefined) {
-      if (
-        base.tool !== "update_shopify_order_address"
-        && base.tool !== "edit_shopify_order"
-        && base.tool !== "set_variant_prices"
-        && base.tool !== "send_reply"
-        && base.tool !== "send_email"
-        && base.tool !== "send_ticket_reply"
-      ) {
-        throw new ReceiptValidationError("failure receipt facts are not supported for this tool");
-      }
+      if (!contract.partial) throw new ReceiptValidationError("failure receipt facts are not supported for this tool");
       if (value.outcome !== "unknown") {
-        throw new ReceiptValidationError(
-          base.tool === "update_shopify_order_address"
-            ? "partial order address facts require an unknown outcome"
-            : base.tool === "edit_shopify_order"
-              ? "partial order edit facts require an unknown outcome"
-              : base.tool === "set_variant_prices"
-                ? "partial variant price facts require an unknown outcome"
-                : "communication facts require an unknown outcome",
-        );
+        throw new ReceiptValidationError(`${contract.partial.label} facts require an unknown outcome`);
       }
-      requireNonEmptyString(value.providerReference, "providerReference");
-      if (base.tool === "update_shopify_order_address") {
-        const facts = parseOrderAddressFacts(value.facts);
-        if (base.target.id !== facts.orderId) {
-          throw new ReceiptValidationError("order address target must match facts.orderId");
-        }
-        if (value.providerReference !== facts.orderId) {
-          throw new ReceiptValidationError("order address providerReference must match facts.orderId");
-        }
-      } else if (base.tool === "edit_shopify_order") {
-        const facts = parseOrderEditFacts(value.facts, { requireCommitted: false });
-        if (base.target.id !== facts.orderId) {
-          throw new ReceiptValidationError("order edit target must match facts.orderId");
-        }
-        if (value.providerReference !== facts.orderId) {
-          throw new ReceiptValidationError("order edit providerReference must match facts.orderId");
-        }
-      } else if (base.tool === "set_variant_prices") {
-        if (value.providerReference !== base.target.id) {
-          throw new ReceiptValidationError("variant price providerReference must match the shop target");
-        }
-        parseVariantPriceFacts(value.facts);
-      } else {
-        const facts = parseCommunicationFacts(value.facts);
-        if (base.target.kind !== "thread" || base.target.id !== facts.threadId) {
-          throw new ReceiptValidationError("communication target must match facts.threadId");
-        }
-        if (value.providerReference !== facts.messageId || facts.logicalResponseId !== facts.messageId) {
-          throw new ReceiptValidationError("communication response identities must match the persisted message");
-        }
-        if (facts.deliveryState !== "unknown") {
-          throw new ReceiptValidationError("unknown communication receipts require unknown delivery state");
-        }
-      }
+      contract.partial.validate(base, value);
     }
   } else {
     throw new ReceiptValidationError("receipt outcome is invalid");

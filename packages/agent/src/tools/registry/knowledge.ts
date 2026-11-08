@@ -1,22 +1,20 @@
 import { toolNotFound, toolOk } from "../result.js";
 import { threadContextOf } from "./helpers.js";
-import { defineTool, stringArg } from "./schema.js";
-import type { SearchKbInput } from "./types.js";
+import { defineTool } from "./schema.js";
+import { TOOL_INPUT_FIELDS } from "./input-fields.js";
 
 export const KNOWLEDGE_TOOL_DEFINITIONS = [
   defineTool({
     name: "search_kb",
     description:
       "Search the organization's knowledge base for articles matching a query. Use this to find store policies, FAQs, or how-to guides before answering customer questions about returns, shipping, or store procedures.",
-    fields: {
-      query: stringArg("Search terms to look for in knowledge base article titles and bodies (e.g. 'return policy', 'shipping times').", { required: true }),
-    },
+    fields: TOOL_INPUT_FIELDS.search_kb,
     category: "read",
     group: "knowledge",
     capabilities: ["kb"],
     label: "Searched knowledge base",
     planStepLabel: "Search knowledge base",
-    execute: async (input: SearchKbInput, ctx, settings, deps) => {
+    execute: async (input, ctx, settings, deps) => {
       const words = input.query.trim().split(/\s+/).filter((word) => word.length >= 2);
       if (words.length === 0) return toolNotFound("No knowledge base articles found for that query.");
 

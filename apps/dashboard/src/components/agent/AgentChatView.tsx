@@ -15,7 +15,7 @@ import type { PanelSuggestionChip } from "@/lib/agent/panel-briefing"
 import { AgentChatComposer } from "./AgentChatComposer"
 import { AgentChatMessage } from "./AgentChatMessage"
 import { useAgentWalkthrough } from "./useAgentWalkthrough"
-import { CONCIERGE_BUBBLE } from "@/app/dashboard/_components/home/needs-you-card-styles"
+import { CONCIERGE_BUBBLE } from "@/components/support-card/styles"
 import { messageKey, type AgentChatState } from "./useAgentChatState"
 
 export interface AgentChatClientProps {

@@ -1,23 +1,14 @@
 import { db, findOrgMemberBindToken, looksLikeOrgMemberBindToken } from '@shopkeeper/db';
 import logger from '../../logger.js';
-import { buildOrgDigest } from '../../maintenance/digest.js';
-import { getContext, loadLiveOperatorContext, updateContext } from '../../operator-context.js';
-import { resolveOperatorMemberKey } from '../../operator-identity.js';
-import { executeFreeFormInstruction } from '../telegram/agent-execution.js';
-import { isDigestCommand, isPendingPlanCommand, parseTelegramCommand } from '../telegram/command-parser.js';
-import { handleDigestCommand } from '../telegram/digest-commands.js';
-import { HELP_TEXT } from '../telegram/format.js';
-import { handlePendingPlanCommand } from '../telegram/pending-plan-commands.js';
+import { runOperatorTurn } from '../operator/message-handler.js';
 import {
   progressOnlyPresence,
   SILENT_CHANNEL_PROGRESS_THRESHOLD_MS,
   TYPING_INDICATOR_PROGRESS_THRESHOLD_MS,
-  type OperatorMessageContext,
   type OperatorPresence,
   type OperatorReply,
 } from '../operator-message.js';
 import { withImessageTyping } from '../../clients/spectrum.js';
-import { buildMirroredReply } from '../../operator-thread-mirror.js';
 import { handleImessageBinding } from './binding.js';
 
 export interface ImessageOperatorInbound {
@@ -108,73 +99,17 @@ export function imessagePresence(reply: OperatorReply, spaceId: string | null | 
 // (help/summary/digest/pending-plan) then the free-form agent turn. Extracted so
 // both the synchronous webhook path and the durable operator-event worker run
 // identical logic; they differ only in the injected reply (provider send) and
-// when the webhook is acknowledged. Mirrors runTelegramOperatorTurn.
+// when the webhook is acknowledged.
 export async function runImessageOperatorTurn(params: ImessageOperatorTurnParams): Promise<void | 'queued'> {
   const { organizationId, clerkUserId, senderId, body, reply, turnId, spaceId } = params;
 
-  const chatId = senderId;
-  const deliveryRef = `imessage:${senderId}`;
-  // State is keyed to the person, so this handle sees the same pending queue the
-  // merchant's other transports do.
-  const memberKey = await resolveOperatorMemberKey(organizationId, clerkUserId);
-  const context = await loadLiveOperatorContext(
-    organizationId,
-    memberKey,
-    await getContext(organizationId, memberKey),
-  );
-
-  // Freeform turns persist their own thread messages, so they keep the raw reply.
-  // Command paths reply through a wrapper that mirrors the exchange (inbound once,
-  // then each reply) onto the merchant's durable operator thread.
-  const baseMessage: OperatorMessageContext = {
-    chatId,
+  return runOperatorTurn(organizationId, clerkUserId, {
+    chatId: senderId,
     body,
     reply,
-    senderRef: memberKey,
-    deliveryRef,
+    deliveryRef: `imessage:${senderId}`,
     spaceId,
     ...(turnId ? { turnId } : {}),
     presence: imessagePresence(reply, spaceId),
-  };
-  const mirroredReply = buildMirroredReply(organizationId, memberKey, body, reply);
-  const commandMessage: OperatorMessageContext = { ...baseMessage, reply: mirroredReply };
-
-  const command = parseTelegramCommand(body);
-
-  if (command.type === 'help') {
-    await mirroredReply(HELP_TEXT);
-    return;
-  }
-
-  if (command.type === 'summary') {
-    const org = await db.organization.findUnique({
-      where: { id: organizationId },
-      select: { settings: true },
-    });
-    const settings = (org?.settings as Record<string, unknown> | null) ?? {};
-    const digest = await buildOrgDigest(organizationId, new Date(), settings);
-    if (!digest) {
-      await mirroredReply('Nothing new in your support inbox right now.');
-      return;
-    }
-    await updateContext(organizationId, memberKey, { pendingDigest: digest.pendingDigest });
-    await mirroredReply(digest.message);
-    return;
-  }
-
-  if (isDigestCommand(command) && await handleDigestCommand(organizationId, command, context, commandMessage)) {
-    return;
-  }
-
-  if (
-    isPendingPlanCommand(command)
-    && await handlePendingPlanCommand(organizationId, clerkUserId, commandMessage, command, context)
-  ) {
-    return;
-  }
-
-  // Everything past the keyword fast path is one agent turn: the model reads the
-  // pending-state ledger and drives approve/reject/revise/answer via control tools,
-  // or handles a fresh instruction normally.
-  return executeFreeFormInstruction(organizationId, clerkUserId, baseMessage);
+  });
 }

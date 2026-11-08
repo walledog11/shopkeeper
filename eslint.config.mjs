@@ -71,6 +71,12 @@ export default [
       "**/next-env.d.ts",
     ],
   },
+  {
+    ...js.configs.recommended,
+    files: ["extensions/shopkeeper-chat/src/**/*.js"],
+    languageOptions: { globals: globals.browser },
+    rules: { "no-unused-vars": ["error", { caughtErrors: "none" }] },
+  },
   ...dashboardConfigs,
   {
     files: dashboardSourceFiles,

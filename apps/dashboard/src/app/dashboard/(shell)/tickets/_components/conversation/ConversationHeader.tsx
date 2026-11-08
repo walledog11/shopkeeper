@@ -5,13 +5,13 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/ui/cn"
 import {
-  NeedsYouCardHeader,
-} from "@/app/dashboard/_components/home/needs-you-card-ui"
+  SupportCardHeader,
+} from "@/components/support-card/card"
 import {
   TicketCardMetaRow,
   type TicketCardMeta,
-} from "@/app/dashboard/_components/home/needs-you-card-meta"
-import { needsYouMetaPillShellClassName } from "@/app/dashboard/_components/home/needs-you-card-styles"
+} from "@/components/support-card/metadata"
+import { supportCardMetaPillShellClassName } from "@/components/support-card/styles"
 import { merchantSandInkHoverClass } from "@/lib/ui/merchant-palette"
 import type { TicketCocoAction } from "../../_lib/resolve-ticket-coco-action"
 import { TicketTimelineMenu } from "./TicketTimelineMenu"
@@ -63,7 +63,7 @@ export default function ConversationHeader({
           disabled={cocoAction.disabled}
           onClick={onCocoAction}
           className={cn(
-            needsYouMetaPillShellClassName,
+            supportCardMetaPillShellClassName,
             "h-9 max-w-[9.5rem] gap-1.5 px-3 text-xs font-semibold sm:h-10 sm:max-w-none",
             COCO_ACTION_CLASS[cocoAction.variant],
           )}
@@ -81,7 +81,7 @@ export default function ConversationHeader({
           onClick={onResolve}
           aria-label="Close ticket"
           className={cn(
-            needsYouMetaPillShellClassName,
+            supportCardMetaPillShellClassName,
             "size-9 px-0 text-xs font-semibold sm:h-10 sm:w-auto sm:gap-1.5 sm:px-3",
             "bg-foreground text-background hover:bg-foreground/90 hover:text-background",
           )}
@@ -120,7 +120,7 @@ export default function ConversationHeader({
           aria-label={embedded ? "Close conversation" : "Back"}
           className={cn(
             embedded ? "" : "md:hidden",
-            needsYouMetaPillShellClassName,
+            supportCardMetaPillShellClassName,
             "size-9 shrink-0 bg-white text-[#6b5d4f] hover:bg-white hover:text-[#1a1a1a] sm:size-10",
           )}
           onClick={onBack}
@@ -135,8 +135,8 @@ export default function ConversationHeader({
   if (flush) return header
 
   return (
-    <NeedsYouCardHeader className="shrink-0">
+    <SupportCardHeader className="shrink-0">
       {header}
-    </NeedsYouCardHeader>
+    </SupportCardHeader>
   )
 }

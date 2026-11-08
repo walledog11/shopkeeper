@@ -1,5 +1,5 @@
 import logger from '../logger.js';
-import { buildProgressCopy, type ProgressContext } from './telegram/progress-copy.js';
+import { buildProgressCopy, type ProgressContext } from './operator/progress-copy.js';
 
 export type OperatorReply = (text: string) => Promise<void>;
 

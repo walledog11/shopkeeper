@@ -59,7 +59,7 @@ function ticket(overrides: Partial<Ticket> = {}): Ticket {
 type StepSeed = { id: string; tool: string; category: string; label: string; description: string }
 type ToolCallSeed = { id?: string; name: string; input: Record<string, unknown> }
 
-function withPlan(steps: StepSeed[], rawToolCalls: ToolCallSeed[] = [], warnings: string[] = []) {
+function withPlan(steps: StepSeed[], rawToolCalls: ToolCallSeed[] = []) {
   return {
     cachedPlanMessageId: CUSTOMER_MESSAGE_ID,
     hasPlan: true,
@@ -74,7 +74,6 @@ function withPlan(steps: StepSeed[], rawToolCalls: ToolCallSeed[] = [], warnings
         validation: { status: "valid", issues: [] },
         routingEvidence: { classifierState: "not_applicable", codes: [] },
         steps: steps.map(step => ({ ...step, enabled: true })),
-        warnings,
         rawToolCalls: rawToolCalls.map((call, index) => ({ id: call.id ?? `call-${index}`, ...call })),
       },
     },

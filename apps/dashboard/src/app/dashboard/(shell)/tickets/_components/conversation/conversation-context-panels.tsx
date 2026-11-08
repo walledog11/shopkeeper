@@ -3,9 +3,9 @@
 import NextLink from "next/link"
 import { cn } from "@/lib/ui/cn"
 import {
-  needsYouMetaPillClassName,
-  needsYouSoftShadowClassName,
-} from "@/app/dashboard/_components/home/needs-you-card-styles"
+  supportCardMetaPillClassName,
+  supportCardSoftShadowClassName,
+} from "@/components/support-card/styles"
 import {
   merchantContactPillClass,
   merchantSandHoverClass,
@@ -22,7 +22,7 @@ import type { ShopifyCustomerState } from "../context-panel/useShopifyCustomer"
 
 export type ConversationContextSection = "orders" | "customer" | "past"
 
-const contactPillClassName = cn(needsYouMetaPillClassName, merchantContactPillClass)
+const contactPillClassName = cn(supportCardMetaPillClassName, merchantContactPillClass)
 
 export function ConversationContextDropdown({
   children,
@@ -32,7 +32,7 @@ export function ConversationContextDropdown({
   return (
     <div
       className={cn(
-        needsYouSoftShadowClassName,
+        supportCardSoftShadowClassName,
         "mt-2 max-h-[min(28rem,50vh)] overflow-y-auto rounded-2xl border border-border bg-white custom-scrollbar animate-in fade-in slide-in-from-top-1 duration-200",
       )}
     >

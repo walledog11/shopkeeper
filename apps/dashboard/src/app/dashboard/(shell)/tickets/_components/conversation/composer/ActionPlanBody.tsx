@@ -7,9 +7,9 @@ import {
 import { customerFirstName } from "@shopkeeper/agent/person-name"
 import { AttachmentList } from "@/app/dashboard/_components/AttachmentList"
 import {
-  NeedsYouBubble,
-  NeedsYouInfoCallout,
-} from "@/app/dashboard/_components/home/needs-you-card-ui"
+  SupportCardBubble,
+  SupportCardInfoCallout,
+} from "@/components/support-card/card"
 import type { PlanSignal, PlanStep } from "@/types"
 import { formatPlanStepSentence } from "./plan-step-display"
 
@@ -104,7 +104,7 @@ export function ActionPlanBody({
           ))}
           {advisorySignals.map(signal => (
             <Fragment key={signal.message}>
-              <NeedsYouInfoCallout
+              <SupportCardInfoCallout
                 actionLabel={
                   isShopifyLinkSignal(signal) && onFocusShopifyLink
                     ? "Check customer panel →"
@@ -113,7 +113,7 @@ export function ActionPlanBody({
                 onAction={isShopifyLinkSignal(signal) ? onFocusShopifyLink : undefined}
               >
                 {signalDisplayText(signal)}
-              </NeedsYouInfoCallout>
+              </SupportCardInfoCallout>
               {photosFor(signal)}
             </Fragment>
           ))}
@@ -122,9 +122,9 @@ export function ActionPlanBody({
 
       {showReplyHero ? (
         <div className="mt-3">
-          <NeedsYouBubble tone="reply" flush>
+          <SupportCardBubble tone="reply" flush>
             <span className={draftTextClass}>{replyText}</span>
-          </NeedsYouBubble>
+          </SupportCardBubble>
         </div>
       ) : (
         <ol className="mt-3 flex flex-col gap-1.5">
@@ -174,9 +174,9 @@ export function ActionPlanBody({
       {followUps.length > 0 && (
         <div className="mt-3 space-y-2">
           {followUps.map(followUp => (
-            <NeedsYouInfoCallout key={followUp}>
+            <SupportCardInfoCallout key={followUp}>
               {merchantFollowUpBeforeApproval(followUp, customer)}
-            </NeedsYouInfoCallout>
+            </SupportCardInfoCallout>
           ))}
         </div>
       )}

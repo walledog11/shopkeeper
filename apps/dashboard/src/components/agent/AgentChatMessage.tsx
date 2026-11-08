@@ -9,7 +9,7 @@ import {
   getToolChipVariant,
   TOOL_CHIP_CLASS,
 } from "@/lib/agent/tool-action-display"
-import { CONCIERGE_BUBBLE } from "@/app/dashboard/_components/home/needs-you-card-styles"
+import { CONCIERGE_BUBBLE } from "@/components/support-card/styles"
 import { cn } from "@/lib/ui/cn"
 import type { ChatMessage } from "./agent-chat-session"
 

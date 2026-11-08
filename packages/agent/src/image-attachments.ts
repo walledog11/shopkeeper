@@ -1,3 +1,4 @@
+import { readStreamWithinLimit } from "@shopkeeper/shared/bounded-stream";
 import { get } from "@vercel/blob";
 import type {
   AgentImageMediaType,
@@ -130,28 +131,6 @@ function sniffImageMediaType(data: Buffer): AgentImageMediaType | null {
     return "image/webp";
   }
   return null;
-}
-
-async function readStreamWithinLimit(
-  stream: ReadableStream<Uint8Array>,
-  maxBytes: number,
-): Promise<Buffer | null> {
-  const reader = stream.getReader();
-  const chunks: Buffer[] = [];
-  let byteLength = 0;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    byteLength += value.byteLength;
-    if (byteLength > maxBytes) {
-      await reader.cancel();
-      return null;
-    }
-    chunks.push(Buffer.from(value));
-  }
-
-  return byteLength > 0 ? Buffer.concat(chunks, byteLength) : null;
 }
 
 async function loadPrivateAgentImage(

@@ -35,14 +35,10 @@ export function MorningBriefingSection({
   shopifyConnected: boolean
 }) {
   const {
+    rawInputs,
+    setRawInput,
     settingsState,
     dispatch,
-    digestHourInput,
-    setDigestHourInput,
-    digestSecondHourInput,
-    setDigestSecondHourInput,
-    lowStockThresholdInput,
-    setLowStockThresholdInput,
   } = controller
 
   const frequency = settingsState.digestFrequency
@@ -51,7 +47,7 @@ export function MorningBriefingSection({
     ? OFFERED_FREQUENCIES
     : [...OFFERED_FREQUENCIES, frequency]
   ).map((value) => ({ value, label: FREQUENCY_LABELS[value] }))
-  const lowStockEnabled = lowStockThresholdInput.trim() !== ""
+  const lowStockEnabled = rawInputs.lowStockThreshold.trim() !== ""
 
   return (
     <>
@@ -80,8 +76,8 @@ export function MorningBriefingSection({
               <SelectField
                 label={frequency === "daily" ? "Send at" : frequency === "twice_daily" ? "First at" : "Starting at"}
                 ariaLabel="Briefing time"
-                value={digestHourInput}
-                onChange={setDigestHourInput}
+                value={rawInputs.digestHour}
+                onChange={value => setRawInput("digestHour", value)}
                 options={HOUR_OPTIONS}
                 widthClassName="w-36"
               />
@@ -89,8 +85,8 @@ export function MorningBriefingSection({
                 <SelectField
                   label="Second at"
                   ariaLabel="Second briefing time"
-                  value={digestSecondHourInput}
-                  onChange={setDigestSecondHourInput}
+                  value={rawInputs.digestSecondHour}
+                  onChange={value => setRawInput("digestSecondHour", value)}
                   options={HOUR_OPTIONS}
                   widthClassName="w-36"
                 />
@@ -134,9 +130,9 @@ export function MorningBriefingSection({
                 checked={lowStockEnabled}
                 onChange={(value) => {
                   if (value) {
-                    setLowStockThresholdInput((current) => (current.trim() === "" ? "5" : current))
+                    setRawInput("lowStockThreshold", (current) => (current.trim() === "" ? "5" : current))
                   } else {
-                    setLowStockThresholdInput("")
+                    setRawInput("lowStockThreshold", "")
                   }
                 }}
                 ariaLabel="Low-stock alerts"
@@ -147,8 +143,8 @@ export function MorningBriefingSection({
               <NumberInput
                 label="Threshold"
                 hint="units or fewer"
-                value={lowStockThresholdInput}
-                onValueChange={setLowStockThresholdInput}
+                value={rawInputs.lowStockThreshold}
+                onValueChange={value => setRawInput("lowStockThreshold", value)}
                 min={0}
                 max={1000}
                 inputWidthClassName="w-28"

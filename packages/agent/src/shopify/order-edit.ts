@@ -19,13 +19,15 @@ import {
   type ShopifyGraphqlUserError,
 } from "./client.js";
 import type { ShopifyOrder } from "./types.js";
-import { shopifyFailureReceipt, shopifyReceiptEnvelope } from "./receipts.js";
+import { shopifyReceiptResults, shopifyReceiptEnvelope } from "./receipts.js";
 import {
   optionalPositiveInteger,
   optionalString,
   requireNumericId,
   ShopifyInputError,
 } from "./validation.js";
+
+const orderEditReceipts = shopifyReceiptResults("edit_shopify_order", "order");
 
 type CalculatedLineItemEdge = {
   node: {
@@ -221,23 +223,6 @@ function changesWithObservation(
   }));
 }
 
-function orderEditFailure(
-  ctx: ShopifyContext,
-  orderId: string,
-  result: ToolResult,
-  outcome: "rejected" | "failed",
-  code: string,
-): ToolResult {
-  const receipt = shopifyFailureReceipt(
-    ctx,
-    { kind: "order", id: orderId },
-    "edit_shopify_order",
-    outcome,
-    code,
-  );
-  return receipt ? { ...result, receipt } : result;
-}
-
 function unknownOrderEditReceipt(
   ctx: ShopifyContext,
   orderId: string,
@@ -394,7 +379,7 @@ export async function editShopifyOrder(
     const rawRemoveVariantId = optionalString(input.remove_variant_id);
 
     if (!rawAddVariantId && !rawRemoveVariantId) {
-      return orderEditFailure(
+      return orderEditReceipts.failure(
         ctx,
         orderId,
         toolPolicyBlock("Error: edit_shopify_order requires at least variant_id (to add) or remove_variant_id (to remove)."),
@@ -406,7 +391,7 @@ export async function editShopifyOrder(
     const addVariantId = rawAddVariantId ? requireNumericId(rawAddVariantId, "variant_id") : null;
     const removeVariantId = rawRemoveVariantId ? requireNumericId(rawRemoveVariantId, "remove_variant_id") : null;
     if (addVariantId && removeVariantId && addVariantId === removeVariantId) {
-      return orderEditFailure(
+      return orderEditReceipts.failure(
         ctx,
         orderId,
         toolPolicyBlock("Error: edit_shopify_order cannot add and remove the same variant in one edit."),
@@ -436,7 +421,7 @@ export async function editShopifyOrder(
     const beginPayload = beginData.orderEditBegin;
     const beginErrors = formatUserErrors(beginPayload?.userErrors);
     if (beginErrors) {
-      return orderEditFailure(
+      return orderEditReceipts.failure(
         ctx,
         orderId,
         toolPolicyBlock(`Error: could not begin order edit - ${beginErrors}`),
@@ -449,7 +434,7 @@ export async function editShopifyOrder(
     const calculatedOrderId = calculatedOrder?.id;
     if (!calculatedOrderId) return interruptedStageResult(ctx, orderId, "begin", changes);
     if (calculatedOrder.lineItems.pageInfo.hasNextPage) {
-      return orderEditFailure(
+      return orderEditReceipts.failure(
         ctx,
         orderId,
         toolPolicyBlock(`Error: could not safely edit order ${orderId} because it has more than 250 line items; manual review is required.`),
@@ -478,7 +463,7 @@ export async function editShopifyOrder(
         (edge) => edge.node.quantity > 0 && edge.node.variant?.id === removeVariantGid,
       );
       if (matches.length === 0) {
-        return orderEditFailure(
+        return orderEditReceipts.failure(
           ctx,
           orderId,
           toolPolicyBlock(`Error: could not remove old item - variant ${removeVariantId} was not found on order ${orderId}.`),
@@ -487,7 +472,7 @@ export async function editShopifyOrder(
         );
       }
       if (matches.length > 1) {
-        return orderEditFailure(
+        return orderEditReceipts.failure(
           ctx,
           orderId,
           toolPolicyBlock(`Error: could not remove old item - variant ${removeVariantId} appears multiple times on order ${orderId}; manual review is required.`),
@@ -521,7 +506,7 @@ export async function editShopifyOrder(
       const addPayload = addData.orderEditAddVariant;
       const addErrors = formatUserErrors(addPayload?.userErrors);
       if (addErrors) {
-        return orderEditFailure(
+        return orderEditReceipts.failure(
           ctx,
           orderId,
           toolError(`Error: could not add item to order - ${addErrors}`),
@@ -556,7 +541,7 @@ export async function editShopifyOrder(
           const receipt = unknownOrderEditReceipt(ctx, orderId, "partial_staging_rejected", changes);
           return receipt ? { ...result, receipt } : result;
         }
-        return orderEditFailure(
+        return orderEditReceipts.failure(
           ctx,
           orderId,
           toolError(`Error: could not remove old item - ${setQtyErrors}`),
@@ -624,7 +609,7 @@ export async function editShopifyOrder(
     }
     const fallbackOrderId = orderId ?? (input.order_id.trim() || "invalid");
     if (err instanceof ShopifyInputError) {
-      return orderEditFailure(
+      return orderEditReceipts.failure(
         ctx,
         fallbackOrderId,
         toolPolicyBlock(formatShopifyToolError("failed to edit order", err)),
@@ -639,7 +624,7 @@ export async function editShopifyOrder(
       const receipt = unknownOrderEditReceipt(ctx, fallbackOrderId, "failure_after_staging", changes);
       return receipt ? { ...result, receipt } : result;
     }
-    return orderEditFailure(
+    return orderEditReceipts.failure(
       ctx,
       fallbackOrderId,
       toolError(formatShopifyToolError("failed to edit order", err)),

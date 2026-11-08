@@ -2,7 +2,7 @@ import { getCurrentPlanForThread } from "@shopkeeper/agent/plan-cache-shape"
 import { decideAutonomy } from "@shopkeeper/agent/autonomy"
 import { buildPlanPreview } from "@shopkeeper/agent/plan-preview"
 import { SENDER_TYPE } from "@shopkeeper/agent/thread-constants"
-import type { TicketCardMeta } from "@/app/dashboard/_components/home/needs-you-card-meta"
+import type { TicketCardMeta } from "@/components/support-card/metadata"
 import { getChannelInfo } from "@/lib/messaging/channels"
 import { customerDisplayLabel } from "@/lib/messaging/customer-display"
 import {

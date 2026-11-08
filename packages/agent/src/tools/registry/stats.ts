@@ -1,22 +1,20 @@
 import { toolOk } from "../result.js";
-import { SUPPORT_STATS_DEFAULT_DAYS, SUPPORT_STATS_MAX_DAYS, clampSupportStatsDays } from "../support-stats-types.js";
-import { defineTool, numberArg } from "./schema.js";
-import type { SupportStatsInput } from "./types.js";
+import { clampSupportStatsDays } from "../support-stats-types.js";
+import { defineTool } from "./schema.js";
+import { TOOL_INPUT_FIELDS } from "./input-fields.js";
 
 export const STATS_TOOL_DEFINITIONS = [
   defineTool({
     name: "get_support_stats",
     description:
       "Summarize support activity over the last N days: ticket volume by day, topic, and channel, message counts by sender, and average resolution time. Use this for questions like 'how many tickets came in last week?' or 'what were customers asking about this month?'.",
-    fields: {
-      days: numberArg(`Number of days to look back (1-${SUPPORT_STATS_MAX_DAYS}). Use ${SUPPORT_STATS_DEFAULT_DAYS} for 'this week', 30 for 'this month'.`, { required: true }),
-    },
+    fields: TOOL_INPUT_FIELDS.get_support_stats,
     category: "read",
     group: "insights",
     capabilities: ["stats"],
     label: "Summarized support activity",
     planStepLabel: "Summarize support activity",
-    execute: async (input: SupportStatsInput, ctx, _settings, deps) => {
+    execute: async (input, ctx, _settings, deps) => {
       const stats = await deps.getSupportStats(ctx.orgId, clampSupportStatsDays(input.days));
       return toolOk(JSON.stringify(stats));
     },
