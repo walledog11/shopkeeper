@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type SubmitEvent } from "react";
 import { track } from "@vercel/analytics";
 import { Check, LoaderCircle } from "lucide-react";
 import { PRIMARY_CTA_LABEL } from "@/lib/brand";
@@ -67,7 +67,7 @@ export function WaitlistForm({
     }
   }
 
-  function submitEmail(event: FormEvent<HTMLFormElement>) {
+  function submitEmail(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const query = new URLSearchParams(window.location.search);
@@ -90,7 +90,7 @@ export function WaitlistForm({
     });
   }
 
-  function submitStore(event: FormEvent<HTMLFormElement>) {
+  function submitStore(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     void run(async () => {
