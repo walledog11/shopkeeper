@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Caveat } from "next/font/google";
 import { headers } from "next/headers";
-import { getDashboardAppUrl } from "@/lib/env";
+import { getMarketingSiteUrl } from "@/lib/env";
 import { Providers } from "./providers";
 import "./globals.css";
 
@@ -21,8 +21,10 @@ const title = "Shopkeeper — customer support that texts you before it acts";
 const description =
   "Shopkeeper answers your Instagram DMs and emails using your real orders in Shopify. Routine questions get answered on their own. Changes and refunds wait for your yes, by text.";
 
+// URLs in the metadata (canonical, og:url, the preview image) resolve against
+// the public site, not the app host that also serves these pages.
 export const metadata: Metadata = {
-  metadataBase: new URL(getDashboardAppUrl()),
+  metadataBase: new URL(getMarketingSiteUrl()),
   title,
   description,
   icons: {

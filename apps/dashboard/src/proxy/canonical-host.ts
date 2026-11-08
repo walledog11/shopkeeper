@@ -40,6 +40,14 @@ function isSiblingHost(host: string, canonicalHost: string): boolean {
   return host === parentDomain || host.endsWith(`.${parentDomain}`);
 }
 
+/** The public site: a sibling of the `APP_URL` host (`useshopkeeper.com`), never the app host itself. */
+export function isMarketingHost(host: string | null | undefined): boolean {
+  if (!host) return false;
+  const canonical = readCanonicalUrl();
+  if (!canonical || host === canonical.host) return false;
+  return isSiblingHost(host, canonical.host);
+}
+
 export function getCanonicalHostRedirect(
   host: string | null | undefined,
   pathname: string,

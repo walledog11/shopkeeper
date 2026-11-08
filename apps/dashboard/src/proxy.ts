@@ -1,7 +1,7 @@
 import { clerkMiddleware } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { isE2EAuthBypassEnabled } from '@/lib/e2e-auth'
-import { getCanonicalHostRedirect } from '@/proxy/canonical-host'
+import { getCanonicalHostRedirect, isMarketingHost } from '@/proxy/canonical-host'
 import { CSP_REPORT_ENDPOINT, cspDirectives } from '@/proxy/content-security-policy'
 import { getPathAccessPolicy, isApiPath } from '@/proxy/path-access-policy'
 
@@ -33,6 +33,13 @@ export default clerkMiddleware(async (auth, req) => {
   if (policy.requiresAuth && !userId) {
     if (isApiPath(pathname)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    // Every app page asked for on the public site was sent to the app host
+    // above, so a protected path left here doesn't exist: a visitor gets the
+    // 404, not the sign-in page. `_missing` is a private segment, so it can
+    // never match a route.
+    if (isMarketingHost(req.headers.get('host'))) {
+      return NextResponse.rewrite(new URL('/_missing', req.url))
     }
     await auth.protect()
     return
