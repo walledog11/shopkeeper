@@ -18,6 +18,7 @@ import type { TaskModelBudget } from '@shopkeeper/agent/context';
 import type { OrgSettings } from '@shopkeeper/agent/types';
 import { STATUS } from '../../constants.js';
 import logger from '../../logger.js';
+import { emitOpsAlert } from '../../ops-alerts.js';
 import { publishThreadEvent } from '../../realtime/publish.js';
 import { gatewayThreadSink } from './agent-thread-sink.js';
 import {
@@ -188,10 +189,18 @@ export async function runWithheldMessageFollowUp(
   } catch (error) {
     // The approved execution is already recorded, and the dashboard shows the
     // customer was not told. A drafting failure must not leave the task claimed.
-    logger.error(
-      { err: error, opsAlert: true, organizationId, threadId, taskId: claim.taskId },
-      '[WithheldMessageFollowUp] Could not draft the follow-up',
-    );
+    emitOpsAlert({
+      category: 'agent_failure',
+      level: 'error',
+      message: '[WithheldMessageFollowUp] Could not draft the follow-up',
+      fingerprint: ['ops-alert', 'agent_failure', 'gateway', 'source:withheld_message_follow_up'],
+      extra: {
+        err: error instanceof Error ? error.message : String(error),
+        organizationId,
+        threadId,
+        taskId: claim.taskId,
+      },
+    }, { pushOncePerSecs: 60 * 60 });
     await finish().catch(() => undefined);
   }
 }

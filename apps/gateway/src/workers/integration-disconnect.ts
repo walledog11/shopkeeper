@@ -110,9 +110,9 @@ export function createIntegrationDisconnectWorker(
 
   registerJobFailureLogging(worker, {
     logMessage: '[IntegrationDisconnect] Job failed permanently',
+    alert: { category: 'provider_cleanup', queue: QUEUE.INTEGRATION_DISCONNECT },
     logFields: job => ({ jobId: job?.id }),
     failureExtra: job => ({
-      opsAlert: true,
       jobId: job?.id,
       queue: QUEUE.INTEGRATION_DISCONNECT,
       operationId: job?.data?.operationId,

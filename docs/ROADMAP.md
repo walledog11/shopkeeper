@@ -68,19 +68,17 @@ In order. This is the product's critical path.
 - **A refusal shouldn't outlive the capability.** In a permanent operator thread the
   agent keeps citing its own earlier "I can't" after a tool ships. Decide the mechanism;
   a prompt bullet is not it.
-- **Ops alerts that bypass `emitOpsAlert` reach nobody** until log drains exist —
-  including the 30-day `customers/data_request` duty. Route them, and decide whether
-  anything external should notice a dead worker or a database outage.
+- **Nothing outside notices a dead gateway.** Its alerts reach the ops Telegram chat only
+  while it runs. Decide whether an external check (an uptime monitor on its health
+  endpoint) should notice a dead worker or a database outage.
 - **Compliance webhooks:** exercise `customers/data_request` and `shop/redact` once
   ([data-deletion](production/data-deletion.md)).
 - **Production leftovers:** get `audit:agent-runtime-retirement -- --strict` clean
   (approvable cards without a durable proposal regenerated, open unknown actions
-  reconciled). Drop the unused `autonomy_shadow_decisions` table in the release after the
-  one that stopped reading it (runbook *Migrations*: destructive cleanup ships later). Drop
-  `AGENT_RUNTIME_VERSION` from Railway only once no pre-#165 revision can be a rollback
-  target ([agent-runtime](agent-runtime.md), *Deployment and rollback*). Retire the
-  identity-less operator queue reader once `audit:operator-context-compatibility --
-  --strict` reports none.
+  reconciled). Drop `AGENT_RUNTIME_VERSION` from Railway only once no pre-#165 revision
+  can be a rollback target ([agent-runtime](agent-runtime.md), *Deployment and
+  rollback*). Retire the identity-less operator queue reader once
+  `audit:operator-context-compatibility -- --strict` reports none.
 - **Gmail restricted-scope verification** — submit
   ([packet](production/google-gmail-verification-packet.md)).
 - **Postmark:** credential canary to an off-domain recipient, then restore the
@@ -91,10 +89,6 @@ In order. This is the product's critical path.
   Decide whether a verified shopper may start a mutation that goes to merchant approval.
 - **PostHog:** the privacy policy already discloses it — review staging payloads, then
   set `PRODUCT_ANALYTICS_ENABLED=true`.
-- **Deletion gaps:** a merchant whose only workspace it is gets account deletion, which
-  removes only their membership — confirm whether Clerk deletes the org (and so the
-  workspace and any Stripe subscription); `failWorkspaceDeletion` has no caller, so a
-  revoked Gmail/Instagram grant makes the sweep retry every minute forever.
 - **Orphaned workspaces:** 12 rows stay `active` that Clerk no longer has (April's `org_test_*`
   rows from tests run against production, and abandoned onboarding workspaces). Finish them through
   the deletion ledger ([data-deletion](production/data-deletion.md), *Recovery*).
@@ -102,7 +96,6 @@ In order. This is the product's critical path.
   Partner app name and privacy URL, Postmark sender branding, the Telegram bot rename to
   `@useshopkeeperbot`, and Stripe product names, statement descriptor and receipts —
   those land on merchants' card statements, so check them before charging anyone.
-- **Collapse `vercel.json`'s build command** to `prisma generate` plus a turbo filter.
 - **Paid pilot:** decide the SocialAPI admission unit and contracted capacity, instrument
   outcomes and per-org cost, benchmark 1x/10x pilot load on isolated data with stubbed
   providers (warm list/detail p95 ≤ 500 ms, provider-independent failures < 1%, routine

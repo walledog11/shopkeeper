@@ -1,6 +1,7 @@
 import { DelayedError, type Job } from 'bullmq';
 import { getGatewayRedis } from '../../clients/redis-client.js';
 import logger from '../../logger.js';
+import { emitOpsAlert } from '../../ops-alerts.js';
 import { listOperatorBindings, notifyOperator } from '../../operator-notify.js';
 import type { AiSummaryJobData } from '../../types.js';
 
@@ -43,7 +44,14 @@ async function announceOutage(organizationId: string, since: number, error: unkn
     return;
   }
   const status = typeof (error as { status?: unknown }).status === 'number' ? (error as { status: number }).status : null;
-  logger.error({ opsAlert: true, organizationId, status }, '[ModelOutage] Model provider refused a customer message; holding it');
+  // Once per workspace's outage; across workspaces it is one incident.
+  emitOpsAlert({
+    category: 'agent_failure',
+    level: 'error',
+    message: '[ModelOutage] Model provider refused a customer message; holding it',
+    fingerprint: ['ops-alert', 'agent_failure', 'gateway', 'source:model_outage'],
+    extra: { organizationId, status },
+  }, { pushOncePerSecs: 60 * 60 });
   await notifyMerchant(organizationId, MODEL_OUTAGE_NOTICE, `model-outage:${organizationId}:${since}`);
 }
 

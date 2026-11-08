@@ -13,6 +13,7 @@ import {
 } from '@shopkeeper/email';
 import { recordManualMerchantReplyForThread } from '@shopkeeper/agent/request-outcome';
 import logger from '../../logger.js';
+import { emitOpsAlert } from '../../ops-alerts.js';
 import { captureOutboundReplySent } from '../../product-analytics.js';
 import type { OutboundEmailJobData } from '../../types.js';
 
@@ -86,17 +87,14 @@ export async function handleOutboundEmailJob(
   ]);
 
   if (!message || !integration || message.integrationId !== integration.id) {
-    logger.error(
-      {
-        opsAlert: true,
-        messageId,
-        integrationId,
-        organizationId,
-        threadId: job.data.threadId,
-        traceId,
-      },
-      '[OutboundEmail] Resource ownership mismatch — dropping',
-    );
+    emitOpsAlert({
+      category: 'provider_send',
+      level: 'error',
+      message: '[OutboundEmail] Resource ownership mismatch — dropping',
+      tags: { channel: 'email' },
+      fingerprint: ['ops-alert', 'provider_send', 'gateway', 'source:outbound_email_ownership'],
+      extra: { messageId, integrationId, organizationId, threadId: job.data.threadId, traceId },
+    }, { pushOncePerSecs: 60 * 60 });
     return;
   }
 
@@ -183,7 +181,14 @@ export async function handleOutboundEmailJob(
     data: { sendAttemptedAt: new Date() },
   });
   if (attempted.count !== 1) {
-    logger.error({ opsAlert: true, messageId, traceId }, '[OutboundEmail] Delivery claim was lost before provider attempt');
+    emitOpsAlert({
+      category: 'provider_send',
+      level: 'error',
+      message: '[OutboundEmail] Delivery claim was lost before provider attempt',
+      tags: { channel: 'email' },
+      fingerprint: ['ops-alert', 'provider_send', 'gateway', 'source:outbound_email_claim'],
+      extra: { messageId, traceId },
+    }, { pushOncePerSecs: 60 * 60 });
     return;
   }
 
@@ -213,10 +218,15 @@ export async function handleOutboundEmailJob(
     // Transport and provider errors after the request starts are ambiguous. A
     // retry could duplicate a message that the provider already accepted.
     await markClaimUnknown(messageId, claimToken, msg);
-    logger.error(
-      { opsAlert: true, err: msg, messageId, provider, source, organizationId, traceId },
-      '[OutboundEmail] Provider outcome is unknown; automatic retry suppressed',
-    );
+    // The provider's error text stays in the log: it can name the recipient.
+    emitOpsAlert({
+      category: 'provider_send',
+      level: 'error',
+      message: '[OutboundEmail] Provider outcome is unknown; automatic retry suppressed',
+      tags: { provider, channel: 'email' },
+      fingerprint: ['ops-alert', 'provider_send', 'gateway', 'source:outbound_email_unknown'],
+      extra: { err: msg, messageId, provider, source, organizationId, traceId },
+    }, { pushOncePerSecs: 60 * 60 });
     return;
   }
 

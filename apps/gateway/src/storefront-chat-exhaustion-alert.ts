@@ -1,5 +1,6 @@
 import { db } from '@shopkeeper/db';
 import logger from './logger.js';
+import { emitOpsAlert } from './ops-alerts.js';
 import { listOperatorBindings, notifyOperator } from './operator-notify.js';
 
 export interface StorefrontChatExhaustionAlert {
@@ -76,10 +77,14 @@ export async function alertStorefrontChatExhaustion(
     }
     return notified;
   } catch (err) {
-    logger.error(
-      { opsAlert: true, organizationId, integrationId, day, err: err instanceof Error ? err.message : String(err) },
-      '[StorefrontChat] Budget-exhaustion alert failed entirely',
-    );
+    emitOpsAlert({
+      category: 'usage_limit',
+      level: 'error',
+      message: '[StorefrontChat] Budget-exhaustion alert failed entirely',
+      tags: { channel: 'shopify_chat' },
+      fingerprint: ['ops-alert', 'usage_limit', 'gateway', 'source:storefront_chat_exhaustion_notice'],
+      extra: { organizationId, integrationId, day, err: err instanceof Error ? err.message : String(err) },
+    }, { pushOncePerSecs: 60 * 60 });
     return 0;
   }
 }

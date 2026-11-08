@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { beginWorkspaceDeletion, db } from '@shopkeeper/db'
+import { clerkClient } from '@clerk/nextjs/server'
 import { verifyWebhook, type WebhookEvent } from '@clerk/nextjs/webhooks'
 import logger from '@/lib/server/logger'
 import { markWaitlistSignedUp } from '@shopkeeper/email/waitlist'
@@ -10,6 +11,19 @@ function hasSvixHeaders(headers: Headers) {
     headers.get('svix-timestamp') &&
     headers.get('svix-signature')
   )
+}
+
+// Asked of Clerk, not of org_members: a member who never opened the dashboard has
+// no row there. A 404 means Clerk already deleted the organization itself.
+async function hasOtherMember(clerkOrgId: string, departedUserId: string): Promise<boolean> {
+  const client = await clerkClient()
+  try {
+    const { data } = await client.organizations.getOrganizationMembershipList({ organizationId: clerkOrgId, limit: 2 })
+    return data.some(membership => membership.publicUserData?.userId !== departedUserId)
+  } catch (error) {
+    if ((error as { status?: number }).status === 404) return false
+    throw error
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -85,8 +99,22 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ received: true, skipped: true })
       }
 
+      // Settings sends a merchant with one workspace to account deletion, so a
+      // workspace this leaves with no member is deleted too; otherwise its data
+      // and any subscription outlive the account. Memberships are removed last,
+      // so a retried delivery still finds the workspaces to check.
+      const memberships = await db.orgMember.findMany({
+        where: { clerkUserId },
+        select: { organization: { select: { id: true, clerkOrgId: true } } },
+      })
+      let deletionPending = 0
+      for (const { organization } of memberships) {
+        if (await hasOtherMember(organization.clerkOrgId, clerkUserId)) continue
+        if (await beginWorkspaceDeletion(organization.id)) deletionPending += 1
+      }
+
       const result = await db.orgMember.deleteMany({ where: { clerkUserId } })
-      return NextResponse.json({ received: true, deleted: result.count })
+      return NextResponse.json({ received: true, deleted: result.count, deletionPending })
     }
 
     case 'organizationMembership.deleted': {

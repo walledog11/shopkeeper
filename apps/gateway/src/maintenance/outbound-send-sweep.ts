@@ -1,6 +1,7 @@
 import { db } from '@shopkeeper/db';
 import { JOB, QUEUE } from '../constants.js';
 import logger from '../logger.js';
+import { emitOpsAlert } from '../ops-alerts.js';
 import {
   createMaintenanceQueue,
   createMaintenanceWorker,
@@ -53,10 +54,13 @@ export async function runOutboundSendSweep(): Promise<void> {
   const failedCount = pending.count + unattempted.count;
   const unknownCount = attempted.count + pendingAttempted.count;
   if (failedCount > 0 || unknownCount > 0) {
-    logger.error(
-      { opsAlert: true, failedCount, unknownCount },
-      '[OutboundSendSweep] Reconciled orphaned outbound send claims',
-    );
+    emitOpsAlert({
+      category: 'provider_send',
+      level: 'error',
+      message: '[OutboundSendSweep] Reconciled orphaned outbound send claims',
+      fingerprint: ['ops-alert', 'provider_send', 'gateway', 'source:outbound_send_sweep'],
+      extra: { failedCount, unknownCount },
+    }, { pushOncePerSecs: 60 * 60 });
   }
 }
 
