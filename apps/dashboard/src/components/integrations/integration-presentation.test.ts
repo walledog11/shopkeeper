@@ -8,7 +8,7 @@ import {
 } from "./integration-presentation"
 
 const FLAGS = {
-  instagramConnectAvailable: true,
+  instagramConnectTransport: "socialapi" as const,
   tiktokShopConfigured: true,
   imessageHandle: "+15555550100",
 }
@@ -144,7 +144,7 @@ describe("integration presentation", () => {
       integrations: [],
       flags: {
         ...FLAGS,
-        instagramConnectAvailable: false,
+        instagramConnectTransport: null,
         tiktokShopConfigured: false,
         imessageHandle: "   ",
       },
@@ -159,7 +159,7 @@ describe("integration presentation", () => {
     const connected = integration({ id: "ig-1", platform: "ig_dm" })
     const models = deriveIntegrationCardModels({
       integrations: [connected],
-      flags: { ...FLAGS, instagramConnectAvailable: false },
+      flags: { ...FLAGS, instagramConnectTransport: null },
       isAdmin: true,
     })
     const instagram = models.find((model) => model.definition.id === "instagram")

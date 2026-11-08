@@ -15,7 +15,7 @@ export default async function IntegrationsPage() {
   const org = await getOrCreateOrg()
   const initialIntegrations = await getIntegrationsForOrg(org)
   const imessageHandle = normalizeImessageLineHandle(process.env.IMESSAGE_LINE_HANDLE)
-  const instagramConnectAvailable = resolveInstagramConnectTransport(orgId) !== null
+  const instagramConnectTransport = resolveInstagramConnectTransport(orgId)
   const tiktokShopConfigured = isTikTokShopOAuthConfigured()
   const storefrontChatGloballyEnabled = isStorefrontChatGloballyEnabled()
   const shopifyClientId = getShopifyOAuthAuthorizeConfig()?.clientId ?? null
@@ -24,7 +24,7 @@ export default async function IntegrationsPage() {
     <Suspense fallback={<IntegrationsPageSkeleton />}>
       <IntegrationsPageClient
         imessageHandle={imessageHandle}
-        instagramConnectAvailable={instagramConnectAvailable}
+        instagramConnectTransport={instagramConnectTransport}
         tiktokShopConfigured={tiktokShopConfigured}
         initialIntegrations={initialIntegrations}
         shopifyClientId={shopifyClientId}

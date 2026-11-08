@@ -12,6 +12,7 @@ import {
   CARD_BUTTON_PRIMARY,
   CARD_BUTTON_SECONDARY,
   CARD_DESCRIPTION,
+  CARD_NOTE,
   CARD_SHELL,
 } from "./integration-card-styles"
 
@@ -57,6 +58,7 @@ export default function IntegrationCard({
       <div id={definition.id} className={CARD_SHELL}>
         <IntegrationCardHeader config={definition} />
         <p className={CARD_DESCRIPTION}>{definition.description}</p>
+        {model.connectNote ? <p className={CARD_NOTE}>{model.connectNote}</p> : null}
 
         <div className={CARD_ACTIONS}>
           {availabilityBlocksCard ? (

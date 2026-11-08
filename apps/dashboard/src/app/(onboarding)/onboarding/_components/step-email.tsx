@@ -5,7 +5,9 @@ import { cn } from "@/lib/ui/cn";
 import { EmailForwardingSetupPanel } from "@/components/integrations/EmailForwardingDisclosure";
 import { GmailSupportAddressPanel } from "@/components/integrations/GmailSupportAddressPanel";
 import { ShopifyStorefrontChatSection } from "@/components/integrations/ShopifyStorefrontChatSection";
+import { instagramConnectNote } from "@/lib/integrations/catalog";
 import { isSimulatedShopifyIntegration } from "@/lib/integrations/shopify-simulator";
+import type { InstagramConnectTransport } from "@/lib/socialapi/config";
 import { isStorefrontChatEnabledForIntegration } from "@/lib/storefront-chat/enabled";
 import { Headline, Lede } from "./primitives";
 import type { Integration } from "@/types";
@@ -17,7 +19,7 @@ export function StepEmail({
   update,
   shopifyRow, storefrontChatGloballyEnabled, shopifyClientId, onUpdateStorefrontChat, disabled,
   instagramConnected,
-  instagramConnectAvailable,
+  instagramConnectTransport,
   forwardingIntegration,
   gmailIntegration,
   instagramIntegration,
@@ -39,7 +41,7 @@ export function StepEmail({
   onUpdateStorefrontChat: (enabled: boolean) => Promise<boolean>;
   disabled: boolean;
   instagramConnected: boolean;
-  instagramConnectAvailable: boolean;
+  instagramConnectTransport: InstagramConnectTransport;
   forwardingIntegration: Integration | undefined;
   gmailIntegration: Integration | undefined;
   instagramIntegration: Integration | undefined;
@@ -126,8 +128,9 @@ export function StepEmail({
             onConnect={() => onOAuth("instagram", {})}
             pending={oauthPendingProvider === "instagram"}
             disabled={disabled}
-            unavailable={!instagramConnectAvailable && !instagramConnected}
+            unavailable={!instagramConnectTransport && !instagramConnected}
             unavailableLabel="Currently unavailable"
+            note={instagramConnectNote(instagramConnectTransport, instagramConnected)}
           />
         <ChannelCard
           name="Gmail"
@@ -232,6 +235,7 @@ function ChannelCard({
   disabled,
   unavailable = false,
   unavailableLabel = "Unavailable",
+  note = null,
 }: {
   name: string;
   logo: string;
@@ -243,6 +247,7 @@ function ChannelCard({
   disabled: boolean;
   unavailable?: boolean;
   unavailableLabel?: string;
+  note?: string | null;
 }) {
   return (
     <div className={cn(
@@ -258,6 +263,7 @@ function ChannelCard({
         {connected && <Check className="ml-auto size-4 text-foreground" />}
       </div>
       <p className="mt-3 flex-1 text-[13px] leading-relaxed text-foreground/55">{description}</p>
+      {note ? <p className="mt-2 text-pretty text-[12px] leading-snug text-foreground/45">{note}</p> : null}
       <button
         type="button"
         onClick={onConnect}

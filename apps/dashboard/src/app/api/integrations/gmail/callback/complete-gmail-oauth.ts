@@ -8,11 +8,18 @@ import {
   isProviderRequestTimeoutError,
 } from '@/lib/server/provider-fetch';
 import type { OAuthCallbackCompletionResult } from '@/app/api/integrations/_lib/oauth-callback-runner';
-import { upsertEmailIntegration } from '@/app/api/integrations/_lib/email-integration';
+import {
+  DualInboundDeliveryError,
+  upsertEmailIntegration,
+} from '@/app/api/integrations/_lib/email-integration';
 import type { EmailOAuthProviderConfig } from '@/app/api/integrations/_lib/email-oauth-providers';
 import { registerGmailWatch } from '@/app/api/integrations/_lib/gmail-watch';
 
-type GmailOAuthError = 'no_email' | 'provider_unavailable' | 'token_exchange_failed';
+type GmailOAuthError =
+  | 'email_forwarding_active'
+  | 'no_email'
+  | 'provider_unavailable'
+  | 'token_exchange_failed';
 
 interface GmailToken {
   accessToken: string;
@@ -47,21 +54,29 @@ export async function completeGmailOAuth(input: {
     userResult.data.email,
     userResult.data.hostedDomain,
   );
-  const integrationId = await upsertEmailIntegration({
-    organizationId: input.organizationId,
-    externalAccountId: userResult.data.email,
-    accessToken: tokenResult.data.accessToken,
-    refreshToken: tokenResult.data.refreshToken,
-    tokenExpiresAt: new Date(Date.now() + tokenResult.data.expiresIn * 1_000),
-    provider: 'gmail',
-    oauthScopes: tokenResult.data.scopes,
-    gmailMetadata: {
-      accountType: gmailAccountType,
-      ...(userResult.data.hostedDomain
-        ? { hostedDomain: userResult.data.hostedDomain }
-        : {}),
-    },
-  });
+  let integrationId: string;
+  try {
+    integrationId = await upsertEmailIntegration({
+      organizationId: input.organizationId,
+      externalAccountId: userResult.data.email,
+      accessToken: tokenResult.data.accessToken,
+      refreshToken: tokenResult.data.refreshToken,
+      tokenExpiresAt: new Date(Date.now() + tokenResult.data.expiresIn * 1_000),
+      provider: 'gmail',
+      oauthScopes: tokenResult.data.scopes,
+      gmailMetadata: {
+        accountType: gmailAccountType,
+        ...(userResult.data.hostedDomain
+          ? { hostedDomain: userResult.data.hostedDomain }
+          : {}),
+      },
+    });
+  } catch (error) {
+    if (error instanceof DualInboundDeliveryError) {
+      return { ok: false, error: 'email_forwarding_active', failureCategory: 'validation_failed' };
+    }
+    throw error;
+  }
 
   scheduleGmailWatchRegistration(integrationId);
   logger.info(
