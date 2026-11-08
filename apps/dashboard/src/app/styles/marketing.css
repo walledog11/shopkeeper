@@ -2140,21 +2140,21 @@ html:has(.m-page) {
 }
 
 @media (max-width: 639px) {
-  .m-lanes {
+  .m-lanes.is-scroll {
     gap: 2rem;
   }
 
-  .m-lane {
+  .m-lanes.is-scroll .m-lane {
     padding: 0;
     border-radius: 0;
     background: none;
   }
 
-  .m-lane-head {
+  .m-lanes.is-scroll .m-lane-head {
     padding: 0 0 0.75rem;
   }
 
-  .m-lane-list {
+  .m-lanes.is-scroll .m-lane-list {
     display: flex;
     margin-inline: -1.25rem;
     padding: 0.25rem 1.25rem 1.25rem;
@@ -2165,11 +2165,11 @@ html:has(.m-page) {
     scrollbar-width: none;
   }
 
-  .m-lane-list::-webkit-scrollbar {
+  .m-lanes.is-scroll .m-lane-list::-webkit-scrollbar {
     display: none;
   }
 
-  .m-lane-list > .m-req {
+  .m-lanes.is-scroll .m-lane-list > .m-req {
     flex: 0 0 80%;
     scroll-snap-align: start;
   }
@@ -2598,4 +2598,42 @@ html:has(.m-page) {
   .m-step-copy {
     margin-top: 0.125rem;
   }
+}
+
+/* Security page (product/security): rule lists inside the lanes, and point cards. */
+.m-rules {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.m-rules li {
+  padding: 0.875rem 1rem;
+  border-radius: 0.875rem;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(27, 26, 25, 0.06);
+  color: var(--m-ink);
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.m-point {
+  padding: 1.5rem;
+  border: 1px solid var(--m-line);
+  border-radius: 1.25rem;
+  background: #fff;
+}
+
+.m-point-icon {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.75rem;
+  background: var(--m-bg-alt);
+  color: var(--m-ink);
+}
+
+.m-point-icon svg {
+  width: 20px;
+  height: 20px;
 }

@@ -82,7 +82,7 @@ function RequestCard({ channel, from, text, outcome, Icon }: Request) {
 
 export function Requests() {
   return (
-    <section aria-labelledby="requests-heading" className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
+    <section id="what-it-handles" aria-labelledby="requests-heading" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-20 sm:px-8 sm:py-28">
       <div className="max-w-2xl">
         <h2 id="requests-heading" className="m-display m-h2">
           It handles the everyday. <span className="m-tail">You handle the exceptions.</span>
@@ -92,7 +92,7 @@ export function Requests() {
         </p>
       </div>
 
-      <div className="m-lanes mt-12 sm:mt-14">
+      <div className="m-lanes is-scroll mt-12 sm:mt-14">
         {lanes.map((lane) => (
           <div key={lane.tone} className={cn("m-lane", `is-${lane.tone}`)}>
             <div className="m-lane-head">

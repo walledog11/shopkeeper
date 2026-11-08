@@ -1,12 +1,8 @@
 import type { MetadataRoute } from "next";
-import { getDashboardAppUrl } from "@/lib/env";
+import { getMarketingSiteUrl } from "@/lib/env";
 
 const publicRoutes = [
   "",
-  "/product/customer-support",
-  "/product/order-operations",
-  "/product/approvals-and-controls",
-  "/product/integrations",
   "/product/security",
   "/privacy",
   "/terms",
@@ -14,7 +10,7 @@ const publicRoutes = [
 ] as const;
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = getDashboardAppUrl();
+  const baseUrl = getMarketingSiteUrl();
 
   return publicRoutes.map((path, index) => ({
     url: new URL(path || "/", baseUrl).toString(),

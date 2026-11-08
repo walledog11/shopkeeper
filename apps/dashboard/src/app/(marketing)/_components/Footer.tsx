@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Store } from "lucide-react";
 import { CONTACT_EMAIL, PRODUCT_NAME } from "@/lib/brand";
-import { productPages } from "./product-pages";
 
 const COPYRIGHT_YEAR = 2026;
 
@@ -12,7 +11,7 @@ const footerGroups = [
       { href: "/#how-it-works", label: "How it works" },
       { href: "/#features", label: "Features" },
       { href: "/#pricing", label: "Pricing" },
-      ...productPages.map(({ href, label }) => ({ href, label })),
+      { href: "/product/security", label: "Security" },
     ],
   },
   {

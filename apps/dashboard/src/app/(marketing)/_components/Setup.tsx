@@ -30,7 +30,7 @@ const steps = [
 
 export function Setup() {
   return (
-    <section aria-labelledby="setup-heading" className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
+    <section id="setup" aria-labelledby="setup-heading" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-20 sm:px-8 sm:py-28">
       <div className="max-w-2xl">
         <h2 id="setup-heading" className="m-display m-h2">Up and running in four steps.</h2>
         <p className="m-lede mt-5 text-[1.125rem]">It works with the store, inbox and phone you already have.</p>

@@ -30,6 +30,17 @@ export function getDashboardAppUrl(): string {
   throw new Error('[Dashboard] Missing required environment variable: APP_URL');
 }
 
+/**
+ * The public site's origin: the app runs on `app.<domain>` and the marketing
+ * pages on `<domain>` (see `canonical-host.ts`). Anywhere the app host has no
+ * `app.` label (local dev, previews) the two are the same origin.
+ */
+export function getMarketingSiteUrl(): string {
+  const url = new URL(getDashboardAppUrl());
+  if (url.hostname.startsWith('app.')) url.hostname = url.hostname.slice('app.'.length);
+  return url.origin;
+}
+
 function readRequiredConfig(names: readonly string[]): Record<string, string> | null {
   const values: Record<string, string> = {};
   for (const name of names) {

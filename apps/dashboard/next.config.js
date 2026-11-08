@@ -53,6 +53,11 @@ const nextConfig = {
   },
   async redirects() {
     return [
+      // Retired product pages: the homepage and the Security page cover them.
+      { source: '/product/customer-support', destination: '/#features', permanent: true },
+      { source: '/product/order-operations', destination: '/#what-it-handles', permanent: true },
+      { source: '/product/approvals-and-controls', destination: '/product/security', permanent: true },
+      { source: '/product/integrations', destination: '/#setup', permanent: true },
       {
         source: '/dashboard/reports',
         destination: '/dashboard/analytics?tab=export',

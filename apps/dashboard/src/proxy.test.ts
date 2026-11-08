@@ -125,6 +125,21 @@ describe('proxy canonical host handling', () => {
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('E2E_AUTH_BYPASS', 'false');
   });
+
+  it('shows signed-out visitors the 404 for a missing page on the public site, not the sign-in page', async () => {
+    vi.stubEnv('APP_URL', 'https://app.useshopkeeper.com');
+    const { fn, protect } = makeAuth(null, null);
+    const res = await capturedHandler(fn as never, makeReq('/pricing', 'useshopkeeper.com'));
+    expect(protect).not.toHaveBeenCalled();
+    expect(res?.headers.get('x-middleware-rewrite')).toContain('/_missing');
+
+    const onAppHost = makeAuth(null, null);
+    await capturedHandler(onAppHost.fn as never, makeReq('/pricing', 'app.useshopkeeper.com'));
+    expect(onAppHost.protect).toHaveBeenCalledOnce();
+    vi.unstubAllEnvs();
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('E2E_AUTH_BYPASS', 'false');
+  });
 });
 
 describe('proxy content security policy', () => {

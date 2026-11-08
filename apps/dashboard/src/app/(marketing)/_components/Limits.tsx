@@ -15,7 +15,7 @@ function Toggle() {
   );
 }
 
-function SettingsPreview() {
+export function SettingsPreview() {
   return (
     <div
       role="img"
