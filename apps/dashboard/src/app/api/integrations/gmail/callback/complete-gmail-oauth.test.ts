@@ -7,6 +7,7 @@ const { mockFetch, mockUpsert } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/app/api/integrations/_lib/email-integration', () => ({
+  DualInboundDeliveryError: class DualInboundDeliveryError extends Error {},
   upsertEmailIntegration: mockUpsert,
 }));
 const { mockRegisterGmailWatch } = vi.hoisted(() => ({
@@ -21,6 +22,7 @@ vi.mock('@/lib/server/logger', () => ({
 }));
 vi.stubGlobal('fetch', mockFetch);
 
+import { DualInboundDeliveryError } from '@/app/api/integrations/_lib/email-integration';
 import { GMAIL_EMAIL_OAUTH } from '@/app/api/integrations/_lib/email-oauth-providers';
 import { completeGmailOAuth } from './complete-gmail-oauth';
 
@@ -99,6 +101,21 @@ describe('completeGmailOAuth', () => {
     mockUpsert.mockRejectedValueOnce(new Error('database unavailable'));
 
     await expect(complete()).rejects.toThrow('database unavailable');
+  });
+
+  // A refused connect used to escape as a server error, so the merchant was told
+  // to try again instead of why it can't work.
+  it('says forwarding is on when the connect would receive mail twice', async () => {
+    mockSuccessfulToken();
+    mockFetch.mockResolvedValueOnce(jsonResponse({ email: 'owner@example.test' }));
+    mockUpsert.mockRejectedValueOnce(new DualInboundDeliveryError());
+
+    await expect(complete()).resolves.toEqual({
+      ok: false,
+      error: 'email_forwarding_active',
+      failureCategory: 'validation_failed',
+    });
+    expect(mockRegisterGmailWatch).not.toHaveBeenCalled();
   });
 
   it('validates provider fields and returns the persisted integration id', async () => {

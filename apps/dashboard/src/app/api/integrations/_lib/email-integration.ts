@@ -3,6 +3,7 @@ import {
   assertNoDualInboundDelivery,
   DUAL_INBOUND_MESSAGE,
   findEmailIntegrations,
+  metadataWithGmailState,
 } from '@shopkeeper/email';
 import { getEmailProvider } from '@shopkeeper/email/providers';
 import { BadRequestError } from '@/lib/api/errors';
@@ -10,6 +11,14 @@ import type { Prisma as PrismaTypes } from '@prisma/client';
 
 import { isRecord } from "@shopkeeper/shared/guards";
 export type EmailIntegrationProvider = 'gmail' | 'postmark';
+
+/** The connect would have Gmail sync and email forwarding both receive the same mail. */
+export class DualInboundDeliveryError extends BadRequestError {
+  constructor() {
+    super(DUAL_INBOUND_MESSAGE);
+    this.name = 'DualInboundDeliveryError';
+  }
+}
 
 export type UpsertEmailIntegrationArgs = {
   externalAccountId: string;
@@ -84,11 +93,19 @@ function assertInboundTransportAllowedAfterUpsert(input: {
   const emailProvider = input.provider === 'gmail' ? EmailProvider.gmail : EmailProvider.postmark;
   const existing = input.emailIntegrations.find((integration) =>
     getEmailProvider(integration) === input.provider);
+  // `completeGmailOAuth` registers the Gmail watch right after this save, so a
+  // Gmail connect is judged as receiving mail before the watch has given it a
+  // status. Judged by its stored status, a workspace's first Gmail connect
+  // passed beside active forwarding and every email arrived twice. Send-only
+  // Gmail (`inboundMode: 'postmark'`) still doesn't count as receiving.
+  const metadata = input.provider === 'gmail'
+    ? metadataWithGmailState(input.metadata, { inboundStatus: 'active' })
+    : input.metadata;
   const projectedUpsert = {
     ...(existing ?? { id: 'projected-new' }),
     emailProvider,
     lifecycleStatus: 'active',
-    metadata: input.metadata,
+    metadata,
   };
   const projected = [
     ...input.emailIntegrations.filter((integration) => getEmailProvider(integration) !== input.provider),
@@ -98,7 +115,7 @@ function assertInboundTransportAllowedAfterUpsert(input: {
   try {
     assertNoDualInboundDelivery({ gmail, postmark });
   } catch {
-    throw new BadRequestError(DUAL_INBOUND_MESSAGE);
+    throw new DualInboundDeliveryError();
   }
 }
 
@@ -196,7 +213,7 @@ async function assertForwardingEmailAllowed(organizationId: string): Promise<voi
       },
     });
   } catch {
-    throw new BadRequestError(DUAL_INBOUND_MESSAGE);
+    throw new DualInboundDeliveryError();
   }
 }
 

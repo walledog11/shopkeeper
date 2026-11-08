@@ -7,7 +7,7 @@ Technical contracts and settled engineering decisions live with the code they go
 ([agent-runtime](agent-runtime.md), [runbook](production/runbook.md),
 [transport plan](socialapi-transport-plan.md)), not here.
 
-Last updated: 2026-11-05.
+Last updated: 2026-11-08.
 
 ## Next — the first real merchant
 
@@ -19,9 +19,8 @@ In order. This is the product's critical path.
    card: the confirmation line, photos and the proposed resolution. `simulate:refund
    --damage` checks it while you send the photo from the customer's Instagram account.
 2. **Close SocialAPI vendor diligence** before any external merchant's data flows: DPA,
-   written retention/deletion answers, the terms §11.4 contradiction, and a "Powered by
-   SocialAPI" notice before the vendor redirect. When SocialAPI answers, add its
-   retention to `/privacy`. Gates are in [socialapi-s0-diligence](production/socialapi-s0-diligence-2026-09-07.md).
+   written retention/deletion answers and the terms §11.4 contradiction. When SocialAPI
+   answers, add its retention to `/privacy`. Gates are in [socialapi-s0-diligence](production/socialapi-s0-diligence-2026-09-07.md).
 3. **First live SocialAPI merchant connect** (runbook: *Instagram via SocialAPI*). Closes
    when `verify:production:env` passes, a workspace connects from the dashboard, and its
    next DM routes to it. Needs a paid SocialAPI plan: Free allows 50 replies per billing
@@ -31,8 +30,12 @@ In order. This is the product's critical path.
    the brand's listing and, after reconnecting, the same sender's next DM lands on the
    same customer and a reply reaches them. If SocialAPI issues new author IDs on
    reconnect, record that in the transport plan (invariant 6) instead.
-5. **Install the Shopify app on a real, non-dev store.** Closes when the install grants
-   every `SHOPIFY_OAUTH_SCOPES` scope and a missing scope shows the reconnect path.
+5. **Install the Shopify app on a real, non-dev store.** First check its distribution in
+   the Partner dashboard; it can't be changed once chosen. Custom distribution installs on
+   one store (or one Plus organization), so it can't serve item 6. Public distribution
+   needs Shopify's app review before any non-development install, even unlisted, and App
+   Store apps must charge through Shopify's billing, not Stripe. Closes when the install
+   grants every `SHOPIFY_OAUTH_SCOPES` scope and a missing scope shows the reconnect path.
 6. **Two supervised external merchants** complete real approved loops with no
    wrong-recipient, unauthorized-money, duplicate-action or lost-message incident.
 
@@ -91,11 +94,6 @@ In order. This is the product's critical path.
   Decide whether a verified shopper may start a mutation that goes to merchant approval.
 - **PostHog:** the privacy policy already discloses it — review staging payloads, then
   set `PRODUCT_ANALYTICS_ENABLED=true`.
-- **Email and onboarding bugs:** a workspace's *first* Gmail connect is not refused while
-  forwarding is active (`assertNoDualInboundDelivery` sees no `inboundStatus` on the new
-  row), so the watch turns on beside forwarding and mail arrives twice; onboarding offers
-  Telegram (`StepConnect`) whenever `TELEGRAM_BOT_USERNAME` is set, against
-  [product-truth](product-truth.md) — keep it unset in production until it doesn't.
 - **Deletion gaps:** a merchant whose only workspace it is gets account deletion, which
   removes only their membership — confirm whether Clerk deletes the org (and so the
   workspace and any Stripe subscription); `failWorkspaceDeletion` has no caller, so a
@@ -115,7 +113,6 @@ In order. This is the product's critical path.
   brands in one segment. Success: ≥5 paying and ≥3 renewing, ≥2 hours/week saved for ≥3,
   ≥80% of routine plans approved unedited, no unresolved money or wrong-recipient
   incident. Stripe prices only when the pilot tests renewal.
-- **Shopify App Store listing:** check whether one exists, then decide.
 
 ## Parked — reopen on the trigger
 

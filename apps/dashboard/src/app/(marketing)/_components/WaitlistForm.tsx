@@ -157,7 +157,7 @@ export function WaitlistForm({
             </button>
           </div>
           <label className="m-waitlist-opt-in">
-            <input type="checkbox" name="newsletter" defaultChecked disabled={saving} />
+            <input type="checkbox" name="newsletter" disabled={saving} />
             <span>Send me occasional product updates, too.</span>
           </label>
           <div className="m-waitlist-trap" aria-hidden="true">

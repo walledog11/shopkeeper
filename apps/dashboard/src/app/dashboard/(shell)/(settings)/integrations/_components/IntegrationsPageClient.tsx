@@ -33,6 +33,7 @@ import { CARD_ACTIONS, CARD_DESCRIPTION, CARD_SHELL } from "@/components/integra
 import ImessageCard from "@/components/integrations/ImessageCard"
 import { getShopifyDisconnectMessage, resolveShopifyConnectionState } from "@/lib/integrations/shopify-connection"
 import { Skeleton } from "@/components/ui/skeleton"
+import type { InstagramConnectTransport } from "@/lib/socialapi/config"
 import type { Integration } from "@/types"
 import { EmailSpamFilterCard } from "./EmailSpamFilterCard"
 import {
@@ -76,7 +77,7 @@ function renderIntegrationSkeletonSection(
 
 interface IntegrationsPageProps {
   imessageHandle: string | null
-  instagramConnectAvailable: boolean
+  instagramConnectTransport: InstagramConnectTransport
   tiktokShopConfigured: boolean
   initialIntegrations?: Integration[]
   shopifyClientId: string | null
@@ -93,7 +94,7 @@ export default function IntegrationsPageClient(props: IntegrationsPageProps) {
 
 function IntegrationsPageContent({
   imessageHandle,
-  instagramConnectAvailable,
+  instagramConnectTransport,
   tiktokShopConfigured,
   initialIntegrations,
   shopifyClientId,
@@ -141,14 +142,14 @@ function IntegrationsPageContent({
   const models = useMemo(() => deriveIntegrationCardModels({
     integrations,
     flags: {
-      instagramConnectAvailable,
+      instagramConnectTransport,
       tiktokShopConfigured,
       imessageHandle,
     },
     isAdmin,
   }), [
     imessageHandle,
-    instagramConnectAvailable,
+    instagramConnectTransport,
     integrations,
     isAdmin,
     tiktokShopConfigured,

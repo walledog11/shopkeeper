@@ -12,7 +12,7 @@ import { ForwardingEmailDetails, type IntegrationCardCallbacks } from "./Integra
 import { deriveIntegrationCardModels } from "./integration-presentation"
 
 const FLAGS = {
-  instagramConnectAvailable: true,
+  instagramConnectTransport: "socialapi" as const,
   tiktokShopConfigured: true,
   imessageHandle: "+15555550100",
 }

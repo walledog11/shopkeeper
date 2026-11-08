@@ -13,6 +13,7 @@ const LOGO_SOFTEN = "opacity-[0.88] saturate-[0.9] transition-all duration-200 g
 export const LOGO_IMAGE = cn(LOGO_INLINE, "object-contain", LOGO_SOFTEN)
 export const CARD_TITLE = "text-xl font-bold text-card-foreground leading-[22px]"
 export const CARD_DESCRIPTION = "mt-2 min-h-[54px] flex-1 line-clamp-3 text-[13.5px] leading-[18px] text-muted-foreground"
+export const CARD_NOTE = "mt-2 text-pretty text-[12.5px] leading-[17px] text-muted-foreground/80"
 export const CARD_ACTIONS = "mt-auto flex w-full shrink-0 gap-2 pt-4"
 const CARD_BUTTON = cn("h-10 flex-1 rounded-[10px] text-[17px] font-medium transition-colors", CARD_BUTTON_FOCUS)
 export const CARD_BUTTON_PRIMARY = cn(CARD_BUTTON, "bg-primary text-primary-foreground hover:bg-primary/90")

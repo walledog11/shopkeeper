@@ -54,7 +54,7 @@ export default async function OnboardingPage({
   }
   const imessageHandle = normalizeImessageLineHandle(process.env.IMESSAGE_LINE_HANDLE);
   const shopifySimulatorEnabled = isShopifySimulatorEnabled();
-  const instagramConnectAvailable = resolveInstagramConnectTransport(orgId) !== null;
+  const instagramConnectTransport = resolveInstagramConnectTransport(orgId);
   const storefrontChatGloballyEnabled = isStorefrontChatGloballyEnabled();
   const shopifyClientId = getShopifyOAuthAuthorizeConfig()?.clientId ?? null;
   const oauthParams = new URLSearchParams();
@@ -68,7 +68,7 @@ export default async function OnboardingPage({
     <OnboardingExperience
       imessageHandle={imessageHandle}
       shopifySimulatorEnabled={shopifySimulatorEnabled}
-      instagramConnectAvailable={instagramConnectAvailable}
+      instagramConnectTransport={instagramConnectTransport}
       storefrontChatGloballyEnabled={storefrontChatGloballyEnabled}
       shopifyClientId={shopifyClientId}
       pinnedStepIndex={pinnedStepIndex}

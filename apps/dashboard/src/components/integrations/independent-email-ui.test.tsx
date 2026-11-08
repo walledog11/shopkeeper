@@ -16,7 +16,7 @@ vi.mock('@/hooks/useOrg', () => ({
 const EMAIL_CONFIG = getIntegrationDefinition('email') as WorkspaceIntegrationDefinition;
 const GMAIL_CONFIG = getIntegrationDefinition('gmail') as WorkspaceIntegrationDefinition;
 const FLAGS = {
-  instagramConnectAvailable: true,
+  instagramConnectTransport: "socialapi" as const,
   tiktokShopConfigured: true,
   imessageHandle: null,
 };

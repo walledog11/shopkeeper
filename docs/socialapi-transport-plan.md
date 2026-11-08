@@ -16,7 +16,7 @@ Meta, migration, or any cross-provider handoff needs a future dated decision.
 
 - **Works on a controlled account:** a signed `dm.received` becomes a durable `provider: 'socialapi'` job, a ticket and a plan; an approved reply leaves through SocialAPI's conversation endpoint; an approval card reaches the bound iMessage line. A merchant approval executing a mutative plan end to end through SocialAPI is not yet proven.
 - **Built, never run for a live merchant:** merchant OAuth connect (S2). It is closed in production because `SOCIALAPI_ENABLED` and `SOCIALAPI_BRAND_ASSIGNMENTS` are unset, so `getSocialApiConnectConfig` returns null.
-- **Absent:** connection generations, `dm.sent` reconciliation, recovery/catch-up reads, SocialAPI health probing, remote brand deletion, OAuth compensation, the "Powered by SocialAPI" disclosure, and transport-tagged observability.
+- **Absent:** connection generations, `dm.sent` reconciliation, recovery/catch-up reads, SocialAPI health probing, remote brand deletion, OAuth compensation, and transport-tagged observability.
 - **Blocked on the vendor:** SocialAPI exposes no native Instagram account ID, and the DPA and retention terms are unreconciled ([S0 diligence](production/socialapi-s0-diligence-2026-09-07.md)).
 
 ## Decisions and invariants
@@ -118,12 +118,12 @@ Done when existing direct Meta tests pass with at most compatibility-only adjust
 
 ### S2. SocialAPI client and OAuth lifecycle
 
-Built: the core REST client (`packages/integrations/src/socialapi/client.ts`: connect, exchange, account read, conversation send, disconnect) with bounded timeouts, response validation and no blind retry of sends; connect configuration and the assignment cap (`apps/dashboard/src/lib/socialapi/config.ts`, base-URL override ignored in production); OAuth state bound to the initiating organization via the sealed attempt cookie keyed by the redirect URI's `attempt`, with the provider's own state compared before exchange; brand re-resolved from the assignment map on callback; one connect entry point dispatching on `resolveInstagramConnectTransport`; the transactional recheck of the current integration in `persistSocialApiConnection`.
+Built: the core REST client (`packages/integrations/src/socialapi/client.ts`: connect, exchange, account read, conversation send, disconnect) with bounded timeouts, response validation and no blind retry of sends; connect configuration and the assignment cap (`apps/dashboard/src/lib/socialapi/config.ts`, base-URL override ignored in production); OAuth state bound to the initiating organization via the sealed attempt cookie keyed by the redirect URI's `attempt`, with the provider's own state compared before exchange; brand re-resolved from the assignment map on callback; one connect entry point dispatching on `resolveInstagramConnectTransport`; the transactional recheck of the current integration in `persistSocialApiConnection`; before authorization, a note on the onboarding and Integrations connect cards that Instagram will ask the merchant to allow SocialAPI (`instagramConnectNote`).
 
 - [ ] Add health, list/sync recovery, and deletion operations to the client as S4/S5 need them.
 - [ ] Validate native account ID and Professional-account eligibility at connect. Blocked: neither `POST /oauth/exchange` nor `GET /accounts` returns them (vendor question 5).
 - [ ] Durably schedule compensation for a remote account proven to have been created by a failed attempt and not adopted by a successful connection; ambiguous ownership goes to reconciliation.
-- [ ] Show "Powered by SocialAPI" before authorization and link the updated privacy disclosure. Blocked on capturing the live consent screen (S0).
+- [ ] Check the connect note against the live consent screen (S0), and link the privacy disclosure from it once SocialAPI's retention answer is in `/privacy`.
 - [ ] Run connect for one assigned organization against a live merchant OAuth: an unassigned organization keeps the direct behavior, callback replay is harmless, and cross-organization ownership attempts fail.
 
 ### S3. Signed inbound webhook

@@ -10,11 +10,12 @@ import { StepEmail } from "./step-email";
 import { StepPlan } from "./step-plan";
 import { useOnboardingFlow } from "../_hooks/useOnboardingFlow";
 import type { OAuthOutcome } from "@/lib/integrations/oauth-contract";
+import type { InstagramConnectTransport } from "@/lib/socialapi/config";
 
 export interface OnboardingChannelConfig {
   imessageHandle: string | null;
   shopifySimulatorEnabled: boolean;
-  instagramConnectAvailable: boolean;
+  instagramConnectTransport: InstagramConnectTransport;
   storefrontChatGloballyEnabled: boolean;
   shopifyClientId: string | null;
 }
@@ -47,7 +48,7 @@ export function OnboardingExperience({ pinnedStepIndex, oauthOutcome, ...channel
           <div key={step.id} className="animate-[ob-fade-in_360ms_ease] motion-reduce:animate-none">
             {step.id === "shopify" && <StepShopify data={data} update={handlers.update} connected={status.hasShopify} shopifyRow={shopifyRow} kbSync={kbSync} onOAuth={handlers.launchOAuth}
               onSimulate={handlers.simulateShopify} simulatorEnabled={channels.shopifySimulatorEnabled} simulating={status.shopifySimulating} oauthPending={status.oauthPendingProvider === "shopify"} disabled={disabled} />}
-            {step.id === "email" && <StepEmail data={data} update={handlers.update} instagramConnected={status.hasInstagramReady} instagramConnectAvailable={channels.instagramConnectAvailable}
+            {step.id === "email" && <StepEmail data={data} update={handlers.update} instagramConnected={status.hasInstagramReady} instagramConnectTransport={channels.instagramConnectTransport}
               forwardingIntegration={emailIntegrations.forwarding} gmailIntegration={emailIntegrations.gmail} instagramIntegration={instagramRow}
               orgReady={status.orgReady} orgLoading={status.orgEnsuring} orgError={status.orgEnsureFailed} onRetryOrg={() => { void handlers.ensureOrganization(); }}
               emailSaving={status.emailSaving} oauthPendingProvider={status.oauthPendingProvider} onSaveForwarding={email => { void handlers.saveEmailIntegration(email, "postmark"); }}

@@ -1,10 +1,12 @@
 import { formatLastActivityTime } from "@/lib/format/date"
 import {
   INTEGRATION_DEFINITIONS,
+  instagramConnectNote,
   type IntegrationDefinition,
   type OAuthIntegrationDefinition,
   type WorkspaceIntegrationDefinition,
 } from "@/lib/integrations/catalog"
+import type { InstagramConnectTransport } from "@/lib/socialapi/config"
 import { isShopifyIntegrationLinked } from "@/lib/integrations/shopify-connection"
 import { normalizeImessageLineHandle } from "@/lib/integrations/imessage-visibility"
 import type { Integration } from "@/types"
@@ -18,8 +20,8 @@ import { deriveIntegrationHealth, type IntegrationHealth } from "./integration-c
 import { deriveGmailPresentation, type GmailPresentation } from "./gmail-configure-state"
 
 export interface IntegrationDeploymentFlags {
-  /** Whether *either* Instagram transport is open to this workspace. */
-  instagramConnectAvailable: boolean
+  /** The Instagram connect this workspace may start; null when neither transport is open. */
+  instagramConnectTransport: InstagramConnectTransport
   tiktokShopConfigured: boolean
   imessageHandle: string | null
 }
@@ -58,6 +60,8 @@ export interface IntegrationCardModel {
   preventInitialFocus: boolean
   emailInboundDualMessage: string | null
   forwardingConnectBlockedMessage: string | null
+  /** What the merchant should expect from the provider before connecting. */
+  connectNote: string | null
 }
 
 export interface IntegrationAttentionSummary {
@@ -89,7 +93,7 @@ function availabilityFor(
   if (
     definition.kind === "oauth"
     && definition.availabilityFlag === "instagram"
-    && !flags.instagramConnectAvailable
+    && !flags.instagramConnectTransport
     && !integrations.some((integration) => definition.matches(integration))
   ) {
     return { state: "coming-soon", label: "Coming soon" }
@@ -190,6 +194,7 @@ export function deriveIntegrationCardModels({
         preventInitialFocus: false,
         emailInboundDualMessage: null,
         forwardingConnectBlockedMessage: null,
+        connectNote: null,
       }
     }
 
@@ -249,6 +254,9 @@ export function deriveIntegrationCardModels({
         : null,
       forwardingConnectBlockedMessage: definition.id === "email"
         ? forwardingConnectBlockedMessage
+        : null,
+      connectNote: definition.id === "instagram"
+        ? instagramConnectNote(flags.instagramConnectTransport, isConnected)
         : null,
     }
   })

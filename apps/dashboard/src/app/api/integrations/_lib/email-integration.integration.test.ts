@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { afterEach, describe, expect, it } from 'vitest';
 import { db } from '@shopkeeper/db';
 import { BadRequestError } from '@/lib/api/errors';
-import { upsertEmailIntegration } from './email-integration';
+import { DualInboundDeliveryError, upsertEmailIntegration } from './email-integration';
 
 const createdClerkOrgIds: string[] = [];
 
@@ -106,6 +106,34 @@ describe('upsertEmailIntegration', () => {
       refreshToken: 'refresh-token',
       tokenExpiresAt: new Date(Date.now() + 3_600_000),
     })).rejects.toBeInstanceOf(BadRequestError);
+  });
+
+  // A new Gmail row has no inbound status until the watch registers, so the
+  // first connect beside forwarding used to pass and every email arrived twice.
+  it('rejects a first Gmail connect while Postmark forwarding is active', async () => {
+    const org = await seedOrg();
+    await db.integration.create({
+      data: {
+        organizationId: org.id,
+        platform: 'email',
+        emailProvider: 'postmark',
+        externalAccountId: 'support@example.com',
+        lifecycleStatus: 'active',
+        metadata: { provider: 'postmark' },
+      },
+    });
+
+    await expect(upsertEmailIntegration({
+      organizationId: org.id,
+      externalAccountId: 'merchant@example.com',
+      provider: 'gmail',
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      tokenExpiresAt: new Date(Date.now() + 3_600_000),
+    })).rejects.toBeInstanceOf(DualInboundDeliveryError);
+    expect(await db.integration.count({
+      where: { organizationId: org.id, emailProvider: 'gmail' },
+    })).toBe(0);
   });
 
   it('strips legacy hybrid inboundMode on Gmail upsert', async () => {

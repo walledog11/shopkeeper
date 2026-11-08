@@ -1,5 +1,19 @@
 import { getEmailProvider, getEmailReauthorizePath } from "@shopkeeper/email/providers"
+import type { InstagramConnectTransport } from "@/lib/socialapi/config"
 import type { Integration } from "@/types"
+
+/**
+ * Instagram's permission screen names SocialAPI, the service that relays the
+ * DMs, not Shopkeeper, so the merchant is told before being sent there.
+ */
+export function instagramConnectNote(
+  transport: InstagramConnectTransport,
+  connected: boolean,
+): string | null {
+  return transport === "socialapi" && !connected
+    ? "Instagram will ask you to allow SocialAPI, which relays your DMs."
+    : null
+}
 
 export type IntegrationChannelKind = "operator" | "support"
 export type WorkspaceConnectType = "email" | "ig" | "shopify" | "tiktok_shop"
