@@ -136,7 +136,7 @@ afterEach(() => {
 });
 
 describe("runAgent tool execution", () => {
-  it("hides support-only escalation, reply, and note tools in operator mode", async () => {
+  it("hides support-only question, escalation, reply, and note tools in operator mode", async () => {
     mockCreate.mockResolvedValueOnce(endTurn("Ready."));
     const ctx = makeCtx({
       recentMessages: [
@@ -157,6 +157,9 @@ describe("runAgent tool execution", () => {
 
     const request = mockCreate.mock.calls[0]?.[0] as { tools?: Array<{ name: string }> };
     const names = request.tools?.map((tool) => tool.name) ?? [];
+    // In the merchant's own chat, ask_operator ended the turn as "Escalated to
+    // merchant: <question>", leaving no ticket question for their answer to resolve.
+    expect(names).not.toContain("ask_operator");
     expect(names).not.toContain("escalate_to_human");
     expect(names).not.toContain("send_reply");
     expect(names).not.toContain("add_internal_note");

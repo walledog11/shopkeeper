@@ -89,8 +89,12 @@ export interface RunAgentOptions extends RunAgentPolicyOptions {
 }
 
 // The operator agent writes to customers through drafts the merchant approves
-// (its draft_ticket_reply and draft_email module tools), never by sending.
+// (its draft_ticket_reply and draft_email module tools), never by sending. It
+// talks to the merchant directly, so it asks them in its reply: ask_operator and
+// escalate_to_human hand a ticket to the merchant, and in their own chat that
+// reported the agent's question as an escalation no answer could resolve.
 const OPERATOR_HIDDEN_TOOL_NAMES = new Set([
+  "ask_operator",
   "escalate_to_human",
   "send_reply",
   "send_email",

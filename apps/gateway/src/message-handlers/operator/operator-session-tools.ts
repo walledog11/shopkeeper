@@ -245,7 +245,7 @@ export function buildOperatorSessionTools(
   const answerOperatorQuestion = defineTool({
     name: 'answer_operator_question',
     description:
-      'Record the merchant\'s answer to the question the agent asked, then re-draft the reply. Call this when a question is pending and the merchant\'s message answers it.',
+      'Record the merchant\'s answer to the customer ticket question listed under "## Pending state", then re-draft that ticket\'s reply. Call this when that question is pending and the merchant\'s message answers it. It is not for a question you asked in this conversation: when the merchant answers one of those, carry on with their answer.',
     fields: {
       answer: stringArg('The merchant\'s answer to the pending question, in their words.', { required: true }),
     },

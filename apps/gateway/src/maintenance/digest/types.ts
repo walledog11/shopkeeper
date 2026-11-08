@@ -49,6 +49,8 @@ export interface DigestMessageExtras {
   opener?: string | null;
   /** Everything that needs the merchant, in the order it is numbered. */
   needsYou?: BriefingItem[];
+  /** Damage claims waiting on the customer's photo, as one sentence. */
+  photoWaitLine?: string | null;
   /** What the agent did without them, as a sentence for the closing tail. */
   handledSection?: string | null;
   /** Proposed merchant preferences awaiting confirmation in Agent settings. */

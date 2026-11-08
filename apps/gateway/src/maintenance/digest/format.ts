@@ -79,9 +79,17 @@ export function formatDigestMessage(
     lines.push(list);
   }
 
-  // The tail reports completed work only. Threads waiting on customers are
-  // normal operational state, not news for the merchant, and are intentionally
-  // absent rather than summarized as a vague "ticking along" count.
+  // The one wait on a customer the merchant hears about: a damage claim held
+  // open until its photo arrives. Named, never counted.
+  const photoWaitLine = extras?.photoWaitLine?.trim();
+  if (photoWaitLine) {
+    if (lines.length > 0) lines.push('');
+    lines.push(photoWaitLine);
+  }
+
+  // The tail reports completed work only. Other threads waiting on customers
+  // are normal operational state, not news for the merchant, and are
+  // intentionally absent rather than summarized as a vague "ticking along" count.
   const tail: string[] = [];
   if (extras?.handledSection) tail.push(extras.handledSection);
   if (extras?.preferenceBriefingLine) tail.push(extras.preferenceBriefingLine);
