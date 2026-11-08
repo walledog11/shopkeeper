@@ -1,6 +1,7 @@
 import { db, getConversationAllowance, utcMonthString } from '@shopkeeper/db';
 import { getBillingPriceIds } from '../../config/env.js';
 import logger from '../../logger.js';
+import { emitOpsAlert } from '../../ops-alerts.js';
 import { sendConversationLimitNotification } from './planning-notifications.js';
 
 const NOTICE_MONTH_KEY = 'conversationLimitNoticeMonth';
@@ -58,18 +59,20 @@ export async function degradeForConversationLimit(
     );
     if (!allowance.overLimit || allowance.limit === null) return false;
 
-    logger.warn(
-      {
+    // Raised on every message while over; the chat hears once a day per workspace.
+    emitOpsAlert({
+      category: 'usage_limit',
+      message: '[Worker] Org over its monthly conversation allowance — planning paused, ingestion unaffected',
+      fingerprint: ['ops-alert', 'usage_limit', 'gateway', 'source:conversation_allowance', `org:${organizationId}`],
+      extra: {
         organizationId,
         threadId,
-        opsAlert: true,
         purpose: 'conversation_limit_degrade',
         tier: allowance.tier,
         limit: allowance.limit,
         used: allowance.used,
       },
-      '[Worker] Org over its monthly conversation allowance — planning paused, ingestion unaffected',
-    );
+    }, { pushOncePerSecs: 24 * 60 * 60 });
 
     const period = utcMonthString();
     if (await claimPeriodNotice(organizationId, period)) {

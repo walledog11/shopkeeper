@@ -1,7 +1,7 @@
 import { utcDayString } from '@shopkeeper/db';
 import type { EpisodeTransactionClient } from './message-handlers/inbound/resolve-inbound-episode.js';
 import { fixedWindowRateLimit, type FixedWindowCounterClient } from '@shopkeeper/agent/rate-limit';
-import logger from './logger.js';
+import { emitOpsAlert } from './ops-alerts.js';
 import { getGatewayRedis } from './clients/redis-client.js';
 import {
   getStorefrontChatBurstLimits,
@@ -162,7 +162,14 @@ export async function claimStorefrontChatBudget(input: {
 export async function reportStorefrontChatExhaustion(organizationId: string, integrationId: string): Promise<void> {
   const day = utcDayString();
   const limit = getStorefrontChatMessageBudgets().perShopPerDay;
-  logger.warn({ opsAlert: true, organizationId, integrationId, day, limit }, '[StorefrontChat] Shop daily message budget exhausted');
+  // Raised on every refused message; the chat hears once a day per shop.
+  emitOpsAlert({
+    category: 'usage_limit',
+    message: '[StorefrontChat] Shop daily message budget exhausted',
+    tags: { channel: 'shopify_chat' },
+    fingerprint: ['ops-alert', 'usage_limit', 'gateway', 'source:storefront_chat_budget', `integration:${integrationId}`],
+    extra: { organizationId, integrationId, day, limit },
+  }, { pushOncePerSecs: 24 * 60 * 60 });
   await alertStorefrontChatExhaustion({ organizationId, integrationId, day, limit });
 }
 

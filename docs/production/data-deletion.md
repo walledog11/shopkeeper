@@ -34,11 +34,10 @@ record that the deletion happened.
 - **Operator, on a verified request:** delete the organization in the Clerk.com
   Dashboard. Clerk's `organization.deleted` reaches `POST /api/webhooks/clerk`,
   which opens the ledger with `clerk_deleted_at` already stamped.
-
-Use the operator path when it is the merchant's only workspace. The Settings page
-offers them account deletion instead, and Shopkeeper's `user.deleted` handler
-removes only that user's `org_members` rows: unless the organization itself is
-deleted, the workspace, its data and any Stripe subscription remain.
+- **Account deletion:** the Settings page sends a merchant whose only workspace it
+  is to account deletion. Clerk's `user.deleted` removes that user's `org_members`
+  rows and opens the ledger for each of their workspaces that Clerk then lists with
+  no other member, or no longer has. A workspace someone else still belongs to stays.
 
 Opening the ledger, in one transaction, sets the organization's `lifecycle_status`
 to `deleting` (dashboard org routes then answer `409` "Workspace deletion is in
@@ -75,13 +74,15 @@ Each step stamps its column, so a retry resumes where the last attempt stopped:
 A step that is not finished yet (in-flight work, more blobs, an integration
 claimed by another worker) releases the row with
 `last_error = 'Cleanup will continue on the next sweep'`. An exception releases it
-with the error text and logs `[WorkspaceDeletion] Cleanup needs retry` with
-`opsAlert: true`, which reaches only the Railway log viewer until log drains
-exist. Nothing moves a row to `failed`; it retries every minute until it
-completes.
+with the error text and raises `[WorkspaceDeletion] Cleanup needs retry`, which
+reaches the ops Telegram chat once a day per row. A row still failing after
+`WORKSPACE_DELETION_MAX_ATTEMPTS` attempts (about a day) stops retrying: it becomes
+`failed`, the organization `deletion_failed`, and the chat hears it once.
 
 Provider cleanup covers only the Gmail watch, the direct-Meta Instagram webhook
-subscription, and the remote SocialAPI account (`cleanupIntegrationProvider`). The Shopify app stays installed on the
+subscription, and the remote SocialAPI account (`cleanupIntegrationProvider`). A
+Gmail or Instagram grant the merchant already revoked counts as cleaned: there is
+no access left to clean up with. The Shopify app stays installed on the
 merchant's store, and an email forwarding rule keeps forwarding, until the
 merchant removes them. Hand those over with the provider-side items below.
 
@@ -131,11 +132,10 @@ commit;
 
 **A row keeps retrying with the same `last_error`.** Fix the cause (Stripe, Clerk,
 Blob or provider credentials) and the next sweep resumes. If the stuck step is
-provider cleanup that cannot succeed because the merchant already revoked the
-Gmail or Instagram grant, the matching `integration_disconnects` row repeats the
-error. Once you have confirmed the provider will no longer deliver for that
-account, mark its provider step done; the next sweep deletes the integration and
-continues:
+provider cleanup the provider will never accept, the matching
+`integration_disconnects` row repeats the error. Once you have confirmed the
+provider will no longer deliver for that account, mark its provider step done; the
+next sweep deletes the integration and continues:
 
 ```sql
 update integration_disconnects
@@ -144,6 +144,23 @@ where organization_id = '<organization_uuid>'
   and integration_id = '<integration_uuid>'
   and status in ('pending', 'failed')
   and provider_cleaned_at is null;
+```
+
+**A row is `failed`.** The sweep gave up after about a day. Fix the cause, then
+reopen it with its attempts reset: replay the signed `organization.deleted` message
+from the Clerk.com Dashboard webhook log if there is one (`beginWorkspaceDeletion`
+reopens a failed row), or run:
+
+```sql
+begin;
+update workspace_deletions
+set status = 'pending', attempts = 0, last_error = null, updated_at = now()
+where id = '<operation_uuid>' and status = 'failed';
+
+update organizations
+set lifecycle_status = 'deleting', updated_at = now()
+where id = '<organization_uuid>' and lifecycle_status = 'deletion_failed';
+commit;
 ```
 
 ## Team Member Removal
@@ -197,8 +214,9 @@ All three mandatory topics are declared in `shopify.app.toml` and delivered to
 compliance action:
 
 - `customers/data_request` creates an idempotent, durable pending row in
-  `shopify_privacy_requests` and emits an `opsAlert` containing only its local
-  request ID and fulfillment path. An authenticated member of the matching
+  `shopify_privacy_requests` and raises a `compliance_request` ops alert, which
+  reaches the ops Telegram chat; the operational check below lists the request,
+  and the alert's log line carries its fulfillment path. An authenticated member of the matching
   workspace opens
   `/api/org/gdpr-export?privacyRequestId=<local-request-uuid>` to download the
   matching export; that successful download marks the request `exported`, not

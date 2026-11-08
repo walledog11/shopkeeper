@@ -76,13 +76,16 @@ describe('POST /webhooks/shopify — mandatory compliance topics', () => {
     expect(mockLogger.warn).toHaveBeenCalledWith(
       expect.objectContaining({
         opsAlert: true,
-        organizationId: org.id,
-        dataRequestId: '9999',
-        privacyRequestId: privacyRequest.id,
-        fulfillmentPath: `/api/org/gdpr-export?privacyRequestId=${privacyRequest.id}`,
-        matchedCustomers: 1,
-        matchedThreads: 1,
-        matchedMessages: 1,
+        category: 'compliance_request',
+        extra: expect.objectContaining({
+          organizationId: org.id,
+          dataRequestId: '9999',
+          privacyRequestId: privacyRequest.id,
+          fulfillmentPath: `/api/org/gdpr-export?privacyRequestId=${privacyRequest.id}`,
+          matchedCustomers: 1,
+          matchedThreads: 1,
+          matchedMessages: 1,
+        }),
       }),
       '[Webhook] Shopify customer data request received',
     );

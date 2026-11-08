@@ -48,7 +48,7 @@ of them runs against production, or it silently uses your local bot token, datab
 - Build:
 
 ```bash
-npx prisma generate --schema=packages/db/prisma/schema.prisma && npm run build -w packages/db && npm run build -w packages/agent && npm run build -w packages/integrations && npx turbo run build --filter=shopkeeper-dashboard
+npx prisma generate --schema=packages/db/prisma/schema.prisma && npx turbo run build --filter=shopkeeper-dashboard
 ```
 
 - Output directory: `apps/dashboard/.next`
@@ -467,21 +467,19 @@ Structured Pino logs with `opsAlert: true` and stable `category`, `service`, `ta
 `fingerprint` fields. Field names are a contract: rewording a message is safe, renaming a field
 breaks routing. Categories (`OPS_ALERT_CATEGORIES` in `packages/agent/src/observability/ops-alerts.ts`):
 `queue_health`, `webhook_signature`, `provider_send`, `provider_cleanup`, `agent_failure`,
-`gmail_inbound`, `inbound_unclaimed`.
+`gmail_inbound`, `inbound_unclaimed`, `compliance_request`, `data_deletion`, `usage_limit`.
 
 - **Gateway → Telegram.** Every alert raised through `emitOpsAlert` is pushed to the chat in
   `OPS_ALERT_TELEGRAM_CHAT_ID` (Railway); unset = log-only. Use a chat you own, never a merchant binding.
 - **Dashboard → Sentry.** `agent_failure`, `provider_send` and `provider_cleanup` call
   `Sentry.captureMessage` with the alert fingerprint through the existing DSN; nothing to configure.
+- **Repeats.** An alert whose cause raises it again on its own (a sweep, a retry, every message
+  past a limit) passes `pushOncePerSecs` to the gateway's `emitOpsAlert`: every occurrence is
+  logged, and the chat hears about its fingerprint once per window. Each Shopify
+  `customers/data_request` has its own fingerprint, so every request reaches the chat.
 - **Log drains are not configured** (Vercel → Better Stack, plus a forwarder for Railway, which has
-  no native drain). Until they are, a raw `logger.*({ opsAlert: true, … })` line that bypasses
-  `emitOpsAlert` reaches **only** the Railway/Vercel log viewer — among them `[OutboundSendSweep]`,
-  `[OperatorEventSweep]`, `[AgentTaskSweep]`, `[WorkspaceDeletion] Cleanup
-  needs retry`, Shopify `customers/data_request` (a 30-day duty), `[EmailBounce] Outbound email
-  bounced`, `[StorefrontChat] Shop daily message budget exhausted`, `[WithheldMessageFollowUp]`,
-  `[OutboundEmail]` claim loss, ownership mismatch and unknown provider outcome, `[Worker] Org over
-  its monthly conversation allowance`, and the permanent-failure logs of `[AgentTask]` and
-  `[IntegrationDisconnect]`. Search those logs for `opsAlert` during triage.
+  no native drain). Every gateway alert goes through `emitOpsAlert`, so the chat is the only push;
+  search the logs for `opsAlert` during triage.
 
 `apps/gateway/src/ops-alert-notify.ts` must keep three properties: it never uses
 `clients/telegram-client.sendMessage` (which raises its own `provider_send` alerts — a Telegram
@@ -491,8 +489,9 @@ the push carries only level, message and the tags `category`, `service`, `queue`
 is behind auth (Sentry keeps `extra`; it is private); dispatch is fire-and-forget after the log
 write, and a suppressed alert never pushes.
 
-Thresholds and defaults: `OPS_ALERTS_ENABLED=true` (`false` silences threshold alerts, not ordinary
-logs), `OPS_ALERT_WINDOW_SECS=300`, `QUEUE_ALERT_FAILED_THRESHOLD=10`,
+Thresholds and defaults: `OPS_ALERTS_ENABLED=true` (`false` silences every ops alert, its log line
+included, not ordinary logs; the work an alert names stays in its table, e.g.
+`shopify_privacy_requests`), `OPS_ALERT_WINDOW_SECS=300`, `QUEUE_ALERT_FAILED_THRESHOLD=10`,
 `QUEUE_ALERT_WAITING_THRESHOLD=100`, `QUEUE_ALERT_ACTIVE_STUCK_MS=900000`,
 `WEBHOOK_SIGNATURE_ALERT_THRESHOLD=5`, `PROVIDER_SEND_ALERT_THRESHOLD=3`,
 `AGENT_FAILURE_ALERT_THRESHOLD=3`, `UNCLAIMED_RECIPIENT_ALERT_THRESHOLD=5`. Route both apps to the

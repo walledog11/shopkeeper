@@ -1,6 +1,7 @@
 import { db, Prisma } from '@shopkeeper/db';
 import type { Prisma as PrismaTypes } from '@prisma/client';
 import logger from '../logger.js';
+import { emitOpsAlert } from '../ops-alerts.js';
 import { deleteOrgAttachments } from '../storage/blob.js';
 
 export const SHOPIFY_COMPLIANCE_TOPICS = new Set([
@@ -510,9 +511,13 @@ export async function handleShopifyComplianceWebhook(
       },
       update: {},
     });
-    logger.warn(
-      {
-        opsAlert: true,
+    // A 30-day duty, so every request reaches the chat; the window only
+    // absorbs a redelivery of the same one.
+    emitOpsAlert({
+      category: 'compliance_request',
+      message: '[Webhook] Shopify customer data request received',
+      fingerprint: ['ops-alert', 'compliance_request', 'gateway', `request:${privacyRequest.id}`],
+      extra: {
         organizationId,
         topic,
         dataRequestId: shopifyRequestId,
@@ -522,8 +527,7 @@ export async function handleShopifyComplianceWebhook(
         matchedThreads: selection.threadIds.length,
         matchedMessages: selection.messageCount,
       },
-      '[Webhook] Shopify customer data request received',
-    );
+    }, { pushOncePerSecs: 24 * 60 * 60 });
     return;
   }
 

@@ -1,5 +1,6 @@
 import { JOB, QUEUE } from '../constants.js';
 import logger from '../logger.js';
+import { emitOpsAlert } from '../ops-alerts.js';
 import {
   findCommittedUndeliveredOperatorEvents,
   markOperatorEventReplyDelivered,
@@ -88,16 +89,13 @@ export async function runOperatorEventSweep(): Promise<void> {
 
   const unhealedUndelivered = undelivered.length - redelivered;
   if (reconciledUnknown > 0 || unhealedUndelivered > 0) {
-    logger.error(
-      {
-        opsAlert: true,
-        reconciledUnknown,
-        undeliveredFound: undelivered.length,
-        redelivered,
-        deliveryUnknown,
-      },
-      '[OperatorEventSweep] Reconciled stuck operator events',
-    );
+    emitOpsAlert({
+      category: 'provider_send',
+      level: 'error',
+      message: '[OperatorEventSweep] Reconciled stuck operator events',
+      fingerprint: ['ops-alert', 'provider_send', 'gateway', 'source:operator_event_sweep'],
+      extra: { reconciledUnknown, undeliveredFound: undelivered.length, redelivered, deliveryUnknown },
+    }, { pushOncePerSecs: 60 * 60 });
   } else if (redelivered > 0) {
     logger.info(
       { redelivered },

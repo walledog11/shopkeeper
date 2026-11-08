@@ -267,9 +267,9 @@ export function createAgentTaskWorker(options: { workerOptions: SharedGatewayWor
   );
   registerJobFailureLogging(worker, {
     logMessage: '[AgentTask] Job failed permanently',
+    alert: { category: 'agent_failure', queue: QUEUE.AGENT_TASK },
     logFields: (job) => ({ jobId: job?.id }),
     failureExtra: (job) => ({
-      opsAlert: true,
       queue: QUEUE.AGENT_TASK,
       taskId: job?.data?.taskId,
       organizationId: job?.data?.organizationId,

@@ -73,7 +73,7 @@ describe('runOutboundSendSweep', () => {
     await runOutboundSendSweep();
 
     expect(errorLog).toHaveBeenCalledWith(
-      expect.objectContaining({ opsAlert: true, failedCount: 3, unknownCount: 3 }),
+      expect.objectContaining({ opsAlert: true, extra: { failedCount: 3, unknownCount: 3 } }),
       expect.stringContaining('Reconciled orphaned outbound send claims'),
     );
   });

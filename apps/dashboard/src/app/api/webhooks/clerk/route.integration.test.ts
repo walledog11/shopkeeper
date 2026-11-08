@@ -1,9 +1,24 @@
 import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createHmac, randomUUID } from 'node:crypto'
+import { clerkClient } from '@clerk/nextjs/server'
 import { db } from '@shopkeeper/db'
 import { cleanupTestData, createTestOrg } from '@shopkeeper/db/test-helpers'
 import { POST } from './route'
+
+vi.mock('@clerk/nextjs/server', () => ({ clerkClient: vi.fn() }))
+
+/** Clerk's member list for every organization the test asks about. */
+function clerkListsMembers(userIds: string[]) {
+  vi.mocked(clerkClient).mockResolvedValue({
+    organizations: {
+      getOrganizationMembershipList: async () => ({
+        data: userIds.map(userId => ({ publicUserData: { userId } })),
+        totalCount: userIds.length,
+      }),
+    },
+  } as unknown as Awaited<ReturnType<typeof clerkClient>>)
+}
 
 const WEBHOOK_SIGNING_BYTES = Buffer.from('clerk webhook test fixture')
 const CLERK_WEBHOOK_SECRET = WEBHOOK_SIGNING_BYTES.toString('base64')
@@ -114,6 +129,7 @@ describe('POST /api/webhooks/clerk', () => {
 
   it('removes local org memberships when Clerk deletes a user', async () => {
     const testOrg = await createOrg()
+    clerkListsMembers(['user_deleted', 'user_teammate'])
 
     await db.orgMember.create({
       data: {
@@ -133,10 +149,34 @@ describe('POST /api/webhooks/clerk', () => {
     }))
 
     expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ received: true, deleted: 1 })
+    expect(await response.json()).toEqual({ received: true, deleted: 1, deletionPending: 0 })
 
-    await expect(db.organization.findUniqueOrThrow({ where: { id: testOrg.id } })).resolves.toBeTruthy()
+    await expect(db.organization.findUniqueOrThrow({ where: { id: testOrg.id } }))
+      .resolves.toMatchObject({ lifecycleStatus: 'active' })
     await expect(db.orgMember.count({ where: { organizationId: testOrg.id } })).resolves.toBe(0)
+  })
+
+  // Settings sends a merchant with one workspace to account deletion, which
+  // removed only their membership: the workspace, its data and any Stripe
+  // subscription stayed.
+  it('deletes the workspace a deleted user leaves with no members', async () => {
+    const testOrg = await createOrg()
+    await db.organization.update({ where: { id: testOrg.id }, data: { stripeSubscriptionId: 'sub_sole' } })
+    await db.orgMember.create({ data: { organizationId: testOrg.id, clerkUserId: 'user_sole' } })
+    clerkListsMembers(['user_sole'])
+
+    const response = await POST(createSignedRequest({
+      object: 'event',
+      type: 'user.deleted',
+      data: { object: 'user', id: 'user_sole', deleted: true },
+    }))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ received: true, deleted: 1, deletionPending: 1 })
+    await expect(db.organization.findUniqueOrThrow({ where: { id: testOrg.id } }))
+      .resolves.toMatchObject({ lifecycleStatus: 'deleting' })
+    await expect(db.workspaceDeletion.findUniqueOrThrow({ where: { organizationId: testOrg.id } }))
+      .resolves.toMatchObject({ status: 'pending', stripeSubscriptionId: 'sub_sole', clerkDeletedAt: null })
   })
 
   it('removes a local org membership when Clerk removes that membership', async () => {

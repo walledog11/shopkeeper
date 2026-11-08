@@ -38,10 +38,12 @@ export async function beginWorkspaceDeletion(
 
     if (existing) {
       if (existing.status === 'failed') {
+        // A restart gets the sweep's full allowance of attempts again.
         const operation = await tx.workspaceDeletion.update({
           where: { id: existing.id },
           data: {
             status: 'pending',
+            attempts: 0,
             claimToken: null,
             claimedAt: null,
             lastError: null,

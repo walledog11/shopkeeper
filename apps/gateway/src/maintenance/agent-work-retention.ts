@@ -1,6 +1,6 @@
 import type { Prisma as PrismaTypes } from '@prisma/client';
 import { db, Prisma } from '@shopkeeper/db';
-import logger from '../logger.js';
+import { emitOpsAlert } from '../ops-alerts.js';
 import { deleteOrgAttachments } from '../storage/blob.js';
 
 /**
@@ -12,7 +12,13 @@ export async function deletePurgedAttachments(references: readonly string[]): Pr
   try {
     await deleteOrgAttachments(references);
   } catch (err) {
-    logger.error({ err, opsAlert: true, count: references.length }, '[Purge] Failed to delete purged attachments');
+    emitOpsAlert({
+      category: 'data_deletion',
+      level: 'error',
+      message: '[Purge] Failed to delete purged attachments',
+      fingerprint: ['ops-alert', 'data_deletion', 'gateway', 'source:attachment_purge'],
+      extra: { err: err instanceof Error ? err.message : String(err), count: references.length },
+    }, { pushOncePerSecs: 60 * 60 });
   }
 }
 

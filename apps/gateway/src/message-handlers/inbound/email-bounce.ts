@@ -1,5 +1,6 @@
 import { createMessage, db, SenderType } from '@shopkeeper/db';
 import logger from '../../logger.js';
+import { emitOpsAlert } from '../../ops-alerts.js';
 
 export type EmailBounceProvider = 'postmark' | 'gmail';
 
@@ -91,19 +92,19 @@ export async function recordEmailBounce(event: EmailBounceEvent): Promise<EmailB
     contentText: noteText(event),
   });
 
-  logger.warn(
-    {
-      provider: event.provider,
+  emitOpsAlert({
+    category: 'provider_send',
+    message: '[EmailBounce] Outbound email bounced',
+    tags: { provider: event.provider, channel: 'email' },
+    fingerprint: ['ops-alert', 'provider_send', 'gateway', 'source:email_bounce'],
+    extra: {
       organizationId: message.organizationId,
       threadId: message.threadId,
       messageId: message.id,
       bounceType: event.bounceType,
       permanent: event.permanent,
-      opsAlert: true,
-      category: 'email_bounce',
     },
-    '[EmailBounce] Outbound email bounced',
-  );
+  }, { pushOncePerSecs: 60 * 60 });
 
   return 'recorded';
 }

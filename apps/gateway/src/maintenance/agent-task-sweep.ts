@@ -3,7 +3,7 @@ import {
   reconcileExpiredAgentTaskClaims,
 } from '@shopkeeper/agent/task-ledger';
 import { JOB, QUEUE } from '../constants.js';
-import logger from '../logger.js';
+import { emitOpsAlert } from '../ops-alerts.js';
 import { ensureAgentTaskEnqueued } from '../agent-task-ingest.js';
 import {
   createMaintenanceQueue,
@@ -20,12 +20,14 @@ export async function runAgentTaskSweep(): Promise<void> {
   const results = await Promise.allSettled(queued.map(task => ensureAgentTaskEnqueued(task)));
   const enqueueFailures = results.filter((result) => result.status === 'rejected');
   if (reconciled > 0 || enqueueFailures.length > 0) {
-    logger.error({
-      opsAlert: true,
-      reconciled,
-      queuedFound: queued.length,
-      enqueueFailures: enqueueFailures.length,
-    }, '[AgentTaskSweep] Durable task recovery needs attention');
+    emitOpsAlert({
+      category: 'queue_health',
+      level: 'error',
+      message: '[AgentTaskSweep] Durable task recovery needs attention',
+      tags: { queue: QUEUE.AGENT_TASK },
+      fingerprint: ['ops-alert', 'queue_health', 'gateway', 'source:agent_task_sweep'],
+      extra: { reconciled, queuedFound: queued.length, enqueueFailures: enqueueFailures.length },
+    }, { pushOncePerSecs: 60 * 60 });
   }
 }
 

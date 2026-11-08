@@ -133,7 +133,7 @@ describe('workspace deletion lifecycle', () => {
     const retried = await beginWorkspaceDeletion(org.id);
     expect(retried).toMatchObject({
       deduplicated: true,
-      operation: { id: started!.operation.id, status: 'pending', lastError: null },
+      operation: { id: started!.operation.id, status: 'pending', attempts: 0, lastError: null },
     });
     await expect(db.organization.findUniqueOrThrow({ where: { id: org.id } }))
       .resolves.toMatchObject({ lifecycleStatus: 'deleting' });
