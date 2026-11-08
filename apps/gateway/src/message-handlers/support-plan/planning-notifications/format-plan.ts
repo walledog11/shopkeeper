@@ -131,8 +131,9 @@ function capitalizeFirst(text: string): string {
 // Why the plan escalated, so the card can say what the agent concluded instead
 // of only that it gave up. The reason is already on the tool call — either
 // model-authored or templated from the routing signals — and it is the most
-// useful sentence in the whole notification.
-function escalationReason(
+// useful sentence in the whole notification. A model-authored one is the
+// planner's own wording, so the card prefers the grounded handoff's blocker.
+export function escalationReason(
   rawToolCalls: readonly { name: string; input?: unknown }[],
 ): string | null {
   for (const toolCall of rawToolCalls) {
@@ -270,6 +271,9 @@ export function formatOperatorPlanMessage(
     // The customer's photos of a damage claim: sent above this card, or not
     // shown at all.
     damagePhotos?: { count: number; shown: boolean };
+    // What stopped the agent, in the merchant handoff's sourced words
+    // (composeHandoffStatements). Shown instead of the escalation reason.
+    escalationBlocker?: string | null;
   },
 ): string {
   const { lines, person, canShowRequest } = formatCardOpening({
@@ -337,8 +341,11 @@ export function formatOperatorPlanMessage(
   const sendStep = approvableSteps.find(isSendStep);
   const actionSteps = approvableSteps.filter((step) => !isSendStep(step));
 
+  const shownEscalationReason = options?.escalationBlocker
+    ?? (options?.rawToolCalls ? escalationReason(options.rawToolCalls) : null);
+
   if (escalateOnly) {
-    const reason = options?.rawToolCalls ? escalationReason(options.rawToolCalls) : null;
+    const reason = shownEscalationReason;
     lines.push('', reason
       ? `This one needs you: ${endSentence(reason)}`
       : "This one needs you — I can't answer it myself.");
@@ -370,7 +377,7 @@ export function formatOperatorPlanMessage(
   // The reply goes out and the thread still lands on them. Without this the
   // merchant approves the reply and reasonably reads that as the whole answer.
   if (escalationStep && !escalateOnly) {
-    const reason = options?.rawToolCalls ? escalationReason(options.rawToolCalls) : null;
+    const reason = shownEscalationReason;
     lines.push('', reason
       ? `Then it's yours: ${endSentence(reason)}`
       : "Then it's yours — I can't take it further myself.");

@@ -82,6 +82,41 @@ describe('buildOrgDigest — inbox scope', () => {
     expect(digest.pendingDigest.items.find((item) => item.threadId === thread.id)?.kind).toBe('decision');
   });
 
+  // A damage claim waiting on its photo has no card, so the briefing said
+  // nothing about it and a stalled claim went unseen.
+  it('names a damage claim still waiting on its photo, until the photo arrives', async () => {
+    org = await createTestOrg();
+    const customer = await createTestCustomer(org.id, 'dana@example.com', { name: 'Dana Reyes' });
+    const thread = await createTestThread(org.id, customer.id, 'email');
+    await createTestMessage(thread.id, 'My mug arrived cracked.');
+    const askedAt = new Date(NOW.getTime() - 2 * HOUR);
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        awaitingCustomer: 'damage_photo',
+        awaitingCustomerSince: askedAt,
+        classifierSignals: digestFactsClassifierSignals({ ask: 'refund', subject: 'a cracked mug', order: '#1038' }),
+      },
+    });
+
+    const waiting = (await buildOrgDigest(org.id, NOW))!;
+    expect(waiting.message).toContain('Waiting on a photo from Dana (#1038).');
+    expect(waiting.pendingDigest.items.some((item) => item.threadId === thread.id)).toBe(false);
+
+    await db.message.create({
+      data: {
+        threadId: thread.id,
+        organizationId: org.id,
+        senderType: 'customer',
+        contentText: '',
+        attachments: [`${org.id}/photo.jpg`],
+        sentAt: new Date(askedAt.getTime() + HOUR),
+      },
+    });
+    const answered = (await buildOrgDigest(org.id, NOW))!;
+    expect(answered.message).not.toContain('Waiting on a photo');
+  });
+
   // Regression: the 2026-08-23 production briefing asked the merchant what to
   // do immediately after saying the request details were unavailable. The
   // thread was a v4 escalation, so it had no RequestFacts, but its aligned

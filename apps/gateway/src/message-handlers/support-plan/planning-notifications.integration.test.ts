@@ -17,7 +17,14 @@ const IMESSAGE_BINDING = {
   spaceId: 'space_2',
 };
 
-const { listOperatorBindingsSpy, loadWorkspaceImagesSpy, mockLogger, notifyOperatorSpy } = vi.hoisted(() => ({
+const {
+  composeHandoffStatementsSpy,
+  listOperatorBindingsSpy,
+  loadWorkspaceImagesSpy,
+  mockLogger,
+  notifyOperatorSpy,
+} = vi.hoisted(() => ({
+  composeHandoffStatementsSpy: vi.fn(),
   listOperatorBindingsSpy: vi.fn(),
   loadWorkspaceImagesSpy: vi.fn(),
   mockLogger: {
@@ -45,6 +52,10 @@ vi.mock('../../operator-notify.js', () => ({
 
 vi.mock('@shopkeeper/agent/image-attachments', () => ({
   loadWorkspaceImages: loadWorkspaceImagesSpy,
+}));
+
+vi.mock('../../operator-handoff.js', () => ({
+  composeHandoffStatements: composeHandoffStatementsSpy,
 }));
 
 vi.mock('../../config/env.js', () => ({
@@ -100,6 +111,7 @@ function requestDisplay(topic: string): RequestDisplay {
 }
 
 beforeEach(() => {
+  composeHandoffStatementsSpy.mockReset();
   listOperatorBindingsSpy.mockReset();
   notifyOperatorSpy.mockReset();
   mockLogger.info.mockClear();
@@ -251,6 +263,51 @@ describe('sendOperatorPlanNotification', () => {
     expect(body).toContain('cracked lid');
     expect(body).not.toContain('Request details unavailable');
     expect(body).toContain('OK to send?');
+  });
+
+  // An escalate-only plan on an already-escalated thread is never executed, so
+  // the merchant reads its card, not the handoff message. The card printed the
+  // planner's own reason, tool names and all.
+  it('explains a handoff in the grounded handoff words, not the planner reason', async () => {
+    const { org, thread, messageId } = await seedLegacyThread('Please cancel #1038, or can I return it instead?');
+    const reason = 'cancel_order is not appropriate: unclear whether they want a full refund vs return';
+    composeHandoffStatementsSpy.mockResolvedValueOnce({
+      request: 'Dana Reyes asked to cancel order #1038 or return it.',
+      blocker: "I can't tell whether they want a refund or a return.",
+    });
+    const escalateOnly: AgentPlan = {
+      instruction: 'Handle the cancellation request',
+      steps: [{
+        id: 'tc_escalate',
+        category: 'internal',
+        tool: 'escalate_to_human',
+        description: 'Escalate to merchant',
+        label: 'Escalate to merchant',
+        enabled: true,
+      }],
+      rawToolCalls: [{ id: 'tc_escalate', name: 'escalate_to_human', input: { reason } }],
+    };
+
+    await sendOperatorPlanNotification(
+      org.id,
+      thread.id,
+      'Dana Reyes',
+      ChannelType.email,
+      'Wants to cancel or return order #1038',
+      escalateOnly,
+      'Handle the cancellation request',
+      { identity: operatorPlanNotificationIdentity(messageId!) },
+    );
+
+    expect(composeHandoffStatementsSpy).toHaveBeenCalledWith(expect.objectContaining({
+      organizationId: org.id,
+      customerName: 'Dana Reyes',
+      request: 'Wants to cancel or return order #1038',
+      reason,
+    }));
+    const [, , body] = notifyOperatorSpy.mock.calls[0] ?? [];
+    expect(body).toContain("This one needs you: I can't tell whether they want a refund or a return.");
+    expect(body).not.toContain('cancel_order');
   });
 
   it('drops the approval question when nothing can show the request', async () => {

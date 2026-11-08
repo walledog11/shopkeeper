@@ -1,8 +1,8 @@
-import type { DbChannelType } from '@shopkeeper/db';
+import { db, type DbChannelType } from '@shopkeeper/db';
 import { isEscalationOnlyPlan } from '@shopkeeper/agent/autonomy';
 import { classifyPerson } from '@shopkeeper/agent/person-name';
 import { memberOperatorKey } from '@shopkeeper/agent/internal-thread';
-import type { AgentPlan } from '@shopkeeper/agent/types';
+import type { AgentPlan, OrgSettings } from '@shopkeeper/agent/types';
 import { loadWorkspaceImages } from '@shopkeeper/agent/image-attachments';
 import logger from '../../../logger.js';
 import { getGatewayDashboardUrl } from '../../../config/env.js';
@@ -11,6 +11,7 @@ import {
   planNotificationIdempotencyKey,
 } from '../../../operator-notify-idempotency.js';
 import { listOperatorBindings, type OperatorNotifyOptions } from '../../../operator-notify.js';
+import { composeHandoffStatements } from '../../../operator-handoff.js';
 import { getContext, toPendingPlanToolCalls, type PendingPlan } from '../../../operator-context.js';
 import { listConfirmedOrders } from '../../../storefront-chat-verified-orders.js';
 import type { PlanIdentity } from '../planning-types.js';
@@ -23,7 +24,12 @@ import {
 import { loadRequestSourceText, storedCustomerName } from './card-context.js';
 import { getConversationStage } from './conversation-stage.js';
 import { notifyCriticalToAllOperators } from './delivery.js';
-import { formatOperatorPlanMessage, parkedActionLabel, requiresDashboardDraftReview } from './format-plan.js';
+import {
+  escalationReason,
+  formatOperatorPlanMessage,
+  parkedActionLabel,
+  requiresDashboardDraftReview,
+} from './format-plan.js';
 import type { OperatorNotificationExclude, QueueNotice } from './types.js';
 import { recordStepTiming } from '@shopkeeper/agent/step-timings';
 
@@ -65,12 +71,51 @@ async function loadCardPhotos(
 }
 
 
+/**
+ * What stopped the agent, for a card that hands the thread to the merchant: the
+ * same sourced blocker an executed escalation's message uses. An escalate-only
+ * plan on an already-escalated thread is never executed, so without this its
+ * card printed the planner's raw reason, tool names and all.
+ */
+async function escalationBlockerFor(input: {
+  organizationId: string;
+  threadId: string;
+  customerName: string | null;
+  requestSummary: string | null;
+  plan: AgentPlan;
+}): Promise<string | null> {
+  // An invalid plan's card lists its issues instead of any escalation line.
+  if (input.plan.validation?.status === 'invalid') return null;
+  const reason = escalationReason(input.plan.rawToolCalls);
+  if (!reason) return null;
+  try {
+    const organization = await db.organization.findUniqueOrThrow({
+      where: { id: input.organizationId },
+      select: { settings: true },
+    });
+    const statements = await composeHandoffStatements({
+      organizationId: input.organizationId,
+      settings: organization.settings as Partial<OrgSettings> | null,
+      customerName: input.customerName,
+      request: input.requestSummary,
+      reason,
+    });
+    return statements?.blocker ?? null;
+  } catch (error) {
+    logger.warn(
+      { err: (error as Error).message, organizationId: input.organizationId, threadId: input.threadId },
+      '[Worker] Escalation handoff composition failed; the card keeps the planner\'s reason',
+    );
+    return null;
+  }
+}
+
 export async function sendOperatorPlanNotification(
   organizationId: string,
   threadId: string,
   lookupName: string | null,
   channelType: DbChannelType,
-  _requestSummary: string | null,
+  requestSummary: string | null,
   plan: AgentPlan,
   instruction: string,
   options?: {
@@ -121,6 +166,14 @@ export async function sendOperatorPlanNotification(
   }
   const photos = await loadCardPhotos(organizationId, plan);
   const photosHidden = photos !== null && photos.images.length === 0;
+  // Composed once, before the fan-out, so every bound phone reads the same words.
+  const escalationBlocker = await escalationBlockerFor({
+    organizationId,
+    threadId,
+    customerName,
+    requestSummary,
+    plan,
+  });
   const dashboardUrl = getGatewayDashboardUrl();
   const idempotencyKey = (photoState?: 'shown' | 'hidden') => planNotificationIdempotencyKey(
     organizationId,
@@ -193,6 +246,7 @@ export async function sendOperatorPlanNotification(
           ...(queueNotice ? { queueNotice } : {}),
           ...(sourceMessageText ? { sourceMessageText } : {}),
           ...(photos ? { damagePhotos: { count: photos.count, shown: photosShown } } : {}),
+          ...(escalationBlocker ? { escalationBlocker } : {}),
         }),
         idempotencyKey: idempotencyKey(photos ? (photosShown ? 'shown' : 'hidden') : undefined),
         ...(escalationOnly ? {} : { appendPlan: { plan: parkPlan(photosShown), maxDepth } }),

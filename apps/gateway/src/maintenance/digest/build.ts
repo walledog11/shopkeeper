@@ -13,8 +13,10 @@ import { byDeadlineFirst } from '../briefing-fields.js';
 import { loadDigestShopifyGarnish } from '../digest-shopify-garnish.js';
 import {
   formatHandledSection,
+  formatPhotoWaitLine,
   hasHandoffRequestContext,
   loadHandledRollup,
+  loadPhotoWaits,
   loadWaitingOnYouItems,
   resolveHandledWindowStart,
   rowHasNoRequest,
@@ -45,7 +47,7 @@ export async function buildOrgDigest(
   options: { opener?: string | null; includeEmptyInbox?: boolean } = {},
 ): Promise<OrgDigest | null> {
   const since = resolveHandledWindowStart(settings, now);
-  const [openThreads, weeklyStats, handledRollup, waitingItems, garnishLines, attributionLine, proposedPreferences, organization] = await Promise.all([
+  const [openThreads, weeklyStats, handledRollup, waitingItems, garnishLines, attributionLine, proposedPreferences, organization, photoWaits] = await Promise.all([
     db.thread.findMany({
       where: {
         ...canonicalInboxThreadWhere(organizationId),
@@ -84,6 +86,7 @@ export async function buildOrgDigest(
     loadAttributionLine(organizationId, since),
     loadProposedMerchantPreferences(organizationId),
     db.organization.findUnique({ where: { id: organizationId }, select: { settings: true } }),
+    loadPhotoWaits(organizationId),
   ]);
 
   const handledSection = formatHandledSection(handledRollup);
@@ -199,6 +202,10 @@ export async function buildOrgDigest(
     dailyLLMSpendCapUsd: typeof spendCap === 'number' ? spendCap : undefined,
   });
 
+  // A claim already listed above is told there, whatever it is waiting on.
+  const listedThreadIds = new Set(needsYou.map((item) => item.threadId));
+  const photoWaitLine = formatPhotoWaitLine(photoWaits.filter((wait) => !listedThreadIds.has(wait.threadId)));
+
   const weeklyLine = needsYou.length > 0
     ? null
     : weeklyStats
@@ -212,6 +219,7 @@ export async function buildOrgDigest(
       {
         opener: options.opener ?? null,
         needsYou: narratedItems,
+        photoWaitLine,
         handledSection,
         preferenceBriefingLine,
         // Sits with the sales pulse: same register, same place in the message.

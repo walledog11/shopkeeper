@@ -29,13 +29,22 @@ function readSummary(value: unknown, source: string): string | null {
   return endSentence(text);
 }
 
-export async function composeOperatorHandoff(input: {
+interface HandoffInput {
   organizationId: string;
   settings: Partial<OrgSettings> | null;
   customerName: string | null;
   request: string | null;
   reason: string;
-}): Promise<string | null> {
+}
+
+/**
+ * What the customer asked for and what stopped the agent, each in plain words
+ * bound to its own source. Null when either can't be supported: callers keep
+ * their own fallback rather than show unsourced text.
+ */
+export async function composeHandoffStatements(
+  input: HandoffInput,
+): Promise<{ request: string; blocker: string } | null> {
   if (!input.request?.trim() || input.request.length > 4000
     || !input.reason.trim() || input.reason.length > 2000) return null;
 
@@ -70,5 +79,12 @@ cannot be supported by its source, return empty text and evidence for it.`,
   const request = readSummary(parsed.request, input.request);
   const blocker = readSummary(parsed.blocker, input.reason);
   if (!request || !blocker) return null;
-  return `${request} ${blocker} How would you like me to respond to them?`;
+  return { request, blocker };
+}
+
+export async function composeOperatorHandoff(input: HandoffInput): Promise<string | null> {
+  const statements = await composeHandoffStatements(input);
+  return statements
+    ? `${statements.request} ${statements.blocker} How would you like me to respond to them?`
+    : null;
 }
