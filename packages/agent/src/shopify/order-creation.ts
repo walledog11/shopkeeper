@@ -16,7 +16,7 @@ import {
   type ShopifyContext,
 } from "./client.js";
 import { buildOrderAddress } from "./order-address.js";
-import { shopifyFailureReceipt, shopifyReceiptEnvelope } from "./receipts.js";
+import { shopifyReceiptResults, shopifyFailureReceipt, shopifyReceiptEnvelope } from "./receipts.js";
 import type { ShopifyOrder } from "./types.js";
 import {
   optionalPositiveInteger,
@@ -27,6 +27,8 @@ import {
   requireNumericId,
   ShopifyInputError,
 } from "./validation.js";
+
+const orderCreationReceipts = shopifyReceiptResults("create_shopify_order", "email");
 
 export interface CreateShopifyOrderOptions {
   allowCustomLineItems?: boolean;
@@ -78,23 +80,6 @@ function orderCreationUnknown(
     "unknown",
     code,
     providerReference,
-  );
-  return receipt ? { ...result, receipt } : result;
-}
-
-function orderCreationFailure(
-  ctx: ShopifyContext,
-  email: string,
-  result: ToolResult,
-  outcome: "rejected" | "failed",
-  code: string,
-): ToolResult {
-  const receipt = shopifyFailureReceipt(
-    ctx,
-    { kind: "email", id: email },
-    "create_shopify_order",
-    outcome,
-    code,
   );
   return receipt ? { ...result, receipt } : result;
 }
@@ -353,7 +338,7 @@ export async function createShopifyOrder(
     }
     const email = validatedEmail ?? (input.email.trim().toLowerCase() || "invalid");
     if (err instanceof ShopifyInputError) {
-      return orderCreationFailure(
+      return orderCreationReceipts.failure(
         ctx,
         email,
         toolPolicyBlock(formatShopifyToolError("failed to create order", err)),
@@ -361,7 +346,7 @@ export async function createShopifyOrder(
         "invalid_order_creation_input",
       );
     }
-    return orderCreationFailure(
+    return orderCreationReceipts.failure(
       ctx,
       email,
       toolError(formatShopifyToolError("failed to create order", err)),

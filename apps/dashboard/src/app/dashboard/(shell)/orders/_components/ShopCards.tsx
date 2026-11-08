@@ -1,14 +1,14 @@
 "use client"
 
 import {
-  NeedsYouCardBody,
-  NeedsYouCardHeader,
-  NeedsYouCardShell,
-} from "@/app/dashboard/_components/home/needs-you-card-ui"
+  SupportCardBody,
+  SupportCardHeader,
+  SupportCardShell,
+} from "@/components/support-card/card"
 import type { OrderRow } from "@/lib/orders/order-contract"
 import { lineItemsSummary } from "./orders-board-model"
 import type { OrderAttentionFinding } from "./order-requests"
-import { TicketCardMetaRow } from "@/app/dashboard/_components/home/needs-you-card-meta"
+import { TicketCardMetaRow } from "@/components/support-card/metadata"
 import { customerLabel, orderStatusMeta } from "./shop-page-utils"
 
 export function ShopOrderCard({
@@ -23,8 +23,8 @@ export function ShopOrderCard({
 
   return (
     <li className="list-none">
-      <NeedsYouCardShell>
-        <NeedsYouCardHeader>
+      <SupportCardShell>
+        <SupportCardHeader>
           <button
             type="button"
             onClick={onOpen}
@@ -40,8 +40,8 @@ export function ShopOrderCard({
               }}
             />
           </button>
-        </NeedsYouCardHeader>
-        <NeedsYouCardBody className="gap-2 py-2.5 sm:py-3">
+        </SupportCardHeader>
+        <SupportCardBody className="gap-2 py-2.5 sm:py-3">
           <button
             type="button"
             onClick={onOpen}
@@ -53,8 +53,8 @@ export function ShopOrderCard({
               <p className="text-sm leading-relaxed text-[#6b5d4f]/70">No line items recorded.</p>
             )}
           </button>
-        </NeedsYouCardBody>
-      </NeedsYouCardShell>
+        </SupportCardBody>
+      </SupportCardShell>
     </li>
   )
 }
@@ -72,8 +72,8 @@ export function ShopFindingCard({
 }) {
   return (
     <li className="list-none">
-      <NeedsYouCardShell>
-        <NeedsYouCardHeader>
+      <SupportCardShell>
+        <SupportCardHeader>
           <button
             type="button"
             onClick={onOpen}
@@ -90,8 +90,8 @@ export function ShopFindingCard({
               }}
             />
           </button>
-        </NeedsYouCardHeader>
-        <NeedsYouCardBody className="gap-2 py-2.5 sm:py-3">
+        </SupportCardHeader>
+        <SupportCardBody className="gap-2 py-2.5 sm:py-3">
           <button
             type="button"
             onClick={onOpen}
@@ -109,8 +109,8 @@ export function ShopFindingCard({
               </p>
             )}
           </button>
-        </NeedsYouCardBody>
-      </NeedsYouCardShell>
+        </SupportCardBody>
+      </SupportCardShell>
     </li>
   )
 }

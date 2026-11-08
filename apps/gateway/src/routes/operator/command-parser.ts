@@ -8,7 +8,7 @@ export type PendingPlanCommand =
   | { type: 'plan-run' }
   | { type: 'plan-dismiss' };
 
-export type TelegramCommand =
+export type OperatorCommand =
   | { type: 'start'; token: string | null }
   | { type: 'help' }
   | { type: 'summary' }
@@ -32,7 +32,7 @@ function parseIndex(value: string): number | null {
   return Number.isSafeInteger(index) ? index : null;
 }
 
-export function parseTelegramCommand(body: string): TelegramCommand {
+export function parseOperatorCommand(body: string): OperatorCommand {
   const normalized = body.trim().toLowerCase();
 
   if (normalized.startsWith('/start')) {

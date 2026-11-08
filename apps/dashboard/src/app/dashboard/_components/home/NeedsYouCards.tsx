@@ -10,17 +10,17 @@ import { cn } from "@/lib/ui/cn"
 import { canQuickApprove } from "@/lib/home/walkthrough"
 import type { HomeNeedsAttentionItem } from "@/lib/home/summary-contract"
 import {
-  NeedsYouActionReceipt,
-  NeedsYouBubble,
-  NeedsYouCardBody,
-  NeedsYouCardFooter,
-  NeedsYouCardHeader,
-  NeedsYouCardShell,
-  NeedsYouEscalationCallout,
-  NeedsYouPrimaryButton,
-} from "./needs-you-card-ui"
+  SupportCardActionReceipt,
+  SupportCardBubble,
+  SupportCardBody,
+  SupportCardFooter,
+  SupportCardHeader,
+  SupportCardShell,
+  SupportCardEscalationCallout,
+  SupportCardPrimaryButton,
+} from "@/components/support-card/card"
 import { NeedsYouCardHeaderRow } from "./needs-you-card-meta"
-import { needsYouSecondaryButtonClassName } from "./needs-you-card-styles"
+import { supportCardSecondaryButtonClassName } from "@/components/support-card/styles"
 import { isSampleNeedsYouItem } from "./sample-needs-you-items"
 import { useNeedsYouActions } from "./useNeedsYouActions"
 
@@ -29,7 +29,7 @@ function ticketHref(threadId: string): string {
 }
 
 const HANDLE_IN_TICKET_CLASS = cn(
-  needsYouSecondaryButtonClassName,
+  supportCardSecondaryButtonClassName,
   "border-foreground bg-gradient-to-b from-foreground to-foreground/90 text-background shadow-md shadow-foreground/10 hover:-translate-y-0.5 hover:bg-foreground hover:text-background",
 )
 
@@ -55,12 +55,12 @@ export function NeedsYouCard({
     ? (item.proposalSummary || item.contextLine || item.customerMessage)
     : null
 
-  const viewTicket = (label: string, className = needsYouSecondaryButtonClassName) => (
+  const viewTicket = (label: string, className = supportCardSecondaryButtonClassName) => (
     <Link href={ticketHref(item.threadId)} className={className}>{label}</Link>
   )
 
   const closeTicket = (
-    <button type="button" onClick={actions.close} disabled={busy} className={needsYouSecondaryButtonClassName}>
+    <button type="button" onClick={actions.close} disabled={busy} className={supportCardSecondaryButtonClassName}>
       {actions.pending === "close" && <Loader2 aria-hidden className="mr-2 size-4 animate-spin" />}
       Close ticket
     </button>
@@ -94,33 +94,33 @@ export function NeedsYouCard({
       </div>
     )
   } else if (item.isEscalationOnly) {
-    content = <NeedsYouEscalationCallout reason={item.escalationReason} />
+    content = <SupportCardEscalationCallout reason={item.escalationReason} />
     primary = viewTicket("Handle in ticket", HANDLE_IN_TICKET_CLASS)
     secondary = closeTicket
   } else {
     content = (
       <>
-        {item.replyText && <NeedsYouBubble tone="reply" flush>{item.replyText}</NeedsYouBubble>}
+        {item.replyText && <SupportCardBubble tone="reply" flush>{item.replyText}</SupportCardBubble>}
         {fallbackBubbleText && (
-          <NeedsYouBubble tone={item.kind === "needs_review" ? "flag" : "reply"} flush>
+          <SupportCardBubble tone={item.kind === "needs_review" ? "flag" : "reply"} flush>
             {fallbackBubbleText}
-          </NeedsYouBubble>
+          </SupportCardBubble>
         )}
         <BlankAnswerFields answers={actions.answers} blanks={actions.blanks} disabled={busy} onChange={actions.setAnswer} />
       </>
     )
     primary = (
-      <NeedsYouPrimaryButton confirming={actions.confirming} disabled={busy || actions.answersMissing} onClick={actions.approve}>
+      <SupportCardPrimaryButton confirming={actions.confirming} disabled={busy || actions.answersMissing} onClick={actions.approve}>
         {actions.pending === "approve" && <Loader2 aria-hidden className="size-4 animate-spin" />}
         {/* The inbox names a reply-only draft "Send reply"; the same card says so here. */}
         {item.kind === "quick_reply"
           ? (actions.pending === "approve" ? "Sending" : actions.confirming ? "Confirm send" : "Send reply")
           : (actions.pending === "approve" ? "Approving" : actions.confirming ? "Confirm approve" : "Approve")}
-      </NeedsYouPrimaryButton>
+      </SupportCardPrimaryButton>
     )
     if (actions.confirming) {
       secondary = (
-        <button type="button" onClick={actions.cancelConfirm} disabled={busy} className={needsYouSecondaryButtonClassName}>
+        <button type="button" onClick={actions.cancelConfirm} disabled={busy} className={supportCardSecondaryButtonClassName}>
           Cancel
         </button>
       )
@@ -128,21 +128,21 @@ export function NeedsYouCard({
   }
 
   return (
-    <NeedsYouCardShell confirming={actions.confirming}>
-      <NeedsYouCardHeader>
+    <SupportCardShell confirming={actions.confirming}>
+      <SupportCardHeader>
         <NeedsYouCardHeaderRow item={item} />
-      </NeedsYouCardHeader>
+      </SupportCardHeader>
 
-      <NeedsYouCardBody>
-        {item.customerMessage && <NeedsYouBubble tone="customer">{item.customerMessage}</NeedsYouBubble>}
+      <SupportCardBody>
+        {item.customerMessage && <SupportCardBubble tone="customer">{item.customerMessage}</SupportCardBubble>}
         {/* A damage claim's photos, so approving here is approving what they show. */}
         <AttachmentList attachments={item.damagePhotos ?? []} compact />
         <div className="flex flex-col gap-3">{content}</div>
-      </NeedsYouCardBody>
+      </SupportCardBody>
 
-      <NeedsYouCardFooter>
+      <SupportCardFooter>
         {showAction && (
-          <NeedsYouActionReceipt
+          <SupportCardActionReceipt
             display={item.actionDisplay!}
             hideOrderRef={Boolean(item.orderRef && item.actionDisplay?.orderRef === item.orderRef)}
           />
@@ -159,8 +159,8 @@ export function NeedsYouCard({
           {primary}
           {secondary}
         </div>
-      </NeedsYouCardFooter>
-    </NeedsYouCardShell>
+      </SupportCardFooter>
+    </SupportCardShell>
   )
 }
 

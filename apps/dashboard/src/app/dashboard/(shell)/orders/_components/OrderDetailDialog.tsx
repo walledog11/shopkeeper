@@ -3,16 +3,16 @@
 import { ExternalLink } from "lucide-react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import {
-  NeedsYouCardBody,
-  NeedsYouCardFooter,
-  NeedsYouCardHeader,
-} from "@/app/dashboard/_components/home/needs-you-card-ui"
-import { needsYouCardShellClassName, needsYouSecondaryButtonClassName } from "@/app/dashboard/_components/home/needs-you-card-styles"
+  SupportCardBody,
+  SupportCardFooter,
+  SupportCardHeader,
+} from "@/components/support-card/card"
+import { supportCardShellClassName, supportCardSecondaryButtonClassName } from "@/components/support-card/styles"
 import { formatMoney } from "@shopkeeper/agent/money"
 import { cn } from "@/lib/ui/cn"
 import type { OrderRow } from "@/lib/orders/order-contract"
 import { orderItemCount } from "./orders-board-model"
-import { TicketCardMetaRow } from "@/app/dashboard/_components/home/needs-you-card-meta"
+import { TicketCardMetaRow } from "@/components/support-card/metadata"
 import { customerLabel, orderStatusMeta, shopifyAdminOrderHref } from "./shop-page-utils"
 
 function OrderDetail({ order, shop }: { order: OrderRow; shop: string | null }) {
@@ -22,7 +22,7 @@ function OrderDetail({ order, shop }: { order: OrderRow; shop: string | null }) 
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <NeedsYouCardHeader className="pr-12">
+      <SupportCardHeader className="pr-12">
         <TicketCardMetaRow
           meta={{
             customerName: customerLabel(order),
@@ -32,9 +32,9 @@ function OrderDetail({ order, shop }: { order: OrderRow; shop: string | null }) 
             statusTone: status.tone,
           }}
         />
-      </NeedsYouCardHeader>
+      </SupportCardHeader>
 
-      <NeedsYouCardBody className="custom-scrollbar min-h-0 flex-1 overflow-y-auto">
+      <SupportCardBody className="custom-scrollbar min-h-0 flex-1 overflow-y-auto">
         {order.customer?.email ? (
           <p className="text-sm leading-relaxed text-[#6b5d4f]">{order.customer.email}</p>
         ) : null}
@@ -63,20 +63,20 @@ function OrderDetail({ order, shop }: { order: OrderRow; shop: string | null }) 
           <span className="text-[#6b5d4f]/50"> · </span>
           <span className="text-[#6b5d4f]">{itemCount} item{itemCount !== 1 ? "s" : ""}</span>
         </p>
-      </NeedsYouCardBody>
+      </SupportCardBody>
 
       {adminHref ? (
-        <NeedsYouCardFooter className="px-4 py-3 sm:px-5">
+        <SupportCardFooter className="px-4 py-3 sm:px-5">
           <a
             href={adminHref}
             target="_blank"
             rel="noreferrer"
-            className={cn(needsYouSecondaryButtonClassName, "gap-2 text-sm")}
+            className={cn(supportCardSecondaryButtonClassName, "gap-2 text-sm")}
           >
             <ExternalLink className="size-3.5" />
             View in Shopify
           </a>
-        </NeedsYouCardFooter>
+        </SupportCardFooter>
       ) : null}
     </div>
   )
@@ -96,7 +96,7 @@ export function OrderDetailDialog({
       <DialogContent
         showCloseButton
         className={cn(
-          needsYouCardShellClassName("shell"),
+          supportCardShellClassName("shell"),
           "fixed left-0 top-0 flex h-[100dvh] max-h-[100dvh] w-full max-w-full translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden border-border bg-card p-0 pt-[env(safe-area-inset-top)] sm:left-1/2 sm:top-1/2 sm:h-auto sm:max-h-[86vh] sm:w-[calc(100%-2rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:pt-0 sm:max-w-2xl",
         )}
       >

@@ -11,8 +11,3 @@ export function getTagStyle(tag: string | null | undefined) {
   if (tag && TAG_STYLES[tag]) return TAG_STYLES[tag]
   return TAG_STYLES.General
 }
-
-export function getMeaningfulTagStyle(tag: string | null | undefined) {
-  if (tag && tag !== "General" && TAG_STYLES[tag]) return TAG_STYLES[tag]
-  return null
-}

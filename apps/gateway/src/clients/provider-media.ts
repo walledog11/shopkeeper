@@ -1,3 +1,4 @@
+import { readStreamWithinLimit } from '@shopkeeper/shared/bounded-stream';
 import logger from '../logger.js';
 
 export function isAllowedProviderMediaUrl(value: string, suffixes: readonly string[]): boolean {
@@ -45,21 +46,9 @@ export async function downloadProviderMedia(url: string, policy: {
         return null;
       }
       if (!response.body) return null;
-      const reader = response.body.getReader();
-      const chunks: Uint8Array[] = [];
-      let bytes = 0;
-      try {
-        while (true) {
-          signal.throwIfAborted();
-          const { done, value } = await reader.read();
-          if (done) break;
-          bytes += value.byteLength;
-          if (bytes > maxBytes || policy.consumeBytes?.(value.byteLength) === false) { await reader.cancel(); return null; }
-          chunks.push(value);
-        }
-      } finally { reader.releaseLock(); }
-      if (!bytes) return null;
-      return { filename: policy.filename(contentType), contentType, base64Content: Buffer.concat(chunks, bytes).toString('base64') };
+      const data = await readStreamWithinLimit(response.body, maxBytes, { signal, consumeBytes: policy.consumeBytes });
+      if (!data) return null;
+      return { filename: policy.filename(contentType), contentType, base64Content: data.toString('base64') };
     }
   } catch (err) { logger.warn({ err }, '[Media] Download failed'); }
   return null;

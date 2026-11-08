@@ -2,7 +2,7 @@
 
 import { AlertTriangle, Loader2, MessageSquare } from "lucide-react"
 import { AttachmentList } from "@/app/dashboard/_components/AttachmentList"
-import { NeedsYouBubble } from "@/app/dashboard/_components/home/needs-you-card-ui"
+import { SupportCardBubble } from "@/components/support-card/card"
 import type { AgentTurn, FailedMessage, Ticket } from "@/types"
 import AgentPrivateTurns from "./AgentPrivateTurns"
 
@@ -90,7 +90,7 @@ export default function ChatTimeline({
                 {bubbleContent}
               </div>
             ) : (
-              // NeedsYouBubble caps itself at a percentage of this box, so it has
+              // SupportCardBubble caps itself at a percentage of this box, so it has
               // to span the timeline — shrink-to-fit made the cap 88% of the
               // bubble's own width and pushed attachments outside it.
               <div
@@ -99,9 +99,9 @@ export default function ChatTimeline({
                 data-sender={msg.sender}
                 className="flex w-full"
               >
-                <NeedsYouBubble tone={isOutbound ? "reply" : "customer"} flush>
+                <SupportCardBubble tone={isOutbound ? "reply" : "customer"} flush>
                   {bubbleContent}
-                </NeedsYouBubble>
+                </SupportCardBubble>
               </div>
             )}
             {isPending ? (

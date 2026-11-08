@@ -7,7 +7,7 @@ import { canonicalInboxThreadWhere } from '@shopkeeper/agent/inbox-filter';
 import { wrapUntrusted } from '@shopkeeper/agent/message-history';
 import { getCurrentPlanForThread } from '@shopkeeper/agent/plan-cache-shape';
 import { SENDER_TYPE, THREAD_STATUS } from '@shopkeeper/agent/thread-constants';
-import { relativeAge } from '../../routes/telegram/format.js';
+import { relativeAge } from '../../routes/operator/format.js';
 import type { PendingDigest } from '../../operator-context.js';
 import { submitTicketPlanRequest } from '../../agent-task-ingest.js';
 import {

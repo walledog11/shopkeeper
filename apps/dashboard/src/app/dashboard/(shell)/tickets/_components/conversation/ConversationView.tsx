@@ -1,8 +1,8 @@
 "use client"
 
-import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ComponentProps, type CSSProperties, type RefObject } from "react"
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react"
 import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
-import { NeedsYouCardBody, NeedsYouCardHeader } from "@/app/dashboard/_components/home/needs-you-card-ui"
+import { SupportCardBody, SupportCardHeader } from "@/components/support-card/card"
 import { useFillerPhrase } from "@/hooks/useFillerPhrase"
 import { useIsMobile } from "@/hooks/useMobile"
 import { requestShopifyLinkFocus } from "@/lib/messaging/shopify-link-focus"
@@ -19,7 +19,7 @@ import { partitionConversationMessages } from "./utils/conversationViewUtils"
 import { useConversationCocoAction } from "./useConversationCocoAction"
 import { useConversationViewportEffects } from "./useConversationViewportEffects"
 import { useVisualKeyboard } from "./useVisualKeyboard"
-import type { Ticket, AgentTurn, AgentPlan, FailedMessage, OrgSettings, PlanCardOutcome, Thread } from "@/types"
+import type { Ticket, AgentTurn, AgentPlan, FailedMessage, OrgSettings, Thread } from "@/types"
 
 interface Props {
   ticket: Ticket
@@ -61,7 +61,6 @@ interface Props {
 
 const EMPTY_FAILED_MESSAGES: FailedMessage[] = []
 type ConversationDisplayMessages = ReturnType<typeof partitionConversationMessages>["displayMessages"]
-type ConversationComposerAreaProps = ComponentProps<typeof ConversationComposerArea>
 
 export default function ConversationView({
   ticket,
@@ -254,7 +253,7 @@ export default function ConversationView({
       }`}
       style={conversationStyle}
     >
-      <NeedsYouCardHeader className="shrink-0 pb-3.5 sm:pb-4">
+      <SupportCardHeader className="shrink-0 pb-3.5 sm:pb-4">
         <div className="flex flex-col gap-2">
           <ConversationHeader
             activeTab={activeTab}
@@ -280,7 +279,7 @@ export default function ConversationView({
             />
           )}
         </div>
-      </NeedsYouCardHeader>
+      </SupportCardHeader>
 
       <ConversationTimelinePanel
         agentTurns={agentTurns}
@@ -302,148 +301,45 @@ export default function ConversationView({
         history={history ? { ...history, load: handleLoadHistory } : undefined}
       />
 
-      <ConversationOpenComposer
-        activeTab={activeTab}
-        threadId={ticket.id}
-        onAnswered={handleMerchantAnswered}
-        agent={{
-          agentInstruction,
-          isAgentMode,
-          isPlanExecuting,
-          isPlanLoading,
-          isRegenerating,
-          pendingPlan,
-          planExecutionOutcome,
-        }}
-        composerRef={composerRef}
-        customer={{
-          channelType: ticket.channelType,
-          customerName: ticket.customer,
-          customerPlatformId,
-          lastCustomerMessageAt: ticket.lastCustomerMessageAt,
-          shopifyCustomerId,
-        }}
-        handlers={{
-          focusComposer,
-          handleFocusShopifyLink,
-          handlePlanApprove,
-          handlePlanDismiss,
-          handlePlanEdit,
-          handlePlanRegenerate,
-          handleSend,
-          onReplyChange,
-        }}
-        isMobile={isMobile}
-        isThreadLoading={isThreadLoading}
-        planCardRef={planCardRef}
-        reply={{
-          isSending,
-          replyText,
-          composerAttachments,
-          sendError,
-          isAgentRunning,
-        }}
-      />
+      {activeTab === "open" && (isThreadLoading ? <ComposerSkeleton /> : (
+        <ConversationComposerArea
+          containerRef={composerRef}
+          planCardRef={planCardRef}
+          threadId={ticket.id}
+          onAnswered={handleMerchantAnswered}
+          agentInstruction={agentInstruction}
+          isAgentMode={isAgentMode}
+          isPlanExecuting={isPlanExecuting}
+          isRegenerating={isRegenerating}
+          onChange={text => onReplyChange(
+            isAgentMode ? `@${AGENT_DISPLAY_NAME.toLowerCase()} ` + text : text,
+          )}
+          onClearAgentMode={() => onReplyChange('')}
+          onPlanApprove={handlePlanApprove}
+          onPlanEdit={() => {
+            handlePlanEdit()
+            if (!isMobile) focusComposer()
+          }}
+          onPlanDismiss={handlePlanDismiss}
+          onFocusShopifyLink={handleFocusShopifyLink}
+          onPlanRegenerate={handlePlanRegenerate}
+          onSend={handleSend}
+          pendingPlan={pendingPlan}
+          planExecutionOutcome={planExecutionOutcome}
+          composer={{
+            customerName: ticket.customer,
+            channelType: ticket.channelType,
+            customerPlatformId,
+            isSending: isSending || isAgentRunning || isPlanLoading,
+            replyText,
+            attachments: composerAttachments,
+            sendError,
+            shopifyCustomerId,
+            lastCustomerMessageAt: ticket.lastCustomerMessageAt,
+          }}
+        />
+      ))}
     </div>
-  )
-}
-
-interface ConversationOpenComposerProps {
-  activeTab: Props["activeTab"]
-  threadId: string
-  onAnswered: (result?: { saveToKb: boolean }) => void
-  agent: {
-    agentInstruction: string
-    isAgentMode: boolean
-    isPlanExecuting: boolean
-    isPlanLoading: boolean
-    isRegenerating: boolean
-    pendingPlan: AgentPlan | null
-    planExecutionOutcome: PlanCardOutcome | null
-  }
-  composerRef: RefObject<HTMLDivElement | null>
-  customer: {
-    channelType: Ticket["channelType"]
-    customerName: string
-    customerPlatformId?: string
-    lastCustomerMessageAt: string | null
-    shopifyCustomerId?: string | null
-  }
-  handlers: {
-    focusComposer: () => void
-    handleFocusShopifyLink: () => void
-    handlePlanApprove: ConversationComposerAreaProps["onPlanApprove"]
-    handlePlanDismiss: NonNullable<ConversationComposerAreaProps["onPlanDismiss"]>
-    handlePlanEdit: () => void
-    handlePlanRegenerate: ConversationComposerAreaProps["onPlanRegenerate"]
-    handleSend: ConversationComposerAreaProps["onSend"]
-    onReplyChange: Props["onReplyChange"]
-  }
-  isMobile: boolean
-  isThreadLoading: boolean
-  planCardRef: RefObject<HTMLDivElement | null>
-  reply: {
-    isAgentRunning: boolean
-    isSending: boolean
-    replyText: string
-    composerAttachments: ComposerAttachments
-    sendError: string | null
-  }
-}
-
-function ConversationOpenComposer({
-  activeTab,
-  threadId,
-  onAnswered,
-  agent,
-  composerRef,
-  customer,
-  handlers,
-  isMobile,
-  isThreadLoading,
-  planCardRef,
-  reply,
-}: ConversationOpenComposerProps) {
-  if (activeTab !== "open") return null
-  if (isThreadLoading) return <ComposerSkeleton />
-
-  return (
-    <ConversationComposerArea
-      containerRef={composerRef}
-      planCardRef={planCardRef}
-      threadId={threadId}
-      onAnswered={onAnswered}
-      agentInstruction={agent.agentInstruction}
-      isAgentMode={agent.isAgentMode}
-      isPlanExecuting={agent.isPlanExecuting}
-      isRegenerating={agent.isRegenerating}
-      onChange={text => handlers.onReplyChange(
-        agent.isAgentMode ? `@${AGENT_DISPLAY_NAME.toLowerCase()} ` + text : text,
-      )}
-      onClearAgentMode={() => handlers.onReplyChange('')}
-      onPlanApprove={handlers.handlePlanApprove}
-      onPlanEdit={() => {
-        handlers.handlePlanEdit()
-        if (!isMobile) handlers.focusComposer()
-      }}
-      onPlanDismiss={handlers.handlePlanDismiss}
-      onFocusShopifyLink={handlers.handleFocusShopifyLink}
-      onPlanRegenerate={handlers.handlePlanRegenerate}
-      onSend={handlers.handleSend}
-      pendingPlan={agent.pendingPlan}
-      planExecutionOutcome={agent.planExecutionOutcome}
-      composer={{
-        customerName: customer.customerName,
-        channelType: customer.channelType,
-        customerPlatformId: customer.customerPlatformId,
-        isSending: reply.isSending || reply.isAgentRunning || agent.isPlanLoading,
-        replyText: reply.replyText,
-        attachments: reply.composerAttachments,
-        sendError: reply.sendError,
-        shopifyCustomerId: customer.shopifyCustomerId,
-        lastCustomerMessageAt: customer.lastCustomerMessageAt,
-      }}
-    />
   )
 }
 
@@ -483,7 +379,7 @@ function ConversationTimelinePanel({
   timelineRef,
 }: ConversationTimelinePanelProps) {
   return (
-    <NeedsYouCardBody
+    <SupportCardBody
       ref={timelineRef}
       className="mobile-ticket-timeline overflow-y-auto custom-scrollbar transition-colors"
     >
@@ -519,6 +415,6 @@ function ConversationTimelinePanel({
           />
         )}
       </div>
-    </NeedsYouCardBody>
+    </SupportCardBody>
   )
 }

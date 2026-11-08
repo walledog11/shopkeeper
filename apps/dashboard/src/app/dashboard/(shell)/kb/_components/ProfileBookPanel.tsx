@@ -12,7 +12,8 @@ import { errorMessageFromUnknown } from "@/lib/api/fetcher"
 import type { KbPageData } from "@/lib/server/kb-page-data"
 import { cn } from "@/lib/ui/cn"
 import { inputCls, MEMORY_CARD_SHELL } from "./kb-page-utils"
-import { createPreference, resolveVoiceProposal, saveStoreProfileField, updatePreference } from "./kb-page-requests"
+import { resolveVoiceProposal, saveStoreProfileField } from "./kb-page-requests"
+import { createPreference, updatePreference } from "@/lib/agent/preference-requests"
 import type { MemoryBook } from "./memory-books"
 
 export interface MemoryProfile {

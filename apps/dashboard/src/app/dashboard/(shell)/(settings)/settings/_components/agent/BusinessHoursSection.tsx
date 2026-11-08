@@ -10,12 +10,10 @@ import type { AgentTabController } from "./useAgentTabState"
 
 export function BusinessHoursSection({ controller }: { controller: AgentTabController }) {
   const {
+    rawInputs,
+    setRawInput,
     settingsState,
     dispatch,
-    businessHoursStartInput,
-    setBusinessHoursStartInput,
-    businessHoursEndInput,
-    setBusinessHoursEndInput,
     businessHoursInvalid,
   } = controller
 
@@ -52,16 +50,16 @@ export function BusinessHoursSection({ controller }: { controller: AgentTabContr
         <SelectField
           label="Opens at"
           ariaLabel="Business hours start"
-          value={businessHoursStartInput}
-          onChange={setBusinessHoursStartInput}
+          value={rawInputs.bhStart}
+          onChange={value => setRawInput("bhStart", value)}
           options={HOUR_OPTIONS}
           widthClassName="w-40"
         />
         <SelectField
           label="Closes at"
           ariaLabel="Business hours end"
-          value={businessHoursEndInput}
-          onChange={setBusinessHoursEndInput}
+          value={rawInputs.bhEnd}
+          onChange={value => setRawInput("bhEnd", value)}
           options={HOUR_OPTIONS}
           widthClassName="w-40"
           selectClassName={businessHoursInvalid ? "border-red-600/60" : undefined}

@@ -16,6 +16,7 @@ import {
 } from '@shopkeeper/agent/ai';
 import { enforceSpendCap, recordSpend } from '@shopkeeper/agent/spend';
 import { readModelUsage } from '@shopkeeper/agent/usage';
+import { timeStep } from '@shopkeeper/agent/step-timings';
 import {
   buildBoundedEmailClassifierInput,
 } from '@shopkeeper/agent/context-budget';
@@ -45,7 +46,6 @@ import {
 } from './classification-contract.js';
 
 export {
-  CLASSIFIER_MAX_TOKENS,
   CLASSIFIER_VERSION,
   classifierSignals,
   emptyIntents,
@@ -539,33 +539,11 @@ export async function classifyAndSummarizeNewEmail(
       inputChars: boundedInput.length,
     }, '[Worker] AI input budget');
 
-    const response = await anthropic.messages.create({
-      model: HAIKU_MODEL,
-      max_tokens: CLASSIFIER_MAX_TOKENS,
-      thinking: { type: 'disabled' },
-      system: classifierSystemPrompt(CHANNEL.EMAIL),
-      output_config: {
-        format: {
-          type: 'json_schema',
-          schema: CLASSIFIER_OUTPUT_SCHEMA,
-        },
-      },
-      messages: [{ role: 'user', content: classifierInput }],
-    });
-    const usage = readModelUsage(response);
-    await recordSpend(organizationId, usage, HAIKU_MODEL);
-    logger.info({
-      organizationId,
+    return await runClassifier(organizationId, classifierInput, {
+      channelType: CHANNEL.EMAIL,
       purpose: 'email_classification',
-      inputTokens: usage.inputTokens,
-      outputTokens: usage.outputTokens,
-      cacheCreationInputTokens: usage.cacheCreationInputTokens,
-      cacheReadInputTokens: usage.cacheReadInputTokens,
       inputChars: classifierInput.length,
-    }, '[Worker] AI model usage');
-    const block = response.content.find((part) => part.type === 'text');
-    if (!block || block.type !== 'text') throw new Error('Unexpected AI response type');
-    return parseClassifierJson(block.text);
+    });
   } catch (error) {
     // Null defers to SUMMARIZE_THREAD either way; the outcome code is what
     // separates a budget stop from a defect for anyone counting them.
@@ -578,6 +556,43 @@ export async function classifyAndSummarizeNewEmail(
     });
     return null;
   }
+}
+
+export async function runClassifier(
+  organizationId: string,
+  input: string,
+  options: {
+    channelType: string;
+    verifiedOrderNames?: readonly string[];
+    purpose: string;
+    threadId?: string;
+    inputChars: number;
+  },
+): Promise<ClassificationResult> {
+  const { channelType, verifiedOrderNames, ...logContext } = options;
+  const request = () => anthropic.messages.create({
+    model: HAIKU_MODEL,
+    max_tokens: CLASSIFIER_MAX_TOKENS,
+    thinking: { type: 'disabled' },
+    system: classifierSystemPrompt(channelType, verifiedOrderNames),
+    output_config: { format: { type: 'json_schema', schema: CLASSIFIER_OUTPUT_SCHEMA } },
+    messages: [{ role: 'user', content: input }],
+  });
+  const response = options.threadId
+    ? await timeStep({ organizationId, threadId: options.threadId, step: 'read_message', detail: HAIKU_MODEL }, request)
+    : await request();
+  const usage = readModelUsage(response);
+  await recordSpend(organizationId, usage, HAIKU_MODEL);
+  logger.info({
+    organizationId, ...logContext,
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    cacheCreationInputTokens: usage.cacheCreationInputTokens,
+    cacheReadInputTokens: usage.cacheReadInputTokens,
+  }, '[Worker] AI model usage');
+  const block = response.content.find((part) => part.type === 'text');
+  if (!block || block.type !== 'text') throw new Error('Unexpected AI response type');
+  return parseClassifierJson(block.text);
 }
 
 export function stripQuotedReply(text: string): string {

@@ -1,7 +1,7 @@
 import { Card } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { InboxStreamLoading } from "@/app/dashboard/(shell)/tickets/_components/stream/InboxStreamLoading"
-import { needsYouCardShellClassName } from "@/app/dashboard/_components/home/needs-you-card-styles"
+import { supportCardShellClassName } from "@/components/support-card/styles"
 import { MemoryLibrarySkeleton } from "./MemoryLibrarySkeleton"
 import { Pulse } from "./Pulse"
 import { dashboardChromeColumnClassName, dashboardChromeMaxWidthClass } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
@@ -31,7 +31,7 @@ export function HomePageSkeleton() {
         )}>
           <Pulse className={cn("h-[4.75rem] w-full rounded-2xl border border-border bg-white", boardCardShadowClassName("briefing"))} />
 
-          <Card className={needsYouCardShellClassName("briefing")} aria-busy="true" aria-label="Loading home briefing">
+          <Card className={supportCardShellClassName("briefing")} aria-busy="true" aria-label="Loading home briefing">
               <div className="px-5 py-3 sm:px-6 sm:py-4">
                 <Pulse className="h-7 w-[72%] max-w-md rounded-lg sm:h-8" />
                 <div className="mt-3 max-w-2xl space-y-2">
@@ -46,7 +46,7 @@ export function HomePageSkeleton() {
             </Card>
 
             <section className="mt-5 sm:mt-10 flex flex-col gap-2.5" aria-busy="true" aria-label="Loading action plan cards">
-              <Card className={needsYouCardShellClassName("front")}>
+              <Card className={supportCardShellClassName("front")}>
                 <div className="rounded-t-3xl border-b border-border/60 bg-white px-5 py-3.5 sm:px-6">
                   <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
                     <div className="flex w-full items-center gap-2">

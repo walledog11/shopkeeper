@@ -55,4 +55,17 @@ describe('fetchWithDeadline', () => {
       { provider: 'fixture', operation: 'read' },
     )).rejects.toBe(failure);
   });
+
+  it('propagates caller cancellation through the composed signal with the existing error identity', async () => {
+    const controller = new AbortController();
+    vi.stubGlobal('fetch', vi.fn((_input: unknown, init: RequestInit) => new Promise((_resolve, reject) => {
+      init.signal!.addEventListener('abort', () => reject(init.signal!.reason), { once: true });
+    })));
+    const request = fetchWithDeadline('https://provider.test/resource', { signal: controller.signal }, {
+      provider: 'fixture', operation: 'read',
+    });
+    controller.abort();
+    await expect(request).rejects.toBeInstanceOf(ExternalRequestTimeoutError);
+    await expect(request).rejects.toMatchObject({ cause: controller.signal.reason });
+  });
 });

@@ -1,3 +1,4 @@
+import { readStreamWithinLimit } from '@shopkeeper/shared/bounded-stream';
 import { get } from '@vercel/blob';
 import { BLOB_ATTACHMENT_PREFIX } from '@shopkeeper/agent/attachment-ref';
 import type { OutboundAttachment } from './types.js';
@@ -58,28 +59,6 @@ function pathnameFor(ref: string): string | null {
   if (!ref.startsWith(BLOB_ATTACHMENT_PREFIX)) return null;
   const pathname = ref.slice(BLOB_ATTACHMENT_PREFIX.length);
   return pathname.length > 0 ? pathname : null;
-}
-
-async function readStreamWithinLimit(
-  stream: ReadableStream<Uint8Array>,
-  maxBytes: number,
-): Promise<Buffer | null> {
-  const reader = stream.getReader();
-  const chunks: Buffer[] = [];
-  let byteLength = 0;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    byteLength += value.byteLength;
-    if (byteLength > maxBytes) {
-      await reader.cancel();
-      return null;
-    }
-    chunks.push(Buffer.from(value));
-  }
-
-  return byteLength > 0 ? Buffer.concat(chunks, byteLength) : null;
 }
 
 async function fetchBlob(pathname: string) {

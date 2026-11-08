@@ -1,3 +1,4 @@
+import type { ToolInput } from "./input-fields.js";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { RecordReturnWatchParams } from "@shopkeeper/db";
 import type { BaseAgentContext, TaskModelBudget } from "../../agent-context.js";
@@ -6,249 +7,85 @@ import type { ShopifyOAuthScope } from "../../shopify/integration-health.js";
 import type { ToolResult } from "../result.js";
 import type { SupportStatsSummary } from "../support-stats-types.js";
 
-export interface SearchShopifyProductsInput {
-  query: string;
-  limit?: number;
-}
+export type SearchShopifyProductsInput = ToolInput<"search_shopify_products">;
 
 // One lookup, discriminated by how the caller knows the customer. `query`
 // resolves a name or email to an ID and returns the thin match list; `id`
 // returns the full profile. Two tools for two ways of naming the same record
 // meant the model chose between them before it could ask anything.
-export interface FindCustomerInput {
-  by: "query" | "id";
-  value: string;
-  limit?: number;
-}
+export type FindCustomerInput = ToolInput<"find_customer">;
 
-export interface UpdateShopifyCustomerInfoInput {
-  customer_id: string;
-  first_name?: string;
-  last_name?: string;
-  email?: string;
-  phone?: string;
-}
+export type UpdateShopifyCustomerInfoInput = ToolInput<"update_shopify_customer_info">;
 
-export interface GetShopifyOrdersInput {
-  customer_id: string;
-}
+export type GetShopifyOrdersInput = ToolInput<"get_shopify_orders">;
 
-export interface UpdateShopifyOrderAddressInput {
-  order_id: string;
-  customer_id: string;
-  address1: string;
-  address2?: string;
-  city: string;
-  province: string;
-  zip: string;
-  country: string;
-}
+export type UpdateShopifyOrderAddressInput = ToolInput<"update_shopify_order_address">;
 
-export interface AddShopifyCustomerNoteInput {
-  customer_id: string;
-  note: string;
-}
+export type AddShopifyCustomerNoteInput = ToolInput<"add_shopify_customer_note">;
 
-export interface GetOrderByNameInput {
-  order_name: string;
-}
+export type GetOrderByNameInput = ToolInput<"get_order_by_name">;
 
-export interface GetOrderFulfillmentStatusInput {
-  order_number?: string;
-  email?: string;
-}
+export type GetOrderFulfillmentStatusInput = ToolInput<"get_order_fulfillment_status">;
 
-export interface CreateRefundInput {
-  order_id: string;
-  /** Shopify quote shown to the approver; never trusted from model output. */
-  amount?: string;
-  /** Currency paired with amount. Runtime-authored with the Shopify quote. */
-  currency?: string;
-  /**
-   * What the refund costs the shop, in the shop's currency, which is what the
-   * workspace limits are set in. Runtime-authored beside the quote, and only when
-   * the customer was charged in another currency; absent means `amount` is it.
-   */
-  approval_shop_amount?: string;
-  reason?: string;
-}
+export type CreateRefundInput = ToolInput<"create_refund">;
 
-export const APPROVAL_LINE_ITEM_CHANGES = ["refund", "return", "replacement", "remove", "add"] as const;
+export { APPROVAL_LINE_ITEM_CHANGES } from "./input-fields.js";
 
 /**
  * A line item a write targets, named by Shopify and bound into the proposal
  * before approval so the card can say which item the IDs point at. Display
  * only: execution acts on the IDs and never reads it.
  */
-export interface ApprovalLineItem {
-  name: string;
-  quantity: number;
-  change: (typeof APPROVAL_LINE_ITEM_CHANGES)[number];
-}
+export type ApprovalLineItem = NonNullable<CreatePartialRefundInput["approval_line_items"]>[number];
 
 /** Item and quantity selection. Approval fields are runtime-authored. */
-export interface CreatePartialRefundInput {
-  order_id: string;
-  items: { line_item_id: string; quantity: number }[];
-  reason?: string;
-  /** Shopify quote shown to the approver; never trusted from model output. */
-  approval_amount?: string;
-  /** Currency paired with approval_amount. */
-  approval_currency?: string;
-  approval_line_items?: ApprovalLineItem[];
-}
+export type CreatePartialRefundInput = ToolInput<"create_partial_refund">;
 
-export interface CancelOrderInput {
-  order_id: string;
-  reason?: "customer" | "fraud" | "inventory" | "declined" | "other";
-  restock?: boolean;
-  /**
-   * What the cancellation refunds, as Shopify quoted it when the plan was made;
-   * "0.00" when nothing was captured. Runtime-authored, never shown to the model.
-   */
-  approval_amount?: string;
-  /** Currency paired with approval_amount; absent when it is "0.00". */
-  approval_currency?: string;
-}
+export type CancelOrderInput = ToolInput<"cancel_order">;
 
-export interface CreateShopifyOrderLineItem {
-  variant_id?: string;
-  title?: string;
-  price?: string;
-  quantity: number;
-}
+export type CreateShopifyOrderLineItem = CreateShopifyOrderInput["line_items"][number];
 
-export interface CreateShopifyOrderInput {
-  email: string;
-  first_name: string;
-  last_name: string;
-  address1: string;
-  address2?: string;
-  city: string;
-  province: string;
-  zip: string;
-  country: string;
-  line_items: CreateShopifyOrderLineItem[];
-  note?: string;
-  /** Absent on inputs persisted before the field existed. */
-  payment?: "customer_pays" | "free";
-}
+export type CreateShopifyOrderInput = ToolInput<"create_shopify_order">;
 
-export interface AddInternalNoteInput {
-  text: string;
-}
+export type AddInternalNoteInput = ToolInput<"add_internal_note">;
 
-export interface SendReplyInput {
-  text: string;
-  /** Retired: nothing reads it. Persisted inputs may still carry it. */
-  await_response?: boolean;
-  /** True when the reply tells the customer someone will do something later. */
-  promises_follow_up?: boolean;
-}
+export type SendReplyInput = ToolInput<"send_reply">;
 
-export interface SendEmailInput {
-  to: string;
-  subject: string;
-  body: string;
-}
+export type SendEmailInput = ToolInput<"send_email">;
 
-export interface UpdateThreadStatusInput {
-  status: "open" | "closed";
-}
+export type UpdateThreadStatusInput = ToolInput<"update_thread_status">;
 
-export interface UpdateThreadTagInput {
-  tag: string;
-}
+export type UpdateThreadTagInput = ToolInput<"update_thread_tag">;
 
 /** Takes no input: the runtime records which thread is waiting and since when. */
-export type AwaitCustomerPhotoInput = Record<string, never>;
+export type AwaitCustomerPhotoInput = ToolInput<"await_customer_photo">;
 
 /** Names the order only. The email or zip is never an input: code reads it from the customer's message. */
-export interface AwaitOrderVerificationInput {
-  /** Absent while the reply asks which order. */
-  order_name?: string;
-}
+export type AwaitOrderVerificationInput = ToolInput<"await_order_verification">;
 
-export interface EscalateToHumanInput {
-  reason: string;
-}
+export type EscalateToHumanInput = ToolInput<"escalate_to_human">;
 
-export interface AskOperatorInput {
-  question: string;
-}
+export type AskOperatorInput = ToolInput<"ask_operator">;
 
-export interface EditShopifyOrderInput {
-  order_id: string;
-  variant_id?: string;
-  quantity?: number;
-  remove_variant_id?: string;
-  approval_line_items?: ApprovalLineItem[];
-}
+export type EditShopifyOrderInput = ToolInput<"edit_shopify_order">;
 
-export interface IssueDiscountInput {
-  percentage: number;
-  reason?: string;
-  expires_in_days?: number;
-}
+export type IssueDiscountInput = ToolInput<"issue_discount">;
 
-export interface CreateReturnInput {
-  order_id: string;
-  variant_id?: string;
-  reason?:
-    | "unwanted"
-    | "defective"
-    | "wrong_item"
-    | "not_as_described"
-    | "too_large"
-    | "too_small"
-    | "style"
-    | "color"
-    | "other";
-  approval_line_items?: ApprovalLineItem[];
-}
+export type CreateReturnInput = ToolInput<"create_return">;
 
-export interface IssueStoreCreditInput {
-  customer_id: string;
-  amount: string;
-  expires_in_days?: number;
-}
+export type IssueStoreCreditInput = ToolInput<"issue_store_credit">;
 
-export interface CreateGiftCardInput {
-  amount: string;
-  customer_id: string;
-  reason?: string;
-  expires_in_days?: number;
-}
+export type CreateGiftCardInput = ToolInput<"create_gift_card">;
 
-export interface ExchangeQuoteInput {
-  order_id: string;
-  variant_id: string;
-  exchange_variant_id: string;
-  quantity?: number;
-}
+export type ExchangeQuoteInput = ToolInput<"get_exchange_quote">;
 
-export interface CreateExchangeInput extends ExchangeQuoteInput {
-  reason?: CreateReturnInput["reason"];
-  approval_line_items?: ApprovalLineItem[];
-}
+export type CreateExchangeInput = ToolInput<"create_exchange">;
 
-export interface AttachReturnLabelInput {
-  order_id: string;
-  label_url: string;
-  tracking_number?: string;
-}
+export type AttachReturnLabelInput = ToolInput<"attach_return_label">;
 
-export interface FulfillOrderInput {
-  order_id: string;
-  tracking_number?: string;
-  tracking_company?: string;
-  tracking_url?: string;
-  notify_customer?: boolean;
-}
+export type FulfillOrderInput = ToolInput<"fulfill_order">;
 
-export interface GetOrderTrackingInput {
-  order_id: string;
-}
+export type GetOrderTrackingInput = ToolInput<"get_order_tracking">;
 
 /**
  * Two questions with one answer shape. With `query`, stock for what matches it;
@@ -256,11 +93,7 @@ export interface GetOrderTrackingInput {
  * the merchant asking "what am I running out of", not a wildcard over the
  * catalog — the result is bounded either way.
  */
-export interface GetInventoryStatusInput {
-  query?: string;
-  limit?: number;
-  low_stock_threshold?: number;
-}
+export type GetInventoryStatusInput = ToolInput<"get_inventory_status">;
 
 /**
  * A sale is one automatic discount with an expiry, so what it covers is a
@@ -291,13 +124,9 @@ export interface SetVariantPricesInput {
   prices: { variant_id: string; price: number }[];
 }
 
-export interface SearchKbInput {
-  query: string;
-}
+export type SearchKbInput = ToolInput<"search_kb">;
 
-export interface SupportStatsInput {
-  days: number;
-}
+export type SupportStatsInput = ToolInput<"get_support_stats">;
 
 export type ToolGroup =
   | "knowledge"

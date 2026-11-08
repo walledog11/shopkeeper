@@ -10,55 +10,13 @@ import type {
   ToolPolicyMetadata,
 } from "./types.js";
 
-type FieldDefinition =
-  | {
-      kind: "string";
-      description: string;
-      required?: boolean;
-      enum?: readonly string[];
-      nonBlank?: boolean;
-      /** As on an array field: written by the runtime, never shown to the model. */
-      runtimeOnly?: boolean;
-      /**
-       * Required in the schema the model is shown but optional when parsing, for
-       * a field added after inputs without it were persisted.
-       */
-      modelRequired?: boolean;
-    }
-  | {
-      kind: "number";
-      description: string;
-      required?: boolean;
-    }
-  | {
-      kind: "boolean";
-      description: string;
-      required?: boolean;
-      /**
-       * Left out of the schema the model is shown but still parsed, for a field
-       * removed after inputs carrying it were persisted.
-       */
-      retired?: boolean;
-    }
-  | {
-      kind: "array";
-      description: string;
-      required?: boolean;
-      minItems?: number;
-      items: FieldMap;
-      /**
-       * Written by the runtime, never by the model: parsed like any field but
-       * left out of the schema the model is shown.
-       */
-      runtimeOnly?: boolean;
-    };
+import type { FieldDefinition, FieldMap, InputFromFields } from "./fields.js";
+export { stringArg, numberArg, booleanArg, arrayArg } from "./fields.js";
 
-type FieldMap = Record<string, FieldDefinition>;
-
-interface DefineToolOptions<TInput, TName extends string> {
+interface DefineToolOptions<TFields extends FieldMap, TName extends string> {
   name: TName;
   description: string;
-  fields: FieldMap;
+  fields: TFields;
   category: ToolCategory;
   group: ToolGroup;
   capabilities: readonly ToolCapability[];
@@ -74,7 +32,7 @@ interface DefineToolOptions<TInput, TName extends string> {
   policy?: Partial<Omit<ToolPolicyMetadata, "categoryPermission">> & {
     categoryPermission?: boolean;
   };
-  execute: AgentToolDefinition<TInput, TName>["execute"];
+  execute: AgentToolDefinition<InputFromFields<NoInfer<TFields>>, TName>["execute"];
 }
 
 export class ToolInputValidationError extends Error {
@@ -82,29 +40,6 @@ export class ToolInputValidationError extends Error {
     super(message);
     this.name = "ToolInputValidationError";
   }
-}
-
-export function stringArg(
-  description: string,
-  options: { required?: boolean; enum?: readonly string[]; nonBlank?: boolean; runtimeOnly?: boolean; modelRequired?: boolean } = {},
-): FieldDefinition {
-  return { kind: "string", description, ...options };
-}
-
-export function numberArg(description: string, options: { required?: boolean } = {}): FieldDefinition {
-  return { kind: "number", description, ...options };
-}
-
-export function booleanArg(description: string, options: { required?: boolean; retired?: boolean } = {}): FieldDefinition {
-  return { kind: "boolean", description, ...options };
-}
-
-export function arrayArg(
-  description: string,
-  items: FieldMap,
-  options: { required?: boolean; minItems?: number; runtimeOnly?: boolean } = {},
-): FieldDefinition {
-  return { kind: "array", description, items, ...options };
 }
 
 function objectSchema(fields: FieldMap): Anthropic.Tool.InputSchema {
@@ -217,18 +152,18 @@ function parseField(field: FieldDefinition, value: unknown, path: string): unkno
   return value;
 }
 
-function objectParser<TInput>(fields: FieldMap): ToolParser<TInput> {
-  return (input) => parseObject(fields, input, "input") as TInput;
+function objectParser<TFields extends FieldMap>(fields: TFields): ToolParser<InputFromFields<TFields>> {
+  return (input) => parseObject(fields, input, "input") as InputFromFields<TFields>;
 }
 
-export function defineTool<const TName extends string, TInput>(
-  definition: DefineToolOptions<TInput, TName>,
-): AgentToolDefinition<TInput, TName> {
+export function defineTool<const TName extends string, const TFields extends FieldMap>(
+  definition: DefineToolOptions<TFields, TName>,
+): AgentToolDefinition<InputFromFields<TFields>, TName> {
   return {
     name: definition.name,
     description: definition.description,
     inputSchema: objectSchema(definition.fields),
-    parse: objectParser<TInput>(definition.fields),
+    parse: objectParser(definition.fields),
     category: definition.category,
     group: definition.group,
     capabilities: definition.capabilities,

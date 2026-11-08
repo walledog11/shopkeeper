@@ -1,49 +1,21 @@
-import { blankAnswerField, MERCHANT_ANSWER_NAMES } from "../../reply-placeholders.js";
 import { noThread } from "./helpers.js";
-import { booleanArg, defineTool, stringArg } from "./schema.js";
-import type { SendEmailInput, SendReplyInput } from "./types.js";
-
-// Every customer message the agent writes is one of these two fields, so the
-// shop's voice is set here once for every mode that drafts one.
-const CUSTOMER_MESSAGE_TEXT =
-  "Exactly what they read. Write it the way a person at the shop would: warm, plain, short sentences, no em dashes (—), bullet characters or markdown. Never describe their photos or attachments back to them. Order and tracking numbers are the only store references to mention; leave out internal ones such as a return's.";
-
-// A blank's saved answer, bound on the message by planning so the card shows it
-// and the approval binds it. Never offered to the model: only the store's own
-// answer fills a blank.
-const BLANK_ANSWER_FIELDS = Object.fromEntries(MERCHANT_ANSWER_NAMES.map((name) => [
-  blankAnswerField(name),
-  stringArg("Runtime-supplied: the store's saved answer for this blank, bound for approval.", { runtimeOnly: true }),
-]));
-
-// What an email to a customer is made of. The operator's draft_email parks
-// exactly this input as the send_email the merchant approves, so the two read
-// and validate it the same way.
-export const SEND_EMAIL_FIELDS = {
-  to: stringArg("Recipient email address in user@domain format (e.g. 'jane@example.com'). Must be a valid SMTP address — never a name or phone number.", { required: true, nonBlank: true }),
-  subject: stringArg("Email subject line.", { required: true, nonBlank: true }),
-  body: stringArg(CUSTOMER_MESSAGE_TEXT, { required: true, nonBlank: true }),
-  ...BLANK_ANSWER_FIELDS,
-};
+import { defineTool } from "./schema.js";
+import { TOOL_INPUT_FIELDS } from "./input-fields.js";
+export { SEND_EMAIL_FIELDS } from "./input-fields.js";
 
 export const MESSAGING_TOOL_DEFINITIONS = [
   defineTool({
     name: "send_reply",
     description:
       "Send a message to the customer on their channel (Instagram DM, email, etc.).",
-    fields: {
-      text: stringArg(CUSTOMER_MESSAGE_TEXT, { required: true, nonBlank: true }),
-      await_response: booleanArg("Retired; parked replies may still carry it.", { retired: true }),
-      promises_follow_up: booleanArg("Set true when this reply tells the customer that you or anyone at the store will do something later, such as look into it, pass it along, or get back to them. Nothing does that work on its own, so the merchant approves the reply before it is sent."),
-      ...BLANK_ANSWER_FIELDS,
-    },
+    fields: TOOL_INPUT_FIELDS.send_reply,
     category: "communication",
     group: "messaging",
     capabilities: ["thread-io"],
     label: "Sent reply",
     planStepLabel: "Notify customer",
     requiredReceiptVersion: 1,
-    execute: async (input: SendReplyInput, ctx) => (
+    execute: async (input, ctx) => (
       ctx.io ? (ctx.execution ? ctx.io.sendReply(input, ctx.execution) : ctx.io.sendReply(input)) : noThread
     ),
   }),
@@ -51,14 +23,14 @@ export const MESSAGING_TOOL_DEFINITIONS = [
     name: "send_email",
     description:
       "Send an outbound email to any email address. Use this to proactively contact a customer (e.g. shipping delay notice) even when the current thread is not an email thread.",
-    fields: SEND_EMAIL_FIELDS,
+    fields: TOOL_INPUT_FIELDS.send_email,
     category: "communication",
     group: "messaging",
     capabilities: ["thread-io"],
     label: "Sent email",
     planStepLabel: "Send email to customer",
     requiredReceiptVersion: 1,
-    execute: async (input: SendEmailInput, ctx) => (
+    execute: async (input, ctx) => (
       ctx.io ? (ctx.execution ? ctx.io.sendEmail(input, ctx.execution) : ctx.io.sendEmail(input)) : noThread
     ),
   }),

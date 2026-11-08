@@ -249,114 +249,41 @@ export interface CommunicationReceiptFactsV1 {
   providerMessageId: string | null;
 }
 
-export type ReceiptSuccessV1 =
-  | (ReceiptBaseV1<"create_refund"> & {
-      outcome: "succeeded";
-      providerReference: string;
-      facts: RefundReceiptFactsV1;
-    })
-  | (ReceiptBaseV1<"create_partial_refund"> & {
-      outcome: "succeeded";
-      providerReference: string;
-      facts: PartialRefundReceiptFactsV1;
-    })
-  | (ReceiptBaseV1<"cancel_order"> & {
-      outcome: "succeeded";
-      providerReference: string | null;
-      facts: CancellationReceiptFactsV1;
-    })
-  | (ReceiptBaseV1<"create_return"> & {
-      outcome: "succeeded";
-      providerReference: string;
-      facts: ReturnReceiptFactsV1;
-    })
-  | (ReceiptBaseV1<"create_exchange"> & {
-      outcome: "succeeded";
-      providerReference: string;
-      facts: ExchangeReceiptFactsV1;
-    })
-  | (ReceiptBaseV1<"attach_return_label"> & {
-      outcome: "succeeded";
-      providerReference: string;
-      facts: ReturnLabelReceiptFactsV1;
-    })
-  | (ReceiptBaseV1<"fulfill_order"> & {
-      outcome: "succeeded";
-      providerReference: string;
-      facts: FulfillmentReceiptFactsV1;
-    })
-  | (ReceiptBaseV1<"update_shopify_order_address"> & {
-      outcome: "succeeded";
-      providerReference: string;
-      facts: OrderAddressReceiptFactsV1;
-    })
-  | (ReceiptBaseV1<"edit_shopify_order"> & {
-      outcome: "succeeded";
-      providerReference: string;
-      facts: OrderEditReceiptFactsV1;
-    })
-  | (ReceiptBaseV1<"create_shopify_order"> & {
-      outcome: "succeeded";
-      providerReference: string;
-      facts: OrderCreationReceiptFactsV1;
-    })
-  | (ReceiptBaseV1<"update_shopify_customer_info"> & {
-      outcome: "succeeded";
-      providerReference: string;
-      facts: CustomerInfoReceiptFactsV1;
-    })
-  | (ReceiptBaseV1<"add_shopify_customer_note"> & {
-      outcome: "succeeded";
-      providerReference: string;
-      facts: CustomerNoteReceiptFactsV1;
-    })
-  | (ReceiptBaseV1<"create_gift_card"> & {
-      outcome: "succeeded";
-      providerReference: string;
-      facts: GiftCardReceiptFactsV1;
-    })
-  | (ReceiptBaseV1<"create_flash_sale"> & {
-      outcome: "succeeded";
-      providerReference: string;
-      facts: FlashSaleReceiptFactsV1;
-    })
-  | (ReceiptBaseV1<"end_flash_sale"> & {
-      outcome: "succeeded";
-      providerReference: string;
-      facts: EndFlashSaleReceiptFactsV1;
-    })
-  | (ReceiptBaseV1<"set_variant_prices"> & {
-      outcome: "succeeded";
-      providerReference: string;
-      facts: VariantPriceReceiptFactsV1;
-    })
-  | (ReceiptBaseV1<"add_internal_note"> & {
-      outcome: "succeeded";
-      providerReference: string;
-      facts: InternalNoteReceiptFactsV1;
-    })
-  | (ReceiptBaseV1<"update_thread_status"> & {
-      outcome: "succeeded";
-      providerReference: string;
-      facts: ThreadStatusReceiptFactsV1;
-    })
-  | (ReceiptBaseV1<"update_thread_tag"> & {
-      outcome: "succeeded";
-      providerReference: string;
-      facts: ThreadTagReceiptFactsV1;
-    })
-  | (ReceiptBaseV1<"mark_ticket_spam"> & {
-      outcome: "succeeded";
-      providerReference: string;
-      facts: TicketSpamReceiptFactsV1;
-    })
-  | (ReceiptBaseV1<"send_reply" | "send_email" | "send_ticket_reply"> & {
-      outcome: "succeeded";
-      providerReference: string;
-      facts: CommunicationReceiptFactsV1;
-    });
+interface ReceiptFactsByToolV1 {
+  create_refund: RefundReceiptFactsV1;
+  create_partial_refund: PartialRefundReceiptFactsV1;
+  cancel_order: CancellationReceiptFactsV1;
+  create_return: ReturnReceiptFactsV1;
+  create_exchange: ExchangeReceiptFactsV1;
+  attach_return_label: ReturnLabelReceiptFactsV1;
+  fulfill_order: FulfillmentReceiptFactsV1;
+  update_shopify_order_address: OrderAddressReceiptFactsV1;
+  edit_shopify_order: OrderEditReceiptFactsV1;
+  create_shopify_order: OrderCreationReceiptFactsV1;
+  update_shopify_customer_info: CustomerInfoReceiptFactsV1;
+  add_shopify_customer_note: CustomerNoteReceiptFactsV1;
+  create_gift_card: GiftCardReceiptFactsV1;
+  create_flash_sale: FlashSaleReceiptFactsV1;
+  end_flash_sale: EndFlashSaleReceiptFactsV1;
+  set_variant_prices: VariantPriceReceiptFactsV1;
+  add_internal_note: InternalNoteReceiptFactsV1;
+  update_thread_status: ThreadStatusReceiptFactsV1;
+  update_thread_tag: ThreadTagReceiptFactsV1;
+  mark_ticket_spam: TicketSpamReceiptFactsV1;
+  send_reply: CommunicationReceiptFactsV1;
+  send_email: CommunicationReceiptFactsV1;
+  send_ticket_reply: CommunicationReceiptFactsV1;
+}
 
-export type ReceiptToolV1 = ReceiptSuccessV1["tool"];
+export type ReceiptToolV1 = keyof ReceiptFactsByToolV1;
+
+export type ReceiptSuccessV1 = {
+  [Tool in ReceiptToolV1]: ReceiptBaseV1<Tool> & {
+    outcome: "succeeded";
+    providerReference: Tool extends "cancel_order" ? string | null : string;
+    facts: ReceiptFactsByToolV1[Tool];
+  };
+}[ReceiptToolV1];
 
 type ReceiptFailureWithoutPartialFactsV1 = ReceiptBaseV1<ReceiptToolV1> & {
   outcome: "not_found" | "rejected" | "failed" | "unknown";

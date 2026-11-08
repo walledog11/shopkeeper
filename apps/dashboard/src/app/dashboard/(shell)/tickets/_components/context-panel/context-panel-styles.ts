@@ -1,5 +1,5 @@
 import { cn } from "@/lib/ui/cn"
-import { needsYouSoftShadowClassName } from "@/app/dashboard/_components/home/needs-you-card-styles"
+import { supportCardSoftShadowClassName } from "@/components/support-card/styles"
 import {
   merchantInkClass,
   merchantMutedClass,
@@ -36,7 +36,7 @@ export const contextIconButtonClassName = cn(
 )
 
 export const contextMenuClassName = cn(
-  needsYouSoftShadowClassName,
+  supportCardSoftShadowClassName,
   "absolute right-0 top-10 z-20 w-48 overflow-hidden rounded-2xl border border-border bg-white py-1",
 )
 

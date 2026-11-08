@@ -17,7 +17,9 @@ import {
 import { quoteCancellationRefund } from "./refunds.js";
 import type { ShopifyOrder } from "./types.js";
 import { centsToMoney, moneyToCents, requireNumericId } from "./validation.js";
-import { shopifyFailureReceipt, shopifyReceiptEnvelope } from "./receipts.js";
+import { shopifyReceiptResults, shopifyReceiptEnvelope } from "./receipts.js";
+
+const cancellationReceipts = shopifyReceiptResults("cancel_order", "order");
 
 type RequestedRefund = { amount: string; currency: string } | null;
 
@@ -74,38 +76,6 @@ function cancellationRefund(
   return cents > 0 && currency ? { amount: centsToMoney(cents), currency } : null;
 }
 
-function cancellationNoEffect(
-  ctx: ShopifyContext,
-  orderId: string,
-  result: ToolResult,
-  outcome: "rejected" | "failed" | "not_found",
-  code: string,
-): ToolResult {
-  const receipt = shopifyFailureReceipt(
-    ctx,
-    { kind: "order", id: orderId },
-    "cancel_order",
-    outcome,
-    code,
-  );
-  return receipt ? { ...result, receipt } : result;
-}
-
-function unknownCancellationReceipt(
-  ctx: ShopifyContext,
-  orderId: string,
-  code: string,
-): ReceiptV1 | undefined {
-  const envelope = shopifyReceiptEnvelope(ctx, { kind: "order", id: orderId });
-  return envelope ? {
-    ...envelope,
-    tool: "cancel_order",
-    outcome: "unknown",
-    code,
-    providerReference: null,
-  } : undefined;
-}
-
 function cancellationResult(
   ctx: ShopifyContext,
   order: ShopifyOrder,
@@ -118,7 +88,7 @@ function cancellationResult(
   const reason = order.cancel_reason?.trim();
   const financialStatus = order.financial_status?.trim();
   if (!cancelledAt || !reason || !financialStatus) {
-    const receipt = unknownCancellationReceipt(ctx, orderId, "confirmed_state_incomplete");
+    const receipt = cancellationReceipts.unknown(ctx, orderId, "confirmed_state_incomplete");
     return {
       ...toolUnknown(
         `Unknown: Shopify cancelled order ${orderId}, but did not return complete confirmed cancellation state. Do not retry or confirm it to the customer until it is reconciled.`,
@@ -131,7 +101,7 @@ function cancellationResult(
   // refund that was asked for and is not in Shopify's answer is not a success
   // either. Unknown holds the approved message and sends the merchant to look.
   if (requested.refund && !refund) {
-    const receipt = unknownCancellationReceipt(ctx, orderId, "confirmed_refund_missing");
+    const receipt = cancellationReceipts.unknown(ctx, orderId, "confirmed_refund_missing");
     return {
       ...toolUnknown(
         `Unknown: Shopify cancelled order ${order.name ?? orderId}, but its answer shows no refund of the ${requested.refund.amount} ${requested.refund.currency} that was requested (financial_status "${financialStatus}"). Do not tell the customer a refund was made until it is reviewed.`,
@@ -183,19 +153,19 @@ async function reconcileCancellation(
       const result = toolUnknown(
         `Unknown: order ${orderId} is cancelled, but Shopify recorded reason "${actualReason}" instead of "${expectedReason}" after the provider response was interrupted. Do not retry or confirm the cancellation until it is reviewed.`,
       );
-      const receipt = unknownCancellationReceipt(ctx, orderId, "confirmed_reason_mismatch");
+      const receipt = cancellationReceipts.unknown(ctx, orderId, "confirmed_reason_mismatch");
       return receipt ? { ...result, receipt } : result;
     }
     const result = toolUnknown(
       `Unknown: the cancellation request for order ${orderId} may still have committed at Shopify, but a follow-up read did not confirm it. Do not retry or confirm it to the customer until it is reconciled. ${formatShopifyToolError("cancellation reconciliation failed", mutationError)}`,
     );
-    const receipt = unknownCancellationReceipt(ctx, orderId, "reconciliation_not_confirmed");
+    const receipt = cancellationReceipts.unknown(ctx, orderId, "reconciliation_not_confirmed");
     return receipt ? { ...result, receipt } : result;
   } catch (reconciliationError) {
     const result = toolUnknown(
       `Unknown: the cancellation request for order ${orderId} may have committed at Shopify and the follow-up read failed. Do not retry or confirm it to the customer until it is reconciled. ${formatShopifyToolError("cancellation reconciliation failed", reconciliationError)}`,
     );
-    const receipt = unknownCancellationReceipt(ctx, orderId, "reconciliation_read_failed");
+    const receipt = cancellationReceipts.unknown(ctx, orderId, "reconciliation_read_failed");
     return receipt ? { ...result, receipt } : result;
   }
 }
@@ -210,7 +180,7 @@ export async function cancelOrder(
       query: { fields: CANCELLATION_ORDER_FIELDS },
     });
     if (!before.order) {
-      return cancellationNoEffect(
+      return cancellationReceipts.failure(
         ctx,
         orderId,
         toolNotFound(`Order ${orderId} was not returned by Shopify.`),
@@ -219,7 +189,7 @@ export async function cancelOrder(
       );
     }
     if (before.order.cancelled_at) {
-      return cancellationNoEffect(
+      return cancellationReceipts.failure(
         ctx,
         orderId,
         toolPolicyBlock(`Error: failed to cancel order - order ${before.order.name ?? orderId} is already cancelled.`),
@@ -228,7 +198,7 @@ export async function cancelOrder(
       );
     }
     if (before.order.fulfillment_status && before.order.fulfillment_status !== "unfulfilled") {
-      return cancellationNoEffect(
+      return cancellationReceipts.failure(
         ctx,
         orderId,
         toolPolicyBlock(`Error: failed to cancel order - order ${before.order.name ?? orderId} has already shipped or partially shipped.`),
@@ -241,7 +211,7 @@ export async function cancelOrder(
     // only the amount it is sent; without one it keeps the payment.
     const quote = await quoteCancellationRefund(ctx, orderId, before.order);
     if (quote.kind === "currency_mismatch") {
-      return cancellationNoEffect(
+      return cancellationReceipts.failure(
         ctx,
         orderId,
         toolPolicyBlock(`Error: failed to cancel order - Shopify could not price the refund for order ${before.order.name ?? orderId} in one currency.`, { code: "currency_mismatch" }),
@@ -263,7 +233,7 @@ export async function cancelOrder(
       const quotedCents = requested.refund ? moneyToCents(requested.refund.amount) : 0;
       const quotedCurrency = requested.refund?.currency ?? null;
       if (approvedCents !== quotedCents || (quotedCents > 0 && approvedCurrency !== quotedCurrency)) {
-        return cancellationNoEffect(
+        return cancellationReceipts.failure(
           ctx,
           orderId,
           toolPolicyBlock(
@@ -296,13 +266,13 @@ export async function cancelOrder(
 
     if (!data.order) {
       const result = toolUnknown(`Unknown: Shopify accepted the cancellation request for order ${orderId} but did not return the cancelled order. Do not retry or confirm it to the customer until it is reconciled.`);
-      const receipt = unknownCancellationReceipt(ctx, orderId, "provider_order_missing");
+      const receipt = cancellationReceipts.unknown(ctx, orderId, "provider_order_missing");
       return receipt ? { ...result, receipt } : result;
     }
 
     return cancellationResult(ctx, data.order, orderId, input, requested);
   } catch (err) {
-    return cancellationNoEffect(
+    return cancellationReceipts.failure(
       ctx,
       input.order_id.trim() || "invalid",
       toolError(formatShopifyToolError("failed to cancel order", err)),

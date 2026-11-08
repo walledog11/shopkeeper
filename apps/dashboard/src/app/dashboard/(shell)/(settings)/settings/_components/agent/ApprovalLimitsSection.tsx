@@ -50,14 +50,12 @@ function overrideHint(
 
 export function ApprovalLimitsSection({ controller }: { controller: AgentTabController }) {
   const {
+    rawInputs,
+    setRawInput,
     settingsState,
     dispatch,
-    maxRefundInput,
     markExplicit,
     setAutonomyOverride,
-    setMaxRefundInput,
-    dailyRefundCapInput,
-    setDailyRefundCapInput,
   } = controller
 
   return (
@@ -71,10 +69,10 @@ export function ApprovalLimitsSection({ controller }: { controller: AgentTabCont
             <MoneyInput
               label="Largest single"
               aria-label="Largest single compensation"
-              value={maxRefundInput}
+              value={rawInputs.maxRefund}
               onValueChange={(value) => {
                 markExplicit("maxRefundAmount")
-                setMaxRefundInput(value)
+                setRawInput("maxRefund", value)
               }}
               placeholder="No limit"
             />
@@ -83,8 +81,8 @@ export function ApprovalLimitsSection({ controller }: { controller: AgentTabCont
           <MoneyInput
             label="Daily total"
             aria-label="Daily compensation total"
-            value={dailyRefundCapInput}
-            onValueChange={setDailyRefundCapInput}
+            value={rawInputs.dailyRefundCap}
+            onValueChange={value => setRawInput("dailyRefundCap", value)}
             placeholder="No limit"
           />
         </div>
@@ -138,9 +136,9 @@ export function AiUsageLimitSection({
   controller: AgentTabController
   llmSpend: LlmSpendSnapshot
 }) {
-  const { dailyLLMSpendCapInput, setDailyLLMSpendCapInput } = controller
-  const parsedCap = Number(dailyLLMSpendCapInput)
-  const capUsd = dailyLLMSpendCapInput.trim() && Number.isFinite(parsedCap) ? parsedCap : llmSpend.defaultCapUsd
+  const { rawInputs, setRawInput } = controller
+  const parsedCap = Number(rawInputs.dailyLLMSpendCap)
+  const capUsd = rawInputs.dailyLLMSpendCap.trim() && Number.isFinite(parsedCap) ? parsedCap : llmSpend.defaultCapUsd
   const spend = presentLlmSpend(llmSpend, capUsd)
 
   return (
@@ -149,8 +147,8 @@ export function AiUsageLimitSection({
         <MoneyInput
           label="Daily limit"
           aria-label="Daily AI limit"
-          value={dailyLLMSpendCapInput}
-          onValueChange={setDailyLLMSpendCapInput}
+          value={rawInputs.dailyLLMSpendCap}
+          onValueChange={value => setRawInput("dailyLLMSpendCap", value)}
           placeholder={String(llmSpend.defaultCapUsd)}
         />
         <div

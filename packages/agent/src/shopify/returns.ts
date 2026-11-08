@@ -16,8 +16,10 @@ import {
   type ReceiptV1,
   type ToolResult,
 } from "../tools/result.js";
-import { shopifyFailureReceipt, shopifyReceiptEnvelope } from "./receipts.js";
+import { shopifyReceiptResults, shopifyReceiptEnvelope } from "./receipts.js";
 import { optionalString, requireNumericId } from "./validation.js";
+
+const returnReceipts = shopifyReceiptResults("create_return", "order");
 
 const RETURN_REASON_MAP: Record<string, string> = {
   unwanted: "UNWANTED",
@@ -209,39 +211,6 @@ export async function runReturnCreate(
   return { createdReturn };
 }
 
-function returnFailure(
-  ctx: ShopifyContext,
-  orderId: string,
-  result: ToolResult,
-  outcome: "rejected" | "failed" | "not_found",
-  code: string,
-): ToolResult {
-  const receipt = shopifyFailureReceipt(
-    ctx,
-    { kind: "order", id: orderId },
-    "create_return",
-    outcome,
-    code,
-  );
-  return receipt ? { ...result, receipt } : result;
-}
-
-function unknownReturnReceipt(
-  ctx: ShopifyContext,
-  orderId: string,
-  code: string,
-  providerReference: string | null = null,
-): ReceiptV1 | undefined {
-  const envelope = shopifyReceiptEnvelope(ctx, { kind: "order", id: orderId });
-  return envelope ? {
-    ...envelope,
-    tool: "create_return",
-    outcome: "unknown",
-    code,
-    providerReference,
-  } : undefined;
-}
-
 export async function createReturn(
   input: CreateReturnInput,
   ctx: ShopifyContext
@@ -257,7 +226,7 @@ export async function createReturn(
 
     const returnable = await fetchReturnableLineItems(ctx, orderGid);
     if (!returnable) {
-      return returnFailure(
+      return returnReceipts.failure(
         ctx,
         orderId,
         toolNotFound(`Order ${orderId} was not returned by Shopify.`),
@@ -267,7 +236,7 @@ export async function createReturn(
     }
 
     if (returnable.length === 0) {
-      return returnFailure(
+      return returnReceipts.failure(
         ctx,
         orderId,
         toolPolicyBlock("Error: this order has no returnable items - it may not have shipped yet, or the items were already returned."),
@@ -279,7 +248,7 @@ export async function createReturn(
     const selected = selectReturnLineItems(returnable, filterVariantId);
     if (filterVariantId) {
       if (selected.length === 0) {
-        return returnFailure(
+        return returnReceipts.failure(
           ctx,
           orderId,
           toolPolicyBlock(`Error: could not open a return - variant ${filterVariantId} is not a returnable item on order ${orderId}.`),
@@ -305,10 +274,10 @@ export async function createReturn(
         ? toolUnknown(`Unknown: Shopify may have opened the return on order ${orderId}, but did not return a complete return record. Do not retry or confirm it to the customer until it is reconciled.`)
         : toolError(`Error: could not create return - ${created.errorMessage}`);
       if (created.outcome === "unknown") {
-        const receipt = unknownReturnReceipt(ctx, orderId, created.code);
+        const receipt = returnReceipts.unknown(ctx, orderId, created.code);
         return receipt ? { ...result, receipt } : result;
       }
-      return returnFailure(ctx, orderId, result, "failed", created.code);
+      return returnReceipts.failure(ctx, orderId, result, "failed", created.code);
     }
 
     const returnId = created.createdReturn.id?.trim();
@@ -318,7 +287,7 @@ export async function createReturn(
       const result = toolUnknown(
         `Unknown: Shopify opened a return on order ${orderId}, but did not return complete confirmed return state. Do not retry or confirm it to the customer until it is reconciled.`,
       );
-      const receipt = unknownReturnReceipt(
+      const receipt = returnReceipts.unknown(
         ctx,
         orderId,
         "confirmed_state_incomplete",
@@ -362,14 +331,14 @@ export async function createReturn(
       const result = toolUnknown(
         `Unknown: the return may have been opened at Shopify, but it could not be confirmed. Do not open another return, retry, or tell the customer the return is set up until order ${input.order_id} is reviewed. ${formatShopifyToolError("return reconciliation failed", err)}`,
       );
-      const receipt = unknownReturnReceipt(
+      const receipt = returnReceipts.unknown(
         ctx,
         input.order_id.trim() || "invalid",
         "ambiguous_provider_response",
       );
       return receipt ? { ...result, receipt } : result;
     }
-    return returnFailure(
+    return returnReceipts.failure(
       ctx,
       input.order_id.trim() || "invalid",
       toolError(formatShopifyToolError("failed to create return", err)),

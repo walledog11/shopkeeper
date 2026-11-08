@@ -1,4 +1,4 @@
-import type { TicketCardMetaStatusTone } from "@/app/dashboard/_components/home/needs-you-card-meta"
+import type { TicketCardMetaStatusTone } from "@/components/support-card/metadata"
 import type { OrderRow } from "@/lib/orders/order-contract"
 import { financialPill, fulfillmentPill } from "./orders-board-model"
 

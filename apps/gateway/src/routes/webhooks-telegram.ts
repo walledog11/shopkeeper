@@ -2,7 +2,7 @@ import type { Request, Response, Router } from 'express';
 import logger from '../logger.js';
 import { webhookJsonParser } from './body-parsers.js';
 import { ingestAndEnqueueOperatorEvent } from '../operator-event-ingest.js';
-import { parseTelegramCommand } from './telegram/command-parser.js';
+import { parseOperatorCommand } from './operator/command-parser.js';
 import {
   resolveBoundTelegramMember,
   TELEGRAM_UNBOUND_REPLY,
@@ -18,7 +18,7 @@ async function ingestTelegramOperatorEvent(
   webhook: ValidatedTelegramWebhook,
   res: Response,
 ): Promise<void> {
-  const command = parseTelegramCommand(webhook.body);
+  const command = parseOperatorCommand(webhook.body);
   if (command.type === 'start') {
     res.status(200).send('OK');
     await handleStartBinding(webhook.chatId, command.token, webhook.metadata, webhook.reply);

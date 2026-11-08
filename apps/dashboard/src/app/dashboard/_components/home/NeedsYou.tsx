@@ -5,7 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import type { HomeNeedsAttentionItem } from "@/lib/home/summary-contract"
 import { NeedsYouAllClear } from "./NeedsYouAllClear"
 import { NeedsYouDeck } from "./NeedsYouDeck"
-import { needsYouCardShellClassName } from "./needs-you-card-styles"
+import { supportCardShellClassName } from "@/components/support-card/styles"
 
 interface Props {
   items: HomeNeedsAttentionItem[]
@@ -29,7 +29,7 @@ function NeedsYouLoadingSkeleton() {
       aria-label="Loading action plan cards"
       className="mt-5 sm:mt-10 flex flex-col gap-2.5"
     >
-      <Card className={needsYouCardShellClassName("front")}>
+      <Card className={supportCardShellClassName("front")}>
         <div className="rounded-t-3xl border-b border-border/60 bg-white px-5 py-3.5 sm:px-6">
           <div className="flex w-full flex-col gap-2 sm:hidden">
             <div className="flex w-full items-center gap-2">

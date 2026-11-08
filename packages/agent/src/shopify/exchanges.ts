@@ -14,7 +14,7 @@ import {
   type ReceiptV1,
   type ToolResult,
 } from "../tools/result.js";
-import { shopifyFailureReceipt, shopifyReceiptEnvelope } from "./receipts.js";
+import { shopifyReceiptResults, shopifyReceiptEnvelope } from "./receipts.js";
 import { EXCHANGE_EFFECT_DESCRIPTION, EXCHANGE_REPLY_GUIDANCE } from "./exchange-contract.js";
 import { moneyToCents, optionalPositiveInteger, requireNumericId } from "./validation.js";
 import {
@@ -24,6 +24,8 @@ import {
   runReturnCreate,
   type ReturnWatchToolData,
 } from "./returns.js";
+
+const exchangeReceipts = shopifyReceiptResults("create_exchange", "order");
 
 interface VariantPricesData {
   nodes: ({
@@ -55,39 +57,6 @@ export function variantDisplayName(variant: { title?: string | null; product?: {
   return [product, title].filter(Boolean).join(" - ") || "item";
 }
 
-function exchangeFailure(
-  ctx: ShopifyContext,
-  orderId: string,
-  result: ToolResult,
-  outcome: "rejected" | "failed" | "not_found",
-  code: string,
-): ToolResult {
-  const receipt = shopifyFailureReceipt(
-    ctx,
-    { kind: "order", id: orderId },
-    "create_exchange",
-    outcome,
-    code,
-  );
-  return receipt ? { ...result, receipt } : result;
-}
-
-function unknownExchangeReceipt(
-  ctx: ShopifyContext,
-  orderId: string,
-  code: string,
-  providerReference: string | null = null,
-): ReceiptV1 | undefined {
-  const envelope = shopifyReceiptEnvelope(ctx, { kind: "order", id: orderId });
-  return envelope ? {
-    ...envelope,
-    tool: "create_exchange",
-    outcome: "unknown",
-    code,
-    providerReference,
-  } : undefined;
-}
-
 export async function createExchange(
   input: CreateExchangeInput,
   ctx: ShopifyContext
@@ -101,7 +70,7 @@ export async function createExchange(
     const returnReason = mapReturnReason(input.reason);
 
     if (returnVariantId === exchangeVariantId) {
-      return exchangeFailure(
+      return exchangeReceipts.failure(
         ctx,
         orderId,
         toolPolicyBlock("Error: could not set up exchange - the replacement variant is the same as the item being returned."),
@@ -116,7 +85,7 @@ export async function createExchange(
 
     const returnable = await fetchReturnableLineItems(ctx, orderGid);
     if (!returnable) {
-      return exchangeFailure(
+      return exchangeReceipts.failure(
         ctx,
         orderId,
         toolNotFound(`Order ${orderId} was not returned by Shopify.`),
@@ -127,7 +96,7 @@ export async function createExchange(
 
     const selected = returnable.filter((item) => item.variantId === returnVariantGid);
     if (selected.length === 0) {
-      return exchangeFailure(
+      return exchangeReceipts.failure(
         ctx,
         orderId,
         toolPolicyBlock(`Error: could not set up exchange - variant ${returnVariantId} is not a returnable item on order ${orderId}. It may not have shipped yet, or was already returned.`),
@@ -138,7 +107,7 @@ export async function createExchange(
 
     const returnableQuantity = selected.reduce((sum, item) => sum + item.quantity, 0);
     if (quantity > returnableQuantity) {
-      return exchangeFailure(
+      return exchangeReceipts.failure(
         ctx,
         orderId,
         toolPolicyBlock(`Error: could not set up exchange - only ${returnableQuantity} unit(s) of this item can still be returned on order ${orderId}.`),
@@ -160,7 +129,7 @@ export async function createExchange(
     const replacementVariant = variants.get(exchangeVariantGid);
 
     if (!replacementVariant?.price) {
-      return exchangeFailure(
+      return exchangeReceipts.failure(
         ctx,
         orderId,
         toolNotFound(`Replacement variant ${exchangeVariantId} was not returned by Shopify.`),
@@ -169,7 +138,7 @@ export async function createExchange(
       );
     }
     if (!returnedVariant?.price) {
-      return exchangeFailure(
+      return exchangeReceipts.failure(
         ctx,
         orderId,
         toolPolicyBlock("Error: could not set up exchange - the returned item's variant no longer exists in the catalog, so prices cannot be compared. Escalate to the merchant."),
@@ -178,7 +147,7 @@ export async function createExchange(
       );
     }
     if (moneyToCents(replacementVariant.price) > moneyToCents(returnedVariant.price)) {
-      return exchangeFailure(
+      return exchangeReceipts.failure(
         ctx,
         orderId,
         toolPolicyBlock(`Error: could not set up exchange - the replacement costs more at current catalog prices (${replacementVariant.price} vs ${returnedVariant.price}), so automatic exchange is restricted. Escalate to the merchant to handle pricing. These catalog prices do not establish the customer's balance; get_exchange_quote can read Shopify's current estimate.`),
@@ -205,10 +174,10 @@ export async function createExchange(
         ? toolUnknown(`Unknown: Shopify may have opened the exchange return on order ${orderId}, but did not return a complete return record. Do not retry or confirm it to the customer until it is reconciled.`)
         : toolError(`Error: could not set up exchange - ${created.errorMessage}`);
       if (created.outcome === "unknown") {
-        const receipt = unknownExchangeReceipt(ctx, orderId, created.code);
+        const receipt = exchangeReceipts.unknown(ctx, orderId, created.code);
         return receipt ? { ...result, receipt } : result;
       }
-      return exchangeFailure(ctx, orderId, result, "failed", created.code);
+      return exchangeReceipts.failure(ctx, orderId, result, "failed", created.code);
     }
 
     const returnId = created.createdReturn.id?.trim();
@@ -218,7 +187,7 @@ export async function createExchange(
       const result = toolUnknown(
         `Unknown: Shopify opened an exchange return on order ${orderId}, but did not return complete confirmed return state. Do not retry or confirm it to the customer until it is reconciled.`,
       );
-      const receipt = unknownExchangeReceipt(
+      const receipt = exchangeReceipts.unknown(
         ctx,
         orderId,
         "confirmed_state_incomplete",
@@ -267,14 +236,14 @@ export async function createExchange(
       const result = toolUnknown(
         `Unknown: the exchange return may have been opened at Shopify, but it could not be confirmed. Do not create another exchange, retry, or tell the customer the exchange is set up until order ${input.order_id} is reviewed. ${formatShopifyToolError("exchange reconciliation failed", err)}`,
       );
-      const receipt = unknownExchangeReceipt(
+      const receipt = exchangeReceipts.unknown(
         ctx,
         input.order_id.trim() || "invalid",
         "ambiguous_provider_response",
       );
       return receipt ? { ...result, receipt } : result;
     }
-    return exchangeFailure(
+    return exchangeReceipts.failure(
       ctx,
       input.order_id.trim() || "invalid",
       toolError(formatShopifyToolError("failed to set up exchange", err)),

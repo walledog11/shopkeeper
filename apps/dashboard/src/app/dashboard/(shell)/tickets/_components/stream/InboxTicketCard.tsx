@@ -4,18 +4,18 @@ import { Loader2 } from "lucide-react"
 import MerchantAnswerForm from "@/components/agent/MerchantAnswerForm"
 import { cn } from "@/lib/ui/cn"
 import {
-  NeedsYouCardBody,
-  NeedsYouCardFooter,
-  NeedsYouCardHeader,
-  NeedsYouCardShell,
-  NeedsYouPrimaryButton,
-} from "@/app/dashboard/_components/home/needs-you-card-ui"
+  SupportCardBody,
+  SupportCardFooter,
+  SupportCardHeader,
+  SupportCardShell,
+  SupportCardPrimaryButton,
+} from "@/components/support-card/card"
 import {
   TicketCardMetaRow,
   type TicketCardMeta,
   type TicketCardMetaStatusTone,
-} from "@/app/dashboard/_components/home/needs-you-card-meta"
-import { needsYouSecondaryButtonClassName } from "@/app/dashboard/_components/home/needs-you-card-styles"
+} from "@/components/support-card/metadata"
+import { supportCardSecondaryButtonClassName } from "@/components/support-card/styles"
 import { buildTicketCardMeta } from "../../_lib/inbox-row"
 import type { InboxRow as InboxRowModel, InboxRowDecision } from "../../_lib/inbox-row"
 import type { Ticket } from "@/types"
@@ -34,7 +34,7 @@ function actionButtonLabel(row: InboxRowModel, isSending: boolean): string {
 }
 
 const compactSecondaryClassName = cn(
-  needsYouSecondaryButtonClassName,
+  supportCardSecondaryButtonClassName,
   "shrink-0 whitespace-nowrap px-4 py-2.5 text-sm",
 )
 
@@ -106,8 +106,8 @@ export function InboxTicketCard({
       data-decision={row.decision ?? "none"}
       className={cn("list-none", dim && "brightness-[0.98] saturate-[0.92]")}
     >
-      <NeedsYouCardShell className={cn(dim && "opacity-90")}>
-        <NeedsYouCardHeader>
+      <SupportCardShell className={cn(dim && "opacity-90")}>
+        <SupportCardHeader>
           <button
             type="button"
             onClick={actions.onOpen}
@@ -115,9 +115,9 @@ export function InboxTicketCard({
           >
             <TicketCardMetaRow meta={headerMeta} />
           </button>
-        </NeedsYouCardHeader>
+        </SupportCardHeader>
 
-        <NeedsYouCardBody className="gap-2 py-2.5 sm:py-3">
+        <SupportCardBody className="gap-2 py-2.5 sm:py-3">
           <button
             type="button"
             onClick={actions.onOpen}
@@ -150,39 +150,39 @@ export function InboxTicketCard({
               />
             </div>
           )}
-        </NeedsYouCardBody>
+        </SupportCardBody>
 
         {showDraftFooter && (
-          <NeedsYouCardFooter className="px-4 py-3 sm:px-5">
-            <NeedsYouPrimaryButton
+          <SupportCardFooter className="px-4 py-3 sm:px-5">
+            <SupportCardPrimaryButton
               data-testid={`ticket-row-${row.decision}`}
               disabled={actionsDisabled || isSending}
               onClick={row.decision === "send" ? actions.onSend : actions.onReview}
             >
               {isSending && <Loader2 aria-hidden className="size-3.5 animate-spin" />}
               {actionButtonLabel(row, isSending)}
-            </NeedsYouPrimaryButton>
-          </NeedsYouCardFooter>
+            </SupportCardPrimaryButton>
+          </SupportCardFooter>
         )}
 
         {showTrustFooter && (
-          <NeedsYouCardFooter className="flex flex-wrap items-center justify-end gap-2 px-4 py-3 sm:px-5">
+          <SupportCardFooter className="flex flex-wrap items-center justify-end gap-2 px-4 py-3 sm:px-5">
             <button type="button" onClick={actions.onNotReal} disabled={actionsDisabled} className={compactSecondaryClassName}>
               Mark as spam
             </button>
-            <NeedsYouPrimaryButton
+            <SupportCardPrimaryButton
               size="compact"
               data-testid="ticket-row-trust"
               disabled={actionsDisabled}
               onClick={actions.onTrust}
             >
               Mark as customer
-            </NeedsYouPrimaryButton>
-          </NeedsYouCardFooter>
+            </SupportCardPrimaryButton>
+          </SupportCardFooter>
         )}
 
         {showSpamFooter && actions.onRecover && (
-          <NeedsYouCardFooter className="flex items-center justify-end gap-2 px-4 py-3 sm:px-5">
+          <SupportCardFooter className="flex items-center justify-end gap-2 px-4 py-3 sm:px-5">
             <button
               type="button"
               data-testid="inbox-spam-recover"
@@ -192,9 +192,9 @@ export function InboxTicketCard({
             >
               Not spam
             </button>
-          </NeedsYouCardFooter>
+          </SupportCardFooter>
         )}
-      </NeedsYouCardShell>
+      </SupportCardShell>
     </li>
   )
 }

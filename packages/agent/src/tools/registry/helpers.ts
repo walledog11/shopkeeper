@@ -7,21 +7,6 @@ import type { AgentToolDefinition, ShopifyToolContext, ToolCapability, ToolExecu
 
 export const noShopify = toolError("Error: no Shopify integration connected.");
 export const noThread = toolError("Error: this tool requires a conversation thread.");
-export const cancelReasons = ["customer", "fraud", "inventory", "declined", "other"] as const;
-export const returnReasons = [
-  "unwanted",
-  "defective",
-  "wrong_item",
-  "not_as_described",
-  "too_large",
-  "too_small",
-  "style",
-  "color",
-  "other",
-] as const;
-// Escalation is orthogonal (`Thread.escalatedAt`); `pending` remains a legacy
-// database value but is no longer a state the model may create.
-export const threadStatuses = ["open", "closed"] as const;
 
 export function requireShopify(ctx: BaseAgentContext): ShopifyToolContext | null {
   return ctx.shopify;

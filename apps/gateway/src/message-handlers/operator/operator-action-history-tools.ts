@@ -1,7 +1,7 @@
 import { db } from '@shopkeeper/db';
 import { defineTool, stringArg, toolOk, type AgentToolDefinition } from '@shopkeeper/agent/tools';
 import { wrapUntrusted } from '@shopkeeper/agent/message-history';
-import { relativeAge } from '../../routes/telegram/format.js';
+import { relativeAge } from '../../routes/operator/format.js';
 
 // `AgentAction` is the audit trail for every tool call the agent makes, and
 // until now nothing on the operator side could read it. That mattered most for

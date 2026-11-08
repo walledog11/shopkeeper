@@ -4,7 +4,7 @@ import { ProductImage } from "./ProductImage"
 import { SectionHeader } from "./SectionHeader"
 import { cn } from "@/lib/ui/cn"
 import { merchantSandInkHoverClass, merchantSandSurfaceClass } from "@/lib/ui/merchant-palette"
-import { needsYouMetaPillClassName } from "@/app/dashboard/_components/home/needs-you-card-styles"
+import { supportCardMetaPillClassName } from "@/components/support-card/styles"
 import type { ShopifyOrder } from "@/types/shopify"
 
 interface OrderListProps {
@@ -112,7 +112,7 @@ export function OrderList({
             const href = shopifyOrderUrl(shop, item.id)
             const label = orderLabel(item.name)
             const pillClass = cn(
-              needsYouMetaPillClassName,
+              supportCardMetaPillClassName,
               "h-9 shrink-0 px-3 text-xs font-semibold",
               merchantSandInkHoverClass,
             )

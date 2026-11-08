@@ -12,12 +12,12 @@ import {
   runImessageOperatorTurn,
   type ImessageOperatorInbound,
 } from './message-handler.js';
-import { HELP_TEXT } from '../telegram/format.js';
+import { HELP_TEXT } from '../operator/format.js';
 import type { OperatorReply } from '../operator-message.js';
 
 const executeFreeFormInstructionSpy = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 
-vi.mock('../telegram/agent-execution.js', () => ({
+vi.mock('../operator/agent-execution.js', () => ({
   executeFreeFormInstruction: executeFreeFormInstructionSpy,
 }));
 

@@ -2,7 +2,7 @@ import { db } from '@shopkeeper/db';
 import { wrapUntrusted } from '@shopkeeper/agent/message-history';
 import { canonicalInboxThreadWhere } from '@shopkeeper/agent/inbox-filter';
 import { postDashboardInternal, type DashboardApiResult } from '../../clients/dashboard-internal.js';
-import { relativeAge } from '../../routes/telegram/format.js';
+import { relativeAge } from '../../routes/operator/format.js';
 import { customerFirstName } from '@shopkeeper/agent/person-name';
 import { briefingOrdinal, type PendingDigest, type PendingDigestItem } from '../../operator-context.js';
 

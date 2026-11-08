@@ -1,55 +1,24 @@
-import { noShopify, cancelReasons, requireShopify, returnReasons, maybeRecordReturnWatch } from "./helpers.js";
-import { arrayArg, booleanArg, defineTool, numberArg, stringArg } from "./schema.js";
+import { noShopify, requireShopify, maybeRecordReturnWatch } from "./helpers.js";
+import { defineTool } from "./schema.js";
+import { TOOL_INPUT_FIELDS } from "./input-fields.js";
 import { toolPolicyBlock } from "../result.js";
 import type { SupportContext } from "../../agent-context.js";
 import { ORDER_VERIFICATION_CHANNELS } from "../../thread-constants.js";
 import { EXCHANGE_EFFECT_DESCRIPTION, EXCHANGE_REPLY_GUIDANCE, EXCHANGE_FINANCIAL_GUIDANCE } from "../../shopify/exchange-contract.js";
-import type {
-  AttachReturnLabelInput,
-  CancelOrderInput,
-  CreateExchangeInput,
-  CreateGiftCardInput,
-  CreatePartialRefundInput,
-  CreateRefundInput,
-  CreateReturnInput,
-  CreateShopifyOrderInput,
-  EditShopifyOrderInput,
-  ExchangeQuoteInput,
-  FulfillOrderInput,
-  GetOrderByNameInput,
-  GetOrderFulfillmentStatusInput,
-  GetOrderTrackingInput,
-  GetShopifyOrdersInput,
-  UpdateShopifyOrderAddressInput,
-} from "./types.js";
-import { APPROVAL_LINE_ITEM_CHANGES } from "./types.js";
-
-// Hidden from the model; the planner binds it from Shopify before approval.
-const approvalLineItemsArg = arrayArg(
-  "The line items this write targets, as Shopify names them, bound by the runtime for approval.",
-  {
-    name: stringArg("Shopify's name for the line item or variant.", { required: true }),
-    quantity: numberArg("How many units the write changes.", { required: true }),
-    change: stringArg("What the write does to it.", { required: true, enum: APPROVAL_LINE_ITEM_CHANGES }),
-  },
-  { runtimeOnly: true },
-);
 
 export const ORDER_TOOL_DEFINITIONS = [
   defineTool({
     name: "get_shopify_orders",
     description:
       "Fetch the most recent Shopify orders for a customer (up to 5), including financial status, fulfillment status, line items, and the order's shipping_address (address1, address2, city, province, zip, country). Use this first for basic order-status questions or to look up the shipping address; if fulfillment_status is null, the order has not shipped yet and you usually do not need get_order_tracking.",
-    fields: {
-      customer_id: stringArg("Shopify customer ID.", { required: true }),
-    },
+    fields: TOOL_INPUT_FIELDS.get_shopify_orders,
     category: "read",
     group: "order",
     capabilities: ["shopify"],
     requiredScopes: ["read_orders"],
     label: "Fetched orders",
     planStepLabel: "Fetch recent orders",
-    execute: async (input: GetShopifyOrdersInput, ctx, _settings, deps) => {
+    execute: async (input, ctx, _settings, deps) => {
       const shopify = requireShopify(ctx);
       return shopify ? deps.getShopifyOrders(input, shopify) : noShopify;
     },
@@ -58,16 +27,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     name: "update_shopify_order_address",
     description:
       "Update the shipping address on a specific Shopify order AND sync the customer's default address to match (only works for unfulfilled/unshipped orders). The order ID is available in the 'Customer's recent orders' context — use it directly. Pass ALL address components in a single call.",
-    fields: {
-      order_id: stringArg("Shopify order ID (numeric, e.g. '5678901234'). Use the id field from the orders context.", { required: true }),
-      customer_id: stringArg("Shopify customer ID.", { required: true }),
-      address1: stringArg("Street line (e.g. '123 Main St').", { required: true }),
-      address2: stringArg("Apartment, suite, unit, etc. (e.g. 'Apt 4B'). Omit if not provided."),
-      city: stringArg("City.", { required: true }),
-      province: stringArg("State or province abbreviation (e.g. 'NY', 'CA').", { required: true }),
-      zip: stringArg("ZIP or postal code.", { required: true }),
-      country: stringArg("Country name (e.g. 'United States').", { required: true }),
-    },
+    fields: TOOL_INPUT_FIELDS.update_shopify_order_address,
     category: "action",
     group: "order",
     capabilities: ["shopify"],
@@ -75,7 +35,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     requiredReceiptVersion: 1,
     label: "Updated shipping address",
     planStepLabel: "Update shipping address on Shopify",
-    execute: async (input: UpdateShopifyOrderAddressInput, ctx, _settings, deps) => {
+    execute: async (input, ctx, _settings, deps) => {
       const shopify = requireShopify(ctx);
       return shopify ? deps.updateShopifyOrderAddress(input, shopify) : noShopify;
     },
@@ -84,16 +44,14 @@ export const ORDER_TOOL_DEFINITIONS = [
     name: "get_order_by_name",
     description:
       "Look up a Shopify order by its human-readable order number (e.g. '#1234'). Use this when the customer mentions an order number. Returns the order ID, financial/fulfillment status, line items, and shipping_address.",
-    fields: {
-      order_name: stringArg("The order number as shown to the customer, e.g. '#1234' or '1234'.", { required: true }),
-    },
+    fields: TOOL_INPUT_FIELDS.get_order_by_name,
     category: "read",
     group: "order",
     capabilities: ["shopify"],
     requiredScopes: ["read_orders"],
     label: "Looked up order",
     planStepLabel: "Look up order",
-    execute: async (input: GetOrderByNameInput, ctx, _settings, deps) => {
+    execute: async (input, ctx, _settings, deps) => {
       const shopify = requireShopify(ctx);
       return shopify ? deps.getOrderByName(input, shopify) : noShopify;
     },
@@ -102,17 +60,14 @@ export const ORDER_TOOL_DEFINITIONS = [
     name: "get_order_fulfillment_status",
     description:
       "Check whether an order has shipped, using the order number and/or the email used at checkout. Returns only the shipping state (not_shipped_yet, partially_shipped, shipped, delivered, cancelled, unknown), the date it was placed, and the date it shipped. Returns no name, address, contact details, items or amounts — use the fuller order tools when you have those available and need that detail.",
-    fields: {
-      order_number: stringArg("The order number as shown to the customer, e.g. '#1234' or '1234'."),
-      email: stringArg("The email address used at checkout, if they gave one. Supplying both narrows the match."),
-    },
+    fields: TOOL_INPUT_FIELDS.get_order_fulfillment_status,
     category: "read",
     group: "order",
     capabilities: ["shopify"],
     requiredScopes: ["read_orders"],
     label: "Checked shipping status",
     planStepLabel: "Check shipping status",
-    execute: async (input: GetOrderFulfillmentStatusInput, ctx, _settings, deps) => {
+    execute: async (input, ctx, _settings, deps) => {
       const shopify = requireShopify(ctx);
       if (!shopify) return noShopify;
       // An email confirms an Instagram or TikTok sender's order and unlocks
@@ -132,16 +87,14 @@ export const ORDER_TOOL_DEFINITIONS = [
     name: "get_order_tracking",
     description:
       "Fetch the fulfillment and tracking details Shopify holds for an order: tracking number, carrier, shipment status, and the carrier's tracking URL. It does not return carrier scan events - if someone needs the movement history, the tracking URL is where it lives. Use this only when the order is fulfilled or partially fulfilled AND someone explicitly needs tracking details such as a tracking number or carrier link. Fulfillment by itself is not a reason to call this tool. Do not use it for unfulfilled orders or basic status checks that can be answered from get_shopify_orders.",
-    fields: {
-      order_id: stringArg("Shopify order ID (numeric, e.g. '5678901234'). Use the id field from the orders context or from get_order_by_name.", { required: true }),
-    },
+    fields: TOOL_INPUT_FIELDS.get_order_tracking,
     category: "read",
     group: "order",
     capabilities: ["shopify"],
     requiredScopes: ["read_orders"],
     label: "Fetched tracking info",
     planStepLabel: "Fetch order tracking",
-    execute: async (input: GetOrderTrackingInput, ctx, _settings, deps) => {
+    execute: async (input, ctx, _settings, deps) => {
       const shopify = requireShopify(ctx);
       return shopify ? deps.getOrderTracking(input, shopify) : noShopify;
     },
@@ -150,13 +103,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     name: "create_refund",
     description:
       "Use when the customer or merchant explicitly requests all available money back for one identified order and does not also explicitly ask to send delivered items back. Pass the order_id and reason only: Shopify supplies the current refundable balance and currency for approval, so never calculate or copy an amount yourself. Do not infer a return merely because the item was damaged, unwanted, or the wrong size. Item-only refunds use create_partial_refund; a physical return uses create_return; an unshipped order that should be stopped uses cancel_order.",
-    fields: {
-      order_id: stringArg("Shopify order ID (numeric).", { required: true }),
-      amount: stringArg("Runtime-supplied Shopify quote for approval. Always omit this field."),
-      currency: stringArg("Runtime-supplied quote currency for approval. Always omit this field."),
-      approval_shop_amount: stringArg("Runtime-supplied cost of the refund in the shop's currency, for approval.", { runtimeOnly: true }),
-      reason: stringArg("Reason for the refund (e.g. 'Item not received', 'Wrong item sent')."),
-    },
+    fields: TOOL_INPUT_FIELDS.create_refund,
     category: "action",
     group: "order",
     capabilities: ["shopify"],
@@ -169,7 +116,7 @@ export const ORDER_TOOL_DEFINITIONS = [
       dailyRefundSpendLimit: "input",
       damageEvidence: true,
     },
-    execute: async (input: CreateRefundInput, ctx, _settings, deps) => {
+    execute: async (input, ctx, _settings, deps) => {
       const shopify = requireShopify(ctx);
       if (!shopify) return noShopify;
 
@@ -181,21 +128,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     name: "create_partial_refund",
     description:
       "Use when the customer or merchant asks for money back on specific items rather than the whole order — one item out of three, two of five units, a single damaged piece. Name each line item and how many units come back; Shopify prices the refund and its figure is the one that is applied, so do not calculate or state an amount yourself. Shipping is not refunded. If the whole order is coming back use create_refund instead. If the goods are being physically returned use create_return.",
-    fields: {
-      order_id: stringArg("Shopify order ID (numeric).", { required: true }),
-      items: arrayArg(
-        "The line items to refund and how many units of each.",
-        {
-          line_item_id: stringArg("Shopify line item ID from the order.", { required: true }),
-          quantity: numberArg("How many units of this line item to refund.", { required: true }),
-        },
-        { required: true, minItems: 1 },
-      ),
-      reason: stringArg("Reason for the refund (e.g. 'One napkin arrived torn')."),
-      approval_amount: stringArg("Runtime-supplied Shopify quote for approval. Always omit this field."),
-      approval_currency: stringArg("Runtime-supplied quote currency for approval. Always omit this field."),
-      approval_line_items: approvalLineItemsArg,
-    },
+    fields: TOOL_INPUT_FIELDS.create_partial_refund,
     category: "action",
     group: "order",
     capabilities: ["shopify"],
@@ -211,7 +144,7 @@ export const ORDER_TOOL_DEFINITIONS = [
       dailyRefundSpendLimit: "provider",
       damageEvidence: true,
     },
-    execute: async (input: CreatePartialRefundInput, ctx, settings, deps) => {
+    execute: async (input, ctx, settings, deps) => {
       const shopify = requireShopify(ctx);
       if (!shopify) return noShopify;
       return deps.createPartialRefund(input, shopify, settings);
@@ -221,13 +154,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     name: "cancel_order",
     description:
       "Use when nothing on the order has shipped and the customer wants the whole order stopped. Only works for orders that have not yet been fulfilled; it refunds what the customer paid as part of the cancellation, so no separate create_refund call is needed. If the order has already shipped, the goods have to come back instead - use create_return. If the order is still going ahead and only some items should come off it, use edit_shopify_order.",
-    fields: {
-      order_id: stringArg("Shopify order ID (numeric).", { required: true }),
-      reason: stringArg("Reason for cancellation.", { enum: cancelReasons }),
-      restock: booleanArg("Whether to restock the items. Defaults to true."),
-      approval_amount: stringArg("Runtime-supplied Shopify quote of the refund, for approval.", { runtimeOnly: true }),
-      approval_currency: stringArg("Runtime-supplied quote currency, for approval.", { runtimeOnly: true }),
-    },
+    fields: TOOL_INPUT_FIELDS.cancel_order,
     category: "action",
     group: "order",
     capabilities: ["shopify"],
@@ -238,7 +165,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     policy: {
       cancellationDisabled: true,
     },
-    execute: async (input: CancelOrderInput, ctx, _settings, deps) => {
+    execute: async (input, ctx, _settings, deps) => {
       const shopify = requireShopify(ctx);
       return shopify ? deps.cancelOrder(input, shopify) : noShopify;
     },
@@ -247,29 +174,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     name: "create_shopify_order",
     description:
       "Create a new Shopify order on behalf of a customer. Each line item must include either a variant_id (for a real catalog product) or a title + price (for a custom item, if allowed). The order is created unpaid, with its full total pending: nothing is collected and the customer gets no receipt. This tool cannot discount an order or make it free.",
-    fields: {
-      email: stringArg("Customer email address.", { required: true }),
-      first_name: stringArg("Customer first name.", { required: true }),
-      last_name: stringArg("Customer last name.", { required: true }),
-      address1: stringArg("Shipping street address.", { required: true }),
-      address2: stringArg("Apartment or suite (optional)."),
-      city: stringArg("City.", { required: true }),
-      province: stringArg("State or province abbreviation (e.g. 'NY').", { required: true }),
-      zip: stringArg("ZIP or postal code.", { required: true }),
-      country: stringArg("Country name (e.g. 'United States').", { required: true }),
-      line_items: arrayArg(
-        "Items to include in the order.",
-        {
-          variant_id: stringArg("Shopify product variant ID. Use this for real catalog products."),
-          title: stringArg("Custom item title. Only provide when variant_id is omitted."),
-          price: stringArg("Unit price as a decimal string (e.g. '29.99'). Only for custom items."),
-          quantity: numberArg("Quantity.", { required: true }),
-        },
-        { required: true, minItems: 1 },
-      ),
-      note: stringArg("Optional note to attach to the order."),
-      payment: stringArg('Who pays for the order: "customer_pays" when the customer owes its total, or "free" when it should cost them nothing, such as a free replacement or a gift.', { modelRequired: true, enum: ["customer_pays", "free"] }),
-    },
+    fields: TOOL_INPUT_FIELDS.create_shopify_order,
     category: "action",
     group: "order",
     capabilities: ["shopify"],
@@ -282,7 +187,7 @@ export const ORDER_TOOL_DEFINITIONS = [
       freeOfChargeRefused: true,
       damageEvidence: true,
     },
-    execute: async (input: CreateShopifyOrderInput, ctx, settings, deps) => {
+    execute: async (input, ctx, settings, deps) => {
       const shopify = requireShopify(ctx);
       return shopify
         ? deps.createShopifyOrder(input, shopify, {
@@ -295,13 +200,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     name: "edit_shopify_order",
     description:
       "Use while the order has not shipped yet and its contents need to change but the order itself goes ahead. Adds, removes, or swaps a line item on an existing Shopify order using the Order Editing API. Once items have shipped they come back through create_return or create_exchange rather than an edit; to stop the whole unshipped order instead of changing it, use cancel_order. To add an item: provide variant_id and quantity. To remove an item: provide only remove_variant_id from the orders context, no search needed. To swap size/color: provide variant_id (new) and remove_variant_id (old). At least one of variant_id or remove_variant_id must be provided.",
-    fields: {
-      order_id: stringArg("Shopify order ID (numeric, e.g. '5678901234'). Use the id field from the orders context.", { required: true }),
-      variant_id: stringArg("Variant ID to add. Required when adding or swapping. Omit for pure removal."),
-      quantity: numberArg("Number of units to add. Required when variant_id is provided."),
-      remove_variant_id: stringArg("Variant ID of the existing item to remove. Use for removals and swaps. Available in the orders context — no search needed."),
-      approval_line_items: approvalLineItemsArg,
-    },
+    fields: TOOL_INPUT_FIELDS.edit_shopify_order,
     category: "action",
     group: "order",
     capabilities: ["shopify"],
@@ -309,7 +208,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     requiredReceiptVersion: 1,
     label: "Edited order",
     planStepLabel: "Edit existing order",
-    execute: async (input: EditShopifyOrderInput, ctx, _settings, deps) => {
+    execute: async (input, ctx, _settings, deps) => {
       const shopify = requireShopify(ctx);
       return shopify ? deps.editShopifyOrder(input, shopify) : noShopify;
     },
@@ -318,11 +217,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     name: "issue_discount",
     description:
       "Retired historical percentage-discount action. Kept only so old action records and reconciliation remain readable; new requests require merchant handling.",
-    fields: {
-      percentage: numberArg("Whole-number percentage off the customer's next order, e.g. 10 for 10% off. Must be within the workspace discount cap.", { required: true }),
-      reason: stringArg("Short internal reason for the gesture (e.g. 'shipping delay'). Used only to label the discount inside Shopify."),
-      expires_in_days: numberArg("Optional whole number of days until the code expires. Omit for no expiry."),
-    },
+    fields: TOOL_INPUT_FIELDS.issue_discount,
     category: "action",
     group: "order",
     capabilities: ["shopify"],
@@ -337,12 +232,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     name: "create_return",
     description:
       "Open a return (RMA) for items on a fulfilled Shopify order so the customer is authorized to send them back. This does NOT refund the customer or change the order total. Use this only when the customer explicitly asks to return/send back the delivered goods or store policy requires an RMA; do not infer a return merely from a damaged, unwanted, or wrong-size item. If the customer explicitly requests an exact full-order refund without saying the goods are being returned, use create_refund. If a later partial or item-only refund is owed, escalate it for merchant handling; create_refund is full-order-only. By default this returns every returnable item on the order; pass variant_id (from the orders context) to return just that one item. Only works for items that have actually shipped. If they want a different size, colour or variant of the same item instead of their money back, use create_exchange.",
-    fields: {
-      order_id: stringArg("Shopify order ID (numeric). Use the id field from the orders context.", { required: true }),
-      variant_id: stringArg("Variant ID of the single item to return, from the orders context. Omit to return all returnable items on the order."),
-      reason: stringArg("Why the item is coming back.", { enum: returnReasons }),
-      approval_line_items: approvalLineItemsArg,
-    },
+    fields: TOOL_INPUT_FIELDS.create_return,
     category: "action",
     group: "order",
     capabilities: ["shopify"],
@@ -351,7 +241,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     merchantFollowUp: "send_return_label",
     label: "Opened return",
     planStepLabel: "Open return",
-    execute: async (input: CreateReturnInput, ctx, _settings, deps) => {
+    execute: async (input, ctx, _settings, deps) => {
       const shopify = requireShopify(ctx);
       if (!shopify) return noShopify;
       const result = await deps.createReturn(input, shopify);
@@ -363,14 +253,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     name: "create_exchange",
     description:
       `Set up an exchange on a fulfilled Shopify order for the item the customer is sending back. Use this instead of create_refund when the customer wants a different size, color, or variant rather than their money back. ${EXCHANGE_EFFECT_DESCRIPTION} ${EXCHANGE_REPLY_GUIDANCE} ${EXCHANGE_FINANCIAL_GUIDANCE} Only works for items that have shipped; for unshipped orders use edit_shopify_order to swap items directly. If they are sending the item back and not taking a replacement, use create_return. Automatic exchanges require the replacement's current catalog price to be the same or lower; a higher catalog price requires merchant handling. That eligibility check does not establish the customer's balance.`,
-    fields: {
-      order_id: stringArg("Shopify order ID (numeric). Use the id field from the orders context.", { required: true }),
-      variant_id: stringArg("Variant ID of the item the customer is sending back, from the orders context.", { required: true }),
-      exchange_variant_id: stringArg("Variant ID of the replacement item to record on the exchange. Use search_shopify_products to find it if it is not in context.", { required: true }),
-      quantity: numberArg("How many units to exchange. Defaults to 1."),
-      reason: stringArg("Why the item is coming back.", { enum: returnReasons }),
-      approval_line_items: approvalLineItemsArg,
-    },
+    fields: TOOL_INPUT_FIELDS.create_exchange,
     category: "action",
     group: "order",
     capabilities: ["shopify"],
@@ -382,7 +265,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     policy: {
       damageEvidence: true,
     },
-    execute: async (input: CreateExchangeInput, ctx, _settings, deps) => {
+    execute: async (input, ctx, _settings, deps) => {
       const shopify = requireShopify(ctx);
       if (!shopify) return noShopify;
       const result = await deps.createExchange(input, shopify);
@@ -394,19 +277,14 @@ export const ORDER_TOOL_DEFINITIONS = [
     name: "get_exchange_quote",
     description:
       `Read Shopify's current financial estimate for exchanging a fulfilled item for a selected replacement, including discounts, tax and calculated fees. No return is opened and no charge, refund or shipment happens. ${EXCHANGE_FINANCIAL_GUIDANCE}`,
-    fields: {
-      order_id: stringArg("Shopify order ID.", { required: true }),
-      variant_id: stringArg("Variant ID of the fulfilled item being returned.", { required: true }),
-      exchange_variant_id: stringArg("Variant ID of the selected replacement.", { required: true }),
-      quantity: numberArg("How many units to exchange. Defaults to 1."),
-    },
+    fields: TOOL_INPUT_FIELDS.get_exchange_quote,
     category: "read",
     group: "order",
     capabilities: ["shopify"],
     requiredScopes: ["read_orders", "read_returns", "read_products"],
     label: "Read exchange estimate",
     planStepLabel: "Read exchange estimate",
-    execute: async (input: ExchangeQuoteInput, ctx, _settings, deps) => {
+    execute: async (input, ctx, _settings, deps) => {
       const shopify = requireShopify(ctx);
       return shopify ? deps.getExchangeQuote(input, shopify) : noShopify;
     },
@@ -415,11 +293,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     name: "issue_store_credit",
     description:
       "Retired historical account-balance store-credit action. Kept only so old action records and reconciliation remain readable; explicit new store-credit language maps to create_gift_card.",
-    fields: {
-      customer_id: stringArg("Shopify customer ID (numeric).", { required: true }),
-      amount: stringArg("Amount of store credit in the store's currency (e.g. '25.00'). Must be within the workspace refund cap.", { required: true }),
-      expires_in_days: numberArg("Optional whole number of days until the credit expires. Omit for no expiry."),
-    },
+    fields: TOOL_INPUT_FIELDS.issue_store_credit,
     category: "action",
     group: "order",
     capabilities: ["shopify"],
@@ -438,12 +312,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     name: "create_gift_card",
     description:
       "Create a fixed-value Shopify gift card only when the merchant explicitly directs it as a goodwill action. A resolved Shopify customer is required so Shopify can deliver the code. Never infer this from a customer complaint or substitute it for a refund. The amount uses the workspace compensation limits.",
-    fields: {
-      amount: stringArg("Gift card value in the store's currency (e.g. '25.00'). Must be within the workspace compensation limit.", { required: true }),
-      customer_id: stringArg("Resolved Shopify customer ID (numeric). Required so Shopify delivers the gift card code to this customer.", { required: true }),
-      reason: stringArg("Short internal reason for the gesture (e.g. 'damaged item'). Used only as a note inside Shopify."),
-      expires_in_days: numberArg("Optional whole number of days until the gift card expires. Omit for no expiry."),
-    },
+    fields: TOOL_INPUT_FIELDS.create_gift_card,
     category: "action",
     group: "order",
     capabilities: ["shopify"],
@@ -456,7 +325,7 @@ export const ORDER_TOOL_DEFINITIONS = [
       dailyRefundSpendLimit: "input",
       damageEvidence: true,
     },
-    execute: async (input: CreateGiftCardInput, ctx, _settings, deps) => {
+    execute: async (input, ctx, _settings, deps) => {
       const shopify = requireShopify(ctx);
       if (!shopify) return noShopify;
 
@@ -467,11 +336,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     name: "attach_return_label",
     description:
       "Attach a return shipping label (a URL to the label file, e.g. a PDF) to the open return on a Shopify order, creating the reverse delivery. Use this only when the merchant provides a label URL. Requires an open return on the order: open one first with create_return or create_exchange. After attaching, your reply to the customer MUST include the label link so they can ship the items back.",
-    fields: {
-      order_id: stringArg("Shopify order ID (numeric) whose open return the label belongs to.", { required: true }),
-      label_url: stringArg("Direct URL to the label file provided by the merchant.", { required: true }),
-      tracking_number: stringArg("Tracking number for the return shipment, if the merchant provided one."),
-    },
+    fields: TOOL_INPUT_FIELDS.attach_return_label,
     category: "action",
     group: "order",
     capabilities: ["shopify"],
@@ -480,7 +345,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     completesMerchantFollowUp: "send_return_label",
     label: "Attached return label",
     planStepLabel: "Attach return label",
-    execute: async (input: AttachReturnLabelInput, ctx, _settings, deps) => {
+    execute: async (input, ctx, _settings, deps) => {
       const shopify = requireShopify(ctx);
       return shopify ? deps.attachReturnLabel(input, shopify) : noShopify;
     },
@@ -489,13 +354,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     name: "fulfill_order",
     description:
       "Mark a Shopify order as fulfilled (shipped) and optionally attach tracking. Fulfills every item still awaiting fulfillment on the order. Only use this when the merchant has confirmed the parcel is actually shipped or handed to the carrier - never to reassure a customer who is asking where their order is, and never on your own initiative from a customer message alone. By default Shopify emails the customer a shipping confirmation. This cannot be undone from here: a wrong fulfillment sends a false shipping notice, so escalate instead if you are unsure. It also cannot ship part of an order - if only some items went out, escalate to the merchant.",
-    fields: {
-      order_id: stringArg("Shopify order ID (numeric). Use the id field from the orders context.", { required: true }),
-      tracking_number: stringArg("Carrier tracking number for the shipment, if the merchant provided one."),
-      tracking_company: stringArg("Carrier name (e.g. 'USPS', 'UPS', 'FedEx'). Provide it whenever a tracking number is given so the customer's tracking link resolves."),
-      tracking_url: stringArg("Direct tracking URL, if the merchant provided one instead of or alongside a number."),
-      notify_customer: booleanArg("Whether Shopify emails the customer a shipping confirmation. Defaults to true."),
-    },
+    fields: TOOL_INPUT_FIELDS.fulfill_order,
     category: "action",
     group: "order",
     capabilities: ["shopify"],
@@ -503,7 +362,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     requiredReceiptVersion: 1,
     label: "Fulfilled order",
     planStepLabel: "Mark order fulfilled",
-    execute: async (input: FulfillOrderInput, ctx, _settings, deps) => {
+    execute: async (input, ctx, _settings, deps) => {
       const shopify = requireShopify(ctx);
       return shopify ? deps.fulfillOrder(input, shopify) : noShopify;
     },

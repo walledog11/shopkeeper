@@ -1,20 +1,7 @@
 import { db } from '@shopkeeper/db';
-import { buildOrgDigest } from '../../maintenance/digest.js';
-import { getContext, loadLiveOperatorContext, updateContext } from '../../operator-context.js';
-import { resolveOperatorMemberKey } from '../../operator-identity.js';
-import { executeFreeFormInstruction } from './agent-execution.js';
-import {
-  isDigestCommand,
-  isPendingPlanCommand,
-  parseTelegramCommand,
-} from './command-parser.js';
-import { handleDigestCommand } from './digest-commands.js';
-import { HELP_TEXT } from './format.js';
-import { handlePendingPlanCommand } from './pending-plan-commands.js';
+import { runOperatorTurn } from '../operator/message-handler.js';
 import { withOperatorPresence } from './presence.js';
-import { buildMirroredReply } from '../../operator-thread-mirror.js';
 import type { TelegramReply } from './types.js';
-import type { OperatorMessageContext } from '../operator-message.js';
 
 export const TELEGRAM_UNBOUND_REPLY =
   "This chat isn't connected to a Shopkeeper workspace. Generate a link from your Shopkeeper dashboard under Integrations → Telegram.";
@@ -54,68 +41,13 @@ export interface TelegramOperatorTurnParams {
 // when the webhook is acknowledged.
 export async function runTelegramOperatorTurn(params: TelegramOperatorTurnParams): Promise<void | 'queued'> {
   const { organizationId, clerkUserId, chatId, body, messageId, reply, turnId } = params;
-  const deliveryRef = `telegram:${chatId}`;
-  // State is keyed to the person, so this chat sees the same pending queue the
-  // merchant's other transports do.
-  const memberKey = await resolveOperatorMemberKey(organizationId, clerkUserId);
-  const context = await loadLiveOperatorContext(
-    organizationId,
-    memberKey,
-    await getContext(organizationId, memberKey),
-  );
-
-  // Freeform turns persist their own thread messages, so they keep the raw reply.
-  // Command paths reply through a wrapper that mirrors the exchange (inbound once,
-  // then each reply) onto the merchant's durable operator thread.
-  const baseMessage: OperatorMessageContext = {
+  return runOperatorTurn(organizationId, clerkUserId, {
     chatId,
     body,
     reply,
-    senderRef: memberKey,
-    deliveryRef,
+    deliveryRef: `telegram:${chatId}`,
     ...(turnId ? { turnId } : {}),
     presence: (progress, work) =>
       withOperatorPresence({ chatId, messageId, reply, progress }, work),
-  };
-  const mirroredReply = buildMirroredReply(organizationId, memberKey, body, reply);
-  const commandMessage: OperatorMessageContext = { ...baseMessage, reply: mirroredReply };
-
-  const command = parseTelegramCommand(body);
-
-  if (command.type === 'help') {
-    await mirroredReply(HELP_TEXT);
-    return;
-  }
-
-  if (command.type === 'summary') {
-    const org = await db.organization.findUnique({
-      where: { id: organizationId },
-      select: { settings: true },
-    });
-    const settings = (org?.settings as Record<string, unknown> | null) ?? {};
-    const digest = await buildOrgDigest(organizationId, new Date(), settings);
-    if (!digest) {
-      await mirroredReply('Nothing new in your support inbox right now.');
-      return;
-    }
-    await updateContext(organizationId, memberKey, { pendingDigest: digest.pendingDigest });
-    await mirroredReply(digest.message);
-    return;
-  }
-
-  if (isDigestCommand(command) && await handleDigestCommand(organizationId, command, context, commandMessage)) {
-    return;
-  }
-
-  if (
-    isPendingPlanCommand(command)
-    && await handlePendingPlanCommand(organizationId, clerkUserId, commandMessage, command, context)
-  ) {
-    return;
-  }
-
-  // Everything past the keyword fast path is one agent turn: the model reads the
-  // pending-state ledger and drives approve/reject/revise/answer via control tools,
-  // or handles a fresh instruction normally.
-  return executeFreeFormInstruction(organizationId, clerkUserId, baseMessage);
+  });
 }

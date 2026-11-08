@@ -1,6 +1,6 @@
 import { sendChatAction, setMessageReaction } from '../../clients/telegram-client.js';
 import logger from '../../logger.js';
-import { buildProgressCopy, type ProgressContext } from './progress-copy.js';
+import { buildProgressCopy, type ProgressContext } from '../operator/progress-copy.js';
 import type { TelegramReply } from './types.js';
 
 const TYPING_REFRESH_MS = 4000;

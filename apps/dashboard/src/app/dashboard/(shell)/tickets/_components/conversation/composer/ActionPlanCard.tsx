@@ -3,10 +3,10 @@
 import { AlertTriangle, Check, ChevronUp, CircleX, Loader2, RefreshCw } from "lucide-react"
 import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import {
-  NeedsYouCardFooter,
-  NeedsYouPrimaryButton,
-} from "@/app/dashboard/_components/home/needs-you-card-ui"
-import { needsYouSecondaryButtonClassName } from "@/app/dashboard/_components/home/needs-you-card-styles"
+  SupportCardFooter,
+  SupportCardPrimaryButton,
+} from "@/components/support-card/card"
+import { supportCardSecondaryButtonClassName } from "@/components/support-card/styles"
 import { toAttachmentDisplayUrl } from "@/lib/attachments/blob-ref"
 import { cn } from "@/lib/ui/cn"
 import { BlankAnswerFields } from "@/components/agent/BlankAnswerFields"
@@ -205,7 +205,7 @@ function ActionPlanControls({
               type="button"
               data-testid="action-plan-edit"
               onClick={onEdit}
-              className={cn(needsYouSecondaryButtonClassName, "flex-1")}
+              className={cn(supportCardSecondaryButtonClassName, "flex-1")}
             >
               Edit &amp; send myself
             </button>
@@ -215,7 +215,7 @@ function ActionPlanControls({
               type="button"
               data-testid="action-plan-dismiss-invalid"
               onClick={onDismiss}
-              className={cn(needsYouSecondaryButtonClassName, "flex-1")}
+              className={cn(supportCardSecondaryButtonClassName, "flex-1")}
             >
               Dismiss
             </button>
@@ -236,7 +236,7 @@ function ActionPlanControls({
         }
       </p>
       <div className={`flex ${status.showEditTakeover ? "gap-2" : ""}`}>
-        <NeedsYouPrimaryButton
+        <SupportCardPrimaryButton
           type="button"
           data-testid="action-plan-run"
           onClick={onApproveClick}
@@ -256,14 +256,14 @@ function ActionPlanControls({
               ? <><Loader2 className="size-4 animate-spin" /> Sending…</>
               : primaryLabel
           }
-        </NeedsYouPrimaryButton>
+        </SupportCardPrimaryButton>
         {status.showEditTakeover && (
           <button
             type="button"
             data-testid="action-plan-edit"
             onClick={onEdit}
             disabled={status.isRunning || Boolean(status.executionOutcome)}
-            className={cn(needsYouSecondaryButtonClassName, "flex-1")}
+            className={cn(supportCardSecondaryButtonClassName, "flex-1")}
           >
             Edit & send myself
           </button>
@@ -334,7 +334,7 @@ export default function ActionPlanCard({
   }
 
   return (
-    <NeedsYouCardFooter className="pointer-events-auto p-0">
+    <SupportCardFooter className="pointer-events-auto p-0">
       <div
         data-testid="action-plan-card"
         data-layout={isMobileSticky ? "mobile-floating" : "default"}
@@ -416,6 +416,6 @@ export default function ActionPlanCard({
         </div>
       </div>
       </div>
-    </NeedsYouCardFooter>
+    </SupportCardFooter>
   )
 }

@@ -37,6 +37,14 @@
     "./realtime": {
       "types": "./dist/realtime.d.ts",
       "default": "./dist/realtime.js"
+    },
+    "./http-deadline": {
+      "types": "./dist/http-deadline.d.ts",
+      "default": "./dist/http-deadline.js"
+    },
+    "./bounded-stream": {
+      "types": "./dist/bounded-stream.d.ts",
+      "default": "./dist/bounded-stream.js"
     }
   },
   "scripts": {

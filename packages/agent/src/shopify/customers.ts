@@ -36,7 +36,7 @@ import {
   type ToolResult,
 } from "../tools/result.js";
 import { customerName, serializeCustomer } from "./serializers.js";
-import { shopifyFailureReceipt, shopifyReceiptEnvelope } from "./receipts.js";
+import { shopifyReceiptResults, shopifyReceiptEnvelope } from "./receipts.js";
 import type { ShopifyCustomer } from "./types.js";
 import {
   clampLimit,
@@ -45,6 +45,9 @@ import {
   requireNumericId,
   ShopifyInputError,
 } from "./validation.js";
+
+const customerNoteReceipts = shopifyReceiptResults("add_shopify_customer_note", "customer");
+const customerInfoReceipts = shopifyReceiptResults("update_shopify_customer_info", "customer");
 
 // The one customer read the registry exposes. Both branches are the
 // implementations the two retired tools already used, unchanged: consolidating
@@ -170,25 +173,6 @@ async function readCustomerInfo(ctx: ShopifyContext, customerId: string): Promis
   return data.customer ?? null;
 }
 
-function customerInfoFailure(
-  ctx: ShopifyContext,
-  customerId: string,
-  result: ToolResult,
-  outcome: "not_found" | "rejected" | "failed" | "unknown",
-  code: string,
-  providerReference: string | null = null,
-): ToolResult {
-  const receipt = shopifyFailureReceipt(
-    ctx,
-    { kind: "customer", id: customerId },
-    "update_shopify_customer_info",
-    outcome,
-    code,
-    providerReference,
-  );
-  return receipt ? { ...result, receipt } : result;
-}
-
 function customerInfoSuccess(
   ctx: ShopifyContext,
   customer: ShopifyCustomer,
@@ -197,7 +181,7 @@ function customerInfoSuccess(
 ): ToolResult {
   const updates = customerInfoUpdates(customer, update);
   if (!updates) {
-    return customerInfoFailure(
+    return customerInfoReceipts.failure(
       ctx,
       update.customerId,
       toolUnknown(`Unknown: Shopify returned customer ${update.customerId}, but the requested profile fields could not be confirmed. Do not retry or confirm the update until it is reconciled.`),
@@ -235,7 +219,7 @@ async function reconcileCustomerInfo(
     const detail = mutationError
       ? ` ${formatShopifyToolError("customer info reconciliation failed", mutationError)}`
       : "";
-    return customerInfoFailure(
+    return customerInfoReceipts.failure(
       ctx,
       update.customerId,
       toolUnknown(`Unknown: the customer-info update may have committed at Shopify, but a follow-up read did not confirm every requested field. Do not retry or confirm it until it is reconciled.${detail}`),
@@ -244,7 +228,7 @@ async function reconcileCustomerInfo(
       update.customerId,
     );
   } catch (error) {
-    return customerInfoFailure(
+    return customerInfoReceipts.failure(
       ctx,
       update.customerId,
       toolUnknown(`Unknown: the customer-info update may have committed at Shopify and its follow-up read failed. Do not retry or confirm it until it is reconciled. ${formatShopifyToolError("customer info reconciliation failed", error)}`),
@@ -278,7 +262,7 @@ export async function updateShopifyCustomerInfo(
       return reconcileCustomerInfo(ctx, update, err);
     }
     if (err instanceof ShopifyInputError) {
-      return customerInfoFailure(
+      return customerInfoReceipts.failure(
         ctx,
         customerId,
         toolPolicyBlock(formatShopifyToolError("failed to update customer info", err)),
@@ -287,7 +271,7 @@ export async function updateShopifyCustomerInfo(
       );
     }
     if (err instanceof ShopifyRequestError && err.status === 404) {
-      return customerInfoFailure(
+      return customerInfoReceipts.failure(
         ctx,
         customerId,
         toolNotFound(formatShopifyToolError("failed to update customer info", err)),
@@ -295,7 +279,7 @@ export async function updateShopifyCustomerInfo(
         "customer_not_found",
       );
     }
-    return customerInfoFailure(
+    return customerInfoReceipts.failure(
       ctx,
       customerId,
       toolError(formatShopifyToolError("failed to update customer info", err)),
@@ -325,7 +309,7 @@ export async function addShopifyCustomerNote(
     );
 
     if (!existing.customer) {
-      return customerNoteFailure(
+      return customerNoteReceipts.failure(
         ctx,
         customerId,
         toolNotFound(`Error: failed to add note - customer ${customerId} was not returned by Shopify.`),
@@ -352,7 +336,7 @@ export async function addShopifyCustomerNote(
       return reconcileCustomerNote(ctx, customerId, note, previousNote, resultingNote, err);
     }
     if (err instanceof ShopifyInputError) {
-      return customerNoteFailure(
+      return customerNoteReceipts.failure(
         ctx,
         customerId,
         toolPolicyBlock(formatShopifyToolError("failed to add note", err)),
@@ -361,7 +345,7 @@ export async function addShopifyCustomerNote(
       );
     }
     if (err instanceof ShopifyRequestError && err.status === 404) {
-      return customerNoteFailure(
+      return customerNoteReceipts.failure(
         ctx,
         customerId,
         toolNotFound(formatShopifyToolError("failed to add note", err)),
@@ -369,7 +353,7 @@ export async function addShopifyCustomerNote(
         "customer_not_found",
       );
     }
-    return customerNoteFailure(
+    return customerNoteReceipts.failure(
       ctx,
       customerId,
       toolError(formatShopifyToolError("failed to add note", err)),
@@ -389,25 +373,6 @@ function customerNoteMatches(
   expectedNote: string,
 ): boolean {
   return Boolean(customer && String(customer.id) === customerId && customer.note === expectedNote);
-}
-
-function customerNoteFailure(
-  ctx: ShopifyContext,
-  customerId: string,
-  result: ToolResult,
-  outcome: "not_found" | "rejected" | "failed" | "unknown",
-  code: string,
-  providerReference: string | null = null,
-): ToolResult {
-  const receipt = shopifyFailureReceipt(
-    ctx,
-    { kind: "customer", id: customerId },
-    "add_shopify_customer_note",
-    outcome,
-    code,
-    providerReference,
-  );
-  return receipt ? { ...result, receipt } : result;
 }
 
 function customerNoteSuccess(
@@ -460,7 +425,7 @@ async function reconcileCustomerNote(
     const detail = mutationError
       ? ` ${formatShopifyToolError("customer note reconciliation failed", mutationError)}`
       : "";
-    return customerNoteFailure(
+    return customerNoteReceipts.failure(
       ctx,
       customerId,
       toolUnknown(`Unknown: the customer-note append may have committed at Shopify, but a follow-up read did not confirm the exact resulting note. Do not retry or confirm it until it is reconciled.${detail}`),
@@ -469,7 +434,7 @@ async function reconcileCustomerNote(
       customerId,
     );
   } catch (error) {
-    return customerNoteFailure(
+    return customerNoteReceipts.failure(
       ctx,
       customerId,
       toolUnknown(`Unknown: the customer-note append may have committed at Shopify and its follow-up read failed. Do not retry or confirm it until it is reconciled. ${formatShopifyToolError("customer note reconciliation failed", error)}`),
