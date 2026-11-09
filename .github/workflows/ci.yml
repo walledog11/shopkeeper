@@ -105,7 +105,7 @@ jobs:
   e2e:
     name: E2E Tests
     needs: [secret-scan, static, unit, coverage, build]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # Match the Ubuntu images supported by the locked Playwright version.
     env:
       CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY || vars.CLERK_SECRET_KEY }}
       CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY }}
