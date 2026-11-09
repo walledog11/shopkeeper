@@ -1,6 +1,4 @@
-import { installTestNetworkGuard, resetTestNetworkAllowlist } from '../../../scripts/test-network-guard.mjs';
 import { getTestEnv } from '../../../scripts/with-test-env.mjs';
-import { afterEach } from 'vitest';
 
 const TEST_DEFAULT_KEYS = [
   'DATABASE_URL',
@@ -30,9 +28,3 @@ if (!process.env.LOG_PRETTY) process.env.LOG_PRETTY = 'false';
 // route test. Set explicitly to opt back into enforcement.
 if (!process.env.E2E_TEST_RUN) process.env.E2E_TEST_RUN = 'true';
 process.env.E2E_OUTBOUND_MODE = 'live';
-
-installTestNetworkGuard();
-
-afterEach(() => {
-  resetTestNetworkAllowlist();
-});

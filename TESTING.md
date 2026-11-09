@@ -44,10 +44,10 @@ Unit tests must not need Postgres, Redis, Playwright, provider credentials or ne
   Local development shares these containers but uses `shopkeeper_dev` and Redis DB 1;
   tests use `clerk_test` and Redis DB 0. Do not flush all Redis databases in tests.
   Integration tasks always execute; Turbo does not cache their database-dependent results.
-- In `apps/dashboard` and `apps/gateway`, Vitest setup installs a fetch guard: localhost
-  and the configured local service URLs are allowed, every other host is blocked.
-  Package tests run without it, so mock fetch there yourself (`vi.stubGlobal('fetch', …)`,
-  SDK mocks, injected dependencies). For a fixture host, use `allowTestNetworkHosts` from
+- Every Vitest workspace reuses `packages/shared/src/test-setup.ts` to block external
+  fetches; localhost and configured local service URLs are allowed. Mock provider calls
+  with `vi.stubGlobal('fetch', …)`, SDK mocks, or injected dependencies.
+  For a fixture host, use `allowTestNetworkHosts` from
   `scripts/test-network-guard.mjs`; don't add env flags to bypass the guard.
 - `test-setup.ts` defaults `E2E_TEST_RUN=true` because the rate limiter fails closed
   without Upstash; a wall of 429s means that flag got unset.
