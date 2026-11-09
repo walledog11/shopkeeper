@@ -419,5 +419,13 @@ describe("receipt v1", () => {
       ...receipt,
       facts: { ...receipt.facts, deliveryState: "unknown" },
     })).toThrow("successful communication cannot have unknown delivery state");
+    // Coercing these arrays to strings used to accept malformed state and even
+    // let an unknown delivery pass as a successful communication.
+    for (const deliveryState of [["sent"], ["unknown"]]) {
+      expect(() => parseReceiptV1({
+        ...receipt,
+        facts: { ...receipt.facts, deliveryState },
+      })).toThrow("facts.deliveryState is invalid");
+    }
   });
 });

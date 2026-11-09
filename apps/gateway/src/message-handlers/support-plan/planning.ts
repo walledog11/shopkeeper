@@ -78,48 +78,17 @@ export async function precomputeThreadPlan(
       return null;
     }
 
-    const {
-      plan,
-      instruction,
-      identity,
-      merchantQuestion,
-      autoExecuted,
-      autoExecutionKind,
-      autoExecutionStatus,
-      autoExecutionSummary,
-      autoExecutionActions,
-      autoExecutionError,
-      failureReplanRecovered,
-      failureReplanAwaitingApproval,
-      failureReplanFailureTool,
-      failureReplanFailureReason,
-    } = await generateThreadPlan(
+    const generated = await generateThreadPlan(
       organizationId,
       threadId,
       options.allowAutoExecute === true,
       { instruction: options.instruction, sourceMessageId: options.sourceMessageId },
     );
+    const { plan } = generated;
     if (!plan || (plan.steps.length === 0 && plan.validation?.status !== 'invalid')) {
       return null;
     }
-    return {
-      plan,
-      instruction,
-      identity,
-      merchantQuestion,
-      ...(autoExecuted ? {
-        autoExecuted: true,
-        autoExecutionKind,
-        autoExecutionStatus,
-        autoExecutionSummary,
-        autoExecutionActions,
-        autoExecutionError,
-        failureReplanRecovered,
-        failureReplanAwaitingApproval,
-        failureReplanFailureTool,
-        failureReplanFailureReason,
-      } : {}),
-    };
+    return { ...generated, plan };
   } catch (err) {
     logger.error({ err: (err as Error).message, threadId, organizationId }, '[Worker] precomputeThreadPlan error');
     throw err;

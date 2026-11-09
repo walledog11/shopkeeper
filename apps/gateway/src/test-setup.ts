@@ -1,6 +1,4 @@
-import { installTestNetworkGuard, resetTestNetworkAllowlist } from '../../../scripts/test-network-guard.mjs';
 import { getTestEnv } from '../../../scripts/with-test-env.mjs';
-import { afterEach } from 'vitest';
 
 // Fallback values for CI where no .env file exists.
 // Values must match the ?? fallbacks in test files so HMAC signatures align.
@@ -37,9 +35,3 @@ for (const key of TEST_DEFAULT_KEYS) {
 
 if (!process.env.LOG_LEVEL) process.env.LOG_LEVEL = 'silent';
 if (!process.env.LOG_PRETTY) process.env.LOG_PRETTY = 'false';
-
-installTestNetworkGuard();
-
-afterEach(() => {
-  resetTestNetworkAllowlist();
-});

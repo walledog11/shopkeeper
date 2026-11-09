@@ -1,3 +1,4 @@
+import { isRecord } from '@shopkeeper/shared/guards';
 import type {
   AddressReceiptAddressV1,
   CancellationReceiptFactsV1,
@@ -39,8 +40,16 @@ export class ReceiptValidationError extends Error {
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
+function requireOneOf<T extends string>(value: unknown, field: string, choices: readonly T[]): asserts value is T {
+  if (!choices.some(choice => choice === value)) {
+    throw new ReceiptValidationError(`${field} is invalid`);
+  }
+}
+
+function requireCurrency(value: unknown, field: string): asserts value is string {
+  if (typeof value !== "string" || !/^[A-Z]{3}$/.test(value)) {
+    throw new ReceiptValidationError(`${field} must be a three-letter uppercase code`);
+  }
 }
 
 function requireNonEmptyString(value: unknown, field: string): asserts value is string {
@@ -84,16 +93,12 @@ function parseCommunicationFacts(value: unknown): CommunicationReceiptFactsV1 {
   requireNonEmptyString(value.messageId, "facts.messageId");
   requireNonEmptyString(value.threadId, "facts.threadId");
   if (!isRecord(value.destination)) throw new ReceiptValidationError("facts.destination must be an object");
-  if (value.destination.kind !== "thread" && value.destination.kind !== "email") {
-    throw new ReceiptValidationError("facts.destination.kind is invalid");
-  }
+  requireOneOf(value.destination.kind, "facts.destination.kind", ["thread", "email"]);
   requireNonEmptyString(value.destination.id, "facts.destination.id");
   if (typeof value.contentSha256 !== "string" || !/^[a-f0-9]{64}$/.test(value.contentSha256)) {
     throw new ReceiptValidationError("facts.contentSha256 must be a SHA-256 digest");
   }
-  if (!['accepted', 'sent', 'delivered', 'unknown'].includes(String(value.deliveryState))) {
-    throw new ReceiptValidationError("facts.deliveryState is invalid");
-  }
+  requireOneOf(value.deliveryState, "facts.deliveryState", ["accepted", "sent", "delivered", "unknown"]);
   if (value.providerMessageId !== null && typeof value.providerMessageId !== "string") {
     throw new ReceiptValidationError("facts.providerMessageId must be a string or null");
   }
@@ -165,17 +170,10 @@ function parseVariantPriceFacts(value: unknown): VariantPriceReceiptFactsV1 {
       throw new ReceiptValidationError("facts.batches product IDs must be unique");
     }
     products.add(candidate.productId);
-    if (candidate.outcome !== "succeeded" && candidate.outcome !== "failed" && candidate.outcome !== "unknown") {
-      throw new ReceiptValidationError(`facts.batches[${batchIndex}].outcome is invalid`);
-    }
-    if (
-      candidate.confirmation !== "mutation_response"
-      && candidate.confirmation !== "read_after_ambiguous_response"
-      && candidate.confirmation !== "provider_rejected"
-      && candidate.confirmation !== "not_attempted"
-    ) {
-      throw new ReceiptValidationError(`facts.batches[${batchIndex}].confirmation is invalid`);
-    }
+    requireOneOf(candidate.outcome, `facts.batches[${batchIndex}].outcome`, ["succeeded", "failed", "unknown"]);
+    requireOneOf(candidate.confirmation, `facts.batches[${batchIndex}].confirmation`, [
+      "mutation_response", "read_after_ambiguous_response", "provider_rejected", "not_attempted",
+    ]);
     if (!Array.isArray(candidate.changes) || candidate.changes.length === 0) {
       throw new ReceiptValidationError(`facts.batches[${batchIndex}].changes must be a non-empty array`);
     }
@@ -208,21 +206,14 @@ function parseVariantPriceFacts(value: unknown): VariantPriceReceiptFactsV1 {
 function parseEndFlashSaleFacts(value: unknown): EndFlashSaleReceiptFactsV1 {
   if (!isRecord(value)) throw new ReceiptValidationError("ended flash sale facts must be an object");
   requireNonEmptyString(value.flashSaleId, "facts.flashSaleId");
-  if (
-    value.confirmation !== "deleted"
-    && value.confirmation !== "absent_after_ambiguous_response"
-  ) {
-    throw new ReceiptValidationError("facts.confirmation is invalid");
-  }
+  requireOneOf(value.confirmation, "facts.confirmation", ["deleted", "absent_after_ambiguous_response"]);
   return value as unknown as EndFlashSaleReceiptFactsV1;
 }
 
 function parseFlashSaleFacts(value: unknown): FlashSaleReceiptFactsV1 {
   if (!isRecord(value)) throw new ReceiptValidationError("flash sale facts must be an object");
   requireNonEmptyString(value.flashSaleId, "facts.flashSaleId");
-  if (value.appliesTo !== "entire_catalog" && value.appliesTo !== "variants") {
-    throw new ReceiptValidationError("facts.appliesTo is invalid");
-  }
+  requireOneOf(value.appliesTo, "facts.appliesTo", ["entire_catalog", "variants"]);
   if (!Array.isArray(value.variantIds)) {
     throw new ReceiptValidationError("facts.variantIds must be an array");
   }
@@ -258,9 +249,7 @@ function parseGiftCardFacts(value: unknown): GiftCardReceiptFactsV1 {
   requireNonEmptyString(value.giftCardId, "facts.giftCardId");
   requireNonEmptyString(value.customerId, "facts.customerId");
   requirePositiveDecimal(value.amount, "facts.amount");
-  if (typeof value.currency !== "string" || !/^[A-Z]{3}$/.test(value.currency)) {
-    throw new ReceiptValidationError("facts.currency must be a three-letter uppercase code");
-  }
+  requireCurrency(value.currency, "facts.currency");
   if (typeof value.codeSha256 !== "string" || !/^[a-f0-9]{64}$/.test(value.codeSha256)) {
     throw new ReceiptValidationError("facts.codeSha256 must be a SHA-256 digest");
   }
@@ -284,9 +273,7 @@ function parseCustomerNoteFacts(value: unknown): CustomerNoteReceiptFactsV1 {
       throw new ReceiptValidationError(`facts.${field} must be a SHA-256 digest`);
     }
   }
-  if (!Number.isSafeInteger(value.resultingNoteLength) || Number(value.resultingNoteLength) <= 0) {
-    throw new ReceiptValidationError("facts.resultingNoteLength must be a positive integer");
-  }
+  requirePositiveInteger(value.resultingNoteLength, "facts.resultingNoteLength");
   if (value.appendState !== "appended") {
     throw new ReceiptValidationError("facts.appendState must be appended");
   }
@@ -337,9 +324,7 @@ function parseOrderCreationFacts(value: unknown): OrderCreationReceiptFactsV1 {
   if (!/^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value.totalAmount)) {
     throw new ReceiptValidationError("facts.totalAmount must be a non-negative exact decimal string");
   }
-  if (typeof value.currency !== "string" || !/^[A-Z]{3}$/.test(value.currency)) {
-    throw new ReceiptValidationError("facts.currency must be a three-letter uppercase code");
-  }
+  requireCurrency(value.currency, "facts.currency");
   return value as unknown as OrderCreationReceiptFactsV1;
 }
 
@@ -355,13 +340,11 @@ function parseOrderEditFacts(
   for (const [index, change] of value.changes.entries()) {
     const field = `facts.changes[${index}]`;
     if (!isRecord(change)) throw new ReceiptValidationError(`${field} must be an object`);
-    if (change.kind !== "addition" && change.kind !== "removal") {
-      throw new ReceiptValidationError(`${field}.kind is invalid`);
-    }
+    requireOneOf(change.kind, `${field}.kind`, ["addition", "removal"]);
     requireNonEmptyString(change.variantId, `${field}.variantId`);
     if (change.lineItemId !== null) requireNonEmptyString(change.lineItemId, `${field}.lineItemId`);
     if (change.kind === "addition") {
-      requirePositiveQuantity(change.requestedQuantity, `${field}.requestedQuantity`);
+      requirePositiveInteger(change.requestedQuantity, `${field}.requestedQuantity`);
     } else if (change.requestedQuantity !== null) {
       throw new ReceiptValidationError(`${field}.requestedQuantity must be null for a removal`);
     }
@@ -374,14 +357,7 @@ function parseOrderEditFacts(
         `${field}.providerObservedFinalQuantity must be a non-negative integer or null`,
       );
     }
-    if (
-      change.outcome !== "committed"
-      && change.outcome !== "staged"
-      && change.outcome !== "rejected"
-      && change.outcome !== "unknown"
-    ) {
-      throw new ReceiptValidationError(`${field}.outcome is invalid`);
-    }
+    requireOneOf(change.outcome, `${field}.outcome`, ["committed", "staged", "rejected", "unknown"]);
     if (
       options.requireCommitted
       && (change.outcome !== "committed" || change.providerObservedFinalQuantity === null)
@@ -453,7 +429,7 @@ function parseFulfillmentFacts(value: unknown): FulfillmentReceiptFactsV1 {
       `facts.lineItems[${index}].fulfillmentLineItemId`,
     );
     requireNonEmptyString(item.lineItemId, `facts.lineItems[${index}].lineItemId`);
-    requirePositiveQuantity(item.quantity, `facts.lineItems[${index}].quantity`);
+    requirePositiveInteger(item.quantity, `facts.lineItems[${index}].quantity`);
   }
   if (!isRecord(value.tracking)) {
     throw new ReceiptValidationError("facts.tracking must be an object");
@@ -502,9 +478,7 @@ function parseReturnFacts(value: unknown): ReturnReceiptFactsV1 {
       line.fulfillmentLineItemId,
       `facts.lineItems[${index}].fulfillmentLineItemId`,
     );
-    if (!Number.isSafeInteger(line.quantity) || Number(line.quantity) <= 0) {
-      throw new ReceiptValidationError(`facts.lineItems[${index}].quantity must be a positive integer`);
-    }
+    requirePositiveInteger(line.quantity, `facts.lineItems[${index}].quantity`);
   }
   if (value.refundIssued !== false) {
     throw new ReceiptValidationError("facts.refundIssued must be false");
@@ -512,7 +486,7 @@ function parseReturnFacts(value: unknown): ReturnReceiptFactsV1 {
   return value as unknown as ReturnReceiptFactsV1;
 }
 
-function requirePositiveQuantity(value: unknown, field: string): void {
+function requirePositiveInteger(value: unknown, field: string): void {
   if (!Number.isSafeInteger(value) || Number(value) <= 0) {
     throw new ReceiptValidationError(`${field} must be a positive integer`);
   }
@@ -534,7 +508,7 @@ function parseExchangeFacts(value: unknown): ExchangeReceiptFactsV1 {
       item.fulfillmentLineItemId,
       `facts.returnedItems[${index}].fulfillmentLineItemId`,
     );
-    requirePositiveQuantity(item.quantity, `facts.returnedItems[${index}].quantity`);
+    requirePositiveInteger(item.quantity, `facts.returnedItems[${index}].quantity`);
   }
   if (!Array.isArray(value.replacementItems) || value.replacementItems.length === 0) {
     throw new ReceiptValidationError("exchange facts require replacement items");
@@ -542,7 +516,7 @@ function parseExchangeFacts(value: unknown): ExchangeReceiptFactsV1 {
   for (const [index, item] of value.replacementItems.entries()) {
     if (!isRecord(item)) throw new ReceiptValidationError(`facts.replacementItems[${index}] must be an object`);
     requireNonEmptyString(item.variantId, `facts.replacementItems[${index}].variantId`);
-    requirePositiveQuantity(item.quantity, `facts.replacementItems[${index}].quantity`);
+    requirePositiveInteger(item.quantity, `facts.replacementItems[${index}].quantity`);
   }
   if (value.financialConsequence !== null) {
     if (!isRecord(value.financialConsequence)) {
@@ -555,12 +529,7 @@ function parseExchangeFacts(value: unknown): ExchangeReceiptFactsV1 {
       throw new ReceiptValidationError("facts.financialConsequence.kind must be refund or charge");
     }
     requirePositiveDecimal(value.financialConsequence.amount, "facts.financialConsequence.amount");
-    if (
-      typeof value.financialConsequence.currency !== "string"
-      || !/^[A-Z]{3}$/.test(value.financialConsequence.currency)
-    ) {
-      throw new ReceiptValidationError("facts.financialConsequence.currency must be a three-letter uppercase code");
-    }
+    requireCurrency(value.financialConsequence.currency, "facts.financialConsequence.currency");
   }
   return value as unknown as ExchangeReceiptFactsV1;
 }
@@ -570,9 +539,7 @@ function parseRefundFacts(value: unknown, partial: boolean): RefundReceiptFactsV
   requireNonEmptyString(value.orderId, "facts.orderId");
   requireNonEmptyString(value.refundId, "facts.refundId");
   requirePositiveDecimal(value.amount, "facts.amount");
-  if (typeof value.currency !== "string" || !/^[A-Z]{3}$/.test(value.currency)) {
-    throw new ReceiptValidationError("facts.currency must be a three-letter uppercase code");
-  }
+  requireCurrency(value.currency, "facts.currency");
   requireNonEmptyString(value.transactionStatus, "facts.transactionStatus");
   requireNonEmptyString(value.transactionReference, "facts.transactionReference");
   const expectedClassification = partial ? "partial" : value.classification;
@@ -586,9 +553,7 @@ function parseRefundFacts(value: unknown, partial: boolean): RefundReceiptFactsV
     for (const [index, line] of value.lineItems.entries()) {
       if (!isRecord(line)) throw new ReceiptValidationError(`facts.lineItems[${index}] must be an object`);
       requireNonEmptyString(line.lineItemId, `facts.lineItems[${index}].lineItemId`);
-      if (!Number.isSafeInteger(line.quantity) || Number(line.quantity) <= 0) {
-        throw new ReceiptValidationError(`facts.lineItems[${index}].quantity must be a positive integer`);
-      }
+      requirePositiveInteger(line.quantity, `facts.lineItems[${index}].quantity`);
     }
   }
   return value as unknown as RefundReceiptFactsV1 | PartialRefundReceiptFactsV1;
@@ -606,9 +571,7 @@ function parseCancellationFacts(value: unknown): CancellationReceiptFactsV1 {
   if (value.refund !== undefined && value.refund !== null) {
     if (!isRecord(value.refund)) throw new ReceiptValidationError("facts.refund must be an object or null");
     requireMoneyDecimal(value.refund.amount, "facts.refund.amount");
-    if (typeof value.refund.currency !== "string" || !/^[A-Z]{3}$/.test(value.refund.currency)) {
-      throw new ReceiptValidationError("facts.refund.currency must be a three-letter uppercase code");
-    }
+    requireCurrency(value.refund.currency, "facts.refund.currency");
   }
   return value as unknown as CancellationReceiptFactsV1;
 }

@@ -36,7 +36,7 @@ import type { AgentPlan as PackageAgentPlan, OrgSettings } from '@shopkeeper/age
 import { getEmailProvider } from '@shopkeeper/email/providers';
 import { gatewayThreadSink } from './agent-thread-sink.js';
 import { buildGatewayPlanExecutionDeps } from '../operator/agent-turn-deps.js';
-import type { AgentActionResult, PlanIdentity } from './planning-types.js';
+import type { PlanIdentity, PrecomputedPlanResult } from './planning-types.js';
 import { publishThreadEvent } from '../../realtime/publish.js';
 import { captureAgentPlanGenerated } from '../../product-analytics.js';
 import logger from '../../logger.js';
@@ -102,21 +102,8 @@ function merchantQuestionFor(plan: PackageAgentPlan | null, settings: OrgSetting
   return verdict.kind === 'needs_merchant_input' ? verdict.question : null;
 }
 
-export interface GeneratedThreadPlan {
+export interface GeneratedThreadPlan extends Omit<PrecomputedPlanResult, 'plan'> {
   plan: PackageAgentPlan | null;
-  instruction: string;
-  identity?: PlanIdentity;
-  merchantQuestion?: string | null;
-  autoExecuted?: boolean;
-  autoExecutionKind?: 'safe_reply' | 'action';
-  autoExecutionStatus?: 'success' | 'error';
-  autoExecutionSummary?: string;
-  autoExecutionActions?: AgentActionResult[];
-  autoExecutionError?: string;
-  failureReplanRecovered?: boolean;
-  failureReplanAwaitingApproval?: boolean;
-  failureReplanFailureTool?: string;
-  failureReplanFailureReason?: string;
 }
 
 function planIdentity(params: {
