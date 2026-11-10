@@ -7,7 +7,7 @@ Technical contracts and settled engineering decisions live with the code they go
 ([agent-runtime](agent-runtime.md), [runbook](production/runbook.md),
 [transport plan](socialapi-transport-plan.md)), not here.
 
-Last updated: 2026-11-08.
+Last updated: 2026-11-10.
 
 ## Next — the first real merchant
 
@@ -51,8 +51,7 @@ In order. This is the product's critical path.
   SocialAPI's send (about 1.2s) and the gateway's task bookkeeping (about 80 queries at
   20ms each before the first reply). Every step is timed in *Copy timeline*. SocialAPI
   has no typing or "Seen" for Instagram; ask the vendor.
-- **Agent rough edges seen live:** the ticket plan card can go stale after a new
-  customer message (unreproduced); a status question naming the customer uses the full
+- **Agent rough edges seen live:** a status question naming the customer uses the full
   order read.
 - **Concurrency-safe LLM allowances.** Parallel calls can spend the same remainder, and a
   usage write that fails (or names an unpriced model) is logged by `recordSpend` and

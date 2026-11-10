@@ -39,6 +39,49 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
+// Renders the hook in a bare component that each test re-renders with the
+// ticket and server plan an SWR refresh would bring.
+function mountFlow() {
+  const callbacks = {
+    onReplyChange: vi.fn(),
+    onSend: vi.fn(),
+    onAgentTurnAdd: vi.fn(),
+    onAgentRunningChange: vi.fn(),
+    onAgentComplete: vi.fn(),
+  }
+  const current: { value: ReturnType<typeof useConversationAgentFlow> | null } = { value: null }
+  const capture = (value: ReturnType<typeof useConversationAgentFlow>) => {
+    current.value = value
+  }
+  function Harness({
+    ticket,
+    initialPlan,
+    onValue,
+  }: {
+    ticket: Ticket
+    initialPlan: AgentPlan | null
+    onValue: (value: ReturnType<typeof useConversationAgentFlow>) => void
+  }) {
+    const value = useConversationAgentFlow({
+      ticket,
+      initialPlan,
+      replyText: "",
+      ...callbacks,
+    })
+    React.useEffect(() => onValue(value), [onValue, value])
+    return null
+  }
+  container = document.createElement("div")
+  document.body.appendChild(container)
+  root = createRoot(container)
+  const renderHarness = (ticket: Ticket, initialPlan: AgentPlan | null) => {
+    act(() => {
+      root?.render(React.createElement(Harness, { ticket, initialPlan, onValue: capture }))
+    })
+  }
+  return { callbacks, current, renderHarness }
+}
+
 describe("getAgentCommandState", () => {
   it("detects agent mode from the @shopkeeper prefix", () => {
     expect(getAgentCommandState("@shopkeeper refund this order")).toEqual({
@@ -167,46 +210,9 @@ describe("useConversationAgentFlow execution state", () => {
     } satisfies AgentRequestResult
     requestMocks.executeApprovedAgentPlan.mockResolvedValue(partialResult)
 
-    const callbacks = {
-      onReplyChange: vi.fn(),
-      onSend: vi.fn(),
-      onAgentTurnAdd: vi.fn(),
-      onAgentRunningChange: vi.fn(),
-      onAgentComplete: vi.fn(),
-    }
-    const current: { value: ReturnType<typeof useConversationAgentFlow> | null } = { value: null }
-    const capture = (value: ReturnType<typeof useConversationAgentFlow>) => {
-      current.value = value
-    }
-    function Harness({
-      ticket,
-      initialPlan,
-      onValue,
-    }: {
-      ticket: Ticket
-      initialPlan: AgentPlan | null
-      onValue: (value: ReturnType<typeof useConversationAgentFlow>) => void
-    }) {
-      const value = useConversationAgentFlow({
-        ticket,
-        initialPlan,
-        replyText: "",
-        ...callbacks,
-      })
-      React.useEffect(() => onValue(value), [onValue, value])
-      return null
-    }
+    const { callbacks, current, renderHarness } = mountFlow()
     const firstTicket = { id: "ticket-1" } as Ticket
     const secondTicket = { id: "ticket-2" } as Ticket
-    const renderHarness = (ticket: Ticket, initialPlan: AgentPlan | null) => {
-      act(() => {
-        root?.render(React.createElement(Harness, { ticket, initialPlan, onValue: capture }))
-      })
-    }
-
-    container = document.createElement("div")
-    document.body.appendChild(container)
-    root = createRoot(container)
     renderHarness(firstTicket, plan)
 
     await act(async () => {
@@ -282,5 +288,75 @@ describe("useConversationAgentFlow execution state", () => {
       await new Promise(resolve => setTimeout(resolve, 550))
     })
     expect(current.value?.pendingPlan).toEqual(thirdPlan)
+  })
+
+  it("shows the next server plan after a card was restored, dismissed, sent or left partial", async () => {
+    const draft = (planId: string): AgentPlan => ({
+      planId,
+      instruction: "reply",
+      rawToolCalls: [{ id: "reply-1", name: "send_reply", input: {} }],
+      steps: [{
+        id: "reply-1",
+        tool: "send_reply",
+        label: "Reply to customer",
+        description: "Reply to the customer",
+        category: "communication",
+        enabled: true,
+      }],
+    })
+    const [first, second, third, fourth, fifth] = ["plan-1", "plan-2", "plan-3", "plan-4", "plan-5"].map(draft)
+    const sent = {
+      ok: true,
+      executionId: "execution-sent",
+      outcome: "committed",
+      replyNotSent: false,
+      turn: { instruction: "reply", actions: [], summary: "Sent", error: null },
+    } satisfies AgentRequestResult
+    const partial = {
+      ok: false,
+      executionId: "execution-partial",
+      outcome: "partial",
+      turn: { instruction: "reply", actions: [], summary: "Partially completed", error: "Some plan steps failed." },
+    } satisfies AgentRequestResult
+    const ticket = { id: "ticket-1" } as Ticket
+    requestMocks.recoverAgentPlan.mockResolvedValueOnce(first)
+    const { current, renderHarness } = mountFlow()
+    const shownPlanId = () => current.value?.pendingPlan?.planId ?? null
+
+    // Opening the ticket restores the merchant's waiting draft, then the
+    // customer writes again and the next plan is cached.
+    renderHarness(ticket, first)
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 0))
+    })
+    renderHarness(ticket, second)
+    expect(shownPlanId()).toBe("plan-2")
+
+    await act(async () => current.value?.handlePlanDismiss())
+    renderHarness(ticket, null)
+    renderHarness(ticket, third)
+    expect(shownPlanId()).toBe("plan-3")
+
+    requestMocks.executeApprovedAgentPlan.mockResolvedValue(sent)
+    await act(async () => current.value?.handlePlanApprove(third.rawToolCalls))
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 550))
+    })
+    renderHarness(ticket, null)
+    expect(shownPlanId()).toBeNull()
+    renderHarness(ticket, fourth)
+    expect(shownPlanId()).toBe("plan-4")
+
+    // A partial run stays up while its plan is out of the cache, gives way to
+    // the next plan, and does not come back when that one clears.
+    requestMocks.executeApprovedAgentPlan.mockResolvedValue(partial)
+    await act(async () => current.value?.handlePlanApprove(fourth.rawToolCalls))
+    renderHarness(ticket, null)
+    expect(shownPlanId()).toBe("plan-4")
+    expect(current.value?.planExecutionOutcome).toBe("partial")
+    renderHarness(ticket, fifth)
+    expect(shownPlanId()).toBe("plan-5")
+    renderHarness(ticket, null)
+    expect(shownPlanId()).toBeNull()
   })
 })

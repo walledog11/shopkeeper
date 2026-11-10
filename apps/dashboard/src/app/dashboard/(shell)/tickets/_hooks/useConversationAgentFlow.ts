@@ -65,10 +65,17 @@ export function planRequiresApproval(plan: AgentPlan): boolean {
     || plan.steps.some(step => step.category === "action" || step.category === "communication" || step.category === "internal")
 }
 
-interface PendingPlanState {
+// After the merchant acts here (approve, dismiss, edit, regenerate, ask for a
+// draft) or a request is restored on open, the local view stands in for the
+// server's plan until the server shows a plan this view did not know about.
+// That plan is newer, so it replaces the local view for good. A cache that only
+// clears does not: an executed plan leaves the cache, and a failed or partial
+// run's card has to stay up.
+interface PendingPlanOverride {
   ticketId: string
-  hasOverride: boolean
   plan: AgentPlan | null
+  /** `planStateKey`s of the server's plan and the shown plan when this was set. */
+  replaces: string[]
 }
 
 interface PlanExecutionState {
@@ -82,14 +89,12 @@ function planStateKey(plan: AgentPlan): string {
     ?? `${plan.instruction}:${plan.rawToolCalls.map(toolCall => toolCall.id).join(",")}`
 }
 
-type PendingPlanAction = { type: "set"; ticketId: string; plan: AgentPlan | null }
+type PendingPlanAction =
+  | { type: "set"; override: PendingPlanOverride }
+  | { type: "release" }
 
-function pendingPlanReducer(_state: PendingPlanState, action: PendingPlanAction): PendingPlanState {
-  return {
-    ticketId: action.ticketId,
-    hasOverride: true,
-    plan: action.plan,
-  }
+function pendingPlanReducer(_state: PendingPlanOverride | null, action: PendingPlanAction): PendingPlanOverride | null {
+  return action.type === "set" ? action.override : null
 }
 
 export function useConversationAgentFlow({
@@ -104,11 +109,7 @@ export function useConversationAgentFlow({
   onPlanCacheUpdated,
 }: UseConversationAgentFlowProps) {
   const [pendingInstruction, setPendingInstruction] = useState<string | null>(null)
-  const [pendingPlanState, dispatchPendingPlan] = useReducer(pendingPlanReducer, {
-    ticketId: ticket.id,
-    hasOverride: false,
-    plan: null,
-  })
+  const [pendingPlanOverride, dispatchPendingPlan] = useReducer(pendingPlanReducer, null)
   const [isPlanLoading, setIsPlanLoading] = useState(false)
   const [isPlanExecuting, setIsPlanExecuting] = useState(false)
   const [isRegenerating, setIsRegenerating] = useState(false)
@@ -117,9 +118,16 @@ export function useConversationAgentFlow({
   const planningEpoch = useRef(0)
 
   const { agentInstruction, isAgentMode } = getAgentCommandState(replyText)
-  const pendingPlan = pendingPlanState.ticketId === ticket.id && pendingPlanState.hasOverride
-    ? pendingPlanState.plan
-    : initialPlan ?? null
+  const serverPlan = initialPlan ?? null
+  const override = pendingPlanOverride?.ticketId === ticket.id ? pendingPlanOverride : null
+  const supersededByServer = override !== null && serverPlan !== null
+    && !override.replaces.includes(planStateKey(serverPlan))
+  if (supersededByServer) dispatchPendingPlan({ type: "release" })
+  const pendingPlan = override && !supersededByServer ? override.plan : serverPlan
+  const currentPlanKeys = [serverPlan, pendingPlan].flatMap(plan => plan ? [planStateKey(plan)] : [])
+  const overrideServerPlan = (plan: AgentPlan | null) => {
+    dispatchPendingPlan({ type: "set", override: { ticketId: ticket.id, plan, replaces: currentPlanKeys } })
+  }
   const planExecutionOutcome = pendingPlan
     && planExecutionState?.ticketId === ticket.id
     && planExecutionState.planKey === planStateKey(pendingPlan)
@@ -130,7 +138,7 @@ export function useConversationAgentFlow({
       clearTimeout(successDismissTimer.current)
       successDismissTimer.current = null
     }
-    dispatchPendingPlan({ type: "set", ticketId: ticket.id, plan })
+    overrideServerPlan(plan)
     setPlanExecutionState(null)
   }
 
@@ -147,8 +155,9 @@ export function useConversationAgentFlow({
       setIsPlanLoading(true)
       setPendingInstruction(instruction)
     }).then(plan => {
-      if (!current() || !plan) return
-      dispatchPendingPlan({ type: "set", ticketId: ticket.id, plan })
+      // A restored plan that is already current adds nothing; the server's copy stays in charge.
+      if (!current() || !plan || currentPlanKeys.includes(planStateKey(plan))) return
+      overrideServerPlan(plan)
     }).catch(error => {
       if (!current()) return
       onAgentTurnAdd(createAgentTurn(planRequestErrorTurn(NO_MERCHANT_INSTRUCTION, error)))
