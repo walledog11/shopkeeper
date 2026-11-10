@@ -83,7 +83,7 @@ async function patchActiveThreadCache(
   )
 }
 
-export function createThreadCacheCoordinator(deps: ThreadCacheCoordinatorDeps): ThreadCacheCoordinator {
+function createThreadCacheCoordinator(deps: ThreadCacheCoordinatorDeps): ThreadCacheCoordinator {
   const patchAncillary = async (threadId: string, updateThread: ThreadListUpdater) => {
     await Promise.all([
       patchSearchCache(deps.mutateSearch, threadId, updateThread),

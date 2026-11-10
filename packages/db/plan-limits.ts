@@ -1,4 +1,4 @@
-import { db } from './index.js';
+import { db } from './client.js';
 
 // Per-org plan limits. The tier ladder sells volume and seats, not features:
 // every plan runs the whole product (decision 2026-08-19, `c558c788`), so

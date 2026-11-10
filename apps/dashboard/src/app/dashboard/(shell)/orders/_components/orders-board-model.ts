@@ -1,6 +1,5 @@
 import type { OrderRow } from "@/lib/orders/order-contract"
 
-export { classifyOrder } from "@/lib/orders/order-contract"
 export type { OrderRow } from "@/lib/orders/order-contract"
 
 export type PillTone = "positive" | "warn" | "muted" | "info"

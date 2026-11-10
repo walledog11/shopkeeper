@@ -4,7 +4,7 @@ import type { Fixture } from "./types"
 
 const RECORD_PATH = join(__dirname, "recorded-stochastic-core-fixtures.json")
 
-export function loadRecordedStochasticCoreFixtureIds(): string[] {
+function loadRecordedStochasticCoreFixtureIds(): string[] {
   const parsed = JSON.parse(readFileSync(RECORD_PATH, "utf8")) as { fixtureIds?: unknown }
   if (!Array.isArray(parsed.fixtureIds) || parsed.fixtureIds.some(id => typeof id !== "string")) {
     throw new Error("recorded-stochastic-core-fixtures.json must list string fixtureIds")

@@ -18,7 +18,7 @@ export function memoryCardTitle(article: ArticleWithBase): string {
   return article.title
 }
 
-export function memoryCardBodyPreview(article: ArticleWithBase): string {
+function memoryCardBodyPreview(article: ArticleWithBase): string {
   const body = article.body.trim()
   if (!body || articleMemorySource(article) !== "learned") return body
   const lines = body.split("\n")

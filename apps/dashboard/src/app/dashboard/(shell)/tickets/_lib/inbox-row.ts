@@ -73,14 +73,14 @@ function latestCustomerMessage(ticket: Ticket) {
 }
 
 /** Mirrors gateway `mayParkMerchantWork` — greetings and thank-yous are not queue work. */
-export function dispositionBlocksMerchantWork(
+function dispositionBlocksMerchantWork(
   disposition: ThreadRequestDisposition | null | undefined,
 ): boolean {
   return disposition === "none" || disposition === "acknowledgement"
 }
 
 /** Shopify webhook threads are platform notifications, not customer conversations. */
-export function isShopifySystemThread(ticket: Ticket): boolean {
+function isShopifySystemThread(ticket: Ticket): boolean {
   return ticket.channelType === "shopify"
 }
 

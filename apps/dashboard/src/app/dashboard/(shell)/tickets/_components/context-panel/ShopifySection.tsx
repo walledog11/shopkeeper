@@ -62,7 +62,7 @@ type ShopifySectionAction =
   | { type: "createError"; error: string | null }
   | { type: "createSuccess" }
 
-export const initialShopifySectionState: ShopifySectionState = {
+const initialShopifySectionState: ShopifySectionState = {
   mode: 'view',
   isEditingCustomer: false,
   query: '',
@@ -74,7 +74,7 @@ export const initialShopifySectionState: ShopifySectionState = {
   createError: null,
 }
 
-export function shopifySectionReducer(state: ShopifySectionState, action: ShopifySectionAction): ShopifySectionState {
+function shopifySectionReducer(state: ShopifySectionState, action: ShopifySectionAction): ShopifySectionState {
   switch (action.type) {
     case "mode":
       return { ...state, mode: action.mode }

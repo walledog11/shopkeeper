@@ -83,7 +83,7 @@ function providerFailureCategory(
   return 'invalid_credentials';
 }
 
-export function resolveTikTokShopExternalAccountId(
+function resolveTikTokShopExternalAccountId(
   tokenResult: TikTokShopTokenResult,
 ): string | null {
   return tokenResult.shopId ?? tokenResult.sellerId ?? tokenResult.openId;

@@ -48,7 +48,7 @@ export function InboxExternalLead({ count }: { count: number }) {
   )
 }
 
-export function InboxStreamFold({ children }: { children?: ReactNode }) {
+function InboxStreamFold({ children }: { children?: ReactNode }) {
   return (
     <div className="flex items-center gap-3 py-1" role="separator">
       <div className="h-px flex-1 bg-border/50" aria-hidden />

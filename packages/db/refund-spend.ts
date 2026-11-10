@@ -1,5 +1,5 @@
 import type { Prisma, RefundSpendReservation } from '@prisma/client';
-import { db } from './index.js';
+import { db } from './client.js';
 import { utcDayString } from './llm-spend.js';
 
 // Postgres-backed daily refund-cap counter. Dashboard and gateway both call

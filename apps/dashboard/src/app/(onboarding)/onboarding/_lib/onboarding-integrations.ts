@@ -2,7 +2,7 @@ import { getEmailProvider } from "@shopkeeper/email/providers";
 import { isEmailIntegrationConfigured } from "@/lib/integrations/onboarding-setup";
 import type { Integration } from "@/types";
 
-export function isInstagramIntegrationConfigured(integration: Integration | undefined): boolean {
+function isInstagramIntegrationConfigured(integration: Integration | undefined): boolean {
   if (!integration || integration.platform !== "ig_dm") return false;
   return Boolean((integration.externalAccountId ?? "").trim());
 }

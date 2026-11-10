@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { db, SenderType } from '@shopkeeper/db';
-import { BadRequestError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
 import { merchantInboxInternalChannelFilter } from '@shopkeeper/agent/merchant-inbox-surfaces';
+import { parseSearchQuery } from './_lib/validation';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,12 +13,7 @@ export const GET = withOrgRoute(
     rateLimit: { key: 'search', limit: 30, windowSecs: 60 },
   },
   async ({ org, request }) => {
-    const { searchParams } = new URL(request.url);
-    const q = searchParams.get('q')?.trim() ?? '';
-
-    if (q.length < 2) {
-      throw new BadRequestError('Query must be at least 2 characters');
-    }
+    const q = parseSearchQuery(new URL(request.url).searchParams);
 
     const threads = await db.thread.findMany({
       where: {

@@ -10,7 +10,7 @@ import {
 } from '@/app/api/integrations/_lib/oauth-session';
 import { oauthPageRedirect } from '@/app/api/integrations/_lib/oauth-callback';
 
-export const SOCIALAPI_CALLBACK_PATH = '/api/integrations/instagram/socialapi/callback';
+const SOCIALAPI_CALLBACK_PATH = '/api/integrations/instagram/socialapi/callback';
 
 /**
  * SocialAPI mints the OAuth state, so ours cannot ride the `state` parameter

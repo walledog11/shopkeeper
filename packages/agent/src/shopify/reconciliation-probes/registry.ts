@@ -1,4 +1,4 @@
-import { parseToolInput } from "../../tools/index.js";
+import { parseToolInput } from "../../tools/registry/index.js";
 import type {
   AddShopifyCustomerNoteInput,
   AttachReturnLabelInput,

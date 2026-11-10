@@ -41,7 +41,7 @@ const DEFAULT_STATE: VisualKeyboardState = {
   visualViewportHeight: 0,
 }
 
-export function getVisualKeyboardState({
+function getVisualKeyboardState({
   focusedEditable,
   innerHeight,
   isMobile,
