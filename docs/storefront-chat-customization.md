@@ -1,6 +1,8 @@
 # Website chat
 
-Merchants open **Chat** directly in the main navigation at `/dashboard/chat`.
+Merchants open **Chat** directly in the main navigation at `/dashboard/chat`, or the
+**Website chat** tab of the app home inside Shopify admin (`/shopify`); both run the
+same editor (`StorefrontChatEditor`), against their own routes.
 The previous integration URL redirects here. The main form contains a picture,
 brand color, and welcome message. **More options** contains the chat name, short
 description, button style and text, placement, devices, and suggested questions.
@@ -12,7 +14,9 @@ switch between **Customize** and **Preview**. Preview messages never leave the f
 The preview fits both the available width and height; editing appearance preserves
 its conversation, verification inputs, and open/closed state.
 
-Only workspace admins can upload pictures, save settings, or enable chat.
+In the dashboard, only workspace admins can upload pictures, save settings, or enable
+chat. Inside Shopify admin, anyone the store lets open the app can: Shopify's staff
+permissions decide.
 **Discard** restores saved settings. **Save changes** does not enable the channel;
 **Save and turn on** saves the displayed design before enabling it. A failed save
 leaves chat off. **Finish setup in Shopify** opens the theme editor. Enabled in

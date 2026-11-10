@@ -30,13 +30,25 @@ In order. This is the product's critical path.
    the brand's listing and, after reconnecting, the same sender's next DM lands on the
    same customer and a reply reaches them. If SocialAPI issues new author IDs on
    reconnect, record that in the transport plan (invariant 6) instead.
-5. **Install the Shopify app on a real, non-dev store.** First check its distribution in
+5. **Expiring Shopify offline tokens, before 2027-01-01.** From that date Shopify blocks
+   new installs of public apps that still use non-expiring offline tokens, and from
+   2027-04-01 it rejects their Admin API calls. Every reader takes
+   `Integration.accessToken` as is, and `tokenExpiresAt` doubles as the "token is dead"
+   marker. Closes when every Shopify read goes through one refresh-aware accessor
+   (one-hour tokens, a rotating 90-day refresh token, one refresh per store at a time
+   because a refresh retires the other's result), existing tokens are swapped by token
+   exchange, and the OAuth callback and the app home ask for `expiring=1`.
+6. **Install the Shopify app on a real, non-dev store.** First check its distribution in
    the Partner dashboard; it can't be changed once chosen. Custom distribution installs on
-   one store (or one Plus organization), so it can't serve item 6. Public distribution
+   one store (or one Plus organization), so it can't serve item 7. Public distribution
    needs Shopify's app review before any non-development install, even unlisted, and App
-   Store apps must charge through Shopify's billing, not Stripe. Closes when the install
-   grants every `SHOPIFY_OAUTH_SCOPES` scope and a missing scope shows the reconnect path.
-6. **Two supervised external merchants** complete real approved loops with no
+   Store apps must charge through Shopify's billing, not Stripe. Review checks that the
+   app authenticates immediately after install; a shop installed from Shopify with no
+   workspace gets no token until the merchant connects it from onboarding, so store the
+   install's token-exchange grant until a workspace claims it if review flags that.
+   Closes when the install grants every `SHOPIFY_OAUTH_SCOPES` scope and a missing scope
+   shows the reconnect path.
+7. **Two supervised external merchants** complete real approved loops with no
    wrong-recipient, unauthorized-money, duplicate-action or lost-message incident.
 
 ## Later

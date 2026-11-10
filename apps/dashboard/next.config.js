@@ -6,15 +6,19 @@ const { withSentryConfig } = require('@sentry/nextjs');
 // option in src/proxy.ts, not here.
 const SECURITY_HEADERS = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
-  { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
   { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
 ];
 
+// Shopify admin frames `/shopify` (the app home), and that route sets its own
+// `frame-ancestors` naming the one shop it verified. X-Frame-Options has no way
+// to allow a cross-origin parent, so it would blank the page inside the admin.
+const FRAME_HEADERS = [{ key: 'X-Frame-Options', value: 'SAMEORIGIN' }];
+
 const NOINDEX_HEADERS = [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }];
 const NOINDEX_PATH_GROUP =
-  '(login|signup|select-org|create-org|welcome|plan|connect|dashboard|api)';
+  '(login|signup|select-org|create-org|welcome|plan|connect|dashboard|shopify|api)';
 
 const repoRoot = path.resolve(__dirname, '../..');
 const sentryUploadEnabled = Boolean(process.env.SENTRY_AUTH_TOKEN)
@@ -38,6 +42,7 @@ const nextConfig = {
   async headers() {
     return [
       { source: '/(.*)', headers: SECURITY_HEADERS },
+      { source: '/:path((?!shopify(?:/|$)).*)', headers: FRAME_HEADERS },
       { source: `/:path${NOINDEX_PATH_GROUP}`, headers: NOINDEX_HEADERS },
       { source: `/:path${NOINDEX_PATH_GROUP}/:rest*`, headers: NOINDEX_HEADERS },
       // public/ is unfingerprinted, so Next serves it max-age=0 and the hero
@@ -82,6 +87,7 @@ const nextConfig = {
   outputFileTracingRoot: repoRoot,
   outputFileTracingIncludes: {
     '/api/integrations/shopify/storefront-chat/preview': ['../../extensions/shopkeeper-chat/assets/*'],
+    '/shopify/chat-preview': ['../../extensions/shopkeeper-chat/assets/*'],
   },
   transpilePackages: ['@shopkeeper/db'],
   images: {

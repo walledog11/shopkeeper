@@ -32,6 +32,7 @@ import { useIntegrationsOAuth } from "@/components/integrations/useIntegrationsO
 import { CARD_ACTIONS, CARD_DESCRIPTION, CARD_SHELL } from "@/components/integrations/integration-card-styles"
 import ImessageCard from "@/components/integrations/ImessageCard"
 import { getShopifyDisconnectMessage, resolveShopifyConnectionState } from "@/lib/integrations/shopify-connection"
+import { normalizeShopifyShopDomain } from "@/lib/shopify/oauth"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { InstagramConnectTransport } from "@/lib/socialapi/config"
 import type { Integration } from "@/types"
@@ -107,6 +108,8 @@ function IntegrationsPageContent({
   const integrations = useMemo(() => data ?? [], [data])
   const loaded = data !== undefined
   const [openId, setOpenId] = useState<string | null>(searchParams.get("configure") === "shopify" ? "shopify" : null)
+  // Set by the app home inside Shopify admin, so the merchant never types the address.
+  const suggestedShopifyShop = normalizeShopifyShopDomain(searchParams.get("shop"))
   const shopifyPresenceRef = useRef<ReturnType<typeof resolveShopifyConnectionState> | null>(null)
   const mountedRef = useRef(true)
   const [toast, setToast] = useState<{ tone: "success" | "error"; message: string } | null>(null)
@@ -287,6 +290,7 @@ function IntegrationsPageContent({
         onOpenChange={(open) => setOpenId(open ? definition.id : null)}
         shopifyClientId={shopifyClientId}
         storefrontChatGloballyEnabled={storefrontChatGloballyEnabled}
+        suggestedShopifyShop={suggestedShopifyShop}
       />
     )
   }

@@ -1,11 +1,12 @@
 import { clerkMiddleware } from '@clerk/nextjs/server'
-import { NextResponse } from 'next/server'
+import { NextResponse, type NextFetchEvent, type NextRequest } from 'next/server'
 import { isE2EAuthBypassEnabled } from '@/lib/e2e-auth'
 import { getCanonicalHostRedirect, isMarketingHost } from '@/proxy/canonical-host'
 import { CSP_REPORT_ENDPOINT, cspDirectives } from '@/proxy/content-security-policy'
 import { getPathAccessPolicy, isApiPath } from '@/proxy/path-access-policy'
+import { isShopifyAppHomePath, shopifyAppHomeProxy } from '@/proxy/shopify-app-home'
 
-export default clerkMiddleware(async (auth, req) => {
+const clerkProxy = clerkMiddleware(async (auth, req) => {
   if (isE2EAuthBypassEnabled()) {
     return
   }
@@ -69,6 +70,11 @@ export default clerkMiddleware(async (auth, req) => {
     directives: cspDirectives,
   },
 })
+
+export default function proxy(request: NextRequest, event: NextFetchEvent) {
+  if (isShopifyAppHomePath(request.nextUrl.pathname)) return shopifyAppHomeProxy(request)
+  return clerkProxy(request, event)
+}
 
 export const config = {
   matcher: [

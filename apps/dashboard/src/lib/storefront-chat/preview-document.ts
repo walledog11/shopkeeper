@@ -12,6 +12,11 @@ async function readAsset(name: string): Promise<string> {
   }
 }
 
+/** The preview runs the real widget script, sandboxed: nothing but its own nonce runs, and nothing leaves. */
+export function chatPreviewContentSecurityPolicy(nonce: string, frameAncestors: readonly string[]): string {
+  return `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline' https://api.fontshare.com; font-src https://cdn.fontshare.com; img-src 'self' https:; connect-src 'none'; frame-ancestors ${frameAncestors.join(' ')}; base-uri 'none'; form-action 'none'`;
+}
+
 export async function chatPreviewDocument(nonce: string): Promise<string> {
   const [tokens, styles, widget] = await Promise.all([
     readAsset('shopkeeper-tokens.css'), readAsset('shopkeeper-chat.css'), readAsset('shopkeeper-chat.js'),
