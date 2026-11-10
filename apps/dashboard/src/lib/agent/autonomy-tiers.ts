@@ -33,8 +33,3 @@ export const AUTONOMY_TIERS: AutonomyTierOption[] = [
 export function visibleAutonomyTiers(): AutonomyTierOption[] {
   return AUTONOMY_TIERS;
 }
-
-export function effectiveRefundCap(settings: { autonomyTier?: AutonomyTier; maxRefundAmount?: number | null }): number {
-  if (settings.maxRefundAmount != null) return settings.maxRefundAmount;
-  return AUTONOMY_TIERS.find(option => option.id === settings.autonomyTier)?.cap ?? 50;
-}

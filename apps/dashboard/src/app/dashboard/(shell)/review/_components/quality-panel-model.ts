@@ -51,7 +51,7 @@ export const TONE_STYLES: Record<Tone, { container: string; label: string }> = {
   note: { container: "border-foreground/[0.08] bg-foreground/[0.03]", label: "text-foreground/45" },
 }
 
-export const STORE_ACTION_TOOLS = [
+const STORE_ACTION_TOOLS = [
   "create_refund",
   "cancel_order",
   "create_shopify_order",
@@ -178,15 +178,6 @@ export function outcomeTone(action: ActionLogEntry["actions"][number]): Tone {
   if (isErrorStatus(action.status)) return "error"
   if (MONEY_TOOLS.has(action.tool) || action.tool === "flag_order") return "money"
   return "note"
-}
-
-export function isAttentionEntry(entry: ActionLogEntry): boolean {
-  return entry.actions.some(
-    (action) =>
-      action.tool === "escalate_to_human"
-      || action.tool === "flag_order"
-      || isErrorStatus(action.status),
-  )
 }
 
 export function reviewItemChrome(entry: ActionLogEntry): ReviewItemChrome {

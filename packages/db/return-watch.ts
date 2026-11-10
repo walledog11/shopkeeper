@@ -1,4 +1,4 @@
-import { db } from './index.js';
+import { db } from './client.js';
 
 export type ReturnWatchTool = 'create_return' | 'create_exchange';
 

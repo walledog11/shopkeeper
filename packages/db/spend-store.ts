@@ -1,4 +1,4 @@
-import { db } from './index.js';
+import { db } from './client.js';
 import { usageToNanoDollars, utcDayString, type LlmUsageTokens } from './llm-spend.js';
 
 // Postgres-backed daily LLM spend counter. Dashboard and gateway both call

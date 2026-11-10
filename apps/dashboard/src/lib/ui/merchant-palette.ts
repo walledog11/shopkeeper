@@ -9,7 +9,7 @@ export const merchantSandInkHoverClass =
 export const merchantSandHoverClass =
   "hover:bg-[#f5f4f2] hover:text-[#1a1a1a]" as const
 
-export const merchantCautionInkClass = "bg-[#fff4e5] text-[#1a1a1a]" as const
+const merchantCautionInkClass = "bg-[#fff4e5] text-[#1a1a1a]" as const
 
 export const merchantContactPillClass =
   "h-9 max-w-full gap-1.5 px-3 text-xs font-medium text-[#6b5d4f] bg-[#f5f4f2] hover:bg-[#ebeae6]" as const

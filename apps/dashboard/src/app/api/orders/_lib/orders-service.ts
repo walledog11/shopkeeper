@@ -12,7 +12,7 @@ import {
   type OrdersPageResponse,
 } from "@/lib/orders/order-contract"
 
-export const ORDER_FIELDS =
+const ORDER_FIELDS =
   "id,name,created_at,financial_status,fulfillment_status,total_price,current_total_price,currency,customer,line_items"
 
 export interface ShopifyOrderRaw {
@@ -144,14 +144,6 @@ export async function listShopifyOrders(
     nextPageInfo: parseNextPageInfo(headers),
     shop,
   }
-}
-
-export async function listShopifyOrdersForOrg(
-  organizationId: string,
-  query: ShopifyOrdersQuery,
-): Promise<OrdersPageResponse> {
-  const integration = await getOperationalShopifyIntegration(organizationId)
-  return listShopifyOrders(integration, query)
 }
 
 export async function shopifyOrdersErrorResponse(

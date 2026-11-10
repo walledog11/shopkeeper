@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { WorkspaceDeletion } from '@prisma/client';
-import { db } from './index.js';
+import { db } from './client.js';
 import {
   DEFAULT_LIFECYCLE_STALE_CLAIM_MS,
   lifecycleErrorDetail,

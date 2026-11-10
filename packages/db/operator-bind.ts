@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { db } from './index.js';
+import { db } from './client.js';
 
 export const ORG_MEMBER_BIND_TOKEN_TTL_SECONDS = 24 * 60 * 60;
 

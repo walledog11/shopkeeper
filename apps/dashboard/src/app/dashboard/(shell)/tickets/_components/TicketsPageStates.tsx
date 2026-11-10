@@ -1,7 +1,6 @@
 "use client"
 
-import { AlertCircle, CheckCircle2, Inbox, Loader2 } from "lucide-react"
-import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
+import { AlertCircle, Inbox, Loader2 } from "lucide-react"
 import {
   conversationLoadErrorMessage,
   inboxListErrorMessage,
@@ -85,33 +84,6 @@ export function ConversationLoadState({
           Try again
         </button>
       )}
-    </div>
-  )
-}
-
-export function NoConversationSelectedState({
-  allCaughtUp,
-}: {
-  allCaughtUp: boolean
-}) {
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-3 bg-background p-6 text-center">
-      <span className="flex size-11 items-center justify-center rounded-full border border-border bg-foreground/[0.04]">
-        {allCaughtUp
-          ? <CheckCircle2 className="size-5 text-faint" />
-          : <Inbox className="size-5 text-faint" />
-        }
-      </span>
-      <div className="flex flex-col gap-1">
-        <h2 className="text-lg font-semibold text-foreground">
-          {allCaughtUp ? "You're all caught up" : "Pick a conversation"}
-        </h2>
-        <p className="max-w-[230px] text-sm text-muted-foreground">
-          {allCaughtUp
-            ? `${AGENT_DISPLAY_NAME} will flag anything that needs your eye.`
-            : "Choose one from the list to jump in."}
-        </p>
-      </div>
     </div>
   )
 }

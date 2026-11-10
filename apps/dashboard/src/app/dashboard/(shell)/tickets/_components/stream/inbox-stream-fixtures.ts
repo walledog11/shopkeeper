@@ -3,7 +3,7 @@ import type { Ticket } from "@/types"
 
 const CUSTOMER_MESSAGE_ID = "msg-customer"
 
-export function inboxStreamTicket(overrides: Partial<Ticket> = {}): Ticket {
+function inboxStreamTicket(overrides: Partial<Ticket> = {}): Ticket {
   return {
     id: "thread-1",
     channelType: "email",

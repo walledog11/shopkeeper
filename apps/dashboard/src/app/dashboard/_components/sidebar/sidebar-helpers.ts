@@ -5,7 +5,7 @@ export function isRouteActive(pathname: string, href: string) {
   return pathname === href || (href !== "/dashboard" && pathname.startsWith(`${href}/`));
 }
 
-export const topBarGlassHoverClass = "hover:bg-foreground/[0.04]";
+const topBarGlassHoverClass = "hover:bg-foreground/[0.04]";
 
 export function topBarNavTriggerClass(active: boolean) {
   return cn(
@@ -61,15 +61,15 @@ export const desktopTopBarUtilityPillClass = cn(
   GLASS_PILL_SURFACE,
 );
 
-export const desktopTopBarDropdownPanelClass = cn(
+const desktopTopBarDropdownPanelClass = cn(
   "w-56 rounded-xl p-2 text-sidebar-foreground",
   GLASS_PILL_SURFACE,
 );
 
-export const desktopTopBarDropdownItemClass =
+const desktopTopBarDropdownItemClass =
   "flex items-center gap-2 rounded-md px-2.5 py-2 text-sm cursor-pointer outline-none transition-colors hover:bg-sidebar-accent/80 focus:bg-sidebar-accent/80 data-[highlighted]:bg-sidebar-accent/80";
 
-export const desktopTopBarDropdownItemActiveClass =
+const desktopTopBarDropdownItemActiveClass =
   "bg-sidebar-accent font-medium text-sidebar-foreground";
 
 export function desktopTopBarDropdownMenuItemClass(active = false) {

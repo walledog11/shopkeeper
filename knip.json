@@ -23,11 +23,6 @@
       "ignoreDependencies": ["body-parser", "next"]
     },
     "apps/dashboard": {
-      "entry": [
-        "src/app/**/*.{ts,tsx}",
-        "next.config.js",
-        "postcss.config.mjs"
-      ],
       "project": ["src/**/*.{ts,tsx}"],
       "ignoreDependencies": ["shadcn", "tailwindcss", "tw-animate-css"]
     },

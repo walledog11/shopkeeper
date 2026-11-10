@@ -11,7 +11,7 @@ import { sealOAuthAttempt, unsealOAuthAttempt } from './oauth-attempt';
 
 const OAUTH_STATE_PATTERN = /^[a-f0-9]{32}$/;
 
-export const OAUTH_COOKIE_OPTIONS = {
+const OAUTH_COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
   sameSite: 'lax' as const,

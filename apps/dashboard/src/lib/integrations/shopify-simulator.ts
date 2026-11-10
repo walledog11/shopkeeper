@@ -1,8 +1,5 @@
 export { isSimulatedShopifyIntegration } from "@shopkeeper/agent/shopify/integration-health";
-export {
-  SHOPIFY_SIMULATOR_DOMAIN,
-  SHOPIFY_SIMULATOR_TOKEN,
-} from "@shopkeeper/agent/shopify";
+export { SHOPIFY_SIMULATOR_TOKEN } from "@shopkeeper/agent/shopify";
 
 export function isShopifySimulatorEnabled(
   env: {

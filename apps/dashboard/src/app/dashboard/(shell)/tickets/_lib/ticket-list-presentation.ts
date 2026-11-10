@@ -40,17 +40,6 @@ export interface TicketListPresentation {
   showSubject: boolean
 }
 
-export const TRIAGE_TIER_SORT_ORDER: readonly TicketTriageTier[] = [
-  "escalated",
-  "answer",
-  "review",
-  "ready",
-  "working",
-  "noise",
-  "waiting_customer",
-  "closed",
-]
-
 export interface BuildTicketListPresentationInput {
   thread: Pick<
     Thread,
@@ -192,11 +181,7 @@ function resolveTier(
   return "waiting_customer"
 }
 
-export function compareTicketTriageTier(a: TicketTriageTier, b: TicketTriageTier): number {
-  return TRIAGE_TIER_SORT_ORDER.indexOf(a) - TRIAGE_TIER_SORT_ORDER.indexOf(b)
-}
-
-export function buildTicketListPresentation(
+function buildTicketListPresentation(
   input: BuildTicketListPresentationInput,
 ): TicketListPresentation {
   const {

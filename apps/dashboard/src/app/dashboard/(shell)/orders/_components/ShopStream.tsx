@@ -15,7 +15,7 @@ const SERIF = "[font-family:var(--m-serif),Georgia,'Times_New_Roman',serif]"
 const EMPTY_CARD_CLASS =
   "rounded-3xl border border-border bg-card px-5 py-8 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)]"
 
-export function ShopEmptyCard({ children }: { children: React.ReactNode }) {
+function ShopEmptyCard({ children }: { children: React.ReactNode }) {
   return (
     <div className={EMPTY_CARD_CLASS}>
       <p className="text-center text-sm text-muted-foreground">{children}</p>
@@ -23,7 +23,7 @@ export function ShopEmptyCard({ children }: { children: React.ReactNode }) {
   )
 }
 
-export function ShopAttentionLead({ count }: { count: number }) {
+function ShopAttentionLead({ count }: { count: number }) {
   if (count === 0) return null
 
   return (

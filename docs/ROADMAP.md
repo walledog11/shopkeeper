@@ -115,8 +115,12 @@ In order. This is the product's critical path.
 | The first unknown write on a merchant's store | A merchant-facing way to confirm what happened |
 | Before changing capability discovery or operator tool sets | Attribute planning cost (`inspect-turn-usage.ts`, `rebuilt`) |
 | The next support-prompt bullet for one bad output | Move `SUPPORT_INSTRUCTIONS` invariants into schema or executor |
+| The next approval-binding stage added to `planAgent` | Split `planAgent` into stages with typed results (bind provider facts, assess, materialize) instead of one function revising the proposal in place |
+| The next task-lifecycle bug, or a fourth plan-producing flow | One owner for claimed attempts (lease, budget, publish, settle) across auto-planning, composer, answers and follow-ups; distinct types for automatic and merchant-approved execution |
+| The next new receipt kind | Build receipt facts from validated fields instead of `as unknown as` in `receipt-v1-parse.ts`; diff old and new parses of stored receipts first, since unvalidated fields pass through today |
 | The next change to merchant-answer KB or order-ops findings | Typed fields instead of regexes in `merchant-answer-kb.ts`, `order-ops/finding.ts` |
 | Async recovery exercised | Decide async-only outbound email and retire the sync path |
+| The synchronous email rail retired | One outbound envelope in `@shopkeeper/messaging` (pending message, attribution, outcome transitions); hosts supply transport and alerts |
 | A few weeks of real merchant traffic | Baseline outcomes from `request_episode_outcomes`/`agent_actions`/`agent_tasks`/`agent_turn_usage` |
 | Attributed chat sales look too low | Anonymous-shopper attribution via cart attributes |
 | Classifier spend matters | Classify a two-message email burst once |

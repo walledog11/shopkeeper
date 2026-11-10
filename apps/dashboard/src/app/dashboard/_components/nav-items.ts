@@ -1,4 +1,4 @@
-import { Inbox, Settings2, Box, BrainCircuit, Home, ScanEye, User, MessageCircle } from "lucide-react";
+import { Inbox, Settings2, Box, BrainCircuit, ScanEye, User, MessageCircle } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { isRouteActive } from "./sidebar/sidebar-helpers";
 
@@ -16,19 +16,13 @@ export interface NavSection {
   items: NavItem[];
 }
 
-export const homeNavItem: NavItem = {
-  name: "Home",
-  href: "/dashboard",
-  icon: Home,
-};
-
 export const inboxNavItem: NavItem = {
   name: "Inbox",
   href: "/dashboard/tickets",
   icon: Inbox,
 };
 
-export const topBarAgentItems: NavItem[] = [
+const topBarAgentItems: NavItem[] = [
   {
     name: "Memory",
     href: "/dashboard/kb",
@@ -49,8 +43,6 @@ export const shopNavItem: NavItem = {
   icon: Box,
   description: "Orders that need a look",
 };
-
-export const topBarShopItems: NavItem[] = [shopNavItem];
 
 // "Website chat", not "Chat": the page sets up the chat on the store's site, and
 // "Chat" read as the place to talk to the agent, which is the ask box.
