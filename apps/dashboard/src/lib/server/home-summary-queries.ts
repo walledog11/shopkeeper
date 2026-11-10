@@ -135,12 +135,119 @@ export function currentPlanPredicate(organizationId: string) {
   `
 }
 
+// The headline counts: open, waiting on the merchant, replies sent. The app
+// home inside Shopify admin shows these without the rest of the summary.
+export function loadHomeMetricRows(
+  organizationId: string,
+  now: Date,
+  { todayStart, yesterdayStart, weekStart, last24h }: HomeSummaryWindows,
+): Promise<MetricsRow[]> {
+  return db.$queryRaw<MetricsRow[]>`
+    WITH inbox_threads AS MATERIALIZED (
+      SELECT t.*
+      FROM threads t
+      WHERE ${canonicalInboxThreadSql(organizationId)}
+        AND t.status IN ('open', 'closed')
+    ),
+    customer_thread_counts AS (
+      SELECT customer_id, COUNT(*) AS thread_count
+      FROM inbox_threads
+      GROUP BY customer_id
+    ),
+    reply_counts AS (
+      SELECT
+        COUNT(*) FILTER (WHERE m.sender_type = 'ai') AS ai_replies,
+        COUNT(*) FILTER (WHERE m.sender_type = 'agent') AS agent_replies
+      FROM messages m
+      INNER JOIN inbox_threads t ON t.id = m.thread_id
+      WHERE m.deleted_at IS NULL
+        AND m.sent_at >= ${weekStart}
+        AND m.sent_at <= ${now}
+    ),
+    first_replies AS (
+      SELECT
+        t.id,
+        MIN(m.sent_at) FILTER (WHERE m.sender_type = 'customer') AS first_customer,
+        MIN(m.sent_at) FILTER (WHERE m.sender_type IN ('agent', 'ai')) AS first_response
+      FROM inbox_threads t
+      INNER JOIN messages m ON m.thread_id = t.id AND m.deleted_at IS NULL
+      WHERE t.created_at >= ${weekStart}
+        AND t.created_at <= ${now}
+      GROUP BY t.id
+    )
+    SELECT
+      COUNT(*) FILTER (WHERE t.status = 'open')::bigint AS open_count,
+      (
+        COUNT(*) FILTER (WHERE t.created_at >= ${todayStart} AND t.created_at <= ${now})
+        - COUNT(*) FILTER (WHERE t.created_at >= ${yesterdayStart} AND t.created_at < ${todayStart})
+      )::bigint AS open_delta,
+      COUNT(*) FILTER (WHERE t.created_at >= ${weekStart} AND t.created_at <= ${now})::bigint AS weekly_volume,
+      (
+        SELECT ROUND(AVG(EXTRACT(EPOCH FROM (first_response - first_customer)) / 60))::int
+        FROM first_replies
+        WHERE first_customer IS NOT NULL
+          AND first_response IS NOT NULL
+          AND first_response > first_customer
+      ) AS first_reply_minutes,
+      (
+        SELECT CASE
+          WHEN ai_replies + agent_replies > 0
+          THEN ROUND((ai_replies * 100.0) / (ai_replies + agent_replies))::int
+          ELSE NULL
+        END
+        FROM reply_counts
+      ) AS auto_resolved_pct,
+      (
+        SELECT COUNT(*)::bigint
+        FROM messages m
+        INNER JOIN inbox_threads reply_thread ON reply_thread.id = m.thread_id
+        WHERE m.deleted_at IS NULL
+          AND m.sender_type IN ('agent', 'ai')
+          AND m.sent_at >= ${last24h}
+          AND m.sent_at <= ${now}
+      ) AS replies_sent_24h,
+      COUNT(*) FILTER (
+        WHERE t.status = 'closed'
+          AND t.last_message_sender_type = 'ai'
+          AND t.updated_at >= ${last24h}
+          AND t.updated_at <= ${now}
+      )::bigint AS overnight_cleared_count,
+      (
+        SELECT COUNT(*)::bigint
+        FROM threads t
+        WHERE ${currentPlanPredicate(organizationId)}
+      ) AS needs_you_count,
+      (
+        SELECT COUNT(*)::bigint
+        FROM threads t
+        WHERE ${currentPlanPredicate(organizationId)}
+          AND ${planStepsUseTool(REFUND_TOOLS)}
+      ) AS refunds_pending,
+      (
+        SELECT COUNT(*)::bigint
+        FROM inbox_threads vip_thread
+        INNER JOIN customer_thread_counts customer_count
+          ON customer_count.customer_id = vip_thread.customer_id
+        WHERE vip_thread.status = 'open'
+          AND customer_count.thread_count >= 3
+      ) AS vips_in_queue,
+      EXISTS (
+        SELECT 1
+        FROM messages m
+        INNER JOIN inbox_threads sent_thread ON sent_thread.id = m.thread_id
+        WHERE m.deleted_at IS NULL
+          AND m.sender_type IN ('agent', 'ai')
+      ) AS has_sent_reply
+    FROM inbox_threads t
+  `
+}
+
 export async function loadHomeSummaryRows(
   organizationId: string,
   now: Date,
   windows: HomeSummaryWindows,
 ): Promise<HomeSummaryRows> {
-  const { todayStart, yesterdayStart, weekStart, last24h, last30d } = windows
+  const { todayStart, weekStart, last24h, last30d } = windows
   const [
     metricRows,
     dailyRows,
@@ -148,104 +255,7 @@ export async function loadHomeSummaryRows(
     channelRows,
     repeatRows,
   ] = await Promise.all([
-    db.$queryRaw<MetricsRow[]>`
-      WITH inbox_threads AS MATERIALIZED (
-        SELECT t.*
-        FROM threads t
-        WHERE ${canonicalInboxThreadSql(organizationId)}
-          AND t.status IN ('open', 'closed')
-      ),
-      customer_thread_counts AS (
-        SELECT customer_id, COUNT(*) AS thread_count
-        FROM inbox_threads
-        GROUP BY customer_id
-      ),
-      reply_counts AS (
-        SELECT
-          COUNT(*) FILTER (WHERE m.sender_type = 'ai') AS ai_replies,
-          COUNT(*) FILTER (WHERE m.sender_type = 'agent') AS agent_replies
-        FROM messages m
-        INNER JOIN inbox_threads t ON t.id = m.thread_id
-        WHERE m.deleted_at IS NULL
-          AND m.sent_at >= ${weekStart}
-          AND m.sent_at <= ${now}
-      ),
-      first_replies AS (
-        SELECT
-          t.id,
-          MIN(m.sent_at) FILTER (WHERE m.sender_type = 'customer') AS first_customer,
-          MIN(m.sent_at) FILTER (WHERE m.sender_type IN ('agent', 'ai')) AS first_response
-        FROM inbox_threads t
-        INNER JOIN messages m ON m.thread_id = t.id AND m.deleted_at IS NULL
-        WHERE t.created_at >= ${weekStart}
-          AND t.created_at <= ${now}
-        GROUP BY t.id
-      )
-      SELECT
-        COUNT(*) FILTER (WHERE t.status = 'open')::bigint AS open_count,
-        (
-          COUNT(*) FILTER (WHERE t.created_at >= ${todayStart} AND t.created_at <= ${now})
-          - COUNT(*) FILTER (WHERE t.created_at >= ${yesterdayStart} AND t.created_at < ${todayStart})
-        )::bigint AS open_delta,
-        COUNT(*) FILTER (WHERE t.created_at >= ${weekStart} AND t.created_at <= ${now})::bigint AS weekly_volume,
-        (
-          SELECT ROUND(AVG(EXTRACT(EPOCH FROM (first_response - first_customer)) / 60))::int
-          FROM first_replies
-          WHERE first_customer IS NOT NULL
-            AND first_response IS NOT NULL
-            AND first_response > first_customer
-        ) AS first_reply_minutes,
-        (
-          SELECT CASE
-            WHEN ai_replies + agent_replies > 0
-            THEN ROUND((ai_replies * 100.0) / (ai_replies + agent_replies))::int
-            ELSE NULL
-          END
-          FROM reply_counts
-        ) AS auto_resolved_pct,
-        (
-          SELECT COUNT(*)::bigint
-          FROM messages m
-          INNER JOIN inbox_threads reply_thread ON reply_thread.id = m.thread_id
-          WHERE m.deleted_at IS NULL
-            AND m.sender_type IN ('agent', 'ai')
-            AND m.sent_at >= ${last24h}
-            AND m.sent_at <= ${now}
-        ) AS replies_sent_24h,
-        COUNT(*) FILTER (
-          WHERE t.status = 'closed'
-            AND t.last_message_sender_type = 'ai'
-            AND t.updated_at >= ${last24h}
-            AND t.updated_at <= ${now}
-        )::bigint AS overnight_cleared_count,
-        (
-          SELECT COUNT(*)::bigint
-          FROM threads t
-          WHERE ${currentPlanPredicate(organizationId)}
-        ) AS needs_you_count,
-        (
-          SELECT COUNT(*)::bigint
-          FROM threads t
-          WHERE ${currentPlanPredicate(organizationId)}
-            AND ${planStepsUseTool(REFUND_TOOLS)}
-        ) AS refunds_pending,
-        (
-          SELECT COUNT(*)::bigint
-          FROM inbox_threads vip_thread
-          INNER JOIN customer_thread_counts customer_count
-            ON customer_count.customer_id = vip_thread.customer_id
-          WHERE vip_thread.status = 'open'
-            AND customer_count.thread_count >= 3
-        ) AS vips_in_queue,
-        EXISTS (
-          SELECT 1
-          FROM messages m
-          INNER JOIN inbox_threads sent_thread ON sent_thread.id = m.thread_id
-          WHERE m.deleted_at IS NULL
-            AND m.sender_type IN ('agent', 'ai')
-        ) AS has_sent_reply
-      FROM inbox_threads t
-    `,
+    loadHomeMetricRows(organizationId, now, windows),
 
     db.$queryRaw<DailySeriesRow[]>`
       WITH inbox_threads AS MATERIALIZED (

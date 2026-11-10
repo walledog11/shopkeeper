@@ -207,15 +207,17 @@ function ShopifyDetails({
   callbacks,
   shopifyClientId,
   storefrontChatGloballyEnabled,
+  suggestedShop,
 }: {
   model: IntegrationCardModel
   callbacks: IntegrationCardCallbacks
   shopifyClientId: string | null
   storefrontChatGloballyEnabled: boolean
+  suggestedShop: string | null
 }) {
   const definition = model.definition
   const integration = model.selectedConnection
-  const [shop, setShop] = useState("")
+  const [shop, setShop] = useState(suggestedShop ?? "")
   const [loading, setLoading] = useState(false)
   const [kbSyncing, setKbSyncing] = useState(false)
   const [kbSyncResult, setKbSyncResult] = useState<string | null>(null)
@@ -362,11 +364,13 @@ export function IntegrationCardDetails({
   callbacks,
   shopifyClientId,
   storefrontChatGloballyEnabled,
+  suggestedShopifyShop,
 }: {
   model: IntegrationCardModel
   callbacks: IntegrationCardCallbacks
   shopifyClientId: string | null
   storefrontChatGloballyEnabled: boolean
+  suggestedShopifyShop?: string | null
 }) {
   switch (model.definition.details) {
     case "gmail":
@@ -380,6 +384,7 @@ export function IntegrationCardDetails({
           callbacks={callbacks}
           shopifyClientId={shopifyClientId}
           storefrontChatGloballyEnabled={storefrontChatGloballyEnabled}
+          suggestedShop={suggestedShopifyShop ?? null}
         />
       )
     case "oauth":

@@ -4,6 +4,7 @@ import { getE2EAuthIdentity } from "@/lib/e2e-auth";
 import { normalizeImessageLineHandle } from "@/lib/integrations/imessage-visibility";
 import { isShopifySimulatorEnabled } from "@/lib/integrations/shopify-simulator";
 import { getShopifyOAuthAuthorizeConfig } from "@/lib/env";
+import { normalizeShopifyShopDomain } from "@/lib/shopify/oauth";
 import { resolveInstagramConnectTransport } from "@/lib/socialapi/config";
 import { isStorefrontChatGloballyEnabled } from "@/lib/storefront-chat/enabled";
 import {
@@ -39,6 +40,7 @@ export default async function OnboardingPage({
     provider?: string | string[];
     status?: string | string[];
     error?: string | string[];
+    shop?: string | string[];
   }>;
 }) {
   const params = await searchParams;
@@ -63,6 +65,8 @@ export default async function OnboardingPage({
     if (typeof value === "string") oauthParams.set(key, value);
   }
   const oauthOutcome = parseOAuthOutcome(oauthParams);
+  // The app home inside Shopify admin sends a new merchant here with their store.
+  const suggestedShop = typeof params.shop === "string" ? normalizeShopifyShopDomain(params.shop) : null;
 
   return (
     <OnboardingExperience
@@ -73,6 +77,7 @@ export default async function OnboardingPage({
       shopifyClientId={shopifyClientId}
       pinnedStepIndex={pinnedStepIndex}
       oauthOutcome={oauthOutcome}
+      suggestedShop={suggestedShop}
     />
   );
 }

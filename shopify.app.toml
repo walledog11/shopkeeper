@@ -1,6 +1,6 @@
 client_id = "d895bed09fae035e6177ee9d34eff219"
 name = "shopkeeper-production"
-application_url = "https://app.useshopkeeper.com"
+application_url = "https://app.useshopkeeper.com/shopify"
 embedded = true
 
 [webhooks]

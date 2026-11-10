@@ -23,6 +23,7 @@ export default function IntegrationCard({
   open,
   shopifyClientId,
   storefrontChatGloballyEnabled,
+  suggestedShopifyShop,
 }: {
   callbacks: IntegrationCardCallbacks
   model: IntegrationCardModel
@@ -30,6 +31,8 @@ export default function IntegrationCard({
   open: boolean
   shopifyClientId: string | null
   storefrontChatGloballyEnabled: boolean
+  /** The store a merchant arrived from in Shopify admin, prefilled into the connect form. */
+  suggestedShopifyShop?: string | null
 }) {
   const { availability, definition } = model
 
@@ -107,6 +110,7 @@ export default function IntegrationCard({
             callbacks={callbacks}
             shopifyClientId={shopifyClientId}
             storefrontChatGloballyEnabled={storefrontChatGloballyEnabled}
+            suggestedShopifyShop={suggestedShopifyShop}
           />
         </IntegrationConfigureDialog>
       ) : null}

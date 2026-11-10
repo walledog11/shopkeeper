@@ -24,12 +24,13 @@ export function ShopifyConnectBody({
       {!isConnected && (
         <div className="space-y-2">
           <p className="text-xs text-foreground/40 leading-relaxed">
-            Sync customer orders, returns, and Shopify Inbox messages directly into Shopkeeper.
+            Shopkeeper looks up this store&apos;s orders, customers and products when it answers customers.
+            Refunds and order changes still wait for your approval.
           </p>
           <ol className="text-xs text-foreground/30 space-y-1 list-decimal list-inside leading-relaxed">
             <li>Enter your <span className="font-mono text-foreground/45">.myshopify.com</span> store domain below</li>
-            <li>You&apos;ll be redirected to Shopify to authorize Shopkeeper</li>
-            <li>Order data and messages will sync automatically</li>
+            <li>Approve Shopkeeper in Shopify</li>
+            <li>Order lookups work as soon as you approve</li>
           </ol>
         </div>
       )}

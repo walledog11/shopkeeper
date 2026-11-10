@@ -1,24 +1,18 @@
-export type OAuthPopupVisualState = 'loading' | 'success' | 'error';
+import { escapeHtml } from '@/lib/security/escape-html';
 
-function escapeOAuthPopupHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('"', '&quot;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;');
-}
+export type OAuthPopupVisualState = 'loading' | 'success' | 'error';
 
 export function renderOAuthPostShellHtml(options: {
   action: string;
   nonce?: string;
   title: string;
 }): string {
-  const action = escapeOAuthPopupHtml(options.action);
-  const title = escapeOAuthPopupHtml(options.title);
+  const action = escapeHtml(options.action);
+  const title = escapeHtml(options.title);
   // The enforced CSP is `strict-dynamic` + per-request nonce, so an un-nonced
   // inline script is dropped, the form never submits, and the popup spins
   // forever. The nonce comes from the same middleware pass that sets the header.
-  const nonceAttr = options.nonce ? ` nonce="${escapeOAuthPopupHtml(options.nonce)}"` : '';
+  const nonceAttr = options.nonce ? ` nonce="${escapeHtml(options.nonce)}"` : '';
 
   return `<!doctype html>
 <html lang="en">

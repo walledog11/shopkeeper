@@ -89,6 +89,7 @@ export function useOnboardingFlow(
   pinnedStepIndex: number | null,
   oauthOutcome: OAuthOutcome | null = null,
   storefrontChatGloballyEnabled = false,
+  suggestedShop: string | null = null,
 ) {
   const router = useRouter();
   const { user } = useUser();
@@ -121,6 +122,7 @@ export function useOnboardingFlow(
     organizationName: organization?.name,
     pinnedStepIndex,
     savedEmail,
+    suggestedShop,
   });
 
   const importedStoreName = selected.shopify?.fromEmail?.trim();

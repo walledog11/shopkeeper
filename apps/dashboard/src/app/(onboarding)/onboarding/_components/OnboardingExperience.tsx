@@ -20,10 +20,10 @@ export interface OnboardingChannelConfig {
   shopifyClientId: string | null;
 }
 
-export function OnboardingExperience({ pinnedStepIndex, oauthOutcome, ...channels }: OnboardingChannelConfig & {
-  pinnedStepIndex: number | null; oauthOutcome: OAuthOutcome | null;
+export function OnboardingExperience({ pinnedStepIndex, oauthOutcome, suggestedShop, ...channels }: OnboardingChannelConfig & {
+  pinnedStepIndex: number | null; oauthOutcome: OAuthOutcome | null; suggestedShop: string | null;
 }) {
-  const { data, emailIntegrations, exit, idx, instagramRow, kbSync, shopifyRow, status, step, handlers } = useOnboardingFlow(pinnedStepIndex, oauthOutcome, channels.storefrontChatGloballyEnabled);
+  const { data, emailIntegrations, exit, idx, instagramRow, kbSync, shopifyRow, status, step, handlers } = useOnboardingFlow(pinnedStepIndex, oauthOutcome, channels.storefrontChatGloballyEnabled, suggestedShop);
   const contentRef = useRef<HTMLElement>(null);
   const previousStep = useRef(idx);
   useEffect(() => {

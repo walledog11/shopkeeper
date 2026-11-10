@@ -72,7 +72,10 @@ export default clerkMiddleware(async (auth, req) => {
 
 export const config = {
   matcher: [
-    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|json|jpe?g|webp|png|gif|svg|mp4|webm|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // `/shopify` is the app home Shopify admin frames. It authenticates with
+    // Shopify's session token, never a Clerk session, and sends its own CSP
+    // naming the shop it verified, so neither Clerk nor its CSP runs there.
+    '/((?!_next|shopify(?:/|$)|[^?]*\\.(?:html?|css|js(?!on)|json|jpe?g|webp|png|gif|svg|mp4|webm|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
     '/(api|trpc)(.*)',
   ],
 }

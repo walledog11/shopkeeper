@@ -16,7 +16,7 @@ function reducer(state: DraftState, action: Action): DraftState {
   return { ...state, idx: Math.max(0, Math.min(STEPS.length - 1, action.idx)) };
 }
 
-export function useOnboardingDraft({ userId, organizationId, clerkLoaded, founderName, organizationName, pinnedStepIndex, savedEmail }: {
+export function useOnboardingDraft({ userId, organizationId, clerkLoaded, founderName, organizationName, pinnedStepIndex, savedEmail, suggestedShop = null }: {
   userId: string | undefined;
   organizationId: string | undefined;
   clerkLoaded: boolean;
@@ -24,6 +24,8 @@ export function useOnboardingDraft({ userId, organizationId, clerkLoaded, founde
   organizationName: string | null | undefined;
   pinnedStepIndex: number | null;
   savedEmail: string | undefined;
+  /** The store the merchant came from in Shopify admin; it wins over a typed draft. */
+  suggestedShop?: string | null;
 }) {
   const scope = userId ? `${STORAGE_KEY}:${userId}:${organizationId ?? "new"}` : null;
   const [state, dispatch] = useReducer(reducer, { data: DEFAULT_DATA, idx: pinnedStepIndex ?? 0, scope: null });
@@ -36,8 +38,13 @@ export function useOnboardingDraft({ userId, organizationId, clerkLoaded, founde
     const isNewWorkspace = state.scope === `${STORAGE_KEY}:${userId}:new`;
     const data = stored?.data ?? (isNewWorkspace ? state.data : DEFAULT_DATA);
     dispatch({ type: "hydrate", scope, idx: isNewWorkspace ? state.idx : pinnedStepIndex ?? stored?.idx ?? 0,
-      data: { ...data, storeName: organizationName || data.storeName, founderName: founderName || data.founderName } });
-  }, [clerkLoaded, founderName, organizationName, pinnedStepIndex, scope, state, userId]);
+      data: {
+        ...data,
+        storeName: organizationName || data.storeName,
+        founderName: founderName || data.founderName,
+        shopDomain: suggestedShop || data.shopDomain,
+      } });
+  }, [clerkLoaded, founderName, organizationName, pinnedStepIndex, scope, state, suggestedShop, userId]);
 
   useEffect(() => {
     if (savedEmail) dispatch({ type: "patch", patch: { primaryEmail: savedEmail } });

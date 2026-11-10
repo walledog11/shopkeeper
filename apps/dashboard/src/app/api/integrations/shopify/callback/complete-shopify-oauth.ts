@@ -145,17 +145,29 @@ export function isValidShopifyHmac(
   return timingSafeIncludes([digest], hmac);
 }
 
+/**
+ * An offline access token from either grant: the OAuth callback's authorization
+ * code, or the ID token Shopify admin hands the embedded app home (token
+ * exchange, Shopify's managed-installation flow).
+ */
 export async function exchangeShopifyAccessToken({
   clientId,
   clientSecret,
-  code,
   shopDomain,
+  ...grant
 }: {
   clientId: string;
   clientSecret: string;
-  code: string;
   shopDomain: string;
-}): Promise<TokenExchangeResult> {
+} & ({ code: string } | { idToken: string })): Promise<TokenExchangeResult> {
+  const grantFields = 'code' in grant
+    ? { code: grant.code }
+    : {
+      grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
+      subject_token: grant.idToken,
+      subject_token_type: 'urn:ietf:params:oauth:token-type:id_token',
+      requested_token_type: 'urn:shopify:params:oauth:token-type:offline-access-token',
+    };
   let response: Response;
   try {
     response = await fetchProviderWithDeadline(
@@ -164,7 +176,7 @@ export async function exchangeShopifyAccessToken({
         cache: 'no-store',
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code }),
+        body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, ...grantFields }),
       },
       { provider: 'shopify', operation: 'OAuth token exchange' },
     );
