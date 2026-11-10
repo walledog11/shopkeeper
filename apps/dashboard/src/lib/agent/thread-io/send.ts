@@ -67,6 +67,11 @@ export async function sendEmail(
   });
   const targetThreadId = target.id;
   const existingThread = target.replying ? target : null;
+  // The message records the request and task it answers, as a reply's does.
+  const attribution = {
+    ...(ctx.agentRequestId ? { agentRequestId: ctx.agentRequestId } : {}),
+    ...(ctx.agentTaskId ? { agentTaskId: ctx.agentTaskId } : {}),
+  };
 
   // Async path (OUTBOUND_EMAIL_ASYNC): pre-create the agent message as `pending`
   // and hand the provider send to the gateway queue. The thread stores
@@ -81,6 +86,7 @@ export async function sendEmail(
         contentText: input.body,
         sendStatus: 'pending',
         integrationId: emailIntegration.id,
+        ...attribution,
       },
       { status: THREAD_STATUS.OPEN },
     );
@@ -146,6 +152,7 @@ export async function sendEmail(
     contentText: input.body,
     sendStatus: 'pending',
     integrationId: emailIntegration.id,
+    ...attribution,
   });
   await markLogicalResponseAttempted(pendingMessage.id);
   const recorded = await recordOutboundCall({

@@ -271,3 +271,22 @@ describe("context dependency tiers", () => {
     await expect(buildContext(thread.id, org.id, sink)).rejects.toThrow(/connection reset/);
   });
 });
+
+describe("email thread customer link", () => {
+  it("never replaces a customer the merchant linked while the turn was being built", async () => {
+    const { org, thread } = await supportThread();
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (String(input).includes("customers/search.json")) {
+        // The merchant links the thread by hand while Shopify answers the search.
+        await db.thread.update({ where: { id: thread.id }, data: { shopifyCustomerId: "777" } });
+        return Response.json({ customers: [{ id: 555, first_name: "Email", last_name: "Match" }] });
+      }
+      return Response.json({});
+    });
+
+    const ctx = await buildContext(thread.id, org.id, sink);
+
+    expect((await db.thread.findUniqueOrThrow({ where: { id: thread.id } })).shopifyCustomerId).toBe("777");
+    expect(ctx.thread.shopifyCustomerId).not.toBe("555");
+  });
+});

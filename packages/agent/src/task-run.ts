@@ -33,9 +33,11 @@ export function taskModelBudget(claim: ActiveTaskClaim): TaskModelBudget {
 export interface TaskRunControl {
   taskBudget: TaskModelBudget;
   assertExecutionAllowed: () => void;
+  /** A renewal failed: the lease ran out, another attempt holds the task, or a stop was recorded. */
+  leaseLost: () => boolean;
 }
 
-/** Keep an in-process continuation under the same lease and budget as queued work. */
+/** Keep claimed work, queued or in-process, under one renewed lease and its task budget. */
 export async function withAgentTaskClaim<T>(
   claim: ActiveTaskClaim,
   work: (control: TaskRunControl) => Promise<T>,
@@ -54,7 +56,7 @@ export async function withAgentTaskClaim<T>(
   }, 60_000);
   renewal.unref();
   try {
-    return await work({ taskBudget: taskModelBudget(claim), assertExecutionAllowed });
+    return await work({ taskBudget: taskModelBudget(claim), assertExecutionAllowed, leaseLost: () => leaseLost });
   } finally {
     clearInterval(renewal);
   }

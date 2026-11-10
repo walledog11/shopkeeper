@@ -5,11 +5,10 @@ import {
   claimAgentTask,
   claimWithheldMessageFollowUp,
   failAgentTaskClaim,
-  renewAgentTaskLease,
   settleAgentTaskClaim,
   ticketRequestEmail,
 } from '@shopkeeper/agent/task-ledger';
-import { taskModelBudget } from '@shopkeeper/agent/task-run';
+import { withAgentTaskClaim } from '@shopkeeper/agent/task-run';
 import type { TaskSettlement } from '@shopkeeper/agent/task-ledger';
 import { QUEUE } from '../constants.js';
 import logger from '../logger.js';
@@ -25,7 +24,6 @@ import { notifyCommittedComposerTask, runComposerTask } from '../message-handler
 import { OperatorNotifyError } from '../operator-notify.js';
 
 const LEASE_MS = 300_000;
-const RENEW_MS = 60_000;
 
 // A support task whose approved message was withheld. Its approved writes ran,
 // so `claimAgentTask` rightly refuses it; this claim admits it only when every
@@ -49,14 +47,14 @@ async function processWithheldMessageFollowUp(data: AgentTaskJobData): Promise<b
     expectedRevision: data.revision,
     claimToken: claimed.claimToken,
   };
-  await runWithheldMessageFollowUp({
+  await withAgentTaskClaim(claim, control => runWithheldMessageFollowUp({
     ...claim,
     threadId: claimed.task.threadId,
     objective: claimed.task.objective,
     runtimeVersion: claimed.task.runtimeVersion,
     requestId: request?.id ?? data.taskId,
     followUp: claimed.followUp,
-  }, taskModelBudget(claim));
+  }, control.taskBudget));
   return true;
 }
 
@@ -156,107 +154,96 @@ export async function processAgentTaskJob(data: AgentTaskJobData, enqueuedAt?: n
     expectedRevision: data.revision,
     claimToken: claimed.claimToken,
   };
-  const taskBudget = taskModelBudget(claim);
-
-  let leaseLost = false;
-  const renewal = setInterval(() => {
-    void renewAgentTaskLease({ ...claim, leaseMs: LEASE_MS }).then((renewed) => {
-      if (!renewed) leaseLost = true;
-    }).catch((error: unknown) => {
-      leaseLost = true;
-      logger.error({ err: error, taskId: data.taskId }, '[AgentTask] Lease renewal failed');
-    });
-  }, RENEW_MS);
-  renewal.unref();
-
-  let summary: string | undefined;
-  try {
-    if (isComposer) {
-      await runComposerTask({
-        ...claim, requestId: request.id, threadId: claimed.task.threadId,
-        sourceMessageId: request.sourceMessageId, instruction: request.normalizedInstruction,
-        email: ticketRequestEmail(request.payload),
-        runtimeVersion: claimed.task.runtimeVersion,
-        assertExecutionAllowed: () => { if (leaseLost) throw new Error('Task lease ownership was lost.'); },
-      }, taskBudget);
-      return;
-    }
-    const memberKey = claimed.task.initiatingActorKey;
-    const context = await loadLiveOperatorContext(
-      data.organizationId,
-      memberKey,
-      await getContext(data.organizationId, memberKey),
-    );
-    const result = await runOperatorFreeFormTurn({
-      organizationId: data.organizationId,
-      clerkUserId: member.clerkUserId,
-      requestId: request.id,
-      taskId: data.taskId,
-      taskAuthority: {
-        kind: 'claim',
+  // The merchant's reply once the turn ends, or null when the composer's
+  // committed card already answered them.
+  const reply = await withAgentTaskClaim(claim, async (control): Promise<{ summary: string | undefined } | null> => {
+    try {
+      if (isComposer) {
+        await runComposerTask({
+          ...claim, requestId: request.id, threadId: claimed.task.threadId,
+          sourceMessageId: request.sourceMessageId, instruction: request.normalizedInstruction,
+          email: ticketRequestEmail(request.payload),
+          runtimeVersion: claimed.task.runtimeVersion,
+          assertExecutionAllowed: control.assertExecutionAllowed,
+        }, control.taskBudget);
+        return null;
+      }
+      const memberKey = claimed.task.initiatingActorKey;
+      const context = await loadLiveOperatorContext(
+        data.organizationId,
+        memberKey,
+        await getContext(data.organizationId, memberKey),
+      );
+      const result = await runOperatorFreeFormTurn({
+        organizationId: data.organizationId,
+        clerkUserId: member.clerkUserId,
+        requestId: request.id,
         taskId: data.taskId,
-        expectedRevision: data.revision,
-        claimToken: claimed.claimToken,
-      },
-      taskBudget,
-      assertExecutionAllowed: () => {
-        if (leaseLost) throw new Error('Task lease ownership was lost.');
-      },
-      message: event ? operatorTaskMessage(event, memberKey) : {
-        chatId: memberKey,
-        body: request.normalizedInstruction,
-        senderRef: memberKey,
-        reply: async () => {},
-        presence: (_progress, work) => work(),
-      },
-      context,
-    });
-    if (leaseLost) throw new Error('Task lease ownership was lost before completion.');
+        taskAuthority: {
+          kind: 'claim',
+          taskId: data.taskId,
+          expectedRevision: data.revision,
+          claimToken: claimed.claimToken,
+        },
+        taskBudget: control.taskBudget,
+        assertExecutionAllowed: control.assertExecutionAllowed,
+        message: event ? operatorTaskMessage(event, memberKey) : {
+          chatId: memberKey,
+          body: request.normalizedInstruction,
+          senderRef: memberKey,
+          reply: async () => {},
+          presence: (_progress, work) => work(),
+        },
+        context,
+      });
+      control.assertExecutionAllowed();
 
-    const after = await getContext(data.organizationId, memberKey);
-    // Ticket cards belong to their support tasks. A merchant's new instruction
-    // must not copy another thread's waiting proposal onto its operator task.
-    const question = after.pendingQuestion?.threadId === claimed.task.threadId ? after.pendingQuestion : null;
-    const plan = after.pendingPlans.find((pending) => pending.threadId === claimed.task.threadId);
-    const hasUnknownOutcome = result.actionsPerformed.some((action) => action.status === 'unknown');
-    const settlement: TaskSettlement = hasUnknownOutcome
-      ? { status: 'reconciling', failureCode: 'unknown_provider_outcome' }
-      : question
-        ? { status: 'waiting_input', question: question.question }
-        : plan
-          ? {
-              status: 'waiting_approval',
-              proposal: {
-                // The parked card's plan ID becomes the proposal's ID, so an
-                // approval from any surface names the exact durable snapshot.
-                ...(plan.planId ? { proposalId: plan.planId } : {}),
-                instruction: plan.instruction,
-                rawToolCalls: normalizeApprovedToolCalls(plan.rawToolCalls),
-                sourceRequestIds: [request.id],
-              },
-            }
-          : { status: 'completed' };
-    const settled = await settleAgentTaskClaim({
-      ...claim,
-      requestId: request.id,
-      settlement,
-    });
-    if (!settled) throw new Error('Task claim was lost before its result could be recorded.');
-    summary = result.summary;
-  } catch (error) {
-    // The composer already committed its card. BullMQ retries delivery against
-    // that identity without another claim, model call or provider action.
-    if (isComposer && error instanceof OperatorNotifyError) throw error;
-    logger.error({ err: error, taskId: data.taskId, requestId: request.id }, '[AgentTask] Turn failed');
-    await failAgentTaskClaim({
-      ...claim,
-      requestId: request.id,
-      failureCode: leaseLost ? 'claim_lost' : 'turn_failed',
-    });
-  } finally {
-    clearInterval(renewal);
+      const after = await getContext(data.organizationId, memberKey);
+      // Ticket cards belong to their support tasks. A merchant's new instruction
+      // must not copy another thread's waiting proposal onto its operator task.
+      const question = after.pendingQuestion?.threadId === claimed.task.threadId ? after.pendingQuestion : null;
+      const plan = after.pendingPlans.find((pending) => pending.threadId === claimed.task.threadId);
+      const hasUnknownOutcome = result.actionsPerformed.some((action) => action.status === 'unknown');
+      const settlement: TaskSettlement = hasUnknownOutcome
+        ? { status: 'reconciling', failureCode: 'unknown_provider_outcome' }
+        : question
+          ? { status: 'waiting_input', question: question.question }
+          : plan
+            ? {
+                status: 'waiting_approval',
+                proposal: {
+                  // The parked card's plan ID becomes the proposal's ID, so an
+                  // approval from any surface names the exact durable snapshot.
+                  ...(plan.planId ? { proposalId: plan.planId } : {}),
+                  instruction: plan.instruction,
+                  rawToolCalls: normalizeApprovedToolCalls(plan.rawToolCalls),
+                  sourceRequestIds: [request.id],
+                },
+              }
+            : { status: 'completed' };
+      const settled = await settleAgentTaskClaim({
+        ...claim,
+        requestId: request.id,
+        settlement,
+      });
+      if (!settled) throw new Error('Task claim was lost before its result could be recorded.');
+      return { summary: result.summary };
+    } catch (error) {
+      // The composer already committed its card. BullMQ retries delivery against
+      // that identity without another claim, model call or provider action.
+      if (isComposer && error instanceof OperatorNotifyError) throw error;
+      logger.error({ err: error, taskId: data.taskId, requestId: request.id }, '[AgentTask] Turn failed');
+      await failAgentTaskClaim({
+        ...claim,
+        requestId: request.id,
+        failureCode: control.leaseLost() ? 'claim_lost' : 'turn_failed',
+      });
+      return { summary: undefined };
+    }
+  });
+  if (reply) {
+    await completeOperatorTaskReply({ organizationId: data.organizationId, taskId: data.taskId, requestId: request.id, summary: reply.summary });
   }
-  await completeOperatorTaskReply({ organizationId: data.organizationId, taskId: data.taskId, requestId: request.id, summary });
 }
 
 export function createAgentTaskWorker(options: { workerOptions: SharedGatewayWorkerOptions }) {
