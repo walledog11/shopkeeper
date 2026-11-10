@@ -1,11 +1,12 @@
 import { clerkMiddleware } from '@clerk/nextjs/server'
-import { NextResponse } from 'next/server'
+import { NextResponse, type NextFetchEvent, type NextRequest } from 'next/server'
 import { isE2EAuthBypassEnabled } from '@/lib/e2e-auth'
 import { getCanonicalHostRedirect, isMarketingHost } from '@/proxy/canonical-host'
 import { CSP_REPORT_ENDPOINT, cspDirectives } from '@/proxy/content-security-policy'
 import { getPathAccessPolicy, isApiPath } from '@/proxy/path-access-policy'
+import { isShopifyAppHomePath, shopifyAppHomeProxy } from '@/proxy/shopify-app-home'
 
-export default clerkMiddleware(async (auth, req) => {
+const clerkProxy = clerkMiddleware(async (auth, req) => {
   if (isE2EAuthBypassEnabled()) {
     return
   }
@@ -70,12 +71,14 @@ export default clerkMiddleware(async (auth, req) => {
   },
 })
 
+export default function proxy(request: NextRequest, event: NextFetchEvent) {
+  if (isShopifyAppHomePath(request.nextUrl.pathname)) return shopifyAppHomeProxy(request)
+  return clerkProxy(request, event)
+}
+
 export const config = {
   matcher: [
-    // `/shopify` is the app home Shopify admin frames. It authenticates with
-    // Shopify's session token, never a Clerk session, and sends its own CSP
-    // naming the shop it verified, so neither Clerk nor its CSP runs there.
-    '/((?!_next|shopify(?:/|$)|[^?]*\\.(?:html?|css|js(?!on)|json|jpe?g|webp|png|gif|svg|mp4|webm|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|json|jpe?g|webp|png|gif|svg|mp4|webm|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
     '/(api|trpc)(.*)',
   ],
 }

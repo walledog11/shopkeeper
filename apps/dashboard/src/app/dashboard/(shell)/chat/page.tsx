@@ -3,8 +3,7 @@ import { db } from '@shopkeeper/db';
 import { getOrCreateOrg } from '@/lib/server/org';
 import { isOrgAdmin } from '@/lib/api/permissions';
 import { getShopifyOAuthAuthorizeConfig } from '@/lib/env';
-import { readChatConfiguration } from '@/lib/storefront-chat/configuration';
-import { readStorefrontChatEnabled } from '@/lib/storefront-chat/metadata';
+import { chatConfigurationFromIntegration } from '@/lib/storefront-chat/service';
 import { buildShopifyThemeEditorAppEmbedUrl } from '@/lib/storefront-chat/theme-editor';
 import StorefrontChatEditor from '@/components/storefront-chat/StorefrontChatEditor';
 
@@ -28,11 +27,7 @@ export default async function StorefrontChatPage() {
   return <StorefrontChatEditor
     key={integration.id}
     draftKey={`shopkeeper:chat-draft:${org.id}:${integration.id}`}
-    initialData={{
-      shop: integration.externalAccountId, shopName: integration.fromEmail || org.name,
-      enabled: readStorefrontChatEnabled(integration.metadata),
-      configuration: readChatConfiguration(integration.metadata),
-    }}
+    initialData={chatConfigurationFromIntegration(integration, org.name)}
     canManage={canManage}
     themeEditorUrl={clientId ? buildShopifyThemeEditorAppEmbedUrl(integration.externalAccountId, clientId)
       : `https://${integration.externalAccountId}/admin/themes/current/editor?context=apps`}

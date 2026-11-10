@@ -5,6 +5,7 @@ import { Check, X } from "lucide-react"
 import { resolveAgentSettings } from "@shopkeeper/agent/settings"
 import { settingsSectionHref } from "@/app/dashboard/_components/nav-items"
 import { useOrg } from "@/hooks/useOrg"
+import { shopifyPermissionRows } from "@/lib/integrations/shopify-permissions"
 import { PermissionRow } from "./PermissionRow"
 
 function StatusBadge({ enabled }: { enabled: boolean }) {
@@ -23,32 +24,7 @@ function StatusBadge({ enabled }: { enabled: boolean }) {
 
 export function ShopifyPermissionRows() {
   const { data } = useOrg({ enabled: true })
-  const settings = resolveAgentSettings(data?.settings)
-  // A ceiling, not an approval threshold: nothing larger runs even when approved.
-  const refundCap = settings.maxRefundAmount == null
-    ? "No per-refund limit"
-    : `Never more than $${settings.maxRefundAmount} per refund`
-
-  const rows = [
-    {
-      label: "Read orders, customers, products",
-      enabled: true,
-      required: true,
-    },
-    {
-      label: "Issue refunds",
-      enabled: settings.toolsEnabled.action,
-      suffix: settings.toolsEnabled.action ? refundCap : null,
-    },
-    {
-      label: "Cancel unfulfilled orders",
-      enabled: settings.toolsEnabled.action && !settings.blockCancellations,
-    },
-    {
-      label: "Add custom items to new orders",
-      enabled: settings.toolsEnabled.action && !settings.blockCustomLineItems,
-    },
-  ] as const
+  const rows = shopifyPermissionRows(resolveAgentSettings(data?.settings))
 
   return (
     <>
@@ -57,13 +33,7 @@ export function ShopifyPermissionRows() {
           key={row.label}
           icon={Check}
           title={row.label}
-          description={
-            "required" in row && row.required
-              ? "Required for Shopify integration"
-              : "suffix" in row && row.suffix
-                ? row.suffix
-                : undefined
-          }
+          description={row.detail ?? undefined}
           action={<StatusBadge enabled={row.enabled} />}
         />
       ))}

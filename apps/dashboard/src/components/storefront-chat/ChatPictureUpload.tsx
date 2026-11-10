@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, MessageCircle, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { errorMessageFromUnknown, requestJson } from '@/lib/api/fetcher';
+import { errorMessageFromUnknown } from '@/lib/api/fetcher';
 import { cn } from '@/lib/ui/cn';
+import { useStorefrontChatApi } from './chat-api';
 
 async function preparePicture(file: File): Promise<Blob> {
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
@@ -38,6 +39,7 @@ export function ChatPictureUpload({ url, disabled, onChange, onUploadingChange }
   onChange: (url: string) => void;
   onUploadingChange: (uploading: boolean) => void;
 }) {
+  const { pictureUrl, request: requestJson } = useStorefrontChatApi();
   const input = useRef<HTMLInputElement>(null);
   const request = useRef<AbortController | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -57,7 +59,7 @@ export function ChatPictureUpload({ url, disabled, onChange, onUploadingChange }
       if (controller.signal.aborted) return;
       const body = new FormData();
       body.set('file', picture, picture.type === 'image/webp' ? 'chat-picture.webp' : 'chat-picture.png');
-      const result = await requestJson<{ url: string }>('/api/integrations/shopify/storefront-chat/image', {
+      const result = await requestJson<{ url: string }>(pictureUrl, {
         method: 'POST', body, signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]),
       }, 'Could not upload your picture. Please try again.');
       if (!controller.signal.aborted) onChange(result.url);

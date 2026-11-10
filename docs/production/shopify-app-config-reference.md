@@ -71,15 +71,28 @@ identity attached.
 ## The app home inside Shopify admin
 
 `embedded = true` with `application_url` at `https://app.useshopkeeper.com/shopify`:
-opening Shopkeeper from a store's Apps list frames that route inside the admin.
-It is a server-rendered page (`apps/dashboard/src/app/shopify/route.ts`) that
-loads App Bridge, verifies the admin's ID token (`verifyShopifySessionToken`),
-and sends `frame-ancestors` naming only that shop and `admin.shopify.com`. It
-never needs a Clerk session, which a third-party iframe cannot hold: every way
-into the full app opens a new tab. A linked shop sees its workspace's counts; an
-unlinked one gets sign-up and connect links with the store filled in. When the
-linked row's token is dead, or its recorded grant is short of
-`SHOPIFY_OAUTH_SCOPES`, the page re-issues the grant by token exchange.
+opening Shopkeeper from a store's Apps list frames that page inside the admin.
+Clerk stays out of it, since a third-party iframe holds no Clerk session:
+`shopifyAppHomeProxy` takes the path instead of Clerk's middleware and sends
+`frame-ancestors` naming only that shop and `admin.shopify.com`, and the root
+layout renders App Bridge in place of Clerk. The page verifies the admin's ID
+token (`verifyShopifySessionToken`); a missing or stale one bounces once through
+App Bridge for a fresh token.
+
+A linked shop gets three tabs: **Overview** (its workspace's counts, with links
+into the full app, which always open a new tab), **Website chat** (the dashboard's
+chat editor, live preview included) and **Settings** (sync store policies and pages
+to Memory; what the agent may do, read-only). An unlinked shop gets sign-up and
+connect links with the store filled in. When the linked row's token is dead, or
+its recorded grant is short of `SHOPIFY_OAUTH_SCOPES`, the page re-issues the
+grant by token exchange.
+
+The page calls `/api/shopify/app/*`, which `withShopifyAppRoute` authenticates with
+a fresh ID token per request; the workspace is the one connected to the token's
+shop. Anyone the store lets open the app can change website chat and run the sync
+there (in the dashboard those need a workspace admin): Shopify's staff permissions
+decide. What the agent may do (refunds, cancellations, limits) changes only in the
+dashboard.
 
 Before the route existed, `application_url` was the site root, which sends
 `X-Frame-Options: SAMEORIGIN`, so the admin showed a blank frame. An

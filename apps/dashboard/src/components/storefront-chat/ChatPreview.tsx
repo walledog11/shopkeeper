@@ -5,8 +5,10 @@ import { Monitor, Smartphone } from 'lucide-react';
 import type { StorefrontChatSettings } from '@/lib/storefront-chat/configuration';
 import { parseChatImageUrl } from '@/lib/storefront-chat/images';
 import { cn } from '@/lib/ui/cn';
+import { useStorefrontChatApi } from './chat-api';
 
 export const ChatPreview = memo(function ChatPreview({ settings, shopName }: { settings: StorefrontChatSettings; shopName: string }) {
+  const { previewUrl } = useStorefrontChatApi();
   const frame = useRef<HTMLIFrameElement>(null);
   const viewport = useRef<HTMLDivElement>(null);
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
@@ -97,7 +99,7 @@ export const ChatPreview = memo(function ChatPreview({ settings, shopName }: { s
       <div style={{ width: frameWidth * scale, height: 650 * scale }}
         className={cn('relative mx-auto overflow-hidden', device === 'mobile' && 'rounded-xl border border-border')}>
         <iframe key={attempt} ref={frame} title="Website chat preview" sandbox="allow-scripts allow-forms"
-          src="/api/integrations/shopify/storefront-chat/preview"
+          src={previewUrl}
           onLoad={() => frame.current?.contentWindow?.postMessage({ type: 'shopkeeper:connect' }, '*')}
           className="absolute left-0 top-0 block h-[650px] origin-top-left border-0"
           style={{ width: frameWidth, transform: `scale(${scale})` }} />

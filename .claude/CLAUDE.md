@@ -115,7 +115,10 @@ These are the product. Do not loosen one without saying so in the PR.
   `withOrgRoute` (`apps/dashboard/src/lib/api/route.ts`); one that writes tenant data or
   creates customer-visible state passes `requireBillingWriteAllowed` (402 for
   `past_due`/`canceled`; other hosts call `assertBillingWriteAllowedForOrgId`), and
-  admin-only operations pass `requireAdmin`. Another organization's resource ID is a 404
+  admin-only operations pass `requireAdmin`. Routes the app home inside Shopify admin calls
+  (`/api/shopify/app/*`) go through `withShopifyAppRoute` instead: no Clerk session, the
+  workspace comes only from the verified Shopify ID token's shop, and writes keep the
+  billing gate. Another organization's resource ID is a 404
   that leaves that record untouched. Invalid input is rejected before any write or
   provider call, a provider failure persists no local success, and a replayed webhook
   applies once.

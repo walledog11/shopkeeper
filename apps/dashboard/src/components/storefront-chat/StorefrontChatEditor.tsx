@@ -1,17 +1,16 @@
 "use client";
 
-import Link from 'next/link';
 import { useState } from 'react';
 import useSWR from 'swr';
 import { ArrowUpRight, Check, Loader2, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { requestJson } from '@/lib/api/fetcher';
 import type { ChatConfigurationResponse } from '@/lib/storefront-chat/configuration';
 import type { StorefrontChatReadiness } from '@/lib/storefront-chat/readiness';
 import { dashboardChromeColumnClassName } from '@/app/dashboard/_components/sidebar/sidebar-helpers';
 import { cn } from '@/lib/ui/cn';
 import { ChatSettingsFields } from './ChatSettingsFields';
 import { ChatPreview } from './ChatPreview';
+import { DashboardLink, useStorefrontChatApi } from './chat-api';
 import { useChatEditor } from './useChatEditor';
 import { settingsSectionHref } from '@/app/dashboard/_components/nav-items';
 
@@ -21,12 +20,13 @@ export default function StorefrontChatEditor({ initialData, canManage, themeEdit
   themeEditorUrl: string | null;
   draftKey: string;
 }) {
+  const api = useStorefrontChatApi();
   const editor = useChatEditor(initialData, draftKey, canManage);
   const { data, settings, busy, dirty, uploading, conflict, validation } = editor;
   const [mobilePanel, setMobilePanel] = useState<'settings' | 'preview'>('settings');
   const { data: setup, error: setupError, mutate: refreshSetup } = useSWR<StorefrontChatReadiness>(
-    ['/api/integrations/shopify/storefront-chat', draftKey],
-    ([url]: [string, string]) => requestJson(url, { signal: AbortSignal.timeout(15_000) }),
+    [api.setupUrl, draftKey],
+    ([url]: [string, string]) => api.request(url, { signal: AbortSignal.timeout(15_000) }),
     { revalidateOnFocus: true, errorRetryCount: 1 },
   );
   const needsShopify = setup && !setup.checks.find(check => check.id === 'shopify')?.ready;
@@ -68,7 +68,7 @@ export default function StorefrontChatEditor({ initialData, canManage, themeEdit
           </p>}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {needsShopify ? <Button asChild variant="outline"><Link href="/dashboard/integrations?configure=shopify">Reconnect Shopify</Link></Button>
+          {needsShopify ? <Button asChild variant="outline"><DashboardLink href="/dashboard/integrations?configure=shopify">Reconnect Shopify</DashboardLink></Button>
             : data.enabled ? <>
               <Button asChild variant="outline"><a href={'https://' + data.shop} target="_blank" rel="noopener noreferrer">View store<ArrowUpRight /></a></Button>
             </>
@@ -101,10 +101,10 @@ export default function StorefrontChatEditor({ initialData, canManage, themeEdit
             onChange={editor.change} onUploadingChange={editor.setUploading} />
           {!data.configuration && <p className="mt-4 text-xs leading-relaxed text-muted-foreground">Your current theme design stays in use until you save this preview.</p>}
           <div className="mt-5 border-t border-border pt-5 text-xs leading-relaxed text-muted-foreground">
-            <p>Replies and approvals follow your <Link href={settingsSectionHref("approvals")} className="underline underline-offset-4">approval settings</Link>.</p>
+            <p>Replies and approvals follow your <DashboardLink href={settingsSectionHref("approvals")} className="underline underline-offset-4">approval settings</DashboardLink>.</p>
             {setup && <p className="mt-2">{setup.checks.find(check => check.id === 'operator')?.ready
-              ? 'Requests for you appear in iMessage and your dashboard.' : <>Requests for you appear in your dashboard. <Link href={settingsSectionHref("briefing")} className="underline underline-offset-4">Connect iMessage</Link></>}</p>}
-            {setup && !setup.checks.find(check => check.id === 'email')?.ready && <p className="mt-2">To let customers check their orders, <Link href="/dashboard/integrations?configure=gmail" className="underline underline-offset-4">connect an email account</Link>.</p>}
+              ? 'Requests for you appear in iMessage and your dashboard.' : <>Requests for you appear in your dashboard. <DashboardLink href={settingsSectionHref("briefing")} className="underline underline-offset-4">Connect iMessage</DashboardLink></>}</p>}
+            {setup && !setup.checks.find(check => check.id === 'email')?.ready && <p className="mt-2">To let customers check their orders, <DashboardLink href="/dashboard/integrations?configure=gmail" className="underline underline-offset-4">connect an email account</DashboardLink>.</p>}
           </div>
         </form>
         <div className={cn('min-w-0 lg:sticky lg:top-24', mobilePanel === 'settings' && 'hidden lg:block')}>

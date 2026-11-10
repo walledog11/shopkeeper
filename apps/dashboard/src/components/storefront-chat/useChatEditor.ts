@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useSingleFlightOperation } from '@/hooks/useSingleFlightOperation';
-import { errorMessageFromUnknown, isApiRequestError, requestJson } from '@/lib/api/fetcher';
+import { errorMessageFromUnknown, isApiRequestError } from '@/lib/api/fetcher';
 import { DEFAULT_CHAT_SETTINGS, validateChatSettings, type ChatConfigurationResponse, type PublishedChatConfiguration, type StorefrontChatSettings } from '@/lib/storefront-chat/configuration';
+import { useStorefrontChatApi } from './chat-api';
 
-const endpoint = '/api/integrations/shopify/storefront-chat/configuration';
 type Action = 'save' | 'enable' | 'disable' | 'reload';
 
 export function useChatEditor(initialData: ChatConfigurationResponse, draftKey: string, canManage: boolean) {
+  const { configurationUrl, setupUrl, request } = useStorefrontChatApi();
   const [data, setData] = useState(initialData);
   const [settings, setSettings] = useState(initialData.configuration?.settings ?? DEFAULT_CHAT_SETTINGS);
   const [draftRevision, setDraftRevision] = useState(initialData.configuration?.revision ?? 0);
@@ -56,7 +57,7 @@ export function useChatEditor(initialData: ChatConfigurationResponse, draftKey: 
   const operation = useSingleFlightOperation(async (nextAction: Action, snapshot: StorefrontChatSettings, revision: number) => {
     setAction(nextAction);
     if (nextAction === 'reload') {
-      const latest = await requestJson<ChatConfigurationResponse>(endpoint, { signal: AbortSignal.timeout(20_000) }, 'Could not reload settings. Your draft is still here.');
+      const latest = await request<ChatConfigurationResponse>(configurationUrl, { signal: AbortSignal.timeout(20_000) }, 'Could not reload settings. Your draft is still here.');
       setData(latest);
       setSettings(latest.configuration?.settings ?? DEFAULT_CHAT_SETTINGS);
       setDraftRevision(latest.configuration?.revision ?? 0);
@@ -67,7 +68,7 @@ export function useChatEditor(initialData: ChatConfigurationResponse, draftKey: 
       const parsed = validateChatSettings(snapshot);
       if (!parsed.settings) throw new Error(parsed.error);
       if (dirty || !data.configuration) {
-        const result = await requestJson<{ configuration: PublishedChatConfiguration }>(endpoint, {
+        const result = await request<{ configuration: PublishedChatConfiguration }>(configurationUrl, {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ settings: parsed.settings, revision }), signal: AbortSignal.timeout(20_000),
         }, 'Could not confirm the save. Your draft is still here. Try again.');
@@ -79,7 +80,7 @@ export function useChatEditor(initialData: ChatConfigurationResponse, draftKey: 
       }
     }
     if (nextAction === 'enable' || nextAction === 'disable') {
-      const result = await requestJson<{ enabled: boolean }>('/api/integrations/shopify/storefront-chat', {
+      const result = await request<{ enabled: boolean }>(setupUrl, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: nextAction === 'enable' }), signal: AbortSignal.timeout(20_000),
       }, 'Could not update chat. Please try again.');

@@ -1,4 +1,6 @@
 import { db } from '@shopkeeper/db';
+import { resolveAgentSettings } from '@shopkeeper/agent/settings';
+import { shopifyPermissionRows, type ShopifyPermissionRow } from '@/lib/integrations/shopify-permissions';
 import logger from '@/lib/server/logger';
 import { getHomeSummaryWindows, loadHomeMetricRows } from '@/lib/server/home-summary-queries';
 import {
@@ -6,12 +8,15 @@ import {
   missingShopifyScopes,
   recordedShopifyScopes,
 } from '@/lib/server/shopify-integration';
+import type { ChatConfigurationResponse } from '@/lib/storefront-chat/configuration';
+import { chatConfigurationFromIntegration } from '@/lib/storefront-chat/service';
+import { buildShopifyThemeEditorAppEmbedUrl } from '@/lib/storefront-chat/theme-editor';
 import {
   exchangeShopifyAccessToken,
   mergeShopifyOAuthScopes,
 } from '@/app/api/integrations/shopify/callback/complete-shopify-oauth';
 
-export interface ShopifyAppHomeMetrics {
+interface ShopifyAppHomeMetrics {
   needsYou: number;
   open: number;
   repliesSent24h: number;
@@ -28,6 +33,11 @@ export type ShopifyAppHomeState =
     access: 'ok' | 'missing_scopes' | 'lost';
     /** Null when the counts could not be loaded; the page still renders. */
     metrics: ShopifyAppHomeMetrics | null;
+    chat: ChatConfigurationResponse;
+    chatDraftKey: string;
+    themeEditorUrl: string;
+    /** Read-only here: what the agent may do is changed by a workspace admin in Shopkeeper. */
+    permissions: ShopifyPermissionRow[];
   };
 
 interface ShopifyAppConfig {
@@ -50,9 +60,10 @@ function findLinkedIntegration(shop: string) {
       organizationId: true,
       accessToken: true,
       tokenExpiresAt: true,
+      externalAccountId: true,
       metadata: true,
       fromEmail: true,
-      organization: { select: { name: true } },
+      organization: { select: { name: true, settings: true } },
     },
   });
 }
@@ -148,5 +159,9 @@ export async function loadShopifyAppHome(
     workspaceName: integration.organization.name,
     access,
     metrics: await loadMetrics(integration.organizationId),
+    chat: chatConfigurationFromIntegration(integration, integration.organization.name),
+    chatDraftKey: `shopkeeper:chat-draft:${integration.organizationId}:${integration.id}`,
+    themeEditorUrl: buildShopifyThemeEditorAppEmbedUrl(shop, config.clientId),
+    permissions: shopifyPermissionRows(resolveAgentSettings(integration.organization.settings)),
   };
 }

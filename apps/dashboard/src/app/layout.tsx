@@ -1,7 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Caveat } from "next/font/google";
 import { headers } from "next/headers";
-import { getMarketingSiteUrl } from "@/lib/env";
+import { getMarketingSiteUrl, getShopifyOAuthAuthorizeConfig } from "@/lib/env";
+import { SHOPIFY_APP_HOME_HEADER } from "@/proxy/shopify-app-home";
 import { Providers } from "./providers";
 import "./globals.css";
 
@@ -50,6 +51,25 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const requestHeaders = await headers();
+
+  // The app home inside Shopify admin: App Bridge reads the client id from the
+  // meta tag and Shopify asks for its script ahead of the app's own. No Clerk
+  // here: a third-party iframe holds no Clerk session.
+  if (requestHeaders.get(SHOPIFY_APP_HOME_HEADER)) {
+    return (
+      <html lang="en" className={caveat.variable}>
+        <head>
+          <meta name="shopify-api-key" content={getShopifyOAuthAuthorizeConfig()?.clientId ?? ""} />
+          {/* Shopify requires App Bridge unbundled from its CDN, loaded before the app's own scripts. */}
+          {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+          <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js" nonce={requestHeaders.get("x-nonce") ?? undefined} />
+        </head>
+        <body className="font-sans antialiased">{children}</body>
+      </html>
+    );
+  }
+
   const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
   if (!publishableKey) {
     throw new Error("Missing NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY");
@@ -58,7 +78,7 @@ export default async function RootLayout({
   // Clerk's middleware mints the CSP nonce and forwards it as `x-nonce`. The
   // client ClerkProvider cannot read request headers, so thread it through as a
   // prop or `clerk.browser.js` renders un-nonced and 'strict-dynamic' blocks it.
-  const nonce = (await headers()).get("x-nonce") ?? undefined;
+  const nonce = requestHeaders.get("x-nonce") ?? undefined;
 
   return (
     <html lang="en" className={caveat.variable}>

@@ -87,6 +87,7 @@ const nextConfig = {
   outputFileTracingRoot: repoRoot,
   outputFileTracingIncludes: {
     '/api/integrations/shopify/storefront-chat/preview': ['../../extensions/shopkeeper-chat/assets/*'],
+    '/shopify/chat-preview': ['../../extensions/shopkeeper-chat/assets/*'],
   },
   transpilePackages: ['@shopkeeper/db'],
   images: {
