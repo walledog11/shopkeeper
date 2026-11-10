@@ -124,11 +124,18 @@ export async function runWithheldMessageFollowUp(
       settings,
       plan,
     });
+    // Fenced by the claim: an attempt that lost its task while drafting must not
+    // publish over whatever the task holds now.
     const committed = await commitThreadPlanCacheIfCurrent({
       orgId: organizationId,
       threadId,
       sourceMessageId,
       cache,
+      taskClaim: {
+        taskId: claim.taskId,
+        expectedRevision: claim.expectedRevision,
+        claimToken: claim.claimToken,
+      },
     });
     if (!committed || !cache.planId) {
       await finish();

@@ -146,4 +146,22 @@ describe('withheld-message follow-up', () => {
     expect(await db.agentTask.findUniqueOrThrow({ where: { id: task.id } }))
       .toMatchObject({ status: 'failed', failureCode: 'approved_execution_failed', claimToken: null });
   });
+
+  it('publishes nothing when another attempt took the task while it was drafting', async () => {
+    const { seed, task } = await approveCardWhoseRefundFails();
+    const before = await db.thread.findUniqueOrThrow({ where: { id: seed.threadId }, select: { cachedPlan: true } });
+    mockPlanAgent.mockImplementationOnce(async () => {
+      await db.agentTask.update({ where: { id: task.id }, data: { claimToken: randomUUID() } });
+      return {
+        ...exactDraftPlan(seed.threadId, [followUpReply], followUpReply),
+        signals: [{ code: 'approved_message_withheld', severity: 'blocking', message: 'Not sent.' }],
+      };
+    });
+
+    await processAgentTaskJob({ organizationId: seed.organizationId, taskId: task.id, revision: task.revision });
+
+    const after = await db.thread.findUniqueOrThrow({ where: { id: seed.threadId }, select: { cachedPlan: true } });
+    expect(after.cachedPlan).toEqual(before.cachedPlan);
+    expect(mockSendPlan).not.toHaveBeenCalled();
+  });
 });

@@ -192,6 +192,40 @@ function mergePinnedKbArticles(
   return merged.slice(0, limit);
 }
 
+/**
+ * Links an email thread to the Shopify customer with the sender's address, the
+ * first time a turn finds it unlinked. The write only fills an empty link (or
+ * repeats this one), so a customer the merchant linked by hand is never
+ * replaced; if they linked someone else meanwhile, this turn goes on without the
+ * email's match and the next one reads their choice.
+ */
+async function linkEmailThreadToShopifyCustomer(params: {
+  orgId: string;
+  threadId: string;
+  email: string;
+  shopify: ShopifyContext;
+}): Promise<{ id: string; name: string | null } | null> {
+  const data = await shopifyRestJson<{ customers?: { id: number; first_name?: string | null; last_name?: string | null }[] }>(
+    params.shopify,
+    "customers/search.json",
+    { query: { query: `email:${params.email}`, fields: "id,first_name,last_name", limit: 1 } },
+  );
+  const found = data.customers?.[0];
+  if (!found?.id) return null;
+  const shopifyCustomerId = String(found.id);
+  const linked = await db.thread.updateMany({
+    where: {
+      id: params.threadId,
+      organizationId: params.orgId,
+      OR: [{ shopifyCustomerId: null }, { shopifyCustomerId }],
+    },
+    data: { shopifyCustomerId },
+  });
+  if (linked.count !== 1) return null;
+  const name = [found.first_name, found.last_name].filter(Boolean).join(" ");
+  return { id: shopifyCustomerId, name: name || null };
+}
+
 export async function buildContext(
   threadId: string,
   orgId: string,
@@ -289,25 +323,19 @@ export async function buildContext(
   let shopifyCustomerId = thread.shopifyCustomerId;
   let shopifyCustomerName: string | null = null;
   if (!shopifyCustomerId && thread.channelType === "email" && shopifyIntegration?.accessToken) {
-    try {
-      const email = thread.customer.platformId;
-      const data = await shopifyRestJson<{ customers?: { id: number; first_name?: string | null; last_name?: string | null }[] }>(
-        { shop: shopifyIntegration.externalAccountId, accessToken: shopifyIntegration.accessToken },
-        "customers/search.json",
-        { query: { query: `email:${email}`, fields: "id,first_name,last_name", limit: 1 } }
-      );
-      const found = data.customers?.[0];
-      if (found?.id) {
-        shopifyCustomerId = String(found.id);
-        const parts = [found.first_name, found.last_name].filter(Boolean);
-        if (parts.length > 0) shopifyCustomerName = parts.join(" ");
-        await db.thread.update({
-          where: { id: thread.id },
-          data: { shopifyCustomerId },
-        }).catch(() => {});
-      }
-    } catch {
-      // Best effort; leave the thread unlinked.
+    const linked = await linkEmailThreadToShopifyCustomer({
+      orgId,
+      threadId: thread.id,
+      email: thread.customer.platformId,
+      shopify: { shop: shopifyIntegration.externalAccountId, accessToken: shopifyIntegration.accessToken },
+    }).catch((error: unknown) => {
+      // The turn goes on unlinked, as it would for a sender Shopify does not know.
+      logger.warn({ orgId, threadId: thread.id, err: error }, "[agent:context] Shopify customer link failed");
+      return null;
+    });
+    if (linked) {
+      shopifyCustomerId = linked.id;
+      shopifyCustomerName = linked.name;
     }
   }
 
