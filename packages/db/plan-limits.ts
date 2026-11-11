@@ -46,11 +46,11 @@ export interface PlanBilling {
   shopifyPlanName: string | null;
 }
 
-// Shopify managed pricing names each plan in the Partner dashboard, with the
-// names the pricing page sells: Starter and Pro.
-function shopifyPlanTier(planName: string | null): PlanTier | null {
-  const name = planName?.trim().toLowerCase();
-  return name === 'starter' || name === 'pro' ? name : null;
+// Shopify App Pricing reports a plan by the handle set in the Partner
+// dashboard: `starter` and `pro`, the plans the pricing page sells.
+function shopifyPlanTier(planHandle: string | null): PlanTier | null {
+  const handle = planHandle?.trim().toLowerCase();
+  return handle === 'starter' || handle === 'pro' ? handle : null;
 }
 
 /** An active Shopify plan decides the tier; otherwise the Stripe price does. */

@@ -28,7 +28,7 @@ describe('billing write gate', () => {
     expect(() => assertBillingWriteAllowed({ stripeStatus: null, shopifyBillingStatus })).not.toThrow();
   });
 
-  it.each(['frozen', 'inactive'])('blocks a %s Shopify plan', (shopifyBillingStatus) => {
+  it.each(['inactive'])('blocks an %s Shopify plan', (shopifyBillingStatus) => {
     expect(() => assertBillingWriteAllowed({ stripeStatus: null, shopifyBillingStatus })).toThrow(
       expect.objectContaining({ status: 402 }),
     );
@@ -39,7 +39,7 @@ describe('billing write gate', () => {
     orgIds.push(org.id);
     await db.organization.update({
       where: { id: org.id },
-      data: { shopifyBillingStatus: 'frozen' },
+      data: { shopifyBillingStatus: 'inactive' },
     });
 
     await expect(assertBillingWriteAllowedForOrgId(org.id)).rejects.toMatchObject({ status: 402 });

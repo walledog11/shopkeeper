@@ -3,11 +3,10 @@ import { db } from './client.js';
 
 const BLOCKED_WRITE_STATUSES = new Set(['past_due', 'canceled']);
 
-// A workspace billed through Shopify (managed pricing) stops writing when
-// Shopify freezes the store's billing or the plan has ended. Null is a store
-// that never chose a plan, which writes as an unbilled workspace always has.
+// A workspace billed through Shopify App Pricing stops writing when its plan
+// has ended. Null is a store that never chose a plan, which writes as an
+// unbilled workspace always has.
 const BLOCKED_SHOPIFY_BILLING: Record<string, string> = {
-  frozen: "Shopify has paused billing for this store. Settle the store's Shopify bill to continue.",
   inactive: 'Your Shopkeeper plan has ended. Choose a plan in Shopify to continue.',
 };
 

@@ -249,23 +249,33 @@ works once; a store another workspace holds is refused, as with OAuth. An expire
 connecting through Shopify with the store filled in; opening the app from Shopify admin again mints
 a new one. `app/uninstalled` and `shop/redact` delete a held grant.
 
-**Billing (managed pricing).** Plans live in the Partner dashboard and Shopify hosts the page that
-picks one; Shopkeeper only reads the store's subscription (`syncShopifyBilling`) into the
-organization's `shopify_*` billing columns. To turn it on:
+**Billing (Shopify App Pricing, formerly managed pricing).** Plans live in the Partner Dashboard and
+Shopify hosts the page that picks one. Shopify reports a store's plan only through the Partner API
+(`activeSubscription`, keyed by the store's app and shop ids from its Admin API) and sends no webhook
+when it changes, so `syncShopifyBilling` reads it when Usage & billing or the app home shows a plan
+that may have changed, after a store is claimed, and daily in the gateway (`shopify-billing` job).
+It stores what it found in the organization's `shopify_*` billing columns. To turn it on:
 
-1. Partner dashboard → the app → Pricing: choose managed pricing and create plans named exactly
-   **Starter** and **Pro** (plan limits read those names), with the trial and prices the pricing page
-   shows. Leave the welcome link on the app home, which reads the plan again on return.
-2. Copy the app handle from the Partner dashboard and set `SHOPIFY_APP_HANDLE` on the dashboard
-   (Vercel). Until it is set, Usage & billing shows the unbilled state and no workspace is billed
-   through Shopify.
-3. Release the app config (`shopify app deploy`) so stores send `app_subscriptions/update` to the
-   gateway, which reads the subscription again on each delivery.
+1. Partner Dashboard → App distribution → the app → Distribution → **Manage listing** beside the
+   Shopify App Store listing → edit the English locale → Pricing content → **Manage** → Settings:
+   pricing method **Shopify App Pricing**, billing **Monthly**. This needs public distribution, which
+   can't be changed once chosen.
+2. Create the plans with handles **`starter`** and **`pro`** (plan limits read the handle), with the
+   prices and trial the pricing page shows. Leave the welcome link empty (or `/`) so merchants return
+   to the app home, which reads the plan again.
+3. Dev Dashboard → Organization settings → Users → Security → **Add Partner API client** with
+   *Manage apps*. Set its token as `SHOPIFY_PARTNER_API_TOKEN`, and the number in the Partner
+   Dashboard URL (not the Dev Dashboard organization ID) as `SHOPIFY_PARTNER_ID`, on both the
+   dashboard (Vercel) and the gateway (Railway).
+4. Set `SHOPIFY_APP_HANDLE` on the dashboard: the segment after `/apps/` when the app is open in a
+   store's admin. Usage & billing and the app home show Shopify billing only once the handle and the
+   Partner API client are both set.
 
-A store with a `frozen` subscription (Shopify paused its billing) or an `inactive` one (the plan
-ended) stops writing: the billing write gate answers 402, and the app shell and app home say why.
-A store that never chose a plan keeps working. Development stores' plans are test charges; Usage &
-billing marks them.
+A store whose plan ended (`inactive`: seen active, now gone) stops writing: the billing write gate
+answers 402, and the app shell and app home say why. A store that never chose a plan keeps working,
+and so does every store while a read fails (the Partner API answers only for a public app; a refused
+read is logged and leaves the stored plan). A development store in the Partner organization picks a
+paid plan at no charge; it reads as an active plan.
 
 ## Deploy Sequence
 

@@ -287,9 +287,11 @@ model Organization {
   stripeStateEventCreatedAt DateTime? @map("stripe_state_event_created_at") @db.Timestamptz
   stripeStateEventId        String?   @map("stripe_state_event_id") @db.VarChar(255)
 
-  // The store's Shopify managed-pricing subscription, as `syncShopifyBilling`
-  // last read it: `active`, `frozen` (Shopify paused the store's billing) or
-  // `inactive` (a plan that ended); null when the store never had a plan.
+  // The store's Shopify App Pricing plan, as `syncShopifyBilling` last read it
+  // from the Partner API: `active`, or `inactive` (a plan that ended); null when
+  // the store never had one. `shopifyPlanName` holds the plan's handle
+  // (`starter`, `pro`). `shopifySubscriptionId` and `shopifyBillingTest` are no
+  // longer written: the Partner API reports neither.
   shopifyBillingStatus      String?   @map("shopify_billing_status") @db.VarChar(20)
   shopifyPlanName           String?   @map("shopify_plan_name") @db.VarChar(255)
   shopifySubscriptionId     String?   @map("shopify_subscription_id") @db.VarChar(255)

@@ -257,6 +257,18 @@ export function validateProductionEnv(target, options = {}) {
     if (oauthAttemptSecret && oauthAttemptSecret.length < 32) {
       errors.push('OAUTH_ATTEMPT_SECRET must contain at least 32 characters');
     }
+    if (readEnv(env, 'SHOPIFY_APP_HANDLE') && !readEnv(env, 'SHOPIFY_PARTNER_API_TOKEN')) {
+      errors.push('SHOPIFY_APP_HANDLE turns on Shopify billing, which reads plans with SHOPIFY_PARTNER_ID and SHOPIFY_PARTNER_API_TOKEN');
+    }
+  }
+
+  // Shopify App Pricing plans are read through a Partner API client: its token
+  // and the Partner ID (the number in the Partner Dashboard URL) travel together.
+  const partnerId = readEnv(env, 'SHOPIFY_PARTNER_ID');
+  if (Boolean(partnerId) !== Boolean(readEnv(env, 'SHOPIFY_PARTNER_API_TOKEN'))) {
+    errors.push('SHOPIFY_PARTNER_ID and SHOPIFY_PARTNER_API_TOKEN must be set together');
+  } else if (partnerId && !/^\d+$/.test(partnerId)) {
+    errors.push('SHOPIFY_PARTNER_ID must be the number in the Partner Dashboard URL');
   }
 
   for (const [name, suffix] of Object.entries(contract.expectedPathSuffixes ?? {})) {

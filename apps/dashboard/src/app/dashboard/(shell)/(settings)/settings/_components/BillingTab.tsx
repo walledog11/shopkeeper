@@ -16,10 +16,9 @@ import { PLANS } from "@/lib/billing/plans"
 
 interface ShopifyBillingInfo {
   provider: "shopify"
-  status: "active" | "frozen" | "inactive" | null
+  status: "active" | "inactive" | null
   planName: string | null
   trialEndsAt: string | null
-  test: boolean
   planPageUrl: string
 }
 
@@ -160,13 +159,12 @@ function PlanPicker() {
 
 const SHOPIFY_STATUS_CONFIG = {
   active: { label: "Active", icon: CheckCircle2, className: STATUS_CONFIG.active.className },
-  frozen: { label: "Paused by Shopify", icon: AlertTriangle, className: STATUS_CONFIG.past_due.className },
   inactive: { label: "Ended", icon: XCircle, className: STATUS_CONFIG.canceled.className },
 }
 
 const DAY_MS = 86_400_000
 
-// Billed through Shopify (managed pricing): the plan is chosen on Shopify's own
+// Billed through Shopify App Pricing: the plan is chosen on Shopify's own
 // page and paid on the store's Shopify bill, so there is no card or invoice here.
 function ShopifyBilling({ billing, isAdmin }: { billing: ShopifyBillingInfo; isAdmin: boolean }) {
   const statusCfg = billing.status ? SHOPIFY_STATUS_CONFIG[billing.status] : null
@@ -184,7 +182,7 @@ function ShopifyBilling({ billing, isAdmin }: { billing: ShopifyBillingInfo; isA
         action={isAdmin ? (
           <Button asChild variant="outline" className={GLASS_SETTINGS_ACTION}>
             <a href={billing.planPageUrl} target="_blank" rel="noopener noreferrer">
-              {billing.status === "active" || billing.status === "frozen" ? "Change plan" : "Choose a plan"}
+              {billing.status === "active" ? "Change plan" : "Choose a plan"}
               <ExternalLink className="size-3.5" />
             </a>
           </Button>
@@ -203,14 +201,10 @@ function ShopifyBilling({ billing, isAdmin }: { billing: ShopifyBillingInfo; isA
           {inTrial ? (
             <p className="font-medium text-blue-600">{trialDaysLeft} day{trialDaysLeft !== 1 ? "s" : ""} left in trial</p>
           ) : null}
-          {billing.status === "frozen" ? (
-            <p>Shopify paused billing for this store, so replies and actions are paused until the store&apos;s Shopify bill is settled.</p>
-          ) : null}
           {billing.status === "inactive" ? (
             <p>Your plan has ended, so replies and actions are paused. Choose a plan to resume.</p>
           ) : null}
           {billing.status === null ? <p>Choose a plan in Shopify to keep Shopkeeper running.</p> : null}
-          {billing.test ? <p className="text-xs text-faint">Development store: Shopify doesn&apos;t charge this plan.</p> : null}
         </div>
       </SettingsTile>
     </div>

@@ -113,7 +113,7 @@ function Linked({ state, appUrl }: { state: LinkedState; appUrl: string }) {
 
   return <main className="mx-auto w-full max-w-[1000px] px-4 pb-10 pt-4 sm:px-6">
     {summary.access !== 'ok' && <AccessBanner access={summary.access} appUrl={appUrl} />}
-    {(summary.plan?.status === 'frozen' || summary.plan?.status === 'inactive') && <PlanBanner plan={summary.plan} />}
+    {summary.plan?.status === 'inactive' && <PlanBanner plan={summary.plan} />}
 
     <div role="tablist" aria-label="Shopkeeper" className="flex gap-1">
       {TABS.map(item => <button key={item.id} id={`tab-${item.id}`} type="button" role="tab"
@@ -170,16 +170,13 @@ function PlanLink({ href, children }: { href: string; children: ReactNode }) {
 type Plan = NonNullable<ShopifyAppHomeSummary['plan']>;
 
 function PlanBanner({ plan }: { plan: Plan }) {
-  const frozen = plan.status === 'frozen';
   return <div role="status" className="mb-4 flex flex-wrap items-start gap-3 rounded-xl bg-amber-50 p-4 text-sm text-amber-900">
     <CircleAlert className="mt-0.5 size-4 shrink-0" />
     <div className="min-w-0 flex-1">
-      <p className="font-semibold">{frozen ? 'Shopify paused billing for this store' : 'Your Shopkeeper plan has ended'}</p>
-      <p className="mt-0.5">{frozen
-        ? "Replies and actions are paused until the store's Shopify bill is settled."
-        : 'Replies and actions are paused. Choose a plan to resume.'}</p>
+      <p className="font-semibold">Your Shopkeeper plan has ended</p>
+      <p className="mt-0.5">Replies and actions are paused. Choose a plan to resume.</p>
     </div>
-    {!frozen && <PlanLink href={plan.planPageUrl}>Choose a plan</PlanLink>}
+    <PlanLink href={plan.planPageUrl}>Choose a plan</PlanLink>
   </div>;
 }
 
@@ -189,7 +186,6 @@ function PlanCard({ plan }: { plan: Plan }) {
     : 0;
   const detail = trialDaysLeft > 0 ? `${trialDaysLeft} day${trialDaysLeft === 1 ? '' : 's'} left in the free trial`
     : plan.status === 'active' ? 'Billed on your Shopify bill'
-      : plan.status === 'frozen' ? 'Paused by Shopify'
         : plan.status === 'inactive' ? 'Ended'
           : 'No plan chosen yet';
   return <section className={cn(CARD, 'p-5')}>
@@ -197,7 +193,6 @@ function PlanCard({ plan }: { plan: Plan }) {
       <div className="min-w-0">
         <h2 className="text-sm font-semibold">{plan.planName ? `${plan.planName} plan` : 'Plan'}</h2>
         <p className="mt-1 text-sm text-muted-foreground">{detail}</p>
-        {plan.test && <p className="mt-1 text-xs text-muted-foreground">Development store: Shopify doesn&apos;t charge this plan.</p>}
       </div>
       <PlanLink href={plan.planPageUrl}>{plan.status === 'active' ? 'Change plan' : 'Choose a plan'}</PlanLink>
     </div>
