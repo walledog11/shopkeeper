@@ -47,14 +47,13 @@ In order. This is the product's critical path.
 
 The first publication is the App Store. These block review or a new install's first day.
 
-1. **Charge through Shopify** (built: managed pricing; runbook *Shopify install and
-   billing*). Closes when the Starter and Pro plans exist in the Partner dashboard,
-   `SHOPIFY_APP_HANDLE` is set, the app config is released for `app_subscriptions/update`,
-   and a dev-store install picks a plan that Usage & billing and the app home show.
+1. **Charge through Shopify** (built: Shopify App Pricing, plans read from the Partner API;
+   runbook *Shopify install and billing*). Closes when the `starter` and `pro` plans exist in the
+   Partner Dashboard, the Partner API client and `SHOPIFY_APP_HANDLE` are set, and a dev-store install
+   picks a plan that Usage & billing and the app home show.
 2. **Authenticate at install, not at signup** (built: the app home holds the install's
-   grant and its links claim it). Closes when the `shopify_install_and_billing`
-   migration is applied and, on the dev store, install → app home → sign up → inbox asks
-   for no store URL and no second consent.
+   grant and its links claim it). Closes when, on the dev store, install → app home →
+   sign up → inbox asks for no store URL and no second consent.
 3. **Instagram for an installer nobody assigned.** Connect is gated per workspace by
    SocialAPI brand assignment, so every App Store install sees Instagram "Coming soon"
    while the listing and landing page lead with DMs. Provision a brand on connect, or

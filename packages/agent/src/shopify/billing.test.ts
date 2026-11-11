@@ -1,39 +1,25 @@
 import { describe, expect, it } from "vitest";
 import { deriveShopifyBillingState } from "./billing.js";
 
-// The status decides whether the billing gate stops writes, so a stray older
-// subscription must never outvote the plan the store is on.
-
-function subscription(status: string, extra: Partial<{ name: string; trialDays: number; createdAt: string; test: boolean }> = {}) {
-  return {
-    id: `gid://shopify/AppSubscription/${status}`,
-    name: extra.name ?? "Pro",
-    status,
-    test: extra.test ?? false,
-    trialDays: extra.trialDays ?? 0,
-    createdAt: extra.createdAt ?? "2026-11-01T00:00:00Z",
-  };
-}
+// The status decides whether the billing gate stops writes. Shopify reports
+// only an active plan, so an ended plan is told from one never chosen by what
+// was stored before.
 
 describe("deriveShopifyBillingState", () => {
-  it("reads the active plan over an older cancelled one", () => {
-    const state = deriveShopifyBillingState([
-      subscription("ACTIVE", { name: "Pro", trialDays: 14, createdAt: "2026-11-01T00:00:00Z" }),
-      subscription("CANCELLED", { name: "Starter" }),
-    ]);
-    expect(state).toMatchObject({ status: "active", planName: "Pro" });
-    expect(state.trialEndsAt?.toISOString()).toBe("2026-11-15T00:00:00.000Z");
+  it("reads the active plan's handle and trial", () => {
+    const state = deriveShopifyBillingState(
+      { trialEndsAt: "2026-11-15T00:00:00Z", items: [{ handle: "pro" }] },
+      null,
+    );
+    expect(state).toEqual({ status: "active", planHandle: "pro", trialEndsAt: new Date("2026-11-15T00:00:00Z") });
   });
 
-  it("marks a frozen store and a plan that ended", () => {
-    expect(deriveShopifyBillingState([subscription("FROZEN")]).status).toBe("frozen");
-    expect(deriveShopifyBillingState([subscription("CANCELLED")]).status).toBe("inactive");
-    expect(deriveShopifyBillingState([subscription("EXPIRED")]).status).toBe("inactive");
+  it("marks a plan that was active and is gone as ended", () => {
+    expect(deriveShopifyBillingState(null, "active").status).toBe("inactive");
+    expect(deriveShopifyBillingState(null, "inactive").status).toBe("inactive");
   });
 
-  it("treats a store that never ran a plan as having none", () => {
-    expect(deriveShopifyBillingState([]).status).toBeNull();
-    expect(deriveShopifyBillingState([subscription("DECLINED")]).status).toBeNull();
-    expect(deriveShopifyBillingState([subscription("PENDING")]).status).toBeNull();
+  it("leaves a store that never had a plan without one", () => {
+    expect(deriveShopifyBillingState(null, null).status).toBeNull();
   });
 });

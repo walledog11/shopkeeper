@@ -1,35 +1,45 @@
 import { db } from '@shopkeeper/db';
 import { isSimulatedShopifyIntegration } from '@shopkeeper/agent/shopify/integration-health';
-import { shouldSyncShopifyBilling, syncShopifyBilling } from '@shopkeeper/agent/shopify/billing';
+import {
+  shopifyPartnerApiConfig,
+  shouldSyncShopifyBilling,
+  syncShopifyBilling,
+} from '@shopkeeper/agent/shopify/billing';
+import { PLANS } from '@/lib/billing/plans';
 import { getShopifyAppHandle } from '@/lib/env';
 import logger from '@/lib/server/logger';
 
 /** What Usage & billing and the Shopify app home show for a workspace billed through Shopify. */
 export interface ShopifyBillingView {
-  status: 'active' | 'frozen' | 'inactive' | null;
+  status: 'active' | 'inactive' | null;
   planName: string | null;
   trialEndsAt: string | null;
-  /** A development store's plan, which Shopify never charges. */
-  test: boolean;
   /** Shopify's own page for choosing or changing the plan, inside the store's admin. */
   planPageUrl: string;
 }
 
-/** Shopify's hosted plan page for the store, in its admin (managed pricing). */
+/** Shopify's hosted plan page for the store, in its admin (Shopify App Pricing). */
 function shopifyPlanPageUrl(shop: string, appHandle: string): string {
   const storeHandle = shop.replace(/\.myshopify\.com$/, '');
   return `https://admin.shopify.com/store/${encodeURIComponent(storeHandle)}/charges/${encodeURIComponent(appHandle)}/pricing_plans`;
 }
 
+/** Shopify reports a plan by its handle; the pricing page's name for it reads better. */
+function planName(handle: string | null): string | null {
+  if (!handle) return null;
+  return PLANS.find((plan) => plan.tier === handle.toLowerCase())?.name ?? handle;
+}
+
 /**
  * A workspace is billed through Shopify once the plans exist in the Partner
- * dashboard (`SHOPIFY_APP_HANDLE`) and it has a live store. The subscription is
- * read again when it may have changed (`shouldSyncShopifyBilling`); a failed
- * read shows what was stored. Null means Shopify doesn't bill this workspace.
+ * dashboard (`SHOPIFY_APP_HANDLE`), the Partner API can read them
+ * (`shopifyPartnerApiConfig`), and it has a live store. The plan is read again
+ * when it may have changed (`shouldSyncShopifyBilling`); a failed read shows what
+ * was stored. Null means Shopify doesn't bill this workspace.
  */
 export async function loadShopifyBilling(organizationId: string): Promise<ShopifyBillingView | null> {
   const appHandle = getShopifyAppHandle();
-  if (!appHandle) return null;
+  if (!appHandle || !shopifyPartnerApiConfig()) return null;
   const store = await db.integration.findFirst({
     where: { organizationId, platform: 'shopify', lifecycleStatus: 'active' },
     orderBy: { createdAt: 'asc' },
@@ -43,33 +53,26 @@ export async function loadShopifyBilling(organizationId: string): Promise<Shopif
       shopifyBillingStatus: true,
       shopifyPlanName: true,
       shopifyTrialEndsAt: true,
-      shopifyBillingTest: true,
       shopifyBillingSyncedAt: true,
     },
   });
   let billing = {
     status: org.shopifyBillingStatus,
-    planName: org.shopifyPlanName,
+    planHandle: org.shopifyPlanName,
     trialEndsAt: org.shopifyTrialEndsAt,
-    test: org.shopifyBillingTest,
   };
   if (shouldSyncShopifyBilling(org)) {
     const synced = await syncShopifyBilling(organizationId).catch((error: unknown) => {
-      logger.warn({ err: error, orgId: organizationId }, '[Shopify billing] Could not read the subscription');
+      logger.warn({ err: error, orgId: organizationId }, '[Shopify billing] Could not read the plan');
       return null;
     });
     if (synced) billing = synced;
   }
 
   return {
-    status: isShopifyBillingStatus(billing.status) ? billing.status : null,
-    planName: billing.planName,
+    status: billing.status === 'active' || billing.status === 'inactive' ? billing.status : null,
+    planName: planName(billing.planHandle),
     trialEndsAt: billing.trialEndsAt?.toISOString() ?? null,
-    test: billing.test === true,
     planPageUrl: shopifyPlanPageUrl(store.externalAccountId, appHandle),
   };
-}
-
-function isShopifyBillingStatus(value: string | null): value is ShopifyBillingView['status'] & string {
-  return value === 'active' || value === 'frozen' || value === 'inactive';
 }

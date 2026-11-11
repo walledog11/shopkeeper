@@ -19,6 +19,7 @@ import {
   type ProducerConnection,
   type SharedWorkerOptions,
 } from './registration.js';
+import { registerShopifyBillingMaintenanceJob } from './shopify-billing.js';
 import { registerTokenHealthMaintenanceJob } from './token-health.js';
 import { registerVoiceSynthesisMaintenanceJob } from './voice-synthesis.js';
 import { registerPlanRecoveryMaintenanceJob } from './plan-recovery.js';
@@ -28,6 +29,7 @@ const maintenanceJobRegistrations: MaintenanceJobRegistration[] = [
   registerInboundProcessingMaintenanceJob,
   registerTokenHealthMaintenanceJob,
   registerEmailTokenHealthMaintenanceJob,
+  registerShopifyBillingMaintenanceJob,
   registerGmailWatchMaintenanceJob,
   registerIntegrationDisconnectSweepMaintenanceJob,
   registerWorkspaceDeletionSweepMaintenanceJob,

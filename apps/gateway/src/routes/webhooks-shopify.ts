@@ -1,6 +1,5 @@
 import type { Request, Response, Router } from 'express';
 import { createHmac, timingSafeEqual, randomUUID } from 'crypto';
-import { syncShopifyBilling } from '@shopkeeper/agent/shopify/billing';
 import { isOrderRiskMonitorEnabled } from '../config/runtime-config.js';
 import logger from '../logger.js';
 import { CHANNEL, JOB } from '../constants.js';
@@ -80,29 +79,6 @@ export function registerShopifyWebhookRoutes(router: Router): void {
           { err: error, shopDomain },
           '[Webhook] Failed to remove Shopify integration on uninstall',
         );
-        return res.sendStatus(500);
-      }
-    }
-
-    // A plan chosen, changed, frozen or ended: read the store's subscription
-    // again rather than trusting this delivery's order against earlier ones.
-    if (topic === 'app_subscriptions/update') {
-      if (!shopDomain) {
-        logger.warn('[Webhook] Shopify subscription update missing shop domain header — dropping.');
-        return res.sendStatus(400);
-      }
-      try {
-        const organizationId = await resolveOrganizationId(CHANNEL.SHOPIFY, shopDomain);
-        if (!organizationId) {
-          // No workspace has claimed the store yet; the claim reads the plan.
-          logger.info({ shopDomain }, '[Webhook] Shopify subscription update for an unclaimed store');
-          return res.status(200).send('OK');
-        }
-        const state = await syncShopifyBilling(organizationId);
-        logger.info({ organizationId, status: state?.status ?? null }, '[Webhook] Shopify subscription synced');
-        return res.status(200).send('OK');
-      } catch (error) {
-        logger.error({ err: error, shopDomain }, '[Webhook] Shopify subscription sync failed');
         return res.sendStatus(500);
       }
     }
