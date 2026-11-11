@@ -173,3 +173,10 @@ export {
 } from './integration-auth.js';
 export { loadWorkspaceActivationSnapshot } from './product-analytics-workspace.js';
 export type { WorkspaceActivationSnapshot } from './product-analytics-workspace.js';
+export {
+  CUSTOMER_DATA_ACCESS_RETENTION_DAYS,
+  purgeExpiredCustomerDataAccess,
+  recordCustomerDataAccess,
+  scriptActor,
+} from './customer-data-access.js';
+export type { CustomerDataActor, CustomerDataResource } from './customer-data-access.js';

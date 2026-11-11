@@ -1,4 +1,4 @@
-import { db } from '@shopkeeper/db';
+import { CUSTOMER_DATA_ACCESS_RETENTION_DAYS, db, purgeExpiredCustomerDataAccess } from '@shopkeeper/db';
 import { JOB, QUEUE } from '../constants.js';
 import logger from '../logger.js';
 import { deletePurgedAttachments, purgeRetainedAgentThreads } from './agent-work-retention.js';
@@ -72,6 +72,12 @@ async function purgeDeletedRecords(): Promise<void> {
       usageCutoffDays: DAILY_USAGE_RETAIN_DAYS,
     },
     '[Purge] Hard-deleted dead storefront chat sessions and stale daily counters',
+  );
+
+  const accessRecordsPurged = await purgeExpiredCustomerDataAccess(now);
+  logger.info(
+    { rows: accessRecordsPurged, cutoffDays: CUSTOMER_DATA_ACCESS_RETENTION_DAYS },
+    '[Purge] Hard-deleted expired customer data access records',
   );
 }
 

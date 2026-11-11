@@ -13,7 +13,11 @@ import type { AgentTurnAction } from '@shopkeeper/agent/turns';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const GET = withOrgRoute<{ id: string }>(
-  { context: 'Threads GET by id', errorMessage: 'Failed to fetch thread' },
+  {
+    context: 'Threads GET by id',
+    errorMessage: 'Failed to fetch thread',
+    customerData: { resource: 'thread', idParam: 'id' },
+  },
   async ({ org, params, request }) => {
     const { id } = params;
     const before = new URL(request.url).searchParams.get('before');

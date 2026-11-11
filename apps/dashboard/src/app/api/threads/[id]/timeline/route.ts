@@ -4,7 +4,11 @@ import { withOrgRoute } from '@/lib/api/route';
 import { loadTicketTimeline } from '@/lib/server/ticket-timeline';
 
 export const GET = withOrgRoute<{ id: string }>(
-  { context: 'Thread timeline GET', errorMessage: 'Failed to build ticket timeline' },
+  {
+    context: 'Thread timeline GET',
+    errorMessage: 'Failed to build ticket timeline',
+    customerData: { resource: 'thread', idParam: 'id' },
+  },
   async ({ org, params }) => {
     const timeline = await loadTicketTimeline(org.id, params.id);
     if (timeline === null) throw new NotFoundError('Thread not found');

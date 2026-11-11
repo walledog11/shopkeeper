@@ -28,7 +28,7 @@ import { getRedis } from "@/lib/server/redis";
 import logger from "@/lib/server/logger";
 
 export const GET = withOrgRoute(
-  { context: "Agent chat GET", errorMessage: "Failed to load conversation" },
+  { context: "Agent chat GET", errorMessage: "Failed to load conversation", customerData: { resource: "operator_chat" } },
   async ({ org }) => {
     const { userId } = await auth();
     if (!userId) throw new UnauthorizedError();

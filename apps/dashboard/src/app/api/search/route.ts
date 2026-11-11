@@ -11,6 +11,7 @@ export const GET = withOrgRoute(
     context: 'Search GET',
     errorMessage: 'Failed to perform search',
     rateLimit: { key: 'search', limit: 30, windowSecs: 60 },
+    customerData: { resource: 'search' },
   },
   async ({ org, request }) => {
     const q = parseSearchQuery(new URL(request.url).searchParams);

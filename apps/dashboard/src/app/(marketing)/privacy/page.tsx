@@ -19,7 +19,7 @@ export default function PrivacyPage() {
   return (
     <LegalPage
       title="Privacy Policy"
-      effectiveDate="November 6, 2026"
+      effectiveDate="November 11, 2026"
       intro={privacyIntro}
       sections={[
         {
@@ -227,6 +227,14 @@ export default function PrivacyPage() {
                   Disconnecting a channel stops new messages arriving; it does not delete messages already received.
                 </li>
                 <li>
+                  When a store uninstalls Shopkeeper, the data that came from that store is erased when Shopify asks for
+                  it, 48 hours after the uninstall.
+                </li>
+                <li>
+                  Records of who opened customer data &mdash; the workspace member or our own script, the kind of
+                  record and the hour &mdash; are kept for one year.
+                </li>
+                <li>
                   Copies of messages in our processing queue expire within 7 days. Database backups, logs and error
                   reports are kept by our providers on their own rolling schedules.
                 </li>
@@ -248,8 +256,11 @@ export default function PrivacyPage() {
             <p>
               We use administrative, technical, and organizational safeguards designed to protect personal information,
               including tenant-scoped access controls, signed webhooks, production secret separation, encryption in
-              transit, encryption of connected-account credentials at rest, and operational monitoring. No system is perfectly secure, and merchants should keep their own
-              account credentials and connected platform access secure.
+              transit, encryption of connected-account credentials at rest, and operational monitoring. Access to
+              customer data by workspace members and by our own scripts is logged and reviewed every week, and a
+              written incident response policy commits us to tell affected merchants within 72 hours of confirming an
+              incident. No system is perfectly secure, and merchants should keep their own account credentials and
+              connected platform access secure.
             </p>
           ),
         },

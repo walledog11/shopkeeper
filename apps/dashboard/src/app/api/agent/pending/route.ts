@@ -24,7 +24,7 @@ import { getRedis } from "@/lib/server/redis";
 import logger from "@/lib/server/logger";
 
 export const GET = withOrgRoute(
-  { context: "Agent pending GET", errorMessage: "Failed to load pending plans" },
+  { context: "Agent pending GET", errorMessage: "Failed to load pending plans", customerData: { resource: "pending_plans" } },
   async ({ org }) => {
     const { userId } = await auth();
     if (!userId) throw new UnauthorizedError();

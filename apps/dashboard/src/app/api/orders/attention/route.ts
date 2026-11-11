@@ -44,6 +44,7 @@ export const GET = withOrgRoute(
     context: 'Orders attention GET',
     errorMessage: 'Failed to fetch order attention',
     rateLimit: { key: 'orders:attention', limit: 30, windowSecs: 60 },
+    customerData: { resource: 'orders' },
   },
   async ({ org }) => {
     // Findings reference an order on the Shopify store that was connected when

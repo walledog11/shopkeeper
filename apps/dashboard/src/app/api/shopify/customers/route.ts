@@ -15,6 +15,7 @@ export const GET = withOrgRoute(
     context: 'Customers GET',
     errorMessage: 'Failed to fetch customers',
     rateLimit: { key: 'customers:get', limit: 30, windowSecs: 60 },
+    customerData: { resource: 'shopify_customer' },
   },
   async ({ org, request }) => {
     const integration = await db.integration.findFirst({

@@ -49,6 +49,7 @@ export const GET = withOrgRoute(
     context: 'Attachments GET',
     errorMessage: 'Failed to load attachment',
     rateLimit: { key: 'attachments:get', limit: 120, windowSecs: 60 },
+    customerData: { resource: 'attachment' },
   },
   async ({ org, request }) => {
     const ref = new URL(request.url).searchParams.get('ref');

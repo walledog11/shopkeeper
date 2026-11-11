@@ -666,6 +666,39 @@ a *separate* branch and copy rows out. PITR restores Postgres only — not Verce
 email, so after a restore the database disagrees with Clerk, Stripe and Shopify. `AgentAction` is the
 audit trail you would actually reconstruct from.
 
+## Customer data protection
+
+Shopify's protected customer data requirements (level 2: names, emails, phones, addresses) ask for an
+access log that is kept and reviewed, and a security incident response policy. Both live here; the
+merchant-facing promises are the Terms' *Data Processing* section and the privacy policy.
+
+### Customer data access review
+
+`CustomerDataAccess` records who read customer data: a workspace member opening a dashboard view that
+shows it (each such route declares `customerData` on `withOrgRoute`), and every run of an ops script
+that reads it (`scriptActor`). The agent's own reads are its actions (`AgentAction`). One row per
+person or script, kind of record and hour (`recordCustomerDataAccess`); the daily purge deletes rows
+older than `CUSTOMER_DATA_ACCESS_RETENTION_DAYS`, and deleting a workspace deletes its rows. A failed
+write is logged as `[Access log] Could not record customer data access` and never blocks the page.
+
+Weekly, review the last seven days:
+
+```bash
+railway run --service shopkeeper --environment production -- \
+  npm run review:customer-data-access -- --days 7
+```
+
+Every line under *Worth a look* needs an explanation you can name: your own ops script runs, a
+merchant's export, a merchant working through a backlog. Anything you can't explain is a suspected
+incident: follow [the incident response policy](security-incident-response.md). Opening the
+database directly (Neon console, `psql`) is outside the log; do it only to recover from an incident
+or apply a migration, and note it in that incident's record.
+
+### Security incidents
+
+[security-incident-response.md](security-incident-response.md) is the policy: who leads, how an
+incident is contained and investigated, and the 72-hour notice to affected merchants and Shopify.
+
 ## BullMQ Failed Jobs
 
 A retry-exhausted job lands in its queue's `failed` set. It is evidence, not proof the business

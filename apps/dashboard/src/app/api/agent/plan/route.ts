@@ -11,7 +11,11 @@ import { listGatewayAgentRequests, postGatewayPlanRequest } from "@/lib/agent/ap
 export const maxDuration = 60;
 
 export const GET = withOrgRoute(
-  { context: "Agent plan GET", errorMessage: "Failed to load planning request" },
+  {
+    context: "Agent plan GET",
+    errorMessage: "Failed to load planning request",
+    customerData: { resource: "thread", idQuery: "threadId" },
+  },
   async ({ org, request }) => {
     const { userId } = await auth();
     if (!userId) throw new UnauthorizedError();

@@ -36,7 +36,7 @@
  */
 import { createHmac, randomUUID } from 'node:crypto';
 import { parseArgs } from 'node:util';
-import { db } from '@shopkeeper/db';
+import { db, recordCustomerDataAccess, scriptActor } from '@shopkeeper/db';
 import { memberOperatorKey } from '@shopkeeper/agent/internal-thread';
 import { getAgentTurnPrefixLength } from '@shopkeeper/agent/tools';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
@@ -425,6 +425,7 @@ async function main(): Promise<void> {
     select: { id: true, name: true, clerkOrgId: true, settings: true },
   });
   if (!organization) throw new Error(`No workspace ${workspace}`);
+  await recordCustomerDataAccess({ organizationId: organization.id, actor: scriptActor('simulate-refund'), resource: 'script' });
   console.log(`Workspace: ${organization.name} (${organization.clerkOrgId})\n`);
   const organizationId = organization.id;
 

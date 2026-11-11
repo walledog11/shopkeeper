@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { CONTACT_EMAIL } from '@/lib/brand'
 import { LegalPage } from '../_components/LegalPage'
 
@@ -18,7 +19,7 @@ export default function TermsPage() {
   return (
     <LegalPage
       title="Terms of Service"
-      effectiveDate="May 10, 2026"
+      effectiveDate="November 11, 2026"
       intro={termsIntro}
       sections={[
         {
@@ -88,6 +89,57 @@ export default function TermsPage() {
               process, transmit, and display that data to provide and secure the service. Shopkeeper retains rights to the
               service, software, design, documentation, and related technology.
             </p>
+          ),
+        },
+        {
+          title: 'Data Processing',
+          body: (
+            <>
+              <p>
+                When Shopkeeper handles personal data about your customers, such as names, contact details, addresses,
+                order details and messages, it acts as your processor (service provider). It processes that data only on
+                your instructions: these Terms, your settings, and what you ask Shopkeeper to do. You are responsible for
+                having the right to share that data with Shopkeeper.
+              </p>
+              <ul className="list-disc space-y-1 pl-5">
+                <li>
+                  Shopkeeper uses that data only to provide, secure and support the service, as our{' '}
+                  <Link href="/privacy" className="font-semibold text-stone-900 underline decoration-stone-400 underline-offset-4">
+                    Privacy Policy
+                  </Link>{' '}
+                  describes. It does not sell it, use it for advertising, or use it to train general-purpose AI models.
+                </li>
+                <li>
+                  Shopkeeper staff access that data only when needed to run or support the service. They are bound by
+                  confidentiality, and their access is logged and reviewed.
+                </li>
+                <li>
+                  Shopkeeper uses the service providers listed in the Privacy Policy, under obligations that protect the
+                  data at least as well as these Terms, and updates that list before a new provider receives your data.
+                </li>
+                <li>
+                  The data is protected with the measures the Privacy Policy describes, including encryption in transit
+                  and at rest.
+                </li>
+                <li>
+                  If a security incident affects your data, Shopkeeper tells you without undue delay, and within 72 hours
+                  of confirming it, and helps you meet any duty you have to notify regulators or your customers.
+                </li>
+                <li>
+                  Shopkeeper helps you answer your customers&apos; privacy requests: you can export a customer&apos;s data
+                  in the product, and Shopkeeper deletes a customer&apos;s data when you ask or when Shopify sends a
+                  request for your store.
+                </li>
+                <li>
+                  When you delete your workspace, Shopkeeper deletes the personal data it holds for you, as the Privacy
+                  Policy describes, unless the law requires it to keep it. When your store uninstalls Shopkeeper, the data
+                  that came from that store is erased when Shopify asks for it.
+                </li>
+                <li>
+                  On request, Shopkeeper gives you the information reasonably needed to show it meets these commitments.
+                </li>
+              </ul>
+            </>
           ),
         },
         {

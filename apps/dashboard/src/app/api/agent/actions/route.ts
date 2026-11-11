@@ -22,7 +22,7 @@ import { rateLimit, tooManyRequests } from "@/lib/server/rate-limit";
 export const dynamic = "force-dynamic";
 
 export const GET = withOrgRoute(
-  { context: "GET /api/agent/actions", errorMessage: "Failed to fetch action log" },
+  { context: "GET /api/agent/actions", errorMessage: "Failed to fetch action log", customerData: { resource: "agent_history" } },
   async ({ org, request }) => {
     const { searchParams } = new URL(request.url);
     const format = searchParams.get("format");

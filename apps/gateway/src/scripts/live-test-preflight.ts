@@ -14,7 +14,7 @@
  */
 import { readdirSync } from 'node:fs';
 import { parseArgs } from 'node:util';
-import { db } from '@shopkeeper/db';
+import { db, recordCustomerDataAccess, scriptActor } from '@shopkeeper/db';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { shopifyRestJson } from '@shopkeeper/agent/shopify';
 import { SHOPIFY_ACCESS_SELECT, shopifyContextFor } from '@shopkeeper/agent/shopify/access';
@@ -68,6 +68,7 @@ async function main(): Promise<void> {
     select: { id: true, name: true, clerkOrgId: true, lifecycleStatus: true, settings: true },
   });
   if (!organization) throw new Error(`No workspace ${workspace}`);
+  await recordCustomerDataAccess({ organizationId: organization.id, actor: scriptActor('live-test-preflight'), resource: 'script' });
   console.log(`Workspace: ${organization.name} (${organization.clerkOrgId})\n`);
 
   await checkMigrations();
