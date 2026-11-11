@@ -1,8 +1,11 @@
+import { settingsSectionMetadata } from "@/app/dashboard/_components/nav-items"
 import ImessageCard from "@/components/integrations/ImessageCard"
 import { INTEGRATION_DEFINITIONS, type PersonalDeviceIntegrationDefinition } from "@/lib/integrations/catalog"
 import { normalizeImessageLineHandle } from "@/lib/integrations/imessage-visibility"
 import AgentSettingsForm from "../_components/agent/AgentSettingsForm"
 import { loadAgentSettingsForm } from "../_components/agent/load-agent-settings"
+
+export const metadata = settingsSectionMetadata("briefing")
 
 const IMESSAGE_DEFINITION = INTEGRATION_DEFINITIONS.find(
   (definition): definition is PersonalDeviceIntegrationDefinition =>

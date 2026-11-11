@@ -390,7 +390,6 @@ export function IntegrationCardDetails({
     case "oauth":
       return <DeclarativeOAuthDetails model={model} callbacks={callbacks} />
     case "device-binding":
-    case "unavailable":
       return null
   }
 }

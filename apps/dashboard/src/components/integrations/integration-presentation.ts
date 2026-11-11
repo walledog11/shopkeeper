@@ -75,9 +75,6 @@ function availabilityFor(
   flags: IntegrationDeploymentFlags,
   integrations: Integration[],
 ): IntegrationAvailability {
-  if (definition.kind === "unavailable") {
-    return { state: "coming-soon", label: definition.unavailableLabel }
-  }
   if (definition.kind === "personal-device") {
     const configured = Boolean(normalizeImessageLineHandle(flags.imessageHandle))
     return configured
@@ -99,13 +96,6 @@ function availabilityFor(
     return { state: "coming-soon", label: "Coming soon" }
   }
   return { state: "available", label: null }
-}
-
-function descriptionFor(definition: IntegrationDefinition, availability: IntegrationAvailability): string {
-  if (definition.id === "tiktok-shop" && availability.state === "coming-soon") {
-    return "Buyer messages from your TikTok Shop. Not open yet."
-  }
-  return definition.description
 }
 
 export function selectPrimaryConnection(
@@ -165,14 +155,15 @@ export function deriveIntegrationCardModels({
   const emailInboundDualMessage = dualInboundDeliveryMessage(emailInboundAssessment)
   const forwardingConnectBlockedMessage = forwardingBlockedMessage(emailInboundAssessment)
 
-  return definitions.map((originalDefinition) => {
-    const availability = availabilityFor(originalDefinition, flags, integrations)
-    const definition = descriptionFor(originalDefinition, availability) === originalDefinition.description
-      ? originalDefinition
-      : { ...originalDefinition, description: descriptionFor(originalDefinition, availability) }
-    const visible = definition.kind !== "personal-device" || availability.state === "available"
+  return definitions.map((definition) => {
+    const availability = availabilityFor(definition, flags, integrations)
+    // A provider this deployment doesn't offer stays off the page, except
+    // Instagram: the channel the product is sold on says it is coming rather
+    // than vanishing.
+    const visible = availability.state === "available"
+      || (availability.state === "coming-soon" && definition.kind === "oauth" && definition.availabilityFlag === "instagram")
 
-    if (definition.kind === "personal-device" || definition.kind === "unavailable") {
+    if (definition.kind === "personal-device") {
       const health = disconnectedHealth()
       return {
         definition,
@@ -188,7 +179,7 @@ export function deriveIntegrationCardModels({
         connectAction: null,
         permissions: definition.permissions,
         activityCopy: definition.description,
-        canManageWorkspace: definition.kind === "personal-device" || isAdmin,
+        canManageWorkspace: true,
         gmail: null,
         dialogStatusLine: definition.description,
         preventInitialFocus: false,

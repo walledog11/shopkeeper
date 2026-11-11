@@ -124,7 +124,7 @@ export function formatUnixDate(unixSeconds: number | null | undefined, options?:
 
 export function formatClockTime(
   input: DateInput,
-  { fallback = "Just now", hour = "2-digit", timeZone }: ClockTimeFormatOptions = {},
+  { fallback = "Just now", hour = "numeric", timeZone }: ClockTimeFormatOptions = {},
 ): string {
   const date = dateFromInput(input);
   if (!date) return fallback;

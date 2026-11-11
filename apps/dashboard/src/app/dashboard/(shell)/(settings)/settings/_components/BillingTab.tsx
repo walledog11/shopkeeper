@@ -23,6 +23,7 @@ interface BillingInfo {
   nextInvoice: { date: number; amount: number } | null
   paymentMethod: { brand: string; last4: string } | null
   invoices: { id: string; date: number; amount: number; status: string | null; pdfUrl: string | null }[]
+  checkoutAvailable: boolean
 }
 
 const STATUS_CONFIG = {
@@ -184,6 +185,9 @@ export default function BillingTab() {
   const statusCfg = STATUS_CONFIG[data.status] ?? STATUS_CONFIG.none
   const StatusIcon = statusCfg.icon
   const isActive = data.status === "active" || data.status === "trialing"
+  // With no plan on sale and nothing ever bought, a card or invoice tile has
+  // nothing to show.
+  const billable = isActive || data.checkoutAvailable || data.paymentMethod !== null || data.invoices.length > 0
   const trialDaysLeft = data.trialEnd
     ? Math.max(0, Math.ceil((data.trialEnd * 1000 - Date.now()) / 86400000))
     : null
@@ -213,6 +217,7 @@ export default function BillingTab() {
           {data.amount !== null && data.interval ? (
             <p>{formatAmount(data.amount)} / {data.interval}</p>
           ) : null}
+          {!billable ? <p>Free during early access.</p> : null}
           {data.status === "trialing" && trialDaysLeft !== null ? (
             <p className="font-medium text-blue-600">
               {trialDaysLeft} day{trialDaysLeft !== 1 ? "s" : ""} left in trial
@@ -226,82 +231,86 @@ export default function BillingTab() {
         </div>
       </SettingsTile>
 
-      <SettingsTile
-        label="Payment method"
-        action={
-          isAdmin ? (
-            <Button type="button" variant="outline" onClick={openBillingPortal} className={GLASS_SETTINGS_ACTION}>
-              {data.paymentMethod ? "Update card" : "Add card"}
-            </Button>
-          ) : null
-        }
-      >
-        {data.paymentMethod ? (
-          <div className="flex items-center gap-2.5">
-            <CreditCard className="size-4 shrink-0 text-faint" />
-            <CardBrandIcon brand={data.paymentMethod.brand} />
-            <span>
-              ending in <span className="font-semibold text-strong">{data.paymentMethod.last4}</span>
-            </span>
-          </div>
-        ) : (
-          "No payment method on file"
-        )}
-      </SettingsTile>
-
-      {isAdmin && !isActive ? <PlanPicker /> : null}
-
-      <SettingsTile label="Invoices">
-        <div className="space-y-3">
-          {data.invoices.length === 0 ? (
-            <p>No invoices yet.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-foreground/[0.08]">
-                    <th className="py-3 pr-5 text-left text-xs font-semibold uppercase tracking-wide text-faint">Date</th>
-                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-faint">Amount</th>
-                    <th className="hidden px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-faint sm:table-cell">Status</th>
-                    <th className="py-3 pl-5 text-right text-xs font-semibold uppercase tracking-wide text-faint">PDF</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-foreground/[0.06]">
-                  {data.invoices.map((inv) => (
-                    <tr key={inv.id} className="transition-colors hover:bg-foreground/[0.02]">
-                      <td className="py-3.5 pr-5">{formatUnixDate(inv.date)}</td>
-                      <td className="px-5 py-3.5 font-medium text-strong">{formatAmount(inv.amount)}</td>
-                      <td className="hidden px-5 py-3.5 sm:table-cell">
-                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${
-                          inv.status === "paid"
-                            ? "border-green-600/20 bg-green-600/10 text-green-600"
-                            : "border-foreground/[0.10] bg-foreground/[0.06] text-faint"
-                        }`}>
-                          {inv.status ?? "—"}
-                        </span>
-                      </td>
-                      <td className="py-3.5 pl-5 text-right">
-                        {inv.pdfUrl ? (
-                          <a
-                            href={inv.pdfUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground transition-colors hover:text-strong"
-                          >
-                            Download <ExternalLink className="size-3" />
-                          </a>
-                        ) : (
-                          <span className="text-xs text-faint">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+      {billable ? (
+        <SettingsTile
+          label="Payment method"
+          action={
+            isAdmin ? (
+              <Button type="button" variant="outline" onClick={openBillingPortal} className={GLASS_SETTINGS_ACTION}>
+                {data.paymentMethod ? "Update card" : "Add card"}
+              </Button>
+            ) : null
+          }
+        >
+          {data.paymentMethod ? (
+            <div className="flex items-center gap-2.5">
+              <CreditCard className="size-4 shrink-0 text-faint" />
+              <CardBrandIcon brand={data.paymentMethod.brand} />
+              <span>
+                ending in <span className="font-semibold text-strong">{data.paymentMethod.last4}</span>
+              </span>
             </div>
+          ) : (
+            "No payment method on file"
           )}
-        </div>
-      </SettingsTile>
+        </SettingsTile>
+      ) : null}
+
+      {isAdmin && !isActive && data.checkoutAvailable ? <PlanPicker /> : null}
+
+      {billable ? (
+        <SettingsTile label="Invoices">
+          <div className="space-y-3">
+            {data.invoices.length === 0 ? (
+              <p>No invoices yet.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-foreground/[0.08]">
+                      <th className="py-3 pr-5 text-left text-xs font-semibold uppercase tracking-wide text-faint">Date</th>
+                      <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-faint">Amount</th>
+                      <th className="hidden px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-faint sm:table-cell">Status</th>
+                      <th className="py-3 pl-5 text-right text-xs font-semibold uppercase tracking-wide text-faint">PDF</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-foreground/[0.06]">
+                    {data.invoices.map((inv) => (
+                      <tr key={inv.id} className="transition-colors hover:bg-foreground/[0.02]">
+                        <td className="py-3.5 pr-5">{formatUnixDate(inv.date)}</td>
+                        <td className="px-5 py-3.5 font-medium text-strong">{formatAmount(inv.amount)}</td>
+                        <td className="hidden px-5 py-3.5 sm:table-cell">
+                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${
+                            inv.status === "paid"
+                              ? "border-green-600/20 bg-green-600/10 text-green-600"
+                              : "border-foreground/[0.10] bg-foreground/[0.06] text-faint"
+                          }`}>
+                            {inv.status ?? "—"}
+                          </span>
+                        </td>
+                        <td className="py-3.5 pl-5 text-right">
+                          {inv.pdfUrl ? (
+                            <a
+                              href={inv.pdfUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground transition-colors hover:text-strong"
+                            >
+                              Download <ExternalLink className="size-3" />
+                            </a>
+                          ) : (
+                            <span className="text-xs text-faint">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </SettingsTile>
+      ) : null}
     </div>
   )
 }

@@ -1,3 +1,5 @@
+import type { Metadata } from 'next';
+import { chatNavItem } from '@/app/dashboard/_components/nav-items';
 import Link from 'next/link';
 import { db } from '@shopkeeper/db';
 import { getOrCreateOrg } from '@/lib/server/org';
@@ -6,6 +8,8 @@ import { getShopifyOAuthAuthorizeConfig } from '@/lib/env';
 import { chatConfigurationFromIntegration } from '@/lib/storefront-chat/service';
 import { buildShopifyThemeEditorAppEmbedUrl } from '@/lib/storefront-chat/theme-editor';
 import StorefrontChatEditor from '@/components/storefront-chat/StorefrontChatEditor';
+
+export const metadata: Metadata = { title: chatNavItem.name };
 
 export default async function StorefrontChatPage() {
   const org = await getOrCreateOrg();
@@ -20,7 +24,7 @@ export default async function StorefrontChatPage() {
     <div className="mx-auto w-full max-w-3xl space-y-4 px-6 py-12">
       <h1 className="text-2xl font-semibold">Website chat</h1>
       <p className="text-sm text-muted-foreground">Connect your Shopify store to customize its chat.</p>
-      <Link href="/dashboard/integrations" className="text-sm font-medium underline underline-offset-4">Go to integrations</Link>
+      <Link href="/dashboard/integrations" className="text-sm font-medium underline underline-offset-4">Go to Channels</Link>
     </div>
   );
   const clientId = getShopifyOAuthAuthorizeConfig()?.clientId;

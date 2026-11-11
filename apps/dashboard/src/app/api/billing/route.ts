@@ -4,6 +4,7 @@ import { handleApiError } from '@/lib/api/errors'
 import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit'
 import stripe from '@/lib/billing/stripe'
 import { getOrCreateStripeCustomer } from '@/lib/billing/stripe-customer'
+import { getBillingTierPriceId } from '@/lib/env'
 
 export async function GET() {
   try {
@@ -87,6 +88,8 @@ export async function GET() {
       nextInvoice,
       paymentMethod,
       invoices: invoiceHistory,
+      // No checkout without a price for every plan: the tab offers none rather than an error.
+      checkoutAvailable: Boolean(getBillingTierPriceId('starter') && getBillingTierPriceId('pro')),
     })
   } catch (error) {
     return handleApiError(error, 'Billing GET', 'Failed to fetch billing info')

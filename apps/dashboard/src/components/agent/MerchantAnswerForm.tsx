@@ -70,7 +70,7 @@ export default function MerchantAnswerForm({ threadId, question, onAnswered, ini
       updateState({
         succeeded: true,
         toastMessage: saveToKb
-          ? `Saved to knowledge base — ${AGENT_DISPLAY_NAME} won't ask this again.`
+          ? `Saved to Memory — ${AGENT_DISPLAY_NAME} won't ask this again.`
           : null,
       })
       onAnswered({ saveToKb })
@@ -109,7 +109,7 @@ export default function MerchantAnswerForm({ threadId, question, onAnswered, ini
         />
 
         <div className="flex items-center justify-between gap-3">
-          <span className="text-sm font-medium text-foreground/75">Save to knowledge base</span>
+          <span className="text-sm font-medium text-foreground/75">Save to Memory</span>
           <Switch
             checked={saveToKb}
             onChange={saveToKb => updateState({ saveToKb })}

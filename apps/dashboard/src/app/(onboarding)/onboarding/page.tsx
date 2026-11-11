@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { getE2EAuthIdentity } from "@/lib/e2e-auth";
@@ -28,6 +29,8 @@ async function belongsToAWorkspace(userId: string): Promise<boolean> {
   const { totalCount } = await client.users.getOrganizationMembershipList({ userId, limit: 1 });
   return totalCount > 0;
 }
+
+export const metadata: Metadata = { title: "Set up Shopkeeper" };
 
 // Every OAuth hop returns to `/onboarding?step=…`. Resolving it here rather than
 // from `window.location` in the wizard's reducer is what keeps the first render

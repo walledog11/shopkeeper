@@ -104,7 +104,8 @@ export function MorningBriefingSection({
         ) : null}
       </SettingsTile>
 
-      {shopifyConnected ? (
+      {/* Both ride along in the briefing, so they show only while it is on. */}
+      {shopifyConnected && settingsState.digestEnabled ? (
         <>
           <SettingsTile
             label="Sales pulse"
@@ -125,6 +126,7 @@ export function MorningBriefingSection({
 
           <SettingsTile
             label="Low-stock alerts"
+            description="Products running low, in each briefing."
             action={
               <Switch
                 checked={lowStockEnabled}

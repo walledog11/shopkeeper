@@ -15,7 +15,7 @@ export function instagramConnectNote(
     : null
 }
 
-export type IntegrationChannelKind = "operator" | "support"
+export type IntegrationChannelKind = "store" | "support" | "operator"
 export type WorkspaceConnectType = "email" | "ig" | "shopify" | "tiktok_shop"
 export type PersonalDeviceType = "imessage"
 export type IntegrationId =
@@ -25,7 +25,6 @@ export type IntegrationId =
   | "instagram"
   | "shopify"
   | "tiktok-shop"
-  | "whatsapp"
 
 type IntegrationDefinitionCore = {
   id: IntegrationId
@@ -71,12 +70,6 @@ export type IntegrationDefinition =
       details: "device-binding"
       device: PersonalDeviceType
     })
-  | (IntegrationDefinitionCore & {
-      kind: "unavailable"
-      id: "whatsapp"
-      details: "unavailable"
-      unavailableLabel: "Coming soon"
-    })
 
 export type OAuthIntegrationDefinition = Extract<IntegrationDefinition, { kind: "oauth" }>
 export type WorkspaceIntegrationDefinition = Extract<
@@ -90,27 +83,18 @@ export const INTEGRATION_CHANNEL_SECTIONS: {
   title: string
 }[] = [
   {
+    kind: "store",
+    title: "Store",
+  },
+  {
     kind: "support",
-    title: "Support channels",
+    title: "Customer channels",
   },
   {
     kind: "operator",
-    title: "Operator channels",
+    title: "Your phone",
   },
 ]
-
-const OPERATOR_CHANNEL_ORDER: IntegrationId[] = ["imessage", "shopify", "whatsapp"]
-
-export function sortIntegrationDefinitionsByChannelKind(
-  definitions: IntegrationDefinition[],
-  kind: IntegrationChannelKind,
-): IntegrationDefinition[] {
-  const filtered = definitions.filter((definition) => definition.channelKind === kind)
-  if (kind !== "operator") return filtered
-
-  const order = new Map<IntegrationId, number>(OPERATOR_CHANNEL_ORDER.map((id, index) => [id, index]))
-  return [...filtered].sort((a, b) => (order.get(a.id) ?? 99) - (order.get(b.id) ?? 99))
-}
 
 export const INTEGRATION_DEFINITIONS: IntegrationDefinition[] = [
   {
@@ -121,7 +105,7 @@ export const INTEGRATION_DEFINITIONS: IntegrationDefinition[] = [
     logo: "/logos/shopify.svg",
     description: "Orders, customers, and refunds from your store.",
     connectType: "shopify",
-    channelKind: "operator",
+    channelKind: "store",
     details: "shopify",
     permissions: [],
     oauth: {
@@ -153,17 +137,6 @@ export const INTEGRATION_DEFINITIONS: IntegrationDefinition[] = [
       reauthorizePath: getEmailReauthorizePath,
     },
     matches: (integration) => integration.platform === "email" && getEmailProvider(integration) === "gmail",
-  },
-  {
-    kind: "unavailable",
-    id: "whatsapp",
-    name: "WhatsApp",
-    logo: "/logos/whatsapp-logo.png",
-    description: "Approvals and summaries in WhatsApp.",
-    channelKind: "operator",
-    details: "unavailable",
-    unavailableLabel: "Coming soon",
-    permissions: [],
   },
   {
     kind: "oauth",

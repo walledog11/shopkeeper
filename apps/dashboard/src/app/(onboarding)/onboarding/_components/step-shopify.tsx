@@ -166,7 +166,7 @@ export function StepShopify({
               <>
                 <div className="text-[13px] font-semibold text-foreground">Couldn&apos;t read your store</div>
                 <div className="mt-0.5 text-[12px] leading-snug text-foreground/55">
-                  Your store is still connected. {kbSync.canRetry ? "Try reading its policies and pages again." : "You can sync it later from Knowledge."}
+                  Your store is still connected. {kbSync.canRetry ? "Try reading its policies and pages again." : "You can sync it later from Memory."}
                 </div>
                 {kbSync.canRetry && (
                   <Button type="button" variant="outline" size="sm" onClick={kbSync.retry} className="mt-2 h-8 rounded-full px-3 text-[12px]">
