@@ -104,7 +104,7 @@ In order. This is the product's critical path.
   rows from tests run against production, and abandoned onboarding workspaces). Finish them through
   the deletion ledger ([data-deletion](production/data-deletion.md), *Recovery*).
 - **Console residue:** Clerk application name (and delete the unused dev app), Shopify
-  Partner app name and privacy URL, Postmark sender branding, the Telegram bot rename to
+  privacy URL, Postmark sender branding, the Telegram bot rename to
   `@useshopkeeperbot`, and Stripe product names, statement descriptor and receipts —
   those land on merchants' card statements, so check them before charging anyone.
 - **Paid pilot:** decide the SocialAPI admission unit and contracted capacity, instrument

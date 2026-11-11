@@ -16,6 +16,8 @@ interface ShopifyAppRouteOptions {
 
 interface ShopifyAppRouteContext {
   org: { id: string; name: string };
+  /** The verified token's shop: the store the workspace is connected through. */
+  shop: string;
   request: Request;
 }
 
@@ -61,7 +63,7 @@ export function withShopifyAppRoute(
         const result = await rateLimit(`${key}:${organization.id}`, limit, windowSecs);
         if (!result.success) return tooManyRequests(result.reset);
       }
-      return await handler({ org: { id: organization.id, name: organization.name }, request });
+      return await handler({ org: { id: organization.id, name: organization.name }, shop: session.shop, request });
     } catch (error) {
       return handleApiError(error, options.context, options.errorMessage);
     }

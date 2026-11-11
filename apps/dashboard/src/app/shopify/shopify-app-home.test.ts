@@ -5,11 +5,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const { findFirst } = vi.hoisted(() => ({ findFirst: vi.fn() }));
 
 vi.mock('@shopkeeper/db', () => ({ db: { integration: { findFirst } } }));
-vi.mock('./_lib/app-home', () => ({ loadShopifyAppHome: vi.fn() }));
+vi.mock('@/lib/shopify/app-home', () => ({ loadShopifyAppHome: vi.fn() }));
 
 import { withShopifyAppRoute } from '@/lib/shopify/app-route';
 import { shopifyAppHomeProxy } from '@/proxy/shopify-app-home';
-import { loadShopifyAppHome } from './_lib/app-home';
+import { loadShopifyAppHome } from '@/lib/shopify/app-home';
 import ShopifyAppHomePage from './page';
 
 const CLIENT_ID = 'shopify-client-id';

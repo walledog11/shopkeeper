@@ -1,0 +1,3 @@
+# Shopify bundles only assets, blocks, locales and snippets. The widget's source
+# lives in src/; npm run build:storefront-chat bundles it into assets/shopkeeper-chat.js.
+src/**

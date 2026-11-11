@@ -1,38 +1,44 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from 'react';
-import { ArrowUpRight, Check, Loader2, RefreshCw, X } from 'lucide-react';
+import useSWR from 'swr';
+import { ArrowUpRight, Check, CircleAlert, Loader2, RefreshCw, X } from 'lucide-react';
 import { settingsSectionHref } from '@/app/dashboard/_components/nav-items';
 import { Button } from '@/components/ui/button';
 import StorefrontChatEditor from '@/components/storefront-chat/StorefrontChatEditor';
 import { StorefrontChatApiProvider, type StorefrontChatApi } from '@/components/storefront-chat/chat-api';
 import { errorMessageFromUnknown } from '@/lib/api/fetcher';
 import { cn } from '@/lib/ui/cn';
-import type { ShopifyAppHomeState } from '../_lib/app-home';
-import { shopifyAppRequest } from './app-bridge';
+import type { ShopifyAppHomeState, ShopifyAppHomeSummary } from '@/lib/shopify/app-home';
+import { reloadWithFreshToken, shopifyAppRequest } from './app-bridge';
 
 type LinkedState = Extract<ShopifyAppHomeState, { kind: 'linked' }>;
-type Tab = 'overview' | 'chat' | 'settings';
+type Tab = 'home' | 'chat' | 'settings';
+
+// Every way into the full app opens a new tab, so whatever the merchant changes
+// there is loaded again when they come back to this one: SWR revalidates on focus.
+const SUMMARY_URL = '/api/shopify/app/home';
+const SUMMARY_REFRESH = { revalidateOnMount: false, shouldRetryOnError: false } as const;
+const loadSummary = (url: string) => shopifyAppRequest<ShopifyAppHomeSummary>(url);
 
 const TABS: ReadonlyArray<{ id: Tab; label: string }> = [
-  { id: 'overview', label: 'Overview' },
+  { id: 'home', label: 'Home' },
   { id: 'chat', label: 'Website chat' },
   { id: 'settings', label: 'Settings' },
 ];
 
-// Shopify admin's own page background, so the cards sit in it like admin cards.
+// Shopify admin's page background and card edge, so the app reads as one of
+// the admin's own pages rather than a site framed inside it.
 const PAGE = 'min-h-screen bg-[#f1f1f1] text-foreground';
-const CARD = 'rounded-xl border border-border bg-background';
+const CARD = 'rounded-xl bg-white shadow-[0_1px_0_rgba(26,26,26,0.07),0_0_0_1px_rgba(26,26,26,0.06)]';
 
 // The full app needs a Clerk session, which a third-party iframe cannot hold,
-// so every way into it opens a new tab.
+// so every way into it opens a new tab; the arrow says so.
 function AppLink({ href, primary = false, children }: { href: string; primary?: boolean; children: ReactNode }) {
   return <Button asChild size="sm" variant={primary ? 'default' : 'outline'}>
     <a href={href} target="_blank" rel="noopener">{children}<ArrowUpRight /></a>
   </Button>;
 }
-
-const NEW_TAB_NOTE = <p className="mt-3 text-xs text-muted-foreground">Opens Shopkeeper in a new tab.</p>;
 
 export function ShopifyAppHome({ state, appUrl }: { state: ShopifyAppHomeState; appUrl: string }) {
   return <div className={PAGE}>
@@ -41,42 +47,58 @@ export function ShopifyAppHome({ state, appUrl }: { state: ShopifyAppHomeState; 
 }
 
 export function SessionProblem({ appUrl }: { appUrl: string }) {
+  return <ProblemPage appUrl={appUrl} title="Shopkeeper couldn't confirm this Shopify session"
+    detail="Reload the page. If it keeps happening, open Shopkeeper directly." />;
+}
+
+/** `appUrl` may be left out: the page is served from the app's own origin. */
+export function ProblemPage({ title, detail, action, appUrl = '' }: {
+  title: string; detail: string; action?: ReactNode; appUrl?: string;
+}) {
   return <div className={PAGE}>
-    <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6">
+    <main className="mx-auto w-full max-w-xl px-4 py-8">
       <section className={cn(CARD, 'p-6')}>
-        <h1 className="text-lg font-semibold">Shopkeeper couldn&apos;t confirm this Shopify session</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Reload the page. If it keeps happening, open Shopkeeper directly.</p>
-        <div className="mt-5"><AppLink href={`${appUrl}/dashboard`} primary>Open Shopkeeper</AppLink></div>
+        <h1 className="text-base font-semibold">{title}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{detail}</p>
+        <div className="mt-5 flex flex-wrap gap-2">
+          {action}
+          <AppLink href={`${appUrl}/dashboard`} primary={!action}>Open Shopkeeper</AppLink>
+        </div>
       </section>
     </main>
   </div>;
 }
 
 function SetUp({ shop, appUrl }: { shop: string; appUrl: string }) {
+  // The summary loads only once this store is connected: then load the connected page.
+  useSWR(SUMMARY_URL, loadSummary, { ...SUMMARY_REFRESH, onSuccess: () => { reloadWithFreshToken().catch(() => {}); } });
   const onboarding = `${appUrl}/onboarding?shop=${encodeURIComponent(shop)}`;
-  return <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6">
+  const steps = ['Create your account', `Connect ${shop}, already filled in`, 'Add Instagram or email, and your phone'];
+  return <main className="mx-auto w-full max-w-xl px-4 py-8">
     <section className={cn(CARD, 'p-6')}>
-      <h1 className="text-lg font-semibold">Set up Shopkeeper</h1>
-      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-        Shopkeeper answers your Instagram DMs and emails using this store&apos;s real orders. Routine questions get
-        answered on their own. Refunds and order changes wait for your yes, by text.
+      <h1 className="text-base font-semibold">Set up Shopkeeper</h1>
+      <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+        Shopkeeper answers your Instagram DMs and emails using this store&apos;s orders, and texts you before it
+        refunds or changes anything.
       </p>
-      <ol className="mt-4 list-decimal space-y-1.5 pl-5 text-sm">
-        <li>Create your Shopkeeper account.</li>
-        <li>Connect {shop}. The address is filled in for you.</li>
-        <li>Add Instagram or email, then link your phone for approvals.</li>
+      <ol className="mt-5 space-y-3">
+        {steps.map((step, index) => <li key={step} className="flex items-center gap-3 text-sm">
+          <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold tabular-nums">{index + 1}</span>
+          {step}
+        </li>)}
       </ol>
       <div className="mt-6 flex flex-wrap gap-2">
-        <AppLink href={`${appUrl}/signup?redirect_url=${encodeURIComponent(onboarding)}`} primary>Set up Shopkeeper</AppLink>
-        <AppLink href={`${appUrl}/dashboard/integrations?configure=shopify&shop=${encodeURIComponent(shop)}`}>I already have an account</AppLink>
+        <AppLink href={`${appUrl}/signup?redirect_url=${encodeURIComponent(onboarding)}`} primary>Create account</AppLink>
+        <AppLink href={`${appUrl}/dashboard/integrations?configure=shopify&shop=${encodeURIComponent(shop)}`}>Sign in</AppLink>
       </div>
-      {NEW_TAB_NOTE}
     </section>
   </main>;
 }
 
 function Linked({ state, appUrl }: { state: LinkedState; appUrl: string }) {
-  const [tab, setTab] = useState<Tab>('overview');
+  const [tab, setTab] = useState<Tab>('home');
+  const [chatEnabled, setChatEnabled] = useState(state.chat.enabled);
+  const { data: summary = state } = useSWR(SUMMARY_URL, loadSummary, { ...SUMMARY_REFRESH, fallbackData: state });
   const chatApi = useMemo<StorefrontChatApi>(() => ({
     configurationUrl: '/api/shopify/app/storefront-chat/configuration',
     setupUrl: '/api/shopify/app/storefront-chat',
@@ -85,99 +107,110 @@ function Linked({ state, appUrl }: { state: LinkedState; appUrl: string }) {
     request: shopifyAppRequest,
     appUrl,
   }), [appUrl, state.shop]);
-  // Workspaces are usually named after the store; say the name once.
-  const workspace = state.workspaceName.trim().toLowerCase() === state.shopName.trim().toLowerCase()
-    ? '' : ` · ${state.workspaceName}`;
 
-  return <main className="mx-auto w-full max-w-6xl px-4 pb-10 pt-5 sm:px-6">
-    <header className="flex flex-wrap items-start justify-between gap-3">
-      <div className="min-w-0">
-        <h1 className="truncate text-lg font-semibold tracking-tight">{state.shopName}</h1>
-        <p className="text-sm text-muted-foreground">Answered by Shopkeeper{workspace}</p>
-      </div>
-      <AccessBadge access={state.access} />
-    </header>
+  return <main className="mx-auto w-full max-w-[1000px] px-4 pb-10 pt-4 sm:px-6">
+    {summary.access !== 'ok' && <AccessBanner access={summary.access} appUrl={appUrl} />}
 
-    <div role="tablist" aria-label="Shopkeeper" className="mt-5 flex gap-1 border-b border-border">
+    <div role="tablist" aria-label="Shopkeeper" className="flex gap-1">
       {TABS.map(item => <button key={item.id} id={`tab-${item.id}`} type="button" role="tab"
         aria-selected={tab === item.id} aria-controls={`panel-${item.id}`} onClick={() => setTab(item.id)}
-        className={cn('-mb-px border-b-2 px-3 py-2 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-ring',
-          tab === item.id ? 'border-foreground font-medium' : 'border-transparent text-muted-foreground hover:text-foreground')}>
+        className={cn('rounded-lg px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring',
+          tab === item.id ? 'bg-black/[0.08]' : 'text-muted-foreground hover:bg-black/[0.04] hover:text-foreground')}>
         {item.label}
       </button>)}
     </div>
 
     {/* Panels stay mounted, so the chat editor keeps its draft and published
         revision across tabs instead of reloading stale props. */}
-    <div role="tabpanel" id="panel-overview" aria-labelledby="tab-overview" hidden={tab !== 'overview'} className="pt-5">
-      <Overview state={state} appUrl={appUrl} onCustomizeChat={() => setTab('chat')} />
+    <div role="tabpanel" id="panel-home" aria-labelledby="tab-home" hidden={tab !== 'home'} className="mt-4">
+      <Home summary={summary} appUrl={appUrl} chatEnabled={chatEnabled} onOpenChat={() => setTab('chat')} />
     </div>
-    <div role="tabpanel" id="panel-chat" aria-labelledby="tab-chat" hidden={tab !== 'chat'} className="pt-5">
+    <div role="tabpanel" id="panel-chat" aria-labelledby="tab-chat" hidden={tab !== 'chat'} className="mt-4">
       <section className={cn(CARD, 'overflow-hidden')}>
         <StorefrontChatApiProvider value={chatApi}>
-          <StorefrontChatEditor initialData={state.chat} canManage themeEditorUrl={state.themeEditorUrl} draftKey={state.chatDraftKey} />
+          <StorefrontChatEditor initialData={state.chat} canManage themeEditorUrl={state.themeEditorUrl}
+            draftKey={state.chatDraftKey} showHeading={false} onEnabledChange={setChatEnabled} />
         </StorefrontChatApiProvider>
       </section>
     </div>
-    <div role="tabpanel" id="panel-settings" aria-labelledby="tab-settings" hidden={tab !== 'settings'} className="pt-5">
+    <div role="tabpanel" id="panel-settings" aria-labelledby="tab-settings" hidden={tab !== 'settings'} className="mt-4">
       <div className="grid items-start gap-4 lg:grid-cols-2">
         <StoreKnowledge />
-        <Permissions rows={state.permissions} appUrl={appUrl} />
+        <Permissions rows={summary.permissions} appUrl={appUrl} />
       </div>
     </div>
   </main>;
 }
 
-const BADGE = 'shrink-0 rounded-md px-2 py-0.5 text-xs font-medium';
-
-function AccessBadge({ access }: { access: LinkedState['access'] }) {
-  if (access === 'ok') return <span className={cn(BADGE, 'bg-emerald-100 text-emerald-800')}>Connected</span>;
-  if (access === 'missing_scopes') return <span className={cn(BADGE, 'bg-amber-100 text-amber-800')}>Needs attention</span>;
-  return <span className={cn(BADGE, 'bg-red-100 text-red-800')}>Disconnected</span>;
+function AccessBanner({ access, appUrl }: { access: Exclude<ShopifyAppHomeSummary['access'], 'ok'>; appUrl: string }) {
+  const lost = access === 'lost';
+  return <div role="status" className={cn('mb-4 flex flex-wrap items-start gap-3 rounded-xl p-4 text-sm',
+    lost ? 'bg-red-50 text-red-900' : 'bg-amber-50 text-amber-900')}>
+    <CircleAlert className="mt-0.5 size-4 shrink-0" />
+    <div className="min-w-0 flex-1">
+      <p className="font-semibold">{lost ? "Shopkeeper can't reach this store" : 'Shopify permissions need updating'}</p>
+      <p className="mt-0.5">{lost ? 'Order lookups and actions are paused until you reconnect.' : 'A few actions stay off until you reconnect.'}</p>
+    </div>
+    <AppLink href={`${appUrl}/dashboard/integrations?configure=shopify`}>Reconnect</AppLink>
+  </div>;
 }
 
-function Overview({ state, appUrl, onCustomizeChat }: { state: LinkedState; appUrl: string; onCustomizeChat: () => void }) {
-  const needsYou = state.metrics?.needsYou ?? 0;
-  const reconnect = `${appUrl}/dashboard/integrations?configure=shopify`;
+function Home({ summary, appUrl, chatEnabled, onOpenChat }: {
+  summary: ShopifyAppHomeSummary; appUrl: string; chatEnabled: boolean; onOpenChat: () => void;
+}) {
+  const { metrics, setup } = summary;
+  const needsYou = metrics?.needsYou ?? 0;
+  const steps = setup ? [
+    { label: 'Connect Instagram or email', done: setup.customerChannel,
+      action: <AppLink href={`${appUrl}/dashboard/integrations`}>Connect</AppLink> },
+    { label: 'Connect your phone for approvals', done: setup.phone,
+      action: <AppLink href={`${appUrl}${settingsSectionHref('briefing')}`}>Connect</AppLink> },
+    ...(setup.chatAvailable ? [{ label: 'Turn on website chat', done: chatEnabled,
+      action: <Button type="button" size="sm" variant="outline" onClick={onOpenChat}>Set up</Button> }] : []),
+  ] : [];
+  const stepsDone = steps.filter(step => step.done).length;
+
   return <div className="space-y-4">
-    {state.access !== 'ok' && <section role="status" className={cn('rounded-xl border p-4 text-sm',
-      state.access === 'lost' ? 'border-red-200 bg-red-50 text-red-900' : 'border-amber-200 bg-amber-50 text-amber-900')}>
-      <p className="font-medium">{state.access === 'lost'
-        ? "Shopkeeper can't reach this store."
-        : 'Some Shopify permissions are missing.'}</p>
-      <p className="mt-1">{state.access === 'lost'
-        ? 'Order lookups and actions are paused until you reconnect it in Shopkeeper.'
-        : "A few actions stay off until this store is reconnected from Shopkeeper's Shopify settings."}</p>
-      <div className="mt-3"><AppLink href={reconnect} primary>Reconnect store</AppLink></div>
-    </section>}
-
     <section className={cn(CARD, 'p-5')}>
-      {state.metrics && <dl className="grid gap-3 sm:grid-cols-3">
-        <Stat label="Waiting for you" value={state.metrics.needsYou} />
-        <Stat label="Open conversations" value={state.metrics.open} />
-        <Stat label="Replies, last 24 hours" value={state.metrics.repliesSent24h} />
-      </dl>}
-      <div className={cn('flex flex-wrap items-center gap-2', state.metrics && 'mt-5')}>
-        {needsYou > 0 && <AppLink href={`${appUrl}/dashboard/review`} primary>Review {needsYou} waiting</AppLink>}
-        <AppLink href={`${appUrl}/dashboard`} primary={needsYou === 0}>Open Shopkeeper</AppLink>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="min-w-0">
+          <h2 className="text-base font-semibold">{!metrics ? 'Counts are unavailable right now'
+            : needsYou > 0 ? `${needsYou} ticket${needsYou === 1 ? '' : 's'} need${needsYou === 1 ? 's' : ''} you`
+              : 'Nothing needs you right now'}</h2>
+          {needsYou > 0 && <p className="mt-0.5 text-sm text-muted-foreground">Approve, edit or answer them in Shopkeeper.</p>}
+        </div>
+        {needsYou > 0
+          ? <AppLink href={`${appUrl}/dashboard/review`} primary>Review</AppLink>
+          : <AppLink href={`${appUrl}/dashboard`}>Open Shopkeeper</AppLink>}
       </div>
-      {NEW_TAB_NOTE}
+      {metrics && <dl className="mt-5 grid grid-cols-2 divide-x divide-border border-t border-border pt-4">
+        <Stat label="Open tickets" value={metrics.open} />
+        <Stat label="Replies in 24 hours" value={metrics.repliesSent24h} />
+      </dl>}
     </section>
 
-    <section className={cn(CARD, 'flex flex-wrap items-center justify-between gap-3 p-5')}>
-      <div className="min-w-0">
-        <h2 className="text-sm font-medium">Website chat</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Let shoppers chat on your store, in your brand&apos;s colors and words.</p>
+    {stepsDone < steps.length && <section className={CARD}>
+      <div className="flex items-center justify-between gap-3 px-5 pt-4">
+        <h2 className="text-sm font-semibold">Finish setting up</h2>
+        <span className="text-xs text-muted-foreground tabular-nums">{stepsDone} of {steps.length} done</span>
       </div>
-      <Button type="button" size="sm" variant="outline" onClick={onCustomizeChat}>Customize chat</Button>
-    </section>
+      <ul className="mt-2 divide-y divide-border">
+        {steps.map(step => <li key={step.label} className="flex min-h-14 items-center gap-3 px-5 py-2.5">
+          {step.done
+            ? <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-foreground text-background"><Check className="size-3" /></span>
+            : <span className="size-5 shrink-0 rounded-full border-[1.5px] border-dashed border-muted-foreground/60" />}
+          <span className={cn('flex-1 text-sm', step.done && 'text-muted-foreground')}>{step.label}</span>
+          {!step.done && step.action}
+        </li>)}
+      </ul>
+    </section>}
   </div>;
 }
 
 function Stat({ label, value }: { label: string; value: number }) {
-  return <div className="rounded-lg bg-secondary/60 p-3">
+  return <div className="px-4 first:pl-0 last:pr-0">
     <dt className="text-xs text-muted-foreground">{label}</dt>
-    <dd className="mt-1 text-xl font-semibold tabular-nums">{value}</dd>
+    <dd className="mt-1 text-2xl font-semibold tabular-nums">{value}</dd>
   </div>;
 }
 
@@ -196,10 +229,8 @@ function StoreKnowledge() {
     }
   }
   return <section className={cn(CARD, 'p-5')}>
-    <h2 className="text-sm font-medium">Store policies and pages</h2>
-    <p className="mt-1 text-sm text-muted-foreground">
-      Shopkeeper answers from your published policies and pages. Sync after you change them so answers stay current.
-    </p>
+    <h2 className="text-sm font-semibold">Policies and pages</h2>
+    <p className="mt-1 text-sm text-muted-foreground">Shopkeeper answers from your store&apos;s policies and pages. Sync after you edit them.</p>
     <div className="mt-4 flex flex-wrap items-center gap-3">
       <Button type="button" size="sm" variant="outline" disabled={state.status === 'syncing'} onClick={() => void sync()}>
         {state.status === 'syncing' ? <Loader2 className="animate-spin" /> : <RefreshCw />}Sync now
@@ -209,11 +240,17 @@ function StoreKnowledge() {
   </section>;
 }
 
-function Permissions({ rows, appUrl }: { rows: LinkedState['permissions']; appUrl: string }) {
-  return <section className={cn(CARD, 'p-5')}>
-    <h2 className="text-sm font-medium">What Shopkeeper can do in this store</h2>
+function Permissions({ rows, appUrl }: { rows: ShopifyAppHomeSummary['permissions']; appUrl: string }) {
+  return <section className={CARD}>
+    <div className="flex items-center justify-between gap-3 px-5 pt-4">
+      <h2 className="text-sm font-semibold">What Shopkeeper can do</h2>
+      <a href={`${appUrl}${settingsSectionHref('approvals')}`} target="_blank" rel="noopener"
+        className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground">
+        Change<ArrowUpRight className="size-3.5" />
+      </a>
+    </div>
     <ul className="mt-2 divide-y divide-border">
-      {rows.map(row => <li key={row.label} className="flex items-start justify-between gap-3 py-2.5">
+      {rows.map(row => <li key={row.label} className="flex items-start justify-between gap-3 px-5 py-3">
         <div className="min-w-0">
           <p className="text-sm">{row.label}</p>
           {row.detail && <p className="mt-0.5 text-xs text-muted-foreground">{row.detail}</p>}
@@ -223,7 +260,5 @@ function Permissions({ rows, appUrl }: { rows: LinkedState['permissions']; appUr
           : <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-muted-foreground"><X className="size-3.5" />Off</span>}
       </li>)}
     </ul>
-    <p className="mt-3 text-xs text-muted-foreground">A workspace admin changes these in Shopkeeper.</p>
-    <div className="mt-3"><AppLink href={`${appUrl}${settingsSectionHref('approvals')}`}>Approvals & limits</AppLink></div>
   </section>;
 }
