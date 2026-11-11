@@ -287,6 +287,16 @@ model Organization {
   stripeStateEventCreatedAt DateTime? @map("stripe_state_event_created_at") @db.Timestamptz
   stripeStateEventId        String?   @map("stripe_state_event_id") @db.VarChar(255)
 
+  // The store's Shopify managed-pricing subscription, as `syncShopifyBilling`
+  // last read it: `active`, `frozen` (Shopify paused the store's billing) or
+  // `inactive` (a plan that ended); null when the store never had a plan.
+  shopifyBillingStatus      String?   @map("shopify_billing_status") @db.VarChar(20)
+  shopifyPlanName           String?   @map("shopify_plan_name") @db.VarChar(255)
+  shopifySubscriptionId     String?   @map("shopify_subscription_id") @db.VarChar(255)
+  shopifyTrialEndsAt        DateTime? @map("shopify_trial_ends_at") @db.Timestamptz
+  shopifyBillingTest        Boolean?  @map("shopify_billing_test")
+  shopifyBillingSyncedAt    DateTime? @map("shopify_billing_synced_at") @db.Timestamptz
+
   customers               Customer[]
   threads                 Thread[]
   integrations            Integration[]            @relation("OrganizationIntegrations")
@@ -533,6 +543,27 @@ model IntegrationDisconnect {
   @@index([organizationId, createdAt])
   @@index([status, claimedAt])
   @@map("integration_disconnects")
+}
+
+// A store installed from Shopify that no workspace has claimed yet: the grant
+// the app home's token exchange returned on its first load, so the app holds a
+// token from install on. Onboarding (or Channels) claims it into an Integration
+// with a signed link the app home hands out; uninstall deletes it. The token
+// columns are encrypted by the client extension, like Integration's.
+model ShopifyPendingInstall {
+  shop           String    @id @db.VarChar(255)
+  // Stays the same across re-exchanges, so a claim link minted earlier for this
+  // install still matches; a reinstall gets a new one.
+  grantId        String    @default(uuid()) @map("grant_id") @db.Uuid
+  accessToken    String    @map("access_token") @db.Text
+  refreshToken   String?   @map("refresh_token") @db.Text
+  tokenExpiresAt DateTime? @map("token_expires_at") @db.Timestamptz
+  scopes         String[]  @default([])
+  shopName       String?   @map("shop_name") @db.VarChar(255)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("shopify_pending_installs")
 }
 
 // Durable intake ledger for Shopify's mandatory customers/data_request topic.

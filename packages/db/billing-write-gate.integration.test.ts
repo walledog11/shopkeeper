@@ -15,13 +15,34 @@ afterEach(async () => {
 
 describe('billing write gate', () => {
   it.each([null, 'trialing', 'active'])('allows %s billing', (stripeStatus) => {
-    expect(() => assertBillingWriteAllowed({ stripeStatus })).not.toThrow();
+    expect(() => assertBillingWriteAllowed({ stripeStatus, shopifyBillingStatus: null })).not.toThrow();
   });
 
   it.each(['past_due', 'canceled'])('blocks %s billing', (stripeStatus) => {
-    expect(() => assertBillingWriteAllowed({ stripeStatus })).toThrow(
+    expect(() => assertBillingWriteAllowed({ stripeStatus, shopifyBillingStatus: null })).toThrow(
       expect.objectContaining({ status: 402 }),
     );
+  });
+
+  it.each([null, 'active'])('allows a %s Shopify plan', (shopifyBillingStatus) => {
+    expect(() => assertBillingWriteAllowed({ stripeStatus: null, shopifyBillingStatus })).not.toThrow();
+  });
+
+  it.each(['frozen', 'inactive'])('blocks a %s Shopify plan', (shopifyBillingStatus) => {
+    expect(() => assertBillingWriteAllowed({ stripeStatus: null, shopifyBillingStatus })).toThrow(
+      expect.objectContaining({ status: 402 }),
+    );
+  });
+
+  it('loads the Shopify plan status with the organization', async () => {
+    const org = await createTestOrg();
+    orgIds.push(org.id);
+    await db.organization.update({
+      where: { id: org.id },
+      data: { shopifyBillingStatus: 'frozen' },
+    });
+
+    await expect(assertBillingWriteAllowedForOrgId(org.id)).rejects.toMatchObject({ status: 402 });
   });
 
   it('loads and allows an active organization', async () => {

@@ -6,6 +6,7 @@ import { normalizeImessageLineHandle } from "@/lib/integrations/imessage-visibil
 import { isShopifySimulatorEnabled } from "@/lib/integrations/shopify-simulator";
 import { getShopifyOAuthAuthorizeConfig } from "@/lib/env";
 import { normalizeShopifyShopDomain } from "@/lib/shopify/oauth";
+import { readShopifyInstallClaim } from "@/lib/shopify/install-claim";
 import { resolveInstagramConnectTransport } from "@/lib/socialapi/config";
 import { isStorefrontChatGloballyEnabled } from "@/lib/storefront-chat/enabled";
 import {
@@ -44,6 +45,7 @@ export default async function OnboardingPage({
     status?: string | string[];
     error?: string | string[];
     shop?: string | string[];
+    claim?: string | string[];
   }>;
 }) {
   const params = await searchParams;
@@ -68,8 +70,13 @@ export default async function OnboardingPage({
     if (typeof value === "string") oauthParams.set(key, value);
   }
   const oauthOutcome = parseOAuthOutcome(oauthParams);
-  // The app home inside Shopify admin sends a new merchant here with their store.
-  const suggestedShop = typeof params.shop === "string" ? normalizeShopifyShopDomain(params.shop) : null;
+  // The app home inside Shopify admin sends a new merchant here with their store
+  // and, when it holds the install's grant, a claim that connects it in one step.
+  const claim = typeof params.claim === "string" ? params.claim : null;
+  const claimedInstall = readShopifyInstallClaim(claim);
+  const shopifyClaim = claim && claimedInstall ? { claim, shop: claimedInstall.shop } : null;
+  const suggestedShop = shopifyClaim?.shop
+    ?? (typeof params.shop === "string" ? normalizeShopifyShopDomain(params.shop) : null);
 
   return (
     <OnboardingExperience
@@ -81,6 +88,7 @@ export default async function OnboardingPage({
       pinnedStepIndex={pinnedStepIndex}
       oauthOutcome={oauthOutcome}
       suggestedShop={suggestedShop}
+      shopifyClaim={shopifyClaim}
     />
   );
 }

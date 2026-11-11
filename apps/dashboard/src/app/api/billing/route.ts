@@ -5,6 +5,7 @@ import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit'
 import stripe from '@/lib/billing/stripe'
 import { getOrCreateStripeCustomer } from '@/lib/billing/stripe-customer'
 import { getBillingTierPriceId } from '@/lib/env'
+import { loadShopifyBilling } from '@/lib/shopify/billing'
 
 export async function GET() {
   try {
@@ -12,6 +13,11 @@ export async function GET() {
 
     const rl = await rateLimit(`billing:get:${org.id}`, 10, 60)
     if (!rl.success) return tooManyRequests(rl.reset)
+
+    // Billed through Shopify: the plan and its invoices live in the store's
+    // Shopify bill, so there is no Stripe customer to create or read.
+    const shopifyBilling = await loadShopifyBilling(org.id)
+    if (shopifyBilling) return NextResponse.json({ provider: 'shopify', ...shopifyBilling })
 
     const customerId = await getOrCreateStripeCustomer(org)
 
@@ -79,6 +85,7 @@ export async function GET() {
     }))
 
     return NextResponse.json({
+      provider: 'stripe',
       status: subscription?.status ?? 'none',
       planName,
       priceId: priceItem?.price.id ?? null,

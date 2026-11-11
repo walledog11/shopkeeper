@@ -47,17 +47,14 @@ In order. This is the product's critical path.
 
 The first publication is the App Store. These block review or a new install's first day.
 
-1. **Charge through Shopify.** App Store apps must bill through Shopify; billing is
-   Stripe-only, and its plan prices are unset in production (Usage & billing hides the
-   plan picker until they exist). Managed pricing (plans in the Partner dashboard,
-   Shopify's own plan page) is the least code. Closes when a dev-store install picks a
-   plan and the billing write gate reads Shopify's subscription status.
-2. **Authenticate at install, not at signup.** A shop installed from Shopify holds no
-   token until the merchant signs up in a new tab and runs a second OAuth from
-   onboarding's store-URL field; review requires authenticating immediately and never
-   asking for the myshopify domain. Token-exchange on the first app-home load, keep the
-   grant until a workspace claims the shop, and let onboarding claim it. Closes when
-   install → app home → sign up → inbox asks for no store URL and no second consent.
+1. **Charge through Shopify** (built: managed pricing; runbook *Shopify install and
+   billing*). Closes when the Starter and Pro plans exist in the Partner dashboard,
+   `SHOPIFY_APP_HANDLE` is set, the app config is released for `app_subscriptions/update`,
+   and a dev-store install picks a plan that Usage & billing and the app home show.
+2. **Authenticate at install, not at signup** (built: the app home holds the install's
+   grant and its links claim it). Closes when the `shopify_install_and_billing`
+   migration is applied and, on the dev store, install → app home → sign up → inbox asks
+   for no store URL and no second consent.
 3. **Instagram for an installer nobody assigned.** Connect is gated per workspace by
    SocialAPI brand assignment, so every App Store install sees Instagram "Coming soon"
    while the listing and landing page lead with DMs. Provision a brand on connect, or

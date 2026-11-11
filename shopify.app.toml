@@ -7,7 +7,7 @@ embedded = true
 api_version = "2026-04"
 
 [[webhooks.subscriptions]]
-topics = [ "orders/create", "orders/fulfilled", "orders/updated", "orders/cancelled", "app/uninstalled" ]
+topics = [ "orders/create", "orders/fulfilled", "orders/updated", "orders/cancelled", "app/uninstalled", "app_subscriptions/update" ]
 uri = "https://clerk-production-e37f.up.railway.app/webhooks/shopify"
 
 [[webhooks.subscriptions]]

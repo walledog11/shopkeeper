@@ -234,8 +234,9 @@ compliance action:
   `shopify_privacy_requests` rows, and Shopify-sourced knowledge-base entries.
   Customers with no Shopify link are retained.
 
-`app/uninstalled` removes credentials immediately but preserves a non-secret
-integration-disconnect tombstone. Shopify sends `shop/redact` later, so that
+`app/uninstalled` removes credentials immediately, including a grant the app home
+took for a store no workspace had claimed yet (`shopify_pending_installs`; `shop/redact`
+removes it too), but preserves a non-secret integration-disconnect tombstone. Shopify sends `shop/redact` later, so that
 tombstone is required to resolve the delivery to the correct workspace without
 retaining an access token.
 

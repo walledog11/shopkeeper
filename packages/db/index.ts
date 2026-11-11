@@ -162,6 +162,7 @@ export {
 } from './plan-limits.js';
 export type {
   ConversationAllowance,
+  PlanBilling,
   PlanLimits,
   PlanTier,
 } from './plan-limits.js';

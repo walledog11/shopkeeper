@@ -33,10 +33,11 @@
 
 ## Webhooks
 
-The five order and uninstall subscriptions — `orders/create`,
-`orders/fulfilled`, `orders/updated`, `orders/cancelled`, `app/uninstalled` — are
-declared app-level in the root `shopify.app.toml` on Admin API version `2026-04`.
-OAuth does not create per-shop subscriptions.
+The order, uninstall and plan subscriptions — `orders/create`,
+`orders/fulfilled`, `orders/updated`, `orders/cancelled`, `app/uninstalled`,
+`app_subscriptions/update` — are declared app-level in the root `shopify.app.toml`
+on Admin API version `2026-04`. OAuth does not create per-shop subscriptions.
+A new topic reaches stores only after `shopify app deploy` releases the config.
 
 `npm run audit:shopify-webhooks` remains the way to inventory or repair per-shop
 leftovers. It is read-only by default; both mutation modes require an exact

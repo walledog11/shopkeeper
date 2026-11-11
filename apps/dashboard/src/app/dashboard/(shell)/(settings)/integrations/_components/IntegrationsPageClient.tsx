@@ -13,6 +13,7 @@ import {
 } from "@/lib/integrations/catalog"
 import { parseOAuthOutcome } from "@/lib/integrations/oauth-contract"
 import {
+  claimShopifyInstall,
   connectForwardingEmail,
   disconnectIntegration,
   setDefaultEmailIntegration,
@@ -119,6 +120,8 @@ function IntegrationsPageContent({
   const [openId, setOpenId] = useState<string | null>(searchParams.get("configure") === "shopify" ? "shopify" : null)
   // Set by the app home inside Shopify admin, so the merchant never types the address.
   const suggestedShopifyShop = normalizeShopifyShopDomain(searchParams.get("shop"))
+  // Sent by the app home inside Shopify admin: connects the store installed there.
+  const shopifyInstallClaim = searchParams.get("claim")
   const shopifyPresenceRef = useRef<ReturnType<typeof resolveShopifyConnectionState> | null>(null)
   const mountedRef = useRef(true)
   const [toast, setToast] = useState<{ tone: "success" | "error"; message: string } | null>(null)
@@ -249,6 +252,20 @@ function IntegrationsPageContent({
       if (!requireAdmin()) throw new Error("Only workspace admins can manage integrations.")
       return syncShopifyKnowledgeBase()
     },
+    claimInstalledStore: shopifyInstallClaim
+      ? async () => {
+        if (!requireAdmin()) return false
+        try {
+          await claimShopifyInstall(shopifyInstallClaim)
+          await mutate()
+          showToast("success", "Shopify store connected.")
+          return true
+        } catch (error) {
+          showToast("error", errorMessageFromUnknown(error, "Couldn't connect your store. Try again."))
+          return false
+        }
+      }
+      : null,
     async updateShopifyStorefrontChat(enabled) {
       if (!requireAdmin()) return false
       try {
@@ -273,7 +290,7 @@ function IntegrationsPageContent({
         return false
       }
     },
-  }), [launchOAuth, mutate, requireAdmin, showToast])
+  }), [launchOAuth, mutate, requireAdmin, shopifyInstallClaim, showToast])
 
   function renderIntegrationCard(model: IntegrationCardModel) {
     const { definition } = model

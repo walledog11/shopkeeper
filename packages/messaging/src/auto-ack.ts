@@ -24,7 +24,7 @@ export function loadAutoAckThread(threadId: string) {
     where: { id: threadId },
     include: {
       customer: true,
-      organization: { select: { id: true, name: true, settings: true, stripeStatus: true } },
+      organization: { select: { id: true, name: true, settings: true, stripeStatus: true, shopifyBillingStatus: true } },
     },
   })
 }

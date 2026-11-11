@@ -29,7 +29,7 @@ export const POST = withInternalRoute(
       where: { id: threadId },
       include: {
         customer: true,
-        organization: { select: { id: true, name: true, stripeStatus: true } },
+        organization: { select: { id: true, name: true, stripeStatus: true, shopifyBillingStatus: true } },
       },
     });
     if (!thread) {

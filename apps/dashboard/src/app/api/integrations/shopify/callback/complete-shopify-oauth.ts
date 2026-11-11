@@ -101,29 +101,41 @@ export async function completeShopifyOAuth({
     const canonicalShopDomain = shopIdentityResult.shop.myshopifyDomain;
     const shopName = shopIdentityResult.shop.name;
 
-    try {
-      const integration = await claimShopifyIntegration({
-        token: tokenResult.token,
-        canonicalShopDomain,
-        organizationId,
-        shopName,
-      });
-      logger.info(
-        { shopName, shop: canonicalShopDomain, orgId: organizationId },
-        '[Shopify OAuth] Integration saved',
-      );
-      return { ok: true, integrationId: integration.id };
-    } catch (error) {
-      if (error instanceof ShopifyStoreInUseError) {
-        logger.warn(
-          { shop: canonicalShopDomain, orgId: organizationId },
-          '[Shopify OAuth] Store already connected to another workspace — rejecting',
-        );
-        return failure('shopify_store_in_use', 'validation_failed');
-      }
-      throw error;
-    }
+    const saved = await saveShopifyGrant({
+      token: tokenResult.token,
+      canonicalShopDomain,
+      organizationId,
+      shopName,
+    });
+    if (!saved.ok) return failure(saved.error, 'validation_failed');
+    logger.info(
+      { shopName, shop: canonicalShopDomain, orgId: organizationId },
+      '[Shopify OAuth] Integration saved',
+    );
+    return { ok: true, integrationId: saved.integrationId };
   });
+}
+
+/**
+ * Saves an issued grant as the workspace's connection to the store, from the
+ * OAuth callback or a claimed install. A store held by another workspace is
+ * refused: one store answers to one workspace. Call it under the store's
+ * `withShopifyTokenLock`.
+ */
+export async function saveShopifyGrant(
+  args: ShopifyIntegrationWrite,
+): Promise<{ ok: true; integrationId: string } | { ok: false; error: 'shopify_store_in_use' }> {
+  try {
+    const integration = await claimShopifyIntegration(args);
+    return { ok: true, integrationId: integration.id };
+  } catch (error) {
+    if (!(error instanceof ShopifyStoreInUseError)) throw error;
+    logger.warn(
+      { shop: args.canonicalShopDomain, orgId: args.organizationId },
+      '[Shopify OAuth] Store already connected to another workspace — rejecting',
+    );
+    return { ok: false, error: 'shopify_store_in_use' };
+  }
 }
 
 function failure(
@@ -359,7 +371,7 @@ function isIntegrationP2002(error: unknown): boolean {
     && (error.meta?.modelName === undefined || error.meta.modelName === 'Integration');
 }
 
-async function fetchShopifyShopIdentity(shop: string, accessToken: string) {
+export async function fetchShopifyShopIdentity(shop: string, accessToken: string) {
   const shopData = await shopifyRestJson<{
     shop?: { id?: number | string; name?: string; myshopify_domain?: string };
   }>(

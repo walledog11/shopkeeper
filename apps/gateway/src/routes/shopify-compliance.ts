@@ -415,6 +415,8 @@ async function selectShopData(organizationId: string, shopDomain: string): Promi
 }
 
 export async function preserveShopifyUninstallTombstone(shopDomain: string): Promise<number> {
+  // A grant held for a workspace to claim dies with the install.
+  await db.shopifyPendingInstall.deleteMany({ where: { shop: shopDomain } });
   const integrations = await db.integration.findMany({
     where: { platform: 'shopify', externalAccountId: shopDomain },
     select: { id: true, organizationId: true, platform: true, externalAccountId: true },
@@ -480,6 +482,10 @@ export async function handleShopifyComplianceWebhook(
   payload: ShopifyCompliancePayload,
   webhookId: string | null,
 ): Promise<void> {
+  // An install no workspace claimed holds the store's grant and name, with no
+  // workspace for the rest of this to find.
+  if (topic === 'shop/redact') await db.shopifyPendingInstall.deleteMany({ where: { shop: shopDomain } });
+
   const organizationId = await resolveShopifyOrganizationId(shopDomain);
   if (!organizationId) {
     logger.info({ shopDomain, topic }, '[Webhook] Shopify compliance request has no local shop data');
