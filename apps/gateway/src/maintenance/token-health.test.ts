@@ -20,9 +20,9 @@ const {
   update: vi.fn(),
 }));
 
-vi.mock('@shopkeeper/db', () => ({
+vi.mock('@shopkeeper/db', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@shopkeeper/db')>(),
   db: { integration: { findMany, update } },
-  INTEGRATION_REAUTH_SENTINEL: new Date(0),
 }));
 vi.mock('../clients/instagram-graph.js', () => ({
   fetchConnectedInstagramAccount: fetchAccount,
@@ -97,6 +97,7 @@ describe('runTokenHealthCheck', () => {
     fetchAccount.mockReset();
     fetchSubscription.mockReset();
     findMany.mockReset();
+    findMany.mockResolvedValue([]);
     getTikTokConfig.mockReset();
     logger.info.mockClear();
     logger.warn.mockClear();

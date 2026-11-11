@@ -1,5 +1,11 @@
 import type { Prisma } from '@prisma/client';
-import { db, INTEGRATION_REAUTH_SENTINEL } from '@shopkeeper/db';
+import { db, INTEGRATION_REAUTH_SENTINEL, isIntegrationReauthorizationRequired } from '@shopkeeper/db';
+import {
+  keepShopifyTokenAlive,
+  migrateShopifyToken,
+  SHOPIFY_ACCESS_SELECT,
+} from '@shopkeeper/agent/shopify/access';
+import { isSimulatedShopifyIntegration } from '@shopkeeper/agent/shopify/integration-health';
 import { isRecord } from '../lib/typing.js';
 import {
   fetchConnectedInstagramAccount,
@@ -23,6 +29,9 @@ const CONCURRENCY = 5;
 const INSTAGRAM_REFRESH_WINDOW_MS = 7 * ONE_DAY_MS;
 const INSTAGRAM_MIN_REFRESH_AGE_MS = ONE_DAY_MS;
 const TIKTOK_REFRESH_WINDOW_MS = 7 * ONE_DAY_MS;
+// A Shopify refresh token lapses after 90 days unused. A store idle this long
+// (no Shopify call has refreshed its hour-long token) is refreshed here.
+const SHOPIFY_IDLE_REFRESH_MS = 7 * ONE_DAY_MS;
 // One definition, in @shopkeeper/db: four files each had their own.
 const EPOCH_SENTINEL = INTEGRATION_REAUTH_SENTINEL;
 
@@ -362,6 +371,42 @@ export async function runTokenHealthCheck(): Promise<void> {
   logger.info('[TokenHealth] Daily check complete');
 
   await runTikTokShopTokenRefresh();
+  await runShopifyTokenUpkeep();
+}
+
+/**
+ * Swaps each store's non-expiring token for an expiring one (Shopify stops
+ * accepting non-expiring tokens from public apps), and refreshes idle stores
+ * before their refresh token lapses.
+ */
+async function runShopifyTokenUpkeep(): Promise<void> {
+  const integrations = await db.integration.findMany({
+    where: { platform: 'shopify', lifecycleStatus: 'active', accessToken: { not: null } },
+    select: { ...SHOPIFY_ACCESS_SELECT, metadata: true },
+  });
+  const counts = { migrated: 0, refreshed: 0, refused: 0, unavailable: 0 };
+  const idleBefore = Date.now() - SHOPIFY_IDLE_REFRESH_MS;
+
+  for (const integration of integrations) {
+    if (!integration.accessToken || isSimulatedShopifyIntegration(integration.metadata)) continue;
+    if (isIntegrationReauthorizationRequired(integration.tokenExpiresAt)) continue;
+    const target = { id: integration.id, shop: integration.externalAccountId };
+    try {
+      if (!integration.refreshToken) {
+        const outcome = await migrateShopifyToken(target);
+        if (outcome === 'migrated') counts.migrated += 1;
+        else if (outcome === 'refused' || outcome === 'unavailable') counts[outcome] += 1;
+      } else if (integration.tokenExpiresAt && integration.tokenExpiresAt.getTime() < idleBefore) {
+        const outcome = await keepShopifyTokenAlive({ ...target, accessToken: integration.accessToken });
+        counts[outcome === 'ok' ? 'refreshed' : outcome] += 1;
+      }
+    } catch (err) {
+      counts.unavailable += 1;
+      logger.error({ integrationId: integration.id, err: (err as Error).message }, '[TokenHealth] Shopify token upkeep failed');
+    }
+  }
+
+  logger.info({ stores: integrations.length, ...counts }, '[TokenHealth] Shopify token upkeep complete');
 }
 
 async function runTikTokShopTokenRefresh(): Promise<void> {

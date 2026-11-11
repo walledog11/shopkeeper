@@ -1,6 +1,7 @@
 import { db } from '@shopkeeper/db';
 import { NotFoundError } from '@/lib/api/errors';
 import { shopifyRestJson, type ShopifyContext } from '@shopkeeper/agent/shopify';
+import { SHOPIFY_ACCESS_SELECT, shopifyContextFor } from '@shopkeeper/agent/shopify/access';
 import { markShopifyIntegrationInvalidIfAuthFailure } from '@/lib/server/shopify-integration';
 import type { ShopifyCustomer, ShopifyOrder } from '@/types/shopify';
 import logger from '@/lib/server/logger';
@@ -92,14 +93,14 @@ export async function updateShopifyCustomer(
 async function getShopifyContext(organizationId: string): Promise<ResolvedShopifyContext> {
   const integration = await db.integration.findFirst({
     where: { organizationId, platform: 'shopify' },
+    select: SHOPIFY_ACCESS_SELECT,
   });
-
-  if (!integration?.accessToken) {
+  const ctx = integration ? await shopifyContextFor(integration) : null;
+  if (!integration || !ctx) {
     throw new NotFoundError('no_integration');
   }
 
-  const shop = integration.externalAccountId;
-  return { shop, ctx: { shop, accessToken: integration.accessToken }, integrationId: integration.id };
+  return { shop: ctx.shop, ctx, integrationId: integration.id };
 }
 
 async function runShopifyCall<T>(

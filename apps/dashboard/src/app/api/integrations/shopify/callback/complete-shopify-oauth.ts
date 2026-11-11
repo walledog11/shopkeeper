@@ -1,20 +1,22 @@
 import crypto from 'node:crypto';
 import type { IntegrationFailureCategory } from '@shopkeeper/analytics';
 import { shopifyRestJson, ShopifyRequestError } from '@shopkeeper/agent/shopify';
+import {
+  requestShopifyToken,
+  shopifyTokenColumns,
+  withShopifyTokenLock,
+  type ShopifyIssuedToken,
+} from '@shopkeeper/agent/shopify/access';
 import { db, Prisma } from '@shopkeeper/db';
 import type { Prisma as PrismaTypes } from '@prisma/client';
 import logger from '@/lib/server/logger';
 import { timingSafeIncludes } from '@/lib/security/timing-safe';
-import { isRecord } from "@shopkeeper/shared/guards";
 import {
   isSameShopifyStore,
   normalizeShopifyShopDomain,
   parseShopifyShopIdentity,
 } from '@/lib/shopify/oauth';
-import {
-  fetchProviderWithDeadline,
-  isProviderRequestTimeoutError,
-} from '@/lib/server/provider-fetch';
+import { isProviderRequestTimeoutError } from '@/lib/server/provider-fetch';
 import type { OAuthCallbackCompletionResult } from '@/app/api/integrations/_lib/oauth-callback-runner';
 
 type ShopifyOAuthError =
@@ -28,7 +30,7 @@ type ShopifyOAuthError =
 type CompleteShopifyOAuthResult = OAuthCallbackCompletionResult<ShopifyOAuthError>;
 
 type TokenExchangeResult =
-  | { ok: true; accessToken: string; oauthScopes?: string[] }
+  | { ok: true; token: ShopifyIssuedToken }
   | {
     ok: false;
     error: 'shopify_server_error' | 'shopify_token_failed';
@@ -71,54 +73,57 @@ export async function completeShopifyOAuth({
     return failure('shopify_hmac_invalid', 'invalid_callback');
   }
 
-  const tokenResult = await exchangeShopifyAccessToken({
-    clientId,
-    clientSecret,
-    code,
-    shopDomain,
-  });
-  if (!tokenResult.ok) {
-    return failure(tokenResult.error, tokenResult.failureCategory);
-  }
-
-  const shopIdentityResult = await resolveShopifyAuthorizedShop({
-    accessToken: tokenResult.accessToken,
-    savedShop,
-    shopDomain,
-  });
-  if (!shopIdentityResult.ok) {
-    return failure(
-      shopIdentityResult.error,
-      shopIdentityResult.failureCategory,
-    );
-  }
-
-  const canonicalShopDomain = shopIdentityResult.shop.myshopifyDomain;
-  const shopName = shopIdentityResult.shop.name;
-
-  try {
-    const integration = await claimShopifyIntegration({
-      accessToken: tokenResult.accessToken,
-      canonicalShopDomain,
-      oauthScopes: tokenResult.oauthScopes,
-      organizationId,
-      shopName,
+  // A new token retires one a refresh may be fetching for this store at the
+  // same moment, so the exchange and the save happen under the store's lock.
+  return withShopifyTokenLock(shopDomain, async () => {
+    const tokenResult = await exchangeShopifyAccessToken({
+      clientId,
+      clientSecret,
+      code,
+      shopDomain,
     });
-    logger.info(
-      { shopName, shop: canonicalShopDomain, orgId: organizationId },
-      '[Shopify OAuth] Integration saved',
-    );
-    return { ok: true, integrationId: integration.id };
-  } catch (error) {
-    if (error instanceof ShopifyStoreInUseError) {
-      logger.warn(
-        { shop: canonicalShopDomain, orgId: organizationId },
-        '[Shopify OAuth] Store already connected to another workspace — rejecting',
-      );
-      return failure('shopify_store_in_use', 'validation_failed');
+    if (!tokenResult.ok) {
+      return failure(tokenResult.error, tokenResult.failureCategory);
     }
-    throw error;
-  }
+
+    const shopIdentityResult = await resolveShopifyAuthorizedShop({
+      accessToken: tokenResult.token.accessToken,
+      savedShop,
+      shopDomain,
+    });
+    if (!shopIdentityResult.ok) {
+      return failure(
+        shopIdentityResult.error,
+        shopIdentityResult.failureCategory,
+      );
+    }
+
+    const canonicalShopDomain = shopIdentityResult.shop.myshopifyDomain;
+    const shopName = shopIdentityResult.shop.name;
+
+    try {
+      const integration = await claimShopifyIntegration({
+        token: tokenResult.token,
+        canonicalShopDomain,
+        organizationId,
+        shopName,
+      });
+      logger.info(
+        { shopName, shop: canonicalShopDomain, orgId: organizationId },
+        '[Shopify OAuth] Integration saved',
+      );
+      return { ok: true, integrationId: integration.id };
+    } catch (error) {
+      if (error instanceof ShopifyStoreInUseError) {
+        logger.warn(
+          { shop: canonicalShopDomain, orgId: organizationId },
+          '[Shopify OAuth] Store already connected to another workspace — rejecting',
+        );
+        return failure('shopify_store_in_use', 'validation_failed');
+      }
+      throw error;
+    }
+  });
 }
 
 function failure(
@@ -148,7 +153,8 @@ export function isValidShopifyHmac(
 /**
  * An offline access token from either grant: the OAuth callback's authorization
  * code, or the ID token Shopify admin hands the embedded app home (token
- * exchange, Shopify's managed-installation flow).
+ * exchange, Shopify's managed-installation flow). Both ask for an expiring token.
+ * Call it under `withShopifyTokenLock` and store the token before releasing it.
  */
 export async function exchangeShopifyAccessToken({
   clientId,
@@ -160,101 +166,20 @@ export async function exchangeShopifyAccessToken({
   clientSecret: string;
   shopDomain: string;
 } & ({ code: string } | { idToken: string })): Promise<TokenExchangeResult> {
-  const grantFields = 'code' in grant
-    ? { code: grant.code }
-    : {
-      grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
-      subject_token: grant.idToken,
-      subject_token_type: 'urn:ietf:params:oauth:token-type:id_token',
-      requested_token_type: 'urn:shopify:params:oauth:token-type:offline-access-token',
-    };
-  let response: Response;
-  try {
-    response = await fetchProviderWithDeadline(
-      `https://${shopDomain}/admin/oauth/access_token`,
-      {
-        cache: 'no-store',
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, ...grantFields }),
-      },
-      { provider: 'shopify', operation: 'OAuth token exchange' },
-    );
-  } catch (error) {
-    if (isProviderRequestTimeoutError(error)) {
-      logger.error({ err: error }, '[Shopify OAuth] Token exchange unavailable');
-      return {
-        ok: false,
-        error: 'shopify_server_error',
-        failureCategory: 'provider_unavailable',
-      };
-    }
-    throw error;
-  }
+  const result = await requestShopifyToken(shopDomain, grant, { clientId, clientSecret });
+  if (result.ok) return { ok: true, token: result.token };
 
-  if (!response.ok) {
-    const detail = await readResponseDetail(response);
-    logger.error(
-      { status: response.status, error: detail },
-      '[Shopify OAuth] Token exchange failed',
-    );
-    if (response.status === 429) {
-      return { ok: false, error: 'shopify_server_error', failureCategory: 'rate_limited' };
-    }
-    if (response.status >= 500) {
-      return {
-        ok: false,
-        error: 'shopify_server_error',
-        failureCategory: 'provider_unavailable',
-      };
-    }
-    if (response.status >= 400 && response.status < 500) {
-      return {
-        ok: false,
-        error: 'shopify_token_failed',
-        failureCategory: 'invalid_credentials',
-      };
-    }
-    return { ok: false, error: 'shopify_server_error', failureCategory: 'unknown' };
+  logger.error({ status: result.status, error: result.error }, '[Shopify OAuth] Token exchange failed');
+  if (result.status === null || result.status >= 500) {
+    return { ok: false, error: 'shopify_server_error', failureCategory: 'provider_unavailable' };
   }
-
-  let payload: unknown;
-  try {
-    payload = await response.json();
-  } catch {
-    payload = null;
+  if (result.status === 429) {
+    return { ok: false, error: 'shopify_server_error', failureCategory: 'rate_limited' };
   }
-  if (!isRecord(payload) || typeof payload.access_token !== 'string' || !payload.access_token) {
-    logger.error(
-      { status: response.status },
-      '[Shopify OAuth] Token exchange returned a malformed success response',
-    );
-    return { ok: false, error: 'shopify_server_error', failureCategory: 'unknown' };
+  if (result.status >= 400 && result.status < 500) {
+    return { ok: false, error: 'shopify_token_failed', failureCategory: 'invalid_credentials' };
   }
-
-  return {
-    ok: true,
-    accessToken: payload.access_token,
-    oauthScopes: normalizeShopifyOAuthScopes(payload.scope),
-  };
-}
-
-async function readResponseDetail(response: Response): Promise<unknown> {
-  try {
-    return await response.json();
-  } catch {
-    return undefined;
-  }
-}
-
-export function normalizeShopifyOAuthScopes(value: unknown): string[] | undefined {
-  if (typeof value !== 'string') return undefined;
-  return [...new Set(
-    value
-      .split(',')
-      .map((scope) => scope.trim().toLowerCase())
-      .filter(Boolean),
-  )].sort();
+  return { ok: false, error: 'shopify_server_error', failureCategory: 'unknown' };
 }
 
 export function mergeShopifyOAuthScopes(
@@ -358,9 +283,8 @@ function classifyProviderFailure(error: unknown): IntegrationFailureCategory {
 }
 
 type ShopifyIntegrationWrite = {
-  accessToken: string;
+  token: ShopifyIssuedToken;
   canonicalShopDomain: string;
-  oauthScopes: readonly string[] | undefined;
   organizationId: string;
   shopName: string;
 };
@@ -394,11 +318,10 @@ async function claimShopifyIntegrationOnce(args: ShopifyIntegrationWrite) {
       organizationId: args.organizationId,
       platform: 'shopify',
       externalAccountId: args.canonicalShopDomain,
-      accessToken: args.accessToken,
+      ...shopifyTokenColumns(args.token),
       fromEmail: args.shopName,
-      tokenExpiresAt: null,
-      ...(args.oauthScopes !== undefined && {
-        metadata: mergeShopifyOAuthScopes(undefined, args.oauthScopes),
+      ...(args.token.scopes !== undefined && {
+        metadata: mergeShopifyOAuthScopes(undefined, args.token.scopes),
       }),
     },
   });
@@ -417,13 +340,12 @@ async function updateShopifyIntegration(
   integration: NonNullable<Awaited<ReturnType<typeof findCanonicalShopifyIntegration>>>,
   args: ShopifyIntegrationWrite,
 ) {
-  const metadata = mergeShopifyOAuthScopes(integration.metadata, args.oauthScopes);
+  const metadata = mergeShopifyOAuthScopes(integration.metadata, args.token.scopes);
   return db.integration.update({
     where: { id: integration.id },
     data: {
-      accessToken: args.accessToken,
+      ...shopifyTokenColumns(args.token),
       fromEmail: args.shopName,
-      tokenExpiresAt: null,
       // Re-authorizing clears a lifecycle left behind by a failed disconnect.
       lifecycleStatus: 'active',
       ...(metadata !== undefined && { metadata }),

@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { db } from "@shopkeeper/db";
-import { shopifyRestJson, type ShopifyContext } from "@shopkeeper/agent/shopify";
+import { shopifyRestJson } from "@shopkeeper/agent/shopify";
+import { SHOPIFY_ACCESS_SELECT, shopifyContextFor } from "@shopkeeper/agent/shopify/access";
 import {
   VERIFICATION_CODE_LENGTH,
   VERIFICATION_MAX_ATTEMPTS,
@@ -98,9 +99,10 @@ export async function requestVerification(
   // is exactly the disclosure this design exists to prevent.
   const integration = await db.integration.findFirst({
     where: { id: input.integrationId, organizationId: input.orgId, platform: "shopify" },
-    select: { externalAccountId: true, accessToken: true },
+    select: SHOPIFY_ACCESS_SELECT,
   });
-  if (!integration?.accessToken || !integration.externalAccountId) {
+  const shopifyCtx = integration ? await shopifyContextFor(integration) : null;
+  if (!shopifyCtx) {
     return { status: "unavailable" };
   }
 
@@ -139,11 +141,6 @@ export async function requestVerification(
     });
   });
   if (!challenge) return { status: "sent" };
-
-  const shopifyCtx: ShopifyContext = {
-    shop: integration.externalAccountId,
-    accessToken: integration.accessToken,
-  };
 
   let order: ShopifyOrderIdentity | undefined;
   try {

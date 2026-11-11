@@ -162,6 +162,8 @@ export interface KnowledgeBaseToolArticle {
 export interface ShopifyToolContext {
   shop: string;
   accessToken: string;
+  /** See `ShopifyContext.renewAccessToken`. */
+  renewAccessToken?: (refused: string) => Promise<string | null>;
   operationId?: string;
   executionId?: string;
 }

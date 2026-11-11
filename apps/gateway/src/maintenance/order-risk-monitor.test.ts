@@ -12,7 +12,8 @@ const {
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-vi.mock('@shopkeeper/db', () => ({
+vi.mock('@shopkeeper/db', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@shopkeeper/db')>(),
   db: { integration: { findMany } },
 }));
 vi.mock('@shopkeeper/agent/shopify', () => ({

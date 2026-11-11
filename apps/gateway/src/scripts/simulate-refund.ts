@@ -42,6 +42,7 @@ import { getAgentTurnPrefixLength } from '@shopkeeper/agent/tools';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { readAgentPlanCache } from '@shopkeeper/agent/plan-cache';
 import { fulfillOrder, shopifyGraphql, shopifyRestJson } from '@shopkeeper/agent/shopify';
+import { SHOPIFY_ACCESS_SELECT, shopifyContextFor } from '@shopkeeper/agent/shopify/access';
 import { createSocialApiClient, type SocialApiInstagramConversation } from '@shopkeeper/integrations/socialapi';
 import { blankAnswersInCalls, merchantAnswerSlotsInCalls } from '@shopkeeper/agent/reply-placeholders';
 import { getSocialApiApiKey } from '../config/runtime-config.js';
@@ -484,18 +485,19 @@ async function main(): Promise<void> {
       }
     }
 
-    const shopify = await db.integration.findFirst({
+    const shopifyIntegration = await db.integration.findFirst({
       where: { organizationId, platform: 'shopify', lifecycleStatus: 'active' },
-      select: { externalAccountId: true, accessToken: true },
+      select: SHOPIFY_ACCESS_SELECT,
     });
+    const shopify = shopifyIntegration ? await shopifyContextFor(shopifyIntegration) : null;
     let order: ShopifyOrder | undefined;
     let orderToCreate: OrderToCreate | undefined;
-    if (!shopify?.accessToken) {
+    if (!shopify) {
       problems.push('Shopify is not connected');
     } else {
       const wanted = values.order?.trim().replace(/^#?/, '#');
       const { orders = [] } = await shopifyRestJson<{ orders?: ShopifyOrder[] }>(
-        { shop: shopify.externalAccountId, accessToken: shopify.accessToken },
+        shopify,
         'orders.json',
         {
           query: {
@@ -525,7 +527,7 @@ async function main(): Promise<void> {
       } else if (!order) {
         // Every run refunds an order, so a store runs out; a development store
         // gets a fresh one rather than stopping the test.
-        const planned = await planTestOrder({ shop: shopify.externalAccountId, accessToken: shopify.accessToken }, limit);
+        const planned = await planTestOrder(shopify, limit);
         if (typeof planned === 'string') {
           problems.push(`No open, paid, unrefunded${values.damage ? ', shipped' : ''} order under the ${limit ?? 'compensation'} limit has a shipping zip, and ${planned}`);
         } else {
@@ -557,7 +559,7 @@ async function main(): Promise<void> {
       accountId: found.ok ? found.accountId : '',
       conversation: conversation!,
       member: binding!.orgMember,
-      shopify: { shop: shopify!.externalAccountId, accessToken: shopify!.accessToken! },
+      shopify: shopify!,
       order,
       orderToCreate,
     };

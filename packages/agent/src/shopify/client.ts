@@ -10,6 +10,12 @@ const DEFAULT_MAX_RETRIES = 1;
 export interface ShopifyContext {
   shop: string;
   accessToken: string;
+  /**
+   * Set for an expiring token (`shopifyContextFor`). After Shopify refuses
+   * `refused` with a 401, a token to resend the request with, or null when the
+   * grant is gone. Throws when renewal is unavailable.
+   */
+  renewAccessToken?: (refused: string) => Promise<string | null>;
   operationId?: string;
   executionId?: string;
   /**
@@ -279,18 +285,19 @@ export async function shopifyRest<T>(
   // Never replay it implicitly. Call sites may opt into a retry only after
   // establishing provider idempotency or reconciliation for that operation.
   const maxRetries = options.maxRetries ?? (method === "GET" ? DEFAULT_MAX_RETRIES : 0);
-  const init: RequestInit = {
-    method,
-    cache: "no-store",
-    headers: shopifyHeaders(ctx.accessToken),
-    ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
-  };
+  const body = options.body !== undefined ? JSON.stringify(options.body) : undefined;
+  let renewed = false;
 
   async function attemptRequest(attempt: number): Promise<ShopifyResponse<T>> {
     await acquireShopToken(shop);
+    const sentToken = ctx.accessToken;
     let res: Response;
     try {
-      res = await fetchWithTimeout(url, init, options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+      res = await fetchWithTimeout(
+        url,
+        { method, cache: "no-store", headers: shopifyHeaders(sentToken), ...(body !== undefined && { body }) },
+        options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      );
     } catch (error) {
       if (attempt < maxRetries) {
         await delay(500);
@@ -298,6 +305,18 @@ export async function shopifyRest<T>(
       }
       throw error;
     }
+
+    // A 401 is Shopify refusing the token before running anything, so even a
+    // mutation may be resent once with a renewed token.
+    if (res.status === 401 && ctx.renewAccessToken && !renewed) {
+      renewed = true;
+      const refusal = await parseResponseBody(res);
+      const renewedToken = await ctx.renewAccessToken(sentToken);
+      if (!renewedToken) throw new ShopifyRequestError("Shopify API request failed.", { status: 401, payload: refusal });
+      ctx.accessToken = renewedToken;
+      return attemptRequest(attempt);
+    }
+
     const shouldRetry = (res.status === 429 || res.status >= 500) && attempt < maxRetries;
 
     if (shouldRetry) {

@@ -1,4 +1,5 @@
 import { db } from '@shopkeeper/db';
+import { SHOPIFY_ACCESS_SELECT, shopifyContextFor } from '@shopkeeper/agent/shopify/access';
 import {
   defineTool,
   numberArg,
@@ -53,11 +54,12 @@ interface ShopContext {
 export async function loadShopContext(organizationId: string): Promise<ShopContext | null> {
   const integration = await db.integration.findFirst({
     where: { organizationId, platform: 'shopify' },
-    select: { externalAccountId: true, accessToken: true, metadata: true },
+    select: { ...SHOPIFY_ACCESS_SELECT, metadata: true },
   });
-  if (!integration?.accessToken) return null;
+  const shopify = integration ? await shopifyContextFor(integration) : null;
+  if (!integration || !shopify) return null;
   return {
-    shopify: { shop: integration.externalAccountId, accessToken: integration.accessToken },
+    shopify,
     grantedScopes: recordedShopifyScopes(integration.metadata) ?? [],
   };
 }

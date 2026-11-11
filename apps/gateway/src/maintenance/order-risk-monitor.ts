@@ -1,5 +1,6 @@
 import type { Queue } from 'bullmq';
 import { db } from '@shopkeeper/db';
+import { SHOPIFY_ACCESS_SELECT, shopifyContextFor } from '@shopkeeper/agent/shopify/access';
 import {
   listRecentUnfulfilledOrderIds,
   ShopifyRequestError,
@@ -35,8 +36,8 @@ const ORDERS_PER_ORG = 10;
 // orders/created webhook, which is a recent event.
 const DISCOVERY_WINDOW_MS = 24 * ONE_HOUR_MS;
 
-async function fetchRecentUnfulfilledOrderIds(shop: string, accessToken: string): Promise<string[]> {
-  const ctx: ShopifyContext = { shop, accessToken };
+async function fetchRecentUnfulfilledOrderIds(ctx: ShopifyContext): Promise<string[]> {
+  const { shop } = ctx;
   try {
     return await listRecentUnfulfilledOrderIds(
       ctx,
@@ -66,20 +67,19 @@ export async function runOrderRiskMonitor(
   const integrations = await db.integration.findMany({
     where: { platform: 'shopify', accessToken: { not: null } },
     select: {
+      ...SHOPIFY_ACCESS_SELECT,
       organizationId: true,
-      externalAccountId: true,
-      accessToken: true,
-      tokenExpiresAt: true,
       metadata: true,
     },
   });
 
   let ordersReviewed = 0;
   for (const integration of integrations) {
-    if (!integration.accessToken || !integration.externalAccountId) continue;
     if (!isShopifyIntegrationSweepable(integration)) continue;
+    const ctx = await shopifyContextFor(integration);
+    if (!ctx) continue;
     const shop = integration.externalAccountId;
-    const orderIds = await fetchRecentUnfulfilledOrderIds(shop, integration.accessToken);
+    const orderIds = await fetchRecentUnfulfilledOrderIds(ctx);
     for (const orderId of orderIds) {
       // Same stable jobId as the webhook path — dedupes a webhook-reviewed order
       // against this backstop within the queue's retention window.

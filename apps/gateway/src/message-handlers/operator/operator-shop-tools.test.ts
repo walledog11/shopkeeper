@@ -4,7 +4,8 @@ import { buildOperatorShopTools, parsePricePairs } from './operator-shop-tools.j
 
 const findIntegration = vi.hoisted(() => vi.fn());
 
-vi.mock('@shopkeeper/db', () => ({
+vi.mock('@shopkeeper/db', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@shopkeeper/db')>(),
   db: { integration: { findFirst: findIntegration } },
 }));
 

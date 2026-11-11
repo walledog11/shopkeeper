@@ -190,6 +190,10 @@
       "types": "./dist/shopify/integration-health.d.ts",
       "default": "./dist/shopify/integration-health.js"
     },
+    "./shopify/access": {
+      "types": "./dist/shopify/access.d.ts",
+      "default": "./dist/shopify/access.js"
+    },
     "./order-ops": {
       "types": "./dist/order-ops/index.d.ts",
       "default": "./dist/order-ops/index.js"

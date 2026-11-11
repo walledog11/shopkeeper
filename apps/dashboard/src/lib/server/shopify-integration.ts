@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { db } from '@shopkeeper/db';
+import { db, INTEGRATION_REAUTH_SENTINEL } from '@shopkeeper/db';
 import { shopifyRestJson, ShopifyRequestError } from '@shopkeeper/agent/shopify';
+import { shopifyContextFor, type ShopifyAccessRow } from '@shopkeeper/agent/shopify/access';
 import { getRedis } from '@/lib/server/redis';
 import logger from '@/lib/server/logger';
 import {
@@ -36,12 +37,13 @@ export async function markShopifyIntegrationInvalidIfAuthFailure(
       id: integrationId,
       organizationId,
       platform: 'shopify',
+      // Not already marked. An expiring token's past end is not a mark.
       OR: [
         { tokenExpiresAt: null },
-        { tokenExpiresAt: { gt: new Date() } },
+        { tokenExpiresAt: { gt: INTEGRATION_REAUTH_SENTINEL } },
       ],
     },
-    data: { tokenExpiresAt: new Date(0) },
+    data: { tokenExpiresAt: INTEGRATION_REAUTH_SENTINEL },
   });
 
   if (result.count > 0) {
@@ -82,12 +84,8 @@ async function claimProbeSlot(integrationId: string): Promise<boolean> {
   }
 }
 
-export async function refreshShopifyIntegrationHealthIfDue(integration: {
-  id: string;
+export async function refreshShopifyIntegrationHealthIfDue(integration: ShopifyAccessRow & {
   organizationId: string;
-  externalAccountId: string;
-  accessToken: string | null;
-  tokenExpiresAt: Date | null;
   metadata?: unknown;
 }): Promise<Date | null> {
   if (isSimulatedShopifyIntegration(integration.metadata)) {
@@ -102,12 +100,12 @@ export async function refreshShopifyIntegrationHealthIfDue(integration: {
     return integration.tokenExpiresAt;
   }
 
+  // Null here means a refresh was just refused, which marked the integration.
+  const ctx = await shopifyContextFor(integration);
+  if (!ctx) return INTEGRATION_REAUTH_SENTINEL;
+
   try {
-    await shopifyRestJson(
-      { shop: integration.externalAccountId, accessToken: integration.accessToken! },
-      'shop.json',
-      { maxRetries: 0, query: { fields: 'id' } },
-    );
+    await shopifyRestJson(ctx, 'shop.json', { maxRetries: 0, query: { fields: 'id' } });
     return integration.tokenExpiresAt;
   } catch (err) {
     const marked = await markShopifyIntegrationInvalidIfAuthFailure(
@@ -115,6 +113,6 @@ export async function refreshShopifyIntegrationHealthIfDue(integration: {
       integration.organizationId,
       err,
     );
-    return marked ? new Date(0) : integration.tokenExpiresAt;
+    return marked ? INTEGRATION_REAUTH_SENTINEL : integration.tokenExpiresAt;
   }
 }

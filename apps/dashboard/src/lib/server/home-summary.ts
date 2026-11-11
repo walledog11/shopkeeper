@@ -1,6 +1,7 @@
 import type { OrgSettings } from "@/types"
 import { db } from "@shopkeeper/db"
 import { listRecentUnfulfilledOrderIds } from "@shopkeeper/agent/shopify"
+import { SHOPIFY_ACCESS_SELECT, shopifyContextFor } from "@shopkeeper/agent/shopify/access"
 import {
   lastUtcDayKeys,
   type HomeChannelState,
@@ -35,26 +36,13 @@ async function loadOrdersToShip(organizationId: string): Promise<number | null> 
   const integration = await db.integration.findFirst({
     where: { organizationId, platform: "shopify", accessToken: { not: null } },
     orderBy: { createdAt: "desc" },
-    select: {
-      accessToken: true,
-      tokenExpiresAt: true,
-      externalAccountId: true,
-    },
+    select: SHOPIFY_ACCESS_SELECT,
   })
-
-  if (!integration || !isShopifyIntegrationOperational(integration)) {
-    return null
-  }
-
-  const shop = integration.externalAccountId
-  const accessToken = integration.accessToken
-  if (!shop || !accessToken) return null
+  const shopify = integration ? await shopifyContextFor(integration) : null
+  if (!shopify) return null
 
   try {
-    const orderIds = await listRecentUnfulfilledOrderIds(
-      { shop, accessToken },
-      ORDERS_TO_SHIP_LIMIT,
-    )
+    const orderIds = await listRecentUnfulfilledOrderIds(shopify, ORDERS_TO_SHIP_LIMIT)
     return orderIds.length
   } catch {
     return null

@@ -64,6 +64,10 @@ approval or execution. Deploys, env, migrations and incident recovery are in
   customer reach, and US penetration is low (decision 2026-08-07).
 - Internal `channelType` value `operator` is the merchant's durable operator thread
   (dashboard chat, iMessage, Telegram test transport — never SMS).
+- **Shopify tokens expire hourly.** Build every Shopify context with `shopifyContextFor`
+  (`@shopkeeper/agent/shopify/access`) from a row that selected `SHOPIFY_ACCESS_SELECT`; never
+  hand a stored `accessToken` to Shopify. Any new grant or refresh for a store runs under
+  `withShopifyTokenLock`, and only `tokenExpiresAt = 0` means "reconnect".
 - **Redis:** `@upstash/redis` in dashboard, `ioredis` (`REDIS_URL`) in gateway — separate
   instances. The daily LLM spend cap is shared via Postgres (`llm_daily_spend`).
 - **Multi-tenant:** every DB query is scoped by `organizationId`; `getOrCreateOrg()` maps

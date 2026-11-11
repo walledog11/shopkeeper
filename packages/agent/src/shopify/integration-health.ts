@@ -19,7 +19,10 @@ export function getShopifyConnectionState(
   integration: Pick<ShopifyIntegrationHealthInput, "accessToken" | "tokenExpiresAt">,
 ): ShopifyConnectionState {
   if (!integration.accessToken) return "incomplete";
-  if (integration.tokenExpiresAt && integration.tokenExpiresAt.getTime() <= Date.now()) {
+  // 0 marks a grant the merchant must reconnect (INTEGRATION_REAUTH_SENTINEL,
+  // not imported: client code reads this module). Any other date is an expiring
+  // token's end, which a refresh moves on, so it says nothing about the grant.
+  if (integration.tokenExpiresAt && integration.tokenExpiresAt.getTime() <= 0) {
     return "invalid";
   }
   return "active";

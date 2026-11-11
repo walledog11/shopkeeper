@@ -1,5 +1,6 @@
 import { db } from "@shopkeeper/db";
-import { shopifyRestJson, type ShopifyContext } from "../shopify/index.js";
+import { shopifyRestJson } from "../shopify/index.js";
+import { shopifyContextFor } from "../shopify/access.js";
 import { recordedShopifyScopes } from "../shopify/integration-health.js";
 import type { BaseAgentContext } from "../agent-context.js";
 
@@ -102,14 +103,10 @@ export async function buildOrderOpsContext(
   ]);
 
   if (!org) throw new Error("Organization not found");
-  if (!shopifyIntegration?.accessToken) {
+  const shopifyCtx = shopifyIntegration ? await shopifyContextFor(shopifyIntegration) : null;
+  if (!shopifyIntegration || !shopifyCtx) {
     throw new Error("No Shopify integration connected for order-ops run");
   }
-
-  const shopifyCtx: ShopifyContext = {
-    shop: shopifyIntegration.externalAccountId,
-    accessToken: shopifyIntegration.accessToken,
-  };
 
   const data = await shopifyRestJson<{ order?: RawRiskOrder }>(
     shopifyCtx,
