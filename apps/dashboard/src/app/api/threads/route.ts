@@ -14,6 +14,7 @@ export const GET = withOrgRoute(
     context: 'Threads GET',
     errorMessage: 'Failed to fetch threads',
     rateLimit: { key: 'threads:get', limit: 60, windowSecs: 60, scope: 'user' },
+    customerData: { resource: 'inbox' },
   },
   async ({ org, request }) => {
     const { searchParams } = new URL(request.url);

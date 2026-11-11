@@ -18,7 +18,7 @@ function shopifyErrorResponse(err: unknown): NextResponse {
 }
 
 export const GET = withOrgRoute(
-  { context: 'Shopify Customer GET', errorMessage: 'server_error' },
+  { context: 'Shopify Customer GET', errorMessage: 'server_error', customerData: { resource: 'shopify_customer' } },
   async ({ org, request }) => {
     const { searchParams } = new URL(request.url);
     const email = searchParams.get('email');

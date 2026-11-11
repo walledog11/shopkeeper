@@ -5,6 +5,8 @@ import { getOrCreateOrg } from '@/lib/server/org';
 import { ConflictError, handleApiError, NotFoundError, UnauthorizedError } from '@/lib/api/errors';
 import { assertOrgAdmin } from '@/lib/api/permissions';
 import { assertBillingWriteAllowed } from '@shopkeeper/db/billing-write-gate';
+import { recordCustomerDataAccess, type CustomerDataResource } from '@shopkeeper/db';
+import logger from '@/lib/server/logger';
 import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit';
 
 type Org = Awaited<ReturnType<typeof getOrCreateOrg>>;
@@ -20,6 +22,11 @@ export interface OrgRouteOptions {
   // Called from the catch before handleApiError so routes can record failure
   // side effects (e.g. agent-failure alerts) without re-wrapping the handler.
   onError?: (err: unknown, orgId: string | null) => Promise<void> | void;
+  // The response shows protected customer data (names, contact details,
+  // addresses, messages): a successful one records who read it in the customer
+  // data access log. `idParam` (a route parameter) or `idQuery` (a search
+  // parameter) names the record read.
+  customerData?: { resource: CustomerDataResource; idParam?: string; idQuery?: string };
 }
 
 export interface OrgRouteContext<P> {
@@ -62,7 +69,11 @@ export function withOrgRoute<P = Record<string, never>>(
       }
       const params = (routeCtx ? await routeCtx.params : {}) as P;
       const req = request ?? new Request(PLACEHOLDER_REQUEST_URL);
-      return await handler({ org, request: req, params });
+      const response = await handler({ org, request: req, params });
+      if (options.customerData && response.ok) {
+        await recordMemberAccess(org.id, options.customerData, params, req);
+      }
+      return response;
     } catch (error) {
       if (options.onError) {
         try {
@@ -74,6 +85,33 @@ export function withOrgRoute<P = Record<string, never>>(
       return handleApiError(error, options.context, options.errorMessage);
     }
   };
+}
+
+// The access log must never cost the merchant the page: a failed write is
+// logged and the response goes out.
+async function recordMemberAccess(
+  organizationId: string,
+  customerData: NonNullable<OrgRouteOptions['customerData']>,
+  params: unknown,
+  request: Request,
+): Promise<void> {
+  try {
+    const userId = getE2EAuthIdentity()?.userId ?? (await auth()).userId;
+    const fromParam = customerData.idParam
+      ? (params as Record<string, unknown> | null)?.[customerData.idParam]
+      : undefined;
+    const resourceId = typeof fromParam === 'string'
+      ? fromParam
+      : customerData.idQuery ? new URL(request.url).searchParams.get(customerData.idQuery) : null;
+    await recordCustomerDataAccess({
+      organizationId,
+      actor: { type: 'member', id: userId ?? 'unknown' },
+      resource: customerData.resource,
+      resourceId,
+    });
+  } catch (err) {
+    logger.error({ err, orgId: organizationId, resource: customerData.resource }, '[Access log] Could not record customer data access');
+  }
 }
 
 export function assertEntityInOrg<T extends { organizationId: string } | null>(

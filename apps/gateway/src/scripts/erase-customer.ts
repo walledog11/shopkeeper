@@ -18,7 +18,7 @@
  * BLOB_READ_WRITE_TOKEN.
  */
 import { parseArgs } from 'node:util';
-import { db } from '@shopkeeper/db';
+import { db, recordCustomerDataAccess, scriptActor } from '@shopkeeper/db';
 import { eraseCustomers } from '../routes/shopify-compliance.js';
 import { findInstagramSenderIds } from './live-test-instagram.js';
 
@@ -49,6 +49,9 @@ async function main(): Promise<void> {
     select: { id: true, name: true, clerkOrgId: true },
   });
   if (!organization) throw new Error(`No workspace ${workspace}`);
+  await recordCustomerDataAccess({
+    organizationId: organization.id, actor: scriptActor('erase-customer'), resource: 'script', resourceId: threadId,
+  });
   console.log(`Workspace: ${organization.name} (${organization.clerkOrgId})`);
 
   const senders = handle ? await findInstagramSenderIds(organization.id, handle) : null;

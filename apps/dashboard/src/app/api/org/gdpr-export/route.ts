@@ -11,6 +11,7 @@ export const GET = withOrgRoute(
     context: 'Org GDPR Export GET',
     errorMessage: 'Failed to export customer data',
     rateLimit: { key: 'org:gdpr-export', limit: 5, windowSecs: 60 },
+    customerData: { resource: 'export' },
   },
   async ({ org, request }) => {
     const { searchParams } = new URL(request.url)

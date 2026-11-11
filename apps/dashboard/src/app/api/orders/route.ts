@@ -19,6 +19,7 @@ export const GET = withOrgRoute(
     context: "Orders GET",
     errorMessage: "Failed to fetch orders",
     rateLimit: { key: "orders:get", limit: 30, windowSecs: 60 },
+    customerData: { resource: "orders" },
   },
   async ({ org, request }) => {
     const { searchParams } = new URL(request.url)

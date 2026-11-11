@@ -9,6 +9,7 @@ export const GET = withOrgRoute(
     context: 'Org Data GET',
     errorMessage: 'Failed to export data',
     rateLimit: { key: 'org:data:export', limit: 4, windowSecs: 3600 },
+    customerData: { resource: 'export' },
   },
   async ({ org, request }) => {
     const { searchParams } = new URL(request.url);

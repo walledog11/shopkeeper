@@ -7,7 +7,7 @@ import { SHOPIFY_ACCESS_SELECT, shopifyContextFor } from '@shopkeeper/agent/shop
 import { shopifyRouteErrorResponse } from '@/lib/server/shopify-integration';
 
 export const GET = withOrgRoute(
-  { context: 'Shopify Customer Search', errorMessage: 'server_error' },
+  { context: 'Shopify Customer Search', errorMessage: 'server_error', customerData: { resource: 'shopify_customer' } },
   async ({ org, request }) => {
     const { searchParams } = new URL(request.url);
     const q = searchParams.get('q')?.trim();

@@ -60,9 +60,12 @@ The first publication is the App Store. These block review or a new install's fi
    lead with email and say Instagram opens by invitation. Closes when what the listing
    promises is what a new install can connect.
 4. **Partner dashboard submission:** protected customer data access (level 2: name,
-   email, phone, address) with its data-protection answers; a reason for each requested
-   scope, dropping any no shipped tool uses; listing copy, icon and screenshots; a
-   screencast; reviewer test credentials. Closes when the submission form is complete.
+   email, phone, address); its requirements are built (runbook *Customer data
+   protection*: access log and weekly review, the Terms' data processing section, the
+   incident response policy), so every answer is Yes except consent, data sale and
+   automated decisions (Not applicable). Also a reason for each requested scope, dropping
+   any no shipped tool uses; listing copy, icon and screenshots; a screencast; reviewer
+   test credentials. Closes when the submission form is complete.
 5. **Storefront embed weight.** The chat embed loads a stylesheet from api.fontshare.com
    on every storefront page: a render-blocking third-party request that also hands
    shoppers' IPs to a font CDN. Self-host the font or use the system stack, then compare
@@ -88,6 +91,10 @@ The first publication is the App Store. These block review or a new install's fi
   default off), though its blurb promises more. Usage & billing shows a merchant-set AI
   dollar cap that reads as metered billing. Website chat stays in the nav and the app
   home's tabs when `STOREFRONT_CHAT_ENABLED` is off.
+- **Shopify knowledge never drops a removed page or policy.** `syncShopifyKnowledge` only
+  adds and updates, and synced articles are read-only, so a page or policy deleted in
+  Shopify (or a whole store's, after moving to another store) stays in Memory for the
+  agent to quote. Make each sync replace the store's set.
 - **SocialAPI hardening** (S1–S6 in [the transport plan](socialapi-transport-plan.md)):
   `dm.sent` correlation (a reply typed in the Instagram app never reaches the thread),
   missed-delivery recovery, account health probing, failed-connect compensation, and a

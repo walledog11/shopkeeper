@@ -334,6 +334,7 @@ model Organization {
   merchantPreferences    MerchantPreference[]
   agentTurnUsage         AgentTurnUsage[]
   stepTimings            StepTiming[]
+  customerDataAccess     CustomerDataAccess[]
 
   @@index([clerkOrgId])
   @@index([lifecycleStatus])
@@ -1516,6 +1517,28 @@ model AgentTurnUsage {
 // in packages/db/step-timings.ts); read by the ticket timeline. Holds no message
 // content: a step code, a model or operation name, and times. Rows go with their
 // thread.
+// Who read protected customer data (names, contact details, addresses and
+// messages), as Shopify's protected customer data requirements ask: one row per
+// person or ops script, kind of record and hour (`recordCustomerDataAccess`).
+// The agent's own reads are its actions (AgentAction). Kept a year and reviewed
+// weekly (runbook *Customer data access review*).
+model CustomerDataAccess {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  actorType      String   @map("actor_type") @db.VarChar(16)
+  actorId        String   @map("actor_id") @db.VarChar(255)
+  resource       String   @db.VarChar(32)
+  resourceId     String   @default("") @map("resource_id") @db.VarChar(64)
+  accessedHour   DateTime @map("accessed_hour") @db.Timestamptz
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, actorId, resource, resourceId, accessedHour], map: "customer_data_access_once_per_hour_key")
+  @@index([accessedHour], map: "customer_data_access_accessed_hour_idx")
+  @@map("customer_data_access")
+}
+
 model StepTiming {
   id             String   @id @default(uuid()) @db.Uuid
   organizationId String   @map("organization_id") @db.Uuid

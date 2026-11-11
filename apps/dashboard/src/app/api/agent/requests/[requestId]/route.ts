@@ -5,7 +5,11 @@ import { withOrgRoute } from "@/lib/api/route";
 import { getGatewayAgentRequest } from "@/lib/agent/api/gateway-operator-turn";
 
 export const GET = withOrgRoute<{ requestId: string }>(
-  { context: "Agent request GET", errorMessage: "Failed to load agent request" },
+  {
+    context: "Agent request GET",
+    errorMessage: "Failed to load agent request",
+    customerData: { resource: "agent_request", idParam: "requestId" },
+  },
   async ({ org, params }) => {
     const { userId } = await auth();
     if (!userId) throw new UnauthorizedError();

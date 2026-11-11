@@ -9,7 +9,7 @@
  * Needs DATABASE_URL.
  */
 import { parseArgs } from 'node:util';
-import { Prisma, db } from '@shopkeeper/db';
+import { Prisma, db, recordCustomerDataAccess, scriptActor } from '@shopkeeper/db';
 import { MEMORY_OVERRIDE_TAG, memoryOverrideTargetIds } from '@shopkeeper/agent/kb-memory';
 
 const { values } = parseArgs({ options: { ticket: { type: 'string' } } });
@@ -30,6 +30,9 @@ async function main(): Promise<void> {
   });
   if (!thread) throw new Error(`No ticket ${ticketId}`);
   const organizationId = thread.organizationId;
+  await recordCustomerDataAccess({
+    organizationId, actor: scriptActor('inspect-ticket-memory'), resource: 'script', resourceId: thread.id,
+  });
   console.log(`Ticket ${thread.id} · ${thread.channelType} · tag ${thread.tag ?? '-'} · created ${at(thread.createdAt)}`);
   console.log(`Request: ${thread.requestSummary ?? '-'}\n`);
 
