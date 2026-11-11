@@ -23,13 +23,14 @@ describe("getShopifyConnectionState", () => {
     expect(getShopifyConnectionState({ accessToken: null, tokenExpiresAt: null })).toBe("incomplete");
   });
 
-  it("reads an expired token as invalid", () => {
+  it("reads the reconnect marker as invalid, and an expiring token's past end as active", () => {
+    expect(getShopifyConnectionState({ accessToken: "tok", tokenExpiresAt: new Date(0) })).toBe("invalid");
     expect(
       getShopifyConnectionState({
         accessToken: "tok",
         tokenExpiresAt: new Date(Date.now() - HOUR_MS),
       }),
-    ).toBe("invalid");
+    ).toBe("active");
   });
 
   it("reads a future expiry as active", () => {
@@ -81,11 +82,11 @@ describe("isShopifyIntegrationSweepable", () => {
     ).toBe(true);
   });
 
-  it("excludes expired and tokenless integrations", () => {
+  it("excludes integrations marked for reconnect and tokenless ones", () => {
     expect(
       isShopifyIntegrationSweepable({
         accessToken: "tok",
-        tokenExpiresAt: new Date(Date.now() - HOUR_MS),
+        tokenExpiresAt: new Date(0),
         metadata: null,
       }),
     ).toBe(false);

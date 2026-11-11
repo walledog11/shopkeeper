@@ -1,5 +1,6 @@
 import { db } from '@shopkeeper/db';
-import { shopifyRestJson, type ShopifyContext } from '@shopkeeper/agent/shopify';
+import { shopifyRestJson } from '@shopkeeper/agent/shopify';
+import { shopifyContextFor } from '@shopkeeper/agent/shopify/access';
 import { ApiError, BadRequestError } from '@/lib/api/errors';
 import { isSimulatedShopifyIntegration } from '@/lib/integrations/shopify-simulator';
 
@@ -38,7 +39,8 @@ export async function syncShopifyKnowledge(organizationId: string) {
       },
     ];
   } else {
-    const ctx: ShopifyContext = { shop: integration.externalAccountId, accessToken: integration.accessToken };
+    const ctx = await shopifyContextFor(integration);
+    if (!ctx) throw new BadRequestError('Shopify needs reconnecting');
     try {
       const [policiesData, pagesData] = await Promise.all([
         shopifyRestJson<{ policies?: { id: number; title: string; body: string }[] }>(ctx, 'policies.json', { maxRetries: 0 }),

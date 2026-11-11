@@ -4,6 +4,7 @@ import { ORDER_VERIFICATION_CHANNELS } from "./order-verification.js";
 import { requireDurableAgentRuntime } from "./runtime-modes.js";
 import { selectCustomerBurst } from "./message-history.js";
 import { shopifyRestJson, type ShopifyContext } from "./shopify/client.js";
+import { shopifyContextFor } from "./shopify/access.js";
 import { recordedShopifyScopes } from "./shopify/integration-health.js";
 import { serializeOrderLineItem } from "./shopify/serializers.js";
 import type { ShopifyOrderLineItem } from "./shopify/types.js";
@@ -270,6 +271,8 @@ export async function buildContext(
   if (!thread || thread.organizationId !== orgId) {
     throw new Error("Thread not found");
   }
+  // Refreshes an expiring token near its end; null when there is no usable grant.
+  const shopifyCtx = shopifyIntegration ? await shopifyContextFor(shopifyIntegration) : null;
 
   requireDurableAgentRuntime(options?.runtimeVersion);
   const classifierSignals = parseClassifierSignals(thread.classifierSignals);
@@ -322,12 +325,12 @@ export async function buildContext(
 
   let shopifyCustomerId = thread.shopifyCustomerId;
   let shopifyCustomerName: string | null = null;
-  if (!shopifyCustomerId && thread.channelType === "email" && shopifyIntegration?.accessToken) {
+  if (!shopifyCustomerId && thread.channelType === "email" && shopifyCtx) {
     const linked = await linkEmailThreadToShopifyCustomer({
       orgId,
       threadId: thread.id,
       email: thread.customer.platformId,
-      shopify: { shop: shopifyIntegration.externalAccountId, accessToken: shopifyIntegration.accessToken },
+      shopify: shopifyCtx,
     }).catch((error: unknown) => {
       // The turn goes on unlinked, as it would for a sender Shopify does not know.
       logger.warn({ orgId, threadId: thread.id, err: error }, "[agent:context] Shopify customer link failed");
@@ -444,8 +447,8 @@ export async function buildContext(
 
   let recentOrders: ShopifyOrderSummary[] = [];
   let recentOrdersFetchFailed = false;
-  if (shopifyCustomerId && shopifyIntegration?.accessToken) {
-    const ctx: ShopifyContext = { shop: shopifyIntegration.externalAccountId, accessToken: shopifyIntegration.accessToken };
+  if (shopifyCustomerId && shopifyCtx) {
+    const ctx: ShopifyContext = shopifyCtx;
 
     const nameFetch = (!shopifyCustomerName && (isOperator || !dbName))
       ? shopifyRestJson<{ customer?: { first_name?: string | null; last_name?: string | null } }>(
@@ -577,10 +580,9 @@ export async function buildContext(
     orgName: org?.name ?? "Support",
     recentMessages,
     shopify:
-      shopifyIntegration?.accessToken
+      shopifyIntegration && shopifyCtx
         ? {
-            shop: shopifyIntegration.externalAccountId,
-            accessToken: shopifyIntegration.accessToken,
+            ...shopifyCtx,
             grantedScopes: recordedShopifyScopes(shopifyIntegration.metadata) ?? [],
           }
         : null,

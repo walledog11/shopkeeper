@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server"
 import { db } from "@shopkeeper/db"
 import { NotFoundError } from "@/lib/api/errors"
-import { parseNextPageInfo, shopifyRest } from "@shopkeeper/agent/shopify"
-import {
-  isShopifyIntegrationOperational,
-  shopifyRouteErrorResponse,
-} from "@/lib/server/shopify-integration"
+import { parseNextPageInfo, shopifyRest, type ShopifyContext } from "@shopkeeper/agent/shopify"
+import { SHOPIFY_ACCESS_SELECT, shopifyContextFor } from "@shopkeeper/agent/shopify/access"
+import { shopifyRouteErrorResponse } from "@/lib/server/shopify-integration"
 import { normalizeCurrencyCode } from "@shopkeeper/agent/money"
 import {
   type OrderRow,
@@ -78,26 +76,21 @@ export function normalizeOrder(order: ShopifyOrderRaw): OrderRow {
 type ShopifyIntegration = {
   id: string
   organizationId: string
-  externalAccountId: string
-  accessToken: string
+  shopify: ShopifyContext
 }
 
 export async function getOperationalShopifyIntegration(organizationId: string): Promise<ShopifyIntegration> {
   const integration = await db.integration.findFirst({
     where: { organizationId, platform: "shopify", accessToken: { not: null } },
     orderBy: { createdAt: "desc" },
+    select: { ...SHOPIFY_ACCESS_SELECT, organizationId: true },
   })
-
-  if (!integration?.accessToken || !isShopifyIntegrationOperational(integration)) {
+  const shopify = integration ? await shopifyContextFor(integration) : null
+  if (!integration || !shopify) {
     throw new NotFoundError("no_integration")
   }
 
-  return {
-    id: integration.id,
-    organizationId: integration.organizationId,
-    externalAccountId: integration.externalAccountId,
-    accessToken: integration.accessToken,
-  }
+  return { id: integration.id, organizationId: integration.organizationId, shopify }
 }
 
 function buildShopifyOrdersQuery(query: ShopifyOrdersQuery): Record<string, string | number> {
@@ -128,8 +121,8 @@ export async function listShopifyOrders(
   integration: ShopifyIntegration,
   query: ShopifyOrdersQuery,
 ): Promise<OrdersPageResponse> {
-  const shop = integration.externalAccountId
-  const ctx = { shop, accessToken: integration.accessToken }
+  const ctx = integration.shopify
+  const { shop } = ctx
   const shopifyQuery = buildShopifyOrdersQuery(query)
 
   const { data, headers } = await shopifyRest<{ orders?: ShopifyOrderRaw[] }>(

@@ -86,8 +86,8 @@ what the agent may do, read-only). An unlinked shop gets sign-up and connect lin
 with the store filled in. Links into the full app always open a new tab, so coming
 back reloads what may have changed there (`/api/shopify/app/home`), and an unlinked
 shop's page turns into the linked one once the store is connected. When the linked
-row's token is dead, or its recorded grant is short of `SHOPIFY_OAUTH_SCOPES`, the
-page re-issues the grant by token exchange.
+row's token is dead or non-expiring, or its recorded grant is short of
+`SHOPIFY_OAUTH_SCOPES`, the page re-issues the grant by token exchange.
 
 The page calls `/api/shopify/app/*`, which `withShopifyAppRoute` authenticates with
 a fresh ID token per request; the workspace is the one connected to the token's
@@ -119,5 +119,5 @@ plausibly correct eventually; it has never been the safe half of a config change
 
 The current configuration is `shopify.app.toml` in the repo root, and its git
 history is the durable record. This file contains sanitized configuration only.
-`SHOPIFY_CLIENT_ID` and `SHOPIFY_CLIENT_SECRET` live in Vercel;
-`SHOPIFY_APP_SECRET` lives in both.
+`SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET` and `SHOPIFY_APP_SECRET` live in
+both Vercel and Railway.

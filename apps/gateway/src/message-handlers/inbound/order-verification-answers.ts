@@ -1,5 +1,6 @@
 import { db } from '@shopkeeper/db';
-import { ShopifyRequestError, shopifyRestJson } from '@shopkeeper/agent/shopify';
+import { ShopifyRequestError, shopifyRestJson, type ShopifyContext } from '@shopkeeper/agent/shopify';
+import { SHOPIFY_ACCESS_SELECT, shopifyContextFor } from '@shopkeeper/agent/shopify/access';
 import { parseClassifierSignals } from '@shopkeeper/agent/classifier-signals';
 import {
   asksAnotherQuestion,
@@ -33,12 +34,12 @@ export class OrderVerificationLookupError extends Error {
 }
 
 async function lookupOrder(
-  integration: { accessToken: string; externalAccountId: string },
+  shopify: ShopifyContext,
   orderName: string,
 ): Promise<ShopifyOrderIdentity | null | 'refused'> {
   try {
     const data = await shopifyRestJson<{ orders?: ShopifyOrderIdentity[] }>(
-      { shop: integration.externalAccountId, accessToken: integration.accessToken },
+      shopify,
       'orders.json',
       { query: { name: orderName, status: 'any', limit: 1, fields: 'id,name,email,shipping_address' } },
     );
@@ -91,10 +92,10 @@ export async function evaluateOrderVerificationAnswers(
 
   const integration = await db.integration.findFirst({
     where: { organizationId, platform: 'shopify', lifecycleStatus: 'active' },
-    select: { accessToken: true, externalAccountId: true },
+    select: SHOPIFY_ACCESS_SELECT,
   });
-  if (!integration?.accessToken || !integration.externalAccountId) return false;
-  const shop = { accessToken: integration.accessToken, externalAccountId: integration.externalAccountId };
+  const shop = integration ? await shopifyContextFor(integration) : null;
+  if (!integration || !shop) return false;
   const sender = { organizationId, customerId: thread.customerId, shopDomain: integration.externalAccountId };
 
   const rows = await db.orderVerification.findMany({

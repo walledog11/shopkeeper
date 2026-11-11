@@ -17,6 +17,7 @@ import { parseArgs } from 'node:util';
 import { db } from '@shopkeeper/db';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { shopifyRestJson } from '@shopkeeper/agent/shopify';
+import { SHOPIFY_ACCESS_SELECT, shopifyContextFor } from '@shopkeeper/agent/shopify/access';
 import { readPendingPlanArray, readPendingQuestion } from '../operator-context/serialization.js';
 import { findInstagramSenderIds } from './live-test-instagram.js';
 
@@ -102,12 +103,13 @@ async function main(): Promise<void> {
     }
   }
 
-  const shopify = await db.integration.findFirst({
+  const shopifyIntegration = await db.integration.findFirst({
     where: { organizationId: organization.id, platform: 'shopify', lifecycleStatus: 'active' },
-    select: { externalAccountId: true, accessToken: true },
+    select: SHOPIFY_ACCESS_SELECT,
   });
-  if (shopify) ok(`Shopify connected (${shopify.externalAccountId})`);
-  else fail('Shopify is not connected');
+  const shopify = shopifyIntegration ? await shopifyContextFor(shopifyIntegration) : null;
+  if (shopify) ok(`Shopify connected (${shopify.shop})`);
+  else fail(shopifyIntegration ? 'Shopify needs reconnecting' : 'Shopify is not connected');
 
   const phones = await db.orgMemberImessageBinding.count({ where: { orgMember: { organizationId: organization.id } } });
   if (phones > 0) ok(`${phones} phone(s) linked for approvals`);
@@ -180,7 +182,7 @@ async function main(): Promise<void> {
     else ok(`SocialAPI knows ${handle} (sender ${senders.senderIds.join(', ')})`);
   }
 
-  if (shopify?.accessToken) {
+  if (shopify) {
     const { orders = [] } = await shopifyRestJson<{
       orders?: Array<{
         name: string;
@@ -193,7 +195,7 @@ async function main(): Promise<void> {
         email: string | null;
         shipping_address?: { zip?: string | null } | null;
       }>;
-    }>({ shop: shopify.externalAccountId, accessToken: shopify.accessToken }, 'orders.json', {
+    }>(shopify, 'orders.json', {
       query: {
         financial_status: 'paid',
         limit: 50,

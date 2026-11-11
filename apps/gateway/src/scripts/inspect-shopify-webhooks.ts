@@ -234,16 +234,15 @@ async function main(): Promise<void> {
   const args = parseShopifyWebhookMigrationArgs(process.argv.slice(2));
   loadGatewayEnv();
   const { db } = await import('@shopkeeper/db');
+  const { SHOPIFY_ACCESS_SELECT, shopifyContextFor } = await import('@shopkeeper/agent/shopify/access');
   const integrations = await db.integration.findMany({
     where: {
       platform: 'shopify',
       ...(args.shop && { externalAccountId: args.shop }),
     },
     select: {
-      id: true,
+      ...SHOPIFY_ACCESS_SELECT,
       organizationId: true,
-      externalAccountId: true,
-      accessToken: true,
       createdAt: true,
       organization: { select: { name: true } },
     },
@@ -259,15 +258,16 @@ async function main(): Promise<void> {
     console.log(
       `shop=${row.externalAccountId} org=${row.organizationId} (${row.organization?.name ?? '?'}) integration=${row.id}`,
     );
-    if (!row.accessToken || !row.externalAccountId) {
-      console.log('  skipped: missing access token or shop domain');
+    const shopify = await shopifyContextFor(row);
+    if (!shopify) {
+      console.log('  skipped: no usable access token (missing, or the store must be reconnected)');
       continue;
     }
     const result = await migrateShopifyWebhooks({
-      accessToken: row.accessToken,
+      accessToken: shopify.accessToken,
       execute: args.execute,
       mode: args.mode,
-      shop: row.externalAccountId,
+      shop: shopify.shop,
     });
     const matchingBefore = matchingMigrationSubscriptions(result.before);
     console.log(

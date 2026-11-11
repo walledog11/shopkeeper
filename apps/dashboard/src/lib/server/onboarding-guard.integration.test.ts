@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockClerkSession } from '@/test-fixtures/clerk-session';
-import { ChannelType, db } from '@shopkeeper/db';
+import { ChannelType, db, INTEGRATION_REAUTH_SENTINEL } from '@shopkeeper/db';
 import { cleanupTestData, createTestIntegration, createTestOrg } from '@shopkeeper/db/test-helpers';
 
 vi.mock('@clerk/nextjs/server', () => ({
@@ -129,14 +129,14 @@ describe('getIncompleteOnboardingRedirect', () => {
     );
   });
 
-  it('treats an expired Shopify token as not connected', async () => {
+  it('treats a Shopify grant marked for reconnect as not connected', async () => {
     await db.integration.create({
       data: {
         organizationId: org.id,
         platform: ChannelType.shopify,
         externalAccountId: 'test-shop.myshopify.com',
         accessToken: 'shpat_test_token',
-        tokenExpiresAt: new Date(Date.now() - 1000),
+        tokenExpiresAt: INTEGRATION_REAUTH_SENTINEL,
       },
     });
 

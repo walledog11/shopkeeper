@@ -1,4 +1,5 @@
 import { db } from '@shopkeeper/db';
+import { SHOPIFY_ACCESS_SELECT, shopifyContextFor } from '@shopkeeper/agent/shopify/access';
 import {
   listOpenReturnWatches,
   markReturnWatchPlanPushed,
@@ -8,7 +9,6 @@ import {
 } from '@shopkeeper/db';
 import {
   safeFetchOrderReturnStatuses,
-  type ShopifyContext,
 } from '@shopkeeper/agent/shopify';
 import { isShopifyIntegrationSweepable } from '@shopkeeper/agent/shopify/integration-health';
 import { isReturnLifecycleMonitorEnabled } from '../config/runtime-config.js';
@@ -139,10 +139,8 @@ export async function runReturnLifecycleMonitor(): Promise<{
   const integrations = await db.integration.findMany({
     where: { platform: 'shopify', accessToken: { not: null } },
     select: {
+      ...SHOPIFY_ACCESS_SELECT,
       organizationId: true,
-      externalAccountId: true,
-      accessToken: true,
-      tokenExpiresAt: true,
       metadata: true,
     },
   });
@@ -151,12 +149,9 @@ export async function runReturnLifecycleMonitor(): Promise<{
   let closuresNotified = 0;
 
   for (const integration of integrations) {
-    if (!integration.accessToken || !integration.externalAccountId) continue;
     if (!isShopifyIntegrationSweepable(integration)) continue;
-    const ctx: ShopifyContext = {
-      shop: integration.externalAccountId,
-      accessToken: integration.accessToken,
-    };
+    const ctx = await shopifyContextFor(integration);
+    if (!ctx) continue;
 
     const watches = await listOpenReturnWatches(integration.organizationId);
     const watchedReturnIds = new Set(watches.map((watch) => watch.shopifyReturnId));

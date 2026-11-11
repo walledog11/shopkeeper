@@ -72,6 +72,8 @@ const CONTRACTS = {
     ],
     launchRequired: [
       'SHOPIFY_APP_SECRET',
+      'SHOPIFY_CLIENT_ID',
+      'SHOPIFY_CLIENT_SECRET',
       'BLOB_READ_WRITE_TOKEN',
       'POSTMARK_INBOUND_USERNAME',
       'POSTMARK_INBOUND_PASSWORD',

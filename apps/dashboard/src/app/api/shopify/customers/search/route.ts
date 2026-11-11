@@ -3,6 +3,7 @@ import { db } from '@shopkeeper/db';
 import { NotFoundError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
 import { shopifyRestJson } from '@shopkeeper/agent/shopify';
+import { SHOPIFY_ACCESS_SELECT, shopifyContextFor } from '@shopkeeper/agent/shopify/access';
 import { shopifyRouteErrorResponse } from '@/lib/server/shopify-integration';
 
 export const GET = withOrgRoute(
@@ -17,13 +18,12 @@ export const GET = withOrgRoute(
 
     const integration = await db.integration.findFirst({
       where: { organizationId: org.id, platform: 'shopify' },
+      select: SHOPIFY_ACCESS_SELECT,
     });
-
-    if (!integration?.accessToken) {
+    const ctx = integration ? await shopifyContextFor(integration) : null;
+    if (!integration || !ctx) {
       throw new NotFoundError('no_integration');
     }
-
-    const ctx = { shop: integration.externalAccountId, accessToken: integration.accessToken };
 
     let data: { customers?: unknown[] };
     try {

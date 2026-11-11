@@ -274,7 +274,7 @@ describe('POST /api/integrations/shopify/callback', () => {
     mockFetch.mockImplementation(async (input, init) => {
       const url = String(input);
       if (url.endsWith('/admin/oauth/access_token')) {
-        const code = (JSON.parse(String(init?.body)) as { code: string }).code;
+        const code = new URLSearchParams(String(init?.body)).get('code');
         return jsonResponse({ access_token: `token-${code}` });
       }
       if (url.endsWith('/admin/api/2026-04/shop.json')) return shopResponse();

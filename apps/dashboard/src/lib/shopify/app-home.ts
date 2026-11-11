@@ -1,5 +1,7 @@
 import { db } from '@shopkeeper/db';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
+import { shopifyTokenColumns, withShopifyTokenLock } from '@shopkeeper/agent/shopify/access';
+import { isSimulatedShopifyIntegration } from '@shopkeeper/agent/shopify/integration-health';
 import { shopifyPermissionRows, type ShopifyPermissionRow } from '@/lib/integrations/shopify-permissions';
 import logger from '@/lib/server/logger';
 import { getHomeChannelState } from '@/lib/server/home-summary';
@@ -76,6 +78,7 @@ function findLinkedIntegration(shop: string) {
       id: true,
       organizationId: true,
       accessToken: true,
+      refreshToken: true,
       tokenExpiresAt: true,
       externalAccountId: true,
       metadata: true,
@@ -86,7 +89,10 @@ function findLinkedIntegration(shop: string) {
 }
 
 function needsGrantRefresh(integration: LinkedIntegration): boolean {
+  if (isSimulatedShopifyIntegration(integration.metadata)) return false;
   if (!isShopifyIntegrationOperational(integration)) return true;
+  // A non-expiring token, from before expiring tokens: opening the app swaps it.
+  if (!integration.refreshToken) return true;
   const recorded = recordedShopifyScopes(integration.metadata);
   return recorded === null || missingShopifyScopes(recorded).length > 0;
 }
@@ -94,9 +100,9 @@ function needsGrantRefresh(integration: LinkedIntegration): boolean {
 /**
  * Managed installation grants scopes inside Shopify admin, and a token keeps the
  * grant it was issued with. Opening the app is when a merchant has just approved
- * new scopes, or can repair a token Shopify stopped accepting, so a short or
- * dead grant is re-issued here from the admin's ID token. A failure leaves the
- * row as it was; the page then shows the reconnect path.
+ * new scopes, or can repair a token Shopify stopped accepting, so a short, dead
+ * or non-expiring grant is re-issued here from the admin's ID token. A failure
+ * leaves the row as it was; the page then shows the reconnect path.
  */
 async function refreshGrant(
   integration: LinkedIntegration,
@@ -105,26 +111,30 @@ async function refreshGrant(
   config: ShopifyAppConfig,
 ): Promise<LinkedIntegration> {
   try {
-    const result = await exchangeShopifyAccessToken({
-      clientId: config.clientId,
-      clientSecret: config.clientSecret,
-      shopDomain: shop,
-      idToken,
-    });
-    if (!result.ok) return integration;
+    // The new token retires one a refresh may be fetching for this store, so
+    // the exchange and the save happen under the store's lock.
+    const reissued = await withShopifyTokenLock(shop, async (tx) => {
+      const result = await exchangeShopifyAccessToken({
+        clientId: config.clientId,
+        clientSecret: config.clientSecret,
+        shopDomain: shop,
+        idToken,
+      });
+      if (!result.ok) return false;
 
-    const metadata = mergeShopifyOAuthScopes(integration.metadata, result.oauthScopes);
-    // Only an active connection: a disconnect in flight must not be revived by
-    // someone opening the app.
-    const updated = await db.integration.updateMany({
-      where: { id: integration.id, organizationId: integration.organizationId, lifecycleStatus: 'active' },
-      data: {
-        accessToken: result.accessToken,
-        tokenExpiresAt: null,
-        ...(metadata !== undefined && { metadata }),
-      },
+      const metadata = mergeShopifyOAuthScopes(integration.metadata, result.token.scopes);
+      // Only an active connection: a disconnect in flight must not be revived by
+      // someone opening the app.
+      const updated = await tx.integration.updateMany({
+        where: { id: integration.id, organizationId: integration.organizationId, lifecycleStatus: 'active' },
+        data: {
+          ...shopifyTokenColumns(result.token),
+          ...(metadata !== undefined && { metadata }),
+        },
+      });
+      return updated.count > 0;
     });
-    if (updated.count === 0) return integration;
+    if (!reissued) return integration;
 
     logger.info({ shop, orgId: integration.organizationId }, '[Shopify app home] Re-issued the Shopify grant');
     return (await findLinkedIntegration(shop)) ?? integration;

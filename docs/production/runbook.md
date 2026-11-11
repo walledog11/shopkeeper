@@ -162,7 +162,8 @@ daily LLM spend cap (`llm_daily_spend`).
 - **Boot:** `DATABASE_URL`, `DIRECT_DATABASE_URL`, `REDIS_URL`, `ANTHROPIC_API_KEY`, `INTERNAL_API_SECRET`,
   `DASHBOARD_URL`, `TOKEN_ENCRYPTION_KEY`, `PRODUCT_ANALYTICS_ENABLED`, `PLAN_EXECUTION_LEDGER_MODE`,
   plus `POSTMARK_INBOUND_USERNAME`/`POSTMARK_INBOUND_PASSWORD` unless `EMAIL_INBOUND_MODE=gmail-only`.
-- **Launch:** `SHOPIFY_APP_SECRET`, `POSTMARK_INBOUND_USERNAME`, `POSTMARK_INBOUND_PASSWORD` (basic
+- **Launch:** `SHOPIFY_APP_SECRET`, `SHOPIFY_CLIENT_ID` and `SHOPIFY_CLIENT_SECRET` (the dashboard's
+  values: every refresh of a store's hour-long Shopify token presents them), `POSTMARK_INBOUND_USERNAME`, `POSTMARK_INBOUND_PASSWORD` (basic
   auth on `/webhooks/email/inbound` and `/webhooks/email/bounce`), `BLOB_READ_WRITE_TOKEN`,
   `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GMAIL_PUBSUB_TOPIC`, `GMAIL_PUBSUB_AUDIENCE`,
   `GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT` (audience and account must exactly match the push
@@ -205,18 +206,36 @@ before any fresh instruction; never reset the row to `pending` or replay it.
 ### Rotating the Shopify app secret
 
 Shopify signs webhooks, the OAuth callback and app-proxy requests with the app's client secret,
-which the apps hold under three names: gateway `SHOPIFY_APP_SECRET` (webhook HMAC on
-`/webhooks/shopify`), dashboard `SHOPIFY_CLIENT_SECRET` (OAuth callback HMAC and token exchange) and
-dashboard `SHOPIFY_APP_SECRET` (storefront-chat app-proxy signature).
+which the apps hold under four names: gateway `SHOPIFY_APP_SECRET` (webhook HMAC on
+`/webhooks/shopify`), gateway and dashboard `SHOPIFY_CLIENT_SECRET` (token refresh, and on the
+dashboard the OAuth callback HMAC and token exchange) and dashboard `SHOPIFY_APP_SECRET`
+(storefront-chat app-proxy signature).
 
 1. Rotate the secret in the Shopify Partner Dashboard.
-2. In the same window, set the new value on Railway (`SHOPIFY_APP_SECRET`, both gateway services)
-   and Vercel (`SHOPIFY_CLIENT_SECRET` and `SHOPIFY_APP_SECRET`), then redeploy both. Until both
-   hold it, webhooks fail with `401` (`[Webhook] Shopify signature mismatch`, `webhook_signature`
-   alerts) and connects fail their HMAC check.
+2. In the same window, set the new value on Railway (`SHOPIFY_APP_SECRET` and
+   `SHOPIFY_CLIENT_SECRET`, both gateway services) and Vercel (`SHOPIFY_CLIENT_SECRET` and
+   `SHOPIFY_APP_SECRET`), then redeploy both. Until both hold it, webhooks fail with `401`
+   (`[Webhook] Shopify signature mismatch`, `webhook_signature` alerts), connects fail their HMAC
+   check, and token refreshes fail (`[shopify:access] Shopify token refresh failed`).
 3. Validate one OAuth install or reconnect and one signed order webhook the gateway accepts.
 
 Keep the value out of logs, transcripts and shell history.
+
+### Shopify access tokens
+
+A store's token lasts an hour and comes with a refresh token that rotates on every refresh
+(`packages/agent/src/shopify/access.ts`). Every Shopify call builds its context with
+`shopifyContextFor`, which refreshes a token near its end; a refresh and a new grant for one store
+never overlap (`withShopifyTokenLock`, a Postgres advisory lock both apps share). The daily
+token-health job swaps any remaining non-expiring token for an expiring one and refreshes stores
+idle for a week, before their refresh token's 90 days run out. Opening Shopkeeper from Shopify
+admin also swaps a non-expiring token.
+
+- **Refused refresh** (`[shopify:access] Refresh refused`): the integration is marked for reconnect.
+  The merchant opens Shopkeeper from their Shopify admin, which re-issues the grant, or reconnects
+  from Integrations.
+- **Anything else** (timeouts, 5xx, missing `SHOPIFY_CLIENT_ID`/`SHOPIFY_CLIENT_SECRET`): Shopify
+  calls fail as unavailable and nothing is marked; the next call tries again.
 
 ## Deploy Sequence
 

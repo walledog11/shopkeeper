@@ -177,6 +177,8 @@ export interface BaseAgentContext {
   shopify: {
     shop: string;
     accessToken: string;
+    /** See `ShopifyContext.renewAccessToken`. */
+    renewAccessToken?: (refused: string) => Promise<string | null>;
     // Host-generated identity for one tool call. Mutations that support
     // provider idempotency derive their stable provider key from this value.
     operationId?: string;

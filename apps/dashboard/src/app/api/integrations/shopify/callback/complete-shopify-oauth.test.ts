@@ -1,11 +1,11 @@
 import { createHmac } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { jsonResponse } from '@shopkeeper/agent/testing';
+import { normalizeShopifyOAuthScopes } from '@shopkeeper/agent/shopify/access';
 import {
   exchangeShopifyAccessToken,
   isValidShopifyHmac,
   mergeShopifyOAuthScopes,
-  normalizeShopifyOAuthScopes,
 } from './complete-shopify-oauth';
 
 afterEach(() => {
@@ -71,8 +71,7 @@ describe('exchangeShopifyAccessToken', () => {
 
     await expect(exchange()).resolves.toEqual({
       ok: true,
-      accessToken: 'shpat_fixture',
-      oauthScopes: ['read_orders', 'write_orders'],
+      token: { accessToken: 'shpat_fixture', expiresAt: null, refreshToken: null, scopes: ['read_orders', 'write_orders'] },
     });
   });
 });

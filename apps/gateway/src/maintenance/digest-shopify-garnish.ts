@@ -8,6 +8,7 @@ import {
   summarizeOrdersInWindow,
   type ShopifyContext,
 } from '@shopkeeper/agent/shopify';
+import { SHOPIFY_ACCESS_SELECT, shopifyContextFor } from '@shopkeeper/agent/shopify/access';
 import logger from '../logger.js';
 import { resolveHandledWindowStart } from './digest-briefing/index.js';
 
@@ -27,10 +28,9 @@ function resolveLowStockThreshold(settings: Record<string, unknown>): number | n
 async function loadShopifyContext(organizationId: string): Promise<ShopifyContext | null> {
   const integration = await db.integration.findFirst({
     where: { organizationId, platform: 'shopify', accessToken: { not: null } },
-    select: { externalAccountId: true, accessToken: true },
+    select: SHOPIFY_ACCESS_SELECT,
   });
-  if (!integration?.accessToken || !integration.externalAccountId) return null;
-  return { shop: integration.externalAccountId, accessToken: integration.accessToken };
+  return integration ? shopifyContextFor(integration) : null;
 }
 
 function logGarnishFailure(

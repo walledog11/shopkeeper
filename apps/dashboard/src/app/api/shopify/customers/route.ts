@@ -5,6 +5,7 @@ import { NotFoundError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
 import { parseCreateShopifyCustomerBody } from '@/app/api/shopify/customer/_lib/validation';
 import { parseNextPageInfo, shopifyRest, shopifyRestJson } from '@shopkeeper/agent/shopify';
+import { SHOPIFY_ACCESS_SELECT, shopifyContextFor } from '@shopkeeper/agent/shopify/access';
 import { shopifyRouteErrorResponse } from '@/lib/server/shopify-integration';
 
 const CUSTOMER_LIST_FIELDS = 'id,first_name,last_name,email,phone,orders_count,total_spent,created_at,default_address';
@@ -18,14 +19,14 @@ export const GET = withOrgRoute(
   async ({ org, request }) => {
     const integration = await db.integration.findFirst({
       where: { organizationId: org.id, platform: 'shopify' },
+      select: SHOPIFY_ACCESS_SELECT,
     });
-
-    if (!integration?.accessToken) {
+    const ctx = integration ? await shopifyContextFor(integration) : null;
+    if (!integration || !ctx) {
       throw new NotFoundError('no_integration');
     }
 
-    const shop = integration.externalAccountId;
-    const ctx = { shop, accessToken: integration.accessToken };
+    const { shop } = ctx;
     const { searchParams } = new URL(request.url);
     const q = searchParams.get('q')?.trim() ?? '';
     const pageInfo = searchParams.get('page_info') ?? '';
@@ -65,13 +66,12 @@ export const POST = withOrgRoute(
     const { first_name, last_name, email } = parseCreateShopifyCustomerBody(await readRequiredJsonObject(request));
     const integration = await db.integration.findFirst({
       where: { organizationId: org.id, platform: 'shopify' },
+      select: SHOPIFY_ACCESS_SELECT,
     });
-
-    if (!integration?.accessToken) {
+    const ctx = integration ? await shopifyContextFor(integration) : null;
+    if (!integration || !ctx) {
       throw new NotFoundError('no_integration');
     }
-
-    const ctx = { shop: integration.externalAccountId, accessToken: integration.accessToken };
 
     let data: { customer?: unknown };
     try {

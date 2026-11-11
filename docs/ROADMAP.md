@@ -30,14 +30,10 @@ In order. This is the product's critical path.
    the brand's listing and, after reconnecting, the same sender's next DM lands on the
    same customer and a reply reaches them. If SocialAPI issues new author IDs on
    reconnect, record that in the transport plan (invariant 6) instead.
-5. **Expiring Shopify offline tokens, before 2027-01-01.** From that date Shopify blocks
-   new installs of public apps that still use non-expiring offline tokens, and from
-   2027-04-01 it rejects their Admin API calls. Every reader takes
-   `Integration.accessToken` as is, and `tokenExpiresAt` doubles as the "token is dead"
-   marker. Closes when every Shopify read goes through one refresh-aware accessor
-   (one-hour tokens, a rotating 90-day refresh token, one refresh per store at a time
-   because a refresh retires the other's result), existing tokens are swapped by token
-   exchange, and the OAuth callback and the app home ask for `expiring=1`.
+5. **Expiring Shopify offline tokens, before 2027-01-01** (built; runbook *Shopify access
+   tokens*). Closes when the gateway holds `SHOPIFY_CLIENT_ID` and `SHOPIFY_CLIENT_SECRET`
+   and the dev store's integration has a refresh token: opening the app in Shopify admin,
+   or the next daily token-health run, swaps its non-expiring token.
 6. **Install the Shopify app on a real, non-dev store.** First check its distribution in
    the Partner dashboard; it can't be changed once chosen. Custom distribution installs on
    one store (or one Plus organization), so it can't serve item 7. Public distribution

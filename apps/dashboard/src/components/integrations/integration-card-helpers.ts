@@ -14,14 +14,16 @@ import {
 import type { Integration } from "@/types"
 import type { PillState } from "./StatusPill"
 
+// Shopify's hour-long tokens refresh themselves; its reconnect state is
+// `connectionState`, which the Shopify branch above reads.
 function isTokenExpired(integration: Integration) {
-  if (!integration.tokenExpiresAt) return false
+  if (!integration.tokenExpiresAt || integration.platform === "shopify") return false
   if (integration.platform === "email") return isEmailAuthReauthorizationRequired(integration)
   return new Date(integration.tokenExpiresAt).getTime() < Date.now()
 }
 
 function isTokenExpiringSoon(integration: Integration) {
-  if (!integration.tokenExpiresAt) return false
+  if (!integration.tokenExpiresAt || integration.platform === "shopify") return false
   if (integration.platform === "email") return false
   const msLeft = new Date(integration.tokenExpiresAt).getTime() - Date.now()
   return msLeft > 0 && msLeft / 86_400_000 < 10

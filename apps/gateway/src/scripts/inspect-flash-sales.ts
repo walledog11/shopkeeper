@@ -37,18 +37,19 @@ interface RawNode {
 async function main() {
   const { db } = await import('@shopkeeper/db');
   const { listFlashSales, shopifyGraphql } = await import('@shopkeeper/agent/shopify');
+  const { SHOPIFY_ACCESS_SELECT, shopifyContextFor } = await import('@shopkeeper/agent/shopify/access');
 
   const integration = await db.integration.findFirst({
     where: { platform: 'shopify' },
-    select: { externalAccountId: true, accessToken: true },
+    select: SHOPIFY_ACCESS_SELECT,
   });
-  if (!integration?.accessToken) {
-    console.log('No Shopify integration connected.');
+  const ctx = integration ? await shopifyContextFor(integration) : null;
+  if (!ctx) {
+    console.log('No usable Shopify integration connected.');
     await db.$disconnect();
     return;
   }
-  const ctx = { shop: integration.externalAccountId, accessToken: integration.accessToken };
-  console.log(`shop: ${integration.externalAccountId}\n`);
+  console.log(`shop: ${ctx.shop}\n`);
 
   const raw = await shopifyGraphql<{ automaticDiscountNodes?: { nodes?: (RawNode | null)[] | null } }>(
     ctx,

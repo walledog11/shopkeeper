@@ -4,6 +4,7 @@ import {
   type UnknownOutcomeSweepCounts,
 } from '@shopkeeper/agent/unknown-outcome-reconciliation';
 import type { ShopifyContext } from '@shopkeeper/agent/shopify';
+import { SHOPIFY_ACCESS_SELECT, shopifyContextFor } from '@shopkeeper/agent/shopify/access';
 import { JOB, QUEUE } from '../constants.js';
 import logger from '../logger.js';
 import { emitOpsAlert, incrementOpsAlertWindow, type OpsAlertCounterClient } from '../ops-alerts.js';
@@ -27,10 +28,9 @@ const STILL_UNKNOWN_ALERT_WINDOW_SECS = 24 * 60 * 60;
 async function loadShopifyContext(organizationId: string): Promise<ShopifyContext | null> {
   const integration = await db.integration.findFirst({
     where: { organizationId, platform: 'shopify', accessToken: { not: null } },
-    select: { externalAccountId: true, accessToken: true },
+    select: SHOPIFY_ACCESS_SELECT,
   });
-  if (!integration?.accessToken || !integration.externalAccountId) return null;
-  return { shop: integration.externalAccountId, accessToken: integration.accessToken };
+  return integration ? shopifyContextFor(integration) : null;
 }
 
 async function alertUnresolvedOutcomes(
