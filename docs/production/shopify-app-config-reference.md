@@ -80,13 +80,14 @@ token (`verifyShopifySessionToken`); a missing or stale one bounces once through
 App Bridge for a fresh token.
 
 A linked shop gets three tabs: **Home** (what needs the merchant, its workspace's
-counts and any setup steps left, with links into the full app, which always open a
-new tab), **Website chat** (the dashboard's
-chat editor, live preview included) and **Settings** (sync store policies and pages
-to Memory; what the agent may do, read-only). An unlinked shop gets sign-up and
-connect links with the store filled in. When the linked row's token is dead, or
-its recorded grant is short of `SHOPIFY_OAUTH_SCOPES`, the page re-issues the
-grant by token exchange.
+counts and any setup steps left), **Website chat** (the dashboard's chat editor,
+live preview included) and **Settings** (sync store policies and pages to Memory;
+what the agent may do, read-only). An unlinked shop gets sign-up and connect links
+with the store filled in. Links into the full app always open a new tab, so coming
+back reloads what may have changed there (`/api/shopify/app/home`), and an unlinked
+shop's page turns into the linked one once the store is connected. When the linked
+row's token is dead, or its recorded grant is short of `SHOPIFY_OAUTH_SCOPES`, the
+page re-issues the grant by token exchange.
 
 The page calls `/api/shopify/app/*`, which `withShopifyAppRoute` authenticates with
 a fresh ID token per request; the workspace is the one connected to the token's

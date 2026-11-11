@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from 'react';
+import useSWR from 'swr';
 import { ArrowUpRight, Check, CircleAlert, Loader2, RefreshCw, X } from 'lucide-react';
 import { settingsSectionHref } from '@/app/dashboard/_components/nav-items';
 import { Button } from '@/components/ui/button';
@@ -8,11 +9,17 @@ import StorefrontChatEditor from '@/components/storefront-chat/StorefrontChatEdi
 import { StorefrontChatApiProvider, type StorefrontChatApi } from '@/components/storefront-chat/chat-api';
 import { errorMessageFromUnknown } from '@/lib/api/fetcher';
 import { cn } from '@/lib/ui/cn';
-import type { ShopifyAppHomeState } from '../_lib/app-home';
-import { shopifyAppRequest } from './app-bridge';
+import type { ShopifyAppHomeState, ShopifyAppHomeSummary } from '@/lib/shopify/app-home';
+import { reloadWithFreshToken, shopifyAppRequest } from './app-bridge';
 
 type LinkedState = Extract<ShopifyAppHomeState, { kind: 'linked' }>;
 type Tab = 'home' | 'chat' | 'settings';
+
+// Every way into the full app opens a new tab, so whatever the merchant changes
+// there is loaded again when they come back to this one: SWR revalidates on focus.
+const SUMMARY_URL = '/api/shopify/app/home';
+const SUMMARY_REFRESH = { revalidateOnMount: false, shouldRetryOnError: false } as const;
+const loadSummary = (url: string) => shopifyAppRequest<ShopifyAppHomeSummary>(url);
 
 const TABS: ReadonlyArray<{ id: Tab; label: string }> = [
   { id: 'home', label: 'Home' },
@@ -40,18 +47,31 @@ export function ShopifyAppHome({ state, appUrl }: { state: ShopifyAppHomeState; 
 }
 
 export function SessionProblem({ appUrl }: { appUrl: string }) {
+  return <ProblemPage appUrl={appUrl} title="Shopkeeper couldn't confirm this Shopify session"
+    detail="Reload the page. If it keeps happening, open Shopkeeper directly." />;
+}
+
+/** `appUrl` may be left out: the page is served from the app's own origin. */
+export function ProblemPage({ title, detail, action, appUrl = '' }: {
+  title: string; detail: string; action?: ReactNode; appUrl?: string;
+}) {
   return <div className={PAGE}>
     <main className="mx-auto w-full max-w-xl px-4 py-8">
       <section className={cn(CARD, 'p-6')}>
-        <h1 className="text-base font-semibold">Shopkeeper couldn&apos;t confirm this Shopify session</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Reload the page. If it keeps happening, open Shopkeeper directly.</p>
-        <div className="mt-5"><AppLink href={`${appUrl}/dashboard`} primary>Open Shopkeeper</AppLink></div>
+        <h1 className="text-base font-semibold">{title}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{detail}</p>
+        <div className="mt-5 flex flex-wrap gap-2">
+          {action}
+          <AppLink href={`${appUrl}/dashboard`} primary={!action}>Open Shopkeeper</AppLink>
+        </div>
       </section>
     </main>
   </div>;
 }
 
 function SetUp({ shop, appUrl }: { shop: string; appUrl: string }) {
+  // The summary loads only once this store is connected: then load the connected page.
+  useSWR(SUMMARY_URL, loadSummary, { ...SUMMARY_REFRESH, onSuccess: () => { reloadWithFreshToken().catch(() => {}); } });
   const onboarding = `${appUrl}/onboarding?shop=${encodeURIComponent(shop)}`;
   const steps = ['Create your account', `Connect ${shop}, already filled in`, 'Add Instagram or email, and your phone'];
   return <main className="mx-auto w-full max-w-xl px-4 py-8">
@@ -78,6 +98,7 @@ function SetUp({ shop, appUrl }: { shop: string; appUrl: string }) {
 function Linked({ state, appUrl }: { state: LinkedState; appUrl: string }) {
   const [tab, setTab] = useState<Tab>('home');
   const [chatEnabled, setChatEnabled] = useState(state.chat.enabled);
+  const { data: summary = state } = useSWR(SUMMARY_URL, loadSummary, { ...SUMMARY_REFRESH, fallbackData: state });
   const chatApi = useMemo<StorefrontChatApi>(() => ({
     configurationUrl: '/api/shopify/app/storefront-chat/configuration',
     setupUrl: '/api/shopify/app/storefront-chat',
@@ -88,7 +109,7 @@ function Linked({ state, appUrl }: { state: LinkedState; appUrl: string }) {
   }), [appUrl, state.shop]);
 
   return <main className="mx-auto w-full max-w-[1000px] px-4 pb-10 pt-4 sm:px-6">
-    {state.access !== 'ok' && <AccessBanner access={state.access} appUrl={appUrl} />}
+    {summary.access !== 'ok' && <AccessBanner access={summary.access} appUrl={appUrl} />}
 
     <div role="tablist" aria-label="Shopkeeper" className="flex gap-1">
       {TABS.map(item => <button key={item.id} id={`tab-${item.id}`} type="button" role="tab"
@@ -102,7 +123,7 @@ function Linked({ state, appUrl }: { state: LinkedState; appUrl: string }) {
     {/* Panels stay mounted, so the chat editor keeps its draft and published
         revision across tabs instead of reloading stale props. */}
     <div role="tabpanel" id="panel-home" aria-labelledby="tab-home" hidden={tab !== 'home'} className="mt-4">
-      <Home state={state} appUrl={appUrl} chatEnabled={chatEnabled} onOpenChat={() => setTab('chat')} />
+      <Home summary={summary} appUrl={appUrl} chatEnabled={chatEnabled} onOpenChat={() => setTab('chat')} />
     </div>
     <div role="tabpanel" id="panel-chat" aria-labelledby="tab-chat" hidden={tab !== 'chat'} className="mt-4">
       <section className={cn(CARD, 'overflow-hidden')}>
@@ -115,13 +136,13 @@ function Linked({ state, appUrl }: { state: LinkedState; appUrl: string }) {
     <div role="tabpanel" id="panel-settings" aria-labelledby="tab-settings" hidden={tab !== 'settings'} className="mt-4">
       <div className="grid items-start gap-4 lg:grid-cols-2">
         <StoreKnowledge />
-        <Permissions rows={state.permissions} appUrl={appUrl} />
+        <Permissions rows={summary.permissions} appUrl={appUrl} />
       </div>
     </div>
   </main>;
 }
 
-function AccessBanner({ access, appUrl }: { access: Exclude<LinkedState['access'], 'ok'>; appUrl: string }) {
+function AccessBanner({ access, appUrl }: { access: Exclude<ShopifyAppHomeSummary['access'], 'ok'>; appUrl: string }) {
   const lost = access === 'lost';
   return <div role="status" className={cn('mb-4 flex flex-wrap items-start gap-3 rounded-xl p-4 text-sm',
     lost ? 'bg-red-50 text-red-900' : 'bg-amber-50 text-amber-900')}>
@@ -134,10 +155,10 @@ function AccessBanner({ access, appUrl }: { access: Exclude<LinkedState['access'
   </div>;
 }
 
-function Home({ state, appUrl, chatEnabled, onOpenChat }: {
-  state: LinkedState; appUrl: string; chatEnabled: boolean; onOpenChat: () => void;
+function Home({ summary, appUrl, chatEnabled, onOpenChat }: {
+  summary: ShopifyAppHomeSummary; appUrl: string; chatEnabled: boolean; onOpenChat: () => void;
 }) {
-  const { metrics, setup } = state;
+  const { metrics, setup } = summary;
   const needsYou = metrics?.needsYou ?? 0;
   const steps = setup ? [
     { label: 'Connect Instagram or email', done: setup.customerChannel,
@@ -219,7 +240,7 @@ function StoreKnowledge() {
   </section>;
 }
 
-function Permissions({ rows, appUrl }: { rows: LinkedState['permissions']; appUrl: string }) {
+function Permissions({ rows, appUrl }: { rows: ShopifyAppHomeSummary['permissions']; appUrl: string }) {
   return <section className={CARD}>
     <div className="flex items-center justify-between gap-3 px-5 pt-4">
       <h2 className="text-sm font-semibold">What Shopkeeper can do</h2>

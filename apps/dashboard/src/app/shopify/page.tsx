@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { getShopifyOAuthCallbackConfig } from '@/lib/env';
 import { normalizeShopifyShopDomain } from '@/lib/shopify/oauth';
 import { verifyShopifySessionToken } from '@/lib/shopify/session-token';
-import { loadShopifyAppHome } from './_lib/app-home';
+import { loadShopifyAppHome } from '@/lib/shopify/app-home';
 import { SessionBounce } from './_components/SessionBounce';
 import { SessionProblem, ShopifyAppHome } from './_components/ShopifyAppHome';
 

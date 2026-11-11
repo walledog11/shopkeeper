@@ -32,23 +32,30 @@ interface ShopifyAppHomeSetup {
   chatAvailable: boolean;
 }
 
+/**
+ * What the merchant changes in Shopkeeper itself, in a new tab: the page loads
+ * it again when they come back.
+ */
+export interface ShopifyAppHomeSummary {
+  /** `lost`: no working token. `missing_scopes`: works, but short of what the tools need. */
+  access: 'ok' | 'missing_scopes' | 'lost';
+  /** Null when the counts could not be loaded; the page still renders. */
+  metrics: ShopifyAppHomeMetrics | null;
+  /** Null when it could not be loaded; the checklist is left out. */
+  setup: ShopifyAppHomeSetup | null;
+  /** Read-only here: what the agent may do is changed by a workspace admin in Shopkeeper. */
+  permissions: ShopifyPermissionRow[];
+}
+
 export type ShopifyAppHomeState =
   | { kind: 'unlinked'; shop: string }
-  | {
+  | (ShopifyAppHomeSummary & {
     kind: 'linked';
     shop: string;
-    /** `lost`: no working token. `missing_scopes`: works, but short of what the tools need. */
-    access: 'ok' | 'missing_scopes' | 'lost';
-    /** Null when the counts could not be loaded; the page still renders. */
-    metrics: ShopifyAppHomeMetrics | null;
-    /** Null when it could not be loaded; the checklist is left out. */
-    setup: ShopifyAppHomeSetup | null;
     chat: ChatConfigurationResponse;
     chatDraftKey: string;
     themeEditorUrl: string;
-    /** Read-only here: what the agent may do is changed by a workspace admin in Shopkeeper. */
-    permissions: ShopifyPermissionRow[];
-  };
+  });
 
 interface ShopifyAppConfig {
   clientId: string;
@@ -161,6 +168,31 @@ async function loadSetup(organizationId: string): Promise<ShopifyAppHomeSetup | 
   }
 }
 
+async function loadSummary(integration: LinkedIntegration): Promise<ShopifyAppHomeSummary> {
+  const recorded = recordedShopifyScopes(integration.metadata);
+  const access = !isShopifyIntegrationOperational(integration)
+    ? 'lost'
+    : recorded !== null && missingShopifyScopes(recorded).length > 0
+      ? 'missing_scopes'
+      : 'ok';
+  const [metrics, setup] = await Promise.all([
+    loadMetrics(integration.organizationId),
+    loadSetup(integration.organizationId),
+  ]);
+  return {
+    access,
+    metrics,
+    setup,
+    permissions: shopifyPermissionRows(resolveAgentSettings(integration.organization.settings)),
+  };
+}
+
+/** The summary alone, for an open page; null once the shop is no longer connected. */
+export async function loadShopifyAppHomeSummary(shop: string): Promise<ShopifyAppHomeSummary | null> {
+  const integration = await findLinkedIntegration(shop);
+  return integration ? loadSummary(integration) : null;
+}
+
 /** What the app home shows the shop a verified ID token names. */
 export async function loadShopifyAppHome(
   shop: string,
@@ -173,26 +205,12 @@ export async function loadShopifyAppHome(
   const integration = needsGrantRefresh(found)
     ? await refreshGrant(found, shop, idToken, config)
     : found;
-  const recorded = recordedShopifyScopes(integration.metadata);
-  const access = !isShopifyIntegrationOperational(integration)
-    ? 'lost'
-    : recorded !== null && missingShopifyScopes(recorded).length > 0
-      ? 'missing_scopes'
-      : 'ok';
-
-  const [metrics, setup] = await Promise.all([
-    loadMetrics(integration.organizationId),
-    loadSetup(integration.organizationId),
-  ]);
   return {
     kind: 'linked',
     shop,
-    access,
-    metrics,
-    setup,
+    ...await loadSummary(integration),
     chat: chatConfigurationFromIntegration(integration, integration.organization.name),
     chatDraftKey: `shopkeeper:chat-draft:${integration.organizationId}:${integration.id}`,
     themeEditorUrl: buildShopifyThemeEditorAppEmbedUrl(shop, config.clientId),
-    permissions: shopifyPermissionRows(resolveAgentSettings(integration.organization.settings)),
   };
 }
