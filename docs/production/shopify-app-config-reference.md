@@ -79,8 +79,9 @@ layout renders App Bridge in place of Clerk. The page verifies the admin's ID
 token (`verifyShopifySessionToken`); a missing or stale one bounces once through
 App Bridge for a fresh token.
 
-A linked shop gets three tabs: **Overview** (its workspace's counts, with links
-into the full app, which always open a new tab), **Website chat** (the dashboard's
+A linked shop gets three tabs: **Home** (what needs the merchant, its workspace's
+counts and any setup steps left, with links into the full app, which always open a
+new tab), **Website chat** (the dashboard's
 chat editor, live preview included) and **Settings** (sync store policies and pages
 to Memory; what the agent may do, read-only). An unlinked shop gets sign-up and
 connect links with the store filled in. When the linked row's token is dead, or

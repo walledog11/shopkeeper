@@ -2,6 +2,7 @@ import { db } from '@shopkeeper/db';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { shopifyPermissionRows, type ShopifyPermissionRow } from '@/lib/integrations/shopify-permissions';
 import logger from '@/lib/server/logger';
+import { getHomeChannelState } from '@/lib/server/home-summary';
 import { getHomeSummaryWindows, loadHomeMetricRows } from '@/lib/server/home-summary-queries';
 import {
   isShopifyIntegrationOperational,
@@ -9,6 +10,7 @@ import {
   recordedShopifyScopes,
 } from '@/lib/server/shopify-integration';
 import type { ChatConfigurationResponse } from '@/lib/storefront-chat/configuration';
+import { isStorefrontChatGloballyEnabled } from '@/lib/storefront-chat/enabled';
 import { chatConfigurationFromIntegration } from '@/lib/storefront-chat/service';
 import { buildShopifyThemeEditorAppEmbedUrl } from '@/lib/storefront-chat/theme-editor';
 import {
@@ -22,17 +24,25 @@ interface ShopifyAppHomeMetrics {
   repliesSent24h: number;
 }
 
+/** The dashboard's setup steps that still matter once the store is connected. */
+interface ShopifyAppHomeSetup {
+  customerChannel: boolean;
+  phone: boolean;
+  /** Website chat exists only where the platform switch is on. */
+  chatAvailable: boolean;
+}
+
 export type ShopifyAppHomeState =
   | { kind: 'unlinked'; shop: string }
   | {
     kind: 'linked';
     shop: string;
-    shopName: string;
-    workspaceName: string;
     /** `lost`: no working token. `missing_scopes`: works, but short of what the tools need. */
     access: 'ok' | 'missing_scopes' | 'lost';
     /** Null when the counts could not be loaded; the page still renders. */
     metrics: ShopifyAppHomeMetrics | null;
+    /** Null when it could not be loaded; the checklist is left out. */
+    setup: ShopifyAppHomeSetup | null;
     chat: ChatConfigurationResponse;
     chatDraftKey: string;
     themeEditorUrl: string;
@@ -133,6 +143,24 @@ async function loadMetrics(organizationId: string): Promise<ShopifyAppHomeMetric
   }
 }
 
+async function loadSetup(organizationId: string): Promise<ShopifyAppHomeSetup | null> {
+  try {
+    const [channels, phones] = await Promise.all([
+      getHomeChannelState(organizationId, null),
+      // Any member's phone: approvals reach whoever linked one.
+      db.orgMemberImessageBinding.count({ where: { orgMember: { organizationId } } }),
+    ]);
+    return {
+      customerChannel: channels.hasInstagram || channels.hasEmailForwarding,
+      phone: phones > 0,
+      chatAvailable: isStorefrontChatGloballyEnabled(),
+    };
+  } catch (error) {
+    logger.error({ err: error, orgId: organizationId }, '[Shopify app home] Failed to load setup');
+    return null;
+  }
+}
+
 /** What the app home shows the shop a verified ID token names. */
 export async function loadShopifyAppHome(
   shop: string,
@@ -152,13 +180,16 @@ export async function loadShopifyAppHome(
       ? 'missing_scopes'
       : 'ok';
 
+  const [metrics, setup] = await Promise.all([
+    loadMetrics(integration.organizationId),
+    loadSetup(integration.organizationId),
+  ]);
   return {
     kind: 'linked',
     shop,
-    shopName: integration.fromEmail?.trim() || shop,
-    workspaceName: integration.organization.name,
     access,
-    metrics: await loadMetrics(integration.organizationId),
+    metrics,
+    setup,
     chat: chatConfigurationFromIntegration(integration, integration.organization.name),
     chatDraftKey: `shopkeeper:chat-draft:${integration.organizationId}:${integration.id}`,
     themeEditorUrl: buildShopifyThemeEditorAppEmbedUrl(shop, config.clientId),

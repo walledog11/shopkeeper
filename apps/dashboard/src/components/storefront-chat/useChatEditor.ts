@@ -8,7 +8,12 @@ import { useStorefrontChatApi } from './chat-api';
 
 type Action = 'save' | 'enable' | 'disable' | 'reload';
 
-export function useChatEditor(initialData: ChatConfigurationResponse, draftKey: string, canManage: boolean) {
+export function useChatEditor(
+  initialData: ChatConfigurationResponse,
+  draftKey: string,
+  canManage: boolean,
+  onEnabledChange?: (enabled: boolean) => void,
+) {
   const { configurationUrl, setupUrl, request } = useStorefrontChatApi();
   const [data, setData] = useState(initialData);
   const [settings, setSettings] = useState(initialData.configuration?.settings ?? DEFAULT_CHAT_SETTINGS);
@@ -85,6 +90,7 @@ export function useChatEditor(initialData: ChatConfigurationResponse, draftKey: 
         body: JSON.stringify({ enabled: nextAction === 'enable' }), signal: AbortSignal.timeout(20_000),
       }, 'Could not update chat. Please try again.');
       setData(current => ({ ...current, enabled: result.enabled }));
+      onEnabledChange?.(result.enabled);
     }
   }, cause => cause instanceof Error && cause.name === 'TimeoutError'
     ? 'This is taking longer than expected. Your draft is kept here. Try again.'

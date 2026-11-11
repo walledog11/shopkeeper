@@ -15,7 +15,7 @@ export function shopifyPermissionRows(settings: OrgSettings): ShopifyPermissionR
   const actions = settings.toolsEnabled.action
 
   return [
-    { label: "Read orders, customers, products", enabled: true, detail: "Required for Shopify integration" },
+    { label: "Read orders, customers, products", enabled: true, detail: null },
     { label: "Issue refunds", enabled: actions, detail: actions ? refundCap : null },
     { label: "Cancel unfulfilled orders", enabled: actions && !settings.blockCancellations, detail: null },
     { label: "Add custom items to new orders", enabled: actions && !settings.blockCustomLineItems, detail: null },
