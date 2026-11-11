@@ -7,7 +7,7 @@ Technical contracts and settled engineering decisions live with the code they go
 ([agent-runtime](agent-runtime.md), [runbook](production/runbook.md),
 [transport plan](socialapi-transport-plan.md)), not here.
 
-Last updated: 2026-11-10.
+Last updated: 2026-11-11.
 
 ## Next — the first real merchant
 
@@ -37,18 +37,61 @@ In order. This is the product's critical path.
 6. **Install the Shopify app on a real, non-dev store.** First check its distribution in
    the Partner dashboard; it can't be changed once chosen. Custom distribution installs on
    one store (or one Plus organization), so it can't serve item 7. Public distribution
-   needs Shopify's app review before any non-development install, even unlisted, and App
-   Store apps must charge through Shopify's billing, not Stripe. Review checks that the
-   app authenticates immediately after install; a shop installed from Shopify with no
-   workspace gets no token until the merchant connects it from onboarding, so store the
-   install's token-exchange grant until a workspace claims it if review flags that.
-   Closes when the install grants every `SHOPIFY_OAUTH_SCOPES` scope and a missing scope
-   shows the reconnect path.
+   needs Shopify's app review before any non-development install, even unlisted (next
+   section). Closes when the install grants every `SHOPIFY_OAUTH_SCOPES` scope and a
+   missing scope shows the reconnect path.
 7. **Two supervised external merchants** complete real approved loops with no
    wrong-recipient, unauthorized-money, duplicate-action or lost-message incident.
 
+## Next — Shopify App Store submission
+
+The first publication is the App Store. These block review or a new install's first day.
+
+1. **Charge through Shopify.** App Store apps must bill through Shopify; billing is
+   Stripe-only, and its plan prices are unset in production (Usage & billing hides the
+   plan picker until they exist). Managed pricing (plans in the Partner dashboard,
+   Shopify's own plan page) is the least code. Closes when a dev-store install picks a
+   plan and the billing write gate reads Shopify's subscription status.
+2. **Authenticate at install, not at signup.** A shop installed from Shopify holds no
+   token until the merchant signs up in a new tab and runs a second OAuth from
+   onboarding's store-URL field; review requires authenticating immediately and never
+   asking for the myshopify domain. Token-exchange on the first app-home load, keep the
+   grant until a workspace claims the shop, and let onboarding claim it. Closes when
+   install → app home → sign up → inbox asks for no store URL and no second consent.
+3. **Instagram for an installer nobody assigned.** Connect is gated per workspace by
+   SocialAPI brand assignment, so every App Store install sees Instagram "Coming soon"
+   while the listing and landing page lead with DMs. Provision a brand on connect, or
+   lead with email and say Instagram opens by invitation. Closes when what the listing
+   promises is what a new install can connect.
+4. **Partner dashboard submission:** protected customer data access (level 2: name,
+   email, phone, address) with its data-protection answers; a reason for each requested
+   scope, dropping any no shipped tool uses; listing copy, icon and screenshots; a
+   screencast; reviewer test credentials. Closes when the submission form is complete.
+5. **Storefront embed weight.** The chat embed loads a stylesheet from api.fontshare.com
+   on every storefront page: a render-blocking third-party request that also hands
+   shoppers' IPs to a font CDN. Self-host the font or use the system stack, then compare
+   Lighthouse with and without the embed. Closes when the embed costs under Shopify's
+   10-point limit.
+6. **The privacy policy describes what runs.** Sentry Session Replay records a sample of
+   sessions on every page, Shopify admin included, and the policy names Sentry only for
+   error reports; it also omits the website chat widget, and the Terms describe Stripe
+   billing. Closes when replay is off or disclosed and both documents match the shipped
+   app.
+7. **Listing day:** the site's call to action is a waitlist. Point it and the pricing
+   cards at the listing, and open sign-ups. Closes when the listing is live.
+
 ## Later
 
+- **Pre-listing polish** (from the 2026-11-11 walkthrough). Home stacks two setup nudges
+  (the workflow card and a channel banner): give them one slot. Inbox rows are about
+  150px tall (200 on a phone) with input-like pills, so about five tickets fit a
+  screen. Page headers differ: settings pages, Website chat, and none at all on Inbox,
+  Memory, Review and Shop. A plan card shows raw server errors ("Unauthorized") instead
+  of a retry state. Onboarding headlines use a handwritten face nothing else uses.
+  Trusted differs from Ask first only by the refund cap until auto-execute ships (no UI,
+  default off), though its blurb promises more. Usage & billing shows a merchant-set AI
+  dollar cap that reads as metered billing. Website chat stays in the nav and the app
+  home's tabs when `STOREFRONT_CHAT_ENABLED` is off.
 - **SocialAPI hardening** (S1–S6 in [the transport plan](socialapi-transport-plan.md)):
   `dm.sent` correlation (a reply typed in the Instagram app never reaches the thread),
   missed-delivery recovery, account health probing, failed-connect compensation, and a
