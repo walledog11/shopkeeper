@@ -119,7 +119,7 @@ export default function ConversationContextBar({
     facts.push({
       key: "past",
       icon: Sparkles,
-      text: "First time",
+      text: "First chat",
       tone: "muted",
       section: "past",
     })

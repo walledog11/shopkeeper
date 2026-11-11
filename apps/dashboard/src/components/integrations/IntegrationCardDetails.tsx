@@ -29,6 +29,8 @@ export interface IntegrationCardCallbacks {
   ) => void
   syncShopifyKnowledgeBase: () => Promise<{ syncedPolicies: number; syncedPages: number }>
   updateShopifyStorefrontChat: (enabled: boolean) => Promise<boolean>
+  /** Set when the page was opened from Shopify admin with a claim for the store installed there. */
+  claimInstalledStore: (() => Promise<boolean>) | null
 }
 
 const DISCONNECT_NOTES: Record<"email" | "instagram" | "shopify" | "tiktok-shop", string> = {
@@ -219,6 +221,7 @@ function ShopifyDetails({
   const integration = model.selectedConnection
   const [shop, setShop] = useState(suggestedShop ?? "")
   const [loading, setLoading] = useState(false)
+  const [claimRefused, setClaimRefused] = useState(false)
   const [kbSyncing, setKbSyncing] = useState(false)
   const [kbSyncResult, setKbSyncResult] = useState<string | null>(null)
   const resultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -238,6 +241,16 @@ function ShopifyDetails({
     callbacks.launchOAuth(shopifyDefinition, { shop: domain }, () => {
       if (mountedRef.current) setLoading(false)
     })
+  }
+
+  async function claimInstalledStore() {
+    if (!callbacks.claimInstalledStore || !model.canManageWorkspace) return
+    setLoading(true)
+    const claimed = await callbacks.claimInstalledStore()
+    if (!mountedRef.current) return
+    setLoading(false)
+    // Refused (expired, or another workspace holds the store): connect through Shopify instead.
+    if (!claimed) setClaimRefused(true)
   }
 
   function reauthorize() {
@@ -277,6 +290,8 @@ function ShopifyDetails({
         loading={loading}
         onConnect={connect}
         disabled={!model.canManageWorkspace}
+        claimShop={callbacks.claimInstalledStore && suggestedShop && !claimRefused ? suggestedShop : null}
+        onClaim={() => { void claimInstalledStore() }}
       />
     )
   }
@@ -390,7 +405,6 @@ export function IntegrationCardDetails({
     case "oauth":
       return <DeclarativeOAuthDetails model={model} callbacks={callbacks} />
     case "device-binding":
-    case "unavailable":
       return null
   }
 }

@@ -1,3 +1,4 @@
+import { settingsSectionMetadata } from "@/app/dashboard/_components/nav-items"
 import { Suspense } from "react"
 import { auth } from "@clerk/nextjs/server"
 import { IntegrationsPageSkeleton } from "@/app/dashboard/_components/skeletons"
@@ -9,6 +10,8 @@ import { isStorefrontChatGloballyEnabled } from "@/lib/storefront-chat/enabled"
 import { isTikTokShopOAuthConfigured } from "@/lib/tiktok-shop/config"
 import { getOrCreateOrg } from "@/lib/server/org"
 import { getIntegrationsForOrg } from "@/lib/server/integrations-list"
+
+export const metadata = settingsSectionMetadata("channels")
 
 export default async function IntegrationsPage() {
   const { orgId } = await auth()

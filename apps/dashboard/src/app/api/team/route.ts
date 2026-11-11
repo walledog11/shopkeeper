@@ -54,7 +54,7 @@ export const POST = withClerkOrgRoute(
     // a clear refusal is honest; the conversation cap degrades instead precisely
     // because nobody is watching when a customer message arrives.
     const org = await getOrCreateOrg();
-    const seats = planLimitsFor(org.stripePriceId, getBillingPriceIds()).seats;
+    const seats = planLimitsFor(org, getBillingPriceIds()).seats;
     if (seats !== null) {
       const [memberships, pending] = await Promise.all([
         client.organizations.getOrganizationMembershipList({ organizationId: auth.orgId, limit: 100 }),

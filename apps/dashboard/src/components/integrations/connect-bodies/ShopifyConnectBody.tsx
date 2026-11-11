@@ -11,6 +11,8 @@ export function ShopifyConnectBody({
   loading,
   onConnect,
   disabled = false,
+  claimShop = null,
+  onClaim,
 }: {
   isConnected: boolean
   shop: string
@@ -18,7 +20,28 @@ export function ShopifyConnectBody({
   loading: boolean
   onConnect: () => void
   disabled?: boolean
+  /** The store installed from Shopify admin, which connects without its domain or a second approval. */
+  claimShop?: string | null
+  onClaim?: () => void
 }) {
+  if (!isConnected && claimShop && onClaim) {
+    return (
+      <div className="space-y-3">
+        <p className="text-xs text-foreground/40 leading-relaxed">
+          You installed Shopkeeper on this store and approved its access in Shopify. Connect it to this workspace.
+        </p>
+        <div className="flex items-center gap-2">
+          <span className="flex h-9 min-w-0 flex-1 items-center truncate rounded-md border border-input px-3 text-sm">
+            {claimShop}
+          </span>
+          <Button size="sm" disabled={disabled || loading} onClick={onClaim} className="shrink-0 h-9 px-4 font-medium">
+            {loading ? <Loader2 className="size-4 animate-spin" /> : "Connect"}
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-3">
       {!isConnected && (

@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import { auth, currentUser } from "@clerk/nextjs/server"
 import { cookies } from "next/headers"
 import { localGreeting, resolveAgentSettings, storeTimeZone } from "@shopkeeper/agent/settings"
@@ -13,6 +14,8 @@ import { getOrCreateOrg } from "@/lib/server/org"
 import { getHomeChannelState } from "@/lib/server/home-summary"
 import { getCachedHomeSummary } from "@/lib/server/cached-home-summary"
 import DashboardHomeClient from "../_components/home/DashboardHomeClient"
+
+export const metadata: Metadata = { title: "Home" }
 
 export default async function DashboardPage() {
   const { orgId, userId } = await auth()

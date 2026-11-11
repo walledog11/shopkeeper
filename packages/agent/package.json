@@ -194,6 +194,10 @@
       "types": "./dist/shopify/access.d.ts",
       "default": "./dist/shopify/access.js"
     },
+    "./shopify/billing": {
+      "types": "./dist/shopify/billing.d.ts",
+      "default": "./dist/shopify/billing.js"
+    },
     "./order-ops": {
       "types": "./dist/order-ops/index.d.ts",
       "default": "./dist/order-ops/index.js"

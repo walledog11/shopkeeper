@@ -19,6 +19,9 @@ import {
   exchangeShopifyAccessToken,
   mergeShopifyOAuthScopes,
 } from '@/app/api/integrations/shopify/callback/complete-shopify-oauth';
+import { loadShopifyBilling, type ShopifyBillingView } from './billing';
+import { mintShopifyInstallClaim } from './install-claim';
+import { holdShopifyInstallGrant } from './pending-install';
 
 interface ShopifyAppHomeMetrics {
   needsYou: number;
@@ -47,10 +50,13 @@ export interface ShopifyAppHomeSummary {
   setup: ShopifyAppHomeSetup | null;
   /** Read-only here: what the agent may do is changed by a workspace admin in Shopkeeper. */
   permissions: ShopifyPermissionRow[];
+  /** Null when Shopify doesn't bill this workspace (no plans set up yet). */
+  plan: ShopifyBillingView | null;
 }
 
 export type ShopifyAppHomeState =
-  | { kind: 'unlinked'; shop: string }
+  /** `claim` links the sign-up or sign-in tab to the install grant held for this store; null when none is held. */
+  | { kind: 'unlinked'; shop: string; claim: string | null }
   | (ShopifyAppHomeSummary & {
     kind: 'linked';
     shop: string;
@@ -185,14 +191,19 @@ async function loadSummary(integration: LinkedIntegration): Promise<ShopifyAppHo
     : recorded !== null && missingShopifyScopes(recorded).length > 0
       ? 'missing_scopes'
       : 'ok';
-  const [metrics, setup] = await Promise.all([
+  const [metrics, setup, plan] = await Promise.all([
     loadMetrics(integration.organizationId),
     loadSetup(integration.organizationId),
+    loadShopifyBilling(integration.organizationId).catch((error: unknown) => {
+      logger.error({ err: error, orgId: integration.organizationId }, '[Shopify app home] Failed to load the plan');
+      return null;
+    }),
   ]);
   return {
     access,
     metrics,
     setup,
+    plan,
     permissions: shopifyPermissionRows(resolveAgentSettings(integration.organization.settings)),
   };
 }
@@ -210,7 +221,10 @@ export async function loadShopifyAppHome(
   config: ShopifyAppConfig,
 ): Promise<ShopifyAppHomeState> {
   const found = await findLinkedIntegration(shop);
-  if (!found) return { kind: 'unlinked', shop };
+  if (!found) {
+    const held = await holdShopifyInstallGrant(shop, idToken, config);
+    return { kind: 'unlinked', shop, claim: held ? mintShopifyInstallClaim({ shop, grantId: held.grantId }) : null };
+  }
 
   const integration = needsGrantRefresh(found)
     ? await refreshGrant(found, shop, idToken, config)

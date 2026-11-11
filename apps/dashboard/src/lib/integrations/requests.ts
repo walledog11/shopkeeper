@@ -64,3 +64,12 @@ export function updateShopifyStorefrontChat(enabled: boolean): Promise<{ enabled
     "Failed to update storefront chat. Please try again.",
   )
 }
+
+/** Connects the store installed from Shopify, with the claim link from the Shopify admin app. */
+export function claimShopifyInstall(claim: string): Promise<void> {
+  return requestOk(
+    "/api/integrations/shopify/claim",
+    jsonRequest("POST", { claim }),
+    "Couldn't connect your store. Open Shopkeeper from your Shopify admin and try again.",
+  )
+}

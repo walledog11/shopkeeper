@@ -476,13 +476,13 @@ async function main() {
       open: await prisma.thread.count({ where: { organizationId: org.id, status: 'open' } }),
       articles: await prisma.kbArticle.count({ where: { organizationId: org.id } }),
       actions: await prisma.agentAction.count({ where: { organizationId: org.id } }),
-      ticketDetail: `/dashboard/tickets/${t6.id}`,
-      escalatedTicket: `/dashboard/tickets/${t4.id}`,
+      ticketDetail: `/dashboard/tickets?thread=${t6.id}`,
+      escalatedTicket: `/dashboard/tickets?thread=${t4.id}`,
       userScenarios: {
-        aliceMerchantInput: `/dashboard/tickets/${t6.id}`,
-        joshShopifyChat: `/dashboard/tickets/${t7.id}`,
-        garyInstagram: `/dashboard/tickets/${t8.id}`,
-        malikEmail: `/dashboard/tickets/${t9.id}`,
+        aliceMerchantInput: `/dashboard/tickets?thread=${t6.id}`,
+        joshShopifyChat: `/dashboard/tickets?thread=${t7.id}`,
+        garyInstagram: `/dashboard/tickets?thread=${t8.id}`,
+        malikEmail: `/dashboard/tickets?thread=${t9.id}`,
       },
     });
   } finally {

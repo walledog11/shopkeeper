@@ -9,11 +9,11 @@ import { errorMessageFromUnknown } from "@/lib/api/fetcher"
 import { useIntegrations } from "@/hooks/useIntegrations"
 import {
   INTEGRATION_CHANNEL_SECTIONS,
-  sortIntegrationDefinitionsByChannelKind,
   type IntegrationChannelKind,
 } from "@/lib/integrations/catalog"
 import { parseOAuthOutcome } from "@/lib/integrations/oauth-contract"
 import {
+  claimShopifyInstall,
   connectForwardingEmail,
   disconnectIntegration,
   setDefaultEmailIntegration,
@@ -44,13 +44,23 @@ import {
 
 const INTEGRATION_CARD_GRID = "grid items-stretch gap-4 auto-rows-fr grid-cols-[repeat(auto-fill,minmax(340px,1fr))]"
 
+// Wide screens keep the store and the phone in one column beside the customer
+// channels; narrow ones stack the sections in reading order.
+const CHANNEL_SECTIONS_GRID = "grid items-start gap-8 lg:grid-cols-2 lg:grid-rows-[auto_1fr] lg:[grid-template-areas:'store_support'_'operator_support']"
+const CHANNEL_SECTION_AREA: Record<IntegrationChannelKind, string> = {
+  store: "lg:[grid-area:store]",
+  support: "lg:[grid-area:support]",
+  operator: "lg:[grid-area:operator]",
+}
+const SKELETON_CARD_COUNT: Record<IntegrationChannelKind, number> = { store: 1, support: 3, operator: 1 }
+
 function renderIntegrationSkeletonSection(
   sectionKind: IntegrationChannelKind,
   title: string,
   count: number,
 ) {
   return (
-    <section key={sectionKind} className="space-y-4">
+    <section key={sectionKind} className={cn("space-y-4", CHANNEL_SECTION_AREA[sectionKind])}>
       <h2 className="text-sm font-semibold text-strong">{title}</h2>
       <div className={cn(INTEGRATION_CARD_GRID, "w-full")}>
         {Array.from({ length: count }).map((_, index) => (
@@ -110,6 +120,8 @@ function IntegrationsPageContent({
   const [openId, setOpenId] = useState<string | null>(searchParams.get("configure") === "shopify" ? "shopify" : null)
   // Set by the app home inside Shopify admin, so the merchant never types the address.
   const suggestedShopifyShop = normalizeShopifyShopDomain(searchParams.get("shop"))
+  // Sent by the app home inside Shopify admin: connects the store installed there.
+  const shopifyInstallClaim = searchParams.get("claim")
   const shopifyPresenceRef = useRef<ReturnType<typeof resolveShopifyConnectionState> | null>(null)
   const mountedRef = useRef(true)
   const [toast, setToast] = useState<{ tone: "success" | "error"; message: string } | null>(null)
@@ -159,22 +171,12 @@ function IntegrationsPageContent({
   ])
 
   const visibleModels = useMemo(() => models.filter((model) => model.visible), [models])
-  const modelsByChannelKind = useMemo(() => ({
-    support: sortIntegrationDefinitionsByChannelKind(
-      visibleModels.map((model) => model.definition),
-      "support",
-    ).flatMap((definition) => {
-      const model = visibleModels.find((candidate) => candidate.definition.id === definition.id)
-      return model ? [model] : []
-    }),
-    operator: sortIntegrationDefinitionsByChannelKind(
-      visibleModels.map((model) => model.definition),
-      "operator",
-    ).flatMap((definition) => {
-      const model = visibleModels.find((candidate) => candidate.definition.id === definition.id)
-      return model ? [model] : []
-    }),
-  }), [visibleModels])
+  const modelsByChannelKind = useMemo(() => Object.fromEntries(
+    INTEGRATION_CHANNEL_SECTIONS.map(({ kind }) => [
+      kind,
+      visibleModels.filter((model) => model.definition.channelKind === kind),
+    ]),
+  ) as Record<IntegrationChannelKind, IntegrationCardModel[]>, [visibleModels])
   const attention = useMemo(() => integrationAttentionSummary(models), [models])
   const emailConnected = integrations.some((integration) => integration.platform === "email")
   const dualInboundMessage = useMemo(() => {
@@ -250,12 +252,26 @@ function IntegrationsPageContent({
       if (!requireAdmin()) throw new Error("Only workspace admins can manage integrations.")
       return syncShopifyKnowledgeBase()
     },
+    claimInstalledStore: shopifyInstallClaim
+      ? async () => {
+        if (!requireAdmin()) return false
+        try {
+          await claimShopifyInstall(shopifyInstallClaim)
+          await mutate()
+          showToast("success", "Shopify store connected.")
+          return true
+        } catch (error) {
+          showToast("error", errorMessageFromUnknown(error, "Couldn't connect your store. Try again."))
+          return false
+        }
+      }
+      : null,
     async updateShopifyStorefrontChat(enabled) {
       if (!requireAdmin()) return false
       try {
         await updateShopifyStorefrontChat(enabled)
         await mutate()
-        showToast("success", enabled ? "Storefront chat enabled." : "Storefront chat disabled.")
+        showToast("success", enabled ? "Website chat is on." : "Website chat is off.")
         return true
       } catch (error) {
         showToast("error", errorMessageFromUnknown(error, "Failed to update storefront chat. Please try again."))
@@ -274,7 +290,7 @@ function IntegrationsPageContent({
         return false
       }
     },
-  }), [launchOAuth, mutate, requireAdmin, showToast])
+  }), [launchOAuth, mutate, requireAdmin, shopifyInstallClaim, showToast])
 
   function renderIntegrationCard(model: IntegrationCardModel) {
     const { definition } = model
@@ -302,7 +318,7 @@ function IntegrationsPageContent({
   ) {
     if (sectionModels.length === 0) return null
     return (
-      <section key={sectionKind} className="space-y-4">
+      <section key={sectionKind} className={cn("space-y-4", CHANNEL_SECTION_AREA[sectionKind])}>
         <h2 className="text-sm font-semibold text-strong">{title}</h2>
         <div className={cn(INTEGRATION_CARD_GRID, "w-full")}>
           {sectionModels.map(renderIntegrationCard)}
@@ -342,23 +358,11 @@ function IntegrationsPageContent({
           </section>
         ) : null}
 
-        {loaded ? (
-          <div className="grid items-start gap-8 lg:grid-cols-2">
-            {INTEGRATION_CHANNEL_SECTIONS.map((section) => renderIntegrationSection(
-              section.kind,
-              section.title,
-              modelsByChannelKind[section.kind],
-            ))}
-          </div>
-        ) : (
-          <div className="grid items-start gap-8 lg:grid-cols-2">
-            {INTEGRATION_CHANNEL_SECTIONS.map((section) => renderIntegrationSkeletonSection(
-              section.kind,
-              section.title,
-              4,
-            ))}
-          </div>
-        )}
+        <div className={CHANNEL_SECTIONS_GRID}>
+          {INTEGRATION_CHANNEL_SECTIONS.map((section) => loaded
+            ? renderIntegrationSection(section.kind, section.title, modelsByChannelKind[section.kind])
+            : renderIntegrationSkeletonSection(section.kind, section.title, SKELETON_CARD_COUNT[section.kind]))}
+        </div>
       </div>
 
       {toast ? (

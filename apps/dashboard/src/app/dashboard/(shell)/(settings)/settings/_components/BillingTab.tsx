@@ -14,7 +14,17 @@ import { appPrimaryButtonClassName } from "@/lib/ui/app-button-styles"
 import { SettingsTile } from "./SettingsTile"
 import { PLANS } from "@/lib/billing/plans"
 
-interface BillingInfo {
+interface ShopifyBillingInfo {
+  provider: "shopify"
+  status: "active" | "frozen" | "inactive" | null
+  planName: string | null
+  trialEndsAt: string | null
+  test: boolean
+  planPageUrl: string
+}
+
+interface StripeBillingInfo {
+  provider: "stripe"
   status: "active" | "trialing" | "past_due" | "canceled" | "none"
   planName: string | null
   amount: number | null
@@ -23,7 +33,10 @@ interface BillingInfo {
   nextInvoice: { date: number; amount: number } | null
   paymentMethod: { brand: string; last4: string } | null
   invoices: { id: string; date: number; amount: number; status: string | null; pdfUrl: string | null }[]
+  checkoutAvailable: boolean
 }
+
+type BillingInfo = ShopifyBillingInfo | StripeBillingInfo
 
 const STATUS_CONFIG = {
   active: { label: "Active", icon: CheckCircle2, className: "text-green-600 bg-green-600/10 border-green-600/20" },
@@ -145,6 +158,65 @@ function PlanPicker() {
   )
 }
 
+const SHOPIFY_STATUS_CONFIG = {
+  active: { label: "Active", icon: CheckCircle2, className: STATUS_CONFIG.active.className },
+  frozen: { label: "Paused by Shopify", icon: AlertTriangle, className: STATUS_CONFIG.past_due.className },
+  inactive: { label: "Ended", icon: XCircle, className: STATUS_CONFIG.canceled.className },
+}
+
+const DAY_MS = 86_400_000
+
+// Billed through Shopify (managed pricing): the plan is chosen on Shopify's own
+// page and paid on the store's Shopify bill, so there is no card or invoice here.
+function ShopifyBilling({ billing, isAdmin }: { billing: ShopifyBillingInfo; isAdmin: boolean }) {
+  const statusCfg = billing.status ? SHOPIFY_STATUS_CONFIG[billing.status] : null
+  const StatusIcon = statusCfg?.icon
+  const trialDaysLeft = billing.status === "active" && billing.trialEndsAt
+    ? Math.ceil((Date.parse(billing.trialEndsAt) - Date.now()) / DAY_MS)
+    : 0
+  const inTrial = trialDaysLeft > 0
+
+  return (
+    <div id="billing" className="flex flex-col gap-4 scroll-mt-6">
+      <SettingsTile
+        label="Plan"
+        description="Billed through Shopify, on your store's Shopify bill."
+        action={isAdmin ? (
+          <Button asChild variant="outline" className={GLASS_SETTINGS_ACTION}>
+            <a href={billing.planPageUrl} target="_blank" rel="noopener noreferrer">
+              {billing.status === "active" || billing.status === "frozen" ? "Change plan" : "Choose a plan"}
+              <ExternalLink className="size-3.5" />
+            </a>
+          </Button>
+        ) : null}
+      >
+        <div className="space-y-1.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-semibold text-strong">{billing.planName ?? "No plan yet"}</p>
+            {statusCfg && StatusIcon ? (
+              <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold ${inTrial ? STATUS_CONFIG.trialing.className : statusCfg.className}`}>
+                <StatusIcon className="size-3" />
+                {inTrial ? STATUS_CONFIG.trialing.label : statusCfg.label}
+              </span>
+            ) : null}
+          </div>
+          {inTrial ? (
+            <p className="font-medium text-blue-600">{trialDaysLeft} day{trialDaysLeft !== 1 ? "s" : ""} left in trial</p>
+          ) : null}
+          {billing.status === "frozen" ? (
+            <p>Shopify paused billing for this store, so replies and actions are paused until the store&apos;s Shopify bill is settled.</p>
+          ) : null}
+          {billing.status === "inactive" ? (
+            <p>Your plan has ended, so replies and actions are paused. Choose a plan to resume.</p>
+          ) : null}
+          {billing.status === null ? <p>Choose a plan in Shopify to keep Shopkeeper running.</p> : null}
+          {billing.test ? <p className="text-xs text-faint">Development store: Shopify doesn&apos;t charge this plan.</p> : null}
+        </div>
+      </SettingsTile>
+    </div>
+  )
+}
+
 function BillingSkeleton() {
   return (
     <div id="billing" className="flex flex-col gap-4 scroll-mt-6" aria-busy="true" aria-label="Loading billing">
@@ -181,9 +253,14 @@ export default function BillingTab() {
     )
   }
 
+  if (data.provider === "shopify") return <ShopifyBilling billing={data} isAdmin={isAdmin} />
+
   const statusCfg = STATUS_CONFIG[data.status] ?? STATUS_CONFIG.none
   const StatusIcon = statusCfg.icon
   const isActive = data.status === "active" || data.status === "trialing"
+  // With no plan on sale and nothing ever bought, a card or invoice tile has
+  // nothing to show.
+  const billable = isActive || data.checkoutAvailable || data.paymentMethod !== null || data.invoices.length > 0
   const trialDaysLeft = data.trialEnd
     ? Math.max(0, Math.ceil((data.trialEnd * 1000 - Date.now()) / 86400000))
     : null
@@ -213,6 +290,7 @@ export default function BillingTab() {
           {data.amount !== null && data.interval ? (
             <p>{formatAmount(data.amount)} / {data.interval}</p>
           ) : null}
+          {!billable ? <p>Free during early access.</p> : null}
           {data.status === "trialing" && trialDaysLeft !== null ? (
             <p className="font-medium text-blue-600">
               {trialDaysLeft} day{trialDaysLeft !== 1 ? "s" : ""} left in trial
@@ -226,82 +304,86 @@ export default function BillingTab() {
         </div>
       </SettingsTile>
 
-      <SettingsTile
-        label="Payment method"
-        action={
-          isAdmin ? (
-            <Button type="button" variant="outline" onClick={openBillingPortal} className={GLASS_SETTINGS_ACTION}>
-              {data.paymentMethod ? "Update card" : "Add card"}
-            </Button>
-          ) : null
-        }
-      >
-        {data.paymentMethod ? (
-          <div className="flex items-center gap-2.5">
-            <CreditCard className="size-4 shrink-0 text-faint" />
-            <CardBrandIcon brand={data.paymentMethod.brand} />
-            <span>
-              ending in <span className="font-semibold text-strong">{data.paymentMethod.last4}</span>
-            </span>
-          </div>
-        ) : (
-          "No payment method on file"
-        )}
-      </SettingsTile>
-
-      {isAdmin && !isActive ? <PlanPicker /> : null}
-
-      <SettingsTile label="Invoices">
-        <div className="space-y-3">
-          {data.invoices.length === 0 ? (
-            <p>No invoices yet.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-foreground/[0.08]">
-                    <th className="py-3 pr-5 text-left text-xs font-semibold uppercase tracking-wide text-faint">Date</th>
-                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-faint">Amount</th>
-                    <th className="hidden px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-faint sm:table-cell">Status</th>
-                    <th className="py-3 pl-5 text-right text-xs font-semibold uppercase tracking-wide text-faint">PDF</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-foreground/[0.06]">
-                  {data.invoices.map((inv) => (
-                    <tr key={inv.id} className="transition-colors hover:bg-foreground/[0.02]">
-                      <td className="py-3.5 pr-5">{formatUnixDate(inv.date)}</td>
-                      <td className="px-5 py-3.5 font-medium text-strong">{formatAmount(inv.amount)}</td>
-                      <td className="hidden px-5 py-3.5 sm:table-cell">
-                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${
-                          inv.status === "paid"
-                            ? "border-green-600/20 bg-green-600/10 text-green-600"
-                            : "border-foreground/[0.10] bg-foreground/[0.06] text-faint"
-                        }`}>
-                          {inv.status ?? "—"}
-                        </span>
-                      </td>
-                      <td className="py-3.5 pl-5 text-right">
-                        {inv.pdfUrl ? (
-                          <a
-                            href={inv.pdfUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground transition-colors hover:text-strong"
-                          >
-                            Download <ExternalLink className="size-3" />
-                          </a>
-                        ) : (
-                          <span className="text-xs text-faint">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+      {billable ? (
+        <SettingsTile
+          label="Payment method"
+          action={
+            isAdmin ? (
+              <Button type="button" variant="outline" onClick={openBillingPortal} className={GLASS_SETTINGS_ACTION}>
+                {data.paymentMethod ? "Update card" : "Add card"}
+              </Button>
+            ) : null
+          }
+        >
+          {data.paymentMethod ? (
+            <div className="flex items-center gap-2.5">
+              <CreditCard className="size-4 shrink-0 text-faint" />
+              <CardBrandIcon brand={data.paymentMethod.brand} />
+              <span>
+                ending in <span className="font-semibold text-strong">{data.paymentMethod.last4}</span>
+              </span>
             </div>
+          ) : (
+            "No payment method on file"
           )}
-        </div>
-      </SettingsTile>
+        </SettingsTile>
+      ) : null}
+
+      {isAdmin && !isActive && data.checkoutAvailable ? <PlanPicker /> : null}
+
+      {billable ? (
+        <SettingsTile label="Invoices">
+          <div className="space-y-3">
+            {data.invoices.length === 0 ? (
+              <p>No invoices yet.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-foreground/[0.08]">
+                      <th className="py-3 pr-5 text-left text-xs font-semibold uppercase tracking-wide text-faint">Date</th>
+                      <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-faint">Amount</th>
+                      <th className="hidden px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-faint sm:table-cell">Status</th>
+                      <th className="py-3 pl-5 text-right text-xs font-semibold uppercase tracking-wide text-faint">PDF</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-foreground/[0.06]">
+                    {data.invoices.map((inv) => (
+                      <tr key={inv.id} className="transition-colors hover:bg-foreground/[0.02]">
+                        <td className="py-3.5 pr-5">{formatUnixDate(inv.date)}</td>
+                        <td className="px-5 py-3.5 font-medium text-strong">{formatAmount(inv.amount)}</td>
+                        <td className="hidden px-5 py-3.5 sm:table-cell">
+                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${
+                            inv.status === "paid"
+                              ? "border-green-600/20 bg-green-600/10 text-green-600"
+                              : "border-foreground/[0.10] bg-foreground/[0.06] text-faint"
+                          }`}>
+                            {inv.status ?? "—"}
+                          </span>
+                        </td>
+                        <td className="py-3.5 pl-5 text-right">
+                          {inv.pdfUrl ? (
+                            <a
+                              href={inv.pdfUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground transition-colors hover:text-strong"
+                            >
+                              Download <ExternalLink className="size-3" />
+                            </a>
+                          ) : (
+                            <span className="text-xs text-faint">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </SettingsTile>
+      ) : null}
     </div>
   )
 }

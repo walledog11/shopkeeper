@@ -39,11 +39,34 @@ export function resolvePlanTier(
   return 'unknown';
 }
 
+/** The organization columns its plan is read from. */
+export interface PlanBilling {
+  stripePriceId: string | null;
+  shopifyBillingStatus: string | null;
+  shopifyPlanName: string | null;
+}
+
+// Shopify managed pricing names each plan in the Partner dashboard, with the
+// names the pricing page sells: Starter and Pro.
+function shopifyPlanTier(planName: string | null): PlanTier | null {
+  const name = planName?.trim().toLowerCase();
+  return name === 'starter' || name === 'pro' ? name : null;
+}
+
+/** An active Shopify plan decides the tier; otherwise the Stripe price does. */
+function resolveOrganizationPlanTier(
+  billing: PlanBilling,
+  priceIds: { starter?: string; pro?: string },
+): PlanTier {
+  const shopifyTier = billing.shopifyBillingStatus === 'active' ? shopifyPlanTier(billing.shopifyPlanName) : null;
+  return shopifyTier ?? resolvePlanTier(billing.stripePriceId, priceIds);
+}
+
 export function planLimitsFor(
-  stripePriceId: string | null | undefined,
+  billing: PlanBilling,
   priceIds: { starter?: string; pro?: string },
 ): PlanLimits {
-  return PLAN_LIMITS[resolvePlanTier(stripePriceId, priceIds)];
+  return PLAN_LIMITS[resolveOrganizationPlanTier(billing, priceIds)];
 }
 
 // The billing period is the UTC calendar month, matching how `utcDayString`
@@ -87,11 +110,11 @@ export interface ConversationAllowance {
 
 export async function getConversationAllowance(
   organizationId: string,
-  stripePriceId: string | null | undefined,
+  billing: PlanBilling,
   priceIds: { starter?: string; pro?: string },
   now: Date = new Date(),
 ): Promise<ConversationAllowance> {
-  const tier = resolvePlanTier(stripePriceId, priceIds);
+  const tier = resolveOrganizationPlanTier(billing, priceIds);
   const limit = PLAN_LIMITS[tier].conversationsPerMonth;
   if (limit === null) {
     return { tier, limit: null, used: 0, overLimit: false };

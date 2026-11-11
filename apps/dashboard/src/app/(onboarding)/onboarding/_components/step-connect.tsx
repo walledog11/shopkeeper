@@ -27,7 +27,7 @@ export function StepConnect({ imessageHandle }: { imessageHandle: string | null 
         {imessageHandle ? <ImessageConnector handle={imessageHandle} onRefresh={refreshImessage} handles={imessage?.handles ?? []} />
           : <p className="rounded-2xl border border-foreground/10 bg-foreground/[0.04] px-6 py-6 text-[13px] leading-relaxed text-foreground/60">iMessage connection is currently unavailable. You can review drafts and approve actions in the dashboard.</p>}
         <ChannelShell icon={Monitor} name="Prefer the dashboard?" tagline="All your drafts and approvals, in one place." connected={false}>
-          <p className="text-[12.5px] leading-relaxed text-foreground/55">Choose “Use the dashboard” below to continue. You can connect your phone later from Integrations.</p>
+          <p className="text-[12.5px] leading-relaxed text-foreground/55">Choose “Use the dashboard” below to continue. You can link your phone later in Settings → Phone &amp; briefing.</p>
         </ChannelShell>
       </div>
     </div>

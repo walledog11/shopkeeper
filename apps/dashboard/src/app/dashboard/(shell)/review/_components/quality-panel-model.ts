@@ -228,7 +228,7 @@ export function reviewModeNote(entry: ActionLogEntry): string | null {
   const { code } = reviewItemChrome(entry)
 
   if (entry.mode === "auto_executed") {
-    return code === "auto_reply" || code === "auto_action" ? null : "sent automatically"
+    return code === "auto_reply" || code === "auto_action" ? null : "ran automatically"
   }
   if (entry.mode === "read_only") {
     return code === "read_only" ? null : "read-only lookup"

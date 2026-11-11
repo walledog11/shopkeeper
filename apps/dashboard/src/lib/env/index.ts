@@ -127,6 +127,16 @@ export function getBillingPriceIds(): Record<'starter' | 'pro', string | undefin
   );
 }
 
+/**
+ * The app's handle in the Partner dashboard. Set once the plans exist there
+ * (Shopify managed pricing); until then a workspace is not billed through
+ * Shopify and Usage & billing shows the unbilled state.
+ */
+export function getShopifyAppHandle(): string | null {
+  const handle = readEnv('SHOPIFY_APP_HANDLE')?.trim();
+  return handle && /^[a-z0-9-]+$/.test(handle) ? handle : null;
+}
+
 export function getBillingTierPriceId(tier: string): string | undefined {
   const priceIds = getBillingPriceIds();
   return tier === 'starter' || tier === 'pro' ? priceIds[tier] : undefined;

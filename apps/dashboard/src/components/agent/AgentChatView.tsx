@@ -136,7 +136,7 @@ export function AgentChatView({
               {greeting}{firstName ? `, ${firstName}` : ""}.
             </h2>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Ask me to look up orders, issue refunds, search your knowledge base, draft customer replies, or open any page in the dashboard.
+              Ask me to look up orders, issue refunds, search your notes and policies, draft customer replies, or open any page in the dashboard.
             </p>
           </div>
         </div>

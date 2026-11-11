@@ -152,7 +152,7 @@ describe("integration presentation", () => {
     })
     expect(models.find((model) => model.definition.id === "instagram")?.availability.state).toBe("coming-soon")
     expect(models.find((model) => model.definition.id === "tiktok-shop")?.availability.state).toBe("coming-soon")
-    expect(models.find((model) => model.definition.id === "whatsapp")?.availability.state).toBe("coming-soon")
+    expect(models.find((model) => model.definition.id === "tiktok-shop")?.visible).toBe(false)
   })
 
   it("keeps a connected Instagram card manageable after direct connect closes", () => {

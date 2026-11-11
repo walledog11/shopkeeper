@@ -76,7 +76,7 @@ export function useConversationCocoAction({
   const headerCocoAction = useMemo(() => {
     if (pendingPlan) return null
     if (cocoAction && (cocoAction.handler === "draft-reply" || cocoAction.handler === "refresh-draft")) {
-      return { ...cocoAction, label: "Generate Plan", shortLabel: "Generate" }
+      return { ...cocoAction, label: "Generate plan", shortLabel: "Generate" }
     }
     return cocoAction
   }, [cocoAction, pendingPlan])

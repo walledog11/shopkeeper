@@ -237,6 +237,36 @@ admin also swaps a non-expiring token.
 - **Anything else** (timeouts, 5xx, missing `SHOPIFY_CLIENT_ID`/`SHOPIFY_CLIENT_SECRET`): Shopify
   calls fail as unavailable and nothing is marked; the next call tries again.
 
+### Shopify install and billing
+
+**Install.** The first time a store opens Shopkeeper from its admin with no workspace connected,
+the app home exchanges Shopify's ID token for the store's grant and holds it in
+`shopify_pending_installs` (tokens encrypted like an Integration's; `holdShopifyInstallGrant`).
+Its Create account and Sign in links carry a signed claim (`mintShopifyInstallClaim`, keyed by
+`OAUTH_ATTEMPT_SECRET`, good for an hour) that onboarding or Channels redeems to connect the store
+in one click, with no store URL and no second Shopify approval (`claimShopifyInstallGrant`). A claim
+works once; a store another workspace holds is refused, as with OAuth. An expired link falls back to
+connecting through Shopify with the store filled in; opening the app from Shopify admin again mints
+a new one. `app/uninstalled` and `shop/redact` delete a held grant.
+
+**Billing (managed pricing).** Plans live in the Partner dashboard and Shopify hosts the page that
+picks one; Shopkeeper only reads the store's subscription (`syncShopifyBilling`) into the
+organization's `shopify_*` billing columns. To turn it on:
+
+1. Partner dashboard → the app → Pricing: choose managed pricing and create plans named exactly
+   **Starter** and **Pro** (plan limits read those names), with the trial and prices the pricing page
+   shows. Leave the welcome link on the app home, which reads the plan again on return.
+2. Copy the app handle from the Partner dashboard and set `SHOPIFY_APP_HANDLE` on the dashboard
+   (Vercel). Until it is set, Usage & billing shows the unbilled state and no workspace is billed
+   through Shopify.
+3. Release the app config (`shopify app deploy`) so stores send `app_subscriptions/update` to the
+   gateway, which reads the subscription again on each delivery.
+
+A store with a `frozen` subscription (Shopify paused its billing) or an `inactive` one (the plan
+ended) stops writing: the billing write gate answers 402, and the app shell and app home say why.
+A store that never chose a plan keeps working. Development stores' plans are test charges; Usage &
+billing marks them.
+
 ## Deploy Sequence
 
 Pushing `master` deploys the Vercel dashboard and both Railway services, so the env gate and any

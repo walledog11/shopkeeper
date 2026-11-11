@@ -1,6 +1,9 @@
+import type { Metadata } from "next"
 import { getOrCreateOrg } from "@/lib/server/org"
 import { getKbPageData } from "@/lib/server/kb-page-data"
 import KbPageClient from "./_components/KbPageClient"
+
+export const metadata: Metadata = { title: "Memory" }
 
 export default async function KbPage({
   searchParams,

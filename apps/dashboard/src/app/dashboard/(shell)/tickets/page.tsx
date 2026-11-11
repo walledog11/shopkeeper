@@ -1,9 +1,13 @@
+import type { Metadata } from "next"
+import { inboxNavItem } from "@/app/dashboard/_components/nav-items"
 import { Suspense } from "react"
 import { db } from "@shopkeeper/db"
 import { TicketsPageSkeleton } from "@/app/dashboard/_components/skeletons"
 import { getOrCreateOrg } from "@/lib/server/org"
 import InboxPageClient from "./_components/InboxPageClient"
 import type { OrgSettings } from "@/types"
+
+export const metadata: Metadata = { title: inboxNavItem.name }
 
 // The stream is owned by SWR on the client — it polls, paginates, and mutates in
 // place. Fetching a first page here too only delayed the route with rows the client

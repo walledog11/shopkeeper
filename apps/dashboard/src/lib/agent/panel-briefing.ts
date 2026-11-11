@@ -78,14 +78,16 @@ export function buildBriefingNarrativeSegments(input: BriefingCopyInput): Briefi
     return segments
   }
 
+  // Everything here was resolved already, so nothing is waiting on the merchant.
   const segments: BriefingNarrativeSegment[] = [
+    { kind: "text", value: "I cleared " },
     { kind: "strong", value: String(overnightClearedCount) },
-    { kind: "text", value: ` ticket${overnightClearedCount === 1 ? " is" : "s are"} ready for you` },
+    { kind: "text", value: ` ticket${overnightClearedCount === 1 ? "" : "s"}` },
   ]
   if (channelText) {
-    segments.push({ kind: "text", value: ` from ${channelText}` })
+    segments.push({ kind: "text", value: ` across ${channelText}` })
   }
-  segments.push({ kind: "text", value: "." })
+  segments.push({ kind: "text", value: ". Nothing needs your eye." })
   return segments
 }
 

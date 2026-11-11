@@ -8,7 +8,7 @@ import { StepShopify } from "./step-shopify";
 import { StepConnect } from "./step-connect";
 import { StepEmail } from "./step-email";
 import { StepPlan } from "./step-plan";
-import { useOnboardingFlow } from "../_hooks/useOnboardingFlow";
+import { useOnboardingFlow, type OnboardingShopifyClaim } from "../_hooks/useOnboardingFlow";
 import type { OAuthOutcome } from "@/lib/integrations/oauth-contract";
 import type { InstagramConnectTransport } from "@/lib/socialapi/config";
 
@@ -20,10 +20,10 @@ export interface OnboardingChannelConfig {
   shopifyClientId: string | null;
 }
 
-export function OnboardingExperience({ pinnedStepIndex, oauthOutcome, suggestedShop, ...channels }: OnboardingChannelConfig & {
-  pinnedStepIndex: number | null; oauthOutcome: OAuthOutcome | null; suggestedShop: string | null;
+export function OnboardingExperience({ pinnedStepIndex, oauthOutcome, suggestedShop, shopifyClaim, ...channels }: OnboardingChannelConfig & {
+  pinnedStepIndex: number | null; oauthOutcome: OAuthOutcome | null; suggestedShop: string | null; shopifyClaim: OnboardingShopifyClaim | null;
 }) {
-  const { data, emailIntegrations, exit, idx, instagramRow, kbSync, shopifyRow, status, step, handlers } = useOnboardingFlow(pinnedStepIndex, oauthOutcome, channels.storefrontChatGloballyEnabled, suggestedShop);
+  const { data, emailIntegrations, exit, idx, instagramRow, kbSync, shopifyRow, status, step, handlers } = useOnboardingFlow(pinnedStepIndex, oauthOutcome, channels.storefrontChatGloballyEnabled, suggestedShop, shopifyClaim);
   const contentRef = useRef<HTMLElement>(null);
   const previousStep = useRef(idx);
   useEffect(() => {
@@ -47,7 +47,8 @@ export function OnboardingExperience({ pinnedStepIndex, oauthOutcome, suggestedS
           {status.error && <p role="alert" className="mx-auto mb-4 max-w-[560px] rounded-xl border border-destructive/20 bg-destructive/[0.06] px-4 py-3 text-center text-[13px] text-destructive">{status.error}</p>}
           <div key={step.id} className="animate-[ob-fade-in_360ms_ease] motion-reduce:animate-none">
             {step.id === "shopify" && <StepShopify data={data} update={handlers.update} connected={status.hasShopify} shopifyRow={shopifyRow} kbSync={kbSync} onOAuth={handlers.launchOAuth}
-              onSimulate={handlers.simulateShopify} simulatorEnabled={channels.shopifySimulatorEnabled} simulating={status.shopifySimulating} oauthPending={status.oauthPendingProvider === "shopify"} disabled={disabled} />}
+              onSimulate={handlers.simulateShopify} simulatorEnabled={channels.shopifySimulatorEnabled} simulating={status.shopifySimulating} oauthPending={status.oauthPendingProvider === "shopify"} disabled={disabled}
+              claimShop={status.shopifyClaimOpen ? shopifyClaim?.shop ?? null : null} onClaim={handlers.claimShopify} claiming={status.shopifyClaiming} />}
             {step.id === "email" && <StepEmail data={data} update={handlers.update} instagramConnected={status.hasInstagramReady} instagramConnectTransport={channels.instagramConnectTransport}
               forwardingIntegration={emailIntegrations.forwarding} gmailIntegration={emailIntegrations.gmail} instagramIntegration={instagramRow}
               orgReady={status.orgReady} orgLoading={status.orgEnsuring} orgError={status.orgEnsureFailed} onRetryOrg={() => { void handlers.ensureOrganization(); }}

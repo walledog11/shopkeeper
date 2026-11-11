@@ -1,8 +1,11 @@
+import { settingsSectionMetadata } from '@/app/dashboard/_components/nav-items';
 import { Suspense } from 'react';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import { timeAgoShort } from '@/lib/messaging/customer-display';
 import TeamPageClient from './_components/TeamPageClient';
+
+export const metadata = settingsSectionMetadata('team');
 
 interface TeamPageProps {
   searchParams?: Promise<{ invite?: string | string[] }>;

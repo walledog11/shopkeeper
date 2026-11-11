@@ -111,6 +111,27 @@ export default async function DashboardLayout({ children }: { children: React.Re
     });
   }
 
+  // Billed through Shopify: writes stop while Shopify has frozen the store's
+  // billing or the plan has ended (the billing write gate).
+  if (org.shopifyBillingStatus === "frozen") {
+    notifications.push({
+      id: "shopify-billing-frozen",
+      type: "warning",
+      title: "Shopify paused billing for this store.",
+      message: "Replies and actions are paused until the store's Shopify bill is settled.",
+      action: { label: "Open billing", href: settingsSectionHref("billing") },
+    });
+  }
+  if (org.shopifyBillingStatus === "inactive") {
+    notifications.push({
+      id: "shopify-plan-ended",
+      type: "warning",
+      title: "Your Shopkeeper plan has ended.",
+      message: "Choose a plan to restore replies and actions.",
+      action: { label: "Choose a plan", href: settingsSectionHref("billing") },
+    });
+  }
+
   const cookieStore = await cookies();
   const dismissedNotificationIds = parseDismissedNotificationIds(
     cookieStore.get(NOTIFICATION_DISMISSALS_COOKIE)?.value,

@@ -7,7 +7,7 @@ export function StepPlan({ hasCustomerChannel, hasEmail, hasForwarding, hasInsta
   hasCustomerChannel: boolean; hasEmail: boolean; hasForwarding: boolean; hasInstagram: boolean; hasMessaging: boolean; hasShopify: boolean; hasStorefrontChat: boolean;
   storeDomain?: string; kbSync: KbSyncViewModel; onNavigate: (step: StepId) => void; saving: boolean;
 }) {
-  const channels = [hasEmail && "Gmail connected", hasForwarding && "Forwarding address saved", hasInstagram && "Instagram connected", hasStorefrontChat && "Storefront chat enabled"].filter(Boolean).join(" · ");
+  const channels = [hasEmail && "Gmail connected", hasForwarding && "Forwarding address saved", hasInstagram && "Instagram connected", hasStorefrontChat && "Website chat on"].filter(Boolean).join(" · ");
   return <div className="flex flex-col items-center">
     <Headline>{hasShopify ? <>See your shopkeeper at work.<Accent>You keep the final say.</Accent></> : "Let’s connect your store first."}</Headline>
     <Lede>{hasShopify ? "Try a customer question using your store’s knowledge. Read the source, edit the draft, and practice giving the go-ahead." : "Your Shopify connection is missing. Connect it to use your policies and finish setting up your workspace."}</Lede>
@@ -19,7 +19,7 @@ export function StepPlan({ hasCustomerChannel, hasEmail, hasForwarding, hasInsta
       <SetupRow icon={Mail} label="Customer messages" value={channels || "No channel connected yet"} ready={hasCustomerChannel} onEdit={() => onNavigate("email")} disabled={saving} />
       <SetupRow icon={Smartphone} label="Your approvals" value={hasMessaging ? "iMessage and dashboard" : "In the dashboard"} ready onEdit={() => onNavigate("connect")} disabled={saving} />
     </div>
-    <p className="mt-5 max-w-[520px] text-center text-[12.5px] leading-relaxed text-foreground/45">You’ll start in approval mode. You review customer replies and store changes before they happen.</p>
+    <p className="mt-5 max-w-[520px] text-center text-[12.5px] leading-relaxed text-foreground/45">You start on Ask first: Shopkeeper answers routine questions on its own and asks you before any refund or order change. Choose Draft only in Settings to review every reply first.</p>
     {!hasCustomerChannel && <p className="mt-3 max-w-[520px] text-center text-[12.5px] leading-relaxed text-foreground/45">You can finish setting up your workspace now. Connect a customer channel before expecting messages.</p>}
     {hasForwarding && <p className="mt-3 max-w-[520px] text-center text-[12.5px] leading-relaxed text-foreground/45">Forwarding still needs to be configured in your email provider and checked with a test message.</p>}
     {hasShopify && <p className="mt-3 max-w-[520px] text-center text-[12.5px] leading-relaxed text-foreground/45">The practice draft is optional. You can finish setup whenever you’re ready.</p>}

@@ -42,7 +42,7 @@ function AppLink({ href, primary = false, children }: { href: string; primary?: 
 
 export function ShopifyAppHome({ state, appUrl }: { state: ShopifyAppHomeState; appUrl: string }) {
   return <div className={PAGE}>
-    {state.kind === 'linked' ? <Linked state={state} appUrl={appUrl} /> : <SetUp shop={state.shop} appUrl={appUrl} />}
+    {state.kind === 'linked' ? <Linked state={state} appUrl={appUrl} /> : <SetUp shop={state.shop} claim={state.claim} appUrl={appUrl} />}
   </div>;
 }
 
@@ -69,11 +69,14 @@ export function ProblemPage({ title, detail, action, appUrl = '' }: {
   </div>;
 }
 
-function SetUp({ shop, appUrl }: { shop: string; appUrl: string }) {
+function SetUp({ shop, claim, appUrl }: { shop: string; claim: string | null; appUrl: string }) {
   // The summary loads only once this store is connected: then load the connected page.
   useSWR(SUMMARY_URL, loadSummary, { ...SUMMARY_REFRESH, onSuccess: () => { reloadWithFreshToken().catch(() => {}); } });
-  const onboarding = `${appUrl}/onboarding?shop=${encodeURIComponent(shop)}`;
-  const steps = ['Create your account', `Connect ${shop}, already filled in`, 'Add Instagram or email, and your phone'];
+  // The claim lets the new tab connect this store without asking for it or for
+  // Shopify's approval a second time.
+  const storeParams = new URLSearchParams({ shop, ...(claim ? { claim } : {}) }).toString();
+  const onboarding = `${appUrl}/onboarding?${storeParams}`;
+  const steps = ['Create your account', `Connect ${shop} in one click`, 'Add Instagram or email, and your phone'];
   return <main className="mx-auto w-full max-w-xl px-4 py-8">
     <section className={cn(CARD, 'p-6')}>
       <h1 className="text-base font-semibold">Set up Shopkeeper</h1>
@@ -89,7 +92,7 @@ function SetUp({ shop, appUrl }: { shop: string; appUrl: string }) {
       </ol>
       <div className="mt-6 flex flex-wrap gap-2">
         <AppLink href={`${appUrl}/signup?redirect_url=${encodeURIComponent(onboarding)}`} primary>Create account</AppLink>
-        <AppLink href={`${appUrl}/dashboard/integrations?configure=shopify&shop=${encodeURIComponent(shop)}`}>Sign in</AppLink>
+        <AppLink href={`${appUrl}/dashboard/integrations?configure=shopify&${storeParams}`}>Sign in</AppLink>
       </div>
     </section>
   </main>;
@@ -110,6 +113,7 @@ function Linked({ state, appUrl }: { state: LinkedState; appUrl: string }) {
 
   return <main className="mx-auto w-full max-w-[1000px] px-4 pb-10 pt-4 sm:px-6">
     {summary.access !== 'ok' && <AccessBanner access={summary.access} appUrl={appUrl} />}
+    {(summary.plan?.status === 'frozen' || summary.plan?.status === 'inactive') && <PlanBanner plan={summary.plan} />}
 
     <div role="tablist" aria-label="Shopkeeper" className="flex gap-1">
       {TABS.map(item => <button key={item.id} id={`tab-${item.id}`} type="button" role="tab"
@@ -135,6 +139,7 @@ function Linked({ state, appUrl }: { state: LinkedState; appUrl: string }) {
     </div>
     <div role="tabpanel" id="panel-settings" aria-labelledby="tab-settings" hidden={tab !== 'settings'} className="mt-4">
       <div className="grid items-start gap-4 lg:grid-cols-2">
+        {summary.plan && <PlanCard plan={summary.plan} />}
         <StoreKnowledge />
         <Permissions rows={summary.permissions} appUrl={appUrl} />
       </div>
@@ -155,19 +160,67 @@ function AccessBanner({ access, appUrl }: { access: Exclude<ShopifyAppHomeSummar
   </div>;
 }
 
+// Shopify's plan page is part of the admin, so it opens in the admin's own tab.
+function PlanLink({ href, children }: { href: string; children: ReactNode }) {
+  return <Button asChild size="sm" variant="outline">
+    <a href={href} target="_top">{children}</a>
+  </Button>;
+}
+
+type Plan = NonNullable<ShopifyAppHomeSummary['plan']>;
+
+function PlanBanner({ plan }: { plan: Plan }) {
+  const frozen = plan.status === 'frozen';
+  return <div role="status" className="mb-4 flex flex-wrap items-start gap-3 rounded-xl bg-amber-50 p-4 text-sm text-amber-900">
+    <CircleAlert className="mt-0.5 size-4 shrink-0" />
+    <div className="min-w-0 flex-1">
+      <p className="font-semibold">{frozen ? 'Shopify paused billing for this store' : 'Your Shopkeeper plan has ended'}</p>
+      <p className="mt-0.5">{frozen
+        ? "Replies and actions are paused until the store's Shopify bill is settled."
+        : 'Replies and actions are paused. Choose a plan to resume.'}</p>
+    </div>
+    {!frozen && <PlanLink href={plan.planPageUrl}>Choose a plan</PlanLink>}
+  </div>;
+}
+
+function PlanCard({ plan }: { plan: Plan }) {
+  const trialDaysLeft = plan.status === 'active' && plan.trialEndsAt
+    ? Math.ceil((Date.parse(plan.trialEndsAt) - Date.now()) / 86_400_000)
+    : 0;
+  const detail = trialDaysLeft > 0 ? `${trialDaysLeft} day${trialDaysLeft === 1 ? '' : 's'} left in the free trial`
+    : plan.status === 'active' ? 'Billed on your Shopify bill'
+      : plan.status === 'frozen' ? 'Paused by Shopify'
+        : plan.status === 'inactive' ? 'Ended'
+          : 'No plan chosen yet';
+  return <section className={cn(CARD, 'p-5')}>
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <h2 className="text-sm font-semibold">{plan.planName ? `${plan.planName} plan` : 'Plan'}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{detail}</p>
+        {plan.test && <p className="mt-1 text-xs text-muted-foreground">Development store: Shopify doesn&apos;t charge this plan.</p>}
+      </div>
+      <PlanLink href={plan.planPageUrl}>{plan.status === 'active' ? 'Change plan' : 'Choose a plan'}</PlanLink>
+    </div>
+  </section>;
+}
+
 function Home({ summary, appUrl, chatEnabled, onOpenChat }: {
   summary: ShopifyAppHomeSummary; appUrl: string; chatEnabled: boolean; onOpenChat: () => void;
 }) {
-  const { metrics, setup } = summary;
+  const { metrics, setup, plan } = summary;
   const needsYou = metrics?.needsYou ?? 0;
-  const steps = setup ? [
+  const steps = [
+    ...(plan && plan.status === null ? [{ label: 'Choose a plan', done: false,
+      action: <PlanLink href={plan.planPageUrl}>Choose</PlanLink> }] : []),
+    ...(setup ? [
     { label: 'Connect Instagram or email', done: setup.customerChannel,
       action: <AppLink href={`${appUrl}/dashboard/integrations`}>Connect</AppLink> },
     { label: 'Connect your phone for approvals', done: setup.phone,
       action: <AppLink href={`${appUrl}${settingsSectionHref('briefing')}`}>Connect</AppLink> },
     ...(setup.chatAvailable ? [{ label: 'Turn on website chat', done: chatEnabled,
       action: <Button type="button" size="sm" variant="outline" onClick={onOpenChat}>Set up</Button> }] : []),
-  ] : [];
+    ] : []),
+  ];
   const stepsDone = steps.filter(step => step.done).length;
 
   return <div className="space-y-4">

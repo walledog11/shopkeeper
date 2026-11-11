@@ -11,6 +11,7 @@ import {
 import { createTestCustomer, createTestOrg, createTestThread, cleanupTestData } from '@shopkeeper/db/test-helpers';
 
 const PRICE_IDS = { starter: 'price_starter', pro: 'price_pro' };
+const stripeBilling = (stripePriceId: string) => ({ stripePriceId, shopifyBillingStatus: null, shopifyPlanName: null });
 
 let orgId: string | null = null;
 
@@ -57,8 +58,8 @@ describe('plan tier resolution', () => {
     // real Starter subscriber must still come back unbounded rather than be
     // capped on the strength of a missing env var.
     expect(resolvePlanTier('price_starter', {})).toBe('unknown');
-    expect(planLimitsFor('price_starter', {}).conversationsPerMonth).toBeNull();
-    expect(planLimitsFor('price_starter', {}).seats).toBeNull();
+    expect(planLimitsFor(stripeBilling('price_starter'), {}).conversationsPerMonth).toBeNull();
+    expect(planLimitsFor(stripeBilling('price_starter'), {}).seats).toBeNull();
   });
 
   it('carries the numbers the pricing page used to claim', () => {
@@ -140,7 +141,7 @@ describe('conversation allowance', () => {
 
     await seedThreads(org.id, 2);
 
-    const allowance = await getConversationAllowance(org.id, 'price_pro', PRICE_IDS);
+    const allowance = await getConversationAllowance(org.id, stripeBilling('price_pro'), PRICE_IDS);
     expect(allowance).toEqual({ tier: 'pro', limit: null, used: 0, overLimit: false });
   });
 
@@ -150,7 +151,7 @@ describe('conversation allowance', () => {
 
     await seedThreads(org.id, 2);
 
-    const allowance = await getConversationAllowance(org.id, 'price_starter', {
+    const allowance = await getConversationAllowance(org.id, stripeBilling('price_starter'), {
       ...PRICE_IDS,
     });
     expect(allowance.tier).toBe('starter');

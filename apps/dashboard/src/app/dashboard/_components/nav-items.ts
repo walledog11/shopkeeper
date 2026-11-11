@@ -1,5 +1,6 @@
 import { Inbox, Settings2, Box, BrainCircuit, ScanEye, User, MessageCircle } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import type { Metadata } from "next";
 import { isRouteActive } from "./sidebar/sidebar-helpers";
 
 export interface NavItem {
@@ -96,10 +97,19 @@ export const settingsSectionGroups: { heading: string; sections: SettingsSection
 
 export const settingsSections: SettingsSection[] = settingsSectionGroups.flatMap(group => group.sections);
 
-export function settingsSectionHref(id: string): string {
+function settingsSection(id: string): SettingsSection {
   const section = settingsSections.find(candidate => candidate.id === id);
   if (!section) throw new Error(`Unknown settings section: ${id}`);
-  return section.href;
+  return section;
+}
+
+export function settingsSectionHref(id: string): string {
+  return settingsSection(id).href;
+}
+
+/** A settings page's browser tab title: its label in the rail. */
+export function settingsSectionMetadata(id: string): Metadata {
+  return { title: settingsSection(id).label };
 }
 
 export function activeSettingsSection(pathname: string): SettingsSection | null {

@@ -247,6 +247,9 @@ describe('POST /webhooks/shopify — mandatory compliance topics', () => {
       },
     });
 
+    // A grant held for a later claim (a reinstall nobody has claimed) dies with the install too.
+    await db.shopifyPendingInstall.create({ data: { shop: shopDomain, accessToken: 'held-must-not-survive' } });
+
     const uninstall = await signedShopifyRequest('app/uninstalled', shopDomain, {
       id: 954889,
       domain: shopDomain,
@@ -254,6 +257,7 @@ describe('POST /webhooks/shopify — mandatory compliance topics', () => {
 
     expect(uninstall.status).toBe(200);
     expect(await db.integration.findUnique({ where: { id: integration.id } })).toBeNull();
+    expect(await db.shopifyPendingInstall.findUnique({ where: { shop: shopDomain } })).toBeNull();
     const tombstone = await db.integrationDisconnect.findUnique({
       where: { integrationId: integration.id },
     });

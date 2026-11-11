@@ -37,6 +37,7 @@ function DataPrivacySection({ state }: { state: WorkspaceTabState }) {
   return (
     <>
       <DataExportSection state={state} />
+      <ActionHistoryExportSection />
       <GdprExportSection state={state} />
     </>
   )
@@ -64,6 +65,24 @@ function DataExportSection({ state }: { state: WorkspaceTabState }) {
           </Button>
           {exportError ? <p className="text-xs text-red-600">{exportError}</p> : null}
         </div>
+      }
+    />
+  )
+}
+
+// The route answers with an attachment, so a plain link downloads it.
+function ActionHistoryExportSection() {
+  return (
+    <SettingsTile
+      label="Action history"
+      description="What was asked, what Shopkeeper did and who approved it, as CSV."
+      action={
+        <Button asChild variant="outline" className={GLASS_SETTINGS_ACTION}>
+          <a href="/api/agent/actions?format=csv" download>
+            <Download className="size-4" />
+            Export CSV
+          </a>
+        </Button>
       }
     />
   )

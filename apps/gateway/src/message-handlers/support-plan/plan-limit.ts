@@ -50,11 +50,11 @@ export async function degradeForConversationLimit(
   try {
     const org = await db.organization.findUnique({
       where: { id: organizationId },
-      select: { stripePriceId: true },
+      select: { stripePriceId: true, shopifyBillingStatus: true, shopifyPlanName: true },
     });
     const allowance = await getConversationAllowance(
       organizationId,
-      org?.stripePriceId ?? null,
+      org ?? { stripePriceId: null, shopifyBillingStatus: null, shopifyPlanName: null },
       getBillingPriceIds(),
     );
     if (!allowance.overLimit || allowance.limit === null) return false;

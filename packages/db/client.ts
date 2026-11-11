@@ -65,7 +65,7 @@ function transformWriteArgs(operation: string, args: unknown): unknown {
   return args;
 }
 
-function decryptIntegrationRow(row: unknown): void {
+function decryptTokenRow(row: unknown): void {
   if (!row || typeof row !== 'object') return;
   const obj = row as Record<string, unknown>;
   for (const field of TOKEN_FIELDS) {
@@ -78,13 +78,23 @@ function decryptIntegrationRow(row: unknown): void {
 function decryptResultRows(result: unknown): unknown {
   if (result == null) return result;
   if (Array.isArray(result)) {
-    for (const row of result) decryptIntegrationRow(row);
+    for (const row of result) decryptTokenRow(row);
     return result;
   }
   if (typeof result === 'object') {
-    decryptIntegrationRow(result);
+    decryptTokenRow(result);
   }
   return result;
+}
+
+async function encryptedTokenOperation({ args, query, operation }: {
+  args: unknown;
+  query: (args: never) => Promise<unknown>;
+  operation: string;
+}): Promise<never> {
+  const nextArgs = transformWriteArgs(operation, args);
+  const result = await query(nextArgs as never);
+  return decryptResultRows(result) as never;
 }
 
 function createClient() {
@@ -106,15 +116,12 @@ function createClient() {
     base = new PrismaClient({ log });
   }
 
+  // Every model that stores a provider token: a store's grant waiting to be
+  // claimed holds the same secrets an Integration does.
   return base.$extends({
     query: {
-      integration: {
-        async $allOperations({ args, query, operation }) {
-          const nextArgs = transformWriteArgs(operation, args);
-          const result = await query(nextArgs as never);
-          return decryptResultRows(result) as never;
-        },
-      },
+      integration: { $allOperations: encryptedTokenOperation },
+      shopifyPendingInstall: { $allOperations: encryptedTokenOperation },
     },
   });
 }

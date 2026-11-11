@@ -19,7 +19,7 @@ import {
   OAUTH_ERROR_MESSAGES,
   type OAuthOutcome,
 } from "@/lib/integrations/oauth-contract";
-import { updateShopifyStorefrontChat } from "@/lib/integrations/requests";
+import { claimShopifyInstall, updateShopifyStorefrontChat } from "@/lib/integrations/requests";
 import { isShopifyIntegrationActive } from "@/lib/integrations/shopify-connection";
 import { captureClientProductEvent } from "@/lib/product-events";
 import type { Integration } from "@/types";
@@ -37,6 +37,12 @@ import { useOnboardingOrganization } from "./useOnboardingOrganization";
 import { useShopifyKbSync } from "./useShopifyKbSync";
 
 export type OnboardingOAuthProvider = "gmail" | "shopify" | "instagram";
+
+/** A store installed from Shopify admin, with the verified claim that connects it. */
+export interface OnboardingShopifyClaim {
+  claim: string;
+  shop: string;
+}
 export type OnboardingOAuthParameters = {
   gmail: Record<string, string | undefined>;
   shopify: { shop: string };
@@ -90,6 +96,7 @@ export function useOnboardingFlow(
   oauthOutcome: OAuthOutcome | null = null,
   storefrontChatGloballyEnabled = false,
   suggestedShop: string | null = null,
+  shopifyClaim: OnboardingShopifyClaim | null = null,
 ) {
   const router = useRouter();
   const { user } = useUser();
@@ -181,6 +188,22 @@ export function useOnboardingFlow(
     await refreshIntegrations();
     return true;
   }, "Couldn't connect the demo store. Try again.");
+
+  // A refused claim (expired, or the store already belongs to a workspace) falls
+  // back to connecting through Shopify, with the store still filled in.
+  const [shopifyClaimRefused, setShopifyClaimRefused] = useState(false);
+  const { run: runShopifyClaim, state: shopifyClaimState } = useSingleFlightOperation(async () => {
+    if (!shopifyClaim || !await runSettings().catch(() => false)) return false;
+    void captureClientProductEvent({ event: "integration_connection_started", platform: "shopify" });
+    try {
+      await claimShopifyInstall(shopifyClaim.claim);
+    } catch (error) {
+      setShopifyClaimRefused(true);
+      throw error;
+    }
+    await refreshIntegrations();
+    return true;
+  }, (error) => error instanceof Error ? error.message : "Couldn't connect your store. Try again.");
 
   const [settledOAuthState, setSettledOAuthState] = useState<OperationState>({ status: "idle" });
   const { launch, pendingProvider } = useOAuthLauncher({
@@ -316,6 +339,7 @@ export function useOnboardingFlow(
     nextState,
     finishState,
     simulationState,
+    shopifyClaimState,
     oauthState,
     exitState,
   ].some(isOperationPending);
@@ -327,6 +351,10 @@ export function useOnboardingFlow(
   const finish = useCallback(async () => {
     try { await runFinish(); } catch {}
   }, [runFinish]);
+
+  const claimShopify = useCallback(async () => {
+    try { await runShopifyClaim(); } catch {}
+  }, [runShopifyClaim]);
 
   const simulateShopify = useCallback(async (): Promise<boolean> => {
     try { return await runSimulation(); } catch { return false; }
@@ -346,7 +374,7 @@ export function useOnboardingFlow(
   }, [ensureOrgForDraft, stepId]);
 
   const relevantErrors = stepId === "shopify"
-      ? [settingsState, oauthState, shopifySimulationState, organizationOperation, exitState]
+      ? [settingsState, shopifyClaimState, oauthState, shopifySimulationState, organizationOperation, exitState]
       : stepId === "email"
         ? [emailState, settingsState, oauthState, organizationOperation, exitState]
         : stepId === "plan"
@@ -366,6 +394,7 @@ export function useOnboardingFlow(
     shopifyRow: selected.shopify as Integration | undefined,
     handlers: {
       back,
+      claimShopify,
       navigate: (id: StepId) => { if (!pending) go(STEPS.findIndex(step => step.id === id)); },
       ensureOrganization: ensureOrgForDraft,
       finish,
@@ -400,6 +429,8 @@ export function useOnboardingFlow(
         || orgPending,
       shopifySimulating: isOperationPending(simulationState)
         || isOperationPending(shopifySimulationState),
+      shopifyClaimOpen: Boolean(shopifyClaim) && !shopifyClaimRefused,
+      shopifyClaiming: isOperationPending(shopifyClaimState),
     },
     step: STEPS[idx],
   };

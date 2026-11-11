@@ -38,6 +38,7 @@ const callbacks: IntegrationCardCallbacks = {
   launchOAuth: vi.fn(),
   syncShopifyKnowledgeBase: vi.fn(async () => ({ syncedPolicies: 0, syncedPages: 0 })),
   updateShopifyStorefrontChat: vi.fn(async () => true),
+  claimInstalledStore: null,
 };
 
 const detailProps = {

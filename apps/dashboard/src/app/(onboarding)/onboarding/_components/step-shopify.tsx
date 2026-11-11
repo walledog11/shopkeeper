@@ -19,6 +19,9 @@ export function StepShopify({
   simulatorEnabled,
   simulating,
   oauthPending,
+  claimShop,
+  onClaim,
+  claiming,
 }: {
   data: OnboardingData;
   update: (patch: Partial<OnboardingData>) => void;
@@ -31,6 +34,10 @@ export function StepShopify({
   simulatorEnabled: boolean;
   simulating: boolean;
   oauthPending: boolean;
+  /** The store this merchant installed Shopkeeper on, when a claim can connect it without its URL. */
+  claimShop: string | null;
+  onClaim: () => void;
+  claiming: boolean;
 }) {
   const shop = data.shopDomain;
   const suggestion = (data.storeName || "your-store").toLowerCase().replace(/\s+/g, "");
@@ -72,7 +79,28 @@ export function StepShopify({
           </div>
         </div>
 
-        {!connected && (
+        {!connected && claimShop && (
+          <div className="mt-5">
+            <p className="text-[13px] font-semibold text-foreground">You installed Shopkeeper on</p>
+            <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-center">
+              <span className="flex h-11 min-w-0 flex-1 items-center truncate rounded-md border border-foreground/12 px-3 text-[14px] text-foreground">
+                {claimShop}
+              </span>
+              <Button
+                onClick={onClaim}
+                disabled={disabled || claiming}
+                className="h-11 shrink-0 gap-1 rounded-full bg-foreground px-5 text-[14px] font-semibold text-background hover:bg-foreground/85"
+              >
+                {claiming ? <Loader2 className="size-4 animate-spin" /> : <>Connect <ChevronRight className="size-4" /></>}
+              </Button>
+            </div>
+            <p className="mt-1.5 text-[12.5px] text-foreground/45">
+              You approved Shopkeeper&apos;s access when you installed it, so there&apos;s nothing to approve again.
+            </p>
+          </div>
+        )}
+
+        {!connected && !claimShop && (
           <div className="mt-5">
             <label htmlFor="shopify-store" className="mb-1.5 block text-[13px] font-semibold text-foreground">
               Shopify store URL
@@ -166,7 +194,7 @@ export function StepShopify({
               <>
                 <div className="text-[13px] font-semibold text-foreground">Couldn&apos;t read your store</div>
                 <div className="mt-0.5 text-[12px] leading-snug text-foreground/55">
-                  Your store is still connected. {kbSync.canRetry ? "Try reading its policies and pages again." : "You can sync it later from Knowledge."}
+                  Your store is still connected. {kbSync.canRetry ? "Try reading its policies and pages again." : "You can sync it later from Memory."}
                 </div>
                 {kbSync.canRetry && (
                   <Button type="button" variant="outline" size="sm" onClick={kbSync.retry} className="mt-2 h-8 rounded-full px-3 text-[12px]">

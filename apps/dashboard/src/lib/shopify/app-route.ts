@@ -52,7 +52,7 @@ export function withShopifyAppRoute(
 
       const integration = await db.integration.findFirst({
         where: { platform: 'shopify', externalAccountId: session.shop, lifecycleStatus: 'active' },
-        select: { organization: { select: { id: true, name: true, stripeStatus: true, lifecycleStatus: true } } },
+        select: { organization: { select: { id: true, name: true, stripeStatus: true, shopifyBillingStatus: true, lifecycleStatus: true } } },
       });
       if (!integration) throw new NotFoundError('Connect this store to Shopkeeper first.');
       const { organization } = integration;
