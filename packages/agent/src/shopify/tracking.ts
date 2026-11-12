@@ -1,5 +1,6 @@
 import type { GetOrderTrackingInput } from "../tools/index.js";
-import { formatShopifyToolError, shopifyRestJson, type ShopifyContext } from "./client.js";
+import { formatShopifyToolError, type ShopifyContext } from "./client.js";
+import { fetchShopifyOrder } from "./order-reads.js";
 import { toolError, toolNotFound, toolOk, type ToolResult } from "../tools/result.js";
 import type { ShopifyFulfillment } from "./types.js";
 import { requireNumericId } from "./validation.js";
@@ -31,12 +32,10 @@ export async function getOrderTracking(
 ): Promise<ToolResult> {
   try {
     const orderId = requireNumericId(input.order_id, "order_id");
-    const data = await shopifyRestJson<{ fulfillments?: ShopifyFulfillment[] }>(
-      ctx,
-      `orders/${orderId}/fulfillments.json`
-    );
+    const order = await fetchShopifyOrder(ctx, orderId, { lineItems: 1 });
+    if (!order) return toolNotFound(`Order ${orderId} was not found.`);
 
-    const fulfillments = data.fulfillments ?? [];
+    const fulfillments = order.fulfillments ?? [];
     if (fulfillments.length === 0) {
       return toolNotFound("This order has not been fulfilled yet - no tracking information is available.");
     }

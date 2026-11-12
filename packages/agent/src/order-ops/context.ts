@@ -1,5 +1,5 @@
 import { db } from "@shopkeeper/db";
-import { shopifyRestJson } from "../shopify/index.js";
+import { fetchShopifyOrder } from "../shopify/order-reads.js";
 import { shopifyContextFor } from "../shopify/access.js";
 import { recordedShopifyScopes } from "../shopify/integration-health.js";
 import type { BaseAgentContext } from "../agent-context.js";
@@ -19,7 +19,7 @@ export interface OrderForReview {
   id: string;
   name: string;
   createdAt: string;
-  financialStatus: string;
+  financialStatus: string | null;
   fulfillmentStatus: string | null;
   totalPrice: string;
   currency: string | null;
@@ -37,24 +37,6 @@ export interface OrderForReview {
 export interface OrderOpsContext extends BaseAgentContext {
   order: OrderForReview;
 }
-
-type RawRiskOrder = {
-  id: number;
-  name: string;
-  created_at: string;
-  financial_status: string;
-  fulfillment_status: string | null;
-  current_total_price: string;
-  currency?: string | null;
-  customer?: {
-    id?: number | string | null;
-    email?: string | null;
-    orders_count?: number | null;
-    created_at?: string | null;
-  } | null;
-  billing_address?: { city?: string | null; province?: string | null; country?: string | null } | null;
-  shipping_address?: { city?: string | null; province?: string | null; country?: string | null } | null;
-};
 
 const HIGH_VALUE_USD = 300;
 
@@ -108,27 +90,16 @@ export async function buildOrderOpsContext(
     throw new Error("No Shopify integration connected for order-ops run");
   }
 
-  const data = await shopifyRestJson<{ order?: RawRiskOrder }>(
-    shopifyCtx,
-    `orders/${orderId}.json`,
-    {
-      query: {
-        fields:
-          "id,name,created_at,financial_status,fulfillment_status,current_total_price,currency,customer,billing_address,shipping_address",
-      },
-    }
-  );
-
-  const raw = data.order;
+  const raw = await fetchShopifyOrder(shopifyCtx, orderId, { lineItems: 1 });
   if (!raw) throw new Error(`Order ${orderId} not found`);
 
   const partial: Omit<OrderForReview, "riskSignals"> = {
     id: String(raw.id),
-    name: raw.name,
-    createdAt: raw.created_at,
-    financialStatus: raw.financial_status,
-    fulfillmentStatus: raw.fulfillment_status,
-    totalPrice: raw.current_total_price,
+    name: raw.name ?? "",
+    createdAt: raw.created_at ?? "",
+    financialStatus: raw.financial_status ?? null,
+    fulfillmentStatus: raw.fulfillment_status ?? null,
+    totalPrice: raw.current_total_price ?? "",
     currency: raw.currency ?? null,
     customer: raw.customer
       ? {

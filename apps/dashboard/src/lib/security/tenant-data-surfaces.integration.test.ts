@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { jsonResponse } from '@shopkeeper/agent/testing';
+import { answerShopifyGraphqlRead } from '@shopkeeper/agent/testing';
 import { ChannelType, db } from '@shopkeeper/db';
 import {
   cleanupTestData,
@@ -234,25 +234,14 @@ describe('tenant data surfaces', () => {
       externalAccountId: 'tenant-caller-shop.myshopify.com',
       accessToken: 'caller-token',
     });
-    mockFetch.mockResolvedValueOnce(jsonResponse({
-      customers: [{
-        id: 123,
-        first_name: 'Caller',
-        last_name: 'Shopper',
-        email,
-        phone: null,
-        note: null,
-        orders_count: 0,
-        total_spent: '0.00',
-        created_at: '2026-01-01T00:00:00Z',
-        default_address: null,
-      }],
+    mockFetch.mockImplementation(async (_url: unknown, init?: RequestInit) => answerShopifyGraphqlRead(init, {
+      customers: [{ id: 123, first_name: 'Caller', last_name: 'Shopper', email }],
     }));
 
     const res = await getShopifyCustomer(new Request(`http://localhost/api/shopify/customer?email=${encodeURIComponent(email)}&orderLimit=0`));
 
     expect(res.status).toBe(200);
-    expect(String(mockFetch.mock.calls[0][0])).toContain('https://tenant-caller-shop.myshopify.com/admin/api/2026-04/customers/search.json');
+    expect(String(mockFetch.mock.calls[0][0])).toContain('https://tenant-caller-shop.myshopify.com/admin/api/2026-04/graphql.json');
     expect(mockFetch.mock.calls[0][1]).toMatchObject({ headers: { 'X-Shopify-Access-Token': 'caller-token' } });
 
     const callerUpdated = await db.customer.findUniqueOrThrow({ where: { id: callerCustomer.id } });

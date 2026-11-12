@@ -17,15 +17,15 @@ const ORDERS: Record<string, { id: number; name: string; email: string }> = {
   '#1025': { id: 5678901234, name: '#1025', email: OWNER_EMAIL },
 };
 
-const shopifyRestJson = vi.fn(async (_ctx: unknown, _path: string, options: { query?: { name?: string } }) => {
-  const order = ORDERS[options.query?.name ?? ''];
-  return { orders: order ? [order] : [] };
+const findShopifyOrderIdentity = vi.fn(async (_ctx: unknown, search: { name: string }) => {
+  const order = ORDERS[search.name];
+  return order ? { ...order, id: String(order.id), shippingZip: null, customerId: null } : null;
 });
 
 const send = vi.fn(async (_email: OutboundEmail) => ({ providerMessageId: 'stub' }));
 
 vi.mock('@shopkeeper/agent/shopify', () => ({
-  shopifyRestJson: (...args: unknown[]) => shopifyRestJson(...(args as [unknown, string, { query?: { name?: string } }])),
+  findShopifyOrderIdentity: (...args: unknown[]) => findShopifyOrderIdentity(...(args as [unknown, { name: string }])),
 }));
 
 vi.mock('@shopkeeper/email/senders', () => ({

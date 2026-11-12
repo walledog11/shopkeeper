@@ -55,6 +55,7 @@ import { executeCurrentCachedHomePlan } from '@shopkeeper/agent/plan-execution';
 import { buildGatewayPlanExecutionDeps } from './agent-turn-deps.js';
 import { reconcileUnknownAgentAction } from '@shopkeeper/agent/unknown-outcome-reconciliation';
 import { seedWaitingSupportTask, refundPlan } from '../../test-fixtures/operator-answer-replan-fixtures.js';
+import { answerShopifyGraphqlRead, graphqlRequest } from '@shopkeeper/agent/testing';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
 // Operator state is keyed to the person, so every transport in these cases writes
@@ -142,13 +143,12 @@ describe('applyOperatorAnswerReplan durable continuation', () => {
     });
     const providerFetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
+      const read = answerShopifyGraphqlRead(init, { orders: [] });
+      if (read) return read;
       if (url.includes('/orders/9000001001.json')) {
         return new Response(JSON.stringify({ order: {
           id: '9000001001', customer: { id: shopifyCustomerId },
         } }), { status: 200 });
-      }
-      if (url.includes('/orders.json')) {
-        return new Response(JSON.stringify({ orders: [] }), { status: 200 });
       }
       if (url.includes('/graphql.json')) {
         const body = JSON.parse(String(init?.body ?? '{}')) as { query?: string };
@@ -248,8 +248,8 @@ describe('applyOperatorAnswerReplan durable continuation', () => {
       proposalId: parked.activeProposalId, status: 'unknown', receiptVersion: 1,
       receipt: { outcome: 'unknown', code: 'ambiguous_provider_response' },
     });
-    expect(providerFetch.mock.calls.filter(([input]) =>
-      String(input).includes('/graphql.json'))).toHaveLength(2);
+    expect(providerFetch.mock.calls.filter(([, init]) => ['orderReturns', 'reverseDeliveryCreateWithShipping']
+      .includes(graphqlRequest(init)?.operation ?? ''))).toHaveLength(2);
     // The reply is the exact draft the card showed; no model writes it afterwards.
     expect(anthropicCreate).not.toHaveBeenCalled();
     if (providerOutcome === 'confirmed') {

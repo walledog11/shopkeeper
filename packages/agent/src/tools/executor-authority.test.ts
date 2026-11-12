@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { executeToolWithStatus } from "./executor.js";
 import type { BaseAgentContext } from "../agent-context.js";
 import { defineTool } from "./registry/index.js";
+import { answerShopifyGraphqlRead, graphqlRequest, graphqlResponse } from "../testing/shopify-graphql.js";
 
 const {
   mockFindKbArticles,
@@ -153,13 +154,12 @@ describe("customer-record execution identity", () => {
   } as BaseAgentContext;
 
   it.each([
-    ['get_order_by_name', { order_name: '#9001' }],
-    ['create_refund', { order_id: '9001', amount: '10.00' }],
-  ])('blocks %s for an order owned by another customer before reading details or spending', async (name, input) => {
-    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      order: { id: 9001, customer: { id: 9999 } },
-      orders: [{ id: 9001, customer: { id: 9999 } }],
-    }), { status: 200 }));
+    ['get_order_by_name', { order_name: '#9001' }, 'ShopkeeperOrderIdentities'],
+    ['create_refund', { order_id: '9001', amount: '10.00' }, 'ShopkeeperOrderIdentity'],
+  ])('blocks %s for an order owned by another customer before reading details or spending', async (name, input, identityRead) => {
+    const fetch = vi.fn(async (_url: unknown, init?: RequestInit) => answerShopifyGraphqlRead(init, {
+      orders: [{ id: 9001, name: '#9001', customer: { id: 9999 } }],
+    })!);
     vi.stubGlobal('fetch', fetch);
     const ctx = { ...linkedSupportCtx, shopify: {
       ...linkedSupportCtx.shopify!, grantedScopes: ['read_orders', 'write_orders'],
@@ -167,8 +167,7 @@ describe("customer-record execution identity", () => {
     const result = await executeToolWithStatus(name, input, ctx);
     expect(result.status).toBe('policy_block');
     expect(fetch).toHaveBeenCalledTimes(1);
-    const requested = new URL(String(fetch.mock.calls[0][0]));
-    expect(requested.searchParams.get('fields')).toBe('id,customer');
+    expect(graphqlRequest(fetch.mock.calls[0][1])?.operation).toBe(identityRead);
     expect(mockReserveDailyRefundSpend).not.toHaveBeenCalled();
   });
 
@@ -192,7 +191,9 @@ describe("customer-record execution identity", () => {
     } as BaseAgentContext;
 
     it("still reads the order the sender names, so the merchant gets a plan to review", async () => {
-      const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ orders: [] }), { status: 200 }));
+      const fetch = vi.fn().mockResolvedValue(graphqlResponse({
+        orders: { nodes: [], pageInfo: { hasNextPage: false, endCursor: null } },
+      }));
       vi.stubGlobal("fetch", fetch);
       const result = await executeToolWithStatus("get_order_by_name", { order_name: "#9001" }, unlinkedCtx);
       expect(result.status).not.toBe("policy_block");

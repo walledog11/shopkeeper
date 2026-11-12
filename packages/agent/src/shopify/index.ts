@@ -1,12 +1,29 @@
 export {
   SHOPIFY_API_VERSION,
   ShopifyRequestError,
+  isShopifyRefusal,
   parseNextPageInfo,
   shopifyGraphql,
   shopifyRest,
   shopifyRestJson,
   type ShopifyContext,
 } from "./client.js";
+export {
+  fetchShopifyOrder,
+  findShopifyOrderIdentity,
+  findShopifyOrders,
+  type OrderPage,
+  type OrderSearch,
+  type ShopifyOrderIdentity,
+} from "./order-reads.js";
+export {
+  fetchShopifyCustomer,
+  findShopifyCustomerByEmail,
+  searchShopifyCustomerIdentities,
+  searchShopifyCustomers,
+  type CustomerPage,
+} from "./customer-reads.js";
+export { fetchShopifyShop, fetchShopifyStoreContent, type ShopifyContentItem } from "./store-reads.js";
 export {
   SHOPIFY_SIMULATOR_DOMAIN,
   SHOPIFY_SIMULATOR_TOKEN,

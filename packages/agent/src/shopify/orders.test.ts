@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { jsonResponse } from "../testing/json-response.js";
+import { graphqlRequest, graphqlResponse, shopifyOrderNode } from "../testing/shopify-graphql.js";
 import { getOrderByName, listRecentUnfulfilledOrderIds } from "./orders.js";
 import { serializeOrder } from "./serializers.js";
 
@@ -13,38 +13,40 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+function ordersPage(orders: Parameters<typeof shopifyOrderNode>[0][]) {
+  return graphqlResponse({
+    orders: { nodes: orders.map(shopifyOrderNode), pageInfo: { hasNextPage: false, endCursor: null } },
+  });
+}
+
 describe("listRecentUnfulfilledOrderIds", () => {
   it("returns string order ids for paid unfulfilled open orders", async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
-      orders: [{ id: 1001 }, { id: 1002 }],
-    }));
+    const fetchMock = vi.fn().mockResolvedValueOnce(ordersPage([{ id: 1001 }, { id: 1002 }]));
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(listRecentUnfulfilledOrderIds(ctx, 10)).resolves.toEqual(["1001", "1002"]);
 
-    const url = new URL(String(fetchMock.mock.calls[0]?.[0]));
-    expect(url.pathname).toContain("/orders.json");
-    expect(url.searchParams.get("status")).toBe("open");
-    expect(url.searchParams.get("fulfillment_status")).toBe("unfulfilled");
-    expect(url.searchParams.get("financial_status")).toBe("paid");
-    expect(url.searchParams.get("limit")).toBe("10");
-    expect(url.searchParams.get("fields")).toBe("id");
-    expect(url.searchParams.get("created_at_min")).toBeNull();
+    const request = graphqlRequest(fetchMock.mock.calls[0]?.[1]);
+    expect(request?.operation).toBe("ShopkeeperOrders");
+    expect(request?.variables).toMatchObject({
+      query: "status:open fulfillment_status:unfulfilled financial_status:paid",
+      first: 10,
+    });
   });
 
   it("bounds discovery to the given window when one is supplied", async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ orders: [{ id: 1001 }] }));
+    const fetchMock = vi.fn().mockResolvedValueOnce(ordersPage([{ id: 1001 }]));
     vi.stubGlobal("fetch", fetchMock);
     const since = new Date("2026-08-03T00:00:00.000Z");
 
     await listRecentUnfulfilledOrderIds(ctx, 10, since);
 
-    const url = new URL(String(fetchMock.mock.calls[0]?.[0]));
-    expect(url.searchParams.get("created_at_min")).toBe("2026-08-03T00:00:00.000Z");
+    expect(graphqlRequest(fetchMock.mock.calls[0]?.[1])?.variables.query)
+      .toContain('created_at:>="2026-08-03T00:00:00.000Z"');
   });
 
   it("returns an empty list when Shopify responds with no orders", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(jsonResponse({ orders: [] })));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(ordersPage([])));
 
     await expect(listRecentUnfulfilledOrderIds(ctx)).resolves.toEqual([]);
   });
@@ -130,19 +132,16 @@ describe("serializeOrder line items", () => {
 
 describe("order status evidence", () => {
   it("reads cancellation and shipment evidence independently for a refunded order", async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ orders: [{
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(ordersPage([{
       id: 1035, name: "#1035", cancelled_at: "2026-09-30T07:20:09Z",
       financial_status: "refunded", fulfillment_status: null, fulfillments: [],
-    }] }));
-    vi.stubGlobal("fetch", fetchMock);
+    }])));
     const result = await getOrderByName({ order_name: "1035" }, ctx);
     expect(result.status).toBe("ok");
     expect(JSON.parse(result.message)).toMatchObject({
       cancelled_at: "2026-09-30T07:20:09Z",
       financial_status: "refunded", shipping_status: "not_shipped_yet",
     });
-    const fields = new URL(String(fetchMock.mock.calls[0]?.[0])).searchParams.get("fields")?.split(",");
-    expect(fields).toEqual(expect.arrayContaining(["cancelled_at", "fulfillments"]));
   });
 
   it("does not infer shipment or return history from restocking", () => {

@@ -36,6 +36,8 @@ export interface ShopifyCustomer {
   total_spent?: string;
   default_address?: ShopifyCustomerAddress | null;
   note?: string | null;
+  currency?: string | null;
+  created_at?: string;
 }
 
 export interface ShopifyOrderLineItem {
@@ -48,6 +50,8 @@ export interface ShopifyOrderLineItem {
   fulfillable_quantity?: number;
   current_quantity?: number;
   fulfillment_status?: string | null;
+  sku?: string | null;
+  image_url?: string | null;
 }
 
 // Shopify returns every money field twice: once in the shop's own currency and
@@ -66,6 +70,7 @@ export interface ShopifyOrder {
   tags?: string | string[] | null;
   cancelled_at?: string | null;
   cancel_reason?: string | null;
+  closed_at?: string | null;
   fulfillment_status?: string | null;
   total_price?: string;
   fulfillments?: ShopifyFulfillment[] | null;
@@ -79,7 +84,16 @@ export interface ShopifyOrder {
   current_total_price_set?: ShopifyPriceSet;
   line_items?: ShopifyOrderLineItem[];
   shipping_address?: ShopifyCustomerAddress | null;
-  customer?: { id: number | string } | null;
+  email?: string | null;
+  customer?: {
+    id: number | string;
+    first_name?: string | null;
+    last_name?: string | null;
+    email?: string | null;
+    orders_count?: number | null;
+    created_at?: string | null;
+  } | null;
+  billing_address?: ShopifyCustomerAddress | null;
   refunds?: Array<{ id?: number | string; transactions?: ShopifyTransaction[] }>;
 }
 

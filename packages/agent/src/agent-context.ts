@@ -41,7 +41,7 @@ export interface ShopifyOrderSummary {
   id: string;
   name: string;
   created_at: string;
-  financial_status: string;
+  financial_status: string | null;
   fulfillment_status: string | null;
   total_price: string;
   currency?: string | null;

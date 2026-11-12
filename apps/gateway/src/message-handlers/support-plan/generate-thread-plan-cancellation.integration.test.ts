@@ -68,6 +68,7 @@ import { generateThreadPlan } from './generate-thread-plan.js';
 import { executeCurrentCachedHomePlan } from '@shopkeeper/agent/plan-execution';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { buildGatewayPlanExecutionDeps } from '../operator/agent-turn-deps.js';
+import { answerShopifyGraphqlRead } from '@shopkeeper/agent/testing';
 
 const testOrgs = createTestOrgTracker();
 let providerFetch: ReturnType<typeof vi.fn>;
@@ -137,6 +138,8 @@ describe('durable cancellation approval', () => {
     providerFetch.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
       const method = init?.method ?? 'GET';
+      const read = answerShopifyGraphqlRead(init, { orders: [cancelCalls > 0 ? cancelled : cancellable] });
+      if (read) return read;
       if (url.includes('/orders/9000001001/refunds/calculate.json')) {
         return new Response(JSON.stringify({
           refund: {
@@ -165,11 +168,6 @@ describe('durable cancellation approval', () => {
       }
       if (url.includes('/customers/1234.json')) {
         return new Response(JSON.stringify({ customer: { id: 1234 } }), {
-          status: 200, headers: { 'content-type': 'application/json' },
-        });
-      }
-      if (url.includes('/orders.json')) {
-        return new Response(JSON.stringify({ orders: [cancelCalls > 0 ? cancelled : cancellable] }), {
           status: 200, headers: { 'content-type': 'application/json' },
         });
       }
@@ -318,9 +316,11 @@ describe('durable cancellation approval', () => {
 
     let fulfillmentStatus: string | null = null;
     let cancelCalls = 0;
-    providerFetch.mockImplementation(async (input: string | URL | Request) => {
+    providerFetch.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
       const currentOrder = { ...order, fulfillment_status: fulfillmentStatus, cancelled_at: null };
+      const read = answerShopifyGraphqlRead(init, { orders: [currentOrder] });
+      if (read) return read;
       if (url.includes('/orders/9000001001/cancel.json')) {
         cancelCalls += 1;
         throw new Error('A stale approved action must not reach Shopify cancellation.');
@@ -336,9 +336,6 @@ describe('durable cancellation approval', () => {
       }
       if (url.includes('/orders/9000001001.json')) {
         return new Response(JSON.stringify({ order: currentOrder }), { status: 200 });
-      }
-      if (url.includes('/orders.json')) {
-        return new Response(JSON.stringify({ orders: [currentOrder] }), { status: 200 });
       }
       if (url.includes('/customers/1234.json')) return customerNotFound();
       throw new Error(`Unexpected external request: ${url}`);
@@ -417,8 +414,10 @@ describe('durable cancellation approval', () => {
 
     const cancellable = { ...order, fulfillment_status: null, cancelled_at: null };
     let cancelCalls = 0;
-    providerFetch.mockImplementation(async (input: string | URL | Request) => {
+    providerFetch.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
+      const read = answerShopifyGraphqlRead(init, { orders: [cancellable] });
+      if (read) return read;
       if (url.includes('/orders/9000001001/cancel.json')) {
         cancelCalls += 1;
         throw new Error('A revoked write grant must not reach Shopify cancellation.');
@@ -431,9 +430,6 @@ describe('durable cancellation approval', () => {
             transactions: [{ kind: 'suggested_refund', gateway: 'manual', amount: '42.00', currency: 'USD', parent_id: 6001 }],
           },
         }), { status: 200 });
-      }
-      if (url.includes('/orders.json')) {
-        return new Response(JSON.stringify({ orders: [cancellable] }), { status: 200 });
       }
       if (url.includes('/orders/9000001001.json')) {
         return new Response(JSON.stringify({ order: cancellable }), { status: 200 });

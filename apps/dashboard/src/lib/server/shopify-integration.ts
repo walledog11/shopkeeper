@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db, INTEGRATION_REAUTH_SENTINEL } from '@shopkeeper/db';
-import { shopifyRestJson, ShopifyRequestError } from '@shopkeeper/agent/shopify';
+import { fetchShopifyShop, ShopifyRequestError } from '@shopkeeper/agent/shopify';
 import { shopifyContextFor, type ShopifyAccessRow } from '@shopkeeper/agent/shopify/access';
 import { getRedis } from '@/lib/server/redis';
 import logger from '@/lib/server/logger';
@@ -105,7 +105,7 @@ export async function refreshShopifyIntegrationHealthIfDue(integration: ShopifyA
   if (!ctx) return INTEGRATION_REAUTH_SENTINEL;
 
   try {
-    await shopifyRestJson(ctx, 'shop.json', { maxRetries: 0, query: { fields: 'id' } });
+    await fetchShopifyShop(ctx, { maxRetries: 0 });
     return integration.tokenExpiresAt;
   } catch (err) {
     const marked = await markShopifyIntegrationInvalidIfAuthFailure(

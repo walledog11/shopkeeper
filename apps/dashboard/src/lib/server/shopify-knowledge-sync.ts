@@ -1,8 +1,13 @@
 import { db } from '@shopkeeper/db';
-import { shopifyRestJson } from '@shopkeeper/agent/shopify';
+import { fetchShopifyStoreContent } from '@shopkeeper/agent/shopify';
+import { memoryOverrideTargetTag } from '@shopkeeper/agent/kb-memory';
 import { shopifyContextFor } from '@shopkeeper/agent/shopify/access';
 import { ApiError, BadRequestError } from '@/lib/api/errors';
 import { isSimulatedShopifyIntegration } from '@/lib/integrations/shopify-simulator';
+
+function isSyncTag(tag: string): boolean {
+  return tag.startsWith('shopify:policy:') || tag.startsWith('shopify:page:');
+}
 
 function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/\s+/g, ' ').trim();
@@ -10,8 +15,10 @@ function stripHtml(html: string): string {
 
 /**
  * Copies the store's published policies and pages into the workspace's Shopify
- * knowledge base, updating notes synced before. Run from the dashboard and from
- * the app home inside Shopify admin.
+ * knowledge base: notes synced before are updated, and notes for anything the
+ * store no longer publishes are removed, so the agent never quotes a policy the
+ * merchant took down. Run from the dashboard and from the app home inside
+ * Shopify admin.
  */
 export async function syncShopifyKnowledge(organizationId: string) {
   const integration = await db.integration.findFirst({
@@ -21,36 +28,28 @@ export async function syncShopifyKnowledge(organizationId: string) {
     throw new BadRequestError('No Shopify integration connected');
   }
 
-  let policies: { id: number; title: string; body: string }[];
-  let pages: { id: number; title: string; body_html: string }[];
+  let policies: { id: string; title: string; body: string }[];
+  let pages: { id: string; title: string; body: string }[];
   if (isSimulatedShopifyIntegration(integration.metadata)) {
     policies = [
       {
-        id: -1,
+        id: 'demo-returns',
         title: 'Demo return policy',
         body: '<p>Unused items can be returned within 30 days. Contact support before sending anything back.</p>',
       },
     ];
     pages = [
       {
-        id: -1,
+        id: 'demo-shipping',
         title: 'Demo shipping information',
-        body_html: '<p>Orders ship within two business days. Tracking is emailed after fulfillment.</p>',
+        body: '<p>Orders ship within two business days. Tracking is emailed after fulfillment.</p>',
       },
     ];
   } else {
     const ctx = await shopifyContextFor(integration);
     if (!ctx) throw new BadRequestError('Shopify needs reconnecting');
     try {
-      const [policiesData, pagesData] = await Promise.all([
-        shopifyRestJson<{ policies?: { id: number; title: string; body: string }[] }>(ctx, 'policies.json', { maxRetries: 0 }),
-        shopifyRestJson<{ pages?: { id: number; title: string; body_html: string }[] }>(ctx, 'pages.json', {
-          query: { published_status: 'published', limit: 250 },
-          maxRetries: 0,
-        }),
-      ]);
-      policies = policiesData.policies ?? [];
-      pages = pagesData.pages ?? [];
+      ({ policies, pages } = await fetchShopifyStoreContent(ctx));
     } catch {
       throw new ApiError('Failed to fetch data from Shopify', 502);
     }
@@ -76,40 +75,41 @@ export async function syncShopifyKnowledge(organizationId: string) {
   const tagToId = new Map<string, string>();
   for (const a of existingArticles) {
     for (const t of a.tags) {
-      if (t.startsWith('shopify:policy:') || t.startsWith('shopify:page:')) {
-        tagToId.set(t, a.id);
-      }
+      if (isSyncTag(t)) tagToId.set(t, a.id);
     }
   }
 
-  const filteredPolicies = (policies ?? []).filter(p => p.body);
-  const filteredPages = (pages ?? []).filter(p => p.body_html);
+  const filteredPolicies = policies.filter(p => p.body);
+  const filteredPages = pages.filter(p => p.body);
+  const notes = [
+    ...filteredPolicies.map(policy => ({ tag: `shopify:policy:${policy.id}`, title: policy.title, body: stripHtml(policy.body) })),
+    ...filteredPages.map(page => ({ tag: `shopify:page:${page.id}`, title: page.title, body: stripHtml(page.body) })),
+  ];
+  const current = new Set(notes.map(note => note.tag));
 
-  const policyOps = filteredPolicies.map(policy => {
-    const tag = `shopify:policy:${policy.id}`;
-    const body = stripHtml(policy.body);
-    const existingId = tagToId.get(tag);
-    if (existingId) {
-      return db.kbArticle.update({ where: { id: existingId }, data: { title: policy.title, body } });
-    }
-    return db.kbArticle.create({
-      data: { organizationId, knowledgeBaseId: shopifyKb.id, title: policy.title, body, tags: [tag] },
-    });
-  });
+  await Promise.all(notes.map(note => {
+    const existingId = tagToId.get(note.tag);
+    return existingId
+      ? db.kbArticle.update({ where: { id: existingId }, data: { title: note.title, body: note.body } })
+      : db.kbArticle.create({
+          data: { organizationId, knowledgeBaseId: shopifyKb.id, title: note.title, body: note.body, tags: [note.tag] },
+        });
+  }));
 
-  const pageOps = filteredPages.map(page => {
-    const tag = `shopify:page:${page.id}`;
-    const body = stripHtml(page.body_html);
-    const existingId = tagToId.get(tag);
-    if (existingId) {
-      return db.kbArticle.update({ where: { id: existingId }, data: { title: page.title, body } });
-    }
-    return db.kbArticle.create({
-      data: { organizationId, knowledgeBaseId: shopifyKb.id, title: page.title, body, tags: [tag] },
-    });
-  });
-
-  await Promise.all([...policyOps, ...pageOps]);
+  // Only notes this sync wrote; anything else in the folder is the merchant's.
+  const removed = existingArticles
+    .filter(article => article.tags.some(isSyncTag) && !article.tags.some(tag => current.has(tag)))
+    .map(article => article.id);
+  if (removed.length > 0) {
+    // A correction the merchant wrote on a removed note goes with it, as when
+    // they delete a note themselves.
+    await db.$transaction([
+      db.kbArticle.deleteMany({
+        where: { organizationId, OR: removed.map(id => ({ tags: { has: memoryOverrideTargetTag(id) } })) },
+      }),
+      db.kbArticle.deleteMany({ where: { id: { in: removed }, knowledgeBaseId: shopifyKb.id } }),
+    ]);
+  }
 
   return { syncedPolicies: filteredPolicies.length, syncedPages: filteredPages.length };
 }

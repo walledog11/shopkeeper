@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { db } from "@shopkeeper/db";
-import { shopifyRestJson } from "@shopkeeper/agent/shopify";
+import { findShopifyOrderIdentity, type ShopifyOrderIdentity } from "@shopkeeper/agent/shopify";
 import { SHOPIFY_ACCESS_SELECT, shopifyContextFor } from "@shopkeeper/agent/shopify/access";
 import {
   VERIFICATION_CODE_LENGTH,
@@ -39,12 +39,6 @@ export type VerificationRequestResult =
   | { status: "sent" }
   | { status: "send_limit" }
   | { status: "unavailable" };
-
-interface ShopifyOrderIdentity {
-  id: number | string;
-  name?: string | null;
-  email?: string | null;
-}
 
 export interface RequestVerificationInput {
   sessionId: string;
@@ -142,14 +136,9 @@ export async function requestVerification(
   });
   if (!challenge) return { status: "sent" };
 
-  let order: ShopifyOrderIdentity | undefined;
+  let order: ShopifyOrderIdentity | null = null;
   try {
-    const data = await shopifyRestJson<{ orders?: ShopifyOrderIdentity[] }>(
-      shopifyCtx,
-      "orders.json",
-      { query: { name: orderName, status: "any", limit: 1, fields: "id,name,email" } },
-    );
-    order = (data.orders ?? [])[0];
+    order = await findShopifyOrderIdentity(shopifyCtx, { name: orderName });
   } catch (err) {
     // A lookup failure is treated as a miss rather than surfaced. Returning an
     // error here would make Shopify's availability observable per order number,
@@ -162,7 +151,7 @@ export async function requestVerification(
     return { status: "sent" };
   }
 
-  if (!order || normalizeOrderName(order.name ?? "") !== orderName || !emailsMatch(suppliedEmail, order.email)) {
+  if (!order || normalizeOrderName(order.name) !== orderName || !emailsMatch(suppliedEmail, order.email)) {
     return { status: "sent" };
   }
 

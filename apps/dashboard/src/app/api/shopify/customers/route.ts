@@ -1,14 +1,13 @@
 import { NextResponse } from 'next/server';
 import { db } from '@shopkeeper/db';
 import { readRequiredJsonObject } from '@/lib/api/body';
-import { NotFoundError } from '@/lib/api/errors';
+import { BadRequestError, NotFoundError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
 import { parseCreateShopifyCustomerBody } from '@/app/api/shopify/customer/_lib/validation';
-import { parseNextPageInfo, shopifyRest, shopifyRestJson } from '@shopkeeper/agent/shopify';
+import { searchShopifyCustomers, shopifyRestJson } from '@shopkeeper/agent/shopify';
 import { SHOPIFY_ACCESS_SELECT, shopifyContextFor } from '@shopkeeper/agent/shopify/access';
 import { shopifyRouteErrorResponse } from '@/lib/server/shopify-integration';
-
-const CUSTOMER_LIST_FIELDS = 'id,first_name,last_name,email,phone,orders_count,total_spent,created_at,default_address';
+import { decodeShopifyPageToken, encodeShopifyPageToken } from '@/lib/server/shopify-page-token';
 
 export const GET = withOrgRoute(
   {
@@ -29,35 +28,22 @@ export const GET = withOrgRoute(
 
     const { shop } = ctx;
     const { searchParams } = new URL(request.url);
-    const q = searchParams.get('q')?.trim() ?? '';
     const pageInfo = searchParams.get('page_info') ?? '';
-    const limit = 25;
+    const page = pageInfo ? decodeShopifyPageToken(pageInfo) : null;
+    if (pageInfo && !page) throw new BadRequestError('page_info is not a cursor this API issued');
+    const q = page ? page.query : (searchParams.get('q')?.trim() ?? '');
 
-    // Search endpoint has no cursor pagination; the list endpoint returns a Link header.
-    let path: string;
-    let query: Record<string, string | number>;
-    if (pageInfo) {
-      path = 'customers.json';
-      query = { page_info: pageInfo, limit, fields: CUSTOMER_LIST_FIELDS };
-    } else if (q.length >= 1) {
-      path = 'customers/search.json';
-      query = { query: q, limit, fields: CUSTOMER_LIST_FIELDS };
-    } else {
-      path = 'customers.json';
-      query = { limit, fields: CUSTOMER_LIST_FIELDS, order: 'updated_at DESC' };
-    }
-
-    let data: { customers?: unknown[] };
-    let headers: Headers;
+    let result: Awaited<ReturnType<typeof searchShopifyCustomers>>;
     try {
-      ({ data, headers } = await shopifyRest<{ customers?: unknown[] }>(ctx, path, { query, maxRetries: 0 }));
+      result = await searchShopifyCustomers(ctx, q, { first: 25, after: page?.after ?? null, maxRetries: 0 });
     } catch (err) {
       const response = await shopifyRouteErrorResponse(err, integration, org.id);
       if (response) return response;
       throw err;
     }
 
-    return NextResponse.json({ customers: data.customers ?? [], nextPageInfo: parseNextPageInfo(headers), shop });
+    const nextPageInfo = result.nextCursor ? encodeShopifyPageToken({ query: q, after: result.nextCursor }) : null;
+    return NextResponse.json({ customers: result.customers, nextPageInfo, shop });
   },
 );
 

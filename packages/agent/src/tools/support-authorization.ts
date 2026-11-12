@@ -2,7 +2,7 @@ import type { BaseAgentContext, SupportContext } from '../agent-context.js';
 import { hasUnresolvedShopifyCustomer, isGuestOnlyTool } from '../guest-policy.js';
 import { CHANNEL_TYPE, isOperatorChannel } from '../thread-constants.js';
 import { normalizeOrderName } from '../order-reference.js';
-import { shopifyRestJson } from '../shopify/client.js';
+import { fetchShopifyOrderIdentity, findShopifyOrderIdentity } from '../shopify/order-reads.js';
 import type { AgentToolDefinition } from './registry/index.js';
 
 const REFUSAL = 'Customer or order identity could not be verified for this conversation. Ask the merchant to verify it; do not disclose details or change the order.';
@@ -57,15 +57,9 @@ export async function checkSupportAuthorization(
   if (orderId && !/^\d+$/.test(orderId)) return REFUSAL;
   try {
     const order = orderId
-      ? (await shopifyRestJson<{ order?: { customer?: { id: string | number } | null } }>(
-          ctx.shopify, `orders/${orderId}.json`, { query: { fields: 'id,customer' } },
-        )).order
-      : (await shopifyRestJson<{ orders?: Array<{ customer?: { id: string | number } | null }> }>(
-          ctx.shopify, 'orders.json', {
-            query: { name: normalizeOrderName(orderName!), customer_id: customerId, status: 'any', limit: 1, fields: 'id,customer' },
-          },
-        )).orders?.[0];
-    return String(order?.customer?.id ?? '') === customerId ? null : REFUSAL;
+      ? await fetchShopifyOrderIdentity(ctx.shopify, orderId)
+      : await findShopifyOrderIdentity(ctx.shopify, { name: normalizeOrderName(orderName!), customerId });
+    return order?.customerId === customerId ? null : REFUSAL;
   } catch {
     // Unavailable ownership evidence never falls back to model judgment.
     return REFUSAL;

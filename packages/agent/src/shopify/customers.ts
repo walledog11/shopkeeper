@@ -35,6 +35,7 @@ import {
   type ReceiptV1,
   type ToolResult,
 } from "../tools/result.js";
+import { fetchShopifyCustomer, searchShopifyCustomerIdentities } from "./customer-reads.js";
 import { customerName, serializeCustomer } from "./serializers.js";
 import { shopifyReceiptResults, shopifyReceiptEnvelope } from "./receipts.js";
 import type { ShopifyCustomer } from "./types.js";
@@ -68,15 +69,7 @@ async function searchShopifyCustomers(
   try {
     const query = requireNonEmptyString(input.query, "query");
     const limit = clampLimit(input.limit, 5, 10);
-    const data = await shopifyRestJson<{ customers?: ShopifyCustomer[] }>(ctx, "customers/search.json", {
-      query: {
-        query,
-        limit,
-        fields: "id,first_name,last_name,email,phone",
-      },
-    });
-
-    const customers = data.customers ?? [];
+    const customers = await searchShopifyCustomerIdentities(ctx, query, { first: limit });
     if (customers.length === 0) return toolNotFound(`No customers found matching "${query}".`);
 
     return toolOk(JSON.stringify(
@@ -98,17 +91,12 @@ async function getShopifyCustomer(
 ): Promise<ToolResult> {
   try {
     const customerId = requireNumericId(input.customer_id, "customer_id");
-    const data = await shopifyRestJson<{ customer?: ShopifyCustomer }>(ctx, `customers/${customerId}.json`, {
-      query: {
-        fields: "id,first_name,last_name,email,phone,orders_count,total_spent,default_address,note",
-      },
-    });
-
-    if (!data.customer) {
+    const customer = await fetchShopifyCustomer(ctx, customerId);
+    if (!customer) {
       return toolError(`Error: could not fetch customer - customer ${customerId} was not returned by Shopify.`);
     }
 
-    return toolOk(JSON.stringify(serializeCustomer(data.customer)));
+    return toolOk(JSON.stringify(serializeCustomer(customer)));
   } catch (err) {
     return toolError(formatShopifyToolError("could not fetch customer", err));
   }

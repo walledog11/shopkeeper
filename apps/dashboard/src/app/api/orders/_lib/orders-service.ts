@@ -1,72 +1,41 @@
 import { NextResponse } from "next/server"
 import { db } from "@shopkeeper/db"
-import { NotFoundError } from "@/lib/api/errors"
-import { parseNextPageInfo, shopifyRest, type ShopifyContext } from "@shopkeeper/agent/shopify"
+import { BadRequestError, NotFoundError } from "@/lib/api/errors"
+import { findShopifyOrders, type OrderSearch, type ShopifyContext } from "@shopkeeper/agent/shopify"
 import { SHOPIFY_ACCESS_SELECT, shopifyContextFor } from "@shopkeeper/agent/shopify/access"
 import { shopifyRouteErrorResponse } from "@/lib/server/shopify-integration"
+import { decodeShopifyPageToken, encodeShopifyPageToken } from "@/lib/server/shopify-page-token"
 import { normalizeCurrencyCode } from "@shopkeeper/agent/money"
 import {
   type OrderRow,
   type OrdersPageResponse,
 } from "@/lib/orders/order-contract"
 
-const ORDER_FIELDS =
-  "id,name,created_at,financial_status,fulfillment_status,total_price,current_total_price,currency,customer,line_items"
+type ShopifyOrder = Awaited<ReturnType<typeof findShopifyOrders>>["orders"][number]
 
-export interface ShopifyOrderRaw {
-  id: number
-  name: string
-  created_at: string
-  financial_status: string
-  fulfillment_status: string | null
-  total_price: string
-  current_total_price: string
-  currency: string | null
-  customer: {
-    id: number
-    first_name: string | null
-    last_name: string | null
-    email: string | null
-  } | null
-  line_items: {
-    title: string
-    quantity: number
-    current_quantity: number
-    variant_title: string | null
-  }[]
-}
-
-export interface ShopifyOrdersQuery {
-  fulfillmentStatus?: string
-  financialStatus?: string
-  q?: string
-  pageInfo?: string
-  limit?: number
-}
-
-export function normalizeOrder(order: ShopifyOrderRaw): OrderRow {
+export function normalizeOrder(order: ShopifyOrder): OrderRow {
   const customerName = order.customer
     ? [order.customer.first_name, order.customer.last_name].filter(Boolean).join(" ") || null
     : null
   return {
-    id: order.id,
-    name: order.name,
-    created_at: order.created_at,
-    financial_status: order.financial_status,
-    fulfillment_status: order.fulfillment_status,
-    total_price: order.current_total_price ?? order.total_price,
+    id: Number(order.id),
+    name: order.name ?? "",
+    created_at: order.created_at ?? "",
+    financial_status: order.financial_status ?? "",
+    fulfillment_status: order.fulfillment_status ?? null,
+    total_price: order.current_total_price ?? order.total_price ?? "0",
     currency: normalizeCurrencyCode(order.currency),
     customer: order.customer
       ? {
-          id: order.customer.id,
+          id: Number(order.customer.id),
           name: customerName,
           email: order.customer.email || null,
         }
       : null,
-    line_items: order.line_items.flatMap(lineItem => lineItem.current_quantity > 0
+    line_items: (order.line_items ?? []).flatMap(lineItem => (lineItem.current_quantity ?? lineItem.quantity) > 0
       ? [{
           title: lineItem.title,
-          quantity: lineItem.current_quantity,
+          quantity: lineItem.current_quantity ?? lineItem.quantity,
           variant_title: lineItem.variant_title || null,
         }]
       : []),
@@ -93,49 +62,32 @@ export async function getOperationalShopifyIntegration(organizationId: string): 
   return { id: integration.id, organizationId: integration.organizationId, shopify }
 }
 
-function buildShopifyOrdersQuery(query: ShopifyOrdersQuery): Record<string, string | number> {
-  const limit = Math.min(query.limit ?? 25, 50)
-  const fulfillmentStatus = query.fulfillmentStatus ?? "any"
-  const financialStatus = query.financialStatus ?? "any"
-  const q = query.q ?? ""
-  const pageInfo = query.pageInfo ?? ""
-
-  if (pageInfo) {
-    return { page_info: pageInfo, limit, fields: ORDER_FIELDS }
-  }
-  if (q) {
-    return q.includes("@")
-      ? { status: "any", limit, fields: ORDER_FIELDS, email: q }
-      : { status: "any", limit, fields: ORDER_FIELDS, name: q.startsWith("#") ? q : `#${q}` }
-  }
-  return {
-    status: "any",
-    limit,
-    fields: ORDER_FIELDS,
-    ...(fulfillmentStatus !== "any" ? { fulfillment_status: fulfillmentStatus } : {}),
-    ...(financialStatus !== "any" ? { financial_status: financialStatus } : {}),
-  }
+// An order number or a customer email, as the search box takes it.
+function orderSearch(q: string): OrderSearch {
+  if (!q) return {}
+  return q.includes("@") ? { email: q } : { name: q }
 }
 
 export async function listShopifyOrders(
   integration: ShopifyIntegration,
-  query: ShopifyOrdersQuery,
+  query: { q?: string; pageInfo?: string; limit?: number },
 ): Promise<OrdersPageResponse> {
   const ctx = integration.shopify
-  const { shop } = ctx
-  const shopifyQuery = buildShopifyOrdersQuery(query)
+  const page = query.pageInfo ? decodeShopifyPageToken(query.pageInfo) : null
+  if (query.pageInfo && !page) throw new BadRequestError("page_info is not a cursor this API issued")
+  const q = page ? page.query : (query.q ?? "")
 
-  const { data, headers } = await shopifyRest<{ orders?: ShopifyOrderRaw[] }>(
-    ctx,
-    "orders.json",
-    { query: shopifyQuery, maxRetries: 0 },
-  )
+  const result = await findShopifyOrders(ctx, orderSearch(q), {
+    first: Math.min(query.limit ?? 25, 50),
+    after: page?.after ?? null,
+    lineItems: 10,
+    maxRetries: 0,
+  })
 
-  const orders = (data.orders ?? []).map(normalizeOrder)
   return {
-    orders,
-    nextPageInfo: parseNextPageInfo(headers),
-    shop,
+    orders: result.orders.map(normalizeOrder),
+    nextPageInfo: result.nextCursor ? encodeShopifyPageToken({ query: q, after: result.nextCursor }) : null,
+    shop: ctx.shop,
   }
 }
 

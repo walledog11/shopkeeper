@@ -3,9 +3,9 @@ import { mockClerkSession } from '@/test-fixtures/clerk-session';
 import { ChannelType, db } from '@shopkeeper/db';
 import { cleanupTestData, createTestIntegration, createTestOrg } from '@shopkeeper/db/test-helpers';
 
-const { mockAuth, mockShopifyRestJson } = vi.hoisted(() => ({
+const { mockAuth, mockSearchCustomerIdentities } = vi.hoisted(() => ({
   mockAuth: vi.fn(),
-  mockShopifyRestJson: vi.fn(),
+  mockSearchCustomerIdentities: vi.fn(),
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({
@@ -18,7 +18,7 @@ vi.mock('@clerk/nextjs/server', () => ({
 // pass for the wrong reason.
 vi.mock('@shopkeeper/agent/shopify', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@shopkeeper/agent/shopify')>()),
-  shopifyRestJson: mockShopifyRestJson,
+  searchShopifyCustomerIdentities: mockSearchCustomerIdentities,
 }));
 
 vi.mock('@/lib/server/logger', () => ({
@@ -38,7 +38,7 @@ beforeEach(async () => {
   org = await createTestOrg();
   otherOrg = await createTestOrg();
   mockClerkSession({ userId: 'usr_search', orgId: org.clerkOrgId });
-  mockShopifyRestJson.mockResolvedValue({ customers: [] });
+  mockSearchCustomerIdentities.mockResolvedValue([]);
 });
 
 afterEach(async () => {
@@ -56,9 +56,9 @@ describe('GET /api/shopify/customers/search', () => {
       externalAccountId: 'caller-shop.myshopify.com',
       accessToken: 'shpat_caller',
     });
-    mockShopifyRestJson.mockResolvedValue({
-      customers: [{ id: 1, first_name: 'Ada', last_name: 'Lovelace', email: 'ada@example.com' }],
-    });
+    mockSearchCustomerIdentities.mockResolvedValue([
+      { id: 1, first_name: 'Ada', last_name: 'Lovelace', email: 'ada@example.com' },
+    ]);
 
     const response = await call('?q=ada');
     const body = (await response.json()) as { customers: unknown[] };
@@ -78,13 +78,7 @@ describe('GET /api/shopify/customers/search', () => {
 
     // The response is rendered in a picker. Over-requesting fields would pull
     // addresses and order history through a search endpoint that never shows them.
-    expect(mockShopifyRestJson).toHaveBeenCalledWith(
-      expect.anything(),
-      'customers/search.json',
-      expect.objectContaining({
-        query: { query: 'ada', limit: 8, fields: 'id,first_name,last_name,email' },
-      }),
-    );
+    expect(mockSearchCustomerIdentities).toHaveBeenCalledWith(expect.anything(), 'ada', { first: 8, maxRetries: 0 });
   });
 
   it("searches the caller's store, never another org's", async () => {
@@ -101,7 +95,7 @@ describe('GET /api/shopify/customers/search', () => {
 
     await call('?q=ada');
 
-    const [ctx] = mockShopifyRestJson.mock.calls[0] as [{ shop: string; accessToken: string }];
+    const [ctx] = mockSearchCustomerIdentities.mock.calls[0] as [{ shop: string; accessToken: string }];
     expect(ctx.shop).toBe('caller-shop.myshopify.com');
     expect(ctx.accessToken).toBe('shpat_caller');
   });
@@ -120,7 +114,7 @@ describe('GET /api/shopify/customers/search', () => {
 
     // A picker fires this on every keystroke; the guard is what keeps the
     // first two of them off Shopify's rate limit.
-    expect(mockShopifyRestJson).not.toHaveBeenCalled();
+    expect(mockSearchCustomerIdentities).not.toHaveBeenCalled();
   });
 
   it('trims surrounding whitespace before applying the length guard', async () => {
@@ -132,18 +126,14 @@ describe('GET /api/shopify/customers/search', () => {
 
     await call('?q=%20ada%20');
 
-    expect(mockShopifyRestJson).toHaveBeenCalledWith(
-      expect.anything(),
-      'customers/search.json',
-      expect.objectContaining({ query: expect.objectContaining({ query: 'ada' }) }),
-    );
+    expect(mockSearchCustomerIdentities).toHaveBeenCalledWith(expect.anything(), 'ada', expect.anything());
   });
 
   it('reports 404 no_integration when the org has not connected Shopify', async () => {
     const response = await call('?q=ada');
 
     expect(response.status).toBe(404);
-    expect(mockShopifyRestJson).not.toHaveBeenCalled();
+    expect(mockSearchCustomerIdentities).not.toHaveBeenCalled();
   });
 
   it('marks the integration auth-invalid when Shopify rejects the token', async () => {
@@ -152,7 +142,7 @@ describe('GET /api/shopify/customers/search', () => {
       externalAccountId: 'caller-shop.myshopify.com',
       accessToken: 'shpat_revoked',
     });
-    mockShopifyRestJson.mockRejectedValue(
+    mockSearchCustomerIdentities.mockRejectedValue(
       new ShopifyRequestError('unauthorized', { status: 401, payload: { errors: 'bad token' } }),
     );
 
@@ -172,7 +162,7 @@ describe('GET /api/shopify/customers/search', () => {
       externalAccountId: 'caller-shop.myshopify.com',
       accessToken: 'shpat_caller',
     });
-    mockShopifyRestJson.mockRejectedValue(
+    mockSearchCustomerIdentities.mockRejectedValue(
       new ShopifyRequestError('rate limited', { status: 429, payload: {} }),
     );
 
@@ -191,7 +181,7 @@ describe('GET /api/shopify/customers/search', () => {
       externalAccountId: 'caller-shop.myshopify.com',
       accessToken: 'shpat_caller',
     });
-    mockShopifyRestJson.mockRejectedValue(new Error('socket hang up'));
+    mockSearchCustomerIdentities.mockRejectedValue(new Error('socket hang up'));
 
     const response = await call('?q=ada');
 

@@ -16,7 +16,7 @@ import { readdirSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { db, recordCustomerDataAccess, scriptActor } from '@shopkeeper/db';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
-import { shopifyRestJson } from '@shopkeeper/agent/shopify';
+import { findShopifyOrders } from '@shopkeeper/agent/shopify';
 import { SHOPIFY_ACCESS_SELECT, shopifyContextFor } from '@shopkeeper/agent/shopify/access';
 import { readPendingPlanArray, readPendingQuestion } from '../operator-context/serialization.js';
 import { findInstagramSenderIds } from './live-test-instagram.js';
@@ -184,26 +184,7 @@ async function main(): Promise<void> {
   }
 
   if (shopify) {
-    const { orders = [] } = await shopifyRestJson<{
-      orders?: Array<{
-        name: string;
-        current_total_price: string;
-        currency: string;
-        cancelled_at: string | null;
-        closed_at: string | null;
-        customer?: { first_name?: string | null; last_name?: string | null } | null;
-        refunds?: unknown[];
-        email: string | null;
-        shipping_address?: { zip?: string | null } | null;
-      }>;
-    }>(shopify, 'orders.json', {
-      query: {
-        financial_status: 'paid',
-        limit: 50,
-        fields: 'name,current_total_price,currency,cancelled_at,closed_at,refunds,email,shipping_address,customer',
-        status: 'open',
-      },
-    });
+    const { orders } = await findShopifyOrders(shopify, { paid: true, open: true }, { first: 50, lineItems: 1 });
     // Open orders only: an archived order is one the merchant has finished with.
     const eligible = orders.filter(order => (
       !order.cancelled_at

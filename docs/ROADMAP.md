@@ -54,29 +54,34 @@ The first publication is the App Store. These block review or a new install's fi
 2. **Authenticate at install, not at signup** (built: the app home holds the install's
    grant and its links claim it). Closes when, on the dev store, install → app home →
    sign up → inbox asks for no store URL and no second consent.
-3. **Instagram for an installer nobody assigned.** Connect is gated per workspace by
+3. **GraphQL Admin API only.** Shopify takes only GraphQL from new public apps. Every
+   read is moved; left are the writes and the reads inside them (refunds, cancellation,
+   order edit, creation and address, customer updates, approval line items), the
+   reconciliation probes, the dashboard's customer create and update, and the scripts.
+   Closes when nothing builds a REST Admin URL and a check keeps it that way.
+4. **Instagram for an installer nobody assigned.** Connect is gated per workspace by
    SocialAPI brand assignment, so every App Store install sees Instagram "Coming soon"
    while the listing and landing page lead with DMs. Provision a brand on connect, or
    lead with email and say Instagram opens by invitation. Closes when what the listing
    promises is what a new install can connect.
-4. **Partner dashboard submission:** protected customer data access (level 2: name,
+5. **Partner dashboard submission:** protected customer data access (level 2: name,
    email, phone, address); its requirements are built (runbook *Customer data
    protection*: access log and weekly review, the Terms' data processing section, the
    incident response policy), so every answer is Yes except consent, data sale and
    automated decisions (Not applicable). Also a reason for each requested scope, dropping
    any no shipped tool uses; listing copy, icon and screenshots; a screencast; reviewer
    test credentials. Closes when the submission form is complete.
-5. **Storefront embed weight.** The chat embed loads a stylesheet from api.fontshare.com
+6. **Storefront embed weight.** The chat embed loads a stylesheet from api.fontshare.com
    on every storefront page: a render-blocking third-party request that also hands
    shoppers' IPs to a font CDN. Self-host the font or use the system stack, then compare
    Lighthouse with and without the embed. Closes when the embed costs under Shopify's
    10-point limit.
-6. **The privacy policy describes what runs.** Sentry Session Replay records a sample of
+7. **The privacy policy describes what runs.** Sentry Session Replay records a sample of
    sessions on every page, Shopify admin included, and the policy names Sentry only for
    error reports; it also omits the website chat widget, and the Terms describe Stripe
    billing. Closes when replay is off or disclosed and both documents match the shipped
    app.
-7. **Listing day:** the site's call to action is a waitlist. Point it and the pricing
+8. **Listing day:** the site's call to action is a waitlist. Point it and the pricing
    cards at the listing, and open sign-ups. Closes when the listing is live.
 
 ## Later
@@ -91,10 +96,6 @@ The first publication is the App Store. These block review or a new install's fi
   default off), though its blurb promises more. Usage & billing shows a merchant-set AI
   dollar cap that reads as metered billing. Website chat stays in the nav and the app
   home's tabs when `STOREFRONT_CHAT_ENABLED` is off.
-- **Shopify knowledge never drops a removed page or policy.** `syncShopifyKnowledge` only
-  adds and updates, and synced articles are read-only, so a page or policy deleted in
-  Shopify (or a whole store's, after moving to another store) stays in Memory for the
-  agent to quote. Make each sync replace the store's set.
 - **SocialAPI hardening** (S1–S6 in [the transport plan](socialapi-transport-plan.md)):
   `dm.sent` correlation (a reply typed in the Instagram app never reaches the thread),
   missed-delivery recovery, account health probing, failed-connect compensation, and a
@@ -178,7 +179,7 @@ The first publication is the App Store. These block review or a new install's fi
 | A few weeks of real merchant traffic | Baseline outcomes from `request_episode_outcomes`/`agent_actions`/`agent_tasks`/`agent_turn_usage` |
 | Attributed chat sales look too low | Anonymous-shopper attribution via cart attributes |
 | Classifier spend matters | Classify a two-message email burst once |
-| Tool-schema cost justifies a re-proof | Consolidate `get_shopify_orders`/`get_order_by_name` into one `orders.json` read; `get_order_tracking` stays separate. Those two are the whole verified-storefront set (`VERIFIED_ORDER_TOOL_NAMES`), so a by-customer lookup must reach neither storefront state, and the guest/verified matrix is re-proved |
+| Tool-schema cost justifies a re-proof | Consolidate `get_shopify_orders`/`get_order_by_name` into one order read; `get_order_tracking` stays separate. Those two are the whole verified-storefront set (`VERIFIED_ORDER_TOOL_NAMES`), so a by-customer lookup must reach neither storefront state, and the guest/verified matrix is re-proved |
 | SocialAPI fails diligence or the cohort nears 100 | Revisit direct Meta (Meta console branding, native-ID mapping) |
 | Anything touches the gateway host | Move it to a `useshopkeeper.com` subdomain and re-point every webhook together |
 | Google requests a CASA assessment | Backup/log retention checks, a dynamic scan, the unverified requirements |

@@ -1,5 +1,10 @@
 import { db } from '@shopkeeper/db';
-import { ShopifyRequestError, shopifyRestJson, type ShopifyContext } from '@shopkeeper/agent/shopify';
+import {
+  findShopifyOrderIdentity,
+  isShopifyRefusal,
+  type ShopifyContext,
+  type ShopifyOrderIdentity,
+} from '@shopkeeper/agent/shopify';
 import { SHOPIFY_ACCESS_SELECT, shopifyContextFor } from '@shopkeeper/agent/shopify/access';
 import { parseClassifierSignals } from '@shopkeeper/agent/classifier-signals';
 import {
@@ -18,13 +23,6 @@ import {
 import logger from '../../logger.js';
 import { getConversationBurst } from './conversation-burst.js';
 
-interface ShopifyOrderIdentity {
-  id: number | string;
-  name?: string | null;
-  email?: string | null;
-  shipping_address?: { zip?: string | null } | null;
-}
-
 /** Shopify could not be asked, so an answer waits to be compared: retry the job. */
 export class OrderVerificationLookupError extends Error {
   constructor(cause: unknown) {
@@ -38,17 +36,11 @@ async function lookupOrder(
   orderName: string,
 ): Promise<ShopifyOrderIdentity | null | 'refused'> {
   try {
-    const data = await shopifyRestJson<{ orders?: ShopifyOrderIdentity[] }>(
-      shopify,
-      'orders.json',
-      { query: { name: orderName, status: 'any', limit: 1, fields: 'id,name,email,shipping_address' } },
-    );
-    return data.orders?.[0] ?? null;
+    return await findShopifyOrderIdentity(shopify, { name: orderName });
   } catch (err) {
     // A store that refuses the read (revoked, frozen, missing scope) will not
     // answer a retry either.
-    const refused = err instanceof ShopifyRequestError
-      && err.status !== undefined && err.status >= 400 && err.status < 500 && err.status !== 429;
+    const refused = isShopifyRefusal(err);
     logger.warn(
       { err: err instanceof Error ? err.message : String(err), refused },
       '[OrderVerification] Shopify order lookup failed',
@@ -207,7 +199,7 @@ export async function evaluateOrderVerificationAnswers(
         text: message.contentText ?? '',
         orderName: target.orderName,
         order: order
-          ? { name: order.name ?? null, email: order.email ?? null, zip: order.shipping_address?.zip ?? null }
+          ? { name: order.name, email: order.email, zip: order.shippingZip }
           : null,
         budget,
       });

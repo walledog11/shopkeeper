@@ -1,11 +1,11 @@
-import { parseNextPageInfo, shopifyRest, type ShopifyContext } from "./client.js";
+import type { ShopifyContext } from "./client.js";
+import { findShopifyOrders } from "./order-reads.js";
 import type { ShopifyOrder } from "./types.js";
 import { formatMoney } from "../money.js";
 
 const ORDER_PAGE_LIMIT = 250;
 const DEFAULT_MAX_PAGES = 5;
 const DEFAULT_TIMEOUT_MS = 10_000;
-const ORDER_FIELDS = "id,created_at,cancelled_at,current_total_price,total_price,currency,financial_status";
 
 export interface OrderWindowSummary {
   orderCount: number;
@@ -55,26 +55,17 @@ export async function summarizeOrdersInWindow(
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const collected: ShopifyOrder[] = [];
 
-  let pageInfo: string | null = null;
+  let after: string | null = null;
   for (let page = 0; page < maxPages; page += 1) {
-    const query = pageInfo
-      ? { limit: ORDER_PAGE_LIMIT, page_info: pageInfo, fields: ORDER_FIELDS }
-      : {
-          status: "any",
-          limit: ORDER_PAGE_LIMIT,
-          fields: ORDER_FIELDS,
-          created_at_min: window.start.toISOString(),
-          created_at_max: window.end.toISOString(),
-        };
+    const result = await findShopifyOrders(
+      ctx,
+      { createdAtMin: window.start, createdAtMax: window.end },
+      { first: ORDER_PAGE_LIMIT, after, lineItems: 1, timeoutMs },
+    );
+    collected.push(...result.orders);
 
-    const { data, headers } = await shopifyRest<{ orders?: ShopifyOrder[] }>(ctx, "orders.json", {
-      query,
-      timeoutMs,
-    });
-    collected.push(...(data.orders ?? []));
-
-    pageInfo = parseNextPageInfo(headers);
-    if (!pageInfo) break;
+    after = result.nextCursor;
+    if (!after) break;
   }
 
   return summarizeOrders(collected);
