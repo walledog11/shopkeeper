@@ -68,7 +68,13 @@ import { generateThreadPlan } from './generate-thread-plan.js';
 import { executeCurrentCachedHomePlan } from '@shopkeeper/agent/plan-execution';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { buildGatewayPlanExecutionDeps } from '../operator/agent-turn-deps.js';
-import { answerShopifyGraphqlRead } from '@shopkeeper/agent/testing';
+import { answerShopifyGraphqlRead, graphqlRequest, graphqlResponse } from '@shopkeeper/agent/testing';
+
+// Shopify's pricing of the whole balance: the refund cancelling the order makes.
+const fullBalance = {
+  currency: 'USD',
+  transactions: [{ kind: 'suggested_refund', gateway: 'manual', amount: '42.00', currency: 'USD', parent_id: 6001 }],
+};
 
 const testOrgs = createTestOrgTracker();
 let providerFetch: ReturnType<typeof vi.fn>;
@@ -122,7 +128,7 @@ describe('durable cancellation approval', () => {
       cancelled_at: null,
       customer: { id: 1234 },
     };
-    // Shopify's cancel refunds only the amount it is sent (decision H), so the
+    // Cancelling refunds the balance only when asked to (decision H), so the
     // refund appears on the cancelled order only because one was requested.
     const cancelled = {
       ...cancellable,
@@ -138,33 +144,19 @@ describe('durable cancellation approval', () => {
     providerFetch.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
       const method = init?.method ?? 'GET';
-      const read = answerShopifyGraphqlRead(init, { orders: [cancelCalls > 0 ? cancelled : cancellable] });
+      const committed = cancelCalls > 0 && providerOutcome !== 'unresolved';
+      const read = answerShopifyGraphqlRead(init, {
+        orders: [committed ? cancelled : cancellable],
+        refundCalculation: fullBalance,
+      });
       if (read) return read;
-      if (url.includes('/orders/9000001001/refunds/calculate.json')) {
-        return new Response(JSON.stringify({
-          refund: {
-            currency: 'USD',
-            transactions: [{ kind: 'suggested_refund', gateway: 'manual', amount: '42.00', currency: 'USD', parent_id: 6001 }],
-          },
-        }), { status: 200, headers: { 'content-type': 'application/json' } });
-      }
-      if (url.includes('/orders/9000001001/cancel.json')) {
-        expect(JSON.parse(String(init?.body))).toMatchObject({ amount: '42.00', currency: 'USD' });
+      if (graphqlRequest(init)?.operation === 'ShopkeeperOrderCancel') {
+        expect(graphqlRequest(init)!.variables).toMatchObject({ refundMethod: { originalPaymentMethodsRefund: true } });
         cancelCalls += 1;
         if (providerOutcome !== 'direct') {
           return new Response(JSON.stringify({ errors: 'response lost after commit' }), { status: 503 });
         }
-        return new Response(JSON.stringify({ order: cancelled }), {
-          status: 200, headers: { 'content-type': 'application/json' },
-        });
-      }
-      if (url.includes('/orders/9000001001.json')) {
-        const currentOrder = cancelCalls > 0 && providerOutcome !== 'unresolved'
-          ? cancelled
-          : cancellable;
-        return new Response(JSON.stringify({ order: currentOrder }), {
-          status: 200, headers: { 'content-type': 'application/json' },
-        });
+        return graphqlResponse({ orderCancel: { job: { id: 'gid://shopify/Job/1', done: true }, orderCancelUserErrors: [] } });
       }
       if (url.includes('/customers/1234.json')) {
         return new Response(JSON.stringify({ customer: { id: 1234 } }), {
@@ -319,23 +311,12 @@ describe('durable cancellation approval', () => {
     providerFetch.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
       const currentOrder = { ...order, fulfillment_status: fulfillmentStatus, cancelled_at: null };
-      const read = answerShopifyGraphqlRead(init, { orders: [currentOrder] });
+      // Planning binds the cancellation's refund quote into the approval.
+      const read = answerShopifyGraphqlRead(init, { orders: [currentOrder], refundCalculation: fullBalance });
       if (read) return read;
-      if (url.includes('/orders/9000001001/cancel.json')) {
+      if (graphqlRequest(init)?.operation === 'ShopkeeperOrderCancel') {
         cancelCalls += 1;
         throw new Error('A stale approved action must not reach Shopify cancellation.');
-      }
-      // Planning binds the cancellation's refund quote into the approval.
-      if (url.includes('/orders/9000001001/refunds/calculate.json')) {
-        return new Response(JSON.stringify({
-          refund: {
-            currency: 'USD',
-            transactions: [{ kind: 'suggested_refund', gateway: 'manual', amount: '42.00', currency: 'USD', parent_id: 6001 }],
-          },
-        }), { status: 200 });
-      }
-      if (url.includes('/orders/9000001001.json')) {
-        return new Response(JSON.stringify({ order: currentOrder }), { status: 200 });
       }
       if (url.includes('/customers/1234.json')) return customerNotFound();
       throw new Error(`Unexpected external request: ${url}`);
@@ -416,23 +397,12 @@ describe('durable cancellation approval', () => {
     let cancelCalls = 0;
     providerFetch.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
-      const read = answerShopifyGraphqlRead(init, { orders: [cancellable] });
+      // Planning binds the cancellation's refund quote into the approval.
+      const read = answerShopifyGraphqlRead(init, { orders: [cancellable], refundCalculation: fullBalance });
       if (read) return read;
-      if (url.includes('/orders/9000001001/cancel.json')) {
+      if (graphqlRequest(init)?.operation === 'ShopkeeperOrderCancel') {
         cancelCalls += 1;
         throw new Error('A revoked write grant must not reach Shopify cancellation.');
-      }
-      // Planning binds the cancellation's refund quote into the approval.
-      if (url.includes('/orders/9000001001/refunds/calculate.json')) {
-        return new Response(JSON.stringify({
-          refund: {
-            currency: 'USD',
-            transactions: [{ kind: 'suggested_refund', gateway: 'manual', amount: '42.00', currency: 'USD', parent_id: 6001 }],
-          },
-        }), { status: 200 });
-      }
-      if (url.includes('/orders/9000001001.json')) {
-        return new Response(JSON.stringify({ order: cancellable }), { status: 200 });
       }
       if (url.includes('/customers/1234.json')) return customerNotFound();
       throw new Error(`Unexpected external request: ${url}`);

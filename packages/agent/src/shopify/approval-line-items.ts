@@ -4,14 +4,15 @@ import type {
   CreateReturnInput,
   EditShopifyOrderInput,
 } from "../tools/registry/types.js";
-import { shopifyGraphql, shopifyRestJson, type ShopifyContext } from "./client.js";
+import { shopifyGraphql, type ShopifyContext } from "./client.js";
 import { VARIANT_PRICES_QUERY, variantDisplayName } from "./exchanges.js";
+import { fetchShopifyOrder } from "./order-reads.js";
 import {
   allocateReturnQuantity,
   fetchReturnableLineItems,
   selectReturnLineItems,
 } from "./returns.js";
-import type { ShopifyOrder, ShopifyOrderLineItem } from "./types.js";
+import type { ShopifyOrderLineItem } from "./types.js";
 import { optionalPositiveInteger, requireNumericId, ShopifyInputError } from "./validation.js";
 
 /**
@@ -105,11 +106,9 @@ export function orderEditApprovalLineItems(
     const items: ApprovalLineItem[] = [];
 
     if (removeVariantId) {
-      const data = await shopifyRestJson<{ order?: ShopifyOrder }>(ctx, `orders/${orderId}.json`, {
-        query: { fields: "id,line_items" },
-      });
+      const order = await fetchShopifyOrder(ctx, orderId, { lineItems: 250 });
       // The edit removes the whole line, and refuses a variant on two lines.
-      const matches = (data.order?.line_items ?? []).filter((lineItem) => (
+      const matches = (order?.line_items ?? []).filter((lineItem) => (
         String(lineItem.variant_id ?? "") === removeVariantId
         && (lineItem.current_quantity ?? lineItem.quantity) > 0
       ));

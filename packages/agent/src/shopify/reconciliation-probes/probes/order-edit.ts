@@ -1,5 +1,6 @@
 import type { EditShopifyOrderInput } from "../../../tools/index.js";
-import { shopifyRestJson, type ShopifyContext } from "../../client.js";
+import type { ShopifyContext } from "../../client.js";
+import { fetchShopifyOrder } from "../../order-reads.js";
 import type { ShopifyOrder, ShopifyOrderLineItem } from "../../types.js";
 import { optionalString, requireNumericId } from "../../validation.js";
 import { committed, noEffect, stillUnknown, type ShopifyReconciliationProbeResult } from "../types.js";
@@ -24,14 +25,11 @@ export async function probeOrderEdit(
   ctx: ShopifyContext,
 ): Promise<ShopifyReconciliationProbeResult> {
   const orderId = requireNumericId(input.order_id, "order_id");
-  const data = await shopifyRestJson<{ order?: ShopifyOrder }>(ctx, `orders/${orderId}.json`, {
-    query: { fields: "id,name,line_items" },
-    maxRetries: 1,
-  });
-  if (!data.order) {
+  const order = await fetchShopifyOrder(ctx, orderId, { lineItems: 250, maxRetries: 1 });
+  if (!order) {
     return stillUnknown(`Order ${orderId} was not returned by Shopify during reconciliation.`);
   }
-  const current = variantQuantities(data.order);
+  const current = variantQuantities(order);
   const addVariantId = optionalString(input.variant_id);
   const removeVariantId = optionalString(input.remove_variant_id);
   if (!addVariantId && !removeVariantId) {
@@ -39,8 +37,8 @@ export async function probeOrderEdit(
   }
 
   // `edit_shopify_order` adds a *delta*, so the order as it stands cannot say on
-  // its own whether that delta was applied: order-edit.ts:290 compares against
-  // pre-edit quantity plus the delta, and the probe has no pre-edit reading. A
+  // its own whether that delta was applied: `reconcileCommittedEdit` compares
+  // against pre-edit quantity plus the delta, and the probe has no pre-edit reading. A
   // quantity that merely satisfies the request is therefore not evidence the
   // request ran — an order that already held enough of the variant read as
   // committed for an edit that never happened. `null` is "cannot tell".
@@ -63,7 +61,7 @@ export async function probeOrderEdit(
     return noEffect(`Order ${orderId} does not reflect the requested edit at Shopify.`);
   }
   if (legs.every((leg) => leg === true)) {
-    return committed(`Reconciled order edit for order ${data.order.name ?? orderId}.`);
+    return committed(`Reconciled order edit for order ${order.name ?? orderId}.`);
   }
   // A swap whose halves disagree lands here too, which is the point: half an
   // edit is not a committed edit and must not read as one.

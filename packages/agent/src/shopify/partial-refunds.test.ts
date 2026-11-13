@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsonResponse } from "../testing/json-response.js";
+import { graphqlRequest, graphqlResponse, shopifyOrderNode, shopifySuggestedRefundNode } from "../testing/shopify-graphql.js";
 import {
   createPartialRefund,
   parseRefundItems,
@@ -9,6 +10,7 @@ import {
 import { resolveAgentSettings } from "../settings.js";
 import { toolPolicyBlock, toolUnknown, type CompensationReservation } from "../tools/result.js";
 import type { ShopifyContext } from "./client.js";
+import type { ShopifyOrder, ShopifyTransaction } from "./types.js";
 
 // The executor supplies `reserveCompensation`, because the amount this tool
 // spends only exists once Shopify has priced the selection.
@@ -44,9 +46,17 @@ function calculation(amount: string) {
   return {
     refund: {
       currency: "USD",
-      transactions: [{ amount, gateway: "shopify_payments", parent_id: 77, kind: "suggested_refund" }],
+      transactions: [{ amount, gateway: "shopify_payments", parent_id: 77, kind: "suggested_refund" }] as ShopifyTransaction[],
     },
   };
+}
+
+function orderResponse(rest: ReturnType<typeof order>) {
+  return graphqlResponse({ order: shopifyOrderNode(rest.order as ShopifyOrder) });
+}
+
+function calculationResponse(rest: { refund: { currency: string; transactions: ShopifyTransaction[] } }) {
+  return graphqlResponse({ order: { suggestedRefund: shopifySuggestedRefundNode(rest.refund) } });
 }
 
 function committed(amount: string) {
@@ -123,8 +133,8 @@ describe("unrefundableItems", () => {
 describe("createPartialRefund", () => {
   it("binds Shopify's current amount and currency into an approval proposal", async () => {
     vi.stubGlobal("fetch", vi.fn()
-      .mockResolvedValueOnce(jsonResponse(order()))
-      .mockResolvedValueOnce(jsonResponse(calculation("16.00"))));
+      .mockResolvedValueOnce(orderResponse(order()))
+      .mockResolvedValueOnce(calculationResponse(calculation("16.00"))));
 
     await expect(quotePartialRefundForApproval(
       { order_id: "2001", items: [{ line_item_id: "9001", quantity: 1 }] },
@@ -134,13 +144,13 @@ describe("createPartialRefund", () => {
 
   it("names the priced items as Shopify does, variant included", async () => {
     vi.stubGlobal("fetch", vi.fn()
-      .mockResolvedValueOnce(jsonResponse(order({
+      .mockResolvedValueOnce(orderResponse(order({
         line_items: [
           { id: 9001, title: "Napkin", variant_title: "Special", quantity: 3, current_quantity: 3 },
           { id: 9002, title: "Napkin", variant_title: "Sample", quantity: 1, current_quantity: 1 },
         ],
       })))
-      .mockResolvedValueOnce(jsonResponse(calculation("16.00"))));
+      .mockResolvedValueOnce(calculationResponse(calculation("16.00"))));
 
     const quoted = await quotePartialRefundForApproval(
       { order_id: "2001", items: [{ line_item_id: "9001", quantity: 2 }] },
@@ -154,8 +164,8 @@ describe("createPartialRefund", () => {
 
   it("refuses a changed provider amount before reserving or dispatching", async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse(order()))
-      .mockResolvedValueOnce(jsonResponse(calculation("18.00")));
+      .mockResolvedValueOnce(orderResponse(order()))
+      .mockResolvedValueOnce(calculationResponse(calculation("18.00")));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await createPartialRefund(
@@ -178,8 +188,8 @@ describe("createPartialRefund", () => {
 
   it("refunds what Shopify calculated for the chosen items", async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse(order()))
-      .mockResolvedValueOnce(jsonResponse(calculation("16.00")))
+      .mockResolvedValueOnce(orderResponse(order()))
+      .mockResolvedValueOnce(calculationResponse(calculation("16.00")))
       .mockResolvedValueOnce(jsonResponse(committed("16.00")));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -201,16 +211,16 @@ describe("createPartialRefund", () => {
       },
     });
     // Shipping is never part of a partial refund.
-    const calcBody = JSON.parse(String(fetchMock.mock.calls[1][1].body));
-    expect(calcBody.refund.shipping).toEqual({ full_refund: false });
+    const calculationRequest = graphqlRequest(fetchMock.mock.calls[1][1]);
+    expect(calculationRequest?.variables).toMatchObject({ refundShipping: false, suggestFullRefund: false });
   });
 
   // The model never names an amount, so it cannot understate one to duck a cap.
   // The cap is applied to Shopify's figure instead.
   it("blocks when Shopify's calculated amount exceeds the per-call cap", async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse(order()))
-      .mockResolvedValueOnce(jsonResponse(calculation("120.00")));
+      .mockResolvedValueOnce(orderResponse(order()))
+      .mockResolvedValueOnce(calculationResponse(calculation("120.00")));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await createPartialRefund(
@@ -234,8 +244,8 @@ describe("createPartialRefund", () => {
 
   it("reserves Shopify's figure against the daily budget before it commits", async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse(order()))
-      .mockResolvedValueOnce(jsonResponse(calculation("16.00")))
+      .mockResolvedValueOnce(orderResponse(order()))
+      .mockResolvedValueOnce(calculationResponse(calculation("16.00")))
       .mockResolvedValueOnce(jsonResponse(committed("16.00")));
     vi.stubGlobal("fetch", fetchMock);
     let providerCallsWhenReserved = -1;
@@ -259,8 +269,8 @@ describe("createPartialRefund", () => {
 
   it("leaves the order untouched when the daily budget refuses it", async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse(order()))
-      .mockResolvedValueOnce(jsonResponse(calculation("16.00")));
+      .mockResolvedValueOnce(orderResponse(order()))
+      .mockResolvedValueOnce(calculationResponse(calculation("16.00")));
     vi.stubGlobal("fetch", fetchMock);
     reserveCompensation.mockResolvedValue({
       kind: "refused",
@@ -286,8 +296,8 @@ describe("createPartialRefund", () => {
 
   it("keeps an unknown budget record unknown rather than calling it a failure", async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse(order()))
-      .mockResolvedValueOnce(jsonResponse(calculation("16.00")));
+      .mockResolvedValueOnce(orderResponse(order()))
+      .mockResolvedValueOnce(calculationResponse(calculation("16.00")));
     vi.stubGlobal("fetch", fetchMock);
     reserveCompensation.mockResolvedValue({
       kind: "refused",
@@ -310,8 +320,8 @@ describe("createPartialRefund", () => {
 
   it("refuses the refund when no budget check was supplied", async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse(order()))
-      .mockResolvedValueOnce(jsonResponse(calculation("16.00")));
+      .mockResolvedValueOnce(orderResponse(order()))
+      .mockResolvedValueOnce(calculationResponse(calculation("16.00")));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await createPartialRefund(
@@ -328,7 +338,7 @@ describe("createPartialRefund", () => {
 
   it("refuses an order that is not fully paid", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(
-      jsonResponse(order({ financial_status: "partially_refunded" })),
+      orderResponse(order({ financial_status: "partially_refunded" })),
     ));
 
     const result = await createPartialRefund(
@@ -344,7 +354,7 @@ describe("createPartialRefund", () => {
   // Stacking refunds is what would make the reconciliation probe ambiguous.
   it("refuses an order that already has a refund", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(
-      jsonResponse(order({ refunds: [{ id: 1 }] })),
+      orderResponse(order({ refunds: [{ id: 1 }] })),
     ));
 
     const result = await createPartialRefund(
@@ -358,7 +368,7 @@ describe("createPartialRefund", () => {
   });
 
   it("refuses a quantity the order cannot cover", async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(order()));
+    const fetchMock = vi.fn().mockResolvedValueOnce(orderResponse(order()));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await createPartialRefund(
@@ -374,8 +384,8 @@ describe("createPartialRefund", () => {
 
   it("refuses when Shopify calculates nothing to refund", async () => {
     vi.stubGlobal("fetch", vi.fn()
-      .mockResolvedValueOnce(jsonResponse(order()))
-      .mockResolvedValueOnce(jsonResponse({ refund: { currency: "USD", transactions: [] } })));
+      .mockResolvedValueOnce(orderResponse(order()))
+      .mockResolvedValueOnce(calculationResponse({ refund: { currency: "USD", transactions: [] } })));
 
     const result = await createPartialRefund(
       { order_id: "2001", items: [{ line_item_id: "9001", quantity: 1 }] },
@@ -391,8 +401,8 @@ describe("createPartialRefund", () => {
   // the customer must not be told money is on its way.
   it("reports an unsettled transaction as unknown", async () => {
     vi.stubGlobal("fetch", vi.fn()
-      .mockResolvedValueOnce(jsonResponse(order()))
-      .mockResolvedValueOnce(jsonResponse(calculation("16.00")))
+      .mockResolvedValueOnce(orderResponse(order()))
+      .mockResolvedValueOnce(calculationResponse(calculation("16.00")))
       .mockResolvedValueOnce(jsonResponse({
         data: {
           refundCreate: {
@@ -419,8 +429,8 @@ describe("createPartialRefund", () => {
 
   it("sends an idempotency key with the mutation", async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse(order()))
-      .mockResolvedValueOnce(jsonResponse(calculation("16.00")))
+      .mockResolvedValueOnce(orderResponse(order()))
+      .mockResolvedValueOnce(calculationResponse(calculation("16.00")))
       .mockResolvedValueOnce(jsonResponse(committed("16.00")));
     vi.stubGlobal("fetch", fetchMock);
 

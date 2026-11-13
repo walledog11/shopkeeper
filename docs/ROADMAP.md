@@ -54,11 +54,11 @@ The first publication is the App Store. These block review or a new install's fi
 2. **Authenticate at install, not at signup** (built: the app home holds the install's
    grant and its links claim it). Closes when, on the dev store, install → app home →
    sign up → inbox asks for no store URL and no second consent.
-3. **GraphQL Admin API only.** Shopify takes only GraphQL from new public apps. Every
-   read is moved; left are the writes and the reads inside them (refunds, cancellation,
-   order edit, creation and address, customer updates, approval line items), the
-   reconciliation probes, the dashboard's customer create and update, and the scripts.
-   Closes when nothing builds a REST Admin URL and a check keeps it that way.
+3. **GraphQL Admin API only.** Shopify takes only GraphQL from new public apps. Reads,
+   refunds, cancellation and order edits are moved; left are order creation, address
+   changes and customer updates (agent and dashboard, with their reconciliation
+   probes) and the scripts. Closes when nothing builds a REST Admin URL and a check
+   keeps it that way.
 4. **Instagram for an installer nobody assigned.** Connect is gated per workspace by
    SocialAPI brand assignment, so every App Store install sees Instagram "Coming soon"
    while the listing and landing page lead with DMs. Provision a brand on connect, or

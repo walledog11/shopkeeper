@@ -118,24 +118,18 @@ describe('durable refund approval', () => {
     let refundMutationCalls = 0;
     providerFetch.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
-      const read = answerShopifyGraphqlRead(init, { orders: [refundableOrder] });
+      const read = answerShopifyGraphqlRead(init, {
+        orders: [refundableOrder],
+        refundCalculation: {
+          currency: 'USD',
+          refund_line_items: [{ line_item_id: 7001, quantity: 1, restock_type: 'no_restock' }],
+          transactions: [{ kind: 'suggested_refund', gateway: 'shopify_payments', parent_id: 222, amount: '20.00' }],
+        },
+      });
       if (read) return read;
       if (url.includes('/graphql.json')) {
         refundMutationCalls += 1;
         throw new Error('A stale refund amount must not reach Shopify refundCreate.');
-      }
-      if (url.includes('/refunds/calculate.json')) {
-        return new Response(JSON.stringify({ refund: {
-          currency: 'USD',
-          refund_line_items: [{ line_item_id: 7001, quantity: 1, restock_type: 'no_restock' }],
-          transactions: [{
-            kind: 'suggested_refund', gateway: 'shopify_payments', parent_id: 222,
-            amount: '20.00', maximum_refundable: '20.00',
-          }],
-        } }), { status: 200 });
-      }
-      if (url.includes('/orders/9000001001.json')) {
-        return new Response(JSON.stringify({ order: refundableOrder }), { status: 200 });
       }
       if (url.includes('/customers/1234.json')) return customerNotFound();
       throw new Error(`Unexpected external request: ${url}`);
@@ -218,22 +212,17 @@ describe('durable refund approval', () => {
     let approvalGranted = false;
     providerFetch.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
-      const read = answerShopifyGraphqlRead(init, { orders: [order] });
+      const read = answerShopifyGraphqlRead(init, {
+        orders: [approvalGranted ? changedOrder : order],
+        refundCalculation: {
+          currency: 'USD',
+          transactions: [{ kind: 'suggested_refund', gateway: 'shopify_payments', parent_id: 222, amount: '16.00' }],
+        },
+      });
       if (read) return read;
       if (url.includes('/graphql.json')) {
         refundMutationCalls += 1;
         throw new Error('A stale partial refund must not reach Shopify refundCreate.');
-      }
-      if (url.includes('/refunds/calculate.json')) {
-        return new Response(JSON.stringify({ refund: {
-          currency: 'USD',
-          transactions: [{
-            kind: 'suggested_refund', gateway: 'shopify_payments', parent_id: 222, amount: '16.00',
-          }],
-        } }), { status: 200 });
-      }
-      if (url.includes('/orders/9000001001.json')) {
-        return new Response(JSON.stringify({ order: approvalGranted ? changedOrder : order }), { status: 200 });
       }
       if (url.includes('/customers/1234.json')) return customerNotFound();
       throw new Error(`Unexpected external request: ${url}`);
@@ -314,23 +303,20 @@ describe('durable refund approval', () => {
     let refundMutationCalls = 0;
     providerFetch.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
-      const read = answerShopifyGraphqlRead(init, { orders: [order] });
-      if (read) return read;
-      if (url.includes('/graphql.json')) {
-        refundMutationCalls += 1;
-        throw new Error('A changed approved amount must not reach Shopify refundCreate.');
-      }
-      if (url.includes('/refunds/calculate.json')) {
-        return new Response(JSON.stringify({ refund: {
+      const read = answerShopifyGraphqlRead(init, {
+        orders: [order],
+        refundCalculation: {
           currency: 'USD',
           transactions: [{
             kind: 'suggested_refund', gateway: 'shopify_payments', parent_id: 222,
             amount: approvalGranted ? '18.00' : '16.00',
           }],
-        } }), { status: 200 });
-      }
-      if (url.includes('/orders/9000001001.json')) {
-        return new Response(JSON.stringify({ order }), { status: 200 });
+        },
+      });
+      if (read) return read;
+      if (url.includes('/graphql.json')) {
+        refundMutationCalls += 1;
+        throw new Error('A changed approved amount must not reach Shopify refundCreate.');
       }
       if (url.includes('/customers/1234.json')) return customerNotFound();
       throw new Error(`Unexpected external request: ${url}`);

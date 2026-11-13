@@ -1,3 +1,4 @@
+import type { RefundCalculation } from "../shopify/refund-calculation.js";
 import type {
   ShopifyCustomer,
   ShopifyCustomerAddress,
@@ -38,6 +39,8 @@ export function graphqlRequest(init: RequestInit | undefined): { operation: stri
 export interface ShopifyReadFixtures {
   orders?: ShopifyOrder[];
   customers?: ShopifyCustomer[];
+  /** Shopify's pricing of any refund asked about, in REST `refunds/calculate.json`'s shape. */
+  refundCalculation?: NonNullable<RefundCalculation["refund"]>;
 }
 
 /**
@@ -60,6 +63,28 @@ export function answerShopifyGraphqlRead(init: RequestInit | undefined, fixtures
     }
     case "ShopkeeperOrders":
       return graphqlResponse({ orders: { nodes: orders.map(shopifyOrderNode), pageInfo: lastPage } });
+    case "ShopkeeperOrderSettlement": {
+      const id = legacyIdFromGid(String(request.variables.id));
+      const order = orders.find((candidate) => String(candidate.id) === id);
+      return graphqlResponse({ order: order ? shopifyOrderSettlementNode(order) : null });
+    }
+    case "ShopkeeperRefundCalculation": {
+      if (!fixtures.refundCalculation) return null;
+      // As Shopify does: a pricing lists the lines it priced, which are the ones
+      // asked for or, for a full refund, every line with something left.
+      const id = legacyIdFromGid(String(request.variables.id));
+      const order = orders.find((candidate) => String(candidate.id) === id);
+      const requested = request.variables.refundLineItems as { lineItemId: string; quantity: number }[] | null;
+      const lines = fixtures.refundCalculation.refund_line_items ?? (requested
+        ? requested.map((line) => ({ line_item_id: legacyIdFromGid(line.lineItemId), quantity: line.quantity, restock_type: "no_restock" }))
+        : (order?.line_items ?? []).flatMap((line) => {
+            const left = line.current_quantity ?? line.quantity;
+            return line.id != null && left > 0 ? [{ line_item_id: line.id, quantity: left, restock_type: "no_restock" }] : [];
+          }));
+      return graphqlResponse({
+        order: { suggestedRefund: shopifySuggestedRefundNode({ ...fixtures.refundCalculation, refund_line_items: lines }) },
+      });
+    }
     case "ShopkeeperOrderIdentity": {
       const id = legacyIdFromGid(String(request.variables.id));
       const order = orders.find((candidate) => String(candidate.id) === id);
@@ -220,5 +245,49 @@ export function shopifyCustomerNode(customer: ShopifyCustomer) {
     note: customer.note ?? null,
     createdAt: customer.created_at ?? FIXTURE_TIME,
     defaultAddress: customer.default_address ? addressNode(customer.default_address) : null,
+  };
+}
+
+/** The GraphQL settlement of a REST-shaped order: cancellation, payment status and refunds. */
+export function shopifyOrderSettlementNode(order: ShopifyOrder) {
+  const currency = order.currency ?? "USD";
+  return {
+    legacyResourceId: String(order.id),
+    name: order.name ?? `#${order.id}`,
+    currencyCode: currency,
+    cancelledAt: order.cancelled_at ?? null,
+    cancelReason: order.cancel_reason?.toUpperCase() ?? null,
+    displayFinancialStatus: order.financial_status?.toUpperCase() ?? null,
+    displayFulfillmentStatus: DISPLAY_FULFILLMENT_STATUS[order.fulfillment_status ?? ""] ?? "UNFULFILLED",
+    refunds: (order.refunds ?? []).map((refund, index) => ({
+      id: `gid://shopify/Refund/${refund.id ?? index + 1}`,
+      transactions: {
+        nodes: (refund.transactions ?? []).map((transaction) => ({
+          kind: (transaction.kind ?? "refund").toUpperCase(),
+          status: (transaction.status ?? "success").toUpperCase(),
+          gateway: transaction.gateway || null,
+          amountSet: { presentmentMoney: { amount: transaction.amount, currencyCode: transaction.currency ?? currency } },
+        })),
+      },
+    })),
+  };
+}
+
+/** The GraphQL suggested refund for Shopify's pricing in REST `refunds/calculate.json`'s shape. */
+export function shopifySuggestedRefundNode(refund: NonNullable<RefundCalculation["refund"]>) {
+  const currency = refund.currency ?? "USD";
+  return {
+    amountSet: { presentmentMoney: { currencyCode: currency } },
+    refundLineItems: (refund.refund_line_items ?? []).map((line) => ({
+      lineItem: { id: `gid://shopify/LineItem/${line.line_item_id}` },
+      quantity: line.quantity,
+    })),
+    suggestedTransactions: (refund.transactions ?? []).map((transaction) => ({
+      amountSet: { presentmentMoney: { amount: transaction.amount, currencyCode: transaction.currency ?? currency } },
+      gateway: transaction.gateway || null,
+      parentTransaction: transaction.parent_id != null
+        ? { id: `gid://shopify/OrderTransaction/${transaction.parent_id}` }
+        : null,
+    })),
   };
 }

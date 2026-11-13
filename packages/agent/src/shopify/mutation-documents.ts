@@ -6,15 +6,16 @@
 // (scripts/canary-shopify-mutations.mjs --validate) can fail on a document it
 // has no case for, rather than silently skipping a newly added mutation.
 //
-// REST mutations (order cancel, order address, order create) are not here: they
-// fail with an HTTP status rather than as a statusless document-validation
-// error, so they are not part of this class.
+// REST mutations (order address, order create) are not here: they fail with an
+// HTTP status rather than as a statusless document-validation error, so they
+// are not part of this class.
 import {
   AUTOMATIC_DISCOUNT_CREATE_MUTATION,
   AUTOMATIC_DISCOUNT_DELETE_MUTATION,
 } from "./flash-sales.js";
 import { FULFILLMENT_CREATE_MUTATION } from "./fulfillment.js";
 import { GIFT_CARD_CREATE_MUTATION } from "./gift-cards.js";
+import { ORDER_CANCEL_MUTATION } from "./order-cancellation.js";
 import {
   ORDER_EDIT_ADD_VARIANT_MUTATION,
   ORDER_EDIT_BEGIN_MUTATION,
@@ -42,6 +43,10 @@ export const SHOPIFY_MUTATION_DOCUMENTS: Record<string, ShopifyMutationDocument>
   giftCardCreate: {
     document: GIFT_CARD_CREATE_MUTATION,
     rootField: "giftCardCreate",
+  },
+  orderCancel: {
+    document: ORDER_CANCEL_MUTATION,
+    rootField: "orderCancel",
   },
   orderEditBegin: {
     document: ORDER_EDIT_BEGIN_MUTATION,

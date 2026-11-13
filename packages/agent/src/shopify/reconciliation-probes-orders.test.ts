@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsonResponse } from "../testing/json-response.js";
+import { graphqlResponse, shopifyOrderNode } from "../testing/shopify-graphql.js";
 import { shopifyOperationTag } from "./client.js";
 import { probeUnknownShopifyMutation } from "./reconciliation-probes/index.js";
 
@@ -114,12 +115,12 @@ describe("probeUnknownShopifyMutation", () => {
   });
 
   function orderLineItemsResponse(lineItems: Array<{ variant_id: number; quantity: number }>): Response {
-    return jsonResponse({
-      order: {
+    return graphqlResponse({
+      order: shopifyOrderNode({
         id: 456,
         name: "#1001",
-        line_items: lineItems.map((item, index) => ({ id: index + 1, ...item })),
-      },
+        line_items: lineItems.map((item, index) => ({ id: index + 1, title: "Item", ...item })),
+      }),
     });
   }
 
@@ -335,9 +336,7 @@ describe("probeUnknownShopifyMutation", () => {
   });
 
   it("cannot reconcile an order edit without variant identifiers", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
-      order: { id: 456, name: "#1001", line_items: [] },
-    })));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(orderLineItemsResponse([])));
 
     const result = await probeUnknownShopifyMutation(
       "edit_shopify_order",
@@ -350,7 +349,7 @@ describe("probeUnknownShopifyMutation", () => {
   });
 
   it("stays unknown when Shopify does not return the order during an edit probe", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({})));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(graphqlResponse({ order: null })));
 
     const result = await probeUnknownShopifyMutation(
       "edit_shopify_order",
