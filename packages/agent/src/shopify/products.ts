@@ -3,7 +3,7 @@ import { formatShopifyToolError, shopifyGraphql, type ShopifyContext } from "./c
 import { toolError, toolNotFound, toolOk, type ToolResult } from "../tools/result.js";
 import { serializeProduct } from "./serializers.js";
 import type { ShopifyProduct } from "./types.js";
-import { clampLimit, requireNonEmptyString } from "./validation.js";
+import { clampLimit, legacyIdFromGid, requireNonEmptyString } from "./validation.js";
 
 // GraphQL, not REST, because REST `products.json` has no search at all: every
 // filter it offers — `title`, `handle`, `vendor` — is exact equality. This tool
@@ -65,11 +65,6 @@ function toSearchTerms(query: string): string {
   return stripped;
 }
 
-function numericId(gid: string): string {
-  const tail = gid.split("/").pop();
-  return tail && tail.length > 0 ? tail : gid;
-}
-
 export async function searchShopifyProducts(
   input: SearchShopifyProductsInput,
   ctx: ShopifyContext,
@@ -90,11 +85,11 @@ export async function searchShopifyProducts(
       // Enforce publication again on the result; Shopify search must not turn a
       // guest question into an Admin catalog or internal inventory disclosure.
       const products = nodes.filter(node => node.status === "ACTIVE" && node.onlineStoreUrl).map(node => ({
-        product_id: numericId(node.id),
+        product_id: legacyIdFromGid(node.id),
         title: node.title,
         url: node.onlineStoreUrl,
         variants: (node.variants?.nodes ?? []).filter((variant): variant is ProductSearchVariantNode => variant != null).map(variant => ({
-          variant_id: numericId(variant.id), title: variant.title, price: variant.price,
+          variant_id: legacyIdFromGid(variant.id), title: variant.title, price: variant.price,
         })),
       }));
       return products.length ? toolOk(JSON.stringify(products)) : toolNotFound(`No products found matching "${query}".`);
@@ -104,12 +99,12 @@ export async function searchShopifyProducts(
     // result the model has always seen — stay byte-identical.
     const products: ShopifyProduct[] = nodes
       .map((node) => ({
-        id: numericId(node.id),
+        id: legacyIdFromGid(node.id),
         title: node.title,
         variants: (node.variants?.nodes ?? [])
           .filter((variant): variant is ProductSearchVariantNode => variant != null)
           .map((variant) => ({
-            id: numericId(variant.id),
+            id: legacyIdFromGid(variant.id),
             title: variant.title,
             price: variant.price,
             inventory_quantity: variant.inventoryQuantity ?? null,

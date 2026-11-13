@@ -68,6 +68,7 @@ import { generateThreadPlan } from './generate-thread-plan.js';
 import { executeCurrentCachedHomePlan } from '@shopkeeper/agent/plan-execution';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { buildGatewayPlanExecutionDeps } from '../operator/agent-turn-deps.js';
+import { answerShopifyGraphqlRead } from '@shopkeeper/agent/testing';
 
 const testOrgs = createTestOrgTracker();
 let providerFetch: ReturnType<typeof vi.fn>;
@@ -116,11 +117,10 @@ describe('durable return and exchange approval', () => {
     let currentReturnableQuantity = 1;
     providerFetch.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
+      const read = answerShopifyGraphqlRead(init, { orders: [order] });
+      if (read) return read;
       if (url.includes('/orders/9000001001.json')) {
         return new Response(JSON.stringify({ order }), { status: 200 });
-      }
-      if (url.includes('/orders.json')) {
-        return new Response(JSON.stringify({ orders: [order] }), { status: 200 });
       }
       if (url.includes('/graphql.json')) {
         const body = JSON.parse(String(init?.body)) as { query: string };
@@ -293,11 +293,10 @@ describe('durable return and exchange approval', () => {
     let currentReplacementPrice = '42.00';
     providerFetch.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
+      const read = answerShopifyGraphqlRead(init, { orders: [order] });
+      if (read) return read;
       if (url.includes('/orders/9000001001.json')) {
         return new Response(JSON.stringify({ order }), { status: 200 });
-      }
-      if (url.includes('/orders.json')) {
-        return new Response(JSON.stringify({ orders: [order] }), { status: 200 });
       }
       if (url.includes('/graphql.json')) {
         const body = JSON.parse(String(init?.body)) as { query: string; variables: Record<string, unknown> };

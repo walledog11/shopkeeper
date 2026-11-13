@@ -56,13 +56,12 @@ vi.mock("./spend.js", () => ({
 
 // Exercise compensation and delivery after customer ownership is established.
 // The executor's own tests cover refused ownership evidence.
-vi.mock('./shopify/client.js', async importOriginal => {
-  const actual = await importOriginal<typeof import('./shopify/client.js')>();
-  return { ...actual, shopifyRestJson: (...args: Parameters<typeof actual.shopifyRestJson>) =>
-    args[2]?.query?.fields === 'id,customer'
-      ? Promise.resolve({ order: { id: 123, customer: { id: 1234 } } })
-      : actual.shopifyRestJson(...args) };
-});
+vi.mock('./shopify/order-reads.js', async importOriginal => ({
+  ...await importOriginal<typeof import('./shopify/order-reads.js')>(),
+  fetchShopifyOrderIdentity: async (_ctx: unknown, id: string) => ({
+    id, name: '#1001', email: null, shippingZip: null, customerId: '1234',
+  }),
+}));
 
 vi.mock("./agent-actions.js", () => ({
   beginAgentActionAttempt: mockBeginAgentActionAttempt,

@@ -16,6 +16,25 @@ function minorDigits(code: string): number {
 }
 
 /**
+ * A decimal amount with the currency's own number of decimal places, the way
+ * Shopify's REST API wrote it ("360.00" for dollars, "1000" for yen). The
+ * GraphQL API writes the shortest form ("360.0"), so amounts read there pass
+ * through this before anything serializes them. More precision than the
+ * currency has is kept rather than rounded away.
+ */
+export function currencyAmount(amount: string, currency: string | null | undefined): string {
+  const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(amount.trim());
+  if (!match) return amount;
+  const [, sign, whole, rawFraction = ""] = match;
+  const digits = minorDigits(normalizeCurrencyCode(currency));
+  let fraction = rawFraction;
+  while (fraction.length > digits && fraction.endsWith("0")) fraction = fraction.slice(0, -1);
+  if (fraction.length > digits) return amount;
+  fraction = fraction.padEnd(digits, "0");
+  return digits === 0 ? `${sign}${whole}` : `${sign}${whole}.${fraction}`;
+}
+
+/**
  * Money as every surface writes it: "$1,234.50" for US dollars and
  * "1,234.50 EUR" for anything else, so a merchant reads one format on the phone,
  * in the briefing and on the dashboard, and a customer never sees a bare "$"

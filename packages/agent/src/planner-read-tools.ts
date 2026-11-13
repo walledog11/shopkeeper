@@ -47,7 +47,7 @@ function trackedOrderInContext(input: unknown, recentOrders: ShopifyOrderSummary
 // tracking is still answerable from its status. Either way, steer the model to
 // reply from the order data rather than escalate a routine status question.
 function trackingContextSteer(order: ShopifyOrderSummary): string {
-  const state = `This order (${order.name}) is already in your context: fulfillment_status=${order.fulfillment_status ?? "null"}, financial_status=${order.financial_status}.`;
+  const state = `This order (${order.name}) is already in your context: fulfillment_status=${order.fulfillment_status ?? "null"}, financial_status=${order.financial_status ?? "null"}.`;
   return order.fulfillment_status === null
     ? `${state} It has not shipped yet, so there is no carrier tracking to fetch. Tell the customer it has not shipped yet, from this status, and call send_reply now. Do not escalate_to_human or ask_operator for this routine status question.`
     : `${state} No live carrier tracking is available right now, but this status is enough to answer a routine "where is my order?" question. Reply from it with send_reply now. Do not escalate_to_human or ask_operator just because tracking details are unavailable.`;

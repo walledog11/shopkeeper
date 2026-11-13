@@ -14,6 +14,7 @@ import { buildContext, type ThreadSink } from "./context.js";
 import { appendInitialPlanningSignals } from "./planner-read-tools.js";
 import { buildPlanSignals } from "./plan-signals.js";
 import { executeToolWithStatus } from "./tools/executor.js";
+import { answerShopifyGraphqlRead, graphqlRequest } from "./testing/shopify-graphql.js";
 import type { ProducedPlanSignalCode } from "./types.js";
 
 // The database is real; a single load is faulted with spyOn so the tier it sits
@@ -274,12 +275,14 @@ describe("context dependency tiers", () => {
 
 describe("email thread customer link", () => {
   it("never replaces a customer the merchant linked while the turn was being built", async () => {
-    const { org, thread } = await supportThread();
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      if (String(input).includes("customers/search.json")) {
+    const { org, customer, thread } = await supportThread();
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+      if (graphqlRequest(init)?.operation === "ShopkeeperCustomerIdentities") {
         // The merchant links the thread by hand while Shopify answers the search.
         await db.thread.update({ where: { id: thread.id }, data: { shopifyCustomerId: "777" } });
-        return Response.json({ customers: [{ id: 555, first_name: "Email", last_name: "Match" }] });
+        return answerShopifyGraphqlRead(init, {
+          customers: [{ id: 555, first_name: "Email", last_name: "Match", email: customer.platformId }],
+        })!;
       }
       return Response.json({});
     });

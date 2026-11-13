@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@shopkeeper/db';
 import { NotFoundError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
-import { shopifyRestJson } from '@shopkeeper/agent/shopify';
+import { searchShopifyCustomerIdentities } from '@shopkeeper/agent/shopify';
 import { SHOPIFY_ACCESS_SELECT, shopifyContextFor } from '@shopkeeper/agent/shopify/access';
 import { shopifyRouteErrorResponse } from '@/lib/server/shopify-integration';
 
@@ -25,18 +25,17 @@ export const GET = withOrgRoute(
       throw new NotFoundError('no_integration');
     }
 
-    let data: { customers?: unknown[] };
+    let customers: Awaited<ReturnType<typeof searchShopifyCustomerIdentities>>;
     try {
-      data = await shopifyRestJson<{ customers?: unknown[] }>(ctx, 'customers/search.json', {
-        query: { query: q, limit: 8, fields: 'id,first_name,last_name,email' },
-        maxRetries: 0,
-      });
+      customers = await searchShopifyCustomerIdentities(ctx, q, { first: 8, maxRetries: 0 });
     } catch (err) {
       const response = await shopifyRouteErrorResponse(err, integration, org.id);
       if (response) return response;
       throw err;
     }
 
-    return NextResponse.json({ customers: data.customers ?? [] });
+    return NextResponse.json({
+      customers: customers.map(({ id, first_name, last_name, email }) => ({ id, first_name, last_name, email })),
+    });
   },
 );

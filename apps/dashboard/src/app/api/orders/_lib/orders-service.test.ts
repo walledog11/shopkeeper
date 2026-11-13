@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest"
-import { normalizeOrder, type ShopifyOrderRaw } from "./orders-service"
+import { normalizeOrder } from "./orders-service"
 
 describe("normalizeOrder", () => {
   it("normalizes currency, nullable customer fields, and current quantities", () => {
-    const raw: ShopifyOrderRaw = {
+    const raw: Parameters<typeof normalizeOrder>[0] = {
       id: 1001,
       name: "#1001",
       created_at: "2026-08-01T00:00:00Z",

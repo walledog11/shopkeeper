@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockClerkSession } from '@/test-fixtures/clerk-session';
-import { jsonResponse } from '@shopkeeper/agent/testing';
+import { graphqlRequest, graphqlResponse, jsonResponse, shopifyOrderNode } from '@shopkeeper/agent/testing';
+import { decodeShopifyPageToken } from '@/lib/server/shopify-page-token';
 import { ChannelType } from '@shopkeeper/db';
 import { cleanupTestData, createTestIntegration, createTestOrg } from '@shopkeeper/db/test-helpers';
 
@@ -14,6 +15,12 @@ vi.mock('@clerk/nextjs/server', () => ({
 }));
 
 import { GET } from './route';
+
+function ordersPage(orders: Parameters<typeof shopifyOrderNode>[0][], endCursor: string | null = null) {
+  return graphqlResponse({
+    orders: { nodes: orders.map(shopifyOrderNode), pageInfo: { hasNextPage: endCursor !== null, endCursor } },
+  });
+}
 
 let org: Awaited<ReturnType<typeof createTestOrg>>;
 let otherOrg: Awaited<ReturnType<typeof createTestOrg>> | null = null;
@@ -63,7 +70,7 @@ describe('GET /api/orders', () => {
 
     expect(res.status).toBe(503);
     expect(body).toEqual({ error: 'shopify_error', details: { errors: 'upstream unavailable' } });
-    expect(String(mockFetch.mock.calls[0][0])).toContain('https://active-orders.myshopify.com/admin/api/2026-04/orders.json');
+    expect(String(mockFetch.mock.calls[0][0])).toContain('https://active-orders.myshopify.com/admin/api/2026-04/graphql.json');
     expect(mockFetch.mock.calls[0][1]).toMatchObject({
       headers: { 'X-Shopify-Access-Token': 'active-orders-token' },
     });
@@ -75,7 +82,7 @@ describe('GET /api/orders', () => {
       externalAccountId: 'empty-orders.myshopify.com',
       accessToken: 'empty-orders-token',
     });
-    mockFetch.mockResolvedValueOnce(jsonResponse({ orders: [] }));
+    mockFetch.mockResolvedValueOnce(ordersPage([]));
 
     const res = await GET(new Request('http://localhost/api/orders'));
     const body = await res.json() as { orders: unknown[]; nextPageInfo: string | null; shop: string };
@@ -89,15 +96,15 @@ describe('GET /api/orders', () => {
   });
 
   it.each([
-    ['1001', 'name=%231001'],
-    ['customer%40example.com', 'email=customer%40example.com'],
-  ])('supports order-number and customer-email search', async (query, expectedQuery) => {
+    ['1001', 'name:"#1001"'],
+    ['customer%40example.com', 'email:"customer@example.com"'],
+  ])('supports order-number and customer-email search', async (query, expectedSearch) => {
     await createTestIntegration(org.id, {
       platform: ChannelType.shopify,
       externalAccountId: 'search-orders.myshopify.com',
       accessToken: 'search-orders-token',
     });
-    mockFetch.mockResolvedValueOnce(jsonResponse({ orders: [{
+    mockFetch.mockResolvedValueOnce(ordersPage([{
       id: 1,
       name: '#1001',
       created_at: '2026-01-01T00:00:00Z',
@@ -106,15 +113,16 @@ describe('GET /api/orders', () => {
       total_price: '19.00',
       current_total_price: '18.00',
       currency: 'eur',
+      email: 'customer@example.com',
       customer: { id: 2, first_name: null, last_name: null, email: 'customer@example.com' },
       line_items: [],
-    }] }));
+    }]));
 
     const res = await GET(new Request(`http://localhost/api/orders?q=${query}`));
     const body = await res.json() as { orders: Array<{ currency: string; total_price: string; customer: { name: null } }> };
 
     expect(res.status).toBe(200);
-    expect(String(mockFetch.mock.calls[0][0])).toContain(expectedQuery);
+    expect(graphqlRequest(mockFetch.mock.calls[0][1])?.variables.query).toBe(expectedSearch);
     expect(body.orders[0]).toMatchObject({ currency: 'EUR', total_price: '18.00', customer: { name: null } });
   });
 
@@ -156,13 +164,11 @@ describe('GET /api/orders', () => {
       customer: null,
       line_items: [],
     });
-    mockFetch.mockResolvedValueOnce(jsonResponse({ orders: [closed(1, 'refunded'), closed(2, 'voided')] }, {
-      headers: { Link: '<https://example.com?page_info=still-more>; rel="next"' },
-    }));
+    mockFetch.mockResolvedValueOnce(ordersPage([closed(1, 'refunded'), closed(2, 'voided')], 'still-more'));
 
-    const res = await GET(new Request('http://localhost/api/orders?q=1001'));
+    const res = await GET(new Request('http://localhost/api/orders'));
     const body = await res.json() as { orders: unknown[]; nextPageInfo: string | null };
-    expect(body).toEqual({ orders: [], nextPageInfo: 'still-more', shop: 'closed-orders.myshopify.com' });
+    expect(body).toMatchObject({ orders: [], shop: 'closed-orders.myshopify.com' });
+    expect(decodeShopifyPageToken(body.nextPageInfo ?? '')).toEqual({ query: '', after: 'still-more' });
   });
 });
-

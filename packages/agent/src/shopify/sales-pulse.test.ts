@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { jsonResponse } from "../testing/json-response.js";
+import { graphqlRequest, graphqlResponse, shopifyOrderNode } from "../testing/shopify-graphql.js";
 import {
   shiftWindowByDays,
   summarizeOrders,
@@ -34,8 +34,11 @@ describe("summarizeOrders", () => {
 
 describe("summarizeOrdersInWindow", () => {
   it("requests orders in the created_at window", async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
-      orders: [{ id: 1, current_total_price: "10.00", currency: "USD" }],
+    const fetchMock = vi.fn().mockResolvedValueOnce(graphqlResponse({
+      orders: {
+        nodes: [shopifyOrderNode({ id: 1, current_total_price: "10.00", currency: "USD" })],
+        pageInfo: { hasNextPage: false, endCursor: null },
+      },
     }));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -46,9 +49,9 @@ describe("summarizeOrdersInWindow", () => {
     expect(summary.orderCount).toBe(1);
     expect(summary.revenueTotal).toBe(10);
 
-    const url = new URL(String(fetchMock.mock.calls[0]?.[0]));
-    expect(url.searchParams.get("created_at_min")).toBe(start.toISOString());
-    expect(url.searchParams.get("created_at_max")).toBe(end.toISOString());
+    expect(graphqlRequest(fetchMock.mock.calls[0]?.[1])?.variables.query).toBe(
+      `created_at:>="${start.toISOString()}" created_at:<="${end.toISOString()}"`,
+    );
   });
 });
 

@@ -45,6 +45,8 @@ export class ShopifyRequestError extends Error {
   status?: number;
   payload?: unknown;
   rejectedBeforeExecution?: boolean;
+  /** GraphQL error codes (`ACCESS_DENIED`, `THROTTLED`…), which arrive with HTTP 200. */
+  codes?: string[];
 
   constructor(
     message: string,
@@ -53,6 +55,7 @@ export class ShopifyRequestError extends Error {
       payload?: unknown;
       cause?: unknown;
       rejectedBeforeExecution?: boolean;
+      codes?: string[];
     } = {}
   ) {
     super(message);
@@ -60,6 +63,7 @@ export class ShopifyRequestError extends Error {
     this.status = options.status;
     this.payload = options.payload;
     this.rejectedBeforeExecution = options.rejectedBeforeExecution;
+    this.codes = options.codes;
     if (options.cause !== undefined) {
       this.cause = options.cause;
     }
@@ -338,6 +342,26 @@ export async function shopifyRest<T>(
   return attemptRequest(0);
 }
 
+/**
+ * Shopify refused the request rather than failing to answer it: a 4xx other
+ * than rate limiting, a GraphQL document it rejected outright, or a GraphQL
+ * access denial (a missing scope or protected-data approval). Retrying will not
+ * change the answer.
+ */
+export function isShopifyRefusal(err: unknown): boolean {
+  if (!(err instanceof ShopifyRequestError)) return false;
+  if (err.status !== undefined && err.status >= 400 && err.status < 500 && err.status !== 429) return true;
+  return err.rejectedBeforeExecution === true || (err.codes ?? []).includes("ACCESS_DENIED");
+}
+
+/**
+ * A value inside Shopify's search syntax (`name:`, `email:`, `created_at:>=`),
+ * quoted so a `:`, a space or an operator in it is data rather than syntax.
+ */
+export function shopifySearchValue(value: string): string {
+  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
+
 export async function shopifyRestJson<T>(
   ctx: ShopifyContext,
   path: string,
@@ -394,6 +418,7 @@ export async function shopifyGraphql<TData>(
         .join(", "),
       rejectedBeforeExecution: !("data" in payload)
         && !codes.some((code) => code !== undefined && CODES_THAT_ARE_NOT_DOCUMENT_REJECTIONS.has(code)),
+      codes: codes.filter((code): code is string => code !== undefined),
     });
   }
 

@@ -27,6 +27,12 @@ export function requireNumericId(value: unknown, field: string): string {
   return id;
 }
 
+/** The numeric id at the end of a GraphQL global id: `gid://shopify/Order/123` → `123`. */
+export function legacyIdFromGid(gid: string): string {
+  const tail = gid.split("/").pop();
+  return tail && tail.length > 0 ? tail : gid;
+}
+
 /**
  * A variant id in the form the GraphQL API takes, from either form the model
  * writes.

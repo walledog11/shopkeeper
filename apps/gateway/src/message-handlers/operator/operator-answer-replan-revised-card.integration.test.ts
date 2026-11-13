@@ -52,6 +52,7 @@ import { expectedPlanIdentity, getContext } from '../../operator-context.js';
 import { executeCurrentCachedHomePlan } from '@shopkeeper/agent/plan-execution';
 import { buildGatewayPlanExecutionDeps } from './agent-turn-deps.js';
 import { seedCardedSupportTask, refundPlan, actionPlan, withExactReply } from '../../test-fixtures/operator-answer-replan-fixtures.js';
+import { answerShopifyGraphqlRead } from '@shopkeeper/agent/testing';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
 // Operator state is keyed to the person, so every transport in these cases writes
@@ -156,13 +157,12 @@ describe('applyOperatorAnswerReplan durable continuation', () => {
     const mutationInputs: Record<string, unknown>[] = [];
     const providerFetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
+      const read = answerShopifyGraphqlRead(init, { orders: [] });
+      if (read) return read;
       if (url.includes('/orders/9000001001.json')) {
         return new Response(JSON.stringify({ order: {
           id: '9000001001', customer: { id: shopifyCustomerId },
         } }), { status: 200 });
-      }
-      if (url.includes('/orders.json')) {
-        return new Response(JSON.stringify({ orders: [] }), { status: 200 });
       }
       if (url.includes('/graphql.json')) {
         const body = JSON.parse(String(init?.body ?? '{}')) as {

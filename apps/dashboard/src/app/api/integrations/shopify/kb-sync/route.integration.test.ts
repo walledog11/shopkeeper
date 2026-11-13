@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockClerkSession } from '@/test-fixtures/clerk-session';
-import { jsonResponse } from '@shopkeeper/agent/testing';
+import { graphqlResponse, jsonResponse } from '@shopkeeper/agent/testing';
+import { memoryOverrideTargetTag } from '@shopkeeper/agent/kb-memory';
 import { ChannelType, db } from '@shopkeeper/db';
 import { cleanupTestData, createTestIntegration, createTestOrg } from '@shopkeeper/db/test-helpers';
 
@@ -18,6 +19,13 @@ vi.stubGlobal('fetch', mockFetch);
 import { POST } from './route';
 
 let org: Awaited<ReturnType<typeof createTestOrg>> | null;
+
+function storeContent(content: {
+  policies: { id: string; title: string; body: string }[];
+  pages: { id: string; title: string; body: string }[];
+}) {
+  return graphqlResponse({ shop: { shopPolicies: content.policies }, pages: { nodes: content.pages } });
+}
 
 beforeEach(async () => {
   org = await createTestOrg();
@@ -47,9 +55,7 @@ describe('POST /api/integrations/shopify/kb-sync', () => {
       externalAccountId: 'sync-shop.myshopify.com',
       accessToken: 'sync-token',
     });
-    mockFetch
-      .mockResolvedValueOnce(jsonResponse({ errors: 'unavailable' }, { status: 503 }))
-      .mockResolvedValueOnce(jsonResponse({ pages: [] }));
+    mockFetch.mockResolvedValueOnce(jsonResponse({ errors: 'unavailable' }, { status: 503 }));
 
     const res = await POST();
 
@@ -63,19 +69,16 @@ describe('POST /api/integrations/shopify/kb-sync', () => {
       externalAccountId: 'sync-shop.myshopify.com',
       accessToken: 'sync-token',
     });
-    mockFetch
-      .mockResolvedValueOnce(jsonResponse({
-        policies: [{ id: 1, title: 'Returns', body: '<p>Returns &amp; exchanges</p>' }],
-      }))
-      .mockResolvedValueOnce(jsonResponse({
-        pages: [{ id: 2, title: 'Shipping', body_html: '<p>Ships&nbsp;fast</p>' }],
-      }));
+    mockFetch.mockResolvedValueOnce(storeContent({
+      policies: [{ id: 'gid://shopify/ShopPolicy/1', title: 'Returns', body: '<p>Returns &amp; exchanges</p>' }],
+      pages: [{ id: 'gid://shopify/Page/2', title: 'Shipping', body: '<p>Ships&nbsp;fast</p>' }],
+    }));
 
     const res = await POST();
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ syncedPolicies: 1, syncedPages: 1 });
-    expect(String(mockFetch.mock.calls[0][0])).toBe('https://sync-shop.myshopify.com/admin/api/2026-04/policies.json');
+    expect(String(mockFetch.mock.calls[0][0])).toBe('https://sync-shop.myshopify.com/admin/api/2026-04/graphql.json');
     expect(mockFetch.mock.calls[0][1]).toMatchObject({ headers: { 'X-Shopify-Access-Token': 'sync-token' } });
 
     const articles = await db.kbArticle.findMany({
@@ -86,6 +89,35 @@ describe('POST /api/integrations/shopify/kb-sync', () => {
       expect.objectContaining({ title: 'Returns', body: 'Returns & exchanges', tags: ['shopify:policy:1'] }),
       expect.objectContaining({ title: 'Shipping', body: 'Ships fast', tags: ['shopify:page:2'] }),
     ]);
+  });
+
+  it('removes notes for content the store no longer publishes, and only those', async () => {
+    await createTestIntegration(org!.id, {
+      platform: ChannelType.shopify,
+      externalAccountId: 'sync-shop.myshopify.com',
+      accessToken: 'sync-token',
+    });
+    const kb = await db.knowledgeBase.create({ data: { organizationId: org!.id, name: 'Shopify', source: 'shopify' } });
+    const note = (title: string, tags: string[]) => db.kbArticle.create({
+      data: { organizationId: org!.id, knowledgeBaseId: kb.id, title, body: title, tags },
+    });
+    const withdrawn = await note('Old warranty', ['shopify:policy:9']);
+    await note('Merchant note', []);
+    const learned = await db.knowledgeBase.create({ data: { organizationId: org!.id, name: 'Learned' } });
+    await db.kbArticle.create({ data: {
+      organizationId: org!.id, knowledgeBaseId: learned.id, title: 'Correction', body: 'Correction',
+      tags: ['merchant-override', memoryOverrideTargetTag(withdrawn.id)],
+    } });
+    mockFetch.mockResolvedValueOnce(storeContent({
+      policies: [{ id: 'gid://shopify/ShopPolicy/1', title: 'Returns', body: '<p>Returns</p>' }],
+      pages: [],
+    }));
+
+    expect((await POST()).status).toBe(200);
+
+    const titles = (await db.kbArticle.findMany({ where: { organizationId: org!.id }, orderBy: { title: 'asc' } }))
+      .map(article => article.title);
+    expect(titles).toEqual(['Merchant note', 'Returns']);
   });
 
   it('seeds demo knowledge without calling Shopify for a simulated integration', async () => {

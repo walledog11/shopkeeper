@@ -1,5 +1,5 @@
 import { db } from '@shopkeeper/db';
-import { shopifyRestJson } from '@shopkeeper/agent/shopify';
+import { findShopifyCustomerByEmail } from '@shopkeeper/agent/shopify';
 import { SHOPIFY_ACCESS_SELECT, shopifyContextFor } from '@shopkeeper/agent/shopify/access';
 import logger from '../../../logger.js';
 
@@ -36,12 +36,7 @@ export async function lookupShopifyCustomerName(organizationId: string, email: s
   if (!shopify) return null;
 
   try {
-    const data = await shopifyRestJson<{ customers?: Array<{ first_name?: string | null; last_name?: string | null }> }>(
-      shopify,
-      'customers/search.json',
-      { query: { query: `email:${email}`, limit: 1, fields: 'first_name,last_name' } },
-    );
-    const c = data.customers?.[0];
+    const c = await findShopifyCustomerByEmail(shopify, email);
     if (!c) return null;
     const name = `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim();
     return name || null;

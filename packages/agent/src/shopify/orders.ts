@@ -4,14 +4,10 @@ import type {
   GetShopifyOrdersInput,
 } from "../tools/index.js";
 import { toolError, toolNotFound, toolOk, type ToolResult } from "../tools/result.js";
-import { formatShopifyToolError, shopifyRestJson, type ShopifyContext } from "./client.js";
+import { formatShopifyToolError, type ShopifyContext } from "./client.js";
+import { findShopifyOrders, orderName } from "./order-reads.js";
 import { describeShippingStatus, serializeOrder } from "./serializers.js";
-import type { ShopifyOrder } from "./types.js";
 import { optionalString, requireNonEmptyString, requireNumericId } from "./validation.js";
-
-function orderFields(): string {
-  return "id,name,created_at,cancelled_at,financial_status,fulfillment_status,fulfillments,total_price,current_total_price,currency,presentment_currency,total_price_set,current_total_price_set,line_items,shipping_address";
-}
 
 export async function getShopifyOrders(
   input: GetShopifyOrdersInput,
@@ -19,16 +15,7 @@ export async function getShopifyOrders(
 ): Promise<ToolResult> {
   try {
     const customerId = requireNumericId(input.customer_id, "customer_id");
-    const data = await shopifyRestJson<{ orders?: ShopifyOrder[] }>(ctx, "orders.json", {
-      query: {
-        customer_id: customerId,
-        status: "any",
-        limit: 5,
-        fields: orderFields(),
-      },
-    });
-
-    const orders = data.orders ?? [];
+    const { orders } = await findShopifyOrders(ctx, { customerId }, { first: 5 });
     if (orders.length === 0) return toolNotFound("No orders found for this customer.");
 
     return toolOk(JSON.stringify(orders.map(serializeOrder)));
@@ -42,18 +29,8 @@ export async function getOrderByName(
   ctx: ShopifyContext
 ): Promise<ToolResult> {
   try {
-    const rawName = requireNonEmptyString(input.order_name, "order_name");
-    const name = rawName.startsWith("#") ? rawName : `#${rawName}`;
-    const data = await shopifyRestJson<{ orders?: ShopifyOrder[] }>(ctx, "orders.json", {
-      query: {
-        name,
-        status: "any",
-        limit: 1,
-        fields: orderFields(),
-      },
-    });
-
-    const orders = data.orders ?? [];
+    const name = orderName(requireNonEmptyString(input.order_name, "order_name"));
+    const { orders } = await findShopifyOrders(ctx, { name }, { first: 5 });
     if (orders.length === 0) return toolNotFound(`No order found with number ${name}.`);
 
     return toolOk(JSON.stringify(serializeOrder(orders[0])));
@@ -73,18 +50,8 @@ export async function getOrderStatusByName(
   ctx: ShopifyContext
 ): Promise<ToolResult> {
   try {
-    const rawName = requireNonEmptyString(input.order_name, "order_name");
-    const name = rawName.startsWith("#") ? rawName : `#${rawName}`;
-    const data = await shopifyRestJson<{ orders?: ShopifyOrder[] }>(ctx, "orders.json", {
-      query: {
-        name,
-        status: "any",
-        limit: 1,
-        fields: "id,name,cancelled_at,financial_status,fulfillment_status,fulfillments",
-      },
-    });
-
-    const order = (data.orders ?? [])[0];
+    const name = orderName(requireNonEmptyString(input.order_name, "order_name"));
+    const order = (await findShopifyOrders(ctx, { name }, { first: 5, lineItems: 1 })).orders[0];
     if (!order) return toolNotFound(`No order found with number ${name}.`);
 
     const shippedOn = order.fulfillments
@@ -125,17 +92,11 @@ export async function getOrderFulfillmentStatus(
       return toolError("Provide an order number, the email used at checkout, or both.");
     }
 
-    const fields = "id,name,created_at,fulfillment_status,cancelled_at,fulfillments,email";
-    const query = rawName
-      ? { name: rawName.startsWith("#") ? rawName : `#${rawName}`, status: "any", limit: 1, fields }
-      : { email, status: "any", limit: 1, fields };
-    const data = await shopifyRestJson<{ orders?: (ShopifyOrder & OrderStatusExtras)[] }>(
+    const order = (await findShopifyOrders(
       ctx,
-      "orders.json",
-      { query }
-    );
-
-    const order = (data.orders ?? [])[0];
+      rawName ? { name: rawName } : { email: email! },
+      { first: 5, lineItems: 1 },
+    )).orders[0];
     // One response for "no such order" and "that email is not the one on it", so
     // a mismatch never confirms the order exists to someone guessing numbers.
     const emailMatches = !rawName || !email
@@ -157,25 +118,15 @@ export async function getOrderFulfillmentStatus(
   }
 }
 
-interface OrderStatusExtras {
-  email?: string | null;
-}
-
 export async function listRecentUnfulfilledOrderIds(
   ctx: ShopifyContext,
   limit = 10,
   createdSince?: Date,
 ): Promise<string[]> {
-  const data = await shopifyRestJson<{ orders?: { id: number }[] }>(ctx, "orders.json", {
-    query: {
-      status: "open",
-      fulfillment_status: "unfulfilled",
-      financial_status: "paid",
-      limit,
-      fields: "id",
-      ...(createdSince ? { created_at_min: createdSince.toISOString() } : {}),
-    },
-  });
-
-  return (data.orders ?? []).map((order) => String(order.id));
+  const { orders } = await findShopifyOrders(
+    ctx,
+    { open: true, unfulfilled: true, paid: true, ...(createdSince ? { createdAtMin: createdSince } : {}) },
+    { first: limit, lineItems: 1 },
+  );
+  return orders.map((order) => String(order.id));
 }

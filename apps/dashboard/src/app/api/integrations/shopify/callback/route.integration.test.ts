@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { jsonResponse } from '@shopkeeper/agent/testing';
+import { graphqlResponse, jsonResponse } from '@shopkeeper/agent/testing';
 import { ChannelType, db } from '@shopkeeper/db';
 import { cleanupTestData, createTestOrg } from '@shopkeeper/db/test-helpers';
 
@@ -206,9 +206,7 @@ describe('POST /api/integrations/shopify/callback', () => {
     mockSavedCookies({ shop: SHOP });
     mockFetch
       .mockResolvedValueOnce(jsonResponse({ access_token: 'shpat_fixture' }))
-      .mockResolvedValueOnce(jsonResponse({
-        shop: { id: 1, name: 'Evil Shop', myshopify_domain: 'evil-shop.myshopify.com' },
-      }))
+      .mockResolvedValueOnce(shopResponse({ id: 1, myshopifyDomain: 'evil-shop.myshopify.com' }))
       .mockResolvedValueOnce(shopResponse({ id: 2 }));
 
     const response = await POST(callbackRequest({ shop: 'evil-shop.myshopify.com' }));
@@ -277,7 +275,7 @@ describe('POST /api/integrations/shopify/callback', () => {
         const code = new URLSearchParams(String(init?.body)).get('code');
         return jsonResponse({ access_token: `token-${code}` });
       }
-      if (url.endsWith('/admin/api/2026-04/shop.json')) return shopResponse();
+      if (url.endsWith('/admin/api/2026-04/graphql.json')) return shopResponse();
       throw new Error(`Unexpected fetch: ${url}`);
     });
 
@@ -351,8 +349,14 @@ function shopResponse({
   id = 7,
   myshopifyDomain = SHOP,
 }: { id?: number; myshopifyDomain?: string } = {}) {
-  return jsonResponse({
-    shop: { id, name: 'Fixture Shop', myshopify_domain: myshopifyDomain },
+  return graphqlResponse({
+    shop: {
+      id: `gid://shopify/Shop/${id}`,
+      name: 'Fixture Shop',
+      myshopifyDomain,
+      currencyCode: 'USD',
+      plan: { publicDisplayName: 'Basic', partnerDevelopment: false },
+    },
   });
 }
 

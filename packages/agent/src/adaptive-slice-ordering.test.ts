@@ -11,6 +11,7 @@ import { planAgent } from "./planner.js";
 import { runAgent } from "./run.js";
 import { TOOL_CATEGORIES } from "./tools/registry/index.js";
 import { jsonResponse } from "./testing/json-response.js";
+import { answerShopifyGraphqlRead, graphqlRequest } from "./testing/shopify-graphql.js";
 import type { AgentContext } from "./agent-context.js";
 
 const {
@@ -51,14 +52,15 @@ vi.mock("./spend.js", () => ({
 
 // This ordering fixture supplies ownership independently of refund/delivery
 // sequencing; authorization failures are exercised in the executor's tests.
-vi.mock('./shopify/client.js', async importOriginal => {
-  const actual = await importOriginal<typeof import('./shopify/client.js')>();
-  const order = { id: 456, customer: { id: 1234 } };
-  return { ...actual, shopifyRestJson: (...args: Parameters<typeof actual.shopifyRestJson>) =>
-    args[2]?.query?.fields === 'id,customer'
-      ? Promise.resolve({ order, orders: [order] })
-      : actual.shopifyRestJson(...args) };
-});
+vi.mock('./shopify/order-reads.js', async importOriginal => ({
+  ...await importOriginal<typeof import('./shopify/order-reads.js')>(),
+  fetchShopifyOrderIdentity: async (_ctx: unknown, id: string) => ({
+    id, name: '#1011', email: null, shippingZip: null, customerId: '1234',
+  }),
+  findShopifyOrderIdentity: async (_ctx: unknown, search: { name: string }) => ({
+    id: '456', name: search.name, email: null, shippingZip: null, customerId: '1234',
+  }),
+}));
 
 vi.mock("./agent-actions.js", () => ({
   beginAgentActionAttempt: vi.fn().mockResolvedValue({ id: "action_1", operationId: "operation_1" }),
@@ -87,11 +89,11 @@ function toolUse(id: string, name: string, input: unknown) {
 // inserted by a later step does not silently shift every later expectation onto
 // the wrong response.
 function installFakeShopify() {
-  vi.stubGlobal("fetch", vi.fn(async (url: string | URL) => {
+  vi.stubGlobal("fetch", vi.fn(async (url: string | URL, init?: RequestInit) => {
     const href = typeof url === "string" ? url : url.toString();
-    if (href.includes("orders.json")) {
+    if (graphqlRequest(init)?.operation === "ShopkeeperOrders") {
       events.push("provider:list_orders");
-      return jsonResponse({
+      return answerShopifyGraphqlRead(init, {
         orders: [{
           id: 456,
           name: "#1011",
@@ -102,7 +104,7 @@ function installFakeShopify() {
           created_at: "2026-05-14T12:00:00-07:00",
           line_items: [{ id: 11, title: "Hat", quantity: 1, current_quantity: 1 }],
         }],
-      }, { headers: { "retry-after": "0" } });
+      })!;
     }
     if (href.includes("/refunds/calculate")) {
       events.push("provider:calculate_refund");
@@ -430,9 +432,9 @@ describe("a compound task: read the order and the policy, refund one line, repor
       const body = typeof init?.body === "string"
         ? JSON.parse(init.body) as ProviderRequestBody
         : null;
-      if (href.includes("orders.json")) {
+      if (graphqlRequest(init)?.operation === "ShopkeeperOrders") {
         events.push("provider:lookup_order");
-        return jsonResponse({ orders: [COMPOUND_ORDER] }, { headers: { "retry-after": "0" } });
+        return answerShopifyGraphqlRead(init, { orders: [COMPOUND_ORDER] })!;
       }
       if (href.includes("/refunds/calculate")) {
         events.push("provider:calculate_refund");

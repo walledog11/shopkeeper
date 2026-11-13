@@ -67,6 +67,7 @@ import { generateThreadPlan } from './generate-thread-plan.js';
 import { executeCurrentCachedHomePlan } from '@shopkeeper/agent/plan-execution';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { buildGatewayPlanExecutionDeps } from '../operator/agent-turn-deps.js';
+import { answerShopifyGraphqlRead } from '@shopkeeper/agent/testing';
 
 const testOrgs = createTestOrgTracker();
 let providerFetch: ReturnType<typeof vi.fn>;
@@ -214,6 +215,8 @@ describe('durable order-status host path', () => {
     providerFetch.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
       const method = init?.method ?? 'GET';
+      const read = answerShopifyGraphqlRead(init, { orders: [addressOrder] });
+      if (read) return read;
       if (url.includes('/orders/9000001001.json')) {
         if (method === 'PUT') orderUpdateCalls += 1;
         return new Response(JSON.stringify({
@@ -232,11 +235,6 @@ describe('durable order-status host path', () => {
       }
       if (url.includes('/customers/1234.json')) {
         return new Response(JSON.stringify({ customer: { id: 1234, default_address: oldAddress } }), {
-          status: 200, headers: { 'content-type': 'application/json' },
-        });
-      }
-      if (url.includes('/orders.json')) {
-        return new Response(JSON.stringify({ orders: [addressOrder] }), {
           status: 200, headers: { 'content-type': 'application/json' },
         });
       }

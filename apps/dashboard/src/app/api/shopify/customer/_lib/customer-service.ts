@@ -1,12 +1,16 @@
 import { db } from '@shopkeeper/db';
 import { NotFoundError } from '@/lib/api/errors';
-import { shopifyRestJson, type ShopifyContext } from '@shopkeeper/agent/shopify';
+import {
+  fetchShopifyCustomer,
+  findShopifyCustomerByEmail,
+  findShopifyOrders,
+  shopifyRestJson,
+  type ShopifyContext,
+} from '@shopkeeper/agent/shopify';
 import { SHOPIFY_ACCESS_SELECT, shopifyContextFor } from '@shopkeeper/agent/shopify/access';
 import { markShopifyIntegrationInvalidIfAuthFailure } from '@/lib/server/shopify-integration';
 import type { ShopifyCustomer, ShopifyOrder } from '@/types/shopify';
 import logger from '@/lib/server/logger';
-
-const CUSTOMER_FIELDS = 'id,first_name,last_name,email,phone,note,orders_count,total_spent,currency,created_at,default_address';
 
 export interface ShopifyCustomerLookupInput {
   organizationId: string;
@@ -124,23 +128,40 @@ async function runShopifyCallWithContext<T>(
   }
 }
 
+type AgentCustomer = NonNullable<Awaited<ReturnType<typeof fetchShopifyCustomer>>>;
+
+function panelCustomer(customer: AgentCustomer): ShopifyCustomer {
+  return {
+    id: Number(customer.id),
+    first_name: customer.first_name ?? null,
+    last_name: customer.last_name ?? null,
+    email: customer.email ?? null,
+    phone: customer.phone ?? null,
+    note: customer.note ?? null,
+    orders_count: customer.orders_count ?? 0,
+    total_spent: customer.total_spent ?? '0',
+    currency: customer.currency ?? null,
+    created_at: customer.created_at,
+    default_address: customer.default_address
+      ? {
+          address1: customer.default_address.address1 ?? null,
+          city: customer.default_address.city ?? null,
+          province: customer.default_address.province ?? null,
+          country_name: customer.default_address.country_name ?? customer.default_address.country ?? null,
+          zip: customer.default_address.zip ?? null,
+        }
+      : null,
+  };
+}
+
 async function findShopifyCustomer(
   ctx: ShopifyContext,
   input: { email: string | null; customerId: string | null },
 ): Promise<ShopifyCustomer | null> {
-  if (input.customerId) {
-    const data = await shopifyRestJson<{ customer?: ShopifyCustomer }>(ctx, `customers/${input.customerId}.json`, {
-      query: { fields: CUSTOMER_FIELDS },
-      maxRetries: 0,
-    });
-    return data.customer ?? null;
-  }
-
-  const data = await shopifyRestJson<{ customers?: ShopifyCustomer[] }>(ctx, 'customers/search.json', {
-    query: { query: `email:${input.email!}`, fields: CUSTOMER_FIELDS },
-    maxRetries: 0,
-  });
-  return (data.customers ?? [])[0] ?? null;
+  const customerId = input.customerId
+    ?? (await findShopifyCustomerByEmail(ctx, input.email!, { maxRetries: 0 }))?.id;
+  const customer = customerId ? await fetchShopifyCustomer(ctx, customerId, { maxRetries: 0 }) : null;
+  return customer ? panelCustomer(customer) : null;
 }
 
 async function getCustomerOrdersWithImages(
@@ -148,17 +169,22 @@ async function getCustomerOrdersWithImages(
   customerId: number,
   orderLimit: number,
 ): Promise<ShopifyOrder[]> {
-  const ordersData = await shopifyRestJson<{ orders?: ShopifyOrder[] }>(ctx, 'orders.json', {
-    query: {
-      customer_id: customerId,
-      status: 'any',
-      limit: orderLimit,
-      fields: 'id,name,created_at,fulfillment_status,total_price,currency,line_items',
-    },
-    maxRetries: 0,
-  });
-
-  return addProductImagesToOrders(ordersData.orders ?? [], ctx);
+  const { orders } = await findShopifyOrders(ctx, { customerId }, { first: orderLimit, lineItems: 20, maxRetries: 0 });
+  return orders.map(order => ({
+    id: Number(order.id),
+    name: order.name ?? '',
+    created_at: order.created_at ?? '',
+    fulfillment_status: order.fulfillment_status ?? null,
+    total_price: order.total_price ?? '0',
+    currency: order.currency ?? null,
+    line_items: (order.line_items ?? []).map(item => ({
+      title: item.title,
+      quantity: item.quantity,
+      variant_title: item.variant_title ?? null,
+      sku: item.sku ?? null,
+      image: item.image_url ?? null,
+    })),
+  }));
 }
 
 function buildShopifyCustomerPayload(
@@ -210,46 +236,4 @@ async function persistCustomerName(organizationId: string, shopifyCustomer: Shop
   } catch (err) {
     logger.warn({ err, organizationId, email }, '[Shopify Customer GET] Failed to persist customer name');
   }
-}
-
-async function addProductImagesToOrders(orders: ShopifyOrder[], ctx: ShopifyContext) {
-  const productIds = Array.from(new Set(
-    orders.flatMap(order => order.line_items.map(item => item.product_id).filter((id): id is number => typeof id === 'number')),
-  ));
-
-  if (productIds.length === 0) return orders;
-
-  try {
-    const productsData = await shopifyRestJson<{ products?: ShopifyProduct[] }>(ctx, 'products.json', {
-      query: { ids: productIds.join(','), fields: 'id,images' },
-      maxRetries: 0,
-    });
-
-    const productImageById = new Map<number, string | null>(
-      (productsData.products ?? []).map(product => [
-        product.id,
-        product.images?.[0]?.src ?? null,
-      ]),
-    );
-
-    return orders.map(order => ({
-      ...order,
-      line_items: order.line_items.map(item => ({
-        ...item,
-        image: item.product_id ? productImageById.get(item.product_id) ?? null : null,
-      })),
-    }));
-  } catch (err) {
-    logger.warn({ err }, '[Shopify Customer GET] Failed to fetch product images');
-    return orders;
-  }
-}
-
-interface ShopifyProductImage {
-  src: string;
-}
-
-interface ShopifyProduct {
-  id: number;
-  images: ShopifyProductImage[];
 }

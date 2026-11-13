@@ -68,6 +68,7 @@ import { generateThreadPlan } from './generate-thread-plan.js';
 import { executeCurrentCachedHomePlan } from '@shopkeeper/agent/plan-execution';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { buildGatewayPlanExecutionDeps } from '../operator/agent-turn-deps.js';
+import { answerShopifyGraphqlRead } from '@shopkeeper/agent/testing';
 
 const testOrgs = createTestOrgTracker();
 let providerFetch: ReturnType<typeof vi.fn>;
@@ -115,8 +116,10 @@ describe('durable refund approval', () => {
       line_items: [{ ...order.line_items[0], id: 7001, current_quantity: 1 }],
     };
     let refundMutationCalls = 0;
-    providerFetch.mockImplementation(async (input: string | URL | Request) => {
+    providerFetch.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
+      const read = answerShopifyGraphqlRead(init, { orders: [refundableOrder] });
+      if (read) return read;
       if (url.includes('/graphql.json')) {
         refundMutationCalls += 1;
         throw new Error('A stale refund amount must not reach Shopify refundCreate.');
@@ -133,9 +136,6 @@ describe('durable refund approval', () => {
       }
       if (url.includes('/orders/9000001001.json')) {
         return new Response(JSON.stringify({ order: refundableOrder }), { status: 200 });
-      }
-      if (url.includes('/orders.json')) {
-        return new Response(JSON.stringify({ orders: [refundableOrder] }), { status: 200 });
       }
       if (url.includes('/customers/1234.json')) return customerNotFound();
       throw new Error(`Unexpected external request: ${url}`);
@@ -216,8 +216,10 @@ describe('durable refund approval', () => {
     };
     let refundMutationCalls = 0;
     let approvalGranted = false;
-    providerFetch.mockImplementation(async (input: string | URL | Request) => {
+    providerFetch.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
+      const read = answerShopifyGraphqlRead(init, { orders: [order] });
+      if (read) return read;
       if (url.includes('/graphql.json')) {
         refundMutationCalls += 1;
         throw new Error('A stale partial refund must not reach Shopify refundCreate.');
@@ -232,9 +234,6 @@ describe('durable refund approval', () => {
       }
       if (url.includes('/orders/9000001001.json')) {
         return new Response(JSON.stringify({ order: approvalGranted ? changedOrder : order }), { status: 200 });
-      }
-      if (url.includes('/orders.json')) {
-        return new Response(JSON.stringify({ orders: [order] }), { status: 200 });
       }
       if (url.includes('/customers/1234.json')) return customerNotFound();
       throw new Error(`Unexpected external request: ${url}`);
@@ -313,8 +312,10 @@ describe('durable refund approval', () => {
 
     let approvalGranted = false;
     let refundMutationCalls = 0;
-    providerFetch.mockImplementation(async (input: string | URL | Request) => {
+    providerFetch.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
+      const read = answerShopifyGraphqlRead(init, { orders: [order] });
+      if (read) return read;
       if (url.includes('/graphql.json')) {
         refundMutationCalls += 1;
         throw new Error('A changed approved amount must not reach Shopify refundCreate.');
@@ -330,9 +331,6 @@ describe('durable refund approval', () => {
       }
       if (url.includes('/orders/9000001001.json')) {
         return new Response(JSON.stringify({ order }), { status: 200 });
-      }
-      if (url.includes('/orders.json')) {
-        return new Response(JSON.stringify({ orders: [order] }), { status: 200 });
       }
       if (url.includes('/customers/1234.json')) return customerNotFound();
       throw new Error(`Unexpected external request: ${url}`);

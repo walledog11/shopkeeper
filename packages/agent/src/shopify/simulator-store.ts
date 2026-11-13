@@ -71,7 +71,7 @@ const UNFULFILLED = new Set(["", "unfulfilled", "partial", "partially_fulfilled"
 
 const state: SimulatorState = createSeedState();
 
-function isShopifySimulatorContext(ctx: { shop: string; accessToken?: string }): boolean {
+export function isShopifySimulatorContext(ctx: { shop: string; accessToken?: string }): boolean {
   return normalizeSimulatorShop(ctx.shop) === SHOPIFY_SIMULATOR_DOMAIN
     || /^demo-[0-9a-f-]{36}\.shopkeeper\.test$/.test(normalizeSimulatorShop(ctx.shop))
     || ctx.accessToken === SHOPIFY_SIMULATOR_TOKEN;

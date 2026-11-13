@@ -1,5 +1,6 @@
 // The order, catalog and provider stubs shared by the order-status support-plan suites.
 import { createHash, randomUUID } from 'node:crypto';
+import { answerShopifyGraphqlRead } from '@shopkeeper/agent/testing';
 
 // The Shopify client paces requests with an in-process token bucket per shop
 // that is never reset, so a shared domain drains its burst early in the file
@@ -90,14 +91,10 @@ export const acceptedSendReply = async (
 });
 
 // Shopify as the order-status thread sees it; anything else is an unexpected request.
-export async function orderStatusProviderFetch(input: string | URL | Request) {
+export async function orderStatusProviderFetch(input: string | URL | Request, init?: RequestInit) {
   const url = String(input);
-  if (url.includes('/admin/api/') && url.includes('/orders.json')) {
-    return new Response(JSON.stringify({ orders: [order] }), {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-    });
-  }
+  const read = answerShopifyGraphqlRead(init, { orders: [order] });
+  if (read) return read;
   if (url.includes('/admin/api/') && url.includes('/graphql.json')) {
     return new Response(JSON.stringify({
       data: { products: { nodes: [catalogProduct] } },

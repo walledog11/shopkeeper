@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { jsonResponse } from "../testing/json-response.js";
+import { graphqlRequest, graphqlResponse } from "../testing/shopify-graphql.js";
 import { listLowStockVariants } from "./low-stock.js";
 
 const ctx = {
@@ -14,24 +14,23 @@ afterEach(() => {
 
 describe("listLowStockVariants", () => {
   it("returns variants at or below the threshold", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(jsonResponse({
-      products: [{
-        id: 1,
-        title: "Canvas Hat",
-        variants: [
-          { id: 10, title: "Blue", inventory_quantity: 2 },
-          { id: 11, title: "Red", inventory_quantity: 12 },
+    const fetchMock = vi.fn().mockResolvedValueOnce(graphqlResponse({
+      productVariants: {
+        nodes: [
+          { title: "Blue", inventoryQuantity: 2, product: { title: "Canvas Hat" } },
+          { title: "M", inventoryQuantity: 1, product: { title: "Classic Tee" } },
         ],
-      }, {
-        id: 2,
-        title: "Classic Tee",
-        variants: [{ id: 20, title: "M", inventory_quantity: 1 }],
-      }],
-    })));
+      },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
 
     await expect(listLowStockVariants(ctx, 5)).resolves.toEqual([
       { productTitle: "Canvas Hat", variantTitle: "Blue", inventoryQuantity: 2 },
       { productTitle: "Classic Tee", variantTitle: "M", inventoryQuantity: 1 },
     ]);
+    expect(graphqlRequest(fetchMock.mock.calls[0]?.[1])?.variables).toMatchObject({
+      query: "inventory_quantity:<=5",
+      first: 5,
+    });
   });
 });

@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import type { IntegrationFailureCategory } from '@shopkeeper/analytics';
-import { shopifyRestJson, ShopifyRequestError } from '@shopkeeper/agent/shopify';
+import { fetchShopifyShop, ShopifyRequestError } from '@shopkeeper/agent/shopify';
 import {
   requestShopifyToken,
   shopifyTokenColumns,
@@ -372,14 +372,11 @@ function isIntegrationP2002(error: unknown): boolean {
 }
 
 export async function fetchShopifyShopIdentity(shop: string, accessToken: string) {
-  const shopData = await shopifyRestJson<{
-    shop?: { id?: number | string; name?: string; myshopify_domain?: string };
-  }>(
-    { shop, accessToken },
-    'shop.json',
-    { maxRetries: 0 },
+  const shopData = await fetchShopifyShop({ shop, accessToken }, { maxRetries: 0 });
+  const identity = parseShopifyShopIdentity(
+    { shop: { id: shopData.id, name: shopData.name, myshopify_domain: shopData.myshopifyDomain } },
+    shop,
   );
-  const identity = parseShopifyShopIdentity(shopData, shop);
   if (!identity) throw new Error(`Shopify shop identity missing for ${shop}`);
   return identity;
 }

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsonResponse } from "../testing/json-response.js";
+import { graphqlResponse, shopifyOrderNode } from "../testing/shopify-graphql.js";
 import { getOrderTracking } from "./tracking.js";
 
 const ctx = {
@@ -16,6 +17,10 @@ function fulfillment(overrides: Record<string, unknown> = {}) {
     tracking_url: "https://tools.usps.com/go/TrackConfirmAction?tLabels=9400",
     ...overrides,
   };
+}
+
+function orderWith(fulfillments: ReturnType<typeof fulfillment>[]) {
+  return graphqlResponse({ order: shopifyOrderNode({ id: 123, fulfillments }) });
 }
 
 afterEach(() => {
@@ -37,7 +42,7 @@ describe("getOrderTracking", () => {
   });
 
   it("returns not_found when the order has no fulfillments", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ fulfillments: [] })));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(orderWith([])));
 
     const result = await getOrderTracking({ order_id: "123" }, ctx);
 
@@ -48,15 +53,13 @@ describe("getOrderTracking", () => {
   });
 
   it("serializes every tracking number and falls back to the first URL", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
-      fulfillments: [fulfillment({
-        tracking_company: "UPS",
-        tracking_number: null,
-        tracking_numbers: ["1Z-ONE", "1Z-TWO"],
-        tracking_url: null,
-        tracking_urls: ["https://ups.example/one"],
-      })],
-    })));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(orderWith([fulfillment({
+      tracking_company: "UPS",
+      tracking_number: null,
+      tracking_numbers: ["1Z-ONE", "1Z-TWO"],
+      tracking_url: null,
+      tracking_urls: ["https://ups.example/one"],
+    })])));
 
     const result = await getOrderTracking({ order_id: "123" }, ctx);
     const payload = JSON.parse(result.message);
@@ -70,13 +73,11 @@ describe("getOrderTracking", () => {
   });
 
   it("preserves a fulfillment with no tracking number", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
-      fulfillments: [fulfillment({
-        tracking_number: null,
-        tracking_numbers: [],
-        tracking_url: "https://carrier.example/order",
-      })],
-    })));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(orderWith([fulfillment({
+      tracking_number: null,
+      tracking_numbers: [],
+      tracking_url: "https://carrier.example/order",
+    })])));
 
     const result = await getOrderTracking({ order_id: "123" }, ctx);
 
@@ -90,9 +91,7 @@ describe("getOrderTracking", () => {
   // The USPS client this tool used to call is gone. One Shopify request, and no
   // second hop to a carrier — a USPS shipment is now read exactly like a UPS one.
   it("makes exactly one request and never calls a carrier API", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
-      fulfillments: [fulfillment()],
-    }));
+    const fetchMock = vi.fn().mockResolvedValue(orderWith([fulfillment()]));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await getOrderTracking({ order_id: "123" }, ctx);

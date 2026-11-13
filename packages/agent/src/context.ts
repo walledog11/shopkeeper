@@ -3,11 +3,12 @@ import { parseClassifierSignals, parseRequestFacts } from "./classifier-signals.
 import { ORDER_VERIFICATION_CHANNELS } from "./order-verification.js";
 import { requireDurableAgentRuntime } from "./runtime-modes.js";
 import { selectCustomerBurst } from "./message-history.js";
-import { shopifyRestJson, type ShopifyContext } from "./shopify/client.js";
+import type { ShopifyContext } from "./shopify/client.js";
+import { fetchShopifyCustomer, findShopifyCustomerByEmail } from "./shopify/customer-reads.js";
+import { findShopifyOrders } from "./shopify/order-reads.js";
 import { shopifyContextFor } from "./shopify/access.js";
 import { recordedShopifyScopes } from "./shopify/integration-health.js";
 import { serializeOrderLineItem } from "./shopify/serializers.js";
-import type { ShopifyOrderLineItem } from "./shopify/types.js";
 import { CHANNEL_TYPE, isOperatorChannel } from "./thread-constants.js";
 import { MEMORY_OVERRIDE_TAG, memoryOverrideTargetIds } from "./kb-memory.js";
 import {
@@ -42,26 +43,6 @@ import type {
 // `escalate` and `io` on the built context are wired from these, bound to the
 // thread's identity.
 export type { ThreadSink };
-
-type RawShopifyOrder = {
-  id: number;
-  name: string;
-  created_at: string;
-  financial_status: string;
-  fulfillment_status: string | null;
-  current_total_price: string;
-  currency?: string | null;
-  line_items: ShopifyOrderLineItem[];
-  shipping_address?: {
-    address1?: string | null;
-    address2?: string | null;
-    city?: string | null;
-    province?: string | null;
-    zip?: string | null;
-    country?: string | null;
-    country_name?: string | null;
-  } | null;
-};
 
 /**
  * A context load that must not fail the turn, declared at the load rather than
@@ -206,12 +187,7 @@ async function linkEmailThreadToShopifyCustomer(params: {
   email: string;
   shopify: ShopifyContext;
 }): Promise<{ id: string; name: string | null } | null> {
-  const data = await shopifyRestJson<{ customers?: { id: number; first_name?: string | null; last_name?: string | null }[] }>(
-    params.shopify,
-    "customers/search.json",
-    { query: { query: `email:${params.email}`, fields: "id,first_name,last_name", limit: 1 } },
-  );
-  const found = data.customers?.[0];
+  const found = await findShopifyCustomerByEmail(params.shopify, params.email);
   if (!found?.id) return null;
   const shopifyCustomerId = String(found.id);
   const linked = await db.thread.updateMany({
@@ -451,25 +427,10 @@ export async function buildContext(
     const ctx: ShopifyContext = shopifyCtx;
 
     const nameFetch = (!shopifyCustomerName && (isOperator || !dbName))
-      ? shopifyRestJson<{ customer?: { first_name?: string | null; last_name?: string | null } }>(
-          ctx,
-          `customers/${shopifyCustomerId}.json`,
-          { query: { fields: "first_name,last_name" } }
-        ).catch(() => null)
+      ? fetchShopifyCustomer(ctx, shopifyCustomerId).catch(() => null)
       : Promise.resolve(null);
 
-    const ordersFetch = shopifyRestJson<{ orders?: RawShopifyOrder[] }>(
-      ctx,
-      "orders.json",
-      {
-        query: {
-          customer_id: shopifyCustomerId,
-          status: "any",
-          limit: 5,
-          fields: "id,name,created_at,financial_status,fulfillment_status,current_total_price,currency,line_items,shipping_address",
-        },
-      }
-    ).catch((error) => {
+    const ordersFetch = findShopifyOrders(ctx, { customerId: shopifyCustomerId }, { first: 5 }).catch((error) => {
       recentOrdersFetchFailed = true;
       logger.warn({
         orgId,
@@ -483,20 +444,20 @@ export async function buildContext(
     const [nameData, ordersData] = await Promise.all([nameFetch, ordersFetch]);
 
     if (nameData) {
-      const parts = [nameData.customer?.first_name, nameData.customer?.last_name].filter(Boolean);
+      const parts = [nameData.first_name, nameData.last_name].filter(Boolean);
       if (parts.length > 0) shopifyCustomerName = parts.join(" ");
     }
 
-    if (ordersData?.orders) {
+    if (ordersData) {
       recentOrders = ordersData.orders.map((o) => ({
         id: String(o.id),
-        name: o.name,
-        created_at: o.created_at,
-        financial_status: o.financial_status,
-        fulfillment_status: o.fulfillment_status,
-        total_price: o.current_total_price,
+        name: o.name ?? "",
+        created_at: o.created_at ?? "",
+        financial_status: o.financial_status ?? null,
+        fulfillment_status: o.fulfillment_status ?? null,
+        total_price: o.current_total_price ?? "",
         currency: o.currency ?? null,
-        items: o.line_items.map(serializeOrderLineItem),
+        items: (o.line_items ?? []).map(serializeOrderLineItem),
         shipping_address: o.shipping_address
           ? {
               address1: o.shipping_address.address1 ?? null,

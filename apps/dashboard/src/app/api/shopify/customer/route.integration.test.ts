@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockClerkSession } from '@/test-fixtures/clerk-session';
-import { jsonResponse } from '@shopkeeper/agent/testing';
+import { graphqlRequest, jsonResponse } from '@shopkeeper/agent/testing';
 import { ChannelType } from '@shopkeeper/db';
 import { cleanupTestData, createTestIntegration, createTestOrg } from '@shopkeeper/db/test-helpers';
 
@@ -47,7 +47,8 @@ describe('GET /api/shopify/customer', () => {
     expect(res.status).toBe(401);
     expect(body).toEqual({ error: 'shopify_error', details: { errors: 'invalid token' } });
     expect(mockFetch).toHaveBeenCalledTimes(1);
-    expect(String(mockFetch.mock.calls[0][0])).toContain('https://customer-shop.myshopify.com/admin/api/2026-04/customers/search.json');
+    expect(String(mockFetch.mock.calls[0][0])).toContain('https://customer-shop.myshopify.com/admin/api/2026-04/graphql.json');
+    expect(graphqlRequest(mockFetch.mock.calls[0][1])?.operation).toBe('ShopkeeperCustomerIdentities');
     expect(mockFetch.mock.calls[0][1]).toMatchObject({
       headers: { 'X-Shopify-Access-Token': 'customer-token' },
     });
