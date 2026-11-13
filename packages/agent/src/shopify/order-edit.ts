@@ -14,10 +14,10 @@ import {
   formatUserErrors,
   isAmbiguousShopifyMutationError,
   shopifyGraphql,
-  shopifyRestJson,
   type ShopifyContext,
   type ShopifyGraphqlUserError,
 } from "./client.js";
+import { fetchShopifyOrder } from "./order-reads.js";
 import type { ShopifyOrder } from "./types.js";
 import { shopifyReceiptResults, shopifyReceiptEnvelope } from "./receipts.js";
 import {
@@ -295,10 +295,7 @@ async function reconcileCommittedEdit(
   mutationError?: unknown,
 ): Promise<ToolResult> {
   try {
-    const data = await shopifyRestJson<{ order?: ShopifyOrder }>(ctx, `orders/${orderId}.json`, {
-      query: { fields: "id,name,line_items" },
-    });
-    const order = data.order;
+    const order = await fetchShopifyOrder(ctx, orderId, { lineItems: 250 });
     if (order && matchesExpectedQuantities(variantQuantitiesFromOrder(order), expectedQuantities)) {
       const committedChanges = changesWithObservation(
         changes,

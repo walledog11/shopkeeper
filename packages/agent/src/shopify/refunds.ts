@@ -5,32 +5,18 @@ import {
   isAmbiguousShopifyMutationError,
   shopifyGraphql,
   shopifyIdempotencyKey,
-  shopifyRestJson,
   type ShopifyContext,
   type ShopifyGraphqlUserError,
 } from "./client.js";
+import { fetchShopifyOrder } from "./order-reads.js";
+import { calculateShopifyRefund, type RefundCalculation } from "./refund-calculation.js";
 import { toolError, toolOk, toolPolicyBlock, toolUnknown, type ReceiptV1, type ToolResult } from "../tools/result.js";
 import { shopifyReceiptResults, shopifyFailureReceipt, shopifyReceiptEnvelope } from "./receipts.js";
 import { committedShopCents, refundShopCents } from "./refund-shop-money.js";
-import type {
-  ShopifyCalculatedRefundLineItem,
-  ShopifyOrder,
-  ShopifyOrderLineItem,
-  ShopifyTransaction,
-} from "./types.js";
+import type { ShopifyCalculatedRefundLineItem, ShopifyOrder, ShopifyTransaction } from "./types.js";
 import { centsToMoney, moneyToCents, optionalString, requireAmount, requireNumericId, ShopifyInputError } from "./validation.js";
 
 const refundReceipts = shopifyReceiptResults("create_refund", "order");
-
-interface RefundCalculation {
-  refund?: {
-    currency?: string;
-    shipping?: unknown;
-    refund_line_items?: ShopifyCalculatedRefundLineItem[];
-    transactions?: ShopifyTransaction[];
-    suggested_transactions?: ShopifyTransaction[];
-  };
-}
 
 interface RefundCreateData {
   refundCreate: {
@@ -78,24 +64,8 @@ export const REFUND_CREATE_MUTATION = `
       }
     `;
 
-function refundableQuantity(lineItem: ShopifyOrderLineItem): number {
-  const quantity = lineItem.current_quantity ?? lineItem.quantity;
-  return Number.isFinite(quantity) ? Math.max(quantity, 0) : 0;
-}
-
-function buildRefundLineItems(order: ShopifyOrder): ShopifyCalculatedRefundLineItem[] {
-  return (order.line_items ?? []).flatMap((lineItem) => (
-    lineItem.id !== undefined && lineItem.id !== null && refundableQuantity(lineItem) > 0 ? [{
-      line_item_id: lineItem.id!,
-      quantity: refundableQuantity(lineItem),
-      restock_type: "no_restock",
-    }] : []
-  ));
-}
-
 function calculatedTransactions(calculation: RefundCalculation): ShopifyTransaction[] {
-  const refund = calculation.refund;
-  return refund?.transactions ?? refund?.suggested_transactions ?? [];
+  return calculation.refund?.transactions ?? [];
 }
 
 function normalizeRefundTransaction(transaction: ShopifyTransaction, amount?: string): ShopifyTransaction {
@@ -114,22 +84,6 @@ function buildFullRefundTransactions(calculation: RefundCalculation): ShopifyTra
   ));
 }
 
-async function calculateRefund(
-  ctx: ShopifyContext,
-  orderId: string,
-  refundLineItems: ShopifyCalculatedRefundLineItem[]
-): Promise<RefundCalculation> {
-  return shopifyRestJson<RefundCalculation>(ctx, `orders/${orderId}/refunds/calculate.json`, {
-    method: "POST",
-    body: {
-      refund: {
-        shipping: { full_refund: true },
-        refund_line_items: refundLineItems,
-      },
-    },
-  });
-}
-
 export type CancellationRefundQuote =
   | { kind: "none" }
   | { kind: "refund"; amount: string; currency: string }
@@ -142,7 +96,7 @@ const CAPTURED_FINANCIAL_STATUSES = new Set(["paid", "partially_paid", "partiall
 /**
  * What cancelling the order refunds (decision H): Shopify's own calculation of
  * the complete refundable balance, in the currency the customer was charged.
- * The order must carry `financial_status`, `currency` and `line_items`.
+ * The order must carry `financial_status` and `currency`.
  */
 export async function quoteCancellationRefund(
   ctx: ShopifyContext,
@@ -152,7 +106,7 @@ export async function quoteCancellationRefund(
   if (!CAPTURED_FINANCIAL_STATUSES.has(order.financial_status?.trim().toLowerCase() ?? "")) {
     return { kind: "none" };
   }
-  const calculation = await calculateRefund(ctx, orderId, buildRefundLineItems(order));
+  const calculation = await calculateShopifyRefund(ctx, orderId, { kind: "full" });
   const transactions = buildFullRefundTransactions(calculation);
   const currency = calculation.refund?.currency?.toUpperCase() ?? order.currency?.toUpperCase();
   if (!currency) return { kind: "currency_mismatch" };
@@ -215,7 +169,6 @@ interface PreparedFullRefund {
   note: string;
   currency: string;
   refundLineItems: ShopifyCalculatedRefundLineItem[];
-  calculation: RefundCalculation;
   transactions: ShopifyTransaction[];
   refundableCents: number;
   /** What the refund costs the shop, in the shop's currency: the unit the workspace limits use. */
@@ -235,11 +188,9 @@ async function prepareFullRefund(
     : undefined;
   const note = optionalString(input.reason) ?? "";
 
-  const orderData = await shopifyRestJson<{ order?: ShopifyOrder }>(ctx, `orders/${orderId}.json`, {
-    query: { fields: "id,name,currency,line_items,total_price,current_total_price,financial_status,refunds" },
-  });
+  const order = await fetchShopifyOrder(ctx, orderId, { lineItems: 1 });
 
-  if (!orderData.order) {
+  if (!order) {
     return refundNoEffect(
       ctx,
       orderId,
@@ -249,30 +200,29 @@ async function prepareFullRefund(
     );
   }
 
-  const financialStatus = orderData.order.financial_status?.toLowerCase() ?? "unknown";
+  const financialStatus = order.financial_status?.toLowerCase() ?? "unknown";
   if (financialStatus !== "paid") {
     return refundNoEffect(ctx, orderId, toolPolicyBlock(`Error: refund policy blocked - order ${orderId} has financial status "${financialStatus}"; only a fully paid order with no prior refund can be refunded by the agent.`, { code: "order_not_paid", financialStatus }), "rejected", "order_not_paid");
   }
-  if ((orderData.order.refunds?.length ?? 0) > 0) {
+  if ((order.refunds?.length ?? 0) > 0) {
     return refundNoEffect(ctx, orderId, toolPolicyBlock(`Error: refund policy blocked - order ${orderId} already has a refund record and requires merchant review.`, { code: "prior_refund" }), "rejected", "prior_refund");
   }
 
-  const refundLineItems = buildRefundLineItems(orderData.order);
-  if (refundLineItems.length === 0) {
-    return refundNoEffect(ctx, orderId, toolPolicyBlock("Error: refund policy blocked - Shopify returned no refundable line items for the complete order.", { code: "no_refundable_line_items" }), "rejected", "no_refundable_line_items");
-  }
-
-  const calculation = await calculateRefund(ctx, orderId, refundLineItems);
+  const calculation = await calculateShopifyRefund(ctx, orderId, { kind: "full" });
   // A refund settles in the currency the customer was charged, which Shopify
   // returns here. `order.currency` is the shop's own currency and can differ on
   // international orders.
   const currency = calculation.refund?.currency?.toUpperCase()
-    ?? orderData.order.currency?.toUpperCase();
+    ?? order.currency?.toUpperCase();
   if (!currency) {
     return refundNoEffect(ctx, orderId, toolPolicyBlock("Error: refund policy blocked - Shopify returned no refund currency.", { code: "currency_missing" }), "rejected", "currency_missing");
   }
   if (approvedCurrency && approvedCurrency !== currency) {
     return refundNoEffect(ctx, orderId, toolPolicyBlock(`Error: refund policy blocked - approved currency ${approvedCurrency} does not match Shopify currency ${currency}.`, { code: "currency_mismatch", approvedCurrency, currency }), "rejected", "currency_mismatch");
+  }
+  const refundLineItems = calculation.refund?.refund_line_items ?? [];
+  if (refundLineItems.length === 0) {
+    return refundNoEffect(ctx, orderId, toolPolicyBlock("Error: refund policy blocked - Shopify returned no refundable line items for the complete order.", { code: "no_refundable_line_items" }), "rejected", "no_refundable_line_items");
   }
 
   const transactions = buildFullRefundTransactions(calculation);
@@ -295,9 +245,9 @@ async function prepareFullRefund(
 
   const shopCents = await refundShopCents(ctx, {
     orderGid: gid("Order", orderId),
-    shopCurrency: orderData.order.currency,
+    shopCurrency: order.currency,
     quote: { cents: refundableCents, currency },
-    refundLineItems: graphqlRefundLineItems(calculation.refund?.refund_line_items ?? refundLineItems),
+    refundLineItems: graphqlRefundLineItems(refundLineItems),
     refundShipping: true,
   });
   if (shopCents === null) {
@@ -321,7 +271,7 @@ async function prepareFullRefund(
     }
   }
 
-  return { orderId, note, currency, refundLineItems, calculation, transactions, refundableCents, shopCents };
+  return { orderId, note, currency, refundLineItems, transactions, refundableCents, shopCents };
 }
 
 /** Bind Shopify's current complete refundable balance into the proposal. */
@@ -353,7 +303,7 @@ export async function createRefund(
   try {
     const prepared = await prepareFullRefund(input, ctx, true);
     if ("status" in prepared) return prepared;
-    const { orderId, note, currency, refundLineItems, calculation, transactions } = prepared;
+    const { orderId, note, currency, refundLineItems, transactions } = prepared;
 
     const idempotencyKey = shopifyIdempotencyKey(ctx.operationId);
     const refundInput = {
@@ -362,9 +312,7 @@ export async function createRefund(
       note,
       ...(currency ? { currency } : {}),
       shipping: { fullRefund: true },
-      refundLineItems: graphqlRefundLineItems(
-        calculation.refund?.refund_line_items ?? refundLineItems,
-      ),
+      refundLineItems: graphqlRefundLineItems(refundLineItems),
       transactions: graphqlRefundTransactions(orderId, transactions),
     };
     mutationStarted = true;

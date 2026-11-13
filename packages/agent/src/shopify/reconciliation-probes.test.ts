@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsonResponse } from "../testing/json-response.js";
+import { graphqlResponse, shopifyOrderSettlementNode } from "../testing/shopify-graphql.js";
+import type { ShopifyOrder } from "./types.js";
 import { shopifyIdempotencyKey } from "./client.js";
 import { discountCodeForOperation } from "./discounts.js";
 import { probeUnknownShopifyMutation } from "./reconciliation-probes/index.js";
@@ -16,6 +18,11 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
+
+// The order's refunds and cancellation as Shopify reports them.
+function settlement(order: Record<string, unknown>) {
+  return graphqlResponse({ order: shopifyOrderSettlementNode({ id: 456, ...order } as unknown as ShopifyOrder) });
+}
 
 describe("probeUnknownShopifyMutation", () => {
   it("commits when the deterministic discount code exists", async () => {
@@ -54,7 +61,7 @@ describe("probeUnknownShopifyMutation", () => {
   });
 
   it("commits when a matching refund exists on the order", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(settlement({
       refunds: [{
         id: 1,
         transactions: [{ status: "success", amount: "20.00" }],
@@ -71,7 +78,7 @@ describe("probeUnknownShopifyMutation", () => {
   });
 
   it("commits a partial refund from the order's one successful refund", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(settlement({
       refunds: [{
         id: 1,
         transactions: [{ status: "success", amount: "16.00" }],
@@ -89,9 +96,7 @@ describe("probeUnknownShopifyMutation", () => {
   });
 
   it("releases cancellation reconciliation when the order is not cancelled", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
-      order: { id: 456, name: "#1001", cancelled_at: null },
-    })));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(settlement({ name: "#1001", cancelled_at: null })));
 
     const result = await probeUnknownShopifyMutation(
       "cancel_order",
@@ -253,7 +258,7 @@ describe("probeUnknownShopifyMutation", () => {
   });
 
   it("stays unknown when multiple successful refunds match the requested amount", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(settlement({
       refunds: [
         { id: 1, transactions: [{ status: "success", amount: "20.00" }] },
         { id: 2, transactions: [{ status: "success", amount: "20.00" }] },
@@ -271,7 +276,7 @@ describe("probeUnknownShopifyMutation", () => {
   });
 
   it("rules out a refund when no successful refund matches the requested amount", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(settlement({
       refunds: [{
         id: 1,
         transactions: [{ status: "pending", amount: "20.00" }],
@@ -288,9 +293,7 @@ describe("probeUnknownShopifyMutation", () => {
   });
 
   it("commits a cancellation when the cancel reason matches", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
-      order: { id: 456, name: "#1001", cancelled_at: "2026-08-01T00:00:00Z", cancel_reason: "customer" },
-    })));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(settlement({ name: "#1001", cancelled_at: "2026-08-01T00:00:00Z", cancel_reason: "customer" })));
 
     const result = await probeUnknownShopifyMutation(
       "cancel_order",
@@ -302,9 +305,7 @@ describe("probeUnknownShopifyMutation", () => {
   });
 
   it("stays unknown when the order is cancelled with a different reason", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
-      order: { id: 456, name: "#1001", cancelled_at: "2026-08-01T00:00:00Z", cancel_reason: "fraud" },
-    })));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(settlement({ name: "#1001", cancelled_at: "2026-08-01T00:00:00Z", cancel_reason: "fraud" })));
 
     const result = await probeUnknownShopifyMutation(
       "cancel_order",

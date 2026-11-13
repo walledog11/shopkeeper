@@ -212,7 +212,7 @@ function lineItemFromNode(node: LineItemNode): ShopifyOrderLineItem {
   const current = node.currentQuantity;
   const unfulfilled = Math.min(node.unfulfilledQuantity, current);
   return {
-    id: Number(legacyIdFromGid(node.id)),
+    id: legacyIdFromGid(node.id),
     variant_id: node.variant ? Number(node.variant.legacyResourceId) : null,
     title: node.title,
     variant_title: node.variantTitle,
@@ -481,6 +481,92 @@ export async function findShopifyOrderIdentity(
     && (search.customerId === undefined || node.customer?.legacyResourceId === search.customerId.trim())
   ));
   return match ? identityFromNode(match) : null;
+}
+
+// What became of an order: whether and why it was cancelled, whether anything
+// shipped, its payment status, and each refund with the transactions that
+// carried it. Cancellation and refund outcomes are confirmed from this, never
+// from the request that asked for them.
+export const ORDER_SETTLEMENT_QUERY = `query ShopkeeperOrderSettlement($id: ID!) {
+  order(id: $id) {
+    legacyResourceId
+    name
+    currencyCode
+    cancelledAt
+    cancelReason
+    displayFinancialStatus
+    displayFulfillmentStatus
+    refunds(first: 20) {
+      id
+      transactions(first: 10) {
+        nodes { kind status gateway amountSet { presentmentMoney { amount currencyCode } } }
+      }
+    }
+  }
+}`;
+
+interface OrderSettlementNode {
+  legacyResourceId: string;
+  name: string;
+  currencyCode: string;
+  cancelledAt: string | null;
+  cancelReason: string | null;
+  displayFinancialStatus: string | null;
+  displayFulfillmentStatus: string;
+  refunds: {
+    id: string;
+    transactions: {
+      nodes: {
+        kind: string;
+        status: string;
+        gateway: string | null;
+        amountSet: { presentmentMoney: MoneyNode };
+      }[];
+    };
+  }[];
+}
+
+/**
+ * The order's settlement in the REST shape: refunds carry their transactions,
+ * each in the currency the customer was charged.
+ */
+export async function fetchShopifyOrderSettlement(
+  ctx: ShopifyContext,
+  orderId: string,
+  options: { maxRetries?: number } = {},
+): Promise<ShopifyOrder | null> {
+  const id = orderId.trim();
+  if (!/^\d+$/.test(id)) throw new ShopifyRequestError(`Invalid Shopify order id "${id}".`);
+  const data = await shopifyGraphql<{ order: OrderSettlementNode | null }>(
+    ctx,
+    ORDER_SETTLEMENT_QUERY,
+    { id: `gid://shopify/Order/${id}` },
+    { maxRetries: options.maxRetries },
+  );
+  const node = data.order;
+  if (!node) return null;
+  return {
+    id: Number(node.legacyResourceId),
+    name: node.name,
+    currency: node.currencyCode,
+    cancelled_at: node.cancelledAt,
+    cancel_reason: node.cancelReason?.toLowerCase() ?? null,
+    financial_status: node.displayFinancialStatus?.toLowerCase() ?? null,
+    fulfillment_status: ORDER_FULFILLMENT_STATUS[node.displayFulfillmentStatus] ?? null,
+    refunds: node.refunds.map((refund) => ({
+      id: Number(legacyIdFromGid(refund.id)),
+      transactions: refund.transactions.nodes.map((transaction) => {
+        const money = transaction.amountSet.presentmentMoney;
+        return {
+          kind: transaction.kind.toLowerCase(),
+          status: transaction.status.toLowerCase(),
+          gateway: transaction.gateway ?? "",
+          amount: currencyAmount(money.amount, money.currencyCode),
+          currency: money.currencyCode,
+        };
+      }),
+    })),
+  };
 }
 
 // The development simulator answers in memory with REST-shaped orders; it

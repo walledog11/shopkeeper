@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { installAgentLogger, resetAgentLoggerForTests } from "./logger.js";
 import { planAgent } from "./planner.js";
+import { graphqlResponse, shopifyOrderNode, shopifySuggestedRefundNode } from "./testing/shopify-graphql.js";
 import { AGENT_SETTINGS_DEFAULTS } from "./settings.js";
 import {
   FULFILLED_ORDER_4003,
@@ -86,27 +87,24 @@ describe("planAgent capture loop", () => {
       },
     ]));
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        order: {
+      .mockResolvedValueOnce(graphqlResponse({
+        order: shopifyOrderNode({
           id: 9000004003,
           currency: "USD",
           financial_status: "paid",
           refunds: [],
           line_items: [{ id: 11, title: "Tee", quantity: 1, current_quantity: 1 }],
+        }),
+      }))
+      .mockResolvedValueOnce(graphqlResponse({
+        order: {
+          suggestedRefund: shopifySuggestedRefundNode({
+            currency: "USD",
+            refund_line_items: [{ line_item_id: 11, quantity: 1, restock_type: "no_restock" }],
+            transactions: [{ kind: "suggested_refund", gateway: "shopify_payments", parent_id: 222, amount: "42.00" }],
+          }),
         },
-      }), { status: 200, headers: { "content-type": "application/json" } }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        refund: {
-          currency: "USD",
-          transactions: [{
-            kind: "suggested_refund",
-            gateway: "shopify_payments",
-            parent_id: 222,
-            amount: "42.00",
-            maximum_refundable: "42.00",
-          }],
-        },
-      }), { status: 200, headers: { "content-type": "application/json" } }));
+      }));
     vi.stubGlobal("fetch", fetchMock);
 
     const plan = await planAgent(makeCtx({
@@ -172,9 +170,12 @@ describe("planAgent capture loop", () => {
       { id: "tu_edit", name: "edit_shopify_order", input: { order_id: "9000004003", remove_variant_id: "999" } },
       { id: "tu_reply", name: "send_reply", input: { text: "I can take that off your order." } },
     ]));
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({
-      order: { id: 9000004003, line_items: [{ id: 1, variant_id: 501, title: "Napkin", quantity: 1, current_quantity: 1 }] },
-    }), { status: 200, headers: { "content-type": "application/json" } })));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(graphqlResponse({
+      order: shopifyOrderNode({
+        id: 9000004003,
+        line_items: [{ id: 1, variant_id: 501, title: "Napkin", quantity: 1, current_quantity: 1 }],
+      }),
+    })));
 
     const plan = await planAgent(makeCtx({ recentOrders: [FULFILLED_ORDER_4003] }), "Handle this edit", AGENT_SETTINGS_DEFAULTS, {
 

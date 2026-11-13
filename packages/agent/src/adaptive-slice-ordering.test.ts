@@ -85,6 +85,22 @@ function toolUse(id: string, name: string, input: unknown) {
   return { stop_reason: "tool_use", content: [{ type: "tool_use", id, name, input }], usage: USAGE };
 }
 
+// The order the approved refund is for, and Shopify's pricing of all of it.
+const HAT_ORDER = {
+  id: 456,
+  name: "#1011",
+  currency: "USD",
+  total_price: "20.00",
+  financial_status: "paid",
+  refunds: [],
+  line_items: [{ id: 11, title: "Hat", quantity: 1, current_quantity: 1 }],
+};
+const HAT_REFUND = {
+  currency: "USD",
+  refund_line_items: [{ line_item_id: 11, quantity: 1, restock_type: "no_restock" }],
+  transactions: [{ kind: "suggested_refund", gateway: "shopify_payments", parent_id: 222, amount: "20.00" }],
+};
+
 // The fake provider. Routed by URL rather than call order so an extra read
 // inserted by a later step does not silently shift every later expectation onto
 // the wrong response.
@@ -106,15 +122,13 @@ function installFakeShopify() {
         }],
       })!;
     }
-    if (href.includes("/refunds/calculate")) {
+    if (graphqlRequest(init)?.operation === "ShopkeeperRefundCalculation") {
       events.push("provider:calculate_refund");
-      return jsonResponse({
-        refund: {
-          currency: "USD",
-          refund_line_items: [{ line_item_id: 11, quantity: 1, restock_type: "no_restock" }],
-          transactions: [{ kind: "suggested_refund", gateway: "shopify_payments", parent_id: 222, amount: "20.00", maximum_refundable: "20.00" }],
-        },
-      }, { headers: { "retry-after": "0" } });
+      return answerShopifyGraphqlRead(init, { refundCalculation: HAT_REFUND })!;
+    }
+    if (graphqlRequest(init)?.operation === "ShopkeeperOrder") {
+      events.push("provider:read_order");
+      return answerShopifyGraphqlRead(init, { orders: [HAT_ORDER] })!;
     }
     if (href.includes("/graphql")) {
       events.push("provider:commit_refund");
@@ -131,18 +145,7 @@ function installFakeShopify() {
         },
       }, { headers: { "retry-after": "0" } });
     }
-    events.push("provider:read_order");
-    return jsonResponse({
-      order: {
-        id: 456,
-        name: "#1011",
-        currency: "USD",
-        total_price: "20.00",
-        financial_status: "paid",
-        refunds: [],
-        line_items: [{ id: 11, title: "Hat", quantity: 1, current_quantity: 1 }],
-      },
-    }, { headers: { "retry-after": "0" } });
+    throw new Error(`Unexpected provider request: ${href}`);
   }));
 }
 
@@ -299,17 +302,15 @@ describe("running an approved exact-draft proposal", () => {
   });
 
   it("sends nothing when the approved write did not commit", async () => {
-    vi.stubGlobal("fetch", vi.fn(async (url: string | URL) => {
+    vi.stubGlobal("fetch", vi.fn(async (url: string | URL, init?: RequestInit) => {
       const href = typeof url === "string" ? url : url.toString();
-      if (href.includes("/refunds/calculate")) {
+      if (graphqlRequest(init)?.operation === "ShopkeeperRefundCalculation") {
         events.push("provider:calculate_refund");
-        return jsonResponse({
-          refund: {
-            currency: "USD",
-            refund_line_items: [{ line_item_id: 11, quantity: 1, restock_type: "no_restock" }],
-            transactions: [{ kind: "suggested_refund", gateway: "shopify_payments", parent_id: 222, amount: "20.00", maximum_refundable: "20.00" }],
-          },
-        }, { headers: { "retry-after": "0" } });
+        return answerShopifyGraphqlRead(init, { refundCalculation: HAT_REFUND })!;
+      }
+      if (graphqlRequest(init)?.operation === "ShopkeeperOrder") {
+        events.push("provider:read_order");
+        return answerShopifyGraphqlRead(init, { orders: [HAT_ORDER] })!;
       }
       if (href.includes("/graphql")) {
         events.push("provider:refund_rejected");
@@ -317,18 +318,7 @@ describe("running an approved exact-draft proposal", () => {
           data: { refundCreate: { refund: null, userErrors: [{ field: ["input"], message: "Refund exceeds the refundable amount." }] } },
         }, { headers: { "retry-after": "0" } });
       }
-      events.push("provider:read_order");
-      return jsonResponse({
-        order: {
-          id: 456,
-          name: "#1011",
-          currency: "USD",
-          total_price: "20.00",
-          financial_status: "paid",
-          refunds: [],
-          line_items: [{ id: 11, title: "Hat", quantity: 1, current_quantity: 1 }],
-        },
-      }, { headers: { "retry-after": "0" } });
+      throw new Error(`Unexpected provider request: ${href}`);
     }));
 
     const result = await runAgent(
@@ -418,7 +408,6 @@ describe("a compound task: read the order and the policy, refund one line, repor
     transactions?: { amount: string }[];
   }
   interface ProviderRequestBody {
-    refund?: { refund_line_items?: { line_item_id: string; quantity: number }[] };
     variables?: { input?: CommittedRefund };
   }
   let committedRefund: CommittedRefund | null = null;
@@ -436,23 +425,30 @@ describe("a compound task: read the order and the policy, refund one line, repor
         events.push("provider:lookup_order");
         return answerShopifyGraphqlRead(init, { orders: [COMPOUND_ORDER] })!;
       }
-      if (href.includes("/refunds/calculate")) {
+      if (graphqlRequest(init)?.operation === "ShopkeeperRefundCalculation") {
         events.push("provider:calculate_refund");
-        const lines = body?.refund?.refund_line_items ?? [];
+        const lines = (graphqlRequest(init)!.variables.refundLineItems ?? []) as { lineItemId: string; quantity: number }[];
         const units = lines.reduce((total, line) => total + Number(line.quantity ?? 0), 0);
-        return jsonResponse({
-          refund: {
+        return answerShopifyGraphqlRead(init, {
+          refundCalculation: {
             currency: "USD",
-            refund_line_items: lines.map(line => ({ ...line, restock_type: "no_restock" })),
+            refund_line_items: lines.map(line => ({
+              line_item_id: line.lineItemId.split("/").pop()!,
+              quantity: line.quantity,
+              restock_type: "no_restock",
+            })),
             transactions: [{
               kind: "suggested_refund",
               gateway: "shopify_payments",
               parent_id: 222,
               amount: (units * 8.5).toFixed(2),
-              maximum_refundable: "30.00",
             }],
           },
-        }, { headers: { "retry-after": "0" } });
+        })!;
+      }
+      if (graphqlRequest(init)?.operation === "ShopkeeperOrder") {
+        events.push("provider:read_order");
+        return answerShopifyGraphqlRead(init, { orders: [COMPOUND_ORDER] })!;
       }
       if (href.includes("/graphql")) {
         committedRefund = body?.variables?.input ?? null;
@@ -481,8 +477,7 @@ describe("a compound task: read the order and the policy, refund one line, repor
           },
         }, { headers: { "retry-after": "0" } });
       }
-      events.push("provider:read_order");
-      return jsonResponse({ order: COMPOUND_ORDER }, { headers: { "retry-after": "0" } });
+      throw new Error(`Unexpected provider request: ${href}`);
     }));
   }
 

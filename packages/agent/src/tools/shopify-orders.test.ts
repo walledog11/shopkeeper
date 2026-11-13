@@ -6,6 +6,7 @@ import {
   createShopifyOrder,
   editShopifyOrder,
 } from "./shopify.js";
+import { graphqlRequest, graphqlResponse, shopifyOrderNode, shopifySuggestedRefundNode } from "../testing/shopify-graphql.js";
 
 const ctx = {
   shop: "test-store.myshopify.com",
@@ -21,27 +22,28 @@ describe("shopify tools", () => {
   it("creates a full refund using calculated line items and parent transactions", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse({
-        order: {
+      .mockResolvedValueOnce(graphqlResponse({
+        order: shopifyOrderNode({
           id: 456,
           currency: "USD",
           financial_status: "paid",
           refunds: [],
           line_items: [{ id: 11, title: "Hat", quantity: 2, current_quantity: 2 }],
-        },
+        }),
       }))
-      .mockResolvedValueOnce(jsonResponse({
-        refund: {
-          currency: "USD",
-          shipping: { amount: "5.00" },
-          refund_line_items: [{ line_item_id: 11, quantity: 2, restock_type: "no_restock", location_id: 1 }],
-          transactions: [{
-            kind: "suggested_refund",
-            gateway: "shopify_payments",
-            parent_id: 222,
-            amount: "25.00",
+      .mockResolvedValueOnce(graphqlResponse({
+        order: {
+          suggestedRefund: shopifySuggestedRefundNode({
             currency: "USD",
-          }],
+            refund_line_items: [{ line_item_id: 11, quantity: 2, restock_type: "no_restock" }],
+            transactions: [{
+              kind: "suggested_refund",
+              gateway: "shopify_payments",
+              parent_id: 222,
+              amount: "25.00",
+              currency: "USD",
+            }],
+          }),
         },
       }))
       .mockResolvedValueOnce(jsonResponse({
@@ -60,12 +62,10 @@ describe("shopify tools", () => {
 
     const result = await createRefund({ order_id: "456", amount: "25.00", currency: "USD", reason: "Customer request" }, ctx);
 
-    const calculateBody = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+    const calculation = graphqlRequest(fetchMock.mock.calls[1][1]);
     const createBody = JSON.parse(fetchMock.mock.calls[2][1].body as string);
 
-    expect(calculateBody.refund.refund_line_items).toEqual([
-      { line_item_id: 11, quantity: 2, restock_type: "no_restock" },
-    ]);
+    expect(calculation?.variables).toMatchObject({ suggestFullRefund: true, refundShipping: true });
     expect(createBody.variables.input.refundLineItems).toEqual([
       {
         lineItemId: "gid://shopify/LineItem/11",

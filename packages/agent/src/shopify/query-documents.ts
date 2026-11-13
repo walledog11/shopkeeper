@@ -43,7 +43,15 @@ import { SUGGESTED_REFUND_QUERY } from "./refund-shop-money.js";
 import { ORDER_RETURNS_QUERY } from "./return-labels.js";
 import { ORDER_RETURN_STATUSES_QUERY } from "./return-status.js";
 import { RETURNABLE_FULFILLMENTS_QUERY } from "./returns.js";
-import { ORDER_IDENTITIES_QUERY, ORDER_IDENTITY_QUERY, ORDER_QUERY, ORDERS_QUERY } from "./order-reads.js";
+import {
+  ORDER_IDENTITIES_QUERY,
+  ORDER_IDENTITY_QUERY,
+  ORDER_QUERY,
+  ORDER_SETTLEMENT_QUERY,
+  ORDERS_QUERY,
+} from "./order-reads.js";
+import { JOB_QUERY } from "./order-cancellation.js";
+import { REFUND_CALCULATION_QUERY } from "./refund-calculation.js";
 import { CUSTOMER_IDENTITIES_QUERY, CUSTOMER_QUERY, CUSTOMERS_QUERY } from "./customer-reads.js";
 import { SHOP_QUERY, STORE_CONTENT_QUERY } from "./store-reads.js";
 import { LOW_STOCK_VARIANTS_QUERY } from "./low-stock.js";
@@ -64,6 +72,18 @@ export const SHOPIFY_QUERY_DOCUMENTS: Record<string, ShopifyQueryDocument> = {
   orders: {
     document: ORDERS_QUERY,
     variables: { query: 'name:"#SHOPKEEPER-VALIDATION"', first: 1, after: null, lineItems: 1 },
+  },
+  orderSettlement: {
+    document: ORDER_SETTLEMENT_QUERY,
+    variables: { id: "gid://shopify/Order/1" },
+  },
+  refundCalculation: {
+    document: REFUND_CALCULATION_QUERY,
+    variables: { id: "gid://shopify/Order/1", refundLineItems: null, refundShipping: true, suggestFullRefund: true },
+  },
+  job: {
+    document: JOB_QUERY,
+    variables: { id: "gid://shopify/Job/00000000-0000-0000-0000-000000000000" },
   },
   orderIdentity: {
     document: ORDER_IDENTITY_QUERY,
