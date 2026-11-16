@@ -49,6 +49,7 @@ const {
   updateShopifyOrderAddress,
 } = await import('@shopkeeper/agent/shopify');
 const { missingShopifyScopes } = await import('@shopkeeper/agent/shopify/integration-health');
+const { SHOPIFY_ACCESS_SELECT, shopifyContextFor } = await import('@shopkeeper/agent/shopify/access');
 
 const args = new Set(process.argv.slice(2));
 const EXECUTE = args.has('--execute');
@@ -199,10 +200,8 @@ async function loadShopifyIntegration() {
   const rows = await db.integration.findMany({
     where: { platform: 'shopify' },
     select: {
-      id: true,
+      ...SHOPIFY_ACCESS_SELECT,
       organizationId: true,
-      externalAccountId: true,
-      accessToken: true,
       metadata: true,
     },
     orderBy: { createdAt: 'desc' },
@@ -252,14 +251,17 @@ async function loadShopifyIntegration() {
   }
 
   const integration = matches[0];
+  // Shopify tokens expire hourly: the context renews one that is due, and again
+  // on a refused request, so the canary never sends a stale stored token.
+  const ctx = await shopifyContextFor(integration);
+  if (!ctx) {
+    throw new Error(`${integration.externalAccountId} must be reconnected: Shopify no longer accepts its stored grant.`);
+  }
   return {
     organizationId: integration.organizationId,
     integrationId: integration.id,
     skipped,
-    ctx: {
-      shop: integration.externalAccountId,
-      accessToken: integration.accessToken,
-    },
+    ctx,
   };
 }
 
@@ -981,22 +983,6 @@ const VALIDATION_CASES = [
     },
   },
   {
-    name: 'discountCodeBasicCreate',
-    document: 'discountCodeBasicCreate',
-    variables: {
-      basicCodeDiscount: {
-        title: 'Shopkeeper validation probe',
-        code: 'SHOPKEEPER-VALIDATION-PROBE',
-        startsAt: '2020-01-01T00:00:00.000Z',
-        endsAt: '2020-01-02T00:00:00.000Z',
-        customerSelection: { all: true },
-        customerGets: { items: { all: true }, value: { percentage: 0.1 } },
-        appliesOncePerCustomer: true,
-        usageLimit: 1,
-      },
-    },
-  },
-  {
     // Mirrors fulfillOrder's shape: one fulfillment order, explicit line-item
     // quantities, and tracking, so the trackingInfo branch is type-checked too.
     // notifyCustomer is false here even though the tool defaults to true — a
@@ -1107,6 +1093,29 @@ const VALIDATION_CASES = [
     },
   },
   {
+    // Mirrors createPartialRefund: Shopify-priced line items, no shipping.
+    name: 'partialRefundCreate',
+    document: 'partialRefundCreate',
+    variables: {
+      input: {
+        orderId: 'gid://shopify/Order/1',
+        notify: true,
+        note: 'Shopkeeper validation probe',
+        currency: 'USD',
+        shipping: { fullRefund: false },
+        refundLineItems: [{ lineItemId: 'gid://shopify/LineItem/1', quantity: 1, restockType: 'NO_RESTOCK' }],
+        transactions: [{
+          orderId: 'gid://shopify/Order/1',
+          kind: 'REFUND',
+          gateway: 'bogus',
+          amount: '0.01',
+          parentId: 'gid://shopify/OrderTransaction/1',
+        }],
+      },
+      idempotencyKey: '00000000-0000-4000-8000-000000000000',
+    },
+  },
+  {
     name: 'reverseDeliveryCreateWithShipping',
     document: 'reverseDeliveryCreateWithShipping',
     variables: {
@@ -1143,17 +1152,6 @@ const VALIDATION_CASES = [
           returnReason: 'UNKNOWN',
         }],
         exchangeLineItems: [{ variantId: 'gid://shopify/ProductVariant/1', quantity: 1 }],
-      },
-    },
-  },
-  {
-    name: 'storeCreditAccountCredit',
-    document: 'storeCreditAccountCredit',
-    variables: {
-      id: 'gid://shopify/Customer/1',
-      creditInput: {
-        creditAmount: { amount: '0.01', currencyCode: 'USD' },
-        expiresAt: '2020-01-01',
       },
     },
   },

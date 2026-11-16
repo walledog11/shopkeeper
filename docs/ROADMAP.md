@@ -63,9 +63,11 @@ The first publication is the App Store. These block review or a new install's fi
    email, phone, address); its requirements are built (runbook *Customer data
    protection*: access log and weekly review, the Terms' data processing section, the
    incident response policy), so every answer is Yes except consent, data sale and
-   automated decisions (Not applicable). Also a reason for each requested scope, dropping
-   any no shipped tool uses; listing copy, icon and screenshots; a screencast; reviewer
-   test credentials. Closes when the submission form is complete.
+   automated decisions (Not applicable). The reason for each requested scope is in the
+   Shopify configuration reference (*Access scopes*); release the current
+   `shopify.app.toml` and chat extension with `shopify app deploy` before submitting.
+   Left: listing copy, icon and screenshots; a screencast; reviewer test credentials.
+   Closes when the submission form is complete.
 5. **Listing day:** the site's call to action is a waitlist. Point it and the pricing
    cards at the listing, and open sign-ups. Closes when the listing is live.
 
