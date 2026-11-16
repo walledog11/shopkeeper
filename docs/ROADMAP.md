@@ -7,7 +7,7 @@ Technical contracts and settled engineering decisions live with the code they go
 ([agent-runtime](agent-runtime.md), [runbook](production/runbook.md),
 [transport plan](socialapi-transport-plan.md)), not here.
 
-Last updated: 2026-11-11.
+Last updated: 2026-11-16.
 
 ## Next — the first real merchant
 
@@ -71,12 +71,7 @@ The first publication is the App Store. These block review or a new install's fi
    shoppers' IPs to a font CDN. Self-host the font or use the system stack, then compare
    Lighthouse with and without the embed. Closes when the embed costs under Shopify's
    10-point limit.
-6. **The privacy policy describes what runs.** Sentry Session Replay records a sample of
-   sessions on every page, Shopify admin included, and the policy names Sentry only for
-   error reports; it also omits the website chat widget, and the Terms describe Stripe
-   billing. Closes when replay is off or disclosed and both documents match the shipped
-   app.
-7. **Listing day:** the site's call to action is a waitlist. Point it and the pricing
+6. **Listing day:** the site's call to action is a waitlist. Point it and the pricing
    cards at the listing, and open sign-ups. Closes when the listing is live.
 
 ## Later

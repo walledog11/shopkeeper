@@ -19,7 +19,7 @@ export default function PrivacyPage() {
   return (
     <LegalPage
       title="Privacy Policy"
-      effectiveDate="November 11, 2026"
+      effectiveDate="November 16, 2026"
       intro={privacyIntro}
       sections={[
         {
@@ -47,8 +47,9 @@ export default function PrivacyPage() {
               </p>
               <p>
                 We also collect product usage, device, log, and diagnostic data such as request metadata, error reports,
-                webhook delivery status, and security events. Payments are processed by Stripe; we store payment status
-                and identifiers, not full payment card numbers.
+                webhook delivery status, and security events. A store that installs Shopkeeper from Shopify pays on its
+                Shopify bill, and we store the plan it chose and its status. Other workspaces pay through Stripe; we store
+                payment status and identifiers, not full payment card numbers.
               </p>
               <p>
                 We use PostHog for limited product analytics. Shopkeeper sends server-side events tied to a pseudonymous
@@ -158,6 +159,26 @@ export default function PrivacyPage() {
           ),
         },
         {
+          title: 'Website Chat',
+          body: (
+            <>
+              <p>
+                A merchant can add Shopkeeper&apos;s chat to their online store. What a shopper types there, and the store
+                it was sent from, reaches Shopkeeper through Shopify and becomes a support conversation in the
+                merchant&apos;s workspace, kept like the merchant&apos;s other conversations. The chat saves a session
+                identifier in the shopper&apos;s browser storage, not a cookie, so a returning shopper sees their
+                conversation; a session lasts 30 days.
+              </p>
+              <p>
+                To ask about an order, a shopper enters the order number and the email used at checkout. If they match,
+                Shopkeeper sends a six-digit code to that email from the store&apos;s connected support address, and a
+                shopper who enters it is linked to that order and customer. The chat sets no cookies and adds no
+                tracking to the store.
+              </p>
+            </>
+          ),
+        },
+        {
           title: 'Messages to the Merchant’s Phone',
           body: (
             <p>
@@ -185,7 +206,7 @@ export default function PrivacyPage() {
                 <li><strong>Postmark</strong> &mdash; receives forwarded support email and sends replies for stores that use email forwarding.</li>
                 <li><strong>Photon</strong> &mdash; delivers iMessages between Shopkeeper and the merchant&apos;s phone.</li>
                 <li><strong>Clerk</strong> &mdash; sign-in and team accounts.</li>
-                <li><strong>Stripe</strong> &mdash; billing and payments.</li>
+                <li><strong>Stripe</strong> &mdash; payments for workspaces not billed through Shopify.</li>
                 <li><strong>Sentry</strong> &mdash; error reports from the dashboard.</li>
                 <li><strong>PostHog</strong> &mdash; pseudonymous product analytics, as described above.</li>
                 <li><strong>Loops</strong> &mdash; waitlist and product-update email.</li>
