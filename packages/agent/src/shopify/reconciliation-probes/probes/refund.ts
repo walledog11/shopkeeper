@@ -1,5 +1,6 @@
 import type { CreateRefundInput } from "../../../tools/index.js";
-import { shopifyRestJson, type ShopifyContext } from "../../client.js";
+import type { ShopifyContext } from "../../client.js";
+import { fetchShopifyOrderSettlement } from "../../order-reads.js";
 import { moneyToCents, requireAmount, requireNumericId } from "../../validation.js";
 import { committed, noEffect, stillUnknown, type ShopifyReconciliationProbeResult } from "../types.js";
 
@@ -11,12 +12,8 @@ export async function probeRefund(
   const requestedAmount = input.amount !== undefined ? requireAmount(input.amount, "amount") : null;
   const requestedCents = requestedAmount ? moneyToCents(requestedAmount) : null;
 
-  const data = await shopifyRestJson<{ refunds?: Array<{ id: number; transactions?: Array<{ status?: string; amount?: string }> }> }>(
-    ctx,
-    `orders/${orderId}/refunds.json`,
-    { maxRetries: 1 },
-  );
-  const refunds = data.refunds ?? [];
+  const order = await fetchShopifyOrderSettlement(ctx, orderId, { maxRetries: 1 });
+  const refunds = order?.refunds ?? [];
   const successful = refunds.filter((refund) => (
     (refund.transactions ?? []).some((transaction) => transaction.status?.toUpperCase() === "SUCCESS")
   ));

@@ -3,6 +3,7 @@ import { AGENT_SETTINGS_DEFAULTS } from "./settings.js";
 import { runAgent } from "./run.js";
 import { resolveRunPolicy } from "./run-policy.js";
 import type { AgentContext } from "./agent-context.js";
+import { graphqlResponse, shopifyOrderNode, shopifySuggestedRefundNode } from "./testing/shopify-graphql.js";
 
 const {
   mockCreate,
@@ -75,6 +76,19 @@ vi.mock("./agent-actions.js", () => ({
   hashPlan: vi.fn().mockReturnValue("hash"),
   hashInstruction: vi.fn().mockReturnValue("hash"),
 }));
+
+// Shopify's pricing of the whole order: one line, one transaction.
+function calculationResponse(amount: string) {
+  return graphqlResponse({
+    order: {
+      suggestedRefund: shopifySuggestedRefundNode({
+        currency: "USD",
+        refund_line_items: [{ line_item_id: 1, quantity: 1, restock_type: "no_restock" }],
+        transactions: [{ kind: "suggested_refund", gateway: "manual", parent_id: 1, amount }],
+      }),
+    },
+  });
+}
 
 function makeIo(): NonNullable<AgentContext["io"]> {
   return {
@@ -304,15 +318,10 @@ describe("runAgent policy enforcement", () => {
 
   it("allows a refund under the daily cap", async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        order: { id: 123, name: "#1001", currency: "USD", financial_status: "paid", refunds: [], line_items: [{ id: 1, title: "Item", quantity: 1 }], total_price: "20.00" },
-      }), { status: 200, headers: { "Content-Type": "application/json" } }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        refund: {
-          currency: "USD",
-          transactions: [{ kind: "suggested_refund", gateway: "manual", parent_id: 1, amount: "20.00", maximum_refundable: "50.00" }],
-        },
-      }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(graphqlResponse({
+        order: shopifyOrderNode({ id: 123, name: "#1001", currency: "USD", financial_status: "paid", refunds: [], line_items: [{ id: 1, title: "Item", quantity: 1 }], total_price: "20.00" }),
+      }))
+      .mockResolvedValueOnce(calculationResponse("20.00"))
       .mockResolvedValueOnce(new Response(JSON.stringify({
         data: {
           refundCreate: {
@@ -346,22 +355,17 @@ describe("runAgent policy enforcement", () => {
 
   it("releases spend and escalates when Shopify's refundable balance differs", async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        order: {
+      .mockResolvedValueOnce(graphqlResponse({
+        order: shopifyOrderNode({
           id: 123,
           name: "#1001",
           currency: "USD",
           financial_status: "paid",
           refunds: [],
           line_items: [{ id: 1, title: "Item", quantity: 1 }],
-        },
-      }), { status: 200, headers: { "Content-Type": "application/json" } }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        refund: {
-          currency: "USD",
-          transactions: [{ kind: "suggested_refund", gateway: "manual", parent_id: 1, amount: "42.00" }],
-        },
-      }), { status: 200, headers: { "Content-Type": "application/json" } }));
+        }),
+      }))
+      .mockResolvedValueOnce(calculationResponse("42.00"));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await runAgent(
@@ -383,15 +387,10 @@ describe("runAgent policy enforcement", () => {
 
   it("does not send a customer confirmation after an unknown refund outcome", async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        order: { id: 123, name: "#1001", currency: "USD", financial_status: "paid", refunds: [], line_items: [{ id: 1, title: "Item", quantity: 1 }], total_price: "20.00" },
-      }), { status: 200, headers: { "Content-Type": "application/json" } }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        refund: {
-          currency: "USD",
-          transactions: [{ kind: "suggested_refund", gateway: "manual", parent_id: 1, amount: "20.00", maximum_refundable: "50.00" }],
-        },
-      }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(graphqlResponse({
+        order: shopifyOrderNode({ id: 123, name: "#1001", currency: "USD", financial_status: "paid", refunds: [], line_items: [{ id: 1, title: "Item", quantity: 1 }], total_price: "20.00" }),
+      }))
+      .mockResolvedValueOnce(calculationResponse("20.00"))
       .mockResolvedValueOnce(new Response(JSON.stringify({
         data: {
           refundCreate: {

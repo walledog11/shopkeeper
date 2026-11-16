@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsonResponse as sharedJsonResponse } from "../testing/json-response.js";
+import { shopifyOrderNode, shopifySuggestedRefundNode } from "../testing/shopify-graphql.js";
 import { createRefund, quoteFullRefundForApproval } from "./refunds.js";
 
 const ctx = {
@@ -15,30 +16,34 @@ function jsonResponse(body: unknown, status = 200): Response {
   return sharedJsonResponse(body, { status, headers: { "retry-after": "0" } });
 }
 
+function orderNodeResponse(order: Parameters<typeof shopifyOrderNode>[0]) {
+  return jsonResponse({ data: { order: shopifyOrderNode(order) } });
+}
+
+function calculationNodeResponse(refund: Parameters<typeof shopifySuggestedRefundNode>[0]) {
+  return jsonResponse({ data: { order: { suggestedRefund: shopifySuggestedRefundNode(refund) } } });
+}
+
 function orderResponse() {
-  return jsonResponse({
-    order: {
-      id: 456,
-      currency: "USD",
-      financial_status: "paid",
-      refunds: [],
-      line_items: [{ id: 11, title: "Hat", quantity: 1, current_quantity: 1 }],
-    },
+  return orderNodeResponse({
+    id: 456,
+    currency: "USD",
+    financial_status: "paid",
+    refunds: [],
+    line_items: [{ id: 11, title: "Hat", quantity: 1, current_quantity: 1 }],
   });
 }
 
 function calculationResponse() {
-  return jsonResponse({
-    refund: {
-      currency: "USD",
-      transactions: [{
-        kind: "suggested_refund",
-        gateway: "shopify_payments",
-        parent_id: 222,
-        amount: "20.00",
-        maximum_refundable: "50.00",
-      }],
-    },
+  return calculationNodeResponse({
+    currency: "USD",
+    refund_line_items: [{ line_item_id: 11, quantity: 1, restock_type: "no_restock" }],
+    transactions: [{
+      kind: "suggested_refund",
+      gateway: "shopify_payments",
+      parent_id: 222,
+      amount: "20.00",
+    }],
   });
 }
 
@@ -62,25 +67,17 @@ function refundResponse(status = "SUCCESS") {
 // the line items - including a $0 one, which it returns and which must not be
 // sent.
 function multiTransactionCalculationResponse() {
-  return jsonResponse({
-    refund: {
-      currency: "USD",
-      refund_line_items: [
-        { line_item_id: 11, quantity: 1, restock_type: "return", location_id: 77 },
-        { line_item_id: 12, quantity: 2, restock_type: "no_restock", location_id: 77 },
-      ],
-      transactions: [
-        {
-          kind: "suggested_refund",
-          gateway: "shopify_payments",
-          parent_id: 222,
-          amount: "20.00",
-          maximum_refundable: "20.00",
-        },
-        { kind: "suggested_refund", gateway: "gift_card", parent_id: 223, amount: "0.00", maximum_refundable: "0.00" },
-        { kind: "suggested_refund", gateway: "paypal", parent_id: 224, amount: "5.50", maximum_refundable: "5.50" },
-      ],
-    },
+  return calculationNodeResponse({
+    currency: "USD",
+    refund_line_items: [
+      { line_item_id: 11, quantity: 1, restock_type: "return" },
+      { line_item_id: 12, quantity: 2, restock_type: "no_restock" },
+    ],
+    transactions: [
+      { kind: "suggested_refund", gateway: "shopify_payments", parent_id: 222, amount: "20.00" },
+      { kind: "suggested_refund", gateway: "gift_card", parent_id: 223, amount: "0.00" },
+      { kind: "suggested_refund", gateway: "paypal", parent_id: 224, amount: "5.50" },
+    ],
   });
 }
 
@@ -158,14 +155,9 @@ describe("createRefund full-refund input", () => {
     const { variables } = await fullRefundVariables();
 
     expect(variables.input.shipping).toEqual({ fullRefund: true });
-    // Shopify's calculated line items win over the ones derived from the order.
+    // The lines are the ones Shopify priced, and the agent's refunds never restock.
     expect(variables.input.refundLineItems).toEqual([
-      {
-        lineItemId: "gid://shopify/LineItem/11",
-        quantity: 1,
-        restockType: "RETURN",
-        locationId: "gid://shopify/Location/77",
-      },
+      { lineItemId: "gid://shopify/LineItem/11", quantity: 1, restockType: "NO_RESTOCK" },
       { lineItemId: "gid://shopify/LineItem/12", quantity: 2, restockType: "NO_RESTOCK" },
     ]);
   });
@@ -188,14 +180,12 @@ describe("createRefund full-refund input", () => {
     ["authorized", "order_not_paid"],
     ["voided", "order_not_paid"],
   ])("policy-blocks financial status %s before calculation", async (financialStatus, code) => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
-      order: {
-        id: 456,
-        currency: "USD",
-        financial_status: financialStatus,
-        refunds: [],
-        line_items: [{ id: 11, title: "Hat", quantity: 1, current_quantity: 1 }],
-      },
+    const fetchMock = vi.fn().mockResolvedValueOnce(orderNodeResponse({
+      id: 456,
+      currency: "USD",
+      financial_status: financialStatus,
+      refunds: [],
+      line_items: [{ id: 11, title: "Hat", quantity: 1, current_quantity: 1 }],
     }));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -206,14 +196,12 @@ describe("createRefund full-refund input", () => {
   });
 
   it("policy-blocks an existing refund record before calculation", async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
-      order: {
-        id: 456,
-        currency: "USD",
-        financial_status: "paid",
-        refunds: [{ id: 1 }],
-        line_items: [{ id: 11, title: "Hat", quantity: 1, current_quantity: 1 }],
-      },
+    const fetchMock = vi.fn().mockResolvedValueOnce(orderNodeResponse({
+      id: 456,
+      currency: "USD",
+      financial_status: "paid",
+      refunds: [{ id: 1 }],
+      line_items: [{ id: 11, title: "Hat", quantity: 1, current_quantity: 1 }],
     }));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -240,28 +228,18 @@ describe("createRefund full-refund input", () => {
   // treating that as a mismatch made every international order unrefundable.
   it("refunds an order whose presentment currency differs from the shop currency", async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({
-        order: {
-          id: 456,
-          currency: "USD",
-          presentment_currency: "CAD",
-          financial_status: "paid",
-          refunds: [],
-          line_items: [{ id: 11, title: "Hat", quantity: 1, current_quantity: 1 }],
-        },
+      .mockResolvedValueOnce(orderNodeResponse({
+        id: 456,
+        currency: "USD",
+        presentment_currency: "CAD",
+        financial_status: "paid",
+        refunds: [],
+        line_items: [{ id: 11, title: "Hat", quantity: 1, current_quantity: 1 }],
       }))
-      .mockResolvedValueOnce(jsonResponse({
-        refund: {
-          currency: "CAD",
-          transactions: [{
-            kind: "suggested_refund",
-            gateway: "manual",
-            parent_id: 222,
-            amount: "59.90",
-            currency: "CAD",
-            maximum_refundable: "59.90",
-          }],
-        },
+      .mockResolvedValueOnce(calculationNodeResponse({
+        currency: "CAD",
+        refund_line_items: [{ line_item_id: 11, quantity: 1, restock_type: "no_restock" }],
+        transactions: [{ kind: "suggested_refund", gateway: "manual", parent_id: 222, amount: "59.90", currency: "CAD" }],
       }))
       .mockResolvedValueOnce(jsonResponse({
         data: {
@@ -306,16 +284,15 @@ describe("createRefund full-refund input", () => {
   });
 
   it("policy-blocks when Shopify returns no refund currency at all", async () => {
+    const order = shopifyOrderNode({
+      id: 456,
+      financial_status: "paid",
+      refunds: [],
+      line_items: [{ id: 11, title: "Hat", quantity: 1, current_quantity: 1 }],
+    });
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({
-        order: {
-          id: 456,
-          financial_status: "paid",
-          refunds: [],
-          line_items: [{ id: 11, title: "Hat", quantity: 1, current_quantity: 1 }],
-        },
-      }))
-      .mockResolvedValueOnce(jsonResponse({ refund: { transactions: [] } }));
+      .mockResolvedValueOnce(jsonResponse({ data: { order: { ...order, currencyCode: null } } }))
+      .mockResolvedValueOnce(jsonResponse({ data: { order: { suggestedRefund: null } } }));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await createRefund({ order_id: "456", amount: "20.00" }, ctx);

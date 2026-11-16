@@ -4,10 +4,11 @@ import {
   isAmbiguousShopifyMutationError,
   shopifyGraphql,
   shopifyIdempotencyKey,
-  shopifyRestJson,
   type ShopifyContext,
   type ShopifyGraphqlUserError,
 } from "./client.js";
+import { fetchShopifyOrder } from "./order-reads.js";
+import { calculateShopifyRefund } from "./refund-calculation.js";
 import { toolError, toolOk, toolPolicyBlock, toolUnknown, type ReceiptV1 } from "../tools/result.js";
 import { shopifyReceiptResults, shopifyFailureReceipt, shopifyReceiptEnvelope } from "./receipts.js";
 import { committedShopCents, refundShopCents } from "./refund-shop-money.js";
@@ -20,7 +21,7 @@ import {
 import type { RefundToolResult } from "../tools/registry/types.js";
 import type { ApprovalLineItem, CreatePartialRefundInput } from "../tools/registry/types.js";
 import type { OrgSettings } from "../types.js";
-import type { ShopifyOrder, ShopifyOrderLineItem } from "./types.js";
+import type { ShopifyOrder, ShopifyOrderLineItem, ShopifyTransaction } from "./types.js";
 import { orderLineItemName } from "./approval-line-items.js";
 
 const partialRefundReceipts = shopifyReceiptResults("create_partial_refund", "order");
@@ -36,7 +37,7 @@ const partialRefundReceipts = shopifyReceiptResults("create_partial_refund", "or
  * the model never names an amount at all.
  *
  * It names line items and quantities; Shopify prices them. The money is
- * whatever `refunds/calculate.json` returns for that selection, which means a
+ * whatever Shopify's suggested refund is for that selection, which means a
  * model cannot understate a refund to get under a cap, and cannot overstate one
  * by arithmetic error. The cap is then applied to Shopify's figure, because that
  * is the only figure that exists.
@@ -54,24 +55,6 @@ export const PARTIAL_REFUND_MUTATION = `mutation partialRefundCreate($input: Ref
     userErrors { field message }
   }
 }`;
-
-interface RefundCalculationLineItem {
-  line_item_id?: number | string;
-  quantity?: number;
-  restock_type?: string;
-  location_id?: number | string | null;
-  subtotal?: string;
-  total_tax?: string;
-}
-
-interface PartialRefundCalculation {
-  refund?: {
-    currency?: string;
-    refund_line_items?: RefundCalculationLineItem[];
-    transactions?: { amount?: string; gateway?: string; parent_id?: number; kind?: string }[];
-    suggested_transactions?: { amount?: string; gateway?: string; parent_id?: number; kind?: string }[];
-  };
-}
 
 interface RefundCreateData {
   refundCreate: {
@@ -187,7 +170,7 @@ interface PreparedPartialRefund {
   calculatedCents: number;
   /** What the selection costs the shop, in the shop's currency: the unit the workspace limits use. */
   shopCents: number;
-  suggested: { amount?: string; gateway?: string; parent_id?: number; kind?: string }[];
+  suggested: ShopifyTransaction[];
   /** The selection as Shopify names it, for the approval card. */
   lineItems: ApprovalLineItem[];
 }
@@ -199,12 +182,8 @@ async function preparePartialRefund(
   const orderId = requireNumericId(input.order_id, "order_id");
   const items = parseRefundItems(input.items);
   const note = typeof input.reason === "string" ? input.reason.trim() : "";
-  const orderData = await shopifyRestJson<{ order?: ShopifyOrder }>(
-    ctx,
-    `orders/${orderId}.json`,
-    { query: { fields: "id,name,currency,line_items,financial_status,refunds" } },
-  );
-  const order = orderData.order;
+  // Every line, so a requested line is never mistaken for one not on the order.
+  const order = await fetchShopifyOrder(ctx, orderId, { lineItems: 250 });
   if (!order) {
     return partialRefundNoEffect(ctx, orderId, toolPolicyBlock(
       `Error: refund policy blocked - order ${orderId} could not be resolved at Shopify.`,
@@ -233,23 +212,7 @@ async function preparePartialRefund(
     ), "rejected", "line_items_unrefundable");
   }
 
-  const calculation = await shopifyRestJson<PartialRefundCalculation>(
-    ctx,
-    `orders/${orderId}/refunds/calculate.json`,
-    {
-      method: "POST",
-      body: {
-        refund: {
-          shipping: { full_refund: false },
-          refund_line_items: items.map((item) => ({
-            line_item_id: item.lineItemId,
-            quantity: item.quantity,
-            restock_type: "no_restock",
-          })),
-        },
-      },
-    },
-  );
+  const calculation = await calculateShopifyRefund(ctx, orderId, { kind: "items", items });
   const currency = calculation.refund?.currency?.toUpperCase()
     ?? order.currency?.toUpperCase();
   if (!currency) {
@@ -258,9 +221,7 @@ async function preparePartialRefund(
       { code: "currency_missing" },
     ), "rejected", "currency_missing");
   }
-  const suggested = calculation.refund?.transactions
-    ?? calculation.refund?.suggested_transactions
-    ?? [];
+  const suggested = calculation.refund?.transactions ?? [];
   if (suggested.length === 0) {
     return partialRefundNoEffect(ctx, orderId, toolPolicyBlock(
       "Error: refund policy blocked - Shopify calculated no refundable amount for those items.",
@@ -268,7 +229,7 @@ async function preparePartialRefund(
     ), "rejected", "no_refundable_balance");
   }
   const calculatedCents = suggested.reduce(
-    (total, transaction) => total + moneyToCents(transaction.amount ?? "0"),
+    (total, transaction) => total + moneyToCents(transaction.amount),
     0,
   );
   if (calculatedCents <= 0) {

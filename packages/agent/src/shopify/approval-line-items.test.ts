@@ -5,6 +5,8 @@ import {
   orderEditApprovalLineItems,
   returnApprovalLineItems,
 } from "./approval-line-items.js";
+import { graphqlResponse, shopifyOrderNode } from "../testing/shopify-graphql.js";
+import type { ShopifyOrderLineItem } from "./types.js";
 
 const ctx = { shop: "test-store.myshopify.com", accessToken: "shpat_test" };
 
@@ -122,7 +124,9 @@ describe("exchangeApprovalLineItems", () => {
 });
 
 describe("orderEditApprovalLineItems", () => {
-  const order = (lineItems: Record<string, unknown>[]) => jsonResponse({ order: { id: 2001, line_items: lineItems } });
+  const order = (lineItems: Record<string, unknown>[]) => graphqlResponse({
+    order: shopifyOrderNode({ id: 2001, line_items: lineItems as unknown as ShopifyOrderLineItem[] }),
+  });
 
   it("names the whole line a swap removes and the variant it adds", async () => {
     vi.stubGlobal("fetch", vi.fn()

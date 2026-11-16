@@ -8,6 +8,7 @@ import {
 import { DISCOVERY_TOOL_NAME, planAgent } from "@shopkeeper/agent/planner"
 import { resolveAgentSettings } from "@shopkeeper/agent/settings"
 import { readModelUsage } from "@shopkeeper/agent/usage"
+import { answerShopifyGraphqlRead, type ShopifyReadFixtures } from "@shopkeeper/agent/testing"
 import { vi } from "vitest"
 import { judgeReply } from "./judge"
 import {
@@ -141,6 +142,17 @@ export function installSimulatedShopifyRest(fixture: Fixture): () => void {
   const host = new URL(`https://${shop}`).host
   const responses = fixture.setup.simulateShopifyRest ?? []
   const graphqlResponses = fixture.setup.simulateShopifyGraphql ?? []
+  // Fixtures declare an order and Shopify's pricing of its refund in REST's
+  // shape. The runtime reads both over GraphQL, answered from those records.
+  const declaredRecords: ShopifyReadFixtures = {
+    orders: responses.flatMap(entry => (
+      /^orders\/\d+\.json$/.test(entry.path) && (entry.method ?? "GET") === "GET"
+        ? [(entry.response as { order: NonNullable<ShopifyReadFixtures["orders"]>[number] }).order]
+        : []
+    )),
+    refundCalculation: (responses.find(entry => /^orders\/\d+\/refunds\/calculate\.json$/.test(entry.path))
+      ?.response as { refund?: ShopifyReadFixtures["refundCalculation"] } | undefined)?.refund,
+  }
   const originalFetch = globalThis.fetch
   const stubbed: typeof fetch = async (input, init) => {
     const url = new URL(input instanceof Request ? input.url : String(input))
@@ -150,11 +162,15 @@ export function installSimulatedShopifyRest(fixture: Fixture): () => void {
     if (method === "POST" && path === "graphql.json") {
       const operation = graphqlQueryOperation(init)
       const graphql = graphqlResponses.find(entry => entry.operation === operation)
-      if (!graphql) throw new Error(`unsimulated Shopify GraphQL ${operation ?? "operation"} in fixture ${fixture.id}`)
-      return new Response(JSON.stringify({ data: graphql.data }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      })
+      if (graphql) {
+        return new Response(JSON.stringify({ data: graphql.data }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })
+      }
+      const read = answerShopifyGraphqlRead(init, declaredRecords)
+      if (!read) throw new Error(`unsimulated Shopify GraphQL ${operation ?? "operation"} in fixture ${fixture.id}`)
+      return read
     }
     const match = responses.find(entry => (entry.method ?? "GET") === method && entry.path === path)
     if (!match) throw new Error(`unsimulated Shopify request ${method} ${path} in fixture ${fixture.id}`)

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsonResponse } from "../testing/json-response.js";
 import { editShopifyOrder } from "./order-edit.js";
+import { graphqlResponse, shopifyOrderNode } from "../testing/shopify-graphql.js";
 
 const ctx = {
   shop: "test-store.myshopify.com",
@@ -49,8 +50,8 @@ function stagedResponse(field: "orderEditAddVariant" | "orderEditSetQuantity") {
 }
 
 function reconciledOrder(oldItemQuantity: number) {
-  return jsonResponse({
-    order: {
+  return graphqlResponse({
+    order: shopifyOrderNode({
       id: 456,
       name: "#1001",
       line_items: [
@@ -71,7 +72,7 @@ function reconciledOrder(oldItemQuantity: number) {
           current_quantity: 1,
         },
       ],
-    },
+    }),
   });
 }
 
@@ -300,7 +301,9 @@ describe("editShopifyOrder mutation safety", () => {
     });
     expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(graphqlOperation(fetchMock, 2)).toContain("mutation orderEditCommit");
-    expect(fetchMock.mock.calls.filter(([, init]) => (init as RequestInit).method === "POST")).toHaveLength(3);
+    // The commit is never replayed: three mutations and a follow-up read.
+    expect(fetchMock.mock.calls.filter((_, index) => graphqlOperation(fetchMock, index).trimStart().startsWith("mutation")))
+      .toHaveLength(3);
   });
 
   it("reconciles a connection loss after Shopify commits the edit", async () => {

@@ -10,10 +10,13 @@ import {
 } from "../tools/result.js";
 import {
   formatShopifyToolError,
+  formatUserErrors,
   isAmbiguousShopifyMutationError,
-  shopifyRestJson,
+  shopifyGraphql,
   type ShopifyContext,
+  type ShopifyGraphqlUserError,
 } from "./client.js";
+import { fetchShopifyOrderSettlement } from "./order-reads.js";
 import { quoteCancellationRefund } from "./refunds.js";
 import type { ShopifyOrder } from "./types.js";
 import { centsToMoney, moneyToCents, requireNumericId } from "./validation.js";
@@ -23,8 +26,45 @@ const cancellationReceipts = shopifyReceiptResults("cancel_order", "order");
 
 type RequestedRefund = { amount: string; currency: string } | null;
 
-const CANCELLATION_ORDER_FIELDS =
-  "id,name,currency,line_items,cancelled_at,cancel_reason,financial_status,fulfillment_status,refunds";
+// Shopify cancels in the background: the mutation answers with a job, and the
+// order says what happened once the job is done. Refunding to the original
+// payment methods returns the order's whole refundable balance, the amount the
+// quote priced and the merchant approved, and the outcome is checked against it.
+export const ORDER_CANCEL_MUTATION = `mutation ShopkeeperOrderCancel($orderId: ID!, $reason: OrderCancelReason!, $restock: Boolean!, $refundMethod: OrderCancelRefundMethodInput!) {
+  orderCancel(orderId: $orderId, reason: $reason, restock: $restock, refundMethod: $refundMethod, notifyCustomer: false) {
+    job { id done }
+    orderCancelUserErrors { code field message }
+  }
+}`;
+
+export const JOB_QUERY = `query ShopkeeperJob($id: ID!) {
+  job(id: $id) { id done }
+}`;
+
+interface OrderCancelData {
+  orderCancel: {
+    job: { id: string; done: boolean } | null;
+    orderCancelUserErrors: ShopifyGraphqlUserError[];
+  };
+}
+
+// How long a cancellation job is waited on, in pauses between checks. A job
+// still running after them is an unknown outcome for reconciliation, never a
+// failure: Shopify accepted it.
+const CANCEL_JOB_WAITS_MS = [500, 1000, 1500, 2000, 2500];
+
+async function cancellationJobDone(ctx: ShopifyContext, jobId: string): Promise<boolean> {
+  for (const wait of CANCEL_JOB_WAITS_MS) {
+    await new Promise((resolve) => setTimeout(resolve, wait));
+    try {
+      const data = await shopifyGraphql<{ job: { done: boolean } | null }>(ctx, JOB_QUERY, { id: jobId });
+      if (data.job?.done) return true;
+    } catch {
+      // The job keeps running whether or not this check is answered.
+    }
+  }
+  return false;
+}
 
 function refundPhrase(cents: number, currency: string | null): string {
   return cents === 0 ? "no refund" : `a refund of ${centsToMoney(cents)} ${currency ?? ""}`.trimEnd();
@@ -46,9 +86,7 @@ export async function quoteCancellationForApproval(
   delete call.approval_amount;
   delete call.approval_currency;
   const orderId = requireNumericId(call.order_id, "order_id");
-  const { order } = await shopifyRestJson<{ order?: ShopifyOrder }>(ctx, `orders/${orderId}.json`, {
-    query: { fields: CANCELLATION_ORDER_FIELDS },
-  });
+  const order = await fetchShopifyOrderSettlement(ctx, orderId);
   const shipped = order?.fulfillment_status && order.fulfillment_status !== "unfulfilled";
   if (!order || order.cancelled_at || shipped) return call;
   const quote = await quoteCancellationRefund(ctx, orderId, order);
@@ -109,6 +147,19 @@ function cancellationResult(
       ...(receipt ? { receipt } : {}),
     };
   }
+  // Shopify refunds the balance it holds, not an amount it is sent, so the
+  // amount is a fact to check: anything but the approved figure is reviewed.
+  if (requested.refund && refund && (
+    moneyToCents(refund.amount) !== moneyToCents(requested.refund.amount) || refund.currency !== requested.refund.currency
+  )) {
+    const receipt = cancellationReceipts.unknown(ctx, orderId, "confirmed_refund_mismatch");
+    return {
+      ...toolUnknown(
+        `Unknown: Shopify cancelled order ${order.name ?? orderId} and refunded ${refund.amount} ${refund.currency}, not the ${requested.refund.amount} ${requested.refund.currency} that was approved. Do not tell the customer a refund amount until it is reviewed.`,
+      ),
+      ...(receipt ? { receipt } : {}),
+    };
+  }
   const envelope = shopifyReceiptEnvelope(ctx, { kind: "order", id: orderId });
   const receipt: ReceiptV1 | undefined = envelope ? {
     ...envelope,
@@ -141,14 +192,12 @@ async function reconcileCancellation(
   mutationError: unknown,
 ): Promise<ToolResult> {
   try {
-    const state = await shopifyRestJson<{ order?: ShopifyOrder }>(ctx, `orders/${orderId}.json`, {
-      query: { fields: "id,name,currency,cancelled_at,cancel_reason,financial_status,refunds" },
-    });
-    if (state.order?.cancelled_at) {
-      const actualReason = state.order.cancel_reason?.toLowerCase();
+    const state = await fetchShopifyOrderSettlement(ctx, orderId);
+    if (state?.cancelled_at) {
+      const actualReason = state.cancel_reason?.toLowerCase();
       const expectedReason = (input.reason ?? "other").toLowerCase();
       if (!actualReason || actualReason === expectedReason) {
-        return cancellationResult(ctx, state.order, orderId, input, requested, true);
+        return cancellationResult(ctx, state, orderId, input, requested, true);
       }
       const result = toolUnknown(
         `Unknown: order ${orderId} is cancelled, but Shopify recorded reason "${actualReason}" instead of "${expectedReason}" after the provider response was interrupted. Do not retry or confirm the cancellation until it is reviewed.`,
@@ -176,10 +225,8 @@ export async function cancelOrder(
 ): Promise<ToolResult> {
   try {
     const orderId = requireNumericId(input.order_id, "order_id");
-    const before = await shopifyRestJson<{ order?: ShopifyOrder }>(ctx, `orders/${orderId}.json`, {
-      query: { fields: CANCELLATION_ORDER_FIELDS },
-    });
-    if (!before.order) {
+    const before = await fetchShopifyOrderSettlement(ctx, orderId);
+    if (!before) {
       return cancellationReceipts.failure(
         ctx,
         orderId,
@@ -188,40 +235,40 @@ export async function cancelOrder(
         "order_not_found",
       );
     }
-    if (before.order.cancelled_at) {
+    if (before.cancelled_at) {
       return cancellationReceipts.failure(
         ctx,
         orderId,
-        toolPolicyBlock(`Error: failed to cancel order - order ${before.order.name ?? orderId} is already cancelled.`),
+        toolPolicyBlock(`Error: failed to cancel order - order ${before.name ?? orderId} is already cancelled.`),
         "rejected",
         "already_cancelled",
       );
     }
-    if (before.order.fulfillment_status && before.order.fulfillment_status !== "unfulfilled") {
+    if (before.fulfillment_status && before.fulfillment_status !== "unfulfilled") {
       return cancellationReceipts.failure(
         ctx,
         orderId,
-        toolPolicyBlock(`Error: failed to cancel order - order ${before.order.name ?? orderId} has already shipped or partially shipped.`),
+        toolPolicyBlock(`Error: failed to cancel order - order ${before.name ?? orderId} has already shipped or partially shipped.`),
         "rejected",
         "order_already_fulfilled",
       );
     }
 
-    // Decision H: cancelling a paid order refunds it. Shopify's cancel refunds
-    // only the amount it is sent; without one it keeps the payment.
-    const quote = await quoteCancellationRefund(ctx, orderId, before.order);
+    // Decision H: cancelling a paid order refunds it: the whole balance Shopify
+    // holds, which this quote prices so the approval names the amount.
+    const quote = await quoteCancellationRefund(ctx, orderId, before);
     if (quote.kind === "currency_mismatch") {
       return cancellationReceipts.failure(
         ctx,
         orderId,
-        toolPolicyBlock(`Error: failed to cancel order - Shopify could not price the refund for order ${before.order.name ?? orderId} in one currency.`, { code: "currency_mismatch" }),
+        toolPolicyBlock(`Error: failed to cancel order - Shopify could not price the refund for order ${before.name ?? orderId} in one currency.`, { code: "currency_mismatch" }),
         "rejected",
         "currency_mismatch",
       );
     }
     const requested = {
       refund: quote.kind === "refund" ? { amount: quote.amount, currency: quote.currency } : null,
-      priorRefundIds: new Set((before.order.refunds ?? []).flatMap((refund) => (
+      priorRefundIds: new Set((before.refunds ?? []).flatMap((refund) => (
         refund.id === undefined ? [] : [String(refund.id)]
       ))),
     };
@@ -237,7 +284,7 @@ export async function cancelOrder(
           ctx,
           orderId,
           toolPolicyBlock(
-            `Error: failed to cancel order - Shopify now calculates ${refundPhrase(quotedCents, quotedCurrency)} for order ${before.order.name ?? orderId}, but ${refundPhrase(approvedCents, approvedCurrency)} was approved; ask for approval again.`,
+            `Error: failed to cancel order - Shopify now calculates ${refundPhrase(quotedCents, quotedCurrency)} for order ${before.name ?? orderId}, but ${refundPhrase(approvedCents, approvedCurrency)} was approved; ask for approval again.`,
             { code: "amount_mismatch", approvedCents, quotedCents },
           ),
           "rejected",
@@ -246,16 +293,13 @@ export async function cancelOrder(
       }
     }
 
-    let data: { order?: ShopifyOrder };
+    let data: OrderCancelData;
     try {
-      data = await shopifyRestJson<{ order?: ShopifyOrder }>(ctx, `orders/${orderId}/cancel.json`, {
-        method: "POST",
-        body: {
-          reason: input.reason ?? "other",
-          restock: input.restock ?? true,
-          email: false,
-          ...(requested.refund ? requested.refund : {}),
-        },
+      data = await shopifyGraphql<OrderCancelData>(ctx, ORDER_CANCEL_MUTATION, {
+        orderId: `gid://shopify/Order/${orderId}`,
+        reason: (input.reason ?? "other").toUpperCase(),
+        restock: input.restock ?? true,
+        refundMethod: { originalPaymentMethodsRefund: requested.refund !== null },
       });
     } catch (err) {
       if (isAmbiguousShopifyMutationError(err)) {
@@ -264,13 +308,43 @@ export async function cancelOrder(
       throw err;
     }
 
-    if (!data.order) {
-      const result = toolUnknown(`Unknown: Shopify accepted the cancellation request for order ${orderId} but did not return the cancelled order. Do not retry or confirm it to the customer until it is reconciled.`);
-      const receipt = cancellationReceipts.unknown(ctx, orderId, "provider_order_missing");
+    const userError = formatUserErrors(data.orderCancel.orderCancelUserErrors);
+    if (userError) {
+      return cancellationReceipts.failure(
+        ctx,
+        orderId,
+        toolError(`Error: failed to cancel order - ${userError}`),
+        "failed",
+        "provider_rejected",
+      );
+    }
+    const job = data.orderCancel.job;
+    if (!job) {
+      const result = toolUnknown(`Unknown: Shopify accepted the cancellation request for order ${orderId} but did not return its job. Do not retry or confirm it to the customer until it is reconciled.`);
+      const receipt = cancellationReceipts.unknown(ctx, orderId, "provider_job_missing");
+      return receipt ? { ...result, receipt } : result;
+    }
+    if (!job.done && !(await cancellationJobDone(ctx, job.id))) {
+      const result = toolUnknown(`Unknown: Shopify accepted the cancellation of order ${orderId} and is still processing it. Do not retry or confirm it to the customer until it is reconciled.`);
+      const receipt = cancellationReceipts.unknown(ctx, orderId, "provider_job_pending");
       return receipt ? { ...result, receipt } : result;
     }
 
-    return cancellationResult(ctx, data.order, orderId, input, requested);
+    let after: ShopifyOrder | null;
+    try {
+      after = await fetchShopifyOrderSettlement(ctx, orderId, { maxRetries: 2 });
+    } catch (err) {
+      const result = toolUnknown(`Unknown: Shopify finished cancelling order ${orderId}, but reading the result failed. Do not retry or confirm it to the customer until it is reconciled. ${formatShopifyToolError("cancellation confirmation failed", err)}`);
+      const receipt = cancellationReceipts.unknown(ctx, orderId, "confirmation_read_failed");
+      return receipt ? { ...result, receipt } : result;
+    }
+    if (!after?.cancelled_at) {
+      const result = toolUnknown(`Unknown: Shopify finished the cancellation job for order ${orderId}, but the order does not show as cancelled. Do not retry or confirm it to the customer until it is reconciled.`);
+      const receipt = cancellationReceipts.unknown(ctx, orderId, "cancellation_not_confirmed");
+      return receipt ? { ...result, receipt } : result;
+    }
+
+    return cancellationResult(ctx, after, orderId, input, requested);
   } catch (err) {
     return cancellationReceipts.failure(
       ctx,
