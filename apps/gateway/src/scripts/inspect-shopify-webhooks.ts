@@ -1,43 +1,60 @@
 import { pathToFileURL } from 'node:url';
+import { shopifyGraphql, type ShopifyContext } from '@shopkeeper/agent/shopify';
 import { loadGatewayEnv } from '../config/load-env.js';
 
-export const SHOPIFY_WEBHOOK_API_VERSION = '2026-04';
 export const SHOPIFY_WEBHOOK_ADDRESS =
   'https://clerk-production-e37f.up.railway.app/webhooks/shopify';
 export const SHOPIFY_WEBHOOK_TOPICS = [
-  'orders/create',
-  'orders/fulfilled',
-  'orders/updated',
-  'orders/cancelled',
-  'app/uninstalled',
+  'ORDERS_CREATE',
+  'ORDERS_FULFILLED',
+  'ORDERS_UPDATED',
+  'ORDERS_CANCELLED',
+  'APP_UNINSTALLED',
 ] as const;
 
 type MigrationMode = 'audit' | 'remove' | 'restore';
 type MigrationTopic = (typeof SHOPIFY_WEBHOOK_TOPICS)[number];
 
 export interface ShopifyWebhookSubscription {
-  id: number;
+  id: string;
   topic: string;
-  address: string;
-  created_at?: string;
-  updated_at?: string;
-  api_version?: string;
+  uri: string;
 }
 
 export interface ShopifyWebhookMigrationOptions {
-  accessToken: string;
+  ctx: ShopifyContext;
   execute: boolean;
-  fetchImpl?: typeof fetch;
   mode: MigrationMode;
-  shop: string;
 }
 
 export interface ShopifyWebhookMigrationResult {
   after: ShopifyWebhookSubscription[];
   before: ShopifyWebhookSubscription[];
   createdTopics: MigrationTopic[];
-  removedIds: number[];
+  removedIds: string[];
 }
+
+const WEBHOOK_SUBSCRIPTIONS_QUERY = `query ShopkeeperWebhookSubscriptions {
+  webhookSubscriptions(first: 250) {
+    nodes { id topic uri }
+  }
+}`;
+
+const WEBHOOK_SUBSCRIPTION_DELETE_MUTATION = `mutation ShopkeeperWebhookSubscriptionDelete($id: ID!) {
+  webhookSubscriptionDelete(id: $id) {
+    deletedWebhookSubscriptionId
+    userErrors { field message }
+  }
+}`;
+
+const WEBHOOK_SUBSCRIPTION_CREATE_MUTATION = `mutation ShopkeeperWebhookSubscriptionCreate($topic: WebhookSubscriptionTopic!, $webhookSubscription: WebhookSubscriptionInput!) {
+  webhookSubscriptionCreate(topic: $topic, webhookSubscription: $webhookSubscription) {
+    webhookSubscription { id }
+    userErrors { field message }
+  }
+}`;
+
+interface UserError { message: string }
 
 export function matchingMigrationSubscriptions(
   subscriptions: readonly ShopifyWebhookSubscription[],
@@ -45,7 +62,7 @@ export function matchingMigrationSubscriptions(
   const topics = new Set<string>(SHOPIFY_WEBHOOK_TOPICS);
   return subscriptions.filter(
     (subscription) => topics.has(subscription.topic)
-      && subscription.address === SHOPIFY_WEBHOOK_ADDRESS,
+      && subscription.uri === SHOPIFY_WEBHOOK_ADDRESS,
   );
 }
 
@@ -104,47 +121,52 @@ export function parseShopifyWebhookMigrationArgs(argv: readonly string[]): {
 }
 
 export async function migrateShopifyWebhooks({
-  accessToken,
+  ctx,
   execute,
-  fetchImpl = fetch,
   mode,
-  shop,
 }: ShopifyWebhookMigrationOptions): Promise<ShopifyWebhookMigrationResult> {
   if ((mode === 'remove' || mode === 'restore') && !execute) {
     throw new Error(`${mode} requires --execute.`);
   }
 
-  const before = await listShopifyWebhooks(fetchImpl, shop, accessToken);
-  const removedIds: number[] = [];
+  const before = await listShopifyWebhooks(ctx);
+  const removedIds: string[] = [];
   const createdTopics: MigrationTopic[] = [];
 
   if (mode === 'remove') {
     for (const subscription of matchingMigrationSubscriptions(before)) {
-      await requestShopify(fetchImpl, shop, accessToken, `webhooks/${subscription.id}.json`, {
-        method: 'DELETE',
-      });
+      const data = await shopifyGraphql<{
+        webhookSubscriptionDelete: { deletedWebhookSubscriptionId: string | null; userErrors: UserError[] };
+      }>(ctx, WEBHOOK_SUBSCRIPTION_DELETE_MUTATION, { id: subscription.id });
+      refuseOnUserErrors(`removing ${subscription.topic}`, data.webhookSubscriptionDelete.userErrors);
       removedIds.push(subscription.id);
     }
   }
 
   if (mode === 'restore') {
     for (const topic of missingMigrationTopics(before)) {
-      await requestShopify(fetchImpl, shop, accessToken, 'webhooks.json', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          webhook: { topic, address: SHOPIFY_WEBHOOK_ADDRESS, format: 'json' },
-        }),
+      const data = await shopifyGraphql<{
+        webhookSubscriptionCreate: { webhookSubscription: { id: string } | null; userErrors: UserError[] };
+      }>(ctx, WEBHOOK_SUBSCRIPTION_CREATE_MUTATION, {
+        topic,
+        webhookSubscription: { uri: SHOPIFY_WEBHOOK_ADDRESS, format: 'JSON' },
       });
+      refuseOnUserErrors(`restoring ${topic}`, data.webhookSubscriptionCreate.userErrors);
       createdTopics.push(topic);
     }
   }
 
   const after = mode === 'audit'
     ? before
-    : await listShopifyWebhooks(fetchImpl, shop, accessToken);
+    : await listShopifyWebhooks(ctx);
   verifyMigrationResult(mode, after);
   return { after, before, createdTopics, removedIds };
+}
+
+function refuseOnUserErrors(action: string, userErrors: readonly UserError[]): void {
+  if (userErrors.length > 0) {
+    throw new Error(`Shopify refused ${action}: ${userErrors.map((error) => error.message).join(', ')}`);
+  }
 }
 
 function verifyMigrationResult(
@@ -172,54 +194,14 @@ function verifyMigrationResult(
   }
 }
 
-async function listShopifyWebhooks(
-  fetchImpl: typeof fetch,
-  shop: string,
-  accessToken: string,
-): Promise<ShopifyWebhookSubscription[]> {
-  const response = await requestShopify(
-    fetchImpl,
-    shop,
-    accessToken,
-    'webhooks.json?limit=250',
+async function listShopifyWebhooks(ctx: ShopifyContext): Promise<ShopifyWebhookSubscription[]> {
+  const data = await shopifyGraphql<{ webhookSubscriptions: { nodes: ShopifyWebhookSubscription[] } }>(
+    ctx,
+    WEBHOOK_SUBSCRIPTIONS_QUERY,
+    {},
+    { maxRetries: 1 },
   );
-  const payload = await response.json() as { webhooks?: unknown };
-  if (!Array.isArray(payload.webhooks)) {
-    throw new Error(`Shopify returned a malformed webhook list for ${shop}.`);
-  }
-  return payload.webhooks.filter(isWebhookSubscription);
-}
-
-async function requestShopify(
-  fetchImpl: typeof fetch,
-  shop: string,
-  accessToken: string,
-  path: string,
-  init: RequestInit = {},
-): Promise<Response> {
-  const response = await fetchImpl(
-    `https://${shop}/admin/api/${SHOPIFY_WEBHOOK_API_VERSION}/${path}`,
-    {
-      ...init,
-      headers: {
-        'X-Shopify-Access-Token': accessToken,
-        ...init.headers,
-      },
-    },
-  );
-  if (!response.ok) {
-    const detail = (await response.text()).slice(0, 300);
-    throw new Error(`Shopify webhooks request failed (${response.status}): ${detail}`);
-  }
-  return response;
-}
-
-function isWebhookSubscription(value: unknown): value is ShopifyWebhookSubscription {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  const row = value as Record<string, unknown>;
-  return typeof row.id === 'number'
-    && typeof row.topic === 'string'
-    && typeof row.address === 'string';
+  return data.webhookSubscriptions.nodes;
 }
 
 function normalizeShopDomain(value: string): string {
@@ -264,10 +246,9 @@ async function main(): Promise<void> {
       continue;
     }
     const result = await migrateShopifyWebhooks({
-      accessToken: shopify.accessToken,
+      ctx: shopify,
       execute: args.execute,
       mode: args.mode,
-      shop: shopify.shop,
     });
     const matchingBefore = matchingMigrationSubscriptions(result.before);
     console.log(
@@ -275,7 +256,7 @@ async function main(): Promise<void> {
     );
     for (const subscription of matchingBefore) {
       console.log(
-        `  match id=${subscription.id} topic=${subscription.topic} address=${subscription.address}`,
+        `  match id=${subscription.id} topic=${subscription.topic} uri=${subscription.uri}`,
       );
     }
   }

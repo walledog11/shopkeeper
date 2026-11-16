@@ -1,11 +1,9 @@
 export {
   SHOPIFY_API_VERSION,
   ShopifyRequestError,
+  formatUserErrors,
   isShopifyRefusal,
-  parseNextPageInfo,
   shopifyGraphql,
-  shopifyRest,
-  shopifyRestJson,
   type ShopifyContext,
 } from "./client.js";
 export {
@@ -23,6 +21,13 @@ export {
   searchShopifyCustomers,
   type CustomerPage,
 } from "./customer-reads.js";
+export {
+  createShopifyCustomerRecord,
+  fetchShopifyCustomerDefaultAddress,
+  saveShopifyCustomerDefaultAddress,
+  updateShopifyCustomerRecord,
+  type ShopifyCustomerFields,
+} from "./customer-writes.js";
 export { fetchShopifyShop, fetchShopifyStoreContent, type ShopifyContentItem } from "./store-reads.js";
 export {
   SHOPIFY_SIMULATOR_DOMAIN,
@@ -80,6 +85,7 @@ export {
   unrefundableItems,
 } from "./partial-refunds.js";
 export { createRefund, quoteFullRefundForApproval } from "./refunds.js";
+export { calculateShopifyRefund } from "./refund-calculation.js";
 export {
   exchangeApprovalLineItems,
   orderEditApprovalLineItems,

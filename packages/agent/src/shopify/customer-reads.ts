@@ -1,6 +1,5 @@
 import { currencyAmount } from "../money.js";
 import {
-  parseNextPageInfo,
   shopifyGraphql,
   ShopifyRequestError,
   shopifySearchValue,
@@ -195,7 +194,7 @@ export async function searchShopifyCustomers(
     if (!result?.ok) return { customers: [], nextCursor: null };
     return {
       customers: (result.data as { customers?: ShopifyCustomer[] }).customers ?? [],
-      nextCursor: parseNextPageInfo(result.headers),
+      nextCursor: result.nextPageInfo,
     };
   }
   const data = await shopifyGraphql<{

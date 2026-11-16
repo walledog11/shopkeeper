@@ -13,13 +13,21 @@ import {
 } from "../tools/result.js";
 import {
   formatShopifyToolError,
+  formatUserErrors,
   isAmbiguousShopifyMutationError,
-  shopifyRestJson,
+  shopifyGraphql,
   type ShopifyContext,
+  type ShopifyGraphqlUserError,
 } from "./client.js";
+import {
+  fetchShopifyCustomerDefaultAddress,
+  mailingAddressInput,
+  saveShopifyCustomerDefaultAddress,
+} from "./customer-writes.js";
+import { addressFromNode, fetchShopifyOrder, type AddressNode } from "./order-reads.js";
 import { formatAddressForMessage } from "./serializers.js";
 import { shopifyReceiptEnvelope } from "./receipts.js";
-import type { ShopifyCustomer, ShopifyCustomerAddress, ShopifyOrder } from "./types.js";
+import type { ShopifyCustomerAddress, ShopifyOrder } from "./types.js";
 import {
   optionalString,
   requireNonEmptyString,
@@ -155,28 +163,25 @@ export function addressMatches(
     && locationPartMatches(expected.country, actual.country, actual.country_code, actual.country_name);
 }
 
-async function readOrder(
-  ctx: ShopifyContext,
-  orderId: string,
-): Promise<ShopifyOrder | null> {
-  const data = await shopifyRestJson<{ order?: ShopifyOrder }>(ctx, `orders/${orderId}.json`, {
-    query: {
-      fields: "id,name,order_number,fulfillment_status,shipping_address,customer",
-    },
-  });
-  return data.order ?? null;
+export const ORDER_SHIPPING_ADDRESS_UPDATE_MUTATION = `mutation ShopkeeperOrderShippingAddressUpdate($input: OrderInput!) {
+  orderUpdate(input: $input) {
+    order {
+      legacyResourceId
+      name
+      shippingAddress { firstName lastName address1 address2 city province provinceCode zip country countryCodeV2 }
+    }
+    userErrors { field message }
+  }
+}`;
+
+function readOrder(ctx: ShopifyContext, orderId: string): Promise<ShopifyOrder | null> {
+  return fetchShopifyOrder(ctx, orderId, { lineItems: 1, maxRetries: 1 });
 }
 
-async function readCustomerDefaultAddress(
-  ctx: ShopifyContext,
-  customerId: string,
-): Promise<ShopifyCustomerAddress | null> {
-  const data = await shopifyRestJson<{ customer?: Pick<ShopifyCustomer, "default_address"> }>(
-    ctx,
-    `customers/${customerId}.json`,
-    { query: { fields: "id,default_address" } },
-  );
-  return data.customer?.default_address ?? null;
+type CustomerDefaultAddress = ShopifyCustomerAddress & { gid: string };
+
+function readCustomerDefaultAddress(ctx: ShopifyContext, customerId: string): Promise<CustomerDefaultAddress | null> {
+  return fetchShopifyCustomerDefaultAddress(ctx, customerId, { maxRetries: 1 });
 }
 
 function orderAddressUpdatedMessage(order: ShopifyOrder, orderId: string): string {
@@ -218,12 +223,28 @@ async function updateOrderAddress(
   addressPayload: Record<string, string>,
 ): Promise<{ order: ShopifyOrder; changed: boolean; reconciled: boolean } | { result: ToolResult }> {
   try {
-    const data = await shopifyRestJson<{ order?: ShopifyOrder }>(ctx, `orders/${orderId}.json`, {
-      method: "PUT",
-      body: { order: { id: orderId, shipping_address: addressPayload } },
+    const data = await shopifyGraphql<{
+      orderUpdate: {
+        order: { legacyResourceId: string; name: string; shippingAddress: AddressNode | null } | null;
+        userErrors: ShopifyGraphqlUserError[];
+      };
+    }>(ctx, ORDER_SHIPPING_ADDRESS_UPDATE_MUTATION, {
+      input: { id: `gid://shopify/Order/${orderId}`, shippingAddress: mailingAddressInput(addressPayload) },
     });
-    if (data.order && addressMatches(data.order.shipping_address, addressPayload)) {
-      return { order: data.order, changed: true, reconciled: false };
+    const rejection = formatUserErrors(data.orderUpdate.userErrors);
+    if (rejection) {
+      return { result: toolError(`Error: failed to update order shipping address - ${rejection}`) };
+    }
+    const updated = data.orderUpdate.order;
+    const order: ShopifyOrder | null = updated
+      ? {
+          id: Number(updated.legacyResourceId),
+          name: updated.name,
+          shipping_address: updated.shippingAddress ? addressFromNode(updated.shippingAddress) : null,
+        }
+      : null;
+    if (order && addressMatches(order.shipping_address, addressPayload)) {
+      return { order, changed: true, reconciled: false };
     }
     const reconciled = await reconcileOrderAddress(ctx, orderId, addressPayload);
     return "result" in reconciled
@@ -271,7 +292,7 @@ async function reconcileCustomerAddress(
 async function syncCustomerDefaultAddress(
   ctx: ShopifyContext,
   customerId: string,
-  currentAddress: ShopifyCustomerAddress | null,
+  currentAddress: CustomerDefaultAddress | null,
   addressPayload: Record<string, string>,
 ): Promise<{
   message: string;
@@ -298,17 +319,25 @@ async function syncCustomerDefaultAddress(
     };
   }
 
+  const syncFailed = (detail: string) => ({
+    result: toolUnknown(
+      `Partial: the order shipping address was updated, but the customer profile was not. Do not confirm the full change or retry it until the partial result is reviewed. ${detail}`,
+    ),
+    code: "customer_sync_failed_after_order_update",
+    outcome: "failed" as const,
+  });
+
   try {
-    const data = await shopifyRestJson<{ customer_address?: ShopifyCustomerAddress }>(
+    const { value: saved, userErrors } = await saveShopifyCustomerDefaultAddress(
       ctx,
-      `customers/${customerId}/addresses/${currentAddress.id}.json`,
-      {
-        method: "PUT",
-        body: { address: addressPayload },
-      },
+      customerId,
+      currentAddress.gid,
+      addressPayload,
     );
-    if (addressMatches(data.customer_address, addressPayload)) {
-      const address = observedAddress(data.customer_address!);
+    const rejection = formatUserErrors(userErrors);
+    if (rejection) return syncFailed(`Error: customer profile sync failed - ${rejection}`);
+    if (addressMatches(saved, addressPayload)) {
+      const address = observedAddress(saved!);
       if (!address) {
         return {
           result: toolUnknown("Unknown: the order address was updated, but Shopify returned an incomplete customer default address. Do not retry or confirm the full change until it is reviewed."),
@@ -346,13 +375,7 @@ async function syncCustomerDefaultAddress(
             },
           };
     }
-    return {
-      result: toolUnknown(
-        `Partial: the order shipping address was updated, but the customer profile was not. Do not confirm the full change or retry it until the partial result is reviewed. ${formatShopifyToolError("customer profile sync failed", err)}`,
-      ),
-      code: "customer_sync_failed_after_order_update",
-      outcome: "failed",
-    };
+    return syncFailed(formatShopifyToolError("customer profile sync failed", err));
   }
 }
 

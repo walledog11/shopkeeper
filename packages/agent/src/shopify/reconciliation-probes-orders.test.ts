@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { jsonResponse } from "../testing/json-response.js";
-import { graphqlResponse, shopifyOrderNode } from "../testing/shopify-graphql.js";
+import { graphqlRequest, graphqlResponse, shopifyCustomerNode, shopifyOrderNode } from "../testing/shopify-graphql.js";
 import { shopifyOperationTag } from "./client.js";
 import { probeUnknownShopifyMutation } from "./reconciliation-probes/index.js";
 
@@ -29,13 +28,17 @@ afterEach(() => {
 
 describe("probeUnknownShopifyMutation", () => {
   // Measured on palette-dev: order #1008 was unfindable by `tag:` after three
-  // attempts across four seconds, while REST filtered by email returned it
-  // carrying that tag. The direct query is the reconciliation path.
-  it("reconciles a created order through the direct email lookup, not search", async () => {
+  // attempts across four seconds. The newest orders, listed without a search,
+  // carry it sooner.
+  it("reconciles a created order the tag search has not indexed yet", async () => {
     const tag = shopifyOperationTag("execution-1:create_order");
-    const fetchMock = vi.fn(async () => jsonResponse({
-      orders: [{ id: 6123346100458, name: "#1008", tags: `some-other-tag, ${tag}` }],
-    }));
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(graphqlResponse({ orders: { nodes: [] } }))
+      .mockResolvedValueOnce(graphqlResponse({
+        orders: {
+          nodes: [{ id: "gid://shopify/Order/6123346100458", legacyResourceId: "6123346100458", name: "#1008", tags: ["some-other-tag", tag] }],
+        },
+      }));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await probeUnknownShopifyMutation(
@@ -45,20 +48,17 @@ describe("probeUnknownShopifyMutation", () => {
     );
 
     expect(result).toMatchObject({ outcome: "committed" });
-    const url = String(fetchMock.mock.calls[0]![0]);
-    expect(url).toContain("orders.json");
-    expect(url).toContain("email=buyer%40example.com");
-    expect(url).not.toContain("graphql");
+    expect(fetchMock.mock.calls.map(([, init]) => graphqlRequest(init)?.operation))
+      .toEqual(["FindShopkeeperCreatedOrder", "RecentShopkeeperOrders"]);
   });
 
-  // REST hands back tags as one comma-separated string, so a tag that is merely
-  // a prefix of another must not count as a match.
+  // A tag that is merely a prefix of the order's tag must not count as a match.
   it("does not match a tag that is only a prefix of the order's tag", async () => {
     vi.useFakeTimers();
     try {
       const tag = shopifyOperationTag("execution-1:create_order");
-      vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({
-        orders: [{ id: 1, name: "#1008", tags: `${tag}-extra` }],
+      vi.stubGlobal("fetch", vi.fn(async () => graphqlResponse({
+        orders: { nodes: [{ id: "gid://shopify/Order/1", legacyResourceId: "1", name: "#1008", tags: [`${tag}-extra`] }] },
       })));
 
       const pending = probeUnknownShopifyMutation(
@@ -96,7 +96,7 @@ describe("probeUnknownShopifyMutation", () => {
     try {
       // A Response body reads once, so each attempt needs its own instance -
       // mockResolvedValue would hand attempt 2 an already-consumed body.
-      const fetchMock = vi.fn(async () => jsonResponse({ orders: [] }));
+      const fetchMock = vi.fn(async () => graphqlResponse({ orders: { nodes: [] } }));
       vi.stubGlobal("fetch", fetchMock);
 
       const pending = probeUnknownShopifyMutation(
@@ -108,7 +108,8 @@ describe("probeUnknownShopifyMutation", () => {
 
       expect(result.outcome).toBe("still_unknown");
       expect(result.outcome).not.toBe("no_effect");
-      expect(fetchMock).toHaveBeenCalledTimes(3);
+      // Three attempts, each the tag search and the newest orders.
+      expect(fetchMock).toHaveBeenCalledTimes(6);
     } finally {
       vi.useRealTimers();
     }
@@ -213,8 +214,8 @@ describe("probeUnknownShopifyMutation", () => {
   // the input's "US" against `country` alone read every committed update on a
   // country-code input as a no-op.
   it("commits an address update Shopify echoes with a country name", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
-      order: {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(graphqlResponse({
+      order: shopifyOrderNode({
         id: 456,
         name: "#1001",
         shipping_address: {
@@ -226,7 +227,7 @@ describe("probeUnknownShopifyMutation", () => {
           country: "United States",
           country_code: "US",
         },
-      },
+      }),
     })));
 
     const result = await probeUnknownShopifyMutation(
@@ -239,8 +240,8 @@ describe("probeUnknownShopifyMutation", () => {
   });
 
   it("rules out an address update the order does not carry", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
-      order: {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(graphqlResponse({
+      order: shopifyOrderNode({
         id: 456,
         name: "#1001",
         shipping_address: {
@@ -252,7 +253,7 @@ describe("probeUnknownShopifyMutation", () => {
           country: "United States",
           country_code: "US",
         },
-      },
+      }),
     })));
 
     const result = await probeUnknownShopifyMutation(
@@ -267,8 +268,8 @@ describe("probeUnknownShopifyMutation", () => {
   // The street matched; the province did not. The old comparison never looked at
   // province at all.
   it("rules out an address update that landed in the wrong province", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
-      order: {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(graphqlResponse({
+      order: shopifyOrderNode({
         id: 456,
         name: "#1001",
         shipping_address: {
@@ -280,7 +281,7 @@ describe("probeUnknownShopifyMutation", () => {
           country: "United States",
           country_code: "US",
         },
-      },
+      }),
     })));
 
     const result = await probeUnknownShopifyMutation(
@@ -293,8 +294,8 @@ describe("probeUnknownShopifyMutation", () => {
   });
 
   it("observes a committed customer-info update without fabricating receipt facts", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
-      customer: { id: 123, first_name: "Jane", email: "jane@example.com" },
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(graphqlResponse({
+      customer: shopifyCustomerNode({ id: 123, first_name: "Jane", email: "jane@example.com" }),
     })));
 
     const result = await probeUnknownShopifyMutation(
@@ -307,8 +308,8 @@ describe("probeUnknownShopifyMutation", () => {
   });
 
   it("keeps a mismatched customer-info update unknown", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
-      customer: { id: 123, first_name: "Old" },
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(graphqlResponse({
+      customer: shopifyCustomerNode({ id: 123, first_name: "Old" }),
     })));
 
     const result = await probeUnknownShopifyMutation(
@@ -321,8 +322,8 @@ describe("probeUnknownShopifyMutation", () => {
   });
 
   it("does not promote an observed customer note without the append receipt", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
-      customer: { id: 123, note: "Existing\n\nFollow up" },
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(graphqlResponse({
+      customer: shopifyCustomerNode({ id: 123, note: "Existing\n\nFollow up" }),
     })));
 
     const result = await probeUnknownShopifyMutation(

@@ -67,7 +67,13 @@ import { generateThreadPlan } from './generate-thread-plan.js';
 import { executeCurrentCachedHomePlan } from '@shopkeeper/agent/plan-execution';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { buildGatewayPlanExecutionDeps } from '../operator/agent-turn-deps.js';
-import { answerShopifyGraphqlRead } from '@shopkeeper/agent/testing';
+import {
+  answerShopifyGraphqlRead,
+  graphqlRequest,
+  graphqlResponse,
+  shopifyMailingAddressNode,
+  shopifyOrderNode,
+} from '@shopkeeper/agent/testing';
 
 const testOrgs = createTestOrgTracker();
 let providerFetch: ReturnType<typeof vi.fn>;
@@ -203,39 +209,40 @@ describe('durable order-status host path', () => {
       country: 'United States',
       country_code: 'US',
     };
-    const addressOrder = {
-      ...order,
-      fulfillment_status: null,
-      customer: { id: 1234 },
-      shipping_address: oldAddress,
-    };
     let currentFulfillment: string | null = null;
     let currentCustomerId = 1234;
+    let shippingAddress = oldAddress;
     let orderUpdateCalls = 0;
+    const addressOrder = () => ({
+      ...order,
+      fulfillment_status: currentFulfillment,
+      customer: { id: currentCustomerId },
+      shipping_address: shippingAddress,
+    });
     providerFetch.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
       const method = init?.method ?? 'GET';
-      const read = answerShopifyGraphqlRead(init, { orders: [addressOrder] });
-      if (read) return read;
-      if (url.includes('/orders/9000001001.json')) {
-        if (method === 'PUT') orderUpdateCalls += 1;
-        return new Response(JSON.stringify({
-          order: method === 'PUT'
-            ? { ...addressOrder, shipping_address: newAddress }
-            : { ...addressOrder, fulfillment_status: currentFulfillment, customer: { id: currentCustomerId } },
-        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      const operation = graphqlRequest(init)?.operation;
+      if (operation === 'ShopkeeperCustomerDefaultAddress') {
+        return graphqlResponse({ customer: { defaultAddress: shopifyMailingAddressNode(oldAddress) } });
       }
-      if (url.includes('/customers/1234/addresses/789.json')) {
-        if (customerSyncFails && method === 'PUT') {
-          return new Response(JSON.stringify({ errors: 'Address rejected' }), { status: 422 });
-        }
-        return new Response(JSON.stringify({ customer_address: newAddress }), {
-          status: 200, headers: { 'content-type': 'application/json' },
+      const read = answerShopifyGraphqlRead(init, { orders: [addressOrder()] });
+      if (read) return read;
+      if (operation === 'ShopkeeperOrderShippingAddressUpdate') {
+        orderUpdateCalls += 1;
+        shippingAddress = newAddress;
+        return graphqlResponse({
+          orderUpdate: {
+            order: { legacyResourceId: String(order.id), name: order.name, shippingAddress: shopifyOrderNode(addressOrder()).shippingAddress },
+            userErrors: [],
+          },
         });
       }
-      if (url.includes('/customers/1234.json')) {
-        return new Response(JSON.stringify({ customer: { id: 1234, default_address: oldAddress } }), {
-          status: 200, headers: { 'content-type': 'application/json' },
+      if (operation === 'ShopkeeperCustomerAddressUpdate') {
+        return graphqlResponse({
+          customerAddressUpdate: customerSyncFails
+            ? { address: null, userErrors: [{ field: ['address'], message: 'Address rejected' }] }
+            : { address: shopifyMailingAddressNode(newAddress), userErrors: [] },
         });
       }
       throw new Error(`Unexpected external request: ${method} ${url}`);

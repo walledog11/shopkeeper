@@ -1,7 +1,36 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsonResponse } from "../testing/json-response.js";
+import { graphqlRequest, graphqlResponse } from "../testing/shopify-graphql.js";
 import { createShopifyOrder } from "./shopify.js";
 import { shopifyOperationTag } from "../shopify/client.js";
+
+// Shopify's answer to an order lookup: the tag search or the newest orders.
+function ordersFound(...nodes: unknown[]) {
+  return graphqlResponse({ orders: { nodes } });
+}
+
+// The order Shopify holds for an operation, as the lookups and the create return it.
+function createdOrder(operationTag: string, overrides: Record<string, unknown> = {}) {
+  return {
+    id: "gid://shopify/Order/456",
+    legacyResourceId: "456",
+    name: "#1001",
+    email: "jane@example.com",
+    tags: [operationTag],
+    displayFinancialStatus: "PENDING",
+    totalPriceSet: { shopMoney: { amount: "25.0", currencyCode: "USD" } },
+    ...overrides,
+  };
+}
+
+// Shopify created the order and answered with it.
+function orderCreated(order: unknown) {
+  return graphqlResponse({ orderCreate: { order, userErrors: [] } });
+}
+
+function operations(fetchMock: ReturnType<typeof vi.fn>) {
+  return fetchMock.mock.calls.map(([, init]) => graphqlRequest(init as RequestInit)?.operation);
+}
 
 const ctx = {
   shop: "test-store.myshopify.com",
@@ -19,14 +48,9 @@ describe("shopify tools", () => {
     const operationTag = shopifyOperationTag(operationId);
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse({ data: { orders: { nodes: [] } } }))
-      .mockResolvedValueOnce(jsonResponse({
-        order: {
-          id: 456,
-          name: "#1001",
-          total_price: "25.00",
-        },
-      }));
+      .mockResolvedValueOnce(ordersFound())
+      .mockResolvedValueOnce(ordersFound())
+      .mockResolvedValueOnce(orderCreated(createdOrder(operationTag)));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await createShopifyOrder({
@@ -39,13 +63,24 @@ describe("shopify tools", () => {
       line_items: [{ variant_id: "789", quantity: 1 }],
     }, { ...ctx, operationId });
 
-    const lookupBody = JSON.parse(fetchMock.mock.calls[0][1].body as string);
-    const createBody = JSON.parse(fetchMock.mock.calls[1][1].body as string);
-    expect(lookupBody.variables).toEqual({ query: `tag:${operationTag}` });
-    expect(createBody.order.tags).toBe(operationTag);
+    expect(operations(fetchMock)).toEqual(["FindShopkeeperCreatedOrder", "RecentShopkeeperOrders", "ShopkeeperOrderCreate"]);
+    expect(graphqlRequest(fetchMock.mock.calls[0]![1])!.variables).toEqual({ query: `tag:${operationTag}` });
+    const address = { address1: "123 Main St", city: "Los Angeles", province: "CA", zip: "90001", country: "United States" };
+    expect(graphqlRequest(fetchMock.mock.calls[2]![1])!.variables).toEqual({
+      order: {
+        email: "jane@example.com",
+        customer: { toUpsert: { email: "jane@example.com" } },
+        financialStatus: "PENDING",
+        lineItems: [{ variantId: "gid://shopify/ProductVariant/789", quantity: 1 }],
+        shippingAddress: address,
+        billingAddress: address,
+        tags: [operationTag],
+      },
+      options: { sendReceipt: false, sendFulfillmentReceipt: false, inventoryBehaviour: "BYPASS" },
+    });
     expect(result).toEqual({
       status: "ok",
-      message: "Done — order #1001 is in for jane@example.com, total $25.00.\n\n[View in Shopify](https://test-store.myshopify.com/admin/orders/456)",
+      message: "Done — order #1001 is in for jane@example.com, total $25.00, payment pending.\n\n[View in Shopify](https://test-store.myshopify.com/admin/orders/456)",
     });
   });
 
@@ -54,18 +89,9 @@ describe("shopify tools", () => {
     const operationTag = shopifyOperationTag(operationId);
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse({ data: { orders: { nodes: [] } } }))
-      .mockResolvedValueOnce(jsonResponse({
-        order: {
-          id: 456,
-          name: "#1001",
-          email: "jane@example.com",
-          total_price: "25.00",
-          currency: "USD",
-          financial_status: "pending",
-          tags: operationTag,
-        },
-      }));
+      .mockResolvedValueOnce(ordersFound())
+      .mockResolvedValueOnce(ordersFound())
+      .mockResolvedValueOnce(orderCreated(createdOrder(operationTag)));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await createShopifyOrder({
@@ -106,10 +132,9 @@ describe("shopify tools", () => {
     const operationTag = shopifyOperationTag(operationId);
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse({ data: { orders: { nodes: [] } } }))
-      .mockResolvedValueOnce(jsonResponse({
-        order: { id: 456, name: "#1001", total_price: "25.00", tags: operationTag },
-      }));
+      .mockResolvedValueOnce(ordersFound())
+      .mockResolvedValueOnce(ordersFound())
+      .mockResolvedValueOnce(orderCreated(createdOrder(operationTag, { displayFinancialStatus: null })));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await createShopifyOrder({
@@ -139,23 +164,10 @@ describe("shopify tools", () => {
     const operationTag = shopifyOperationTag(operationId);
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse({ data: { orders: { nodes: [] } } }))
+      .mockResolvedValueOnce(ordersFound())
+      .mockResolvedValueOnce(ordersFound())
       .mockResolvedValueOnce(jsonResponse({ errors: "ambiguous provider response" }, { status }))
-      .mockResolvedValueOnce(jsonResponse({
-        data: {
-          orders: {
-            nodes: [{
-              id: "gid://shopify/Order/456",
-              legacyResourceId: "456",
-              name: "#1001",
-              email: "jane@example.com",
-              tags: [operationTag],
-              displayFinancialStatus: "PENDING",
-              totalPriceSet: { shopMoney: { amount: "25.00", currencyCode: "USD" } },
-            }],
-          },
-        },
-      }));
+      .mockResolvedValueOnce(ordersFound(createdOrder(operationTag)));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await createShopifyOrder({
@@ -175,15 +187,18 @@ describe("shopify tools", () => {
       providerReference: "456",
       facts: { orderId: "456", operationTag, financialStatus: "pending" },
     });
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/orders.json"))).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(operations(fetchMock).filter((operation) => operation === "ShopkeeperOrderCreate")).toHaveLength(1);
   });
 
   it("returns a known provider rejection without attempting ambiguous reconciliation", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse({ data: { orders: { nodes: [] } } }))
-      .mockResolvedValueOnce(jsonResponse({ errors: { email: ["is invalid"] } }, { status: 422 }));
+      .mockResolvedValueOnce(ordersFound())
+      .mockResolvedValueOnce(ordersFound())
+      .mockResolvedValueOnce(graphqlResponse({
+        orderCreate: { order: null, userErrors: [{ field: ["order", "email"], message: "Email is invalid" }] },
+      }));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await createShopifyOrder({
@@ -201,22 +216,24 @@ describe("shopify tools", () => {
     });
 
     expect(result.status).toBe("error");
-    expect(result.message).toContain("failed to create order (422)");
+    expect(result.message).toContain("failed to create order - Email is invalid");
     expect(result.receipt).toMatchObject({
       tool: "create_shopify_order",
       target: { kind: "email", id: "jane@example.com" },
       outcome: "failed",
       code: "provider_rejected_creation",
     });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it("returns unknown instead of replaying order creation when reconciliation cannot confirm it", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse({ data: { orders: { nodes: [] } } }))
+      .mockResolvedValueOnce(ordersFound())
+      .mockResolvedValueOnce(ordersFound())
       .mockRejectedValueOnce(new TypeError("connection reset"))
-      .mockResolvedValueOnce(jsonResponse({ data: { orders: { nodes: [] } } }));
+      .mockResolvedValueOnce(ordersFound())
+      .mockResolvedValueOnce(ordersFound());
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await createShopifyOrder({
@@ -241,27 +258,14 @@ describe("shopify tools", () => {
       outcome: "unknown",
       code: "creation_not_confirmed",
     });
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/orders.json"))).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(operations(fetchMock).filter((operation) => operation === "ShopkeeperOrderCreate")).toHaveLength(1);
   });
 
   it("returns a previously created order without issuing another create request", async () => {
     const operationId = "0ecfcf1c-2a07-4caf-956f-77cbaa2fb83a:create_order";
     const operationTag = shopifyOperationTag(operationId);
-    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
-      data: {
-        orders: {
-          nodes: [{
-            id: "gid://shopify/Order/456",
-            legacyResourceId: "456",
-            name: "#1001",
-            email: "jane@example.com",
-            tags: [operationTag],
-            totalPriceSet: { shopMoney: { amount: "25.00" } },
-          }],
-        },
-      },
-    }));
+    const fetchMock = vi.fn().mockResolvedValueOnce(ordersFound(createdOrder(operationTag)));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await createShopifyOrder({

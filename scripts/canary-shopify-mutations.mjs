@@ -26,11 +26,9 @@ loadLocalEnv();
 
 const { db } = await import('@shopkeeper/db');
 const {
-  parseNextPageInfo,
   shopifyGraphql,
-  shopifyRest,
-  shopifyRestJson,
   attachReturnLabel,
+  calculateShopifyRefund,
   cancelOrder,
   createExchange,
   createGiftCard,
@@ -40,6 +38,8 @@ const {
   editShopifyOrder,
   fetchFulfillableFulfillmentOrders,
   fetchReturnableLineItems,
+  fetchShopifyCustomerDefaultAddress,
+  fetchShopifyShop,
   fulfillOrder,
   OPEN_RETURN_STATUSES,
   probeUnknownShopifyMutation,
@@ -95,15 +95,6 @@ if (
   );
 }
 
-const DEVELOPMENT_PLANS = new Set([
-  'partner_test',
-  'affiliate',
-  'staff',
-  'staff_business',
-  'trial',
-  'plus_partner_sandbox',
-  'shopify_alumni',
-]);
 
 function readValueArg(prefix) {
   const raw = process.argv.slice(2).find((arg) => arg.startsWith(prefix))?.slice(prefix.length).trim();
@@ -172,31 +163,8 @@ function selectFullRefundOrder(inspection) {
 async function findRefundableTestOrder(ctx, testOrders) {
   for (const order of testOrders.filter(isFullRefundCandidate)) {
     try {
-      const orderId = String(order.id);
-      const orderData = await shopifyRestJson(ctx, `orders/${orderId}.json`, {
-        query: { fields: 'id,line_items' },
-      });
-      const refundLineItems = (orderData.order?.line_items ?? []).flatMap((lineItem) => {
-        const quantity = Number(lineItem.current_quantity ?? lineItem.quantity ?? 0);
-        return lineItem.id != null && quantity > 0
-          ? [{ line_item_id: lineItem.id, quantity, restock_type: 'no_restock' }]
-          : [];
-      });
-      const calculation = await shopifyRestJson(ctx, `orders/${orderId}/refunds/calculate.json`, {
-        method: 'POST',
-        body: {
-          refund: {
-            shipping: { full_refund: true },
-            refund_line_items: refundLineItems,
-          },
-        },
-      });
-      const transactions = calculation.refund?.transactions
-        ?? calculation.refund?.suggested_transactions
-        ?? [];
-      if (transactions.some((transaction) => (
-        moneyToCents(transaction.maximum_refundable ?? transaction.amount) >= 1
-      ))) {
+      const calculation = await calculateShopifyRefund(ctx, String(order.id), { kind: 'full' });
+      if ((calculation.refund?.transactions ?? []).some((transaction) => moneyToCents(transaction.amount) >= 1)) {
         return order;
       }
     } catch {
@@ -297,26 +265,23 @@ async function loadShopifyIntegration() {
 
 async function inspectStore(ctx) {
   try {
-    const [shopData, orders] = await Promise.all([
-      shopifyRestJson(ctx, 'shop.json', { query: { fields: 'name,plan_name,domain,email,currency' } }),
-      listCanaryOrders(ctx),
-    ]);
+    const [shop, orders] = await Promise.all([fetchShopifyShop(ctx), listCanaryOrders(ctx)]);
 
-    const shop = shopData.shop;
     const testOrders = orders.filter((order) => order.test === true);
     const liveOrders = orders.filter((order) => order.test !== true);
     const refundableTestOrder = await findRefundableTestOrder(ctx, testOrders);
-    const planName = String(shop?.plan_name ?? 'unknown');
-    const isDevelopmentPlan = DEVELOPMENT_PLANS.has(planName.toLowerCase());
+    const { planName } = shop;
+    // Shopify's own mark of a development store: one it never bills.
+    const isDevelopmentPlan = shop.development;
     const mutationsAllowed = isDevelopmentPlan || ALLOW_LIVE_STORE || TEST_ORDERS_ONLY;
 
     return {
       shop: {
         fingerprint: fingerprint(ctx.shop),
-        name: shop?.name ?? null,
+        name: shop.name,
         planName,
-        domain: shop?.domain ?? null,
-        currency: shop?.currency ?? null,
+        domain: shop.myshopifyDomain,
+        currency: shop.currency,
         isDevelopmentPlan,
         mutationsAllowed,
         writeMode: TEST_ORDERS_ONLY
@@ -366,30 +331,32 @@ async function inspectStore(ctx) {
   }
 }
 
+const CANARY_ORDERS_QUERY = `query CanaryOrders($after: String) {
+  orders(first: 100, after: $after) {
+    nodes { legacyResourceId name test displayFinancialStatus cancelledAt currentTotalPriceSet { shopMoney { amount } } }
+    pageInfo { hasNextPage endCursor }
+  }
+}`;
+
 // Fixture discovery must not depend on the ten newest orders. The canary itself
 // creates live-looking orders, so a client-side test filter over one small page
-// eventually hides perfectly usable test fixtures. Walk the whole REST cursor
-// instead (bounded defensively for a misconfigured non-development store).
+// eventually hides perfectly usable test fixtures. Walk the whole cursor instead
+// (bounded defensively for a misconfigured non-development store).
 async function listCanaryOrders(ctx) {
   const orders = [];
-  let pageInfo = null;
-  for (let page = 0; page < 20; page += 1) {
-    const response = await shopifyRest(ctx, 'orders.json', {
-      query: pageInfo
-        ? {
-          limit: 250,
-          page_info: pageInfo,
-          fields: 'id,name,test,financial_status,cancelled_at,total_price,current_total_price',
-        }
-        : {
-          status: 'any',
-          limit: 250,
-          fields: 'id,name,test,financial_status,cancelled_at,total_price,current_total_price',
-        },
-    });
-    orders.push(...(response.data.orders ?? []));
-    pageInfo = parseNextPageInfo(response.headers);
-    if (!pageInfo) return orders;
+  let after = null;
+  for (let page = 0; page < 50; page += 1) {
+    const data = await shopifyGraphql(ctx, CANARY_ORDERS_QUERY, { after }, { maxRetries: 1 });
+    orders.push(...data.orders.nodes.map((node) => ({
+      id: node.legacyResourceId,
+      name: node.name,
+      test: node.test,
+      financial_status: node.displayFinancialStatus?.toLowerCase() ?? null,
+      cancelled_at: node.cancelledAt,
+      current_total_price: node.currentTotalPriceSet.shopMoney.amount,
+    })));
+    if (!data.orders.pageInfo.hasNextPage) return orders;
+    after = data.orders.pageInfo.endCursor;
   }
   throw new Error('Order fixture scan exceeded 5,000 orders; choose a dedicated development store.');
 }
@@ -423,19 +390,25 @@ async function inspectAccessScopes(ctx) {
 // real customer's gift-card history or inbox is touched.
 async function createCanaryCustomer(ctx, operationId) {
   const email = `shopkeeper-canary+${Date.now()}@example.com`;
-  const data = await shopifyRestJson(ctx, 'customers.json', {
-    method: 'POST',
-    body: {
-      customer: {
-        email,
-        first_name: 'Canary',
-        last_name: 'Shopkeeper',
-        tags: 'shopkeeper-canary',
-        note: `Shopkeeper gift-card canary ${operationId}`,
-      },
+  const data = await shopifyGraphql(ctx, `mutation CanaryCustomerCreate($input: CustomerInput!) {
+    customerCreate(input: $input) {
+      customer { legacyResourceId }
+      userErrors { field message }
+    }
+  }`, {
+    input: {
+      email,
+      firstName: 'Canary',
+      lastName: 'Shopkeeper',
+      tags: ['shopkeeper-canary'],
+      note: `Shopkeeper gift-card canary ${operationId}`,
     },
-  });
-  const id = data.customer?.id;
+  }, { maxRetries: 0 });
+  const userErrors = data.customerCreate?.userErrors ?? [];
+  if (userErrors.length > 0) {
+    throw new Error(`Could not create the canary customer: ${userErrors.map((error) => error.message).join(', ')}`);
+  }
+  const id = data.customerCreate?.customer?.legacyResourceId;
   if (!id) {
     throw new Error('Shopify accepted the canary customer but returned no id.');
   }
@@ -641,11 +614,8 @@ async function createOrderRiskCanaryFixture(ctx, currency) {
   };
 }
 
-async function readCanaryCustomerAddress(ctx, customerId) {
-  const data = await shopifyRestJson(ctx, `customers/${customerId}.json`, {
-    query: { fields: 'id,default_address' },
-  });
-  return data.customer?.default_address ?? null;
+function readCanaryCustomerAddress(ctx, customerId) {
+  return fetchShopifyCustomerDefaultAddress(ctx, customerId, { maxRetries: 1 });
 }
 
 // The return family needs something no other family does: a *fulfilled* order.
@@ -707,16 +677,16 @@ const CANARY_FULFILLED_ORDER_CREATE_MUTATION = `mutation CanaryFulfilledOrderCre
 }`;
 
 async function loadActiveVariants(ctx) {
-  const products = await shopifyRestJson(ctx, 'products.json', {
-    query: { status: 'active', limit: 250, fields: 'id,title,variants' },
-  });
-  return (products.products ?? []).flatMap((product) =>
-    (product.variants ?? []).map((variant) => ({
-      id: String(variant.id),
-      title: `${product.title ?? 'Product'} - ${variant.title ?? 'Variant'}`,
-      priceCents: moneyToCents(variant.price),
-    })),
-  );
+  const data = await shopifyGraphql(ctx, `query CanaryActiveVariants {
+    productVariants(first: 250, query: "product_status:active") {
+      nodes { legacyResourceId title price product { title } }
+    }
+  }`, {}, { maxRetries: 1 });
+  return data.productVariants.nodes.map((variant) => ({
+    id: String(variant.legacyResourceId),
+    title: `${variant.product.title} - ${variant.title}`,
+    priceCents: moneyToCents(variant.price),
+  }));
 }
 
 function exchangePairForFixture(returnFixture, variants) {
@@ -911,6 +881,105 @@ async function runFamily(family, runner) {
 // every id points at a resource that does not exist, so even the catastrophic
 // case where a server ignores @skip cannot touch a real order or customer.
 const VALIDATION_CASES = [
+  {
+    // Mirrors updateShopifyCustomerRecord with every field the tools and the
+    // dashboard set.
+    name: 'customerUpdate',
+    document: 'customerUpdate',
+    variables: {
+      input: {
+        id: 'gid://shopify/Customer/1',
+        firstName: 'Shopkeeper',
+        lastName: 'Validation',
+        email: 'shopkeeper-validation-probe',
+        phone: '+14155550100',
+        note: 'Shopkeeper validation probe',
+      },
+    },
+  },
+  {
+    // No email Shopify accepts, so even an executed create makes no customer.
+    name: 'customerCreate',
+    document: 'customerCreate',
+    variables: {
+      input: { firstName: 'Shopkeeper', lastName: 'Validation', email: 'shopkeeper-validation-probe' },
+    },
+  },
+  {
+    // The default-address writes send province and country as written, through
+    // the inputs that accept a name or a code.
+    name: 'customerAddressUpdate',
+    document: 'customerAddressUpdate',
+    variables: {
+      customerId: 'gid://shopify/Customer/1',
+      addressId: 'gid://shopify/MailingAddress/1?model_name=CustomerAddress',
+      address: { address1: '1 Validation St', city: 'Portland', province: 'OR', zip: '97201', country: 'US' },
+    },
+  },
+  {
+    name: 'customerAddressCreate',
+    document: 'customerAddressCreate',
+    variables: {
+      customerId: 'gid://shopify/Customer/1',
+      address: { address1: '1 Validation St', city: 'Portland', province: 'OR', zip: '97201', country: 'US' },
+    },
+  },
+  {
+    name: 'orderShippingAddressUpdate',
+    document: 'orderShippingAddressUpdate',
+    variables: {
+      input: {
+        id: 'gid://shopify/Order/1',
+        shippingAddress: {
+          firstName: 'Shopkeeper',
+          lastName: 'Validation',
+          address1: '1 Validation St',
+          city: 'Portland',
+          province: 'OR',
+          zip: '97201',
+          country: 'US',
+        },
+      },
+    },
+  },
+  {
+    // Mirrors createShopifyOrder, with a custom line so its priceSet is
+    // type-checked too. The variant does not exist, so even an executed create
+    // makes no order.
+    name: 'orderCreate',
+    document: 'orderCreate',
+    variables: {
+      order: {
+        email: 'shopkeeper-validation-probe',
+        customer: { toUpsert: { email: 'shopkeeper-validation-probe' } },
+        financialStatus: 'PENDING',
+        lineItems: [
+          { variantId: 'gid://shopify/ProductVariant/1', quantity: 1 },
+          {
+            title: 'Shopkeeper validation probe',
+            quantity: 1,
+            requiresShipping: true,
+            priceSet: { shopMoney: { amount: '0.01', currencyCode: 'USD' } },
+          },
+        ],
+        shippingAddress: { address1: '1 Validation St', city: 'Portland', province: 'OR', zip: '97201', country: 'US' },
+        billingAddress: { address1: '1 Validation St', city: 'Portland', province: 'OR', zip: '97201', country: 'US' },
+        tags: ['shopkeeper-op-validation'],
+        note: 'Shopkeeper validation probe',
+      },
+      options: { sendReceipt: false, sendFulfillmentReceipt: false, inventoryBehaviour: 'BYPASS' },
+    },
+  },
+  {
+    name: 'orderCancel',
+    document: 'orderCancel',
+    variables: {
+      orderId: 'gid://shopify/Order/1',
+      reason: 'OTHER',
+      restock: true,
+      refundMethod: { originalPaymentMethodsRefund: false },
+    },
+  },
   {
     name: 'discountCodeBasicCreate',
     document: 'discountCodeBasicCreate',

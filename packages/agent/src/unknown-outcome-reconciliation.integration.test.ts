@@ -19,6 +19,7 @@ import {
   STALE_ACTION_DISPATCH_ERROR,
 } from "./unknown-outcome-reconciliation.js";
 import { shopifyIdempotencyKey, shopifyOperationTag } from "./shopify/client.js";
+import { graphqlResponse } from "./testing/shopify-graphql.js";
 
 const ELEVEN_MINUTES_AGO = () => new Date(Date.now() - 11 * 60 * 1000);
 
@@ -752,11 +753,8 @@ describe("unknown outcome reconciliation", () => {
       },
     });
     const tag = shopifyOperationTag(providerOperationKey);
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      orders: [{ id: 123, name: "#1001", tags: tag }],
-    }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
+    vi.stubGlobal("fetch", vi.fn(async () => graphqlResponse({
+      orders: { nodes: [{ id: "gid://shopify/Order/123", legacyResourceId: "123", name: "#1001", tags: [tag] }] },
     })));
 
     const outcome = await reconcileUnknownAgentAction({

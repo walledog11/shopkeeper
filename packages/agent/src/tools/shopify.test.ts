@@ -1,11 +1,29 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsonResponse } from "../testing/json-response.js";
+import {
+  graphqlRequest,
+  graphqlResponse,
+  shopifyCustomerNode,
+  shopifyMailingAddressNode,
+  shopifyOrderNode,
+} from "../testing/shopify-graphql.js";
+import type { ShopifyCustomer } from "../shopify/types.js";
 import { addShopifyCustomerNote, updateShopifyCustomerInfo, updateShopifyOrderAddress } from "./shopify.js";
 
 const ctx = {
   shop: "test-store.myshopify.com",
   accessToken: "shpat_test",
 };
+
+// Shopify's answer to a customer read.
+function customerRead(customer: ShopifyCustomer) {
+  return graphqlResponse({ customer: shopifyCustomerNode(customer) });
+}
+
+// Shopify accepted a customer update and answered with the customer it now holds.
+function customerUpdated(customer: ShopifyCustomer) {
+  return graphqlResponse({ customerUpdate: { customer: shopifyCustomerNode(customer), userErrors: [] } });
+}
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -14,14 +32,12 @@ afterEach(() => {
 
 describe("shopify tools", () => {
   it("emits provider-observed customer-info facts for an identity-bearing update", async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
-      customer: {
-        id: 123,
-        first_name: "Jane",
-        last_name: "Smith",
-        email: "jane@example.com",
-        phone: "+14155550100",
-      },
+    const fetchMock = vi.fn().mockResolvedValueOnce(customerUpdated({
+      id: 123,
+      first_name: "Jane",
+      last_name: "Smith",
+      email: "jane@example.com",
+      phone: "+14155550100",
     }));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -52,10 +68,8 @@ describe("shopify tools", () => {
   it("reconciles an incomplete customer-update response with a provider read", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123 } }))
-      .mockResolvedValueOnce(jsonResponse({
-        customer: { id: 123, first_name: "Jane", email: "jane@example.com" },
-      }));
+      .mockResolvedValueOnce(customerUpdated({ id: 123 }))
+      .mockResolvedValueOnce(customerRead({ id: 123, first_name: "Jane", email: "jane@example.com" }));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await updateShopifyCustomerInfo({
@@ -73,8 +87,8 @@ describe("shopify tools", () => {
   it("keeps a customer update unknown when the provider state does not match", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123 } }))
-      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123, first_name: "Old" } }));
+      .mockResolvedValueOnce(customerUpdated({ id: 123 }))
+      .mockResolvedValueOnce(customerRead({ id: 123, first_name: "Old" }));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await updateShopifyCustomerInfo({
@@ -98,7 +112,7 @@ describe("shopify tools", () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ errors: "upstream unavailable" }, { status: 503 }))
-      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123, phone: "+14155550100" } }));
+      .mockResolvedValueOnce(customerRead({ id: 123, phone: "+14155550100" }));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await updateShopifyCustomerInfo({
@@ -168,8 +182,8 @@ describe("shopify tools", () => {
   it("emits a hash-bound receipt after appending a customer note", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123, note: "Existing" } }))
-      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123, note: "Existing\n\nFollow up" } }));
+      .mockResolvedValueOnce(customerRead({ id: 123, note: "Existing" }))
+      .mockResolvedValueOnce(customerUpdated({ id: 123, note: "Existing\n\nFollow up" }));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await addShopifyCustomerNote({ customer_id: "123", note: "Follow up" }, {
@@ -205,9 +219,9 @@ describe("shopify tools", () => {
   it("reconciles an incomplete customer-note response without appending twice", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123, note: "Existing" } }))
-      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123 } }))
-      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123, note: "Existing\n\nFollow up" } }));
+      .mockResolvedValueOnce(customerRead({ id: 123, note: "Existing" }))
+      .mockResolvedValueOnce(customerUpdated({ id: 123 }))
+      .mockResolvedValueOnce(customerRead({ id: 123, note: "Existing\n\nFollow up" }));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await addShopifyCustomerNote({ customer_id: "123", note: "Follow up" }, {
@@ -219,15 +233,16 @@ describe("shopify tools", () => {
     expect(result.status).toBe("ok");
     expect(result.message).toContain("confirmed after an interrupted provider response");
     expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(fetchMock.mock.calls.filter(([, init]) => init.method === "PUT")).toHaveLength(1);
+    expect(fetchMock.mock.calls.filter(([, init]) => graphqlRequest(init)?.operation === "ShopkeeperCustomerUpdate"))
+      .toHaveLength(1);
   });
 
   it("keeps a customer-note append unknown when read-back does not match", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123, note: "Existing" } }))
-      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123 } }))
-      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123, note: "Different" } }));
+      .mockResolvedValueOnce(customerRead({ id: 123, note: "Existing" }))
+      .mockResolvedValueOnce(customerUpdated({ id: 123 }))
+      .mockResolvedValueOnce(customerRead({ id: 123, note: "Different" }));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await addShopifyCustomerNote({ customer_id: "123", note: "Follow up" }, {
@@ -250,11 +265,10 @@ describe("shopify tools", () => {
   it("stops the plan on a partial order-address update", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse({
-        order: {
+      .mockResolvedValueOnce(graphqlResponse({
+        order: shopifyOrderNode({
           id: 456,
           name: "#1001",
-          order_number: 1001,
           fulfillment_status: null,
           customer: { id: 123 },
           shipping_address: {
@@ -264,34 +278,42 @@ describe("shopify tools", () => {
             zip: "90001",
             country: "United States",
           },
-        },
+        }),
       }))
-      .mockResolvedValueOnce(jsonResponse({
+      .mockResolvedValueOnce(graphqlResponse({
         customer: {
-          default_address: {
+          defaultAddress: shopifyMailingAddressNode({
             id: 789,
             address1: "Old address",
             city: "Los Angeles",
             province: "CA",
             zip: "90001",
             country: "United States",
-          },
+          }),
         },
       }))
-      .mockResolvedValueOnce(jsonResponse({
-        order: {
-          id: 456,
-          order_number: 1001,
-          shipping_address: {
-            address1: "123 Main St",
-            city: "Los Angeles",
-            province: "CA",
-            zip: "90001",
-            country: "United States",
+      .mockResolvedValueOnce(graphqlResponse({
+        orderUpdate: {
+          order: {
+            legacyResourceId: "456",
+            name: "#1001",
+            shippingAddress: shopifyOrderNode({
+              id: 456,
+              shipping_address: {
+                address1: "123 Main St",
+                city: "Los Angeles",
+                province: "CA",
+                zip: "90001",
+                country: "United States",
+              },
+            }).shippingAddress,
           },
+          userErrors: [],
         },
       }))
-      .mockResolvedValueOnce(jsonResponse({ errors: "Customer not found" }, { status: 404 }));
+      .mockResolvedValueOnce(graphqlResponse({
+        customerAddressUpdate: { address: null, userErrors: [{ field: ["customerId"], message: "Customer does not exist" }] },
+      }));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await updateShopifyOrderAddress({

@@ -8,7 +8,8 @@ export interface ShopifySimulatorRequest {
 }
 
 export type ShopifySimulatorResult =
-  | { ok: true; data: unknown; headers: Headers }
+  // `nextPageInfo` is the cursor for a list's next page; null on the last one.
+  | { ok: true; data: unknown; nextPageInfo: string | null }
   | { ok: false; status: number; payload: unknown };
 
 interface SimulatorAddress {
@@ -123,14 +124,7 @@ function normalizeSimulatorShop(shop: string): string {
 }
 
 function jsonOk(data: unknown, nextPageInfo: string | null = null): ShopifySimulatorResult {
-  const headers = new Headers({ "content-type": "application/json" });
-  if (nextPageInfo) {
-    headers.set(
-      "link",
-      `<https://${SHOPIFY_SIMULATOR_DOMAIN}/admin/api/2026-04/resource.json?page_info=${nextPageInfo}>; rel="next"`,
-    );
-  }
-  return { ok: true, data, headers };
+  return { ok: true, data, nextPageInfo };
 }
 
 function queryString(query: ShopifySimulatorRequest["query"], key: string): string {

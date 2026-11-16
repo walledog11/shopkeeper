@@ -18,11 +18,12 @@ interface GetShopifyCustomerInput {
 }
 import {
   formatShopifyToolError,
+  formatUserErrors,
   isAmbiguousShopifyMutationError,
   ShopifyRequestError,
-  shopifyRestJson,
   type ShopifyContext,
 } from "./client.js";
+import { updateShopifyCustomerRecord, type ShopifyCustomerFields } from "./customer-writes.js";
 import {
   toolError,
   toolNotFound,
@@ -111,25 +112,25 @@ const CUSTOMER_INFO_FIELDS = [
 
 export interface CustomerInfoUpdate {
   customerId: string;
-  payload: Record<string, string>;
+  fields: ShopifyCustomerFields;
   expected: Partial<Record<CustomerInfoReceiptFieldV1, string>>;
 }
 
 export function buildCustomerInfoUpdate(input: UpdateShopifyCustomerInfoInput): CustomerInfoUpdate {
   const customerId = requireNumericId(input.customer_id, "customer_id");
-  const payload: Record<string, string> = { id: customerId };
+  const fields: ShopifyCustomerFields = {};
   const expected: Partial<Record<CustomerInfoReceiptFieldV1, string>> = {};
   for (const [receiptField, shopifyField] of CUSTOMER_INFO_FIELDS) {
     const value = optionalString(input[shopifyField]);
     if (value !== undefined) {
-      payload[shopifyField] = value;
+      fields[shopifyField] = value;
       expected[receiptField] = value;
     }
   }
   if (Object.keys(expected).length === 0) {
     throw new ShopifyInputError("provide at least one customer field to update.");
   }
-  return { customerId, payload, expected };
+  return { customerId, fields, expected };
 }
 
 function normalizedCustomerField(field: CustomerInfoReceiptFieldV1, value: unknown): string {
@@ -151,14 +152,6 @@ export function customerInfoUpdates(
     observed.push({ field: receiptField, value: actual });
   }
   return observed.length > 0 ? observed : null;
-}
-
-async function readCustomerInfo(ctx: ShopifyContext, customerId: string): Promise<ShopifyCustomer | null> {
-  const data = await shopifyRestJson<{ customer?: ShopifyCustomer }>(ctx, `customers/${customerId}.json`, {
-    query: { fields: "id,first_name,last_name,email,phone" },
-    maxRetries: 1,
-  });
-  return data.customer ?? null;
 }
 
 function customerInfoSuccess(
@@ -200,7 +193,7 @@ async function reconcileCustomerInfo(
   mutationError?: unknown,
 ): Promise<ToolResult> {
   try {
-    const customer = await readCustomerInfo(ctx, update.customerId);
+    const customer = await fetchShopifyCustomer(ctx, update.customerId, { maxRetries: 1 });
     if (customerInfoUpdates(customer, update)) {
       return customerInfoSuccess(ctx, customer!, update, true);
     }
@@ -236,13 +229,19 @@ export async function updateShopifyCustomerInfo(
   try {
     update = buildCustomerInfoUpdate(input);
     mutationStarted = true;
-    const data = await shopifyRestJson<{ customer?: ShopifyCustomer }>(
-      ctx,
-      `customers/${update.customerId}.json`,
-      { method: "PUT", body: { customer: update.payload } },
-    );
-    return data.customer && customerInfoUpdates(data.customer, update)
-      ? customerInfoSuccess(ctx, data.customer, update, false)
+    const { value: customer, userErrors } = await updateShopifyCustomerRecord(ctx, update.customerId, update.fields);
+    const rejection = formatUserErrors(userErrors);
+    if (rejection) {
+      return customerInfoReceipts.failure(
+        ctx,
+        update.customerId,
+        toolError(`Error: failed to update customer info - ${rejection}`),
+        "failed",
+        "provider_rejected_customer_update",
+      );
+    }
+    return customer && customerInfoUpdates(customer, update)
+      ? customerInfoSuccess(ctx, customer, update, false)
       : reconcileCustomerInfo(ctx, update);
   } catch (err) {
     const customerId = update?.customerId ?? String(input.customer_id ?? "invalid");
@@ -290,13 +289,9 @@ export async function addShopifyCustomerNote(
     customerId = requireNumericId(input.customer_id, "customer_id");
     note = requireNonEmptyString(input.note, "note");
 
-    const existing = await shopifyRestJson<{ customer?: Pick<ShopifyCustomer, "id" | "note"> }>(
-      ctx,
-      `customers/${customerId}.json`,
-      { query: { fields: "id,note" } }
-    );
+    const existing = await fetchShopifyCustomer(ctx, customerId, { maxRetries: 1 });
 
-    if (!existing.customer) {
+    if (!existing) {
       return customerNoteReceipts.failure(
         ctx,
         customerId,
@@ -306,16 +301,23 @@ export async function addShopifyCustomerNote(
       );
     }
 
-    previousNote = existing.customer.note ?? "";
+    previousNote = existing.note ?? "";
     resultingNote = previousNote ? `${previousNote}\n\n${note}` : note;
 
     mutationStarted = true;
-    const data = await shopifyRestJson<{ customer?: ShopifyCustomer }>(ctx, `customers/${customerId}.json`, {
-      method: "PUT",
-      body: { customer: { id: customerId, note: resultingNote } },
-    });
+    const { value: customer, userErrors } = await updateShopifyCustomerRecord(ctx, customerId, { note: resultingNote });
+    const rejection = formatUserErrors(userErrors);
+    if (rejection) {
+      return customerNoteReceipts.failure(
+        ctx,
+        customerId,
+        toolError(`Error: failed to add note - ${rejection}`),
+        "failed",
+        "provider_rejected_customer_note",
+      );
+    }
 
-    if (customerNoteMatches(data.customer, customerId, resultingNote)) {
+    if (customerNoteMatches(customer, customerId, resultingNote)) {
       return customerNoteSuccess(ctx, customerId, note, previousNote, resultingNote, false);
     }
     return reconcileCustomerNote(ctx, customerId, note, previousNote, resultingNote);
@@ -402,12 +404,8 @@ async function reconcileCustomerNote(
   mutationError?: unknown,
 ): Promise<ToolResult> {
   try {
-    const data = await shopifyRestJson<{ customer?: Pick<ShopifyCustomer, "id" | "note"> }>(
-      ctx,
-      `customers/${customerId}.json`,
-      { query: { fields: "id,note" }, maxRetries: 1 },
-    );
-    if (customerNoteMatches(data.customer, customerId, newNote)) {
+    const customer = await fetchShopifyCustomer(ctx, customerId, { maxRetries: 1 });
+    if (customerNoteMatches(customer, customerId, newNote)) {
       return customerNoteSuccess(ctx, customerId, appendedNote, oldNote, newNote, true);
     }
     const detail = mutationError

@@ -5,7 +5,6 @@ import type { CompensationReservation } from "../tools/result.js";
 export const SHOPIFY_API_VERSION = "2026-04";
 
 const DEFAULT_TIMEOUT_MS = 15_000;
-const DEFAULT_MAX_RETRIES = 1;
 
 export interface ShopifyContext {
   shop: string;
@@ -28,9 +27,6 @@ export interface ShopifyContext {
 }
 
 export interface ShopifyRequestOptions {
-  method?: "GET" | "POST" | "PUT" | "DELETE";
-  query?: Record<string, string | number | boolean | null | undefined>;
-  body?: unknown;
   timeoutMs?: number;
   maxRetries?: number;
 }
@@ -95,22 +91,10 @@ function normalizeShopifyShop(shop: string): string {
   return stripped;
 }
 
-function buildShopifyAdminUrl(
-  ctx: ShopifyContext,
-  path: string,
-  query?: ShopifyRequestOptions["query"]
-): string {
-  const shop = normalizeShopifyShop(ctx.shop);
-  const normalizedPath = path.replace(/^\/+/, "");
-  const url = new URL(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}/${normalizedPath}`);
-
-  for (const [key, value] of Object.entries(query ?? {})) {
-    if (value !== undefined && value !== null) {
-      url.searchParams.set(key, String(value));
-    }
-  }
-
-  return url.toString();
+// Shopify accepts only GraphQL Admin API calls from new public apps, so this is
+// the one Admin API URL the app builds. A lint rule keeps it the only one.
+function graphqlEndpoint(shop: string): string {
+  return `https://${shop}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`;
 }
 
 function retryDelayMs(res: Response): number {
@@ -135,11 +119,11 @@ function delay(ms: number): Promise<void> {
 }
 
 // ── Per-shop request throttling ─────────────────────────────────────────────
-// Shopify's REST Admin API is a leaky bucket (standard plan: 40 burst, 2 req/s
-// refill). The per-call retry above only backs off a lone 429 — concurrent
-// agent/autopilot runs against the same shop would each stampede the bucket
-// independently. A shared in-process token bucket per shop makes them wait
-// cooperatively so request starts are paced under the leak rate.
+// Shopify meters each shop's Admin API calls in a leaky bucket. The per-call
+// retry above only backs off a lone 429 — concurrent agent/autopilot runs
+// against the same shop would each stampede the bucket independently. A shared
+// in-process token bucket per shop makes them wait cooperatively, pacing
+// request starts at 40 burst and 2 per second.
 const BUCKET_CAPACITY = 40;
 const BUCKET_REFILL_PER_SEC = 2;
 
@@ -261,17 +245,12 @@ export function isAmbiguousShopifyMutationError(err: unknown): boolean {
   return err.status === undefined || err.status === 429 || err.status >= 500;
 }
 
-export interface ShopifyResponse<T> {
-  data: T;
-  headers: Headers;
-}
-
-export async function shopifyRest<T>(
+async function postGraphql<T>(
   ctx: ShopifyContext,
-  path: string,
-  options: ShopifyRequestOptions = {}
-): Promise<ShopifyResponse<T>> {
-  const simulated = handleShopifySimulatorRest(ctx, path, options);
+  body: { query: string; variables: Record<string, unknown> },
+  options: ShopifyRequestOptions,
+): Promise<T> {
+  const simulated = handleShopifySimulatorRest(ctx, "graphql.json", { method: "POST", body });
   if (simulated) {
     if (!simulated.ok) {
       throw new ShopifyRequestError("Shopify API request failed.", {
@@ -279,27 +258,27 @@ export async function shopifyRest<T>(
         payload: simulated.payload,
       });
     }
-    return { data: simulated.data as T, headers: simulated.headers };
+    return simulated.data as T;
   }
 
   const shop = normalizeShopifyShop(ctx.shop);
-  const url = buildShopifyAdminUrl(ctx, path, options.query);
-  const method = options.method ?? "GET";
+  const url = graphqlEndpoint(shop);
   // A mutation can commit at Shopify even when the response is a timeout/5xx.
-  // Never replay it implicitly. Call sites may opt into a retry only after
-  // establishing provider idempotency or reconciliation for that operation.
-  const maxRetries = options.maxRetries ?? (method === "GET" ? DEFAULT_MAX_RETRIES : 0);
-  const body = options.body !== undefined ? JSON.stringify(options.body) : undefined;
+  // Never replay a request implicitly. Call sites may opt into a retry: a read,
+  // or a mutation once provider idempotency or reconciliation is established
+  // for that operation.
+  const maxRetries = options.maxRetries ?? 0;
+  const serialized = JSON.stringify(body);
   let renewed = false;
 
-  async function attemptRequest(attempt: number): Promise<ShopifyResponse<T>> {
+  async function attemptRequest(attempt: number): Promise<T> {
     await acquireShopToken(shop);
     const sentToken = ctx.accessToken;
     let res: Response;
     try {
       res = await fetchWithTimeout(
         url,
-        { method, cache: "no-store", headers: shopifyHeaders(sentToken), ...(body !== undefined && { body }) },
+        { method: "POST", cache: "no-store", headers: shopifyHeaders(sentToken), body: serialized },
         options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
       );
     } catch (error) {
@@ -336,7 +315,7 @@ export async function shopifyRest<T>(
       });
     }
 
-    return { data: payload as T, headers: res.headers };
+    return payload as T;
   }
 
   return attemptRequest(0);
@@ -362,22 +341,6 @@ export function shopifySearchValue(value: string): string {
   return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
 
-export async function shopifyRestJson<T>(
-  ctx: ShopifyContext,
-  path: string,
-  options: ShopifyRequestOptions = {}
-): Promise<T> {
-  const { data } = await shopifyRest<T>(ctx, path, options);
-  return data;
-}
-
-// Shopify paginates list endpoints via a cursor in the `Link` response header.
-export function parseNextPageInfo(headers: Headers): string | null {
-  const linkHeader = headers.get("link") ?? "";
-  const nextMatch = linkHeader.match(/<[^>]*[?&]page_info=([^&>]+)[^>]*>;\s*rel="next"/);
-  return nextMatch ? nextMatch[1] : null;
-}
-
 interface ShopifyGraphqlError {
   message: string;
   extensions?: { code?: unknown } | null;
@@ -399,16 +362,12 @@ export async function shopifyGraphql<TData>(
   ctx: ShopifyContext,
   query: string,
   variables: Record<string, unknown>,
-  options: Pick<ShopifyRequestOptions, "maxRetries" | "timeoutMs"> = {},
+  options: ShopifyRequestOptions = {},
 ): Promise<TData> {
-  const payload = await shopifyRestJson<{
+  const payload = await postGraphql<{
     data?: TData;
     errors?: ShopifyGraphqlError[];
-  }>(ctx, "graphql.json", {
-    method: "POST",
-    body: { query, variables },
-    ...options,
-  });
+  }>(ctx, { query, variables }, options);
 
   if (payload.errors?.length) {
     const codes = payload.errors.map(graphqlErrorCode);

@@ -97,6 +97,13 @@ export function answerShopifyGraphqlRead(init: RequestInit | undefined, fixtures
       const customer = customers.find((candidate) => String(candidate.id) === id);
       return graphqlResponse({ customer: customer ? shopifyCustomerNode(customer) : null });
     }
+    case "ShopkeeperCustomerDefaultAddress": {
+      const id = legacyIdFromGid(String(request.variables.id));
+      const customer = customers.find((candidate) => String(candidate.id) === id);
+      if (!customer) return graphqlResponse({ customer: null });
+      const address = customer.default_address;
+      return graphqlResponse({ customer: { defaultAddress: address ? shopifyMailingAddressNode(address) : null } });
+    }
     case "ShopkeeperCustomers":
     case "ShopkeeperCustomerIdentities":
       return graphqlResponse({ customers: { nodes: customers.map(shopifyCustomerNode), pageInfo: lastPage } });
@@ -135,6 +142,14 @@ function addressNode(address: ShopifyCustomerAddress) {
     zip: address.zip ?? null,
     country: address.country ?? address.country_name ?? null,
     countryCodeV2: address.country_code ?? null,
+  };
+}
+
+/** A customer's saved address as GraphQL returns it, with the id an address write names. */
+export function shopifyMailingAddressNode(address: ShopifyCustomerAddress) {
+  return {
+    id: `gid://shopify/MailingAddress/${address.id ?? 1}?model_name=CustomerAddress`,
+    ...addressNode(address),
   };
 }
 

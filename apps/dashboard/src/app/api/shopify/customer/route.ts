@@ -51,9 +51,9 @@ export const PATCH = withOrgRoute(
   async ({ org, request }) => {
     const { customerId, updates } = parseShopifyCustomerUpdateBody(await readRequiredJsonObject(request));
 
-    let customer: unknown | null;
+    let result: Awaited<ReturnType<typeof updateShopifyCustomer>>;
     try {
-      customer = await updateShopifyCustomer(org.id, customerId, updates);
+      result = await updateShopifyCustomer(org.id, customerId, updates);
     } catch (err) {
       if (err instanceof ShopifyRequestError) {
         logger.error({ err: err.payload }, '[Shopify Customer PATCH] Shopify error');
@@ -63,11 +63,14 @@ export const PATCH = withOrgRoute(
       throw err;
     }
 
-    if (!customer) {
-      logger.error({ err: { customer } }, '[Shopify Customer PATCH] Shopify error');
+    if (result && 'rejected' in result) {
+      return NextResponse.json({ error: result.rejected }, { status: 422 });
+    }
+    if (!result) {
+      logger.error({ customerId }, '[Shopify Customer PATCH] Shopify did not return the saved customer');
       return NextResponse.json({ error: 'Failed to update customer' }, { status: 502 });
     }
 
-    return NextResponse.json({ customer });
+    return NextResponse.json({ customer: result.customer });
   },
 );

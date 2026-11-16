@@ -1,10 +1,10 @@
 import type { UpdateShopifyCustomerInfoInput } from "../../../tools/index.js";
-import { shopifyRestJson, type ShopifyContext } from "../../client.js";
+import type { ShopifyContext } from "../../client.js";
+import { fetchShopifyCustomer } from "../../customer-reads.js";
 import {
   buildCustomerInfoUpdate,
   customerInfoUpdates,
 } from "../../customers.js";
-import type { ShopifyCustomer } from "../../types.js";
 import { committed, stillUnknown, type ShopifyReconciliationProbeResult } from "../types.js";
 
 export async function probeCustomerInfo(
@@ -12,12 +12,8 @@ export async function probeCustomerInfo(
   ctx: ShopifyContext,
 ): Promise<ShopifyReconciliationProbeResult> {
   const update = buildCustomerInfoUpdate(input);
-  const data = await shopifyRestJson<{ customer?: ShopifyCustomer }>(
-    ctx,
-    `customers/${update.customerId}.json`,
-    { query: { fields: "id,first_name,last_name,email,phone" }, maxRetries: 1 },
-  );
-  if (customerInfoUpdates(data.customer, update)) {
+  const customer = await fetchShopifyCustomer(ctx, update.customerId, { maxRetries: 1 });
+  if (customerInfoUpdates(customer, update)) {
     return committed(`Reconciled customer-info update for customer ${update.customerId}.`);
   }
   // A mismatch does not prove no effect: Shopify could have committed only a

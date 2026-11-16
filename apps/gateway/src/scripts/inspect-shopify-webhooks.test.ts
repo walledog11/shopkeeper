@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
-import { jsonResponse } from '@shopkeeper/agent/testing';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { graphqlRequest, graphqlResponse } from '@shopkeeper/agent/testing';
 import {
   matchingMigrationSubscriptions,
   migrateShopifyWebhooks,
@@ -10,15 +10,21 @@ import {
   type ShopifyWebhookSubscription,
 } from './inspect-shopify-webhooks.js';
 
+const ctx = { shop: 'fixture.myshopify.com', accessToken: 'token' };
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 describe('Shopify webhook migration selection', () => {
   it('selects only the five exact topics at the exact gateway address', () => {
     const subscriptions = [
-      hook(1, 'orders/create'),
-      hook(2, 'orders/create', 'https://unrelated.example/webhooks/shopify'),
-      hook(3, 'products/create'),
+      hook(1, 'ORDERS_CREATE'),
+      hook(2, 'ORDERS_CREATE', 'https://unrelated.example/webhooks/shopify'),
+      hook(3, 'PRODUCTS_CREATE'),
     ];
 
-    expect(matchingMigrationSubscriptions(subscriptions).map(({ id }) => id)).toEqual([1]);
+    expect(matchingMigrationSubscriptions(subscriptions).map(({ id }) => id)).toEqual([gid(1)]);
     expect(missingMigrationTopics(subscriptions)).toEqual(SHOPIFY_WEBHOOK_TOPICS.slice(1));
   });
 
@@ -33,130 +39,107 @@ describe('Shopify webhook migration selection', () => {
 
 describe('migrateShopifyWebhooks', () => {
   it('is read-only in default audit mode', async () => {
-    const { fetchImpl, requests } = fakeShopify([hook(1, 'orders/create')]);
+    const { requests } = fakeShopify([hook(1, 'ORDERS_CREATE')]);
 
-    const result = await migrateShopifyWebhooks({
-      accessToken: 'token',
-      execute: false,
-      fetchImpl,
-      mode: 'audit',
-      shop: 'fixture.myshopify.com',
-    });
+    const result = await migrateShopifyWebhooks({ ctx, execute: false, mode: 'audit' });
 
     expect(result.before).toHaveLength(1);
-    expect(requests).toEqual([{ method: 'GET', path: 'webhooks.json?limit=250' }]);
+    expect(requests).toEqual(['ShopkeeperWebhookSubscriptions']);
   });
 
   it('does not issue any request when remove lacks execute', async () => {
-    const fetchImpl = vi.fn<typeof fetch>();
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal('fetch', fetchMock);
 
-    await expect(migrateShopifyWebhooks({
-      accessToken: 'token',
-      execute: false,
-      fetchImpl,
-      mode: 'remove',
-      shop: 'fixture.myshopify.com',
-    })).rejects.toThrow('remove requires --execute.');
-    expect(fetchImpl).not.toHaveBeenCalled();
+    await expect(migrateShopifyWebhooks({ ctx, execute: false, mode: 'remove' }))
+      .rejects.toThrow('remove requires --execute.');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('removes duplicate matches without touching unrelated subscriptions', async () => {
-    const unrelated = hook(9, 'orders/create', 'https://unrelated.example/hook');
-    const { fetchImpl, requests, subscriptions } = fakeShopify([
-      hook(1, 'orders/create'),
-      hook(2, 'orders/create'),
-      hook(3, 'orders/updated'),
+    const unrelated = hook(9, 'ORDERS_CREATE', 'https://unrelated.example/hook');
+    const { requests, subscriptions, deleted } = fakeShopify([
+      hook(1, 'ORDERS_CREATE'),
+      hook(2, 'ORDERS_CREATE'),
+      hook(3, 'ORDERS_UPDATED'),
       unrelated,
     ]);
 
-    const result = await migrateShopifyWebhooks({
-      accessToken: 'token',
-      execute: true,
-      fetchImpl,
-      mode: 'remove',
-      shop: 'fixture.myshopify.com',
-    });
+    const result = await migrateShopifyWebhooks({ ctx, execute: true, mode: 'remove' });
 
-    expect(result.removedIds).toEqual([1, 2, 3]);
+    expect(result.removedIds).toEqual([gid(1), gid(2), gid(3)]);
     expect(subscriptions).toEqual([unrelated]);
-    expect(requests.filter(({ method }) => method === 'DELETE').map(({ path }) => path))
-      .toEqual(['webhooks/1.json', 'webhooks/2.json', 'webhooks/3.json']);
+    expect(deleted).toEqual([gid(1), gid(2), gid(3)]);
+    expect(requests.filter((operation) => operation === 'ShopkeeperWebhookSubscriptionDelete')).toHaveLength(3);
   });
 
   it('restores only missing topics and verifies one of each', async () => {
-    const existing = hook(1, 'orders/create');
-    const unrelated = hook(9, 'products/create');
-    const { fetchImpl, requests, subscriptions } = fakeShopify([existing, unrelated]);
+    const existing = hook(1, 'ORDERS_CREATE');
+    const unrelated = hook(9, 'PRODUCTS_CREATE');
+    const { requests, subscriptions } = fakeShopify([existing, unrelated]);
 
-    const result = await migrateShopifyWebhooks({
-      accessToken: 'token',
-      execute: true,
-      fetchImpl,
-      mode: 'restore',
-      shop: 'fixture.myshopify.com',
-    });
+    const result = await migrateShopifyWebhooks({ ctx, execute: true, mode: 'restore' });
 
     expect(result.createdTopics).toEqual(SHOPIFY_WEBHOOK_TOPICS.slice(1));
-    expect(requests.filter(({ method }) => method === 'POST')).toHaveLength(4);
+    expect(requests.filter((operation) => operation === 'ShopkeeperWebhookSubscriptionCreate')).toHaveLength(4);
     expect(subscriptions).toContain(existing);
     expect(subscriptions).toContain(unrelated);
     expect(matchingMigrationSubscriptions(subscriptions)).toHaveLength(5);
   });
 
   it('fails restore verification when an existing topic is duplicated', async () => {
-    const { fetchImpl, requests } = fakeShopify([
-      hook(1, 'orders/create'),
-      hook(2, 'orders/create'),
+    const { requests } = fakeShopify([
+      hook(1, 'ORDERS_CREATE'),
+      hook(2, 'ORDERS_CREATE'),
     ]);
 
-    await expect(migrateShopifyWebhooks({
-      accessToken: 'token',
-      execute: true,
-      fetchImpl,
-      mode: 'restore',
-      shop: 'fixture.myshopify.com',
-    })).rejects.toThrow('expected exactly one matching subscription for orders/create');
-    expect(requests.some(({ method }) => method === 'DELETE')).toBe(false);
+    await expect(migrateShopifyWebhooks({ ctx, execute: true, mode: 'restore' }))
+      .rejects.toThrow('expected exactly one matching subscription for ORDERS_CREATE');
+    expect(requests).not.toContain('ShopkeeperWebhookSubscriptionDelete');
   });
 });
+
+function gid(id: number): string {
+  return `gid://shopify/WebhookSubscription/${id}`;
+}
 
 function hook(
   id: number,
   topic: string,
-  address = SHOPIFY_WEBHOOK_ADDRESS,
+  uri = SHOPIFY_WEBHOOK_ADDRESS,
 ): ShopifyWebhookSubscription {
-  return { id, topic, address };
+  return { id: gid(id), topic, uri };
 }
 
+// Shopify's webhook subscriptions, kept in memory and changed by the mutations.
 function fakeShopify(initial: ShopifyWebhookSubscription[]) {
   const subscriptions = [...initial];
-  const requests: Array<{ method: string; path: string }> = [];
+  const requests: string[] = [];
+  const deleted: string[] = [];
   let nextId = 100;
-  const fetchImpl = vi.fn<typeof fetch>(async (input, init) => {
-    const url = new URL(input instanceof Request ? input.url : input.toString());
-    const marker = '/admin/api/2026-04/';
-    const path = url.pathname.slice(url.pathname.indexOf(marker) + marker.length) + url.search;
-    const method = init?.method ?? 'GET';
-    requests.push({ method, path });
-
-    if (method === 'GET') return jsonResponse({ webhooks: subscriptions });
-    if (method === 'DELETE') {
-      const id = Number.parseInt(path.match(/^webhooks\/(\d+)\.json$/)?.[1] ?? '', 10);
+  vi.stubGlobal('fetch', vi.fn<typeof fetch>(async (_input, init) => {
+    const request = graphqlRequest(init);
+    if (!request) throw new Error('unexpected request');
+    requests.push(request.operation);
+    if (request.operation === 'ShopkeeperWebhookSubscriptions') {
+      return graphqlResponse({ webhookSubscriptions: { nodes: subscriptions } });
+    }
+    if (request.operation === 'ShopkeeperWebhookSubscriptionDelete') {
+      const id = String(request.variables.id);
       const index = subscriptions.findIndex((subscription) => subscription.id === id);
       if (index >= 0) subscriptions.splice(index, 1);
-      return new Response(null, { status: 200 });
+      deleted.push(id);
+      return graphqlResponse({ webhookSubscriptionDelete: { deletedWebhookSubscriptionId: id, userErrors: [] } });
     }
-    if (method === 'POST') {
-      const payload = JSON.parse(String(init?.body)) as {
-        webhook: { topic: string; address: string };
-      };
-      const created = hook(nextId, payload.webhook.topic, payload.webhook.address);
+    if (request.operation === 'ShopkeeperWebhookSubscriptionCreate') {
+      const { uri } = request.variables.webhookSubscription as { uri: string };
+      const created = hook(nextId, String(request.variables.topic), uri);
       nextId += 1;
       subscriptions.push(created);
-      return jsonResponse({ webhook: created }, { status: 201 });
+      return graphqlResponse({ webhookSubscriptionCreate: { webhookSubscription: { id: created.id }, userErrors: [] } });
     }
-    return jsonResponse({ error: 'unexpected request' }, { status: 500 });
-  });
-  return { fetchImpl, requests, subscriptions };
+    throw new Error(`unexpected operation ${request.operation}`);
+  }));
+  return { requests, subscriptions, deleted };
 }
 

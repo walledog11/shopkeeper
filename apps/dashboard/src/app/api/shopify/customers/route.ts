@@ -4,7 +4,7 @@ import { readRequiredJsonObject } from '@/lib/api/body';
 import { BadRequestError, NotFoundError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
 import { parseCreateShopifyCustomerBody } from '@/app/api/shopify/customer/_lib/validation';
-import { searchShopifyCustomers, shopifyRestJson } from '@shopkeeper/agent/shopify';
+import { createShopifyCustomerRecord, formatUserErrors, searchShopifyCustomers } from '@shopkeeper/agent/shopify';
 import { SHOPIFY_ACCESS_SELECT, shopifyContextFor } from '@shopkeeper/agent/shopify/access';
 import { shopifyRouteErrorResponse } from '@/lib/server/shopify-integration';
 import { decodeShopifyPageToken, encodeShopifyPageToken } from '@/lib/server/shopify-page-token';
@@ -60,18 +60,12 @@ export const POST = withOrgRoute(
       throw new NotFoundError('no_integration');
     }
 
-    let data: { customer?: unknown };
+    let created: Awaited<ReturnType<typeof createShopifyCustomerRecord>>;
     try {
-      data = await shopifyRestJson<{ customer?: unknown }>(ctx, 'customers.json', {
-        method: 'POST',
-        maxRetries: 0,
-        body: {
-          customer: {
-            first_name: first_name || '',
-            last_name: last_name || '',
-            email: email || undefined,
-          },
-        },
+      created = await createShopifyCustomerRecord(ctx, {
+        first_name: first_name || '',
+        last_name: last_name || '',
+        ...(email ? { email } : {}),
       });
     } catch (err) {
       const response = await shopifyRouteErrorResponse(err, integration, org.id);
@@ -79,10 +73,14 @@ export const POST = withOrgRoute(
       throw err;
     }
 
-    if (!data.customer) {
+    const rejected = formatUserErrors(created.userErrors);
+    if (rejected) {
+      return NextResponse.json({ error: rejected }, { status: 422 });
+    }
+    if (!created.value) {
       return NextResponse.json({ error: 'Failed to create customer' }, { status: 502 });
     }
 
-    return NextResponse.json({ customer: data.customer });
+    return NextResponse.json({ customer: created.value });
   },
 );

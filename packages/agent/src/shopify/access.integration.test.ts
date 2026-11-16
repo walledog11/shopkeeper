@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db, INTEGRATION_REAUTH_SENTINEL } from "@shopkeeper/db";
 import { cleanupTestData, createTestOrg } from "@shopkeeper/db/test-helpers";
 import { migrateShopifyToken, SHOPIFY_ACCESS_SELECT, shopifyContextFor } from "./access.js";
-import { shopifyRestJson } from "./client.js";
+import { shopifyGraphql } from "./client.js";
 
 const HOUR_MS = 60 * 60_000;
 
@@ -98,7 +98,7 @@ describe("shopifyContextFor", () => {
     const ctx = await shopifyContextFor(integration);
     expect(ctx?.accessToken).toBe("access-1");
     // No status: callers that mark a grant dead on a 401 leave this one alone.
-    await expect(shopifyRestJson(ctx!, "shop.json")).rejects.toMatchObject({ status: undefined, rejectedBeforeExecution: true });
+    await expect(shopifyGraphql(ctx!, "query { shop { id } }", {})).rejects.toMatchObject({ status: undefined, rejectedBeforeExecution: true });
     expect(await stored(integration.id)).toMatchObject({ refreshToken: "refresh-1", tokenExpiresAt: integration.tokenExpiresAt });
   });
 
@@ -111,11 +111,11 @@ describe("shopifyContextFor", () => {
     });
     stubShopify({
       admin: (token) => token === "access-2"
-        ? Response.json({ shop: { id: 1 } })
+        ? Response.json({ data: { shop: { id: 1 } } })
         : Response.json({ errors: "[API] Invalid API key or access token" }, { status: 401 }),
     });
 
-    await expect(shopifyRestJson(ctx!, "shop.json")).resolves.toEqual({ shop: { id: 1 } });
+    await expect(shopifyGraphql(ctx!, "query { shop { id } }", {})).resolves.toEqual({ shop: { id: 1 } });
   });
 });
 

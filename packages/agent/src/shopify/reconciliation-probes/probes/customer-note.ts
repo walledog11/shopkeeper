@@ -1,6 +1,6 @@
 import type { AddShopifyCustomerNoteInput } from "../../../tools/index.js";
-import { shopifyRestJson, type ShopifyContext } from "../../client.js";
-import type { ShopifyCustomer } from "../../types.js";
+import type { ShopifyContext } from "../../client.js";
+import { fetchShopifyCustomer } from "../../customer-reads.js";
 import { requireNonEmptyString, requireNumericId } from "../../validation.js";
 import { stillUnknown, type ShopifyReconciliationProbeResult } from "../types.js";
 
@@ -10,12 +10,8 @@ export async function probeCustomerNote(
 ): Promise<ShopifyReconciliationProbeResult> {
   const customerId = requireNumericId(input.customer_id, "customer_id");
   const appendedNote = requireNonEmptyString(input.note, "note");
-  const data = await shopifyRestJson<{ customer?: Pick<ShopifyCustomer, "id" | "note"> }>(
-    ctx,
-    `customers/${customerId}.json`,
-    { query: { fields: "id,note" }, maxRetries: 1 },
-  );
-  const paragraphs = (data.customer?.note ?? "").split("\n\n");
+  const customer = await fetchShopifyCustomer(ctx, customerId, { maxRetries: 1 });
+  const paragraphs = (customer?.note ?? "").split("\n\n");
   const observation = paragraphs.includes(appendedNote)
     ? "The requested note text is present"
     : "The requested note text is not present";

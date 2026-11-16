@@ -255,7 +255,8 @@ describe("Shopify scope gating", () => {
     expect(toolScopesGranted("create_refund", ["read_orders"])).toBe(false);
     expect(toolScopesGranted("create_refund", ["write_orders"])).toBe(true);
     expect(toolScopesGranted("create_shopify_order", ["read_orders"])).toBe(false);
-    expect(toolScopesGranted("create_shopify_order", ["write_orders"])).toBe(true);
+    expect(toolScopesGranted("create_shopify_order", ["write_orders"])).toBe(false);
+    expect(toolScopesGranted("create_shopify_order", ["write_orders", "write_customers"])).toBe(true);
     expect(toolScopesGranted("create_gift_card", ["write_customers"])).toBe(false);
     expect(toolScopesGranted("create_gift_card", ["write_gift_cards"])).toBe(false);
     expect(toolScopesGranted("create_gift_card", ["read_gift_cards", "write_customers"])).toBe(false);

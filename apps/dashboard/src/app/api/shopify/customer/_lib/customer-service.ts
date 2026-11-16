@@ -2,10 +2,14 @@ import { db } from '@shopkeeper/db';
 import { NotFoundError } from '@/lib/api/errors';
 import {
   fetchShopifyCustomer,
+  fetchShopifyCustomerDefaultAddress,
   findShopifyCustomerByEmail,
   findShopifyOrders,
-  shopifyRestJson,
+  formatUserErrors,
+  saveShopifyCustomerDefaultAddress,
+  updateShopifyCustomerRecord,
   type ShopifyContext,
+  type ShopifyCustomerFields,
 } from '@shopkeeper/agent/shopify';
 import { SHOPIFY_ACCESS_SELECT, shopifyContextFor } from '@shopkeeper/agent/shopify/access';
 import { markShopifyIntegrationInvalidIfAuthFailure } from '@/lib/server/shopify-integration';
@@ -76,22 +80,31 @@ export async function lookupShopifyCustomer({
   return { customer, orders, shop: shopifyContext.shop };
 }
 
+/** The saved customer as the panel shows it, or Shopify's reasons for refusing the change. */
+export type ShopifyCustomerUpdateResult = { customer: ShopifyCustomer } | { rejected: string };
+
 export async function updateShopifyCustomer(
   organizationId: string,
   customerId: string | number,
   updates: ShopifyCustomerUpdates,
-): Promise<unknown | null> {
-  const customerPayload = buildShopifyCustomerPayload(customerId, updates);
+): Promise<ShopifyCustomerUpdateResult | null> {
+  const id = String(customerId);
+  return runShopifyCall(organizationId, async (ctx) => {
+    const record = await updateShopifyCustomerRecord(ctx, id, customerFields(updates));
+    const rejected = formatUserErrors(record.userErrors);
+    if (rejected) return { rejected };
 
-  const data = await runShopifyCall(organizationId, (ctx) =>
-    shopifyRestJson<{ customer?: unknown }>(ctx, `customers/${customerId}.json`, {
-      method: 'PUT',
-      maxRetries: 0,
-      body: { customer: customerPayload },
-    }),
-  );
+    const address = defaultAddressFields(updates.address);
+    if (address) {
+      const current = await fetchShopifyCustomerDefaultAddress(ctx, id);
+      const saved = await saveShopifyCustomerDefaultAddress(ctx, id, current?.gid ?? null, address);
+      const addressRejected = formatUserErrors(saved.userErrors);
+      if (addressRejected) return { rejected: addressRejected };
+    }
 
-  return data.customer ?? null;
+    const customer = await fetchShopifyCustomer(ctx, id, { maxRetries: 0 });
+    return customer ? { customer: panelCustomer(customer) } : null;
+  });
 }
 
 async function getShopifyContext(organizationId: string): Promise<ResolvedShopifyContext> {
@@ -187,31 +200,32 @@ async function getCustomerOrdersWithImages(
   }));
 }
 
-function buildShopifyCustomerPayload(
-  customerId: string | number,
-  updates: ShopifyCustomerUpdates,
-): Record<string, unknown> {
-  const customerPayload: Record<string, unknown> = {
-    id: customerId,
-    ...(updates.first_name !== undefined && { first_name: updates.first_name }),
-    ...(updates.last_name !== undefined && { last_name: updates.last_name }),
-    ...(updates.email !== undefined && { email: updates.email }),
-    ...(updates.phone !== undefined && { phone: updates.phone }),
-    ...(updates.note !== undefined && { note: updates.note }),
-  };
+// A field the panel sent: text, or null to clear it. Anything else is left alone.
+function textOrNull(value: unknown): string | null | undefined {
+  return typeof value === 'string' || value === null ? value : undefined;
+}
 
-  if (updates.address) {
-    customerPayload.addresses = [{
-      ...(updates.address.address1 !== undefined && { address1: updates.address.address1 }),
-      ...(updates.address.city !== undefined && { city: updates.address.city }),
-      ...(updates.address.province !== undefined && { province: updates.address.province }),
-      ...(updates.address.zip !== undefined && { zip: updates.address.zip }),
-      ...(updates.address.country !== undefined && { country: updates.address.country }),
-      default: true,
-    }];
-  }
+function customerFields(updates: ShopifyCustomerUpdates): ShopifyCustomerFields {
+  return Object.fromEntries(Object.entries({
+    first_name: textOrNull(updates.first_name),
+    last_name: textOrNull(updates.last_name),
+    email: textOrNull(updates.email),
+    phone: textOrNull(updates.phone),
+    note: textOrNull(updates.note),
+  }).filter(([, value]) => value !== undefined));
+}
 
-  return customerPayload;
+// The panel sends the address with every save; an empty one is not an address.
+function defaultAddressFields(address: ShopifyCustomerUpdates['address']): Record<string, string> | null {
+  if (!address) return null;
+  const fields = Object.fromEntries(Object.entries({
+    address1: address.address1,
+    city: address.city,
+    province: address.province,
+    zip: address.zip,
+    country: address.country,
+  }).flatMap(([name, value]) => (typeof value === 'string' && value.trim() ? [[name, value.trim()]] : [])));
+  return Object.keys(fields).length > 0 ? fields : null;
 }
 
 async function persistCustomerName(organizationId: string, shopifyCustomer: ShopifyCustomer) {
