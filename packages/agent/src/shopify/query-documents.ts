@@ -24,7 +24,7 @@ import {
   ORDER_FULFILLMENTS_TRACKING_QUERY,
   ORDER_FULFILLMENT_ORDERS_QUERY,
 } from "./fulfillment.js";
-import { CREATED_ORDER_LOOKUP_QUERY } from "./order-creation.js";
+import { CREATED_ORDER_LOOKUP_QUERY, RECENT_ORDERS_QUERY } from "./order-creation.js";
 import { GIFT_CARD_RECEIPT_LOOKUP_QUERY } from "./gift-cards.js";
 import { PRODUCT_SEARCH_QUERY } from "./products.js";
 import { INVENTORY_STATUS_QUERY } from "./inventory.js";
@@ -53,6 +53,7 @@ import {
 import { JOB_QUERY } from "./order-cancellation.js";
 import { REFUND_CALCULATION_QUERY } from "./refund-calculation.js";
 import { CUSTOMER_IDENTITIES_QUERY, CUSTOMER_QUERY, CUSTOMERS_QUERY } from "./customer-reads.js";
+import { CUSTOMER_DEFAULT_ADDRESS_QUERY } from "./customer-writes.js";
 import { SHOP_QUERY, STORE_CONTENT_QUERY } from "./store-reads.js";
 import { LOW_STOCK_VARIANTS_QUERY } from "./low-stock.js";
 
@@ -97,6 +98,10 @@ export const SHOPIFY_QUERY_DOCUMENTS: Record<string, ShopifyQueryDocument> = {
     document: CUSTOMER_QUERY,
     variables: { id: "gid://shopify/Customer/1" },
   },
+  customerDefaultAddress: {
+    document: CUSTOMER_DEFAULT_ADDRESS_QUERY,
+    variables: { id: "gid://shopify/Customer/1" },
+  },
   customerIdentities: {
     document: CUSTOMER_IDENTITIES_QUERY,
     variables: { query: 'email:"validation@shopkeeper.invalid"', first: 1 },
@@ -138,6 +143,10 @@ export const SHOPIFY_QUERY_DOCUMENTS: Record<string, ShopifyQueryDocument> = {
   createdOrderLookup: {
     document: CREATED_ORDER_LOOKUP_QUERY,
     variables: { query: "tag:shopkeeper-op-validation" },
+  },
+  recentOrders: {
+    document: RECENT_ORDERS_QUERY,
+    variables: {},
   },
   giftCardsByCode: {
     document: GIFT_CARDS_BY_CODE_QUERY,

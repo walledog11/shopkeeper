@@ -1,29 +1,16 @@
 import type { CreateShopifyOrderInput } from "../../../tools/index.js";
-import { shopifyRestJson, type ShopifyContext } from "../../client.js";
-import type { ShopifyOrder } from "../../types.js";
-import { operationTag, restOrderTags, sleep } from "../helpers.js";
+import type { ShopifyContext } from "../../client.js";
+import { findCreatedOrders } from "../../order-creation.js";
+import { operationTag, sleep } from "../helpers.js";
 import { committed, stillUnknown, type ShopifyReconciliationProbeResult } from "../types.js";
 
-// Shopify's order search index lags writes, so reconciliation uses the required
-// customer email to query orders directly and filters the result by operation
-// tag. A miss remains unknown because visibility cannot prove non-creation.
+// Shopify's order search index lags writes. Measured on palette-dev: order
+// #1008 was unfindable by `tag:` after three attempts across four seconds, so
+// the lookup also scans the newest orders for the tag, and the probe tries
+// more than once. A miss remains unknown because visibility cannot prove
+// non-creation.
 const ORDER_LOOKUP_ATTEMPTS = 3;
 const ORDER_LOOKUP_BACKOFF_MS = 2000;
-
-async function findCreatedOrdersByEmail(
-  ctx: ShopifyContext,
-  email: string,
-  tag: string,
-): Promise<Array<{ id: string; name?: string }>> {
-  const data = await shopifyRestJson<{ orders?: Array<ShopifyOrder & { tags?: string }> }>(
-    ctx,
-    "orders.json",
-    { query: { email, status: "any", fields: "id,name,tags" }, maxRetries: 1 },
-  );
-  return (data.orders ?? [])
-    .filter((order) => restOrderTags(order).includes(tag))
-    .map((order) => ({ id: String(order.id), name: order.name }));
-}
 
 export async function probeCreatedOrder(
   input: CreateShopifyOrderInput,
@@ -37,9 +24,9 @@ export async function probeCreatedOrder(
 
   for (let attempt = 0; attempt < ORDER_LOOKUP_ATTEMPTS; attempt += 1) {
     if (attempt > 0) await sleep(ORDER_LOOKUP_BACKOFF_MS);
-    const matches = await findCreatedOrdersByEmail(ctx, email, tag);
+    const matches = await findCreatedOrders(ctx, tag);
     if (matches.length === 1) {
-      return committed(`Reconciled created order ${matches[0]!.name ?? matches[0]!.id}.`);
+      return committed(`Reconciled created order ${matches[0]!.name ?? matches[0]!.legacyResourceId ?? matches[0]!.id}.`);
     }
     if (matches.length > 1) {
       return stillUnknown(`Multiple Shopify orders match operation tag ${tag}.`);

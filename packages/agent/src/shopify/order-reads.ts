@@ -1,6 +1,5 @@
 import { currencyAmount } from "../money.js";
 import {
-  parseNextPageInfo,
   shopifyGraphql,
   ShopifyRequestError,
   shopifySearchValue,
@@ -88,7 +87,7 @@ interface MoneySetNode {
   presentmentMoney: MoneyNode;
 }
 
-interface AddressNode {
+export interface AddressNode {
   firstName: string | null;
   lastName: string | null;
   address1: string | null;
@@ -192,7 +191,7 @@ function moneySet(set: MoneySetNode) {
   };
 }
 
-function addressFromNode(node: AddressNode): ShopifyCustomerAddress {
+export function addressFromNode(node: AddressNode): ShopifyCustomerAddress {
   return {
     first_name: node.firstName,
     last_name: node.lastName,
@@ -291,6 +290,8 @@ export interface OrderSearch {
   /** Only orders still open (not archived or cancelled), as REST's default `status=open`. */
   open?: boolean;
   unfulfilled?: boolean;
+  /** Only orders shipped in full. */
+  shipped?: boolean;
   paid?: boolean;
   createdAtMin?: Date;
   createdAtMax?: Date;
@@ -312,6 +313,7 @@ function orderSearchQuery(search: OrderSearch): string {
   }
   if (search.open) terms.push("status:open");
   if (search.unfulfilled) terms.push("fulfillment_status:unfulfilled");
+  if (search.shipped) terms.push("fulfillment_status:shipped");
   if (search.paid) terms.push("financial_status:paid");
   if (search.createdAtMin) terms.push(`created_at:>=${shopifySearchValue(search.createdAtMin.toISOString())}`);
   if (search.createdAtMax) terms.push(`created_at:<=${shopifySearchValue(search.createdAtMax.toISOString())}`);
@@ -585,6 +587,7 @@ async function simulatorOrders(
       ...(search.email !== undefined ? { email: search.email } : {}),
       ...(search.customerId !== undefined ? { customer_id: String(search.customerId) } : {}),
       ...(search.unfulfilled ? { fulfillment_status: "unfulfilled" } : {}),
+      ...(search.shipped ? { fulfillment_status: "shipped" } : {}),
       ...(search.paid ? { financial_status: "paid" } : {}),
     },
   });
@@ -592,5 +595,5 @@ async function simulatorOrders(
   const orders = ((result.data as { orders?: ShopifyOrder[] }).orders ?? [])
     .filter((order) => !search.createdAtMin || (order.created_at ?? "") >= search.createdAtMin.toISOString())
     .filter((order) => !search.createdAtMax || (order.created_at ?? "") <= search.createdAtMax.toISOString());
-  return { orders, nextCursor: parseNextPageInfo(result.headers) };
+  return { orders, nextCursor: result.nextPageInfo };
 }

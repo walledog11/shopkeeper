@@ -54,34 +54,29 @@ The first publication is the App Store. These block review or a new install's fi
 2. **Authenticate at install, not at signup** (built: the app home holds the install's
    grant and its links claim it). Closes when, on the dev store, install → app home →
    sign up → inbox asks for no store URL and no second consent.
-3. **GraphQL Admin API only.** Shopify takes only GraphQL from new public apps. Reads,
-   refunds, cancellation and order edits are moved; left are order creation, address
-   changes and customer updates (agent and dashboard, with their reconciliation
-   probes) and the scripts. Closes when nothing builds a REST Admin URL and a check
-   keeps it that way.
-4. **Instagram for an installer nobody assigned.** Connect is gated per workspace by
+3. **Instagram for an installer nobody assigned.** Connect is gated per workspace by
    SocialAPI brand assignment, so every App Store install sees Instagram "Coming soon"
    while the listing and landing page lead with DMs. Provision a brand on connect, or
    lead with email and say Instagram opens by invitation. Closes when what the listing
    promises is what a new install can connect.
-5. **Partner dashboard submission:** protected customer data access (level 2: name,
+4. **Partner dashboard submission:** protected customer data access (level 2: name,
    email, phone, address); its requirements are built (runbook *Customer data
    protection*: access log and weekly review, the Terms' data processing section, the
    incident response policy), so every answer is Yes except consent, data sale and
    automated decisions (Not applicable). Also a reason for each requested scope, dropping
    any no shipped tool uses; listing copy, icon and screenshots; a screencast; reviewer
    test credentials. Closes when the submission form is complete.
-6. **Storefront embed weight.** The chat embed loads a stylesheet from api.fontshare.com
+5. **Storefront embed weight.** The chat embed loads a stylesheet from api.fontshare.com
    on every storefront page: a render-blocking third-party request that also hands
    shoppers' IPs to a font CDN. Self-host the font or use the system stack, then compare
    Lighthouse with and without the embed. Closes when the embed costs under Shopify's
    10-point limit.
-7. **The privacy policy describes what runs.** Sentry Session Replay records a sample of
+6. **The privacy policy describes what runs.** Sentry Session Replay records a sample of
    sessions on every page, Shopify admin included, and the policy names Sentry only for
    error reports; it also omits the website chat widget, and the Terms describe Stripe
    billing. Closes when replay is off or disclosed and both documents match the shipped
    app.
-8. **Listing day:** the site's call to action is a waitlist. Point it and the pricing
+7. **Listing day:** the site's call to action is a waitlist. Point it and the pricing
    cards at the listing, and open sign-ups. Closes when the listing is live.
 
 ## Later

@@ -29,7 +29,9 @@ export function requireNumericId(value: unknown, field: string): string {
 
 /** The numeric id at the end of a GraphQL global id: `gid://shopify/Order/123` → `123`. */
 export function legacyIdFromGid(gid: string): string {
-  const tail = gid.split("/").pop();
+  // Some ids carry their model after the number
+  // (`gid://shopify/MailingAddress/123?model_name=CustomerAddress`).
+  const tail = gid.split("?")[0]!.split("/").pop();
   return tail && tail.length > 0 ? tail : gid;
 }
 

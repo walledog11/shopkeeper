@@ -41,7 +41,13 @@ import { memberOperatorKey } from '@shopkeeper/agent/internal-thread';
 import { getAgentTurnPrefixLength } from '@shopkeeper/agent/tools';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { readAgentPlanCache } from '@shopkeeper/agent/plan-cache';
-import { fulfillOrder, shopifyGraphql, shopifyRestJson } from '@shopkeeper/agent/shopify';
+import {
+  fetchShopifyOrder,
+  fetchShopifyShop,
+  findShopifyOrders,
+  fulfillOrder,
+  shopifyGraphql,
+} from '@shopkeeper/agent/shopify';
 import { SHOPIFY_ACCESS_SELECT, shopifyContextFor } from '@shopkeeper/agent/shopify/access';
 import { createSocialApiClient, type SocialApiInstagramConversation } from '@shopkeeper/integrations/socialapi';
 import { blankAnswersInCalls, merchantAnswerSlotsInCalls } from '@shopkeeper/agent/reply-placeholders';
@@ -269,25 +275,23 @@ async function callOperatorRoute<T>(path: string, payload: Record<string, unknow
 
 // ── Setup reads ───────────────────────────────────────────────────────────────
 
-interface ShopifyOrder {
-  id: number;
-  name: string;
-  current_total_price: string;
-  currency: string;
-  cancelled_at: string | null;
-  closed_at: string | null;
-  fulfillment_status?: string | null;
-  refunds?: unknown[];
-  shipping_address?: { zip?: string | null } | null;
-}
+// An order as the agent's order reads return it.
+type ShopifyOrder = NonNullable<Awaited<ReturnType<typeof fetchShopifyOrder>>>;
 
-// Plans Shopify uses for development and sandbox stores, as the mutation canary
-// lists them: the only stores this script creates an order on.
-const DEVELOPMENT_PLANS = new Set([
-  'partner_test', 'affiliate', 'staff', 'staff_business', 'trial', 'plus_partner_sandbox', 'shopify_alumni',
-]);
+const ACTIVE_VARIANTS_QUERY = `query SimulateRefundVariants {
+  productVariants(first: 250, query: "product_status:active") {
+    nodes { legacyResourceId title price product { title } }
+  }
+}`;
 
-const ORDER_FIELDS = 'id,name,current_total_price,currency,cancelled_at,closed_at,fulfillment_status,refunds,shipping_address';
+const ORDER_REFUNDS_QUERY = `query SimulateRefundOrderRefunds($id: ID!) {
+  order(id: $id) {
+    refunds(first: 20) {
+      createdAt
+      transactions(first: 10) { nodes { kind status amountSet { shopMoney { amount } } } }
+    }
+  }
+}`;
 
 const CREATE_TEST_ORDER = `mutation SimulateRefundOrder($order: OrderCreateOrderInput!, $options: OrderCreateOptionsInput) {
   orderCreate(order: $order, options: $options) {
@@ -306,22 +310,19 @@ interface OrderToCreate { variantId: string; title: string; price: string; curre
  * says to create the test order there anyway.
  */
 async function planTestOrder(shopify: ShopifyCredentials, limit: number | null): Promise<OrderToCreate | string> {
-  const { shop } = await shopifyRestJson<{ shop?: { plan_name?: string; currency?: string } }>(
-    shopify, 'shop.json', { query: { fields: 'plan_name,currency' } },
-  );
-  const plan = String(shop?.plan_name ?? 'unknown');
-  if (!DEVELOPMENT_PLANS.has(plan.toLowerCase()) && !values['allow-live-store']) {
-    return `the store is on the ${plan} plan, so no test order is created. Place one in Shopify, or add --allow-live-store to create a test order there`;
+  const shop = await fetchShopifyShop(shopify);
+  if (!shop.development && !values['allow-live-store']) {
+    return `the store is on the ${shop.planName} plan, so no test order is created. Place one in Shopify, or add --allow-live-store to create a test order there`;
   }
-  const { products = [] } = await shopifyRestJson<{
-    products?: Array<{ title?: string; variants?: Array<{ id: number; title?: string; price?: string }> }>;
-  }>(shopify, 'products.json', { query: { status: 'active', limit: 250, fields: 'title,variants' } });
-  const variants = products.flatMap(product => (product.variants ?? []).map(variant => ({
-    variantId: String(variant.id),
-    title: `${product.title ?? 'Product'}${variant.title && variant.title !== 'Default Title' ? ` - ${variant.title}` : ''}`,
-    price: variant.price ?? '0',
-    currency: shop?.currency ?? 'USD',
-  })));
+  const { productVariants } = await shopifyGraphql<{
+    productVariants: { nodes: Array<{ legacyResourceId: string; title: string; price: string; product: { title: string } }> };
+  }>(shopify, ACTIVE_VARIANTS_QUERY, {});
+  const variants = productVariants.nodes.map(variant => ({
+    variantId: variant.legacyResourceId,
+    title: `${variant.product.title}${variant.title !== 'Default Title' ? ` - ${variant.title}` : ''}`,
+    price: variant.price,
+    currency: shop.currency,
+  }));
   const affordable = variants
     .filter(variant => Number(variant.price) > 0 && (limit === null || Number(variant.price) <= limit))
     .sort((a, b) => Number(a.price) - Number(b.price));
@@ -359,8 +360,7 @@ async function createTestOrder(shopify: ShopifyCredentials, item: OrderToCreate)
   if (errors.length > 0) throw new Error(`Shopify refused the test order: ${errors.map(error => error.message).join(', ')}`);
   const created = data.orderCreate?.order;
   if (!created?.id || created.test !== true) throw new Error('Shopify returned no test order');
-  const id = created.id.split('/').pop();
-  const { order } = await shopifyRestJson<{ order?: ShopifyOrder }>(shopify, `orders/${id}.json`, { query: { fields: ORDER_FIELDS } });
+  const order = await fetchShopifyOrder(shopify, created.id.split('/').pop()!, { lineItems: 1 });
   if (!order) throw new Error(`Shopify created ${created.name} but it could not be read back`);
   return order;
 }
@@ -497,19 +497,14 @@ async function main(): Promise<void> {
       problems.push('Shopify is not connected');
     } else {
       const wanted = values.order?.trim().replace(/^#?/, '#');
-      const { orders = [] } = await shopifyRestJson<{ orders?: ShopifyOrder[] }>(
+      const { orders } = await findShopifyOrders(
         shopify,
-        'orders.json',
-        {
-          query: {
-            ...(wanted
-              ? { name: wanted, status: 'any' }
-              // Shopify can archive an order once it is fulfilled, so a shipped
-              // one is looked for among archived orders too.
-              : { financial_status: 'paid', status: values.damage ? 'any' : 'open', limit: 50, ...(values.damage ? { fulfillment_status: 'shipped' } : {}) }),
-            fields: ORDER_FIELDS,
-          },
-        },
+        wanted
+          ? { name: wanted }
+          // Shopify can archive an order once it is fulfilled, so a shipped
+          // one is looked for among archived orders too.
+          : { paid: true, ...(values.damage ? { shipped: true } : { open: true }) },
+        { first: 50, lineItems: 1 },
       );
       const limit = settings.maxRefundAmount;
       const eligible = orders.filter(candidate => (
@@ -922,15 +917,21 @@ async function main(): Promise<void> {
   });
 
   await step(`Refund recorded in Shopify on ${order.name}`, async () => {
-    const { refunds = [] } = await shopifyRestJson<{
-      refunds?: Array<{ created_at: string; transactions?: Array<{ amount: string; kind: string; status: string }> }>;
-    }>(setup.shopify, `orders/${order.id}/refunds.json`);
-    const made = refunds.filter(refund => new Date(refund.created_at).getTime() >= runStart.getTime() - 60_000);
+    const data = await shopifyGraphql<{
+      order: {
+        refunds: Array<{
+          createdAt: string | null;
+          transactions: { nodes: Array<{ kind: string; status: string; amountSet: { shopMoney: { amount: string } } }> };
+        }>;
+      } | null;
+    }>(setup.shopify, ORDER_REFUNDS_QUERY, { id: `gid://shopify/Order/${order.id}` }, { maxRetries: 1 });
+    const made = (data.order?.refunds ?? [])
+      .filter(refund => refund.createdAt && new Date(refund.createdAt).getTime() >= runStart.getTime() - 60_000);
     if (made.length === 0) throw new Error(`Shopify shows no refund on ${order.name} from this run`);
     const amount = made
-      .flatMap(refund => refund.transactions ?? [])
-      .filter(transaction => transaction.kind === 'refund' && transaction.status === 'success')
-      .reduce((total, transaction) => total + Number(transaction.amount), 0);
+      .flatMap(refund => refund.transactions.nodes)
+      .filter(transaction => transaction.kind === 'REFUND' && transaction.status === 'SUCCESS')
+      .reduce((total, transaction) => total + Number(transaction.amountSet.shopMoney.amount), 0);
     console.log(`        Refunded ${amount.toFixed(2)} ${order.currency} of ${order.current_total_price}`);
   });
 

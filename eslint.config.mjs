@@ -56,6 +56,11 @@ const repoNodeGlobals = {
   ...globals.node,
 };
 
+// Shopify accepts only GraphQL Admin API calls from new public apps, so the one
+// Admin API URL is the GraphQL endpoint the Shopify client builds.
+const shopifyGraphqlOnly =
+  "Shopify takes only GraphQL Admin API calls. Send them with shopifyGraphql from @shopkeeper/agent/shopify, whose client builds the one Admin API URL.";
+
 export default [
   {
     ignores: [
@@ -109,6 +114,16 @@ export default [
     files: [...repoNodeJsFiles, ...repoNodeTsFiles],
     languageOptions: {
       globals: repoNodeGlobals,
+    },
+  },
+  {
+    files: [...dashboardSourceFiles, ...repoNodeJsFiles, ...repoNodeTsFiles],
+    ignores: ["packages/agent/src/shopify/client.ts", "**/*.test.*", "**/test-fixtures/**"],
+    rules: {
+      "no-restricted-syntax": ["error",
+        { selector: "Literal[value=/\\/admin\\/api\\//]", message: shopifyGraphqlOnly },
+        { selector: "TemplateElement[value.raw=/\\/admin\\/api\\//]", message: shopifyGraphqlOnly },
+      ],
     },
   },
   ...tseslint.configs.recommended.map((config) => ({

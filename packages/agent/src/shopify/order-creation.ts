@@ -7,17 +7,20 @@ import {
   type ReceiptV1,
   type ToolResult,
 } from "../tools/result.js";
+import { currencyAmount } from "../money.js";
 import {
   formatShopifyToolError,
+  formatUserErrors,
   isAmbiguousShopifyMutationError,
   shopifyGraphql,
   shopifyOperationTag,
-  shopifyRestJson,
   type ShopifyContext,
+  type ShopifyGraphqlUserError,
 } from "./client.js";
+import { mailingAddressInput } from "./customer-writes.js";
 import { buildOrderAddress } from "./order-address.js";
 import { shopifyReceiptResults, shopifyFailureReceipt, shopifyReceiptEnvelope } from "./receipts.js";
-import type { ShopifyOrder } from "./types.js";
+import { fetchShopifyShop } from "./store-reads.js";
 import {
   optionalPositiveInteger,
   optionalString,
@@ -34,35 +37,21 @@ export interface CreateShopifyOrderOptions {
   allowCustomLineItems?: boolean;
 }
 
-interface CreatedOrderLookupData {
-  orders?: {
-    nodes?: Array<{
-      id: string;
-      legacyResourceId?: string | null;
-      name?: string | null;
-      email?: string | null;
-      tags?: string[] | null;
-      displayFinancialStatus?: string | null;
-      totalPriceSet?: {
-        shopMoney?: { amount?: string | null; currencyCode?: string | null } | null;
-      } | null;
-    }>;
+/** An order as the creation, its lookups and the probe read it. */
+export interface CreatedOrderNode {
+  id: string;
+  legacyResourceId?: string | null;
+  name?: string | null;
+  email?: string | null;
+  tags?: string[] | null;
+  displayFinancialStatus?: string | null;
+  totalPriceSet?: {
+    shopMoney?: { amount?: string | null; currencyCode?: string | null } | null;
   } | null;
 }
 
-interface ObservedCreatedOrder {
-  id: string | number;
-  name?: string | null;
-  email?: string | null;
-  total?: string | null;
-  currency?: string | null;
-  financialStatus?: string | null;
-  tags?: string | string[] | null;
-}
-
-function hasOperationTag(tags: ObservedCreatedOrder["tags"], operationTag: string): boolean {
-  if (Array.isArray(tags)) return tags.includes(operationTag);
-  return (tags ?? "").split(",").map((tag) => tag.trim()).includes(operationTag);
+interface CreatedOrderLookupData {
+  orders?: { nodes?: CreatedOrderNode[] } | null;
 }
 
 function orderCreationUnknown(
@@ -85,26 +74,21 @@ function orderCreationUnknown(
 }
 
 function createdOrderResult(
-  order: {
-    id: string | number;
-    name?: string | null;
-    email?: string | null;
-    total?: string | null;
-    currency?: string | null;
-    financialStatus?: string | null;
-    tags?: string | string[] | null;
-  },
+  order: CreatedOrderNode,
   ctx: ShopifyContext,
   fallbackEmail: string,
   operationTag: string,
   reconciled = false,
 ): ToolResult {
-  const orderId = String(order.id).replace(/^gid:\/\/shopify\/Order\//, "");
+  const orderId = order.legacyResourceId ?? order.id.replace(/^gid:\/\/shopify\/Order\//, "");
   const orderName = order.name ?? `#${orderId}`;
-  const total = order.total ? `$${order.total}` : "unknown total";
+  const money = order.totalPriceSet?.shopMoney;
+  const currency = money?.currencyCode?.trim().toUpperCase();
+  const totalAmount = money?.amount?.trim() ? currencyAmount(money.amount.trim(), currency) : undefined;
+  const total = totalAmount ? `$${totalAmount}` : "unknown total";
   const adminUrl = `https://${ctx.shop}/admin/orders/${orderId}`;
   const confirmation = reconciled ? " (confirmed after an interrupted provider response)" : "";
-  const financialStatus = order.financialStatus?.trim().toLowerCase();
+  const financialStatus = order.displayFinancialStatus?.trim().toLowerCase();
   const payment = financialStatus ? `, payment ${financialStatus.replace(/_/g, " ")}` : "";
   const result = toolOk(
     `Done — order ${orderName} is in for ${order.email ?? fallbackEmail}, total ${total}${payment}${confirmation}.\n\n`
@@ -113,14 +97,12 @@ function createdOrderResult(
   const envelope = shopifyReceiptEnvelope(ctx, { kind: "order", id: orderId });
   if (!envelope) return result;
 
-  const totalAmount = order.total?.trim();
-  const currency = order.currency?.trim().toUpperCase();
   if (
     !order.name?.trim()
     || !financialStatus
     || !totalAmount
     || !currency
-    || !hasOperationTag(order.tags, operationTag)
+    || !order.tags?.includes(operationTag)
   ) {
     return orderCreationUnknown(
       ctx,
@@ -162,17 +144,39 @@ export const CREATED_ORDER_LOOKUP_QUERY = `query FindShopkeeperCreatedOrder($que
   }
 }`;
 
-async function findCreatedOrder(
-  ctx: ShopifyContext,
-  operationTag: string,
-): Promise<CreatedOrderLookupData["orders"]> {
-  const data = await shopifyGraphql<CreatedOrderLookupData>(
+// Shopify's order search lags writes by seconds, so an order created moments
+// ago can be missing from a `tag:` search. The newest orders, listed without a
+// search, show it sooner.
+export const RECENT_ORDERS_QUERY = `query RecentShopkeeperOrders {
+  orders(first: 50, sortKey: CREATED_AT, reverse: true) {
+    nodes {
+      id
+      legacyResourceId
+      name
+      email
+      tags
+      displayFinancialStatus
+      totalPriceSet { shopMoney { amount currencyCode } }
+    }
+  }
+}`;
+
+/**
+ * The orders carrying an operation's tag: those the tag search finds or, when
+ * it finds none, those among the newest orders. An empty answer does not prove
+ * the order was never created; it may not be visible yet.
+ */
+export async function findCreatedOrders(ctx: ShopifyContext, operationTag: string): Promise<CreatedOrderNode[]> {
+  const tagged = (data: CreatedOrderLookupData) =>
+    (data.orders?.nodes ?? []).filter((order) => order.tags?.includes(operationTag));
+  const searched = tagged(await shopifyGraphql<CreatedOrderLookupData>(
     ctx,
     CREATED_ORDER_LOOKUP_QUERY,
     { query: `tag:${operationTag}` },
     { maxRetries: 1 },
-  );
-  return data.orders ?? null;
+  ));
+  if (searched.length > 0) return searched;
+  return tagged(await shopifyGraphql<CreatedOrderLookupData>(ctx, RECENT_ORDERS_QUERY, {}, { maxRetries: 1 }));
 }
 
 async function reconcileCreatedOrder(
@@ -182,19 +186,9 @@ async function reconcileCreatedOrder(
   mutationError?: unknown,
 ): Promise<ToolResult> {
   try {
-    const lookup = await findCreatedOrder(ctx, operationTag);
-    const matches = (lookup?.nodes ?? []).filter((order) => order.tags?.includes(operationTag));
+    const matches = await findCreatedOrders(ctx, operationTag);
     if (matches.length === 1) {
-      const order = matches[0]!;
-      return createdOrderResult({
-        id: order.legacyResourceId ?? order.id,
-        name: order.name,
-        email: order.email,
-        total: order.totalPriceSet?.shopMoney?.amount,
-        currency: order.totalPriceSet?.shopMoney?.currencyCode,
-        financialStatus: order.displayFinancialStatus,
-        tags: order.tags,
-      }, ctx, email, operationTag, true);
+      return createdOrderResult(matches[0]!, ctx, email, operationTag, true);
     }
     if (matches.length > 1) {
       return orderCreationUnknown(
@@ -223,10 +217,29 @@ async function reconcileCreatedOrder(
   }
 }
 
+export const ORDER_CREATE_MUTATION = `mutation ShopkeeperOrderCreate($order: OrderCreateOrderInput!, $options: OrderCreateOptionsInput!) {
+  orderCreate(order: $order, options: $options) {
+    order {
+      id
+      legacyResourceId
+      name
+      email
+      tags
+      displayFinancialStatus
+      totalPriceSet { shopMoney { amount currencyCode } }
+    }
+    userErrors { field message }
+  }
+}`;
+
+type OrderLine =
+  | { variantId: string; quantity: number }
+  | { title: string; price: string; quantity: number };
+
 function buildLineItems(
   lineItems: CreateShopifyOrderLineItem[],
   options: CreateShopifyOrderOptions
-) {
+): OrderLine[] {
   if (!Array.isArray(lineItems) || lineItems.length === 0) {
     throw new ShopifyInputError("line_items must include at least one item.");
   }
@@ -236,7 +249,7 @@ function buildLineItems(
     const variantId = optionalString(item.variant_id);
 
     if (variantId) {
-      return { variant_id: Number(requireNumericId(variantId, `line_items[${index}].variant_id`)), quantity };
+      return { variantId: requireNumericId(variantId, `line_items[${index}].variant_id`), quantity };
     }
 
     if (!options.allowCustomLineItems) {
@@ -247,9 +260,26 @@ function buildLineItems(
       title: requireNonEmptyString(item.title, `line_items[${index}].title`),
       price: requireAmount(item.price, `line_items[${index}].price`),
       quantity,
-      requires_shipping: true,
     };
   });
+}
+
+// A custom line is priced in the shop's currency, as REST priced it.
+function lineItemInput(line: OrderLine, shopCurrency: string | null) {
+  if ("variantId" in line) {
+    return { variantId: `gid://shopify/ProductVariant/${line.variantId}`, quantity: line.quantity };
+  }
+  return {
+    title: line.title,
+    quantity: line.quantity,
+    requiresShipping: true,
+    priceSet: { shopMoney: { amount: line.price, currencyCode: shopCurrency } },
+  };
+}
+
+async function customLineCurrency(ctx: ShopifyContext, lines: OrderLine[]): Promise<string | null> {
+  if (lines.every((line) => "variantId" in line)) return null;
+  return (await fetchShopifyShop(ctx, { maxRetries: 1 })).currency;
 }
 
 export async function createShopifyOrder(
@@ -278,19 +308,9 @@ export async function createShopifyOrder(
     const currentOperationTag = shopifyOperationTag(ctx.operationId);
     operationTag = currentOperationTag;
 
-    const existing = await findCreatedOrder(ctx, currentOperationTag);
-    const existingMatches = (existing?.nodes ?? []).filter((order) => order.tags?.includes(currentOperationTag));
+    const existingMatches = await findCreatedOrders(ctx, currentOperationTag);
     if (existingMatches.length === 1) {
-      const order = existingMatches[0]!;
-      return createdOrderResult({
-        id: order.legacyResourceId ?? order.id,
-        name: order.name,
-        email: order.email,
-        total: order.totalPriceSet?.shopMoney?.amount,
-        currency: order.totalPriceSet?.shopMoney?.currencyCode,
-        financialStatus: order.displayFinancialStatus,
-        tags: order.tags,
-      }, ctx, email, currentOperationTag, true);
+      return createdOrderResult(existingMatches[0]!, ctx, email, currentOperationTag, true);
     }
     if (existingMatches.length > 1) {
       return orderCreationUnknown(
@@ -301,37 +321,43 @@ export async function createShopifyOrder(
       );
     }
 
+    const shopCurrency = await customLineCurrency(ctx, lineItems);
+    const address = mailingAddressInput(shippingAddress);
+
     mutationStarted = true;
-    const data = await shopifyRestJson<{ order?: ShopifyOrder }>(ctx, "orders.json", {
-      method: "POST",
-      body: {
-        order: {
-          email,
-          financial_status: "pending",
-          send_receipt: false,
-          send_fulfillment_receipt: false,
-          line_items: lineItems,
-          shipping_address: shippingAddress,
-          billing_address: shippingAddress,
-          tags: currentOperationTag,
-          ...(note ? { note } : {}),
-        },
+    const data = await shopifyGraphql<{
+      orderCreate: { order: CreatedOrderNode | null; userErrors: ShopifyGraphqlUserError[] };
+    }>(ctx, ORDER_CREATE_MUTATION, {
+      order: {
+        email,
+        // The customer with this email, or a new one, as REST attached it. Only
+        // the email is sent, so an existing customer's profile is left as it is.
+        customer: { toUpsert: { email } },
+        financialStatus: "PENDING",
+        lineItems: lineItems.map((line) => lineItemInput(line, shopCurrency)),
+        shippingAddress: address,
+        billingAddress: address,
+        tags: [currentOperationTag],
+        ...(note ? { note } : {}),
       },
+      options: { sendReceipt: false, sendFulfillmentReceipt: false, inventoryBehaviour: "BYPASS" },
     });
 
-    if (!data.order) {
+    const rejection = formatUserErrors(data.orderCreate.userErrors);
+    if (rejection) {
+      return orderCreationReceipts.failure(
+        ctx,
+        email,
+        toolError(`Error: failed to create order - ${rejection}`),
+        "failed",
+        "provider_rejected_creation",
+      );
+    }
+    if (!data.orderCreate.order) {
       return reconcileCreatedOrder(ctx, currentOperationTag, email);
     }
 
-    return createdOrderResult({
-      id: data.order.id,
-      name: data.order.name,
-      email,
-      total: data.order.total_price,
-      currency: data.order.currency,
-      financialStatus: data.order.financial_status,
-      tags: data.order.tags,
-    }, ctx, email, currentOperationTag);
+    return createdOrderResult(data.orderCreate.order, ctx, email, currentOperationTag);
   } catch (err) {
     if (mutationStarted && operationTag && isAmbiguousShopifyMutationError(err)) {
       return reconcileCreatedOrder(ctx, operationTag, validatedEmail ?? "the customer", err);

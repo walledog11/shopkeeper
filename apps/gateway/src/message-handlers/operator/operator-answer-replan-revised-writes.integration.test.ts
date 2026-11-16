@@ -52,7 +52,12 @@ import { expectedPlanIdentity, getContext } from '../../operator-context.js';
 import { executeCurrentCachedHomePlan } from '@shopkeeper/agent/plan-execution';
 import { buildGatewayPlanExecutionDeps } from './agent-turn-deps.js';
 import { seedCardedSupportTask, actionPlan, withExactReply } from '../../test-fixtures/operator-answer-replan-fixtures.js';
-import { answerShopifyGraphqlRead } from '@shopkeeper/agent/testing';
+import {
+  answerShopifyGraphqlRead,
+  graphqlRequest,
+  graphqlResponse,
+  shopifyCustomerNode,
+} from '@shopkeeper/agent/testing';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
 // Operator state is keyed to the person, so every transport in these cases writes
@@ -115,7 +120,7 @@ describe('applyOperatorAnswerReplan durable continuation', () => {
     });
 
     let mutationCalls = 0;
-    const originalCustomer = {
+    let customer = {
       id: 1234, first_name: 'Jane', last_name: 'Doe', email: 'jane@example.com',
       phone: '+15550000000', note: 'Existing note', orders_count: 1, total_spent: '42.00',
       default_address: null,
@@ -123,22 +128,22 @@ describe('applyOperatorAnswerReplan durable continuation', () => {
     const providerFetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
       const method = init?.method ?? 'GET';
-      const read = answerShopifyGraphqlRead(init, { orders: [] });
+      const read = answerShopifyGraphqlRead(init, { orders: [], customers: [customer] });
       if (read) return read;
-      if (url.includes(`/customers/${customerId}.json`) && method === 'GET') {
-        return new Response(JSON.stringify({ customer: originalCustomer }), { status: 200 });
-      }
-      if (url.includes(`/customers/${customerId}.json`) && method === 'PUT') {
+      const request = graphqlRequest(init);
+      if (request?.operation === 'ShopkeeperCustomerUpdate') {
         mutationCalls += 1;
         if (scenario === 'unknown') {
           return new Response(JSON.stringify({ errors: 'upstream timeout' }), { status: 503 });
         }
-        const body = JSON.parse(String(init?.body ?? '{}')) as {
-          customer?: Record<string, unknown>;
+        const changes = request.variables.input as Record<string, string | undefined>;
+        customer = {
+          ...customer,
+          ...(changes.email !== undefined ? { email: changes.email } : {}),
+          ...(changes.phone !== undefined ? { phone: changes.phone } : {}),
+          ...(changes.note !== undefined ? { note: changes.note } : {}),
         };
-        return new Response(JSON.stringify({
-          customer: { ...originalCustomer, ...body.customer },
-        }), { status: 200 });
+        return graphqlResponse({ customerUpdate: { customer: shopifyCustomerNode(customer), userErrors: [] } });
       }
       throw new Error(`Unexpected provider request: ${method} ${url}`);
     });

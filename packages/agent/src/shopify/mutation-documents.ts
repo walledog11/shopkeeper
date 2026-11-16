@@ -5,17 +5,21 @@
 // that actually runs. The registry exists so the schema-validation harness
 // (scripts/canary-shopify-mutations.mjs --validate) can fail on a document it
 // has no case for, rather than silently skipping a newly added mutation.
-//
-// REST mutations (order address, order create) are not here: they fail with an
-// HTTP status rather than as a statusless document-validation error, so they
-// are not part of this class.
+import {
+  CUSTOMER_ADDRESS_CREATE_MUTATION,
+  CUSTOMER_ADDRESS_UPDATE_MUTATION,
+  CUSTOMER_CREATE_MUTATION,
+  CUSTOMER_UPDATE_MUTATION,
+} from "./customer-writes.js";
 import {
   AUTOMATIC_DISCOUNT_CREATE_MUTATION,
   AUTOMATIC_DISCOUNT_DELETE_MUTATION,
 } from "./flash-sales.js";
 import { FULFILLMENT_CREATE_MUTATION } from "./fulfillment.js";
 import { GIFT_CARD_CREATE_MUTATION } from "./gift-cards.js";
+import { ORDER_SHIPPING_ADDRESS_UPDATE_MUTATION } from "./order-address.js";
 import { ORDER_CANCEL_MUTATION } from "./order-cancellation.js";
+import { ORDER_CREATE_MUTATION } from "./order-creation.js";
 import {
   ORDER_EDIT_ADD_VARIANT_MUTATION,
   ORDER_EDIT_BEGIN_MUTATION,
@@ -36,6 +40,26 @@ export interface ShopifyMutationDocument {
 }
 
 export const SHOPIFY_MUTATION_DOCUMENTS: Record<string, ShopifyMutationDocument> = {
+  customerUpdate: {
+    document: CUSTOMER_UPDATE_MUTATION,
+    rootField: "customerUpdate",
+  },
+  customerCreate: {
+    document: CUSTOMER_CREATE_MUTATION,
+    rootField: "customerCreate",
+  },
+  customerAddressUpdate: {
+    document: CUSTOMER_ADDRESS_UPDATE_MUTATION,
+    rootField: "customerAddressUpdate",
+  },
+  customerAddressCreate: {
+    document: CUSTOMER_ADDRESS_CREATE_MUTATION,
+    rootField: "customerAddressCreate",
+  },
+  orderShippingAddressUpdate: {
+    document: ORDER_SHIPPING_ADDRESS_UPDATE_MUTATION,
+    rootField: "orderUpdate",
+  },
   fulfillmentCreate: {
     document: FULFILLMENT_CREATE_MUTATION,
     rootField: "fulfillmentCreate",
@@ -43,6 +67,10 @@ export const SHOPIFY_MUTATION_DOCUMENTS: Record<string, ShopifyMutationDocument>
   giftCardCreate: {
     document: GIFT_CARD_CREATE_MUTATION,
     rootField: "giftCardCreate",
+  },
+  orderCreate: {
+    document: ORDER_CREATE_MUTATION,
+    rootField: "orderCreate",
   },
   orderCancel: {
     document: ORDER_CANCEL_MUTATION,

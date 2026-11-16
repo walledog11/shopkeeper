@@ -3,8 +3,8 @@ import { mockClerkSession } from '@/test-fixtures/clerk-session';
 import { ChannelType } from '@shopkeeper/db';
 import { cleanupTestData, createTestIntegration, createTestOrg } from '@shopkeeper/db/test-helpers';
 
-const { mockShopifyRestJson } = vi.hoisted(() => ({
-  mockShopifyRestJson: vi.fn(),
+const { mockCreateShopifyCustomerRecord } = vi.hoisted(() => ({
+  mockCreateShopifyCustomerRecord: vi.fn(),
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({
@@ -16,7 +16,7 @@ vi.mock('@shopkeeper/agent/shopify', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@shopkeeper/agent/shopify')>();
   return {
     ...actual,
-    shopifyRestJson: mockShopifyRestJson,
+    createShopifyCustomerRecord: mockCreateShopifyCustomerRecord,
   };
 });
 
@@ -52,6 +52,6 @@ describe('POST /api/shopify/customers', () => {
     }));
 
     expect(res.status).toBe(400);
-    expect(mockShopifyRestJson).not.toHaveBeenCalled();
+    expect(mockCreateShopifyCustomerRecord).not.toHaveBeenCalled();
   });
 });
