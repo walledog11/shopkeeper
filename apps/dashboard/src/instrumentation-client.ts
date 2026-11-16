@@ -9,9 +9,9 @@ Sentry.init({
   sendDefaultPii: false,
   enableLogs: true,
   tracesSampleRate: process.env.NODE_ENV === 'development' ? 1 : 0.1,
-  integrations: [Sentry.replayIntegration()],
-  replaysSessionSampleRate: process.env.NODE_ENV === 'development' ? 1 : 0.1,
-  replaysOnErrorSampleRate: 1,
+  // No Session Replay: it would record the screens merchants use, Shopify admin
+  // included, where customer names and addresses are shown. The privacy policy
+  // names Sentry for error reports only.
 });
 
 export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;

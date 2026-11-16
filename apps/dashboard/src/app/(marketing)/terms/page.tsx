@@ -19,7 +19,7 @@ export default function TermsPage() {
   return (
     <LegalPage
       title="Terms of Service"
-      effectiveDate="November 11, 2026"
+      effectiveDate="November 16, 2026"
       intro={termsIntro}
       sections={[
         {
@@ -55,8 +55,8 @@ export default function TermsPage() {
           title: 'Connected Services',
           body: (
             <p>
-              Your use of connected services such as Shopify, email providers, Stripe, and messaging platforms remains
-              subject to their terms. You authorize Shopkeeper to access, process, and transmit data from connected services
+              Your use of connected services such as Shopify, email providers, and messaging platforms remains subject
+              to their terms. You authorize Shopkeeper to access, process, and transmit data from connected services
               as needed to provide the product.
             </p>
           ),
@@ -65,9 +65,11 @@ export default function TermsPage() {
           title: 'Billing',
           body: (
             <p>
-              Paid plans, trials, renewal terms, and fees are shown at checkout or in the product. Unless stated
-              otherwise, subscriptions renew automatically until canceled. Failure to pay may result in restricted
-              access, write-gating, or suspension.
+              If your store installed Shopkeeper from Shopify, Shopify bills you for it on your Shopify bill, under
+              Shopify&apos;s terms: you choose or change your plan in Shopify, and uninstalling Shopkeeper cancels it.
+              Otherwise you pay through Stripe at checkout. Plans, trials, and fees are shown where you choose a plan.
+              Unless stated otherwise, subscriptions renew automatically until canceled. Failure to pay may result in
+              restricted access, write-gating, or suspension.
             </p>
           ),
         },

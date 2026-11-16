@@ -102,6 +102,25 @@ Before the route existed, `application_url` was the site root, which sends
 `X-Frame-Options: SAMEORIGIN`, so the admin showed a blank frame. An
 `application_url` change ships only with `shopify app deploy`.
 
+## Access scopes
+
+`scopes` in `shopify.app.toml` and `SHOPIFY_OAUTH_SCOPES` list the same set. Each
+is there for a shipped capability; drop a scope when the last one that needs it
+goes. The reasons, as the App Store submission asks for them:
+
+| Scope | Why the app needs it |
+| --- | --- |
+| `read_customers`, `write_customers` | Find the customer a message comes from; update their contact details or add a note when the merchant approves; attach an order the agent creates to its customer. |
+| `read_orders`, `write_orders` | Answer order and delivery questions; refund, cancel, change a shipping address or create a replacement order when the merchant approves; flag a risky order. |
+| `write_order_edits` | Add or remove items on an unfulfilled order when the merchant approves. |
+| `read_merchant_managed_fulfillment_orders`, `write_merchant_managed_fulfillment_orders` | Mark an order fulfilled, with tracking, when the merchant approves. |
+| `read_returns`, `write_returns` | Open a return or exchange, attach a return label, and tell the merchant when a return closes. |
+| `read_products`, `write_products` | Answer product and stock questions; change the prices of named variants when the merchant approves. |
+| `read_content` | Import the store's published pages and policies into the agent's memory. |
+| `read_gift_cards`, `write_gift_cards` | Issue a gift card when the merchant approves, and confirm it after an interrupted response. |
+| `write_discounts` | Run a time-limited sale (an automatic discount that Shopify ends) when the merchant approves. |
+| `write_app_proxy` | Serve website chat from the store's own domain. |
+
 ## A setting that looks wrong and is not
 
 It matches the production configuration on purpose, and is here because it

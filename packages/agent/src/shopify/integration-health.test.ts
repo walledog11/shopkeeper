@@ -110,21 +110,13 @@ describe("missingShopifyScopes", () => {
   });
 
   // The case this probe exists for: an install predating the 2026-07-06
-  // capability expansion, where gift cards and store credit fail as 403s.
+  // capability expansion, where gift cards fail as 403s.
   it("reports the scopes an older install never received", () => {
     const older = SHOPIFY_OAUTH_SCOPES.filter((scope) => (
-      scope !== "read_gift_cards"
-      && scope !== "write_gift_cards"
-      && scope !== "read_store_credit_accounts"
-      && scope !== "write_store_credit_account_transactions"
+      scope !== "read_gift_cards" && scope !== "write_gift_cards"
     ));
 
-    expect(missingShopifyScopes(older)).toEqual([
-      "read_gift_cards",
-      "write_gift_cards",
-      "read_store_credit_accounts",
-      "write_store_credit_account_transactions",
-    ]);
+    expect(missingShopifyScopes(older)).toEqual(["read_gift_cards", "write_gift_cards"]);
   });
 
   it("reports the fulfillment-order scopes required by fulfill_order", () => {
@@ -150,10 +142,7 @@ describe("missingShopifyScopes", () => {
   it("accepts a write grant in place of the implied read", () => {
     const impliedReads = SHOPIFY_OAUTH_SCOPES.filter((scope) => !scope.startsWith("read_"));
 
-    expect(missingShopifyScopes(impliedReads)).toEqual([
-      "read_content",
-      "read_store_credit_accounts",
-    ]);
+    expect(missingShopifyScopes(impliedReads)).toEqual(["read_content"]);
   });
 
   it("ignores case and surrounding whitespace in the granted list", () => {

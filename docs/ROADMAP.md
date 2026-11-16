@@ -7,7 +7,7 @@ Technical contracts and settled engineering decisions live with the code they go
 ([agent-runtime](agent-runtime.md), [runbook](production/runbook.md),
 [transport plan](socialapi-transport-plan.md)), not here.
 
-Last updated: 2026-11-11.
+Last updated: 2026-11-16.
 
 ## Next — the first real merchant
 
@@ -63,20 +63,12 @@ The first publication is the App Store. These block review or a new install's fi
    email, phone, address); its requirements are built (runbook *Customer data
    protection*: access log and weekly review, the Terms' data processing section, the
    incident response policy), so every answer is Yes except consent, data sale and
-   automated decisions (Not applicable). Also a reason for each requested scope, dropping
-   any no shipped tool uses; listing copy, icon and screenshots; a screencast; reviewer
-   test credentials. Closes when the submission form is complete.
-5. **Storefront embed weight.** The chat embed loads a stylesheet from api.fontshare.com
-   on every storefront page: a render-blocking third-party request that also hands
-   shoppers' IPs to a font CDN. Self-host the font or use the system stack, then compare
-   Lighthouse with and without the embed. Closes when the embed costs under Shopify's
-   10-point limit.
-6. **The privacy policy describes what runs.** Sentry Session Replay records a sample of
-   sessions on every page, Shopify admin included, and the policy names Sentry only for
-   error reports; it also omits the website chat widget, and the Terms describe Stripe
-   billing. Closes when replay is off or disclosed and both documents match the shipped
-   app.
-7. **Listing day:** the site's call to action is a waitlist. Point it and the pricing
+   automated decisions (Not applicable). The reason for each requested scope is in the
+   Shopify configuration reference (*Access scopes*); release the current
+   `shopify.app.toml` and chat extension with `shopify app deploy` before submitting.
+   Left: listing copy, icon and screenshots; a screencast; reviewer test credentials.
+   Closes when the submission form is complete.
+5. **Listing day:** the site's call to action is a waitlist. Point it and the pricing
    cards at the listing, and open sign-ups. Closes when the listing is live.
 
 ## Later
