@@ -14,7 +14,7 @@ async function readAsset(name: string): Promise<string> {
 
 /** The preview runs the real widget script, sandboxed: nothing but its own nonce runs, and nothing leaves. */
 export function chatPreviewContentSecurityPolicy(nonce: string, frameAncestors: readonly string[]): string {
-  return `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline' https://api.fontshare.com; font-src https://cdn.fontshare.com; img-src 'self' https:; connect-src 'none'; frame-ancestors ${frameAncestors.join(' ')}; base-uri 'none'; form-action 'none'`;
+  return `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; img-src 'self' https:; connect-src 'none'; frame-ancestors ${frameAncestors.join(' ')}; base-uri 'none'; form-action 'none'`;
 }
 
 export async function chatPreviewDocument(nonce: string): Promise<string> {
@@ -45,10 +45,5 @@ window.addEventListener('message', function(event) {
   window.parent.postMessage({ type: 'shopkeeper:rendered' }, '*');
 });
 window.parent.postMessage({ type: 'shopkeeper:ready' }, '*');
-// Load typography after the preview is usable, even when the font service is slow.
-var font = document.createElement('link');
-font.rel = 'stylesheet';
-font.href = 'https://api.fontshare.com/v2/css?f[]=general-sans@1,2&display=swap';
-document.head.appendChild(font);
 </script></body></html>`;
 }

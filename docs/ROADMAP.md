@@ -66,12 +66,7 @@ The first publication is the App Store. These block review or a new install's fi
    automated decisions (Not applicable). Also a reason for each requested scope, dropping
    any no shipped tool uses; listing copy, icon and screenshots; a screencast; reviewer
    test credentials. Closes when the submission form is complete.
-5. **Storefront embed weight.** The chat embed loads a stylesheet from api.fontshare.com
-   on every storefront page: a render-blocking third-party request that also hands
-   shoppers' IPs to a font CDN. Self-host the font or use the system stack, then compare
-   Lighthouse with and without the embed. Closes when the embed costs under Shopify's
-   10-point limit.
-6. **Listing day:** the site's call to action is a waitlist. Point it and the pricing
+5. **Listing day:** the site's call to action is a waitlist. Point it and the pricing
    cards at the listing, and open sign-ups. Closes when the listing is live.
 
 ## Later

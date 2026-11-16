@@ -11,6 +11,10 @@
   reports as visible. A light-DOM child that never renders (the shadow root
   replaces it, there is no slot) is what stops the rule matching. The JS also
   sets an inline display, because `div:empty` out-specifies `:host`.
+
+  No web font: the widget falls back to the system stack in
+  shopkeeper-tokens.css. A font stylesheet here was a render-blocking request
+  on every storefront page that also sent shoppers' IPs to the font host.
 {% endcomment %}
 
 {% liquid
@@ -47,7 +51,6 @@
   data-page-url="{{ canonical_url }}"
 ><span hidden></span></div>
 
-<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@1,2&amp;display=swap">
 <script src="{{ 'shopkeeper-chat.js' | asset_url }}" defer></script>
 
 {% comment %} Keep legacy setting IDs and values for stores that have not saved in Shopkeeper. {% endcomment %}
