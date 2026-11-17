@@ -296,7 +296,6 @@ describe('POST /webhooks/shopify', () => {
       platform: 'shopify',
       organizationId: org.id,
       topic: 'orders/create',
-      inboundMessageId: `shopify:${shopDomain}:webhook-1001`,
     });
   });
 

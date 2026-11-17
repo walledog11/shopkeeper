@@ -12,10 +12,6 @@ export function getMockFetch() {
   return getWorkerTestState().mockFetch;
 }
 
-export function getMockLogger() {
-  return getWorkerTestState().mockLogger;
-}
-
 export function makeEmailJob(organizationId: string, overrides: Record<string, unknown> = {}) {
   const defaultMessageId = `mid_${Date.now()}`;
   const data: Record<string, unknown> = {

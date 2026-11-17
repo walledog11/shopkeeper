@@ -703,7 +703,7 @@ incident is contained and investigated, and the 72-hour notice to affected merch
 
 A retry-exhausted job lands in its queue's `failed` set. It is evidence, not proof the business
 operation failed — compare with Postgres and provider truth before replaying or removing it. Queues:
-`inbound-messages` (email, Shopify order events, deferred Instagram DMs), `ai-summary` (summary, plan
+`inbound-messages` (email, new Shopify orders, deferred Instagram DMs), `ai-summary` (summary, plan
 precompute, auto-ack, notifications), `outbound-email`, `gmail-sync`, `gmail-watch-maintenance`,
 `order-review`, `operator-event`, `agent-task`, `integration-disconnect`.
 
@@ -728,7 +728,7 @@ If the evidence does not fit the safe condition, escalate instead of replaying:
 
 | Queue | Truth to inspect | Replay rule |
 | --- | --- | --- |
-| `inbound-messages` | Provider message/webhook identity, persisted `Message`/order event, downstream summary job | Replay the original job only once its stable provider identity is present and ingestion dedupes it. Never reconstruct a job with a new ID. |
+| `inbound-messages` | Provider message/webhook identity, persisted `Message` (a new Shopify order: its `conversation_attributions` row), downstream summary job | Replay the original job only once its stable provider identity is present and ingestion dedupes it. Never reconstruct a job with a new ID. |
 | `ai-summary` | `sourceMessageId`, latest customer message, cached-plan identity, any `PlanExecution` | Only while `sourceMessageId` is still the latest customer request; leave stale jobs superseded. No stable source identity = not replayable. |
 | `gmail-sync` | History cursor, Gmail message ID, stable `gmail-inbound-<integration>-<message>` jobs | Replay after credentials/provider recover; the checkpoint is monotonic and inbound jobs use stable IDs. |
 | `gmail-watch-maintenance` | Watch expiration/status, catch-up admission, Pub/Sub config | Prefer the next 12-hour run after the fix; one manual run only for an expired/near-expiry watch or overdue catch-up. Never create a second repeat schedule. |
@@ -983,11 +983,9 @@ response sends.
 compliance subscriptions are app-level: they are the `uri`s in `shopify.app.toml` and ship with the
 active app version (`npx shopify app versions list --json`). `npm run audit:shopify-webhooks` does
 not confirm them. It inventories per-shop leftovers, and `matching=0` is the clean result. Never run
-`restore` to "fix" that: a per-shop duplicate delivers each event again under its own
-`X-Shopify-Webhook-Id`, which dedupe keys on. Trigger one supported order event with customer
-identity attached, and confirm a message whose `external_message_id` is `shopify:<shop>:<webhookId>`
-([shopify-app-config-reference.md](shopify-app-config-reference.md)) and, where applicable, its
-appearance in the dashboard.
+`restore` to "fix" that: a per-shop duplicate delivers every event a second time. Place one test
+order and confirm its `conversation_attributions` row
+([shopify-app-config-reference.md](shopify-app-config-reference.md)).
 
 **Clerk lifecycle.** Point a Clerk webhook at `https://<dashboard>/api/webhooks/clerk`, subscribed to
 `organization.updated`, `organization.deleted`, `user.deleted` and `organizationMembership.deleted`;

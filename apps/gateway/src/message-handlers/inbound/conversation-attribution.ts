@@ -1,6 +1,5 @@
-import { db } from '@shopkeeper/db';
+import { db, NON_CONVERSATION_CHANNEL_TYPES } from '@shopkeeper/db';
 import { hashVerifiedEmail } from '@shopkeeper/agent/storefront-verification';
-import { CHANNEL_TYPE } from '@shopkeeper/agent/thread-constants';
 import { formatMoney } from '@shopkeeper/agent/money';
 import logger from '../../logger.js';
 import type { ShopifyOrderPayload } from '../../types.js';
@@ -123,7 +122,7 @@ async function findConversation(
       where: {
         organizationId,
         customer: { platformId: order.email, deletedAt: null },
-        channelType: { notIn: [CHANNEL_TYPE.OPERATOR] },
+        channelType: { notIn: [...NON_CONVERSATION_CHANNEL_TYPES] },
         createdAt: { gte: since, lte: order.orderedAt },
         deletedAt: null,
       },
@@ -145,7 +144,7 @@ async function findConversation(
       where: {
         organizationId,
         shopifyCustomerId: order.shopifyCustomerId,
-        channelType: { notIn: [CHANNEL_TYPE.OPERATOR] },
+        channelType: { notIn: [...NON_CONVERSATION_CHANNEL_TYPES] },
         createdAt: { gte: since, lte: order.orderedAt },
         deletedAt: null,
       },
@@ -268,9 +267,8 @@ export async function recordConversationAttribution(
   };
 }
 
-// Attribution is reporting, not delivery. A failure here must never cost the
-// merchant the order event itself, so the caller is not given the chance to
-// throw on it.
+// Attribution is reporting, not delivery: a failure is logged and the order goes
+// uncounted rather than failing its webhook job.
 export async function recordConversationAttributionSafely(
   organizationId: string,
   payload: ShopifyOrderPayload,

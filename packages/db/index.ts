@@ -154,6 +154,7 @@ export type {
 export {
   countConversationsThisMonth,
   getConversationAllowance,
+  NON_CONVERSATION_CHANNEL_TYPES,
   PLAN_LIMITS,
   planLimitsFor,
   resolvePlanTier,

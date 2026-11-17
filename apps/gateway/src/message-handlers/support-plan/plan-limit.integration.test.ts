@@ -19,7 +19,7 @@ let orgId: string | null = null;
 // thread per (org, customer, channel) — seeding many open threads onto a single
 // customer trips it. createMany rather than a loop keeps the over-limit case,
 // which needs 501 rows, a real-database test without making it a slow one.
-async function seedThreads(organizationId: string, count: number, channel: 'email' | 'operator' = 'email') {
+async function seedThreads(organizationId: string, count: number, channel: 'email' | 'operator' | 'shopify' = 'email') {
   const prefix = `c-${channel}-${Date.now()}-${Math.random()}`;
   await db.customer.createMany({
     data: Array.from({ length: count }, (_unused, index) => ({
@@ -89,6 +89,16 @@ describe('conversation counting', () => {
 
     await seedThreads(org.id, 2);
     await seedThreads(org.id, 4, 'operator');
+
+    await expect(countConversationsThisMonth(org.id)).resolves.toBe(2);
+  });
+
+  it('does not count the order threads Shopify order webhooks used to open', async () => {
+    const org = await createTestOrg();
+    orgId = org.id;
+
+    await seedThreads(org.id, 2);
+    await seedThreads(org.id, 3, 'shopify');
 
     await expect(countConversationsThisMonth(org.id)).resolves.toBe(2);
   });
