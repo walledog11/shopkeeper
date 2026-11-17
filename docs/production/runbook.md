@@ -504,21 +504,22 @@ Better Stack free tier, configured in its console; keep its tokens out of the re
 | Monitor | URL | Required keyword |
 | --- | --- | --- |
 | `Shopkeeper Dashboard Health` | `https://app.useshopkeeper.com/api/health` | `{"status":"ok"` |
-| `Shopkeeper Gateway Health` | `https://<gateway>/health` | `{"status":"ok"` |
+| `Shopkeeper Gateway Health` | `https://<gateway>/health/deep` | `{"status":"ok","checks"` |
 
-- **Monitors must not query Postgres.** A `SELECT 1` every three minutes resets Neon's five-minute
-  scale-to-zero timer, so the compute bills as always-on. If you ever monitor a `deep` route, use an
-  interval well above five minutes.
-- **Keep the leading brace in the keyword.** A bare `"status":"ok"` also matches a degraded deep
-  response through its nested checks; `{"status":"ok"` only matches at the document root.
+- **The gateway monitor watches `/health/deep`**, so it sees more than a dead web process: a stopped
+  `Gateway Worker` (its heartbeat goes stale after `GATEWAY_WORKER_HEARTBEAT_STALE_MS`, 10 minutes
+  in production), a database outage or a Redis outage turns the response into a 503 with
+  `"status":"degraded"`. Its database check adds no compute time: the worker's one-minute sweeps
+  (agent tasks, inbound processing) already keep Neon from reaching its five-minute scale-to-zero.
+- **Keyword.** Each healthy check nests its own `{"status":"ok"}`, so `{"status":"ok"` alone also
+  matches a degraded deep response. `{"status":"ok","checks"` matches only a healthy root, whatever
+  Better Stack makes of the 503. The dashboard's `/api/health` nests nothing, so the short keyword
+  is right there.
 - Settings: `keyword`, `GET`, every 3 minutes (free-tier floor), 15 s timeout, verify SSL, follow
   redirects, region `us`, email the launch owner on failure **and** recovery. Test routing with
   Better Stack's test notification, never by taking production down.
-- These see a dead web process only. A dead `Gateway Worker` or a database outage alerts nobody:
-  `queue_health` is raised inside the worker, and nothing polls `/health/deep`. Check `/health/deep`
-  (`checks.worker`, `checks.db`) after every deploy and whenever work stops flowing (open item in
-  [../ROADMAP.md](../ROADMAP.md)). Drill down after an alert with
-  `curl -H "x-internal-secret: $INTERNAL_API_SECRET" https://<gateway>/health/queues`.
+- After an alert, the body names the failing check (`checks.worker`, `checks.db`, `checks.redis`).
+  Drill down with `curl -H "x-internal-secret: $INTERNAL_API_SECRET" https://<gateway>/health/queues`.
 
 ### Ops alerts
 
@@ -703,7 +704,7 @@ incident is contained and investigated, and the 72-hour notice to affected merch
 
 A retry-exhausted job lands in its queue's `failed` set. It is evidence, not proof the business
 operation failed — compare with Postgres and provider truth before replaying or removing it. Queues:
-`inbound-messages` (email, Shopify order events, deferred Instagram DMs), `ai-summary` (summary, plan
+`inbound-messages` (email, new Shopify orders, deferred Instagram DMs), `ai-summary` (summary, plan
 precompute, auto-ack, notifications), `outbound-email`, `gmail-sync`, `gmail-watch-maintenance`,
 `order-review`, `operator-event`, `agent-task`, `integration-disconnect`.
 
@@ -728,7 +729,7 @@ If the evidence does not fit the safe condition, escalate instead of replaying:
 
 | Queue | Truth to inspect | Replay rule |
 | --- | --- | --- |
-| `inbound-messages` | Provider message/webhook identity, persisted `Message`/order event, downstream summary job | Replay the original job only once its stable provider identity is present and ingestion dedupes it. Never reconstruct a job with a new ID. |
+| `inbound-messages` | Provider message/webhook identity, persisted `Message` (a new Shopify order: its `conversation_attributions` row), downstream summary job | Replay the original job only once its stable provider identity is present and ingestion dedupes it. Never reconstruct a job with a new ID. |
 | `ai-summary` | `sourceMessageId`, latest customer message, cached-plan identity, any `PlanExecution` | Only while `sourceMessageId` is still the latest customer request; leave stale jobs superseded. No stable source identity = not replayable. |
 | `gmail-sync` | History cursor, Gmail message ID, stable `gmail-inbound-<integration>-<message>` jobs | Replay after credentials/provider recover; the checkpoint is monotonic and inbound jobs use stable IDs. |
 | `gmail-watch-maintenance` | Watch expiration/status, catch-up admission, Pub/Sub config | Prefer the next 12-hour run after the fix; one manual run only for an expired/near-expiry watch or overdue catch-up. Never create a second repeat schedule. |
@@ -983,11 +984,9 @@ response sends.
 compliance subscriptions are app-level: they are the `uri`s in `shopify.app.toml` and ship with the
 active app version (`npx shopify app versions list --json`). `npm run audit:shopify-webhooks` does
 not confirm them. It inventories per-shop leftovers, and `matching=0` is the clean result. Never run
-`restore` to "fix" that: a per-shop duplicate delivers each event again under its own
-`X-Shopify-Webhook-Id`, which dedupe keys on. Trigger one supported order event with customer
-identity attached, and confirm a message whose `external_message_id` is `shopify:<shop>:<webhookId>`
-([shopify-app-config-reference.md](shopify-app-config-reference.md)) and, where applicable, its
-appearance in the dashboard.
+`restore` to "fix" that: a per-shop duplicate delivers every event a second time. Place one test
+order and confirm its `conversation_attributions` row
+([shopify-app-config-reference.md](shopify-app-config-reference.md)).
 
 **Clerk lifecycle.** Point a Clerk webhook at `https://<dashboard>/api/webhooks/clerk`, subscribed to
 `organization.updated`, `organization.deleted`, `user.deleted` and `organizationMembership.deleted`;

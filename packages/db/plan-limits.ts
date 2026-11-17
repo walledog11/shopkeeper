@@ -79,10 +79,11 @@ export function utcMonthStart(now: Date = new Date()): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 }
 
-// Operator surfaces are the merchant talking to their own agent, not a customer
-// conversation, so they never count against a plan that is sold per customer
-// conversation.
-const INTERNAL_CHANNEL_TYPES = ['operator'] as const;
+// Threads that are not a customer conversation: the merchant's own operator
+// thread, and the note-only order threads Shopify order webhooks used to open.
+// A plan sold per customer conversation never counts them, and an order is
+// never attributed to one.
+export const NON_CONVERSATION_CHANNEL_TYPES = ['operator', 'shopify'] as const;
 
 // A "conversation" is a thread opened in the period. Counting threads rather
 // than messages means a long back-and-forth with one customer costs the same as
@@ -95,7 +96,7 @@ export async function countConversationsThisMonth(
     where: {
       organizationId,
       createdAt: { gte: utcMonthStart(now) },
-      channelType: { notIn: [...INTERNAL_CHANNEL_TYPES] },
+      channelType: { notIn: [...NON_CONVERSATION_CHANNEL_TYPES] },
       deletedAt: null,
     },
   });

@@ -26,7 +26,7 @@ export function createInboundWorker(options: InboundWorkerRegistrationOptions): 
     } else if (job.data.platform === CHANNEL.EMAIL) {
       await handleEmailJob(job, options.aiSummaryQueue);
     } else if (job.data.platform === CHANNEL.SHOPIFY) {
-      await handleShopifyJob(job, options.aiSummaryQueue);
+      await handleShopifyJob(job);
     } else if (job.data.platform === CHANNEL.TIKTOK) {
       await handleTikTokShopJob(job, options.aiSummaryQueue);
     } else {

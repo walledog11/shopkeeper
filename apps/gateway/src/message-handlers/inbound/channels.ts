@@ -470,54 +470,16 @@ export async function handleEmailJob(job: Job<InboundJobData>, aiSummaryQueue: Q
   }
 }
 
-export async function handleShopifyJob(job: Job<InboundJobData>, aiSummaryQueue: Queue): Promise<void> {
+// An order is not a conversation, so it opens no ticket: the agent reads orders
+// from Shopify when a customer writes. A new order feeds conversation
+// attribution, which records every order, guest orders included, because the
+// attributed share is only meaningful against all of them. The other topics
+// restate an order orders/create already counted.
+export async function handleShopifyJob(job: Job<InboundJobData>): Promise<void> {
   const { organizationId, traceId } = job.data;
   const { topic, rawPayload } = job.data as { topic: string; rawPayload: ShopifyOrderPayload };
-  const customer = rawPayload.customer;
-  const email = customer?.email;
-
-  // Before the identity guard below, deliberately. A guest order with no
-  // customer record attached is still revenue, and the attribution table can
-  // only report the attributed *share* if it holds every order as its
-  // denominator. Only orders/create — the other topics restate an order that
-  // has already been counted.
-  if (topic === 'orders/create') {
-    await recordConversationAttributionSafely(organizationId, rawPayload, traceId);
-  }
-
-  if (!email && !customer?.id) {
-    logger.warn({ traceId }, '[Worker] Shopify order missing customer identity — dropping');
-    return;
-  }
-
-  const platformId = email ?? `shopify_${customer!.id}`;
-  const orderName = rawPayload.name || (rawPayload.order_number ? `#${rawPayload.order_number}` : 'unknown order');
-  const customerName = customer?.first_name
-    ? `${customer.first_name}${customer.last_name ? ` ${customer.last_name}` : ''}`.trim()
-    : (email?.split('@')[0] ?? null);
-
-  const EVENT_MESSAGES: Record<string, string> = {
-    'orders/create': `New order ${orderName} was placed.`,
-    'orders/fulfilled': `Order ${orderName} has been fulfilled.`,
-    'orders/updated': `Order ${orderName} has been updated.`,
-    'orders/cancelled': `Order ${orderName} has been cancelled.`,
-  };
-  const messageText = EVENT_MESSAGES[topic] ?? `Shopify event '${topic}' for order ${orderName}.`;
-
-  try {
-    await processInboundMessage(organizationId, platformId, CHANNEL.SHOPIFY, messageText, aiSummaryQueue, {
-      customerName,
-      initialTag: 'Order Status',
-      subject: `Order ${orderName}`,
-      externalMessageId: job.data.inboundMessageId,
-      traceId,
-      synthetic: true,
-    });
-    logger.info({ platformId, organizationId, topic, traceId }, '[Worker] Successfully saved Shopify order event');
-  } catch (error) {
-    logger.error({ err: error, traceId }, '[Worker] DB operation failed for Shopify order event');
-    throw error;
-  }
+  if (topic !== 'orders/create') return;
+  await recordConversationAttributionSafely(organizationId, rawPayload, traceId);
 }
 
 export async function handleTikTokShopJob(job: Job<InboundJobData>, aiSummaryQueue: Queue): Promise<void> {

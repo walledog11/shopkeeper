@@ -16,8 +16,6 @@ import {
   SHOPIFY_COMPLIANCE_TOPICS,
 } from './shopify-compliance.js';
 
-const SHOPIFY_SUPPORTED_TOPICS = new Set(['orders/create', 'orders/fulfilled', 'orders/updated', 'orders/cancelled']);
-
 export function registerShopifyWebhookRoutes(router: Router): void {
   router.post('/shopify', webhookJsonParser(), async (req: Request, res: Response) => {
     const APP_SECRET = process.env.SHOPIFY_APP_SECRET;
@@ -102,7 +100,10 @@ export function registerShopifyWebhookRoutes(router: Router): void {
       }
     }
 
-    if (!topic || !SHOPIFY_SUPPORTED_TOPICS.has(topic)) {
+    // A new order is the only order event with work: conversation attribution,
+    // and order review when the risk monitor is on. The other order topics are
+    // acknowledged and dropped.
+    if (topic !== 'orders/create') {
       return res.status(200).send('OK');
     }
 
@@ -130,7 +131,6 @@ export function registerShopifyWebhookRoutes(router: Router): void {
         organizationId,
         topic,
         rawPayload: req.body,
-        inboundMessageId: webhookId ? `shopify:${shopDomain}:${webhookId}` : null,
         traceId,
       });
 
@@ -138,7 +138,7 @@ export function registerShopifyWebhookRoutes(router: Router): void {
       // Flag-gated; the stable jobId dedupes webhook retries so each order is
       // reviewed once. The per-order agent run happens in-process in the worker.
       const orderId = (req.body as { id?: number | string } | undefined)?.id;
-      if (topic === 'orders/create' && isOrderRiskMonitorEnabled() && orderId != null) {
+      if (isOrderRiskMonitorEnabled() && orderId != null) {
         await getOrderReviewQueue().add(
           JOB.ORDER_REVIEW,
           { organizationId, orderId: String(orderId), traceId },

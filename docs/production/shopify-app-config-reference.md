@@ -58,17 +58,17 @@ address. If a release fails after a `remove`, run `restore` immediately; if the
 released configuration is defective, release the prior app version first and then
 `restore`.
 
-**Verifying delivery.** A Shopify webhook does leave a durable receipt —
-`webhooks-shopify.ts` passes `shopify:<shop>:<webhookId>` as `inboundMessageId`
-and `handleShopifyJob` stores it as the message's `external_message_id`, so
-deliveries are queryable after the fact. Exactly-once is enforced by the database
-rather than by inspection: the partial unique index
-`messages_org_external_id_unique` on `(organization_id, external_message_id)`
-makes a duplicate delivery fail its insert. One trap when testing —
-`handleShopifyJob` **drops** an order with neither `customer.email` nor
-`customer.id`, logging a warn and returning, and such an order leaves no row at
-all, which is indistinguishable from non-delivery. Place test orders with customer
-identity attached.
+**What the order topics do.** Only `orders/create` has work: `handleShopifyJob`
+records the order's conversation attribution, and the order-review queue takes it
+when `ORDER_RISK_MONITOR_ENABLED` is on. An order opens no thread, since it is
+not a conversation. The gateway acknowledges `orders/fulfilled`, `orders/updated`
+and `orders/cancelled` and drops them.
+
+**Verifying delivery.** A new order leaves one `conversation_attributions` row,
+unique on `(organization_id, order_id)`, so a delivery is queryable after the fact
+and a retried or duplicated delivery cannot count an order twice. An order missing
+its `id`, `total_price` or `created_at` is skipped and leaves no row, which is
+indistinguishable from non-delivery.
 
 ## The app home inside Shopify admin
 

@@ -159,9 +159,8 @@ export interface HealthRouteDependencies {
 
 export function registerHealthRoutes(app: Application, { redis }: HealthRouteDependencies): void {
   // Liveness only: is this process up and serving? Deliberately touches no
-  // dependency. Uptime monitors belong here, not on /health/deep — polling a
-  // DB check every few minutes holds the Neon compute above its scale-to-zero
-  // idle window and bills it around the clock.
+  // dependency. The uptime monitor watches /health/deep instead, which also
+  // sees a stopped worker or a database outage (runbook *External monitors*).
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok' });
   });
@@ -215,6 +214,8 @@ export function registerHealthRoutes(app: Application, { redis }: HealthRouteDep
       configured: isImessageConfigured(),
     };
 
+    // The uptime monitor's keyword is `{"status":"ok","checks"`, so `status`
+    // stays the first key and `checks` the second.
     res.status(ok ? 200 : 503).json({ status: ok ? 'ok' : 'degraded', checks });
   });
 
