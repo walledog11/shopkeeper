@@ -7,40 +7,48 @@ Technical contracts and settled engineering decisions live with the code they go
 ([agent-runtime](agent-runtime.md), [runbook](production/runbook.md),
 [transport plan](socialapi-transport-plan.md)), not here.
 
-Last updated: 2026-11-16.
+Last updated: 2026-11-17.
 
 ## Next — the first real merchant
 
 In order. This is the product's critical path.
 
-1. **Run an unlinked Instagram sender's damage claim with a photo** through order
+1. **Point the gateway uptime monitor at `/health/deep`** in Better Stack, with the
+   keyword in the runbook (*External monitors*). On `/health` it sees only a dead web
+   process: a stopped worker or a database outage alerts nobody. Closes when
+   `Shopkeeper Gateway Health` polls `/health/deep`.
+2. **Run an unlinked Instagram sender's damage claim with a photo** through order
    confirmation. Closes when the agent asks for the order, then its email or zip, then a
    photo; the SocialAPI gallery photo is stored on the ticket; and the merchant gets one
    card: the confirmation line, photos and the proposed resolution. `simulate:refund
    --damage` checks it while you send the photo from the customer's Instagram account.
-2. **Close SocialAPI vendor diligence** before any external merchant's data flows: DPA,
+3. **Close SocialAPI vendor diligence** before any external merchant's data flows: DPA,
    written retention/deletion answers and the terms §11.4 contradiction. When SocialAPI
    answers, add its retention to `/privacy`. Gates are in [socialapi-s0-diligence](production/socialapi-s0-diligence-2026-09-07.md).
-3. **First live SocialAPI merchant connect** (runbook: *Instagram via SocialAPI*). Closes
+4. **First live SocialAPI merchant connect** (runbook: *Instagram via SocialAPI*). Closes
    when `verify:production:env` passes, a workspace connects from the dashboard, and its
    next DM routes to it. Needs a paid SocialAPI plan: Free allows 50 replies per billing
    period across every workspace, then refuses all of them until the period ends.
-4. **Disconnect and reconnect the controlled SocialAPI account** (built: disconnect and
+5. **Disconnect and reconnect the controlled SocialAPI account** (built: disconnect and
    workspace deletion revoke the remote account). Closes when the account is gone from
    the brand's listing and, after reconnecting, the same sender's next DM lands on the
    same customer and a reply reaches them. If SocialAPI issues new author IDs on
    reconnect, record that in the transport plan (invariant 6) instead.
-5. **Expiring Shopify offline tokens, before 2027-01-01** (built; runbook *Shopify access
+6. **Expiring Shopify offline tokens, before 2027-01-01** (built; runbook *Shopify access
    tokens*). Closes when the gateway holds `SHOPIFY_CLIENT_ID` and `SHOPIFY_CLIENT_SECRET`
    and the dev store's integration has a refresh token: opening the app in Shopify admin,
    or the next daily token-health run, swaps its non-expiring token.
-6. **Install the Shopify app on a real, non-dev store.** First check its distribution in
+7. **Re-prove every Shopify write after the GraphQL rewrite.** #254–#256 replaced every
+   Shopify read and write, and evals cannot see this layer. Run `canary:shopify-mutations
+   -- --validate`, then `-- --execute` on the dev store, and one `simulate:refund`. Closes
+   when every write passes and no Shopify write has changed since.
+8. **Install the Shopify app on a real, non-dev store.** First check its distribution in
    the Partner dashboard; it can't be changed once chosen. Custom distribution installs on
-   one store (or one Plus organization), so it can't serve item 7. Public distribution
+   one store (or one Plus organization), so it can't serve item 9. Public distribution
    needs Shopify's app review before any non-development install, even unlisted (next
    section). Closes when the install grants every `SHOPIFY_OAUTH_SCOPES` scope and a
    missing scope shows the reconnect path.
-7. **Two supervised external merchants** complete real approved loops with no
+9. **Two supervised external merchants** complete real approved loops with no
    wrong-recipient, unauthorized-money, duplicate-action or lost-message incident.
 
 ## Next — Shopify App Store submission
@@ -54,12 +62,32 @@ The first publication is the App Store. These block review or a new install's fi
 2. **Authenticate at install, not at signup** (built: the app home holds the install's
    grant and its links claim it). Closes when, on the dev store, install → app home →
    sign up → inbox asks for no store URL and no second consent.
-3. **Instagram for an installer nobody assigned.** Connect is gated per workspace by
-   SocialAPI brand assignment, so every App Store install sees Instagram "Coming soon"
-   while the listing and landing page lead with DMs. Provision a brand on connect, or
-   lead with email and say Instagram opens by invitation. Closes when what the listing
-   promises is what a new install can connect.
-4. **Partner dashboard submission:** protected customer data access (level 2: name,
+3. **A customer channel an installer can connect alone.** Instagram connect is gated per
+   workspace by SocialAPI brand assignment (`SOCIALAPI_BRAND_ASSIGNMENTS`, at most 8), so
+   every App Store install sees Instagram "Coming soon" while the listing and landing page
+   lead with DMs. Email is no clean fallback yet: Gmail shows Google's unverified-app
+   warning and stops at 100 users until the next item passes, a forwarding merchant's
+   domain is verified in Postmark by hand before their replies send, and website chat is
+   off (`STOREFRONT_CHAT_ENABLED`). Provision a brand on connect, or lead with email and
+   say Instagram opens by invitation. Closes when what the listing promises is what a new
+   install can connect.
+4. **Submit Gmail restricted-scope verification now**
+   ([packet](production/google-gmail-verification-packet.md)). Until it passes, every
+   Gmail connect shows Google's unverified-app warning and the app stops at 100 users,
+   and the review, with any security assessment Google asks for, runs on Google's
+   schedule. Closes when it is submitted.
+5. **Tell a merchant with no linked iPhone what is waiting.** Plan cards, questions,
+   escalations and the briefing go only to bound phones (`listOperatorBindings`); with
+   none bound, which includes every Android merchant, they are skipped and only the
+   dashboard shows the work. Email a notice that links to the ticket; approval stays in
+   the app. Closes when a workspace with no phone gets an email for a new card, an
+   escalation and the briefing.
+6. **A ceiling on model spend before sign-ups open.** Each workspace's daily AI cap
+   (`dailyLLMSpendCapUsd`, default $20) takes any amount a merchant enters, and nothing
+   limits spend across all workspaces. Give the setting a maximum and add a platform-wide
+   daily stop. Closes when the cap cannot be set above the maximum and model calls stop
+   once the platform's daily total is reached.
+7. **Partner dashboard submission:** protected customer data access (level 2: name,
    email, phone, address); its requirements are built (runbook *Customer data
    protection*: access log and weekly review, the Terms' data processing section, the
    incident response policy), so every answer is Yes except consent, data sale and
@@ -68,21 +96,23 @@ The first publication is the App Store. These block review or a new install's fi
    `shopify.app.toml` and chat extension with `shopify app deploy` before submitting.
    Left: listing copy, icon and screenshots; a screencast; reviewer test credentials.
    Closes when the submission form is complete.
-5. **Listing day:** the site's call to action is a waitlist. Point it and the pricing
+8. **Listing day:** the site's call to action is a waitlist. Point it and the pricing
    cards at the listing, and open sign-ups. Closes when the listing is live.
 
 ## Later
 
-- **Pre-listing polish** (from the 2026-11-11 walkthrough). Home stacks two setup nudges
-  (the workflow card and a channel banner): give them one slot. Inbox rows are about
-  150px tall (200 on a phone) with input-like pills, so about five tickets fit a
-  screen. Page headers differ: settings pages, Website chat, and none at all on Inbox,
-  Memory, Review and Shop. A plan card shows raw server errors ("Unauthorized") instead
-  of a retry state. Onboarding headlines use a handwritten face nothing else uses.
-  Trusted differs from Ask first only by the refund cap until auto-execute ships (no UI,
-  default off), though its blurb promises more. Usage & billing shows a merchant-set AI
-  dollar cap that reads as metered billing. Website chat stays in the nav and the app
-  home's tabs when `STOREFRONT_CHAT_ENABLED` is off.
+- **Pre-listing polish** (from the 2026-11-11 walkthrough and the 2026-11-17 audit). Home
+  stacks two setup nudges (the workflow card and a channel banner): give them one slot.
+  Inbox rows are about 150px tall (200 on a phone) with input-like pills, so about five
+  tickets fit a screen. Page headers differ: settings pages, Website chat, and none at
+  all on Inbox, Memory, Review and Shop. A plan card shows raw server errors
+  ("Unauthorized") instead of a retry state. Onboarding headlines use a handwritten face
+  nothing else uses. Trusted differs from Ask first only by the refund cap until
+  auto-execute ships (no UI, default off), though its blurb promises more. Usage &
+  billing shows a merchant-set AI dollar cap that reads as metered billing. Website chat
+  stays in the nav and the app home's tabs when `STOREFRONT_CHAT_ENABLED` is off.
+  Relative times ("34 min ago") render on the server and again in the browser, a
+  hydration mismatch on Home (`DatePill`).
 - **SocialAPI hardening** (S1–S6 in [the transport plan](socialapi-transport-plan.md)):
   `dm.sent` correlation (a reply typed in the Instagram app never reaches the thread),
   missed-delivery recovery, account health probing, failed-connect compensation, and a
@@ -109,9 +139,6 @@ The first publication is the App Store. These block review or a new install's fi
 - **A refusal shouldn't outlive the capability.** In a permanent operator thread the
   agent keeps citing its own earlier "I can't" after a tool ships. Decide the mechanism;
   a prompt bullet is not it.
-- **Nothing outside notices a dead gateway.** Its alerts reach the ops Telegram chat only
-  while it runs. Decide whether an external check (an uptime monitor on its health
-  endpoint) should notice a dead worker or a database outage.
 - **Compliance webhooks:** exercise `customers/data_request` and `shop/redact` once
   ([data-deletion](production/data-deletion.md)).
 - **Production leftovers:** get `audit:agent-runtime-retirement -- --strict` clean
@@ -120,8 +147,15 @@ The first publication is the App Store. These block review or a new install's fi
   can be a rollback target ([agent-runtime](agent-runtime.md), *Deployment and
   rollback*). Retire the identity-less operator queue reader once
   `audit:operator-context-compatibility -- --strict` reports none.
-- **Gmail restricted-scope verification** — submit
-  ([packet](production/google-gmail-verification-packet.md)).
+- **Moderate advisories in production dependencies:** Next 16.4.3 (an `unstable_cache`
+  disclosure; the home summary uses `unstable_cache`) and nodemailer below 10.1.4, whose
+  address parser reads the From header of every Gmail-synced message through
+  `mailparser` (`parseMime`). Both are pinned in the root `overrides`; CI's dependency
+  audit fails only on high. Closes when both are upgraded.
+- **Built but off, with no trigger:** the order-risk and return-lifecycle monitors
+  (`ORDER_RISK_MONITOR_ENABLED`, `RETURN_LIFECYCLE_MONITOR_ENABLED`) have no row here or
+  under Parked saying when they turn on, yet every shared change carries them. Give each
+  a Parked trigger or remove it.
 - **Postmark:** credential canary to an off-domain recipient, then restore the
   forwarding integration and send one reply with an attachment.
 - **Storefront chat on the dev store:** browser matrix, episode boundary, the
