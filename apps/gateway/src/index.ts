@@ -19,6 +19,7 @@ import {
   createProductAnalyticsShutdownResource,
   initializeGatewayProductAnalytics,
 } from './product-analytics.js';
+import { captureRouteError, createSentryShutdownResource, initializeGatewaySentry } from './sentry.js';
 import {
   createGatewayServerShutdown,
   registerGatewayServerShutdownSignals,
@@ -40,6 +41,7 @@ export function createGatewayApp() {
 }
 
 export async function startGatewayServer() {
+  initializeGatewaySentry('server');
   validateGatewayEnv();
   initializeGatewayProductAnalytics();
 
@@ -75,6 +77,7 @@ export async function startGatewayServer() {
   }
 
   app.use(bodyLimitErrorHandler);
+  app.use(captureRouteError);
 
   const dashboardUrl = getGatewayDashboardUrl();
   logger.info({ dashboardUrl }, '[Gateway] Dashboard base URL configured');
@@ -89,6 +92,7 @@ export async function startGatewayServer() {
     { label: 'bullmq-queues', close: closeGatewayBullMqQueues },
     { label: 'redis-connections', close: closeGatewayRedisConnections },
     createProductAnalyticsShutdownResource(),
+    createSentryShutdownResource(),
   ]);
   registerGatewayServerShutdownSignals(shutdown);
   warmPlatformSpectrumApp();

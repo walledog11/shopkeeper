@@ -96,8 +96,9 @@ npx turbo run build --filter=shopkeeper-gateway
   `railway run --service shopkeeper --environment production -- node scripts/check-production-env.mjs gateway`
   (then `--service 'Gateway Worker'`).
 
-Both platforms build the shared packages before their app. Neither uploads source maps (dashboard
-errors go to `@sentry/nextjs`; the gateway build is compile-only `tsc`). **Neither runs migrations** — see [Migrations](#migrations).
+Both platforms build the shared packages before their app. Neither uploads source maps to Sentry
+(see [Error reports](#error-reports)); the gateway's compile-only `tsc` output reads fine without them.
+**Neither runs migrations** — see [Migrations](#migrations).
 
 ## Prerequisites
 
@@ -180,7 +181,8 @@ daily LLM spend cap (`llm_daily_spend`).
     (30), `STOREFRONT_CHAT_MAX_MESSAGES_PER_SHOP_DAY` (200), `STOREFRONT_CHAT_BURST_PER_SESSION` (5),
     `STOREFRONT_CHAT_BURST_PER_IP` (20), `STOREFRONT_CHAT_BURST_WINDOW_SECS` (60).
   - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`; `OPS_ALERT_TELEGRAM_CHAT_ID` (see [Ops alerts](#ops-alerts));
-    `GATEWAY_REALTIME_ENABLED`; `POSTHOG_PROJECT_TOKEN`, `POSTHOG_HOST`.
+    `SENTRY_DSN` (see [Error reports](#error-reports)); `GATEWAY_REALTIME_ENABLED`; `POSTHOG_PROJECT_TOKEN`,
+    `POSTHOG_HOST`.
 
 **Rules:** `APP_URL`, `DASHBOARD_URL` and `GATEWAY_INTERNAL_URL` are absolute `http(s)` URLs.
 `DASHBOARD_INTERNAL_URL` is dev-only (the gateway warns if set in production). `DIRECT_DATABASE_URL`
@@ -520,6 +522,22 @@ Better Stack free tier, configured in its console; keep its tokens out of the re
   Better Stack's test notification, never by taking production down.
 - After an alert, the body names the failing check (`checks.worker`, `checks.db`, `checks.redis`).
   Drill down with `curl -H "x-internal-secret: $INTERNAL_API_SECRET" https://<gateway>/health/queues`.
+
+### Error reports
+
+Both apps send errors to Sentry. The dashboard's DSN is set in its Sentry configs. A gateway service
+reports only with `SENTRY_DSN` set, so set it on both `shopkeeper` and `Gateway Worker`. The
+dashboard's DSN works there too: gateway events carry `service=gateway` and `role=server` or
+`role=worker`.
+
+- **What the gateway reports** (`initializeGatewaySentry`): a crash (the process still exits), a 5xx
+  route error tagged with its route template, and a job whose last attempt failed, tagged with its
+  `queue` and carrying the worker's identifiers. Each has its stack trace. Retried attempts are not
+  reported.
+- **What it never sends:** request headers or bodies, URLs, breadcrumbs, spans or `job.data`. It also
+  adds no trace headers to provider calls.
+- **Repeats.** The same error from the same queue or route is reported once an hour per process; the
+  logs keep every occurrence. Ops alerts stay on Telegram.
 
 ### Ops alerts
 

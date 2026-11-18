@@ -22,8 +22,10 @@ import {
   createProductAnalyticsShutdownResource,
   initializeGatewayProductAnalytics,
 } from './product-analytics.js';
+import { createSentryShutdownResource, initializeGatewaySentry } from './sentry.js';
 
 export async function startWorkerRuntime() {
+  initializeGatewaySentry('worker');
   validateGatewayEnv();
   initializeGatewayProductAnalytics();
 
@@ -54,6 +56,7 @@ export async function startWorkerRuntime() {
     heartbeats: [heartbeat],
     shutdownResources: [
       createProductAnalyticsShutdownResource(),
+      createSentryShutdownResource(),
       {
         label: 'spectrum-apps',
         close: async () => {

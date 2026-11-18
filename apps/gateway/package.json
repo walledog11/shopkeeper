@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.104.1",
+    "@sentry/node": "10.76.2",
     "@shopkeeper/agent": "*",
     "@shopkeeper/analytics": "*",
     "@shopkeeper/db": "*",

@@ -207,7 +207,7 @@ export default function PrivacyPage() {
                 <li><strong>Photon</strong> &mdash; delivers iMessages between Shopkeeper and the merchant&apos;s phone.</li>
                 <li><strong>Clerk</strong> &mdash; sign-in and team accounts.</li>
                 <li><strong>Stripe</strong> &mdash; payments for workspaces not billed through Shopify.</li>
-                <li><strong>Sentry</strong> &mdash; error reports from the dashboard.</li>
+                <li><strong>Sentry</strong> &mdash; error reports from the dashboard and background processing.</li>
                 <li><strong>PostHog</strong> &mdash; pseudonymous product analytics, as described above.</li>
                 <li><strong>Loops</strong> &mdash; waitlist and product-update email.</li>
                 <li><strong>ImprovMX</strong> &mdash; forwards email sent to our contact address.</li>
