@@ -87,6 +87,16 @@ export function handleApiError(error: unknown, context: string, message: string)
       { status: 503 },
     );
   }
+  if (isSpendCapError(error) && error.scope === 'platform') {
+    logger.error({ context }, '[api] platform spend stop reached');
+    return NextResponse.json(
+      {
+        error: 'Shopkeeper has paused AI work for today. You can keep handling requests yourself; AI work resumes at midnight UTC.',
+        code: 'platform_spend_stop',
+      },
+      { status: 503 },
+    );
+  }
   if (isSpendCapError(error)) {
     logger.warn({ context }, '[api] spend cap reached');
     return NextResponse.json(

@@ -1,7 +1,7 @@
 "use client"
 
 import { AUTONOMY_TIERS } from "@/lib/agent/autonomy-tiers"
-import type { AutonomyTier } from "@shopkeeper/agent/settings"
+import { MAX_DAILY_LLM_SPEND_CAP_USD, type AutonomyTier } from "@shopkeeper/agent/settings"
 import {
   readSettingsPath,
   tierDefaultForPath,
@@ -11,7 +11,12 @@ import { MoneyInput } from "@/components/settings-form/fields"
 import { Switch } from "@/components/ui/switch"
 import { SolidSettingsTile as SettingsTile } from "@/app/dashboard/(shell)/(settings)/settings/_components/SettingsTile"
 import type { AgentTabController } from "./useAgentTabState"
-import { presentLlmSpend, type LlmSpendSnapshot } from "./llm-spend-presentation"
+import {
+  DAILY_LIMIT_OVER_MAX,
+  isOverDailyLimitMax,
+  presentLlmSpend,
+  type LlmSpendSnapshot,
+} from "./llm-spend-presentation"
 
 function tierLabel(tier: AutonomyTier): string {
   return AUTONOMY_TIERS.find((option) => option.id === tier)?.label ?? tier
@@ -139,18 +144,23 @@ export function AiUsageLimitSection({
   const { rawInputs, setRawInput } = controller
   const parsedCap = Number(rawInputs.dailyLLMSpendCap)
   const capUsd = rawInputs.dailyLLMSpendCap.trim() && Number.isFinite(parsedCap) ? parsedCap : llmSpend.defaultCapUsd
-  const spend = presentLlmSpend(llmSpend, capUsd)
+  const overMax = isOverDailyLimitMax(capUsd)
+  const spend = presentLlmSpend(llmSpend, Math.min(capUsd, MAX_DAILY_LLM_SPEND_CAP_USD))
 
   return (
     <SettingsTile label="AI usage">
       <div className="space-y-3">
         <MoneyInput
           label="Daily limit"
+          hint={`up to $${MAX_DAILY_LLM_SPEND_CAP_USD}`}
           aria-label="Daily AI limit"
+          aria-invalid={overMax || undefined}
+          max={MAX_DAILY_LLM_SPEND_CAP_USD}
           value={rawInputs.dailyLLMSpendCap}
           onValueChange={value => setRawInput("dailyLLMSpendCap", value)}
           placeholder={String(llmSpend.defaultCapUsd)}
         />
+        {overMax && <p role="alert" className="text-xs text-red-700">{DAILY_LIMIT_OVER_MAX}</p>}
         <div
           role="status"
           className={spend.state === "paused" || spend.state === "unavailable"

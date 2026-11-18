@@ -78,12 +78,7 @@ The first publication is the App Store. These block review or a new install's fi
    dashboard shows the work. Email a notice that links to the ticket; approval stays in
    the app. Closes when a workspace with no phone gets an email for a new card, an
    escalation and the briefing.
-6. **A ceiling on model spend before sign-ups open.** Each workspace's daily AI cap
-   (`dailyLLMSpendCapUsd`, default $20) takes any amount a merchant enters, and nothing
-   limits spend across all workspaces. Give the setting a maximum and add a platform-wide
-   daily stop. Closes when the cap cannot be set above the maximum and model calls stop
-   once the platform's daily total is reached.
-7. **Partner dashboard submission:** protected customer data access (level 2: name,
+6. **Partner dashboard submission:** protected customer data access (level 2: name,
    email, phone, address); its requirements are built (runbook *Customer data
    protection*: access log and weekly review, the Terms' data processing section, the
    incident response policy), so every answer is Yes except consent, data sale and
@@ -92,7 +87,7 @@ The first publication is the App Store. These block review or a new install's fi
    `shopify.app.toml` and chat extension with `shopify app deploy` before submitting.
    Left: listing copy, icon and screenshots; a screencast; reviewer test credentials.
    Closes when the submission form is complete.
-8. **Listing day:** the site's call to action is a waitlist. Point it and the pricing
+7. **Listing day:** the site's call to action is a waitlist. Point it and the pricing
    cards at the listing, and open sign-ups. Closes when the listing is live.
 
 ## Later

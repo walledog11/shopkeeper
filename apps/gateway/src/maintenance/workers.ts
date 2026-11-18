@@ -11,6 +11,7 @@ import { registerUnknownOutcomeSweepMaintenanceJob } from './unknown-outcome-swe
 import { registerOrderRiskMaintenanceJob } from './order-risk-monitor.js';
 import { registerReturnLifecycleMaintenanceJob } from './return-lifecycle-monitor.js';
 import { registerOutboundSendSweepMaintenanceJob } from './outbound-send-sweep.js';
+import { registerPlatformSpendWatchMaintenanceJob } from './platform-spend-watch.js';
 import { registerQueueHealthMaintenanceJob } from './queue-health.js';
 import { registerRetentionMaintenanceJobs } from './retention.js';
 import {
@@ -44,6 +45,7 @@ const maintenanceJobRegistrations: MaintenanceJobRegistration[] = [
   registerAgentTaskSweepMaintenanceJob,
   registerUnknownOutcomeSweepMaintenanceJob,
   registerQueueHealthMaintenanceJob,
+  registerPlatformSpendWatchMaintenanceJob,
   registerWaitlistSyncMaintenanceJob,
 ];
 

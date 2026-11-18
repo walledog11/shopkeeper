@@ -157,6 +157,7 @@ daily LLM spend cap (`llm_daily_spend`).
   - `TELEGRAM_BOT_USERNAME` — internal testing only; leave unset in production (when set, onboarding
     offers Telegram to every merchant).
   - `NEXT_PUBLIC_CONTACT_EMAIL`, `POSTHOG_PROJECT_TOKEN`, `POSTHOG_HOST` (see [Product Analytics](#product-analytics)).
+  - `PLATFORM_DAILY_LLM_SPEND_STOP_USD` — the same value as the gateway's (see [AI spend limits](#ai-spend-limits)).
 
 ### Gateway
 
@@ -183,6 +184,7 @@ daily LLM spend cap (`llm_daily_spend`).
   - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`; `OPS_ALERT_TELEGRAM_CHAT_ID` (see [Ops alerts](#ops-alerts));
     `SENTRY_DSN` (see [Error reports](#error-reports)); `GATEWAY_REALTIME_ENABLED`; `POSTHOG_PROJECT_TOKEN`,
     `POSTHOG_HOST`.
+  - `PLATFORM_DAILY_LLM_SPEND_STOP_USD` — the same value as the dashboard's (see [AI spend limits](#ai-spend-limits)).
 
 **Rules:** `APP_URL`, `DASHBOARD_URL` and `GATEWAY_INTERNAL_URL` are absolute `http(s)` URLs.
 `DASHBOARD_INTERNAL_URL` is dev-only (the gateway warns if set in production). `DIRECT_DATABASE_URL`
@@ -204,6 +206,21 @@ railway run --service shopkeeper --environment production -- \
 
 Require no unknown outcomes or stale claims. For an `unknown` execution, establish provider truth
 before any fresh instruction; never reset the row to `pending` or replay it.
+
+### AI spend limits
+
+Two daily limits, both counted in `llm_daily_spend` and reset at midnight UTC, stop paid model calls
+(`enforceSpendCap`):
+
+- **Per workspace:** the merchant's daily limit on Usage & billing (`dailyLLMSpendCapUsd`), $20 by
+  default and at most $50 (`MAX_DAILY_LLM_SPEND_CAP_USD`).
+- **Platform-wide:** every workspace together, at `PLATFORM_DAILY_LLM_SPEND_STOP_USD` ($200 by
+  default). Set the same value on Vercel and both Railway services; `0` stops every model call. Each
+  process reads the platform total at most once a minute, so the stop can trail it by about a minute
+  of spend. Merchants are told AI work is paused until midnight UTC; raising the value lifts the stop
+  once the new value is deployed.
+- **Alerts:** the gateway's `platform-spend-watch` job checks every 5 minutes and raises a
+  `usage_limit` ops alert at 80% of the platform stop and again when it trips, each at most once a day.
 
 ### Rotating the Shopify app secret
 

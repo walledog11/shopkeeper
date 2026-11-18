@@ -127,6 +127,20 @@ export function utcDayString(now: Date = new Date()): string {
 // runaway loop or abuse before the bill matters.
 export const DEFAULT_DAILY_LLM_SPEND_CAP_USD = 20;
 
+// The stop across every workspace together, for a fault or abuse that spreads
+// across workspaces while each stays under its own cap. Four times the most a
+// workspace may set (`MAX_DAILY_LLM_SPEND_CAP_USD`), so one cannot trip it alone.
+const DEFAULT_PLATFORM_DAILY_LLM_SPEND_STOP_USD = 200;
+
+// `PLATFORM_DAILY_LLM_SPEND_STOP_USD` overrides the default; both apps must hold
+// the same value, and 0 stops every model call. A value that is not a
+// non-negative number reads as the default.
+export function platformDailyLlmSpendStopUsd(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env.PLATFORM_DAILY_LLM_SPEND_STOP_USD?.trim();
+  const parsed = raw ? Number(raw) : Number.NaN;
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_PLATFORM_DAILY_LLM_SPEND_STOP_USD;
+}
+
 export function nanoDollarsToUsd(nano: number): number {
   return nano / NANO_DOLLARS_PER_USD;
 }
@@ -135,18 +149,23 @@ export function usdToNanoDollars(usd: number): number {
   return Math.round(usd * NANO_DOLLARS_PER_USD);
 }
 
+/** Whose limit stopped the call: the workspace's own cap, or the platform-wide stop. */
+export type SpendCapScope = "workspace" | "platform";
+
 export class SpendCapError extends Error {
   readonly code = "spend_cap_reached" as const;
   readonly currentNanoUsd: number;
   readonly capNanoUsd: number;
+  readonly scope: SpendCapScope;
 
-  constructor(currentNanoUsd: number, capNanoUsd: number) {
+  constructor(currentNanoUsd: number, capNanoUsd: number, scope: SpendCapScope = "workspace") {
     super(
-      `LLM spend cap reached: $${nanoDollarsToUsd(currentNanoUsd).toFixed(2)} / $${nanoDollarsToUsd(capNanoUsd).toFixed(2)} today`,
+      `${scope === "platform" ? "Platform LLM spend stop" : "LLM spend cap"} reached: $${nanoDollarsToUsd(currentNanoUsd).toFixed(2)} / $${nanoDollarsToUsd(capNanoUsd).toFixed(2)} today`,
     );
     this.name = "SpendCapError";
     this.currentNanoUsd = currentNanoUsd;
     this.capNanoUsd = capNanoUsd;
+    this.scope = scope;
   }
 
   get currentUsd(): number {
