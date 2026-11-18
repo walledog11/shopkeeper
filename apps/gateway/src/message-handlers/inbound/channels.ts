@@ -426,7 +426,7 @@ export async function handleEmailJob(job: Job<InboundJobData>, aiSummaryQueue: Q
             select: { id: true },
           })
         : null;
-      const classified = await classifyAndSummarizeNewEmail(organizationId, subject!, body!);
+      const classified = await classifyAndSummarizeNewEmail(organizationId, subject!, body!, org?.settings ?? null);
       precomputed = priorGenuine
         ? knownSenderClassification(classified, subject)
         : classified;

@@ -3,11 +3,15 @@ import {
   LlmBudgetUnavailableError,
   SpendCapError,
   getDailyLlmSpendNano,
+  getPlatformDailyLlmSpendNano,
+  platformDailyLlmSpendStopUsd,
   recordDailyLlmSpend,
   usdToNanoDollars,
+  utcDayString,
   type LlmUsageTokens,
 } from "@shopkeeper/db";
 import logger from "./logger.js";
+import { MAX_DAILY_LLM_SPEND_CAP_USD } from "./settings-parser.js";
 
 // Backstop on per-org daily LLM spend. Persisted in Postgres (one row per org
 // per UTC day) as integer nano-dollars, shared with the gateway so the cap is
@@ -19,9 +23,32 @@ import logger from "./logger.js";
 // pass a bare `{ dailyLLMSpendCapUsd }` or null (→ default cap).
 export type SpendCapSettings = { dailyLLMSpendCapUsd?: number | null };
 
+// Some callers pass the stored value unparsed, so the maximum is applied here too.
 function capNanoUsd(settings: SpendCapSettings | null | undefined): number {
   const usd = settings?.dailyLLMSpendCapUsd ?? DEFAULT_DAILY_LLM_SPEND_CAP_USD;
-  return usdToNanoDollars(usd);
+  return usdToNanoDollars(Math.min(usd, MAX_DAILY_LLM_SPEND_CAP_USD));
+}
+
+// The platform total sums every workspace's rows for the day, so each process
+// reads it at most once a minute; the stop can trail the true total by about a
+// minute of spend.
+const PLATFORM_SPEND_READ_TTL_MS = 60_000;
+let platformSpendRead: { day: string; nanoUsd: number; readAtMs: number } | null = null;
+
+async function getPlatformDailySpendNano(): Promise<number> {
+  const day = utcDayString();
+  const nowMs = Date.now();
+  if (platformSpendRead?.day === day && nowMs - platformSpendRead.readAtMs < PLATFORM_SPEND_READ_TTL_MS) {
+    return platformSpendRead.nanoUsd;
+  }
+  try {
+    const nanoUsd = await getPlatformDailyLlmSpendNano(day);
+    platformSpendRead = { day, nanoUsd, readAtMs: nowMs };
+    return nanoUsd;
+  } catch (err) {
+    logger.error({ err }, "[spend] platform read failed, pausing paid model work");
+    throw new LlmBudgetUnavailableError();
+  }
 }
 
 export async function getDailySpendNano(orgId: string): Promise<number> {
@@ -40,7 +67,12 @@ export async function enforceSpendCap(
   const cap = capNanoUsd(settings);
   const current = await getDailySpendNano(orgId);
   if (current >= cap) {
-    throw new SpendCapError(current, cap);
+    throw new SpendCapError(current, cap, "workspace");
+  }
+  const stop = usdToNanoDollars(platformDailyLlmSpendStopUsd());
+  const platformTotal = await getPlatformDailySpendNano();
+  if (platformTotal >= stop) {
+    throw new SpendCapError(platformTotal, stop, "platform");
   }
 }
 

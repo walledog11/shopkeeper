@@ -14,6 +14,16 @@ export async function getDailyLlmSpendNano(orgId: string, day: string = utcDaySt
   return result._sum.spentNanoUsd ? Number(result._sum.spentNanoUsd) : 0;
 }
 
+// Deliberately across every organization: the platform-wide stop needs the day's
+// total, and the query returns one sum, never a tenant's rows.
+export async function getPlatformDailyLlmSpendNano(day: string = utcDayString()): Promise<number> {
+  const result = await db.llmDailySpend.aggregate({
+    where: { day },
+    _sum: { spentNanoUsd: true },
+  });
+  return result._sum.spentNanoUsd ? Number(result._sum.spentNanoUsd) : 0;
+}
+
 export async function recordDailyLlmSpend(
   orgId: string,
   usage: LlmUsageTokens,

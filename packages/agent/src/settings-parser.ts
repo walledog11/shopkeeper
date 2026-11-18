@@ -94,8 +94,14 @@ const STRING_FIELDS = [
 const NULLABLE_NON_NEGATIVE_FIELDS = [
   "maxRefundAmount",
   "dailyRefundCap",
-  "dailyLLMSpendCapUsd",
 ] as const satisfies readonly (keyof OrgSettings)[];
+
+/**
+ * The most a workspace may set as its daily AI cap (`dailyLLMSpendCapUsd`). The
+ * platform-wide stop (`DEFAULT_PLATFORM_DAILY_LLM_SPEND_STOP_USD`) is four times
+ * this, so one workspace cannot use up the platform's day on its own.
+ */
+export const MAX_DAILY_LLM_SPEND_CAP_USD = 50;
 
 const HOUR_FIELDS = [
   "digestHour",
@@ -228,17 +234,22 @@ function readNullableNonNegativeNumber(
   key: string,
   output: Record<string, unknown>,
   context: ParseContext,
+  max = Number.POSITIVE_INFINITY,
 ): void {
   if (!hasOwn(value, key)) return;
   const candidate = value[key];
   if (
     candidate === null
-    || (typeof candidate === "number" && Number.isFinite(candidate) && candidate >= 0)
+    || (typeof candidate === "number" && Number.isFinite(candidate) && candidate >= 0 && candidate <= max)
   ) {
     output[key] = candidate;
     return;
   }
-  addIssue(context, key, "Expected null or a non-negative finite number");
+  addIssue(
+    context,
+    key,
+    Number.isFinite(max) ? `Expected null or a number from 0 to ${max}` : "Expected null or a non-negative finite number",
+  );
 }
 
 function readInteger(
@@ -378,6 +389,7 @@ function parseSettingsObject(value: unknown, mode: ParseMode): OrgSettingsPatch 
   for (const key of NULLABLE_NON_NEGATIVE_FIELDS) {
     readNullableNonNegativeNumber(value, key, output, context);
   }
+  readNullableNonNegativeNumber(value, "dailyLLMSpendCapUsd", output, context, MAX_DAILY_LLM_SPEND_CAP_USD);
   for (const key of HOUR_FIELDS) readInteger(value, key, 0, 23, output, context);
   for (const key of OFFSET_FIELDS) readInteger(value, key, -12, 14, output, context);
   for (const key of TIMEZONE_FIELDS) readTimezone(value, key, output, context);

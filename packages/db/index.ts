@@ -59,12 +59,13 @@ export {
   isLlmBudgetUnavailableError,
   isSpendCapError,
   nanoDollarsToUsd,
+  platformDailyLlmSpendStopUsd,
   usageToNanoDollars,
   usdToNanoDollars,
   utcDayString,
 } from './llm-spend.js';
 export type { LlmTokenPriceNanoUsd, LlmUsageTokens } from './llm-spend.js';
-export { getDailyLlmSpendNano, recordDailyLlmSpend } from './spend-store.js';
+export { getDailyLlmSpendNano, getPlatformDailyLlmSpendNano, recordDailyLlmSpend } from './spend-store.js';
 export {
   commitDailyRefundSpendReservation,
   getDailyRefundSpendCents,

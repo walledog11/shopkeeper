@@ -16,8 +16,8 @@ export const ACCEPTED = [
     // Sentry's build plugins only: @sentry/nextjs runs them in its
     // `wrappingLoader` during `next build`, and no request path loads them.
     paths: ['node_modules/@rollup/plugin-commonjs/', 'node_modules/@rollup/pluginutils/'],
-    reason: 'ReDoS through glob patterns. Every published picomatch (<=4.0.7) is affected, and the newest @sentry/nextjs and @rollup/plugin-commonjs still require picomatch ^4.0.2.',
-    expires: '2026-12-01',
+    reason: 'ReDoS through glob patterns. Every published picomatch (<=4.0.7) is affected, and the newest @sentry/nextjs and @rollup/plugin-commonjs still require picomatch ^4.0.2. The fix is unreleased (micromatch/picomatch#194).',
+    expires: '2027-02-01',
   },
 ];
 

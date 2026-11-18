@@ -18,6 +18,7 @@ import {
   type AutonomyOverridePath,
   type RawInputs,
 } from "./agent-tab-helpers"
+import { DAILY_LIMIT_OVER_MAX, isOverDailyLimitMax } from "./llm-spend-presentation"
 import { isValidBusinessHoursWindow, resolveAgentSettings, type AutonomyTier } from "@shopkeeper/agent/settings"
 import type { OrgSettings, OrgSettingsPatch } from "@/types"
 
@@ -141,6 +142,10 @@ export function useAgentTabState({
   async function save() {
     setError(null)
     setStaleVersion(false)
+    if (isOverDailyLimitMax(payload.dailyLLMSpendCapUsd)) {
+      setError(DAILY_LIMIT_OVER_MAX)
+      return
+    }
     setSaving(true)
     setSaved(false)
     try {

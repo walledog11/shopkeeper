@@ -1,4 +1,11 @@
 import { formatMoney } from "@shopkeeper/agent/money"
+import { MAX_DAILY_LLM_SPEND_CAP_USD } from "@shopkeeper/agent/settings"
+
+export const DAILY_LIMIT_OVER_MAX = `The daily limit can be at most $${MAX_DAILY_LLM_SPEND_CAP_USD}.`
+
+export function isOverDailyLimitMax(capUsd: number | null | undefined): boolean {
+  return capUsd != null && capUsd > MAX_DAILY_LLM_SPEND_CAP_USD
+}
 
 export interface LlmSpendSnapshot {
   day: string

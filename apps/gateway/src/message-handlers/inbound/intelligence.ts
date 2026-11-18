@@ -2,6 +2,7 @@ import { db, isSpendCapError, SenderType } from '@shopkeeper/db';
 import logger from '../../logger.js';
 import { publishThreadEvent } from '../../realtime/publish.js';
 import { enforceSpendCap } from '@shopkeeper/agent/spend';
+import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import {
   CONTEXT_BUDGETS,
   buildBoundedClassifierConversation,
@@ -37,6 +38,7 @@ export async function generateThreadIntelligence(
     const fullThread = await db.thread.findUnique({
       where: { id: threadId },
       include: {
+        organization: { select: { settings: true } },
         messages: {
           where: { senderType: { not: SenderType.note } },
           orderBy: { sentAt: 'desc' },
@@ -73,7 +75,7 @@ export async function generateThreadIntelligence(
       context: boundedConversation.stats,
     }, '[Worker] AI input budget');
 
-    await enforceSpendCap(fullThread.organizationId, null);
+    await enforceSpendCap(fullThread.organizationId, resolveAgentSettings(fullThread.organization.settings));
 
     const verifiedOrderNames = await listVerifiedOrderNames(
       fullThread.organizationId,
