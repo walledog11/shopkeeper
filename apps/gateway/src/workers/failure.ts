@@ -1,14 +1,19 @@
 import type { OpsAlertCategory } from '@shopkeeper/agent/observability';
 import logger from '../logger.js';
 import { emitOpsAlert } from '../ops-alerts.js';
+import { captureJobFailure } from '../sentry.js';
 
 interface FailedJobSnapshot<DataType> {
   id?: string;
   attemptsMade?: number;
+  /** Set only when BullMQ will not retry the job. */
+  finishedOn?: number;
   data?: DataType;
 }
 
 export interface WorkerFailureEmitter<DataType> {
+  /** The queue name. */
+  readonly name: string;
   on(
     event: 'failed',
     listener: (job: FailedJobSnapshot<DataType> | undefined, err: Error) => void,
@@ -28,7 +33,10 @@ export function registerJobFailureLogging<DataType>(
   options: JobFailureLoggingOptions<DataType>,
 ): void {
   worker.on('failed', (job, err) => {
-    const fields = { err: err.message, ...options.logFields(job, err), ...options.failureExtra(job, err) };
+    const extra = options.failureExtra(job, err);
+    const fields = { err: err.message, ...options.logFields(job, err), ...extra };
+    // An attempt BullMQ will retry has lost nothing yet; the last one has.
+    if (job?.finishedOn !== undefined) captureJobFailure(worker.name, err, extra);
     if (!options.alert) {
       logger.error(fields, options.logMessage);
       return;

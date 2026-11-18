@@ -230,7 +230,8 @@ The first publication is the App Store. These block review or a new install's fi
   turn unless they earn it; gift cards are merchant-directed only. (2026-09-11)
 - **Plans sell volume and seats, never features.** (2026-08-19)
 - **Paid alerting waits for paid beta**; until then gateway alerts go to the operator
-  Telegram chat and the dashboard to Sentry. (2026-07-31)
+  Telegram chat and the dashboard's to Sentry, and both apps report errors to Sentry.
+  (2026-07-31; gateway errors 2026-11-18)
 - **Synchronous outbound email stays the rollback rail** until async recovery is
   exercised and an async-only date is set.
 - **Don't rename persisted enums or BullMQ queue/job names** for aesthetics — live

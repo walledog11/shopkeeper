@@ -79,6 +79,8 @@ export function getTestEnv(baseEnv = process.env) {
     // replaces the provider call with a JSONL audit record.
     OUTBOUND_EMAIL_ASYNC: 'false',
     PRODUCT_ANALYTICS_ENABLED: 'false',
+    // Tests fail jobs and routes on purpose; none of it is a gateway error report.
+    SENTRY_DSN: '',
     E2E_OUTBOUND_RECORD_PATH: baseEnv.E2E_OUTBOUND_RECORD_PATH || path.join(REPO_ROOT, 'test-results', 'e2e-outbound.jsonl'),
     E2E_TEST_EMAIL_ADDRESS: baseEnv.E2E_TEST_EMAIL_ADDRESS || 'support-e2e@inbound.test',
     E2E_TEST_ORG_NAME: baseEnv.E2E_TEST_ORG_NAME || 'E2E Test Store',
