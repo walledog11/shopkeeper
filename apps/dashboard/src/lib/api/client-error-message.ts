@@ -36,6 +36,35 @@ function statusDetail(status: number): ClientErrorCopy {
   }
 }
 
+type ClientErrorRecovery = 'retry' | 'reload'
+
+export interface RequestFailureCopy {
+  detail: string
+  /** What fixes it: the same request again, or a fresh session. */
+  recovery: ClientErrorRecovery | null
+}
+
+function hasErrorCode(payload: unknown): boolean {
+  return typeof (payload as { code?: unknown } | null)?.code === 'string'
+}
+
+/**
+ * Why a request the merchant started failed. A coded failure (the daily AI
+ * limit, paused AI work) and a refusal the route words itself keep the
+ * server's explanation; anything else gets plain copy for its status.
+ */
+export function requestFailureMessage(error: unknown): RequestFailureCopy {
+  if (!(error instanceof ApiRequestError)) {
+    return { detail: 'Check your connection and try again.', recovery: 'retry' }
+  }
+  const message = error.message.trim()
+  if (hasErrorCode(error.payload) && message) return { detail: message, recovery: null }
+  if (error.status === 401 || error.status === 403) return { detail: statusDetail(error.status).detail, recovery: 'reload' }
+  if (error.status === 429 || error.status >= 500) return { detail: statusDetail(error.status).detail, recovery: 'retry' }
+  if (error.status === 404) return { detail: statusDetail(error.status).detail, recovery: null }
+  return { detail: message || statusDetail(error.status).detail, recovery: null }
+}
+
 export function conversationLoadErrorMessage(error: unknown): ClientErrorCopy {
   if (error instanceof ApiRequestError) {
     const fromStatus = statusDetail(error.status)

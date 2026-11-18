@@ -1,5 +1,6 @@
 import type { MerchantAnswers } from "@shopkeeper/agent/types"
 import { ApiRequestError, requestJson } from "@/lib/api/fetcher"
+import { requestFailureMessage } from "@/lib/api/client-error-message"
 import { committedWithUnsentReply, planExecutionOutcomeForActions } from "@shopkeeper/agent/execution-outcome"
 import { handsOffToPlanning } from "@shopkeeper/agent/composer-plan-handoff"
 import type { ActionEntry } from "@/lib/agent/runner"
@@ -7,7 +8,11 @@ import type { AgentPlan, AgentTurn, PlanExecutionOutcome, RawToolCall } from "@/
 import type { GatewayAgentRequestPayload } from "@/lib/agent/api/gateway-operator-turn"
 
 const JSON_HEADERS = { "Content-Type": "application/json" } as const
-const NETWORK_ERROR = "Network error — please try again."
+
+/** A planning request that ended without a draft. Its message is our own copy, not a failed request. */
+export class PlanningEndedError extends Error {
+  override readonly name = "PlanningEndedError"
+}
 
 interface AgentActionPayload {
   actionsPerformed?: ActionEntry[]
@@ -25,7 +30,7 @@ export type AgentRequestResult =
 
 type AgentTurnRequestResult =
   | { ok: true; turn: Omit<AgentTurn, "id">; handsOffToPlanning: boolean }
-  | { ok: false; turn: Omit<AgentTurn, "id"> }
+  | { ok: false; error: unknown }
 
 const PLAN_EXECUTION_OUTCOMES = new Set<PlanExecutionOutcome>([
   "committed",
@@ -104,29 +109,6 @@ function agentTurnFields(
   }
 }
 
-function networkErrorTurn(instruction: string): Omit<AgentTurn, "id"> {
-  return {
-    instruction,
-    actions: [],
-    summary: null,
-    error: NETWORK_ERROR,
-  }
-}
-
-function requestErrorTurn(instruction: string, error: unknown, fallback: string): Omit<AgentTurn, "id"> {
-  const message = error instanceof ApiRequestError
-    ? error.message
-    : error instanceof Error && error.message
-      ? error.message
-      : fallback
-  return {
-    instruction,
-    actions: [],
-    summary: null,
-    error: message,
-  }
-}
-
 export async function executeApprovedAgentPlan(
   threadId: string,
   instruction: string,
@@ -153,14 +135,13 @@ export async function executeApprovedAgentPlan(
     if (error instanceof ApiRequestError) {
       const payload = (error.payload ?? {}) as AgentActionPayload
       const fallbackOutcome = error.status < 500 ? "failed" : "unknown"
-      return executionResult(instruction, payload, fallbackOutcome, error.message)
+      // A failure worth retrying may still have run, so it gets the
+      // outcome's own copy rather than an invitation to try again.
+      const failure = requestFailureMessage(error)
+      return executionResult(instruction, payload, fallbackOutcome, failure.recovery === "retry" ? null : failure.detail)
     }
-    return {
-      ok: false,
-      executionId: null,
-      outcome: "unknown",
-      turn: networkErrorTurn(instruction),
-    }
+    // The request may have reached the server before the connection dropped.
+    return executionResult(instruction, {}, "unknown", null)
   }
 }
 
@@ -185,14 +166,7 @@ export async function askAgentPrivately(
       handsOffToPlanning: handsOffToPlanning(payload.actionsPerformed ?? []),
     }
   } catch (error) {
-    if (error instanceof ApiRequestError) {
-      const payload = (error.payload ?? {}) as AgentActionPayload
-      return {
-        ok: false,
-        turn: agentTurnFields(instruction, payload, error.message),
-      }
-    }
-    return { ok: false, turn: networkErrorTurn(instruction) }
+    return { ok: false, error }
   }
 }
 
@@ -247,7 +221,7 @@ async function waitForAgentPlan(threadId: string, initial: GatewayAgentRequestPa
     }
     if (["failed", "cancelled", "reconciling", "waiting_input", "completed"].includes(payload.status)) {
       storePlanningSubmission(threadId, null)
-      throw new Error(payload.pendingQuestion ?? (payload.failureCode === "superseded_request"
+      throw new PlanningEndedError(payload.pendingQuestion ?? (payload.failureCode === "superseded_request"
         ? "A newer instruction replaced this planning request. Review the current draft."
         : payload.status === "cancelled" ? "Planning was stopped."
         : "Planning did not produce a current draft. Review the ticket before trying again."))
@@ -288,10 +262,6 @@ export async function dismissAgentPlan(threadId: string, planId: string): Promis
   )
 }
 
-export function planRequestErrorTurn(instruction: string, error: unknown): Omit<AgentTurn, "id"> {
-  return requestErrorTurn(instruction, error, "Failed to generate plan — please try again.")
-}
-
 export async function quickApproveCachedPlan(
   threadId: string,
   planId?: string | null,
@@ -308,9 +278,13 @@ export async function quickApproveCachedPlan(
     )
     return { ok: true }
   } catch (error) {
-    const message = error instanceof ApiRequestError
-      ? error.message
-      : "Network error. Try again."
-    return { ok: false, error: message }
+    const failure = requestFailureMessage(error)
+    // A dropped connection or a server error can arrive after the reply went out.
+    return {
+      ok: false,
+      error: failure.recovery === "retry"
+        ? "Couldn't confirm the reply was sent. Open the ticket and check before sending again."
+        : failure.detail,
+    }
   }
 }

@@ -4,6 +4,7 @@ import { AlertCircle, Bot, Check, RefreshCw, Smartphone } from "lucide-react"
 import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import { TOOL_LABELS } from "@shopkeeper/agent/tools"
 import type { AgentTurn } from "@/types"
+import type { AgentRequestFailure } from "../../../_hooks/useConversationAgentFlow"
 
 interface Props {
   agentTurns: AgentTurn[]
@@ -11,7 +12,46 @@ interface Props {
   isPlanLoading: boolean
   pendingInstruction: string | null
   planPhrase: string
+  requestFailure: AgentRequestFailure | null
   runPhrase: string
+}
+
+/** The merchant's own `@agent` instruction, on their side of the timeline. */
+function InstructionBubble({ instruction }: { instruction: string }) {
+  return (
+    <div className="px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed bg-foreground/[0.08] text-strong rounded-md rounded-tr-sm">
+      <span className="text-violet-600 font-semibold">@{AGENT_DISPLAY_NAME.toLowerCase()}</span>{" "}
+      {instruction}
+    </div>
+  )
+}
+
+// Not the agent speaking: the request failed before it could answer.
+function RequestFailureNotice({ failure }: { failure: AgentRequestFailure }) {
+  const { recovery } = failure
+  return (
+    <div
+      role="alert"
+      data-testid="agent-request-failure"
+      className="flex w-fit max-w-[80%] items-start gap-2.5 rounded-xl border border-red-500/20 bg-red-500/[0.06] px-3.5 py-3"
+    >
+      <AlertCircle aria-hidden className="mt-px size-4 shrink-0 text-red-600" />
+      <div className="min-w-0 text-[13px] leading-snug">
+        <p className="font-semibold text-strong">{failure.title}</p>
+        <p className="mt-0.5 text-muted-foreground">{failure.detail}</p>
+        {recovery ? (
+          <button
+            type="button"
+            onClick={recovery.kind === "retry" ? recovery.run : () => window.location.reload()}
+            className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg border border-border bg-white px-2.5 py-1 text-xs font-semibold text-strong transition-colors hover:bg-foreground/[0.04]"
+          >
+            <RefreshCw aria-hidden className="size-3" />
+            {recovery.kind === "retry" ? "Try again" : "Reload"}
+          </button>
+        ) : null}
+      </div>
+    </div>
+  )
 }
 
 export default function AgentPrivateTurns({
@@ -20,6 +60,7 @@ export default function AgentPrivateTurns({
   isPlanLoading,
   pendingInstruction,
   planPhrase,
+  requestFailure,
   runPhrase,
 }: Props) {
   return (
@@ -36,10 +77,7 @@ export default function AgentPrivateTurns({
                   From your phone
                 </div>
               )}
-              <div className="px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed bg-foreground/[0.08] text-strong rounded-md rounded-tr-sm">
-                <span className="text-violet-600 font-semibold">@{AGENT_DISPLAY_NAME.toLowerCase()}</span>{" "}
-                {turn.instruction}
-              </div>
+              <InstructionBubble instruction={turn.instruction} />
             </div>
           )}
           <div className="flex flex-col gap-1 items-start">
@@ -82,14 +120,22 @@ export default function AgentPrivateTurns({
         </div>
       ))}
 
+      {requestFailure && (
+        <div className="space-y-2">
+          {requestFailure.instruction && (
+            <div className="flex flex-col gap-1 items-end">
+              <InstructionBubble instruction={requestFailure.instruction} />
+            </div>
+          )}
+          <RequestFailureNotice failure={requestFailure} />
+        </div>
+      )}
+
       {(isPlanLoading || isAgentRunning) && (
         <div className="space-y-2">
           {pendingInstruction && (
             <div className="flex flex-col gap-1 items-end">
-              <div className="px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed bg-foreground/[0.08] text-strong rounded-md rounded-tr-sm">
-                <span className="text-violet-600 font-semibold">@{AGENT_DISPLAY_NAME.toLowerCase()}</span>{" "}
-                {pendingInstruction}
-              </div>
+              <InstructionBubble instruction={pendingInstruction} />
             </div>
           )}
           <div className="flex flex-col gap-1 items-start">

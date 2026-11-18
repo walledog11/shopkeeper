@@ -1,5 +1,6 @@
 import { TOOL_CATEGORIES, TOOL_LABELS } from "@shopkeeper/agent/tools"
 import type { ActionLogQueryFilters } from "@/hooks/useActionLogEntries"
+import { getToolChipLabel } from "@/lib/agent/tool-action-display"
 import type { ActionLogEntry } from "@/types"
 
 export type Tone = "reply" | "escalate" | "money" | "error" | "note"
@@ -79,7 +80,7 @@ export const REVIEW_FILTERS: ReviewFilterConfig[] = [
     id: "attention",
     label: "Needs review",
     emptyTitle: "Nothing needs review",
-    emptyBody: "Escalations, failed tools, policy blocks, and fraud flags land here.",
+    emptyBody: "Handoffs, failed or blocked steps, and flagged orders land here.",
     query: { attention: true, excludeOperator: true },
   },
   {
@@ -112,7 +113,7 @@ const EXTRA_TOOL_LABELS: Record<string, string> = {
   update_shopify_order_address: "Updated shipping address",
 }
 
-export function toolLabel(tool: string): string {
+function toolLabel(tool: string): string {
   return TOOL_LABELS[tool] ?? EXTRA_TOOL_LABELS[tool] ?? tool
 }
 
@@ -181,22 +182,12 @@ export function outcomeTone(action: ActionLogEntry["actions"][number]): Tone {
 }
 
 export function reviewItemChrome(entry: ActionLogEntry): ReviewItemChrome {
+  // A failure names the step it stopped, so the badge says what didn't happen.
   const errored = entry.actions.find((action) => isErrorStatus(action.status))
-  if (errored) {
-    return {
-      tone: "error",
-      icon: "alert",
-      code: "error",
-      label: errored.status === "policy_block"
-        ? "Policy block"
-        : errored.status === "unknown"
-          ? "Outcome unknown"
-          : "Tool error",
-    }
-  }
+  if (errored) return { tone: "error", icon: "alert", code: "error", label: getToolChipLabel(errored) }
 
   const escalation = entry.actions.find((action) => action.tool === "escalate_to_human" || action.status === "escalated")
-  if (escalation) return { tone: "attention", icon: "alert", code: "escalated", label: "Escalated" }
+  if (escalation) return { tone: "attention", icon: "alert", code: "escalated", label: "Handed to you" }
 
   const flag = entry.actions.find((action) => action.tool === "flag_order")
   if (flag) return { tone: "attention", icon: "alert", code: "flagged_order", label: "Flagged order" }
@@ -216,7 +207,7 @@ export function reviewItemChrome(entry: ActionLogEntry): ReviewItemChrome {
     }
   }
 
-  if (entry.mode === "read_only") return { tone: "note", icon: "note", code: "read_only", label: "Read only" }
+  if (entry.mode === "read_only") return { tone: "note", icon: "note", code: "read_only", label: "Lookup" }
   return { tone: "approved", icon: "check", code: "approved", label: "Approved" }
 }
 
@@ -228,12 +219,27 @@ export function reviewModeNote(entry: ActionLogEntry): string | null {
   const { code } = reviewItemChrome(entry)
 
   if (entry.mode === "auto_executed") {
-    return code === "auto_reply" || code === "auto_action" ? null : "ran automatically"
+    // The agent only ever hands a ticket over on its own, so that needs no note.
+    return code === "auto_reply" || code === "auto_action" || code === "escalated" ? null : "ran automatically"
   }
   if (entry.mode === "read_only") {
-    return code === "read_only" ? null : "read-only lookup"
+    return code === "read_only" ? null : "nothing changed"
   }
   return code === "approved" ? null : "you approved"
+}
+
+/**
+ * What a failed step left undone, and what to do about it. A failed lookup
+ * changed nothing and leaves nothing to finish.
+ */
+export function reviewNextStep(entry: ActionLogEntry): string | null {
+  const failed = entry.actions.find((action) =>
+    isErrorStatus(action.status) && (TOOL_CATEGORIES[action.tool] ?? "internal") !== "read")
+  if (!failed) return null
+  if (failed.status === "unknown") return "It may have gone through. Check Shopify or the conversation before trying again."
+  return failed.status === "policy_block"
+    ? "It didn't run. Finish it from the ticket if it should still happen."
+    : "It didn't go through. Finish it from the ticket if it should still happen."
 }
 
 export function primaryPreviewText(entry: ActionLogEntry): string {

@@ -95,9 +95,7 @@ The first publication is the App Store. These block review or a new install's fi
 - **Pre-listing polish** (from the 2026-11-11 walkthrough and the 2026-11-17 audit). Home
   stacks two setup nudges (the workflow card and a channel banner): give them one slot.
   Page headers differ: settings pages, Website chat, and none at all on Inbox, Memory,
-  Review and Shop. A plan card shows raw server errors
-  ("Unauthorized") instead of a retry state. Onboarding headlines use a handwritten face
-  nothing else uses. Trusted differs from Ask first only by the refund cap until
+  Review and Shop. Onboarding headlines use a handwritten face nothing else uses. Trusted differs from Ask first only by the refund cap until
   auto-execute ships (no UI, default off), though its blurb promises more. Usage &
   billing shows a merchant-set AI dollar cap that reads as metered billing. Website chat
   stays in the nav and the app home's tabs when `STOREFRONT_CHAT_ENABLED` is off.

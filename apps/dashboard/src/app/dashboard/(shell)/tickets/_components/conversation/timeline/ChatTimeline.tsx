@@ -4,6 +4,7 @@ import { AlertTriangle, Loader2, MessageSquare } from "lucide-react"
 import { AttachmentList } from "@/app/dashboard/_components/AttachmentList"
 import { SupportCardBubble } from "@/components/support-card/card"
 import type { AgentTurn, FailedMessage, Ticket } from "@/types"
+import type { AgentRequestFailure } from "../../../_hooks/useConversationAgentFlow"
 import AgentPrivateTurns from "./AgentPrivateTurns"
 
 interface Props {
@@ -17,6 +18,7 @@ interface Props {
   onRetrySend?: (id: string) => void
   pendingInstruction: string | null
   planPhrase: string
+  requestFailure: AgentRequestFailure | null
   runPhrase: string
 }
 
@@ -31,11 +33,13 @@ export default function ChatTimeline({
   onRetrySend,
   pendingInstruction,
   planPhrase,
+  requestFailure,
   runPhrase,
 }: Props) {
   if (
     messages.length === 0
     && agentTurns.length === 0
+    && !requestFailure
     && !isAgentRunning
     && !isPlanLoading
   ) {
@@ -178,6 +182,7 @@ export default function ChatTimeline({
         isPlanLoading={isPlanLoading}
         pendingInstruction={pendingInstruction}
         planPhrase={planPhrase}
+        requestFailure={requestFailure}
         runPhrase={runPhrase}
       />
 

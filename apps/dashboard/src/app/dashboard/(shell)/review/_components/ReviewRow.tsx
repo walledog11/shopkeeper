@@ -14,6 +14,7 @@ import {
   primaryPreviewText,
   reviewItemChrome,
   reviewModeNote,
+  reviewNextStep,
 } from "./quality-panel-model"
 import {
   REVIEW_ICONS,
@@ -39,6 +40,7 @@ export function ReviewRow({
   const Icon = REVIEW_ICONS[chrome.icon]
   const tone = REVIEW_TONE_CLASS[chrome.tone]
   const modeNote = reviewModeNote(entry)
+  const nextStep = reviewNextStep(entry)
   const requestOutcomeSummary = entry.requestOutcome
     ? formatRequestOutcomeSummary(entry.requestOutcome)
     : null
@@ -78,6 +80,7 @@ export function ReviewRow({
           <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-muted-foreground">
             {primaryPreviewText(entry)}
           </p>
+          {nextStep && <p className="mt-1 text-sm font-medium leading-relaxed text-strong">{nextStep}</p>}
         </div>
       </button>
 

@@ -1,12 +1,12 @@
 "use client"
 
-import { useCallback, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react"
 import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import { SupportCardBody, SupportCardHeader } from "@/components/support-card/card"
 import { useFillerPhrase } from "@/hooks/useFillerPhrase"
 import { useIsMobile } from "@/hooks/useMobile"
 import { requestShopifyLinkFocus } from "@/lib/messaging/shopify-link-focus"
-import { useConversationAgentFlow } from "../../_hooks/useConversationAgentFlow"
+import { useConversationAgentFlow, type AgentRequestFailure } from "../../_hooks/useConversationAgentFlow"
 import type { ComposerAttachments } from "../../_hooks/useComposerAttachments"
 import { buildTicketCardMeta } from "../../_lib/inbox-row"
 import ConversationHeader from "./ConversationHeader"
@@ -156,6 +156,7 @@ export default function ConversationView({
     pendingPlan,
     planExecutionOutcome,
     requestDraftReply,
+    requestFailure,
     requestRefreshDraft,
   } = useConversationAgentFlow({
     ticket,
@@ -196,6 +197,11 @@ export default function ConversationView({
     }
     messagesEndRef.current?.scrollIntoView({ behavior, block: "end" })
   }, [messagesEndRef])
+
+  // A failure lands under whatever was on screen; bring it into view.
+  useEffect(() => {
+    if (requestFailure) scrollTimelineToEnd("smooth")
+  }, [requestFailure, scrollTimelineToEnd])
 
   const agentBusy = isSending || isAgentRunning || isPlanLoading || isPlanExecuting
 
@@ -287,6 +293,7 @@ export default function ConversationView({
         onRetrySend={onRetrySend}
         pendingInstruction={pendingInstruction}
         planPhrase={planPhrase}
+        requestFailure={requestFailure}
         runPhrase={runPhrase}
         status={{
           isAgentRunning,
@@ -350,6 +357,7 @@ interface ConversationTimelinePanelProps {
   onRetrySend?: (id: string) => void
   pendingInstruction: string | null
   planPhrase: string
+  requestFailure: AgentRequestFailure | null
   runPhrase: string
   status: {
     isAgentRunning: boolean
@@ -370,6 +378,7 @@ function ConversationTimelinePanel({
   onRetrySend,
   pendingInstruction,
   planPhrase,
+  requestFailure,
   runPhrase,
   status,
   ticketId,
@@ -408,6 +417,7 @@ function ConversationTimelinePanel({
             onRetrySend={onRetrySend}
             pendingInstruction={pendingInstruction}
             planPhrase={planPhrase}
+            requestFailure={requestFailure}
             runPhrase={runPhrase}
           />
         )}

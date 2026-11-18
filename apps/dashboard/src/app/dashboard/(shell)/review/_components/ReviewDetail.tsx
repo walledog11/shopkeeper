@@ -8,6 +8,7 @@ import {
   formatPlanVerdictLabel,
   formatRequestOutcomeDisplay,
 } from "@/lib/agent/action-log-display"
+import { getToolChipLabel } from "@/lib/agent/tool-action-display"
 import { getActionLogChannelInfo } from "@/lib/messaging/channels"
 import type { ActionLogEntry } from "@/types"
 import {
@@ -17,8 +18,8 @@ import {
   outcomeTone,
   reviewItemChrome,
   reviewModeNote,
+  reviewNextStep,
   toOutputBlock,
-  toolLabel,
   type OutputBlock,
 } from "./quality-panel-model"
 import {
@@ -47,13 +48,6 @@ function OutputBlockView({ block }: { block: OutputBlock }) {
   )
 }
 
-function statusClassName(status: ActionLogEntry["actions"][number]["status"]): string {
-  if (status === "success") return "border-emerald-500/20 bg-emerald-500/10 text-emerald-800"
-  if (status === "escalated") return "border-amber-500/20 bg-amber-500/10 text-amber-800"
-  if (status === "error" || status === "policy_block" || status === "unknown") return "border-red-500/20 bg-red-500/10 text-red-800"
-  return "border-foreground/[0.08] bg-foreground/[0.04] text-muted-foreground"
-}
-
 export function ReviewDetail({
   entry,
   onClose,
@@ -73,6 +67,7 @@ export function ReviewDetail({
   const Icon = REVIEW_ICONS[chrome.icon]
   const tone = REVIEW_TONE_CLASS[chrome.tone]
   const modeNote = reviewModeNote(entry)
+  const nextStep = reviewNextStep(entry)
   const requestOutcome = entry.requestOutcome
     ? formatRequestOutcomeDisplay(entry.requestOutcome)
     : null
@@ -105,6 +100,7 @@ export function ReviewDetail({
               {entry.threadTag && <span>{entry.threadTag}</span>}
               {requestOutcome && <span>{requestOutcome.label}</span>}
             </div>
+            {nextStep && <p className="mt-3 text-sm font-medium leading-relaxed text-strong">{nextStep}</p>}
           </div>
         </div>
       </div>
@@ -188,10 +184,7 @@ export function ReviewDetail({
                   }`}
                 >
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-semibold text-strong">{toolLabel(action.tool)}</p>
-                    <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold uppercase tracking-wide ${statusClassName(action.status)}`}>
-                      {action.status ?? "recorded"}
-                    </span>
+                    <p className="text-sm font-semibold text-strong">{getToolChipLabel(action)}</p>
                     {typeof action.durationMs === "number" && (
                       <span className="text-xs text-faint">{action.durationMs} ms</span>
                     )}
