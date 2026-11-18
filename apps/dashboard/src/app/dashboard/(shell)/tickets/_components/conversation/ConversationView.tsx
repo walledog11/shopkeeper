@@ -253,22 +253,17 @@ export default function ConversationView({
       }`}
       style={conversationStyle}
     >
-      <SupportCardHeader className="shrink-0 pb-3.5 sm:pb-4">
-        <div className="flex flex-col gap-2">
-          <ConversationHeader
-            activeTab={activeTab}
-            cocoAction={headerCocoAction}
-            meta={headerMeta}
-            onCocoAction={() => { void handleCocoAction() }}
-            onBack={onBack}
-            onResolve={onResolve}
-            onReopen={onReopen}
-            onOpenContext={thread ? () => setOpenContextSection("customer") : undefined}
-            threadId={thread?.id}
-            embedded={embedded}
-            flush
-          />
-          {thread && onLinkShopifyCustomer && (
+      <SupportCardHeader className="shrink-0">
+        <ConversationHeader
+          activeTab={activeTab}
+          cocoAction={headerCocoAction}
+          meta={headerMeta}
+          onCocoAction={() => { void handleCocoAction() }}
+          onBack={onBack}
+          onResolve={onResolve}
+          onReopen={onReopen}
+          onOpenContext={thread ? () => setOpenContextSection("customer") : undefined}
+          context={thread && onLinkShopifyCustomer ? (
             <ConversationContextBar
               thread={thread}
               hasShopify={hasShopify}
@@ -277,8 +272,10 @@ export default function ConversationView({
               onOpenSectionChange={setOpenContextSection}
               flush
             />
-          )}
-        </div>
+          ) : null}
+          threadId={thread?.id}
+          embedded={embedded}
+        />
       </SupportCardHeader>
 
       <ConversationTimelinePanel

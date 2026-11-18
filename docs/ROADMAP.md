@@ -94,9 +94,8 @@ The first publication is the App Store. These block review or a new install's fi
 
 - **Pre-listing polish** (from the 2026-11-11 walkthrough and the 2026-11-17 audit). Home
   stacks two setup nudges (the workflow card and a channel banner): give them one slot.
-  Inbox rows are about 150px tall (200 on a phone) with input-like pills, so about five
-  tickets fit a screen. Page headers differ: settings pages, Website chat, and none at
-  all on Inbox, Memory, Review and Shop. A plan card shows raw server errors
+  Page headers differ: settings pages, Website chat, and none at all on Inbox, Memory,
+  Review and Shop. A plan card shows raw server errors
   ("Unauthorized") instead of a retry state. Onboarding headlines use a handwritten face
   nothing else uses. Trusted differs from Ask first only by the refund cap until
   auto-execute ships (no UI, default off), though its blurb promises more. Usage &

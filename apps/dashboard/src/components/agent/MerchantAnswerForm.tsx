@@ -18,6 +18,8 @@ interface Props {
   /** Seeds the answer, so a host that unmounts the form (the home deck on swipe) keeps the draft. */
   initialAnswer?: string
   onAnswerChange?: (answer: string) => void
+  /** For a host that reveals the form on demand, where the merchant came to type. */
+  autoFocus?: boolean
 }
 
 interface MerchantAnswerState {
@@ -45,7 +47,7 @@ function mergeState(state: MerchantAnswerState, patch: Partial<MerchantAnswerSta
 // Shared affordance for answering an `ask_operator` question. The merchant supplies the
 // missing fact; the route records it, optionally saves it to the KB, and re-plans the ticket
 // so a normal reply rides the usual approval flow. Used by the home deck and the ticket view.
-export default function MerchantAnswerForm({ threadId, question, onAnswered, initialAnswer, onAnswerChange }: Props) {
+export default function MerchantAnswerForm({ threadId, question, onAnswered, initialAnswer, onAnswerChange, autoFocus }: Props) {
   const [{ answer, error, isSubmitting, saveToKb, succeeded, toastMessage }, updateState] =
     useReducer(mergeState, { ...INITIAL_STATE, answer: initialAnswer ?? "" })
 
@@ -98,6 +100,7 @@ export default function MerchantAnswerForm({ threadId, question, onAnswered, ini
           }}
           placeholder="Your answer…"
           rows={3}
+          autoFocus={autoFocus}
           disabled={isSubmitting || succeeded}
           className="rounded-2xl bg-foreground/[0.03] min-h-[88px]"
           onKeyDown={event => {

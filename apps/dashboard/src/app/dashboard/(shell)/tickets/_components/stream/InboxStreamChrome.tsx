@@ -2,6 +2,7 @@
 
 import { ChevronDown } from "lucide-react"
 import { useState, type ReactNode } from "react"
+import { boardCardListClassName } from "@/lib/ui/board-card-styles"
 import { cn } from "@/lib/ui/cn"
 
 const SERIF = "[font-family:var(--m-serif),Georgia,'Times_New_Roman',serif]"
@@ -79,7 +80,7 @@ export function InboxStreamSection({
     <section className="flex flex-col gap-3" data-testid={testId}>
       {foldBefore && <InboxStreamFold />}
       {lead}
-      <ul className="flex flex-col gap-3">{children}</ul>
+      <ul className={boardCardListClassName}>{children}</ul>
     </section>
   )
 }
@@ -113,7 +114,7 @@ export function InboxSpamSection({
         </span>
       </button>
       {expanded && (
-        <ul className="flex flex-col gap-3">{children}</ul>
+        <ul className={boardCardListClassName}>{children}</ul>
       )}
     </section>
   )

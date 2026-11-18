@@ -28,6 +28,9 @@ export function boardCardShellClassName(variant: BoardCardVariant = "default") {
   )
 }
 
+/** One card holding a list, a divided row per item. */
+export const boardCardListClassName = cn(boardCardShellClassName(), "divide-y divide-border/60")
+
 const boardCardFooterClassName =
   "border-t border-border/50 bg-muted/30 rounded-b-3xl"
 

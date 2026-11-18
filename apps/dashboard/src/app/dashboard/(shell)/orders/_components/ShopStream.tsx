@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { cn } from "@/lib/ui/cn"
 import type { OrderRow } from "@/lib/orders/order-contract"
-import { InboxStreamLoading } from "@/app/dashboard/(shell)/tickets/_components/stream/InboxStreamLoading"
+import { ShopStreamLoading } from "./ShopStreamLoading"
 import { ShopFindingCard, ShopOrderCard } from "./ShopCards"
 import {
   fetchOrdersSearch,
@@ -54,7 +54,7 @@ export function ShopStream({
   const [openErrorById, setOpenErrorById] = useState<Record<string, string>>({})
 
   if (isLoading) {
-    return <InboxStreamLoading label="Loading orders" />
+    return <ShopStreamLoading label="Loading orders" />
   }
 
   if (error) {
@@ -140,7 +140,7 @@ export function ShopSearchResults({
   onRetry: () => void
 }) {
   if (isLoading && orders.length === 0) {
-    return <InboxStreamLoading label="Searching orders" />
+    return <ShopStreamLoading label="Searching orders" />
   }
 
   if (error && orders.length === 0) {
