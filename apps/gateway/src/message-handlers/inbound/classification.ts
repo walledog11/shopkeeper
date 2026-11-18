@@ -15,6 +15,7 @@ import {
   isDeterministicE2EAIEnabled,
 } from '@shopkeeper/agent/ai';
 import { enforceSpendCap, recordSpend } from '@shopkeeper/agent/spend';
+import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { readModelUsage } from '@shopkeeper/agent/usage';
 import { timeStep } from '@shopkeeper/agent/step-timings';
 import {
@@ -516,18 +517,19 @@ function deterministicE2EClassification(subject: string, body: string): Classifi
 // own retry. Writing a fail-open verdict here would set filterDecidedAt, which
 // is the lock that stops any later reclassification — a transient error would
 // mark a newsletter genuine forever.
-// orgId is passed so the call counts against the org's daily LLM spend cap.
+// The org's stored settings are passed so the call counts against the org's own
+// daily LLM spend cap.
 export async function classifyAndSummarizeNewEmail(
   organizationId: string,
   subject: string,
   body: string,
+  orgSettings: unknown,
 ): Promise<ClassificationResult | null> {
   const deterministic = deterministicE2EClassification(subject, body);
   if (deterministic) return deterministic;
 
   try {
-    // Gateway uses default cap (per-org override applies on dashboard agent runs).
-    await enforceSpendCap(organizationId, null);
+    await enforceSpendCap(organizationId, resolveAgentSettings(orgSettings));
     const boundedInput = buildBoundedEmailClassifierInput(subject, body);
     // "by Friday" is only a date relative to something. Kept in the user message
     // rather than the system prompt so the cached prefix stays byte-stable.

@@ -1,7 +1,8 @@
 import './test-fixtures/worker-test-setup.js';
 import type { Queue } from 'bullmq';
 import { describe, expect, it, vi } from 'vitest';
-import { ChannelType, db } from '@shopkeeper/db';
+import { ChannelType, db, usdToNanoDollars, utcDayString } from '@shopkeeper/db';
+import { generateThreadIntelligence } from './message-handlers/inbound/intelligence.js';
 import { processInboundMessage } from './message-handlers/inbound/inbound-persistence.js';
 import type { ClassificationResult } from './message-handlers/inbound/classification.js';
 import type { RequestFacts } from '@shopkeeper/agent/classifier-signals';
@@ -192,6 +193,38 @@ describe('inbound classification channel contract', () => {
     for (const content of contents) {
       expect(content.startsWith(`Today: ${today}\n\n`)).toBe(true);
     }
+  });
+
+  // Both paths passed no settings to the spend gate, so they classified on until
+  // the $20 default whatever daily limit the workspace had set.
+  it('stops both paths at the workspace daily AI limit, not the default', async () => {
+    await db.organization.update({ where: { id: org.id }, data: { settings: { dailyLLMSpendCapUsd: 5 } } });
+    await db.llmDailySpend.create({
+      data: {
+        organizationId: org.id,
+        day: utcDayString(),
+        model: 'claude-haiku-5-5',
+        spentNanoUsd: BigInt(usdToNanoDollars(6)),
+      },
+    });
+    getMockAnthropicCreate().mockResolvedValue(classificationResponse());
+
+    await getCapturedHandlers().get('inbound-messages')!(makeEmailJob(org.id, {
+      body: REQUEST_TEXT,
+      subject: 'Cancel order #1024',
+    }));
+    const { queue } = queueSpy();
+    const storefront = await processInboundMessage(
+      org.id,
+      'spend-limit-shopper',
+      ChannelType.shopify_chat,
+      REQUEST_TEXT,
+      queue,
+      { customerName: 'Test Customer', isRealCustomerMessage: true },
+    );
+    await generateThreadIntelligence(storefront!.thread.id);
+
+    expect(getMockAnthropicCreate()).not.toHaveBeenCalled();
   });
 
   it('rejects a post-persistence classification when a newer request arrives in flight', async () => {
