@@ -3,7 +3,7 @@ import { TOOL_CATEGORIES, TOOL_LABELS, PLAN_STEP_LABELS } from "@shopkeeper/agen
 
 export type ToolChipVariant = "read" | "executed" | "pending" | "error";
 
-export function getToolChipLabel(action: ActionEntry): string {
+export function getToolChipLabel(action: Pick<ActionEntry, "tool"> & { status?: ActionEntry["status"] }): string {
   const actionLabel = PLAN_STEP_LABELS[action.tool] ?? action.tool;
   if (action.status === "policy_block") return `Blocked: ${actionLabel}`;
   if (action.status === "unknown") return `Needs review: ${actionLabel}`;

@@ -3,7 +3,6 @@ import {
   askAgentPrivately,
   executeApprovedAgentPlan,
   fetchAgentPlan,
-  planRequestErrorTurn,
 } from "./conversation-agent-requests"
 
 afterEach(() => {
@@ -84,7 +83,7 @@ describe("conversation agent requests", () => {
       ok: false,
       executionId: "execution-unknown",
       outcome: "unknown",
-      turn: { error: "Agent failed." },
+      turn: { error: expect.stringContaining("could not be confirmed") },
     })
   })
 
@@ -97,11 +96,11 @@ describe("conversation agent requests", () => {
       ok: false,
       executionId: null,
       outcome: "unknown",
-      turn: { error: "Network error — please try again." },
+      turn: { error: expect.stringContaining("could not be confirmed") },
     })
   })
 
-  it("maps API failures into agent turns with payload details", async () => {
+  it("hands ask failures back for the caller to explain", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
       new Response(JSON.stringify({
         error: "Agent failed.",
@@ -111,12 +110,7 @@ describe("conversation agent requests", () => {
 
     const result = await askAgentPrivately("thread-1", "what should I say?", { planHandoff: true })
 
-    expect(result.ok).toBe(false)
-    expect(result.turn).toMatchObject({
-      instruction: "what should I say?",
-      error: "Agent failed.",
-      actions: [{ tool: "send_reply", result: "Sent reply" }],
-    })
+    expect(result).toMatchObject({ ok: false, error: expect.objectContaining({ status: 500 }) })
   })
 
   it("requests agent plans without forcing regeneration by default", async () => {
@@ -135,15 +129,6 @@ describe("conversation agent requests", () => {
     }))
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
       threadId: "thread-1", instruction: "refund order", force: false, clientRequestId: expect.any(String),
-    })
-  })
-
-  it("formats plan request failures for composer turns", () => {
-    expect(planRequestErrorTurn("refund order", new Error("Plan request failed"))).toMatchObject({
-      instruction: "refund order",
-      error: "Plan request failed",
-      actions: [],
-      summary: null,
     })
   })
 })

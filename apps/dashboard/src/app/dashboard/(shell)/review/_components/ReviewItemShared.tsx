@@ -6,7 +6,7 @@ import {
   MessageSquare,
   NotebookText,
   PackageCheck,
-  ThumbsDown,
+  PenLine,
   Wrench,
 } from "lucide-react"
 import { correctReplyHref } from "@/lib/agent/action-log-display"
@@ -88,8 +88,8 @@ export function ReviewCorrectionLink({
       href={correctionHref}
       className={`inline-flex items-center gap-1 font-semibold text-faint transition-colors hover:text-amber-800 ${compact ? "text-[11px]" : "text-xs"}`}
     >
-      <ThumbsDown className="size-3" />
-      Sounds off
+      <PenLine className="size-3" />
+      Correct reply
     </Link>
   )
 }

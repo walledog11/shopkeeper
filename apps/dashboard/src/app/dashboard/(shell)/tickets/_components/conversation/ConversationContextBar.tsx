@@ -6,7 +6,6 @@ import { fetcher } from "@/lib/api/fetcher"
 import { locationString } from "@/lib/format/shopify"
 import { cn } from "@/lib/ui/cn"
 import { merchantSandInkClass } from "@/lib/ui/merchant-palette"
-import { supportCardMetaPillClassName } from "@/components/support-card/styles"
 import type { Thread } from "@/types"
 import { useShopifyCustomer } from "../context-panel/useShopifyCustomer"
 import { formatMoney } from "@shopkeeper/agent/money"
@@ -44,9 +43,9 @@ const TEXT_TONE: Record<FactTone, string> = {
 }
 
 const PILL_TONE: Record<FactTone, string> = {
-  value: "bg-emerald-600/10 text-emerald-800",
-  lead: "bg-white text-[#1a1a1a]",
-  muted: "bg-white text-[#6b5d4f]",
+  value: "bg-emerald-600/10 text-emerald-800 hover:bg-emerald-600/15",
+  lead: "text-[#1a1a1a] hover:bg-foreground/[0.05]",
+  muted: "text-[#6b5d4f] hover:bg-foreground/[0.05]",
 }
 
 export default function ConversationContextBar({
@@ -143,7 +142,7 @@ export default function ConversationContextBar({
 
   return (
     <div className={cn("shrink-0", flush ? "" : "px-4 py-2.5 sm:px-5 sm:py-3 md:px-6")}>
-      <div className="flex w-full min-w-0 items-center gap-1.5 sm:gap-2">
+      <div className="-ml-2 flex w-full min-w-0 flex-wrap items-center gap-1">
         {facts.map(fact => {
           const Icon = fact.icon
           const isOpen = openSection === fact.section
@@ -156,14 +155,13 @@ export default function ConversationContextBar({
               aria-expanded={isOpen}
               onClick={() => toggleSection(fact.section)}
               className={cn(
-                supportCardMetaPillClassName,
-                "h-9 min-w-0 flex-1 justify-center gap-1 px-2 transition-colors hover:bg-white/90 sm:h-10 sm:flex-none sm:gap-1.5 sm:px-3",
+                "inline-flex h-7 min-w-0 max-w-full items-center gap-1 rounded-lg px-2 transition-colors",
                 isOpen ? merchantSandInkClass : PILL_TONE[fact.tone],
               )}
             >
               <Icon className="size-3.5 shrink-0 opacity-70" />
               <span className={cn(
-                "min-w-0 truncate text-center text-xs leading-none",
+                "min-w-0 truncate text-xs leading-none",
                 isOpen ? "font-semibold text-[#1a1a1a]" : TEXT_TONE[fact.tone],
               )}
               >

@@ -1,6 +1,7 @@
 import { Card } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { InboxStreamLoading } from "@/app/dashboard/(shell)/tickets/_components/stream/InboxStreamLoading"
+import { ShopStreamLoading } from "@/app/dashboard/(shell)/orders/_components/ShopStreamLoading"
 import { supportCardShellClassName } from "@/components/support-card/styles"
 import { MemoryLibrarySkeleton } from "./MemoryLibrarySkeleton"
 import { Pulse } from "./Pulse"
@@ -100,7 +101,7 @@ export function OrdersPageSkeleton() {
           dashboardChromeMaxWidthClass,
         )}>
           <SearchFilterBarSkeleton />
-          <InboxStreamLoading />
+          <ShopStreamLoading />
         </div>
       </div>
     </PageShell>

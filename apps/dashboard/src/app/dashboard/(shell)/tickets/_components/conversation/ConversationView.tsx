@@ -1,12 +1,12 @@
 "use client"
 
-import { useCallback, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react"
 import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import { SupportCardBody, SupportCardHeader } from "@/components/support-card/card"
 import { useFillerPhrase } from "@/hooks/useFillerPhrase"
 import { useIsMobile } from "@/hooks/useMobile"
 import { requestShopifyLinkFocus } from "@/lib/messaging/shopify-link-focus"
-import { useConversationAgentFlow } from "../../_hooks/useConversationAgentFlow"
+import { useConversationAgentFlow, type AgentRequestFailure } from "../../_hooks/useConversationAgentFlow"
 import type { ComposerAttachments } from "../../_hooks/useComposerAttachments"
 import { buildTicketCardMeta } from "../../_lib/inbox-row"
 import ConversationHeader from "./ConversationHeader"
@@ -156,6 +156,7 @@ export default function ConversationView({
     pendingPlan,
     planExecutionOutcome,
     requestDraftReply,
+    requestFailure,
     requestRefreshDraft,
   } = useConversationAgentFlow({
     ticket,
@@ -196,6 +197,11 @@ export default function ConversationView({
     }
     messagesEndRef.current?.scrollIntoView({ behavior, block: "end" })
   }, [messagesEndRef])
+
+  // A failure lands under whatever was on screen; bring it into view.
+  useEffect(() => {
+    if (requestFailure) scrollTimelineToEnd("smooth")
+  }, [requestFailure, scrollTimelineToEnd])
 
   const agentBusy = isSending || isAgentRunning || isPlanLoading || isPlanExecuting
 
@@ -253,22 +259,17 @@ export default function ConversationView({
       }`}
       style={conversationStyle}
     >
-      <SupportCardHeader className="shrink-0 pb-3.5 sm:pb-4">
-        <div className="flex flex-col gap-2">
-          <ConversationHeader
-            activeTab={activeTab}
-            cocoAction={headerCocoAction}
-            meta={headerMeta}
-            onCocoAction={() => { void handleCocoAction() }}
-            onBack={onBack}
-            onResolve={onResolve}
-            onReopen={onReopen}
-            onOpenContext={thread ? () => setOpenContextSection("customer") : undefined}
-            threadId={thread?.id}
-            embedded={embedded}
-            flush
-          />
-          {thread && onLinkShopifyCustomer && (
+      <SupportCardHeader className="shrink-0">
+        <ConversationHeader
+          activeTab={activeTab}
+          cocoAction={headerCocoAction}
+          meta={headerMeta}
+          onCocoAction={() => { void handleCocoAction() }}
+          onBack={onBack}
+          onResolve={onResolve}
+          onReopen={onReopen}
+          onOpenContext={thread ? () => setOpenContextSection("customer") : undefined}
+          context={thread && onLinkShopifyCustomer ? (
             <ConversationContextBar
               thread={thread}
               hasShopify={hasShopify}
@@ -277,8 +278,10 @@ export default function ConversationView({
               onOpenSectionChange={setOpenContextSection}
               flush
             />
-          )}
-        </div>
+          ) : null}
+          threadId={thread?.id}
+          embedded={embedded}
+        />
       </SupportCardHeader>
 
       <ConversationTimelinePanel
@@ -290,6 +293,7 @@ export default function ConversationView({
         onRetrySend={onRetrySend}
         pendingInstruction={pendingInstruction}
         planPhrase={planPhrase}
+        requestFailure={requestFailure}
         runPhrase={runPhrase}
         status={{
           isAgentRunning,
@@ -353,6 +357,7 @@ interface ConversationTimelinePanelProps {
   onRetrySend?: (id: string) => void
   pendingInstruction: string | null
   planPhrase: string
+  requestFailure: AgentRequestFailure | null
   runPhrase: string
   status: {
     isAgentRunning: boolean
@@ -373,6 +378,7 @@ function ConversationTimelinePanel({
   onRetrySend,
   pendingInstruction,
   planPhrase,
+  requestFailure,
   runPhrase,
   status,
   ticketId,
@@ -411,6 +417,7 @@ function ConversationTimelinePanel({
             onRetrySend={onRetrySend}
             pendingInstruction={pendingInstruction}
             planPhrase={planPhrase}
+            requestFailure={requestFailure}
             runPhrase={runPhrase}
           />
         )}

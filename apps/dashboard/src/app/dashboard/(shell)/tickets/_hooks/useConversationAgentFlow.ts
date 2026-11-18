@@ -11,9 +11,10 @@ import {
   executeApprovedAgentPlan,
   fetchAgentPlan,
   recoverAgentPlan,
-  planRequestErrorTurn,
+  PlanningEndedError,
 } from "./conversation-agent-requests"
 import { REPLAN_CUSTOMER_REPLY_INSTRUCTION } from "@/lib/agent/replan-instruction"
+import { requestFailureMessage, type RequestFailureCopy } from "@/lib/api/client-error-message"
 import { captureClientProductEvent } from "@/lib/product-events"
 
 interface UseConversationAgentFlowProps {
@@ -40,6 +41,26 @@ function createAgentTurn(turn: Omit<AgentTurn, "id">): AgentTurn {
 // planner instruction the merchant never wrote, and echoing that puts words in
 // their mouth — an internal prompt paragraph included.
 const NO_MERCHANT_INSTRUCTION = ""
+
+// What failed, in the merchant's words. Why comes from the failure itself.
+const FAILURE_TITLES = {
+  restore: "Couldn't load the latest plan.",
+  plan: "Couldn't draft a plan.",
+  answer: "Couldn't get an answer.",
+  regenerate: "Couldn't regenerate the plan.",
+  dismiss: "Couldn't dismiss the plan.",
+  edit: "Couldn't edit the plan.",
+} as const
+
+/** A request the merchant started that failed; it stays up until the next attempt. */
+export interface AgentRequestFailure {
+  ticketId: string
+  /** The merchant's own composer text, echoed above the failure. */
+  instruction: string
+  title: string
+  detail: string
+  recovery: { kind: "retry"; run: () => void } | { kind: "reload" } | null
+}
 
 export function getAgentCommandState(replyText: string) {
   const triggerPrefix = `@${AGENT_DISPLAY_NAME.toLowerCase()}`
@@ -114,6 +135,8 @@ export function useConversationAgentFlow({
   const [isPlanExecuting, setIsPlanExecuting] = useState(false)
   const [isRegenerating, setIsRegenerating] = useState(false)
   const [planExecutionState, setPlanExecutionState] = useState<PlanExecutionState | null>(null)
+  const [requestFailure, setRequestFailure] = useState<AgentRequestFailure | null>(null)
+  const [restoreAttempt, setRestoreAttempt] = useState(0)
   const successDismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const planningEpoch = useRef(0)
 
@@ -142,6 +165,30 @@ export function useConversationAgentFlow({
     setPlanExecutionState(null)
   }
 
+  // Only a request that can be repeated as it was offers to try again; a card
+  // action keeps its own button for that.
+  const reportFailure = (
+    kind: keyof typeof FAILURE_TITLES,
+    error: unknown,
+    options: { instruction?: string; retry?: () => void } = {},
+  ) => {
+    const copy: RequestFailureCopy = error instanceof PlanningEndedError
+      ? { detail: error.message, recovery: null }
+      : requestFailureMessage(error)
+    const retry = options.retry
+    setRequestFailure({
+      ticketId: ticket.id,
+      instruction: options.instruction ?? NO_MERCHANT_INSTRUCTION,
+      title: FAILURE_TITLES[kind],
+      detail: copy.detail,
+      recovery: copy.recovery === "reload"
+        ? { kind: "reload" }
+        : copy.recovery === "retry" && retry
+          ? { kind: "retry", run: () => { setRequestFailure(null); retry() } }
+          : null,
+    })
+  }
+
   useEffect(() => () => {
     if (successDismissTimer.current) clearTimeout(successDismissTimer.current)
   }, [])
@@ -160,17 +207,18 @@ export function useConversationAgentFlow({
       overrideServerPlan(plan)
     }).catch(error => {
       if (!current()) return
-      onAgentTurnAdd(createAgentTurn(planRequestErrorTurn(NO_MERCHANT_INSTRUCTION, error)))
+      reportFailure("restore", error, { retry: () => setRestoreAttempt(attempt => attempt + 1) })
     }).finally(() => {
       if (!current()) return
       setIsPlanLoading(false)
       setPendingInstruction(null)
     })
     return () => controller.abort()
-    // Restore once per ticket; callbacks and refreshed cache data are views of
-    // that ticket, not new planning requests.
+    // Restore once per ticket, and again when the merchant retries a failed
+    // restore; callbacks and refreshed cache data are views of that ticket,
+    // not new planning requests.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ticket.id])
+  }, [ticket.id, restoreAttempt])
 
   const executeApprovedPlan = async (plan: AgentPlan, approvedToolCalls: RawToolCall[], merchantAnswers?: MerchantAnswers) => {
     const instruction = plan.instruction
@@ -180,6 +228,7 @@ export function useConversationAgentFlow({
     }
     // Pin the reviewed plan locally while the server consumes its cache. This
     // preserves failure/partial/unknown recovery context across SWR refreshes.
+    setRequestFailure(null)
     setPendingPlan(plan)
     setPendingInstruction(NO_MERCHANT_INSTRUCTION)
     setIsPlanExecuting(true)
@@ -212,26 +261,23 @@ export function useConversationAgentFlow({
   // answering it. The caller then plans, and the loading state stays up for it.
   const answerPrivateQuestion = async (
     instruction: string,
-    echo: string = instruction,
-    planHandoff = false,
+    options: { echo: string; planHandoff: boolean; retry: () => void; failure?: "answer" | "plan" },
   ): Promise<boolean> => {
-    onReplyChange("")
-    setPendingInstruction(echo)
+    setPendingInstruction(options.echo)
     setIsPlanLoading(true)
 
     let handedOff = false
     try {
-      const result = await askAgentPrivately(ticket.id, instruction, { planHandoff })
-      if (result.ok && result.handsOffToPlanning) {
+      const result = await askAgentPrivately(ticket.id, instruction, { planHandoff: options.planHandoff })
+      if (!result.ok) {
+        reportFailure(options.failure ?? "answer", result.error, { instruction: options.echo, retry: options.retry })
+        return false
+      }
+      if (result.handsOffToPlanning) {
         handedOff = true
         return true
       }
-      const turn = createAgentTurn({ ...result.turn, instruction: echo })
-      if (result.ok) {
-        onAgentComplete(turn)
-      } else {
-        onAgentTurnAdd(turn)
-      }
+      onAgentComplete(createAgentTurn({ ...result.turn, instruction: options.echo }))
       return false
     } finally {
       if (!handedOff) {
@@ -241,35 +287,40 @@ export function useConversationAgentFlow({
     }
   }
 
-  const handleSend = async (noteArg: boolean) => {
-    if (isAgentMode && agentInstruction) {
-      const instruction = agentInstruction
+  const runAgentInstruction = async (instruction: string) => {
+    setRequestFailure(null)
+    const retry = () => { void runAgentInstruction(instruction) }
 
-      // The agent reads whether this is a question or something to do; only
-      // the second reaches planning, which takes over the ticket's draft.
-      if (!(await answerPrivateQuestion(instruction, instruction, true))) return
+    // The agent reads whether this is a question or something to do; only
+    // the second reaches planning, which takes over the ticket's draft.
+    if (!(await answerPrivateQuestion(instruction, { echo: instruction, planHandoff: true, retry }))) return
 
-      planningEpoch.current += 1
+    planningEpoch.current += 1
 
-      try {
-        const plan = await fetchAgentPlan(ticket.id, instruction)
-        const requiresApproval = planRequiresApproval(plan)
+    try {
+      const plan = await fetchAgentPlan(ticket.id, instruction)
+      const requiresApproval = planRequiresApproval(plan)
 
-        if (!requiresApproval) {
-          setIsPlanLoading(false)
-          setPendingInstruction(null)
-          await answerPrivateQuestion(instruction)
-        } else {
-          setIsPlanLoading(false)
-          setPendingInstruction(null)
-          setPendingPlan(resolvePendingPlan(plan, instruction))
-        }
-      } catch (err) {
+      if (!requiresApproval) {
         setIsPlanLoading(false)
         setPendingInstruction(null)
-        onAgentTurnAdd(createAgentTurn(planRequestErrorTurn(instruction, err)))
+        await answerPrivateQuestion(instruction, { echo: instruction, planHandoff: false, retry })
+      } else {
+        setIsPlanLoading(false)
+        setPendingInstruction(null)
+        setPendingPlan(resolvePendingPlan(plan, instruction))
       }
+    } catch (err) {
+      setIsPlanLoading(false)
+      setPendingInstruction(null)
+      reportFailure("plan", err, { instruction, retry })
+    }
+  }
 
+  const handleSend = async (noteArg: boolean) => {
+    if (isAgentMode && agentInstruction) {
+      onReplyChange("")
+      await runAgentInstruction(agentInstruction)
       return
     }
 
@@ -283,12 +334,13 @@ export function useConversationAgentFlow({
 
   const handlePlanDismiss = async () => {
     if (!pendingPlan) return
+    setRequestFailure(null)
     const dismissedPlan = pendingPlan
     if (dismissedPlan.planId) {
       try {
         await dismissAgentPlan(ticket.id, dismissedPlan.planId)
       } catch (error) {
-        onAgentTurnAdd(createAgentTurn(planRequestErrorTurn(NO_MERCHANT_INSTRUCTION, error)))
+        reportFailure("dismiss", error)
         return
       }
     }
@@ -305,12 +357,13 @@ export function useConversationAgentFlow({
 
   const handlePlanEdit = async () => {
     if (!pendingPlan) return
+    setRequestFailure(null)
     const editedPlan = pendingPlan
     if (editedPlan.planId) {
       try {
         await dismissAgentPlan(ticket.id, editedPlan.planId)
       } catch (error) {
-        onAgentTurnAdd(createAgentTurn(planRequestErrorTurn(NO_MERCHANT_INSTRUCTION, error)))
+        reportFailure("edit", error)
         return
       }
     }
@@ -326,6 +379,7 @@ export function useConversationAgentFlow({
 
     const instruction = REPLAN_CUSTOMER_REPLY_INSTRUCTION
     planningEpoch.current += 1
+    setRequestFailure(null)
     setIsRegenerating(true)
 
     try {
@@ -347,13 +401,15 @@ export function useConversationAgentFlow({
         error: null,
       }))
     } catch (err) {
-      onAgentTurnAdd(createAgentTurn(planRequestErrorTurn(NO_MERCHANT_INSTRUCTION, err)))
+      reportFailure("regenerate", err)
     } finally {
       setIsRegenerating(false)
     }
   }
 
   const requestAgentPlan = async (instruction: string, options: { force?: boolean } = {}) => {
+    setRequestFailure(null)
+    const retry = () => { void requestAgentPlan(instruction, options) }
     planningEpoch.current += 1
     onReplyChange("")
     setPendingInstruction(NO_MERCHANT_INSTRUCTION)
@@ -364,13 +420,13 @@ export function useConversationAgentFlow({
       const requiresApproval = planRequiresApproval(plan)
 
       if (!requiresApproval) {
-        await answerPrivateQuestion(instruction, NO_MERCHANT_INSTRUCTION)
+        await answerPrivateQuestion(instruction, { echo: NO_MERCHANT_INSTRUCTION, planHandoff: false, retry, failure: "plan" })
         return
       }
 
       setPendingPlan(resolvePendingPlan(plan, instruction))
     } catch (err) {
-      onAgentTurnAdd(createAgentTurn(planRequestErrorTurn(NO_MERCHANT_INSTRUCTION, err)))
+      reportFailure("plan", err, { retry })
     } finally {
       setIsPlanLoading(false)
       setPendingInstruction(null)
@@ -400,6 +456,7 @@ export function useConversationAgentFlow({
     pendingPlan,
     planExecutionOutcome,
     requestDraftReply,
+    requestFailure: requestFailure?.ticketId === ticket.id ? requestFailure : null,
     requestRefreshDraft,
   }
 }

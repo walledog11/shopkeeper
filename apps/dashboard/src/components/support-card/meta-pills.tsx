@@ -58,11 +58,15 @@ export function CustomerIdentity({
   )
 }
 
-export function DatePill({ at, className, textClassName }: { at: string; className: string; textClassName: string }) {
+/** "6 min ago" within the week, then "Nov 3". */
+export function ticketDateLabel(at: string): string {
   const date = new Date(at)
   const relative = timeAgoCard(date, new Date())
-  const label = relative === "Just now" || relative === "Yesterday" || relative.includes("ago")
+  return relative === "Just now" || relative === "Yesterday" || relative.includes("ago")
     ? relative
     : date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-  return <MetaPill className={className}><time dateTime={at} className={textClassName}>{label}</time></MetaPill>
+}
+
+export function DatePill({ at, className, textClassName }: { at: string; className: string; textClassName: string }) {
+  return <MetaPill className={className}><time dateTime={at} className={textClassName}>{ticketDateLabel(at)}</time></MetaPill>
 }

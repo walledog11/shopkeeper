@@ -11,8 +11,20 @@ import { resetTestData, resolveTestEnv, seedE2ETestData } from './test-infra.mjs
 
 const env = resolveTestEnv(process.env);
 const { PrismaClient } = await import('@prisma/client');
+const { buildAgentPlanCacheRecord } = await import('@shopkeeper/agent/plan-cache');
 
 const AGENT_NAME = 'Wren';
+const SETTINGS = {
+  agentName: AGENT_NAME,
+  autonomyTier: 'guarded',
+  maxRefundAmount: 75,
+  autoPlanOnOpen: true,
+  spamFilterEnabled: true,
+  businessHoursEnabled: true,
+  onboardingCompletedAt: '2020-01-01T00:00:00.000Z',
+  aiContext: 'We sell handwoven linen bedding. Ships in 2-3 business days. 30-day returns on unused items.',
+  brandVoice: 'Warm and direct. Never over-apologise. Plain language, short sentences.',
+};
 const now = Date.now();
 const ago = (minutes) => new Date(now - minutes * 60_000);
 
@@ -24,20 +36,19 @@ function toolCall(id, name, input) {
   return { id, name, input };
 }
 
+// The app's own builder, so a seeded plan is always in the format the app reads.
 function cachedPlan({ instruction, steps, rawToolCalls, warnings }) {
-  return {
-    version: 5,
-    planId: randomUUID(),
+  return buildAgentPlanCacheRecord({
     instruction,
     lastCustomerMessageId: null,
-    settingsFingerprint: 'preview-harness',
+    settings: SETTINGS,
     plan: {
       instruction,
       steps,
       rawToolCalls,
       ...(warnings ? { warnings } : {}),
     },
-  };
+  });
 }
 
 async function main() {
@@ -55,17 +66,7 @@ async function main() {
       where: { id: org.id },
       data: {
         name: 'Linen & Loom',
-        settings: {
-          agentName: AGENT_NAME,
-          autonomyTier: 'guarded',
-          maxRefundAmount: 75,
-          autoPlanOnOpen: true,
-          spamFilterEnabled: true,
-          businessHoursEnabled: true,
-          onboardingCompletedAt: '2020-01-01T00:00:00.000Z',
-          aiContext: 'We sell handwoven linen bedding. Ships in 2-3 business days. 30-day returns on unused items.',
-          brandVoice: 'Warm and direct. Never over-apologise. Plain language, short sentences.',
-        },
+        settings: SETTINGS,
       },
     });
 

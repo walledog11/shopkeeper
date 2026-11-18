@@ -7,7 +7,7 @@ import {
   INBOX_SECTION_ORDER,
   type InboxSection,
 } from "../../_lib/inbox-row"
-import { InboxTicketCard } from "./InboxTicketCard"
+import { InboxTicketRow } from "./InboxTicketRow"
 import {
   InboxExternalLead,
   InboxNeedsReviewLead,
@@ -130,7 +130,7 @@ export function InboxStream({
     entry: BuiltEntry,
     variant: "default" | "trust" | "spam" = "default",
   ) => (
-    <InboxTicketCard
+    <InboxTicketRow
       key={entry.ticket.id}
       ticket={entry.ticket}
       row={entry.row}
