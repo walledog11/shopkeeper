@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@shopkeeper/db";
 import { getIncompleteOnboardingRedirect } from "@/lib/server/onboarding-guard";
+import { newsreader } from "@/lib/fonts";
+import { cn } from "@/lib/ui/cn";
 
 export default async function OnboardingLayout({ children }: { children: React.ReactNode }) {
   const { userId, orgId } = await auth();
@@ -20,7 +22,7 @@ export default async function OnboardingLayout({ children }: { children: React.R
   }
 
   return (
-    <div className="min-h-screen bg-background font-sans text-foreground">
+    <div className={cn(newsreader.variable, "min-h-screen bg-background font-sans text-foreground")}>
       {children}
     </div>
   );

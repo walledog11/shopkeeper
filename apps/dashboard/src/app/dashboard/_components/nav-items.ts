@@ -23,20 +23,21 @@ export const inboxNavItem: NavItem = {
   icon: Inbox,
 };
 
-const topBarAgentItems: NavItem[] = [
-  {
-    name: "Memory",
-    href: "/dashboard/kb",
-    icon: BrainCircuit,
-    description: "Store profile, brand voice, preferences, and notes",
-  },
-  {
-    name: "Review",
-    href: "/dashboard/review",
-    icon: ScanEye,
-    description: "Approve and refine agent responses",
-  },
-];
+export const memoryNavItem: NavItem = {
+  name: "Memory",
+  href: "/dashboard/kb",
+  icon: BrainCircuit,
+  description: "Store profile, brand voice, preferences, and notes",
+};
+
+export const reviewNavItem: NavItem = {
+  name: "Review",
+  href: "/dashboard/review",
+  icon: ScanEye,
+  description: "Approve and refine agent responses",
+};
+
+const topBarAgentItems: NavItem[] = [memoryNavItem, reviewNavItem];
 
 export const shopNavItem: NavItem = {
   name: "Shop",

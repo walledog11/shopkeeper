@@ -34,9 +34,10 @@ export function BusinessHoursSection({ controller }: { controller: AgentTabContr
                     : [...settingsState.businessHoursDays, value],
                 },
               })}
+              aria-pressed={settingsState.businessHoursDays.includes(value)}
               className={`h-8 w-12 rounded-lg border text-xs font-semibold transition-all ${
                 settingsState.businessHoursDays.includes(value)
-                  ? "border-foreground/[0.35] bg-foreground/[0.15] text-foreground"
+                  ? "border-foreground bg-foreground text-background"
                   : "border-foreground/[0.12] bg-transparent text-faint hover:border-foreground/[0.22] hover:text-muted-foreground"
               }`}
             >

@@ -137,7 +137,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
       </Suspense>
       <div
         className="dashboard-shell flex h-dvh w-full flex-col overflow-hidden bg-background font-sans"
-        style={{ "--m-serif": "Georgia, 'Times New Roman', serif" } as React.CSSProperties}
       >
         <NotificationBar
           notifications={visibleNotifications}

@@ -11,12 +11,6 @@ interface RelativeParts {
   days: number;
 }
 
-interface ShortRelativeTimeOptions {
-  includeSeconds?: boolean;
-  justNowSeconds?: number;
-  minuteUnit?: "m" | "min";
-}
-
 interface DateFormatOptions {
   fallback?: string;
   timeZone?: string;
@@ -46,10 +40,6 @@ function relativePartsAt(input: DateInput, now: Date): RelativeParts | null {
   const days = Math.floor(hours / 24);
 
   return { date, seconds, minutes, hours, days };
-}
-
-function relativeParts(input: DateInput): RelativeParts | null {
-  return relativePartsAt(input, new Date());
 }
 
 function formatMonthDay(date: Date, now = new Date()): string {
@@ -136,82 +126,18 @@ export function formatClockTime(
   });
 }
 
-export function formatRelativeTime(iso: DateInput): string {
-  const parts = relativeParts(iso);
-  if (!parts) return "just now";
-
-  if (parts.minutes < 1) return "just now";
-  if (parts.minutes < 60) return `${parts.minutes}m ago`;
-
-  if (parts.hours < 24) return `${parts.hours}h ago`;
-
-  if (parts.days === 1) return "yesterday";
-  if (parts.days < 7) return `${parts.days}d ago`;
-
-  return parts.date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
-function formatShortRelativeTime(
-  input: DateInput,
-  {
-    includeSeconds = false,
-    justNowSeconds = 60,
-    minuteUnit = "m",
-  }: ShortRelativeTimeOptions = {},
-): string {
-  const parts = relativeParts(input);
-  if (!parts) return "just now";
-
-  if (parts.seconds < justNowSeconds) return "just now";
-  if (includeSeconds && parts.seconds < 60) return `${parts.seconds}s ago`;
-  if (parts.minutes < 1) return "just now";
-  if (parts.minutes < 60) {
-    return minuteUnit === "min" ? `${parts.minutes} min ago` : `${parts.minutes}m ago`;
-  }
-  if (parts.hours < 24) return `${parts.hours}h ago`;
-  return `${parts.days}d ago`;
-}
-
-export function formatLastActivityTime(input: DateInput): string {
-  return formatShortRelativeTime(input, { justNowSeconds: 120 });
-}
-
-export function formatTicketAge(iso: string): string {
-  const parts = relativeParts(iso);
-  if (!parts) return "just now";
-
-  if (parts.minutes < 1) return "just now";
-  if (parts.minutes < 60) return `${parts.minutes}m`;
-  if (parts.hours < 24) return `${parts.hours}h`;
-  if (parts.days < 7) return `${parts.days}d`;
-
-  const now = new Date();
-  const sameYear = parts.date.getFullYear() === now.getFullYear();
-  return parts.date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    ...(sameYear ? {} : { year: "numeric" }),
-  });
-}
-
-/** Compact relative time for lists (explicit clock for tests). */
-export function timeAgoShort(date: Date, now: Date): string {
-  const parts = relativePartsAt(date, now);
-  if (!parts) return "just now";
-  if (parts.minutes < 1) return "just now";
-  if (parts.minutes < 60) return `${parts.minutes}m ago`;
-  if (parts.hours < 24) return `${parts.hours}h ago`;
-  return `${parts.days}d ago`;
-}
-
-/** Warmer copy for cards — spells out units and falls back to a date. */
-export function timeAgoCard(date: Date, now: Date): string {
-  const parts = relativePartsAt(date, now);
-  if (!parts) return "Just now";
-  if (parts.minutes < 1) return "Just now";
+/**
+ * How long ago something happened, in the one format the app uses: "just now",
+ * "13 min ago", "2 hr ago", "yesterday", "3 days ago", then "Nov 3" (with the
+ * year once it is not this year). Lowercase, so it reads inside a sentence
+ * ("Last message 13 min ago") as well as on its own.
+ */
+export function formatRelativeTime(input: DateInput, now: Date = new Date()): string {
+  const parts = relativePartsAt(input, now);
+  if (!parts || parts.minutes < 1) return "just now";
   if (parts.minutes < 60) return `${parts.minutes} min ago`;
-  if (parts.hours < 24) return parts.hours === 1 ? "1 hr ago" : `${parts.hours} hr ago`;
-  if (parts.days === 1) return "Yesterday";
+  if (parts.hours < 24) return `${parts.hours} hr ago`;
+  if (parts.days === 1) return "yesterday";
   if (parts.days < 7) return `${parts.days} days ago`;
   return formatMonthDay(parts.date, now);
 }

@@ -4,6 +4,8 @@ import { useState } from "react"
 import { Loader2 } from "lucide-react"
 import { DashboardDetailDialog } from "@/app/dashboard/_components/board/DashboardDetailDialog"
 import { dashboardPageShellClassName } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
+import { reviewNavItem } from "@/app/dashboard/_components/nav-items"
+import { PageTitle } from "@/app/dashboard/_components/PageTitle"
 import { FilterMenu } from "@/components/ui/search-filter-bar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { boardCardShellClassName } from "@/lib/ui/board-card-styles"
@@ -47,6 +49,7 @@ export function ReviewList({
     <>
       <div className="custom-scrollbar flex-1 overflow-y-auto">
         <div className={dashboardPageShellClassName()}>
+          <PageTitle>{reviewNavItem.name}</PageTitle>
           <FilterMenu
             label={config.label}
             aria-label="Filter the audit trail"

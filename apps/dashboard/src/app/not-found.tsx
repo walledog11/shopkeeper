@@ -18,7 +18,7 @@ export default async function NotFound() {
         className="absolute left-1/2 top-6 flex -translate-x-1/2 items-center gap-2 text-foreground transition-colors hover:text-foreground/75"
       >
         <Store className="size-6" strokeWidth={1.75} />
-        <span className="text-2xl font-bold leading-none [font-family:var(--m-caveat)]">shopkeeper</span>
+        <span className="text-xl font-semibold leading-none tracking-[-0.035em]">shopkeeper</span>
       </Link>
       <span className="flex size-11 items-center justify-center rounded-full border border-border bg-foreground/[0.04]">
         <Compass className="size-5 text-foreground/50" />

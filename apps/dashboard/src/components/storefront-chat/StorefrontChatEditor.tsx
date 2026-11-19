@@ -12,7 +12,8 @@ import { ChatSettingsFields } from './ChatSettingsFields';
 import { ChatPreview } from './ChatPreview';
 import { DashboardLink, useStorefrontChatApi } from './chat-api';
 import { useChatEditor } from './useChatEditor';
-import { settingsSectionHref } from '@/app/dashboard/_components/nav-items';
+import { chatNavItem, settingsSectionHref } from '@/app/dashboard/_components/nav-items';
+import { PageTitle } from '@/app/dashboard/_components/PageTitle';
 
 export default function StorefrontChatEditor({ initialData, canManage, themeEditorUrl, draftKey, showHeading = true, onEnabledChange }: {
   initialData: ChatConfigurationResponse;
@@ -45,7 +46,7 @@ export default function StorefrontChatEditor({ initialData, canManage, themeEdit
     <div className={dashboardChromeColumnClassName('pb-8 pt-3')}>
       <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b border-border bg-background py-4">
         <div className="min-w-0 flex-1">
-          {showHeading && <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Website chat</h1>}
+          {showHeading && <PageTitle>{chatNavItem.name}</PageTitle>}
           <div role="status" aria-live="polite" className={cn('mt-1 flex min-h-5 flex-wrap items-center gap-1.5 text-xs', editor.error || conflict || validation.error ? 'text-destructive' : 'text-muted-foreground')}>
             {editor.saved && !conflict && !editor.error && <Check className="size-3.5" />}{status || (showHeading && data.shopName)}
             {conflict && <button type="button" disabled={busy || uploading} onClick={() => editor.run('reload')} className="underline underline-offset-4">Reload saved settings</button>}

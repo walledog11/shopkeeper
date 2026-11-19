@@ -3,7 +3,7 @@ import {
   getGmailAccountType,
   getGmailInboundStatus,
 } from "@shopkeeper/email/providers"
-import { formatLastActivityTime } from "@/lib/format/date"
+import { formatRelativeTime } from "@/lib/format/date"
 import type { Integration } from "@/types"
 import type { IntegrationHealth } from "./integration-card-helpers"
 
@@ -122,7 +122,7 @@ export function gmailConfigureStatusLine(
 
   if (scene === "ready") {
     const parts = [`Replies send from ${gmailReplyAddress(integration)}`]
-    if (lastActivity) parts.push(`Last message ${formatLastActivityTime(lastActivity)}`)
+    if (lastActivity) parts.push(`Last message ${formatRelativeTime(lastActivity)}`)
     return parts.join(" · ")
   }
 

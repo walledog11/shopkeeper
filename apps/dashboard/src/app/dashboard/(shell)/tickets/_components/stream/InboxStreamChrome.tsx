@@ -5,8 +5,6 @@ import { useState, type ReactNode } from "react"
 import { boardCardListClassName } from "@/lib/ui/board-card-styles"
 import { cn } from "@/lib/ui/cn"
 
-const SERIF = "[font-family:var(--m-serif),Georgia,'Times_New_Roman',serif]"
-
 export function InboxNeedsReviewLead({ count }: { count: number }) {
   if (count === 0) return null
 
@@ -15,8 +13,6 @@ export function InboxNeedsReviewLead({ count }: { count: number }) {
       <span className="font-semibold tabular-nums text-foreground">{count}</span>
       {" "}
       {count === 1 ? "needs review" : "need review"}
-      {" "}
-      <span className={cn("italic text-muted-foreground/90", SERIF)}>before you move on.</span>
     </p>
   )
 }
@@ -28,9 +24,7 @@ export function InboxWaitingLead({ count }: { count: number }) {
     <p className="px-0.5 text-sm leading-relaxed text-muted-foreground">
       <span className="font-semibold tabular-nums text-foreground">{count}</span>
       {" "}
-      {count === 1 ? "is waiting" : "are waiting"}
-      {" "}
-      <span className={cn("italic text-muted-foreground/90", SERIF)}>on the customer.</span>
+      {count === 1 ? "is waiting" : "are waiting"} on the customer
     </p>
   )
 }
@@ -42,9 +36,7 @@ export function InboxExternalLead({ count }: { count: number }) {
     <p className="px-0.5 text-sm leading-relaxed text-muted-foreground">
       <span className="font-semibold tabular-nums text-foreground">{count}</span>
       {" "}
-      {count === 1 ? "looks outside your store" : "look outside your store"}
-      {" "}
-      <span className={cn("italic text-muted-foreground/90", SERIF)}>but may still matter.</span>
+      {count === 1 ? "looks outside your store" : "look outside your store"} but may still matter
     </p>
   )
 }
@@ -53,7 +45,7 @@ function InboxStreamFold({ children }: { children?: ReactNode }) {
   return (
     <div className="flex items-center gap-3 py-1" role="separator">
       <div className="h-px flex-1 bg-border/50" aria-hidden />
-      <span className={cn("text-[13px] italic text-muted-foreground/90", SERIF)}>
+      <span className="text-[13px] text-muted-foreground/90">
         {children ?? "The rest"}
       </span>
       <div className="h-px flex-1 bg-border/50" aria-hidden />

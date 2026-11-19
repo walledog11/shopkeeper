@@ -4,6 +4,8 @@ import { useOrganization } from "@clerk/nextjs"
 import { Check, Loader2, Plus } from "lucide-react"
 import { MemoryLibrarySkeleton } from "@/app/dashboard/_components/skeletons"
 import { dashboardChromeColumnClassName } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
+import { memoryNavItem } from "@/app/dashboard/_components/nav-items"
+import { PageTitle } from "@/app/dashboard/_components/PageTitle"
 import { DashboardDetailDialog } from "@/app/dashboard/_components/board/DashboardDetailDialog"
 import { useMobileChromeOverride } from "@/app/dashboard/_components/mobile-chrome/MobileChromeContext"
 import { SearchFilterBar } from "@/components/ui/search-filter-bar"
@@ -35,7 +37,8 @@ export function KbPageView({ state }: { state: KbPageState }) {
   return (
     <div className="relative flex size-full flex-col overflow-hidden bg-background">
       <div className={cn(dashboardChromeColumnClassName(), "flex min-h-0 flex-1 flex-col")}>
-        <div className="relative z-20 shrink-0 pb-3 pt-3 md:pt-0">
+        <div className="relative z-20 flex shrink-0 flex-col gap-3 pb-3 pt-3 md:pt-0">
+          <PageTitle>{memoryNavItem.name}</PageTitle>
           <SearchFilterBar
             value={search}
             onValueChange={setSearch}

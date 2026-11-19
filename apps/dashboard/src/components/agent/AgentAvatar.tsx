@@ -22,7 +22,7 @@ export default function AgentAvatar({ size = "md", className, imageSrc }: Props)
     <div
       aria-hidden
       className={cn(
-        "rounded-full flex items-center justify-center font-display-serif leading-none shrink-0 select-none",
+        "rounded-full flex items-center justify-center font-semibold leading-none shrink-0 select-none",
         imageSrc ? "overflow-hidden bg-foreground text-transparent" : "bg-primary text-primary-foreground",
         SIZE_CLASSES[size],
         className,

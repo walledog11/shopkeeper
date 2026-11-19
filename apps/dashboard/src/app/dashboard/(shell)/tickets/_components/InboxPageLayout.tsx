@@ -14,6 +14,8 @@ import ConversationView from "./conversation/ConversationView"
 import { ConversationBodySkeleton } from "./conversation/ConversationSkeletons"
 import { ConversationLoadState } from "./TicketsPageStates"
 import { dashboardPageShellClassName } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
+import { inboxNavItem } from "@/app/dashboard/_components/nav-items"
+import { PageTitle } from "@/app/dashboard/_components/PageTitle"
 import { supportCardShellClassName } from "@/components/support-card/styles"
 import { cn } from "@/lib/ui/cn"
 
@@ -251,6 +253,7 @@ export function InboxPageLayout({
     <div className="flex size-full flex-col overflow-hidden bg-background relative">
       <div className="custom-scrollbar flex-1 overflow-y-auto overflow-x-hidden">
         <div className={dashboardPageShellClassName()}>
+          <PageTitle>{inboxNavItem.name}</PageTitle>
           <InboxControls
             searchQuery={searchQuery}
             isSearchLoading={Boolean(flags.isSearchLoading && flags.isSearchMode)}

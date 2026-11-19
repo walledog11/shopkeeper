@@ -26,7 +26,7 @@ export function Logo({
       )}
     >
       <Store className="size-6" strokeWidth={1.75} />
-      {!iconOnly && <span className="font-display-serif text-xl leading-none">shopkeeper</span>}
+      {!iconOnly && <span className="text-xl font-semibold leading-none tracking-[-0.035em]">shopkeeper</span>}
     </Link>
   );
 }

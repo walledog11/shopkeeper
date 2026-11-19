@@ -8,6 +8,7 @@ import {
   settingsSections,
 } from "@/app/dashboard/_components/nav-items"
 import { cn } from "@/lib/ui/cn"
+import { PageTitle } from "@/app/dashboard/_components/PageTitle"
 
 export function SettingsNav() {
   const active = activeSettingsSection(usePathname())
@@ -64,5 +65,5 @@ export function SettingsPageTitle() {
   const section = activeSettingsSection(usePathname())
   if (!section) return null
 
-  return <h1 className="text-lg font-semibold tracking-tight text-strong">{section.label}</h1>
+  return <PageTitle showOnPhone>{section.label}</PageTitle>
 }
