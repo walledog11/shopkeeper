@@ -2,7 +2,7 @@ import Image from "next/image"
 import type { ReactNode } from "react"
 import { cn } from "@/lib/ui/cn"
 import { getChannelInfoByName } from "@/lib/messaging/channels"
-import { formatRelativeTime } from "@/lib/format/date"
+import { RelativeTime } from "@/components/ui/relative-time"
 import { getTagStyle } from "@/lib/ui/ticket-tags"
 import { supportCardMetaPillShellClassName } from "./styles"
 
@@ -59,5 +59,5 @@ export function CustomerIdentity({
 }
 
 export function DatePill({ at, className, textClassName }: { at: string; className: string; textClassName: string }) {
-  return <MetaPill className={className}><time dateTime={at} className={textClassName}>{formatRelativeTime(at)}</time></MetaPill>
+  return <MetaPill className={className}><RelativeTime at={at} className={textClassName} /></MetaPill>
 }

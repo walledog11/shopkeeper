@@ -92,14 +92,6 @@ The first publication is the App Store. These block review or a new install's fi
 
 ## Later
 
-- **Pre-listing polish** (from the 2026-11-11 walkthrough and the 2026-11-17 audit). Home
-  stacks two setup nudges (the workflow card and a channel banner): give them one slot.
-  Trusted differs from Ask first only by the refund cap until
-  auto-execute ships (no UI, default off), though its blurb promises more. Usage &
-  billing shows a merchant-set AI dollar cap that reads as metered billing. Website chat
-  stays in the nav and the app home's tabs when `STOREFRONT_CHAT_ENABLED` is off.
-  Relative times ("34 min ago") render on the server and again in the browser, a
-  hydration mismatch on Home (`DatePill`).
 - **SocialAPI hardening** (S1–S6 in [the transport plan](socialapi-transport-plan.md)):
   `dm.sent` correlation (a reply typed in the Instagram app never reaches the thread),
   missed-delivery recovery, account health probing, failed-connect compensation, and a

@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Loader2 } from "lucide-react"
 import MerchantAnswerForm from "@/components/agent/MerchantAnswerForm"
 import { ChannelPill, CustomerIdentity } from "@/components/support-card/meta-pills"
-import { formatRelativeTime } from "@/lib/format/date"
+import { RelativeTime } from "@/components/ui/relative-time"
 import { cn } from "@/lib/ui/cn"
 import {
   merchantInkClass,
@@ -119,9 +119,7 @@ export function InboxTicketRow({
                   {status.label}
                 </span>
               ) : null}
-              <time dateTime={meta.lastMessageAt} className={cn("text-xs tabular-nums", merchantMutedClass)}>
-                {formatRelativeTime(meta.lastMessageAt)}
-              </time>
+              <RelativeTime at={meta.lastMessageAt} className={cn("text-xs tabular-nums", merchantMutedClass)} />
             </div>
           </div>
 

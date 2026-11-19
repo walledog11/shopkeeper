@@ -45,7 +45,7 @@ function overrideHint(
       <button
         type="button"
         onClick={() => resetAutonomyOverride(path)}
-        className="ml-2 font-semibold text-amber-700 hover:text-amber-800"
+        className="ml-2 font-semibold text-strong underline-offset-2 hover:underline"
       >
         Reset
       </button>
@@ -148,7 +148,10 @@ export function AiUsageLimitSection({
   const spend = presentLlmSpend(llmSpend, Math.min(capUsd, MAX_DAILY_LLM_SPEND_CAP_USD))
 
   return (
-    <SettingsTile label="AI usage">
+    <SettingsTile
+      label="AI safety limit"
+      description="Not a charge. If your store's AI use reaches it, new AI work pauses until it resets."
+    >
       <div className="space-y-3">
         <MoneyInput
           label="Daily limit"

@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/ui/cn"
 import type { TicketCardMeta } from "@/components/support-card/metadata"
 import { ChannelPill, CustomerIdentity, ticketTopicLabel } from "@/components/support-card/meta-pills"
-import { formatRelativeTime } from "@/lib/format/date"
+import { RelativeTime } from "@/components/ui/relative-time"
 import { merchantInkClass, merchantMutedClass, merchantSandInkHoverClass } from "@/lib/ui/merchant-palette"
 import type { TicketCocoAction } from "../../_lib/resolve-ticket-coco-action"
 import { TicketTimelineMenu } from "./TicketTimelineMenu"
@@ -47,7 +47,7 @@ function TicketMetaLine({ meta, className }: { meta: TicketCardMeta; className?:
       {meta.orderRef && topic ? META_SEPARATOR : null}
       {topic}
       {meta.orderRef || topic ? META_SEPARATOR : null}
-      <time dateTime={meta.lastMessageAt} className="tabular-nums">{formatRelativeTime(meta.lastMessageAt)}</time>
+      <RelativeTime at={meta.lastMessageAt} className="tabular-nums" />
     </p>
   )
 }

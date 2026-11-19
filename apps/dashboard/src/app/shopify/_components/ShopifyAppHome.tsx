@@ -116,7 +116,7 @@ function Linked({ state, appUrl }: { state: LinkedState; appUrl: string }) {
     {summary.plan?.status === 'inactive' && <PlanBanner plan={summary.plan} />}
 
     <div role="tablist" aria-label="Shopkeeper" className="flex gap-1">
-      {TABS.map(item => <button key={item.id} id={`tab-${item.id}`} type="button" role="tab"
+      {TABS.filter(item => item.id !== 'chat' || summary.chatAvailable).map(item => <button key={item.id} id={`tab-${item.id}`} type="button" role="tab"
         aria-selected={tab === item.id} aria-controls={`panel-${item.id}`} onClick={() => setTab(item.id)}
         className={cn('rounded-lg px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring',
           tab === item.id ? 'bg-black/[0.08]' : 'text-muted-foreground hover:bg-black/[0.04] hover:text-foreground')}>
@@ -129,14 +129,14 @@ function Linked({ state, appUrl }: { state: LinkedState; appUrl: string }) {
     <div role="tabpanel" id="panel-home" aria-labelledby="tab-home" hidden={tab !== 'home'} className="mt-4">
       <Home summary={summary} appUrl={appUrl} chatEnabled={chatEnabled} onOpenChat={() => setTab('chat')} />
     </div>
-    <div role="tabpanel" id="panel-chat" aria-labelledby="tab-chat" hidden={tab !== 'chat'} className="mt-4">
+    {summary.chatAvailable && <div role="tabpanel" id="panel-chat" aria-labelledby="tab-chat" hidden={tab !== 'chat'} className="mt-4">
       <section className={cn(CARD, 'overflow-hidden')}>
         <StorefrontChatApiProvider value={chatApi}>
           <StorefrontChatEditor initialData={state.chat} canManage themeEditorUrl={state.themeEditorUrl}
             draftKey={state.chatDraftKey} showHeading={false} onEnabledChange={setChatEnabled} />
         </StorefrontChatApiProvider>
       </section>
-    </div>
+    </div>}
     <div role="tabpanel" id="panel-settings" aria-labelledby="tab-settings" hidden={tab !== 'settings'} className="mt-4">
       <div className="grid items-start gap-4 lg:grid-cols-2">
         {summary.plan && <PlanCard plan={summary.plan} />}
@@ -212,7 +212,7 @@ function Home({ summary, appUrl, chatEnabled, onOpenChat }: {
       action: <AppLink href={`${appUrl}/dashboard/integrations`}>Connect</AppLink> },
     { label: 'Connect your phone for approvals', done: setup.phone,
       action: <AppLink href={`${appUrl}${settingsSectionHref('briefing')}`}>Connect</AppLink> },
-    ...(setup.chatAvailable ? [{ label: 'Turn on website chat', done: chatEnabled,
+    ...(summary.chatAvailable ? [{ label: 'Turn on website chat', done: chatEnabled,
       action: <Button type="button" size="sm" variant="outline" onClick={onOpenChat}>Set up</Button> }] : []),
     ] : []),
   ];

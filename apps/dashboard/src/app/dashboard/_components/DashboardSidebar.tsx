@@ -15,10 +15,12 @@ function DashboardSidebarContent({
   children,
   initialAutonomyTier,
   rightRail,
+  websiteChat,
 }: {
   children: React.ReactNode;
   initialAutonomyTier: AutonomyTier;
   rightRail: React.ReactNode;
+  websiteChat: boolean;
 }) {
   const navAuth = useNavAuth(initialAutonomyTier);
   const [isSwitching, setIsSwitching] = useState(false);
@@ -73,6 +75,7 @@ function DashboardSidebarContent({
         <DesktopTopBar
           onSwitching={setIsSwitching}
           navAuth={navAuth}
+          websiteChat={websiteChat}
         />
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-row">
@@ -80,6 +83,7 @@ function DashboardSidebarContent({
             <MobileHubHeader
               onSwitching={setIsSwitching}
               navAuth={navAuth}
+              websiteChat={websiteChat}
             />
 
             <div className="dashboard-content relative z-0 flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -99,15 +103,19 @@ export default function DashboardSidebar({
   children,
   initialAutonomyTier,
   rightRail,
+  websiteChat,
 }: {
   children: React.ReactNode;
   initialAutonomyTier: AutonomyTier;
   rightRail: React.ReactNode;
+  /** The storefront chat platform switch: off hides Website chat from the nav. */
+  websiteChat: boolean;
 }) {
   return (
     <DashboardSidebarContent
       initialAutonomyTier={initialAutonomyTier}
       rightRail={rightRail}
+      websiteChat={websiteChat}
     >
       {children}
     </DashboardSidebarContent>

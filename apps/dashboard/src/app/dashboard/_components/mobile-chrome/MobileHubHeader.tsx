@@ -36,9 +36,11 @@ function observeLayoutShift(element: HTMLElement, onChange: () => void) {
 export function MobileHubHeader({
   onSwitching,
   navAuth,
+  websiteChat,
 }: {
   onSwitching: (v: boolean) => void;
   navAuth: NavAuth;
+  websiteChat: boolean;
 }) {
   const headerRef = useRef<HTMLDivElement>(null);
   const [navOpen, setNavOpen] = useState(false);
@@ -81,6 +83,7 @@ export function MobileHubHeader({
             onOpenChange={setNavOpen}
             onSwitching={onSwitching}
             navAuth={navAuth}
+            websiteChat={websiteChat}
           />
 
           <div className={cn(desktopTopBarUtilityPillClass, "shrink-0 px-1")}>
