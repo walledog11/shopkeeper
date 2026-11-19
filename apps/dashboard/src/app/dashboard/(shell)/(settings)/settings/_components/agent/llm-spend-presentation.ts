@@ -33,7 +33,6 @@ export function presentLlmSpend(snapshot: LlmSpendSnapshot, capUsd: number): Llm
     }
   }
 
-  const remaining = Math.max(0, capUsd - snapshot.spentUsd)
   const ratio = capUsd > 0 ? snapshot.spentUsd / capUsd : 1
   const reset = new Date(snapshot.resetAt).toLocaleString(undefined, {
     month: "short",
@@ -47,7 +46,7 @@ export function presentLlmSpend(snapshot: LlmSpendSnapshot, capUsd: number): Llm
     summary: `${dollars(snapshot.spentUsd)} used of ${dollars(capUsd)} today`,
     detail: ratio >= 1
       ? `AI work is paused until the limit resets at ${reset} or the limit is raised.`
-      : `${dollars(remaining)} remaining · resets ${reset}`,
+      : `Resets ${reset}`,
     state: ratio >= 1 ? "paused" : ratio >= 0.8 ? "warning" : "available",
   }
 }

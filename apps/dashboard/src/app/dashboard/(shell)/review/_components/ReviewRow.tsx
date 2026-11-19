@@ -5,7 +5,7 @@ import {
   formatActionLogHeadline,
   formatRequestOutcomeSummary,
 } from "@/lib/agent/action-log-display"
-import { formatRelativeTime } from "@/lib/format/date"
+import { RelativeTime } from "@/components/ui/relative-time"
 import { getActionLogChannelInfo } from "@/lib/messaging/channels"
 import { boardCardShellClassName } from "@/lib/ui/board-card-styles"
 import { cn } from "@/lib/ui/cn"
@@ -58,9 +58,7 @@ export function ReviewRow({
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-3">
             <h3 className="truncate text-sm font-semibold text-strong">{headline}</h3>
-            <span className="shrink-0 text-xs tabular-nums text-faint">
-              {formatRelativeTime(entry.sentAt)}
-            </span>
+            <RelativeTime at={entry.sentAt} className="shrink-0 text-xs tabular-nums text-faint" />
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${tone.badge}`}>

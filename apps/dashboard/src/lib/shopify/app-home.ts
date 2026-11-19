@@ -33,8 +33,6 @@ interface ShopifyAppHomeMetrics {
 interface ShopifyAppHomeSetup {
   customerChannel: boolean;
   phone: boolean;
-  /** Website chat exists only where the platform switch is on. */
-  chatAvailable: boolean;
 }
 
 /**
@@ -48,6 +46,8 @@ export interface ShopifyAppHomeSummary {
   metrics: ShopifyAppHomeMetrics | null;
   /** Null when it could not be loaded; the checklist is left out. */
   setup: ShopifyAppHomeSetup | null;
+  /** Website chat, its tab and its setup step exist only where the platform switch is on. */
+  chatAvailable: boolean;
   /** Read-only here: what the agent may do is changed by a workspace admin in Shopkeeper. */
   permissions: ShopifyPermissionRow[];
   /** Null when Shopify doesn't bill this workspace (no plans set up yet). */
@@ -176,7 +176,6 @@ async function loadSetup(organizationId: string): Promise<ShopifyAppHomeSetup | 
     return {
       customerChannel: channels.hasInstagram || channels.hasEmailForwarding,
       phone: phones > 0,
-      chatAvailable: isStorefrontChatGloballyEnabled(),
     };
   } catch (error) {
     logger.error({ err: error, orgId: organizationId }, '[Shopify app home] Failed to load setup');
@@ -203,6 +202,7 @@ async function loadSummary(integration: LinkedIntegration): Promise<ShopifyAppHo
     access,
     metrics,
     setup,
+    chatAvailable: isStorefrontChatGloballyEnabled(),
     plan,
     permissions: shopifyPermissionRows(resolveAgentSettings(integration.organization.settings)),
   };

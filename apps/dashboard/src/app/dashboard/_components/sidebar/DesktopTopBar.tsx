@@ -98,9 +98,12 @@ function NavDropdown({
 export function DesktopTopBar({
   onSwitching,
   navAuth,
+  websiteChat,
 }: {
   onSwitching: (v: boolean) => void;
   navAuth: NavAuth;
+  /** Website chat is listed only while the platform switch is on. */
+  websiteChat: boolean;
 }) {
   const pathname = usePathname();
   const prefetchNav = useDashboardNavPrefetch();
@@ -146,14 +149,16 @@ export function DesktopTopBar({
               <span>{shopNavItem.name}</span>
             </Link>
 
-            <Link
-              href={chatNavItem.href}
-              onClick={(e) => handleNavClick(e, chatIsActive)}
-              {...dashboardNavPrefetchHandlers(prefetchNav, chatNavItem.href)}
-              className={topBarNavTriggerClass(chatIsActive)}
-            >
-              <span>{chatNavItem.name}</span>
-            </Link>
+            {websiteChat ? (
+              <Link
+                href={chatNavItem.href}
+                onClick={(e) => handleNavClick(e, chatIsActive)}
+                {...dashboardNavPrefetchHandlers(prefetchNav, chatNavItem.href)}
+                className={topBarNavTriggerClass(chatIsActive)}
+              >
+                <span>{chatNavItem.name}</span>
+              </Link>
+            ) : null}
 
             {topBarDropdowns.map(({ label, items }) => (
               <NavDropdown

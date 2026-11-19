@@ -41,11 +41,13 @@ export function MobileHubNavDropdown({
   onOpenChange,
   onSwitching,
   navAuth,
+  websiteChat,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSwitching: (v: boolean) => void;
   navAuth: NavAuth;
+  websiteChat: boolean;
 }) {
   const pathname = usePathname();
   const routeTitle = resolveMobileRouteTitle(pathname);
@@ -176,7 +178,7 @@ export function MobileHubNavDropdown({
                       <div className="min-h-0 flex-1 overflow-y-auto">
                         <div className={cn("mx-auto w-full px-5 pb-6 pt-3", dashboardChromeMaxWidthClass)}>
                           <NavGroupList
-                            sections={mobileNavSections}
+                            sections={mobileNavSections(websiteChat)}
                             pathname={pathname}
                             needsYouCount={needsYouCount}
                             onNavigate={handleNavClick}

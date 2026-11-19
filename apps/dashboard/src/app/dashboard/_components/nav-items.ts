@@ -135,10 +135,13 @@ export const topBarDropdowns = [
   { label: "Agent", items: topBarAgentItems },
 ] as const;
 
-/** Mobile nav sections (logo links home). */
-export const mobileNavSections: NavSection[] = [
+/**
+ * Mobile nav sections (logo links home). Website chat is listed only while the
+ * platform switch (`STOREFRONT_CHAT_ENABLED`) is on, as in the desktop bar.
+ */
+export const mobileNavSections = (websiteChat: boolean): NavSection[] => [
   { heading: "Today", items: [inboxNavItem] },
-  { heading: "Shop", items: [shopNavItem, chatNavItem] },
+  { heading: "Shop", items: websiteChat ? [shopNavItem, chatNavItem] : [shopNavItem] },
   {
     heading: "Shopkeeper",
     items: [

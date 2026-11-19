@@ -23,10 +23,12 @@ export const AUTONOMY_TIERS: AutonomyTierOption[] = [
     recommended: true,
   },
   {
+    // Differs from Ask first only in its compensation limit until merchants can
+    // turn on auto-execution, so the blurb promises no more than that.
     id: "trusted",
     label: "Trusted",
     cap: 100,
-    blurb: "Sends simple replies. Asks before refunds and cancellations.",
+    blurb: "Like Ask first, with a higher limit on refunds and gift cards.",
   },
 ];
 

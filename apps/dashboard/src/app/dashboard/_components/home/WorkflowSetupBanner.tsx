@@ -68,7 +68,8 @@ interface Props {
   steps: Step[]
   /** Step status is derived from the home summary; suppress the banner until it lands. */
   pending?: boolean
-  initialDismissed?: boolean
+  dismissed: boolean
+  onDismiss: () => void
   initialExpanded?: boolean
 }
 
@@ -76,24 +77,29 @@ function getStepKey(step: Step) {
   return `${step.label}:${step.href}`
 }
 
+/** Setup is done once every step that isn't optional is. */
+export function isWorkflowSetupComplete(steps: readonly Pick<Step, "status" | "optional">[]): boolean {
+  return steps.every(step => step.optional || step.status === "done")
+}
+
 export default function WorkflowSetupBanner({
   steps,
   pending = false,
-  initialDismissed = false,
+  dismissed,
+  onDismiss,
   initialExpanded = false,
 }: Props) {
-  const [dismissed, setDismissed] = useState(initialDismissed)
   const [expanded, setExpanded] = useState(initialExpanded)
 
   const trackedSteps = steps.filter(step => !step.optional)
   const trackedDoneCount = trackedSteps.filter(step => step.status === "done").length
   const totalCount = trackedSteps.length
 
-  const isVisible = pending === false && dismissed === false && trackedDoneCount < totalCount
+  const isVisible = pending === false && dismissed === false && !isWorkflowSetupComplete(steps)
 
   function dismiss() {
     writeWorkflowBannerDismissedCookie()
-    setDismissed(true)
+    onDismiss()
   }
 
   function toggle() {

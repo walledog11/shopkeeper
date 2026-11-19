@@ -16,6 +16,7 @@ import { getOrCreateOrg } from "@/lib/server/org";
 import { getIncompleteOnboardingRedirect } from "@/lib/server/onboarding-guard";
 import { resolveAgentSettings } from "@shopkeeper/agent/settings";
 import { getChannelInfo } from "@/lib/messaging/channels";
+import { isStorefrontChatGloballyEnabled } from "@/lib/storefront-chat/enabled";
 import { isEmailAuthReauthorizationRequired } from "@shopkeeper/email/providers";
 import { db, isIntegrationReauthorizationRequired } from "@shopkeeper/db";
 import type { OrgSettings } from "@/types";
@@ -147,6 +148,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <DashboardSidebar
             initialAutonomyTier={settings.autonomyTier ?? "guarded"}
             rightRail={<DashboardRightRail />}
+            websiteChat={isStorefrontChatGloballyEnabled()}
           >
             {children}
           </DashboardSidebar>

@@ -1,7 +1,7 @@
 "use client"
 
-import { useMemo } from "react"
-import WorkflowSetupBanner from "./WorkflowSetupBanner"
+import { useMemo, useState } from "react"
+import WorkflowSetupBanner, { isWorkflowSetupComplete } from "./WorkflowSetupBanner"
 import HomeChannelNudge from "./HomeChannelNudge"
 import ConciergeBriefing from "./ConciergeBriefing"
 import NeedsYou from "./NeedsYou"
@@ -35,6 +35,10 @@ export default function DashboardHomeClient({
   instagramAvailable,
 }: Props) {
   const data = useHomeData(initialHomeSummary, initialChannelState)
+  // One setup slot: the checklist while setup is unfinished, then the nudge for
+  // the most useful channel still missing. Both at once said the same thing twice.
+  const [workflowDismissed, setWorkflowDismissed] = useState(workflowBannerDismissed)
+  const workflowShowing = !workflowDismissed && !isWorkflowSetupComplete(data.workflowSteps)
   const needsYouItems = useMemo(() => {
     if (data.needsYouItems.length > 0) return data.needsYouItems
     if (process.env.NODE_ENV === "development") return SAMPLE_NEEDS_YOU_ITEMS
@@ -58,16 +62,19 @@ export default function DashboardHomeClient({
         )}>
           <WorkflowSetupBanner
             steps={data.workflowSteps}
-            initialDismissed={workflowBannerDismissed}
+            dismissed={workflowDismissed}
+            onDismiss={() => setWorkflowDismissed(true)}
             initialExpanded={workflowBannerExpanded}
           />
 
-          <HomeChannelNudge
-            hasPhoneBound={data.hasPhoneBound}
-            hasEmail={data.hasEmailForwarding}
-            hasInstagram={data.hasInstagram}
-            instagramAvailable={instagramAvailable}
-          />
+          {workflowShowing ? null : (
+            <HomeChannelNudge
+              hasPhoneBound={data.hasPhoneBound}
+              hasEmail={data.hasEmailForwarding}
+              hasInstagram={data.hasInstagram}
+              instagramAvailable={instagramAvailable}
+            />
+          )}
 
           <div className="flex min-w-0 flex-col gap-3">
             <ConciergeBriefing
