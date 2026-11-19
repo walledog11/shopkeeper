@@ -72,12 +72,12 @@ The first publication is the App Store. These block review or a new install's fi
    Gmail connect shows Google's unverified-app warning and the app stops at 100 users,
    and the review, with any security assessment Google asks for, runs on Google's
    schedule. Closes when it is submitted.
-5. **Tell a merchant with no linked iPhone what is waiting.** Plan cards, questions,
-   escalations and the briefing go only to bound phones (`listOperatorBindings`); with
-   none bound, which includes every Android merchant, they are skipped and only the
-   dashboard shows the work. Email a notice that links to the ticket; approval stays in
-   the app. Closes when a workspace with no phone gets an email for a new card, an
-   escalation and the briefing.
+5. **Tell a merchant with no linked iPhone what is waiting** (built: with no phone bound,
+   plan cards, questions, escalations and the briefing are emailed to every member and
+   link into the app; runbook *Notice emails*). Closes when the sender's domain is
+   verified in Postmark, `NOTICE_EMAIL_FROM` is set on the dashboard, and a workspace with
+   no phone gets an email for a new card, an escalation and the briefing. Auto-execution
+   reports and the AI-limit and outage notices still reach phones only.
 6. **Partner dashboard submission:** protected customer data access (level 2: name,
    email, phone, address); its requirements are built (runbook *Customer data
    protection*: access log and weekly review, the Terms' data processing section, the

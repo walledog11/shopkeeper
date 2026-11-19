@@ -153,6 +153,7 @@ daily LLM spend cap (`llm_daily_spend`).
     pairs), `SOCIALAPI_MAX_ACTIVE_ORGS`, `SOCIALAPI_BASE_URL` (test override only) — see
     [Instagram via SocialAPI](#instagram-via-socialapi).
   - `STOREFRONT_CHAT_ENABLED` (off unless exactly `true`), `STOREFRONT_CHAT_SIGNING_SECRET` (must not equal `INTERNAL_API_SECRET`).
+  - `NOTICE_EMAIL_FROM` — the From address of [notice emails](#notice-emails); unset sends none.
   - `NEXT_PUBLIC_GATEWAY_EVENTS_URL` — gateway base for live-inbox SSE (pairs with gateway `GATEWAY_REALTIME_ENABLED=true`); empty disables realtime.
   - `TELEGRAM_BOT_USERNAME` — internal testing only; leave unset in production (when set, onboarding
     offers Telegram to every merchant).
@@ -509,6 +510,7 @@ Homepage and legal pages go on the apex; OAuth redirect URIs go on `app.`.
 | OAuth redirect base | `https://app.useshopkeeper.com` |
 | Contact email | `hello@useshopkeeper.com` |
 | Inbound email domain | `inbound.useshopkeeper.com` |
+| Notice email sender (Postmark verified domain) | `notices@useshopkeeper.com` (`NOTICE_EMAIL_FROM`) |
 | Telegram bot | target `@useshopkeeperbot` (staging `@useshopkeeperdevbot`); the rename is open in [../ROADMAP.md](../ROADMAP.md), so confirm the live username in BotFather — see *Renaming or replacing the bot* |
 
 The Gmail OAuth client (`GOOGLE_CLIENT_ID`) is separate from Clerk's social-login Google client;
@@ -824,6 +826,20 @@ Google restricted-scope verification before their first ticket.
   (fallback `externalAccountId`); the OAuth account email is used for `replyTo` and token refresh.
 - **Missing default.** One provider connected: it self-repairs. Both connected: a configuration error
   to fix from Integrations — never pick an unordered row.
+
+### Notice emails
+
+A workspace with no linked phone gets by email what a phone would get by text: a plan waiting
+for approval, the agent's question, a conversation handed back, and the briefing when it is on.
+Every Clerk member of the workspace gets one; the email links into the app and approving stays
+there. A plan the merchant asked for in the app is not emailed. The gateway composes each notice
+(`emailWorkspaceNotice`) and the dashboard sends it through Postmark
+(`/api/agent/notice-email-internal`), deduped per member for an hour.
+
+To turn it on, verify the sender's domain in Postmark (DKIM and Return-Path records), then set
+`NOTICE_EMAIL_FROM` on the dashboard. Check: in a workspace with no phone, an inbound customer
+message that gets a plan produces one email per member. A failed send raises a `provider_send`
+alert tagged `notice_email`; the work stays on the dashboard either way.
 
 ### Outbound email delivery mode
 

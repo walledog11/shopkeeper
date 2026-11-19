@@ -318,7 +318,7 @@ async function runAnswerReplan(
     await sendOperatorQuestionNotification(
       organizationId, threadId, customerName, meta?.channelType ?? thread.channelType,
       thread.requestSummary, verdict.question, baseInstruction,
-      { planId: cacheRecord.planId, sourceMessageId: pendingCustomerMessageId },
+      { planId: cacheRecord.planId, sourceMessageId: pendingCustomerMessageId, startedByMerchant: true },
     );
     return { status: 'replanned', message: 'The revised proposal needs more information; I sent the new question.' };
   }
@@ -363,6 +363,7 @@ async function runAnswerReplan(
       baseInstruction,
       {
         requestDisplay,
+        startedByMerchant: true,
         ...(cacheRecord.planId && cacheRecord.lastCustomerMessageId ? {
           identity: {
             planId: cacheRecord.planId,

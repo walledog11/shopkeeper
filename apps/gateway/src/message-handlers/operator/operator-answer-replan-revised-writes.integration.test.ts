@@ -261,7 +261,13 @@ describe('applyOperatorAnswerReplan durable continuation', () => {
         proposalId: parked.activeProposalId, status: 'policy_block', dispatchState: 'settled',
       });
       expect(action.output).toContain(scenario === 'revoked grant' ? 'write_customers' : 'linked');
-      expect(postDashboardInternal).not.toHaveBeenCalled();
+      // The blocked write hands the thread back, which emails a workspace with
+      // no phone; the customer is sent nothing.
+      expect(postDashboardInternal).not.toHaveBeenCalledWith(
+        '/api/agent/io-send-internal',
+        expect.anything(),
+        expect.anything(),
+      );
     }
   });
 });

@@ -62,6 +62,10 @@ export interface OrgDigest {
   message: string;
   pendingDigest: PendingDigest;
   flaggedCount: number;
+  /** What `message` recites as needing the merchant, for the emailed briefing. */
+  needsYou: BriefingItem[];
+  /** What the agent did without them, as `message` tells it. */
+  handledSection: string | null;
 }
 
 export interface SendScheduledDigestsOptions {

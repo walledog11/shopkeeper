@@ -28,10 +28,12 @@ const DAYS_OPTIONS: readonly { value: OrgSettings["digestDays"]; label: string }
 export function MorningBriefingSection({
   controller,
   phoneLinked,
+  noticeEmailEnabled,
   shopifyConnected,
 }: {
   controller: AgentTabController
   phoneLinked: boolean
+  noticeEmailEnabled: boolean
   shopifyConnected: boolean
 }) {
   const {
@@ -54,7 +56,9 @@ export function MorningBriefingSection({
       <SettingsTile
         id="briefing"
         label="Briefing"
-        description={phoneLinked ? undefined : "Link your iPhone above to get it."}
+        description={phoneLinked
+          ? undefined
+          : noticeEmailEnabled ? "Sent by email until you link your iPhone above." : "Link your iPhone above to get it."}
         action={
           <Switch
             checked={settingsState.digestEnabled}

@@ -3,8 +3,10 @@ import { db } from '@shopkeeper/db';
 import logger from '../../logger.js';
 import { listOperatorBindings, notifyOperator, type OperatorBinding, type OperatorNotifyResult } from '../../operator-notify.js';
 import { digestNotificationIdempotencyKey } from '../../operator-notify-idempotency.js';
+import { emailWorkspaceNotice } from '../../operator-email.js';
 import { finalizeDigestSend } from '../digest-briefing/index.js';
 import { buildOrgDigest } from './build.js';
+import { formatDigestEmail } from './format-email.js';
 import { buildDigestOpener, digestWindowKey, shouldSendDigest } from './schedule.js';
 import type { OrgDigest, SendScheduledDigestsOptions } from './types.js';
 import { claimDigestWindow, releaseDigestWindow } from './window-claim.js';
@@ -58,16 +60,15 @@ export async function sendScheduledDigests(
 ): Promise<void> {
   const now = new Date();
   const nowMs = now.getTime();
+  // Every workspace with the briefing on: one with a linked phone gets it as a
+  // text, one without as an email.
   const orgs = await db.organization.findMany({
     where: {
       ...(options.organizationIds === undefined
         ? {}
         : { id: { in: [...options.organizationIds] } }),
-      members: {
-        some: {
-          OR: [{ telegramChats: { some: {} } }, { imessageBindings: { some: {} } }],
-        },
-      },
+      lifecycleStatus: 'active',
+      settings: { path: ['digestEnabled'], equals: true },
     },
     select: { id: true, name: true, settings: true },
   });
@@ -102,10 +103,30 @@ export async function sendScheduledDigests(
     try {
       const firstBriefingPending = orgSettings.firstBriefingPending === true;
       const agentName = resolveAgentSettings(org.settings).agentName;
+      const opener = buildDigestOpener(agentName, orgSettings, now, firstBriefingPending);
       const digest = await buildOrgDigest(org.id, now, orgSettings, {
-        opener: buildDigestOpener(agentName, orgSettings, now, firstBriefingPending),
+        opener,
         includeEmptyInbox: false,
       });
+      const bindings = await listOperatorBindings(org.id);
+      // Keyed by window, not by `pendingDigest.sentAt`: a millisecond stamp is
+      // fresh on every attempt, so the Redis dedupe this key exists for could
+      // never fire on the retry it was written to cover.
+      const idempotencyKey = digestNotificationIdempotencyKey(org.id, windowKey);
+
+      // No linked phone: the briefing is emailed. The empty-inbox welcome
+      // teaches texting commands, so an emailed briefing waits for something to
+      // report, and the welcome stays armed for the first phone.
+      if (bindings.length === 0) {
+        if (!digest) continue;
+        delivered = await emailWorkspaceNotice(org.id, {
+          ...formatDigestEmail(digest, opener),
+          threadId: null,
+          idempotencyKey,
+        });
+        if (delivered) await finalizeDigestSend(org.id, now, false);
+        continue;
+      }
 
       // A brand-new merchant with an empty inbox would otherwise never get a
       // first digest. Send a welcome briefing once so they see the morning ritual.
@@ -123,11 +144,6 @@ export async function sendScheduledDigests(
         pendingDigest = { items: [], sentAt: now.toISOString() };
       }
 
-      const bindings = await listOperatorBindings(org.id);
-      // Keyed by window, not by `pendingDigest.sentAt`: a millisecond stamp is
-      // fresh on every attempt, so the Redis dedupe this key exists for could
-      // never fire on the retry it was written to cover.
-      const idempotencyKey = digestNotificationIdempotencyKey(org.id, windowKey);
       for (const member of bindings) {
         const result = digest
           ? await deliverOrgDigest(org.id, member, digest, idempotencyKey)

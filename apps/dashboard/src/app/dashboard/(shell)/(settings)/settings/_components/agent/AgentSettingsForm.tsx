@@ -22,6 +22,8 @@ export interface AgentSettingsFormProps {
   orgName: string
   shopifyConnected: boolean
   phoneLinked: boolean
+  /** Without a linked phone, the briefing goes by email (`NOTICE_EMAIL_FROM`). */
+  noticeEmailEnabled: boolean
   llmSpend: LlmSpendSnapshot
 }
 
@@ -48,6 +50,7 @@ export default function AgentSettingsForm(props: AgentSettingsFormProps) {
         <MorningBriefingSection
           controller={controller}
           phoneLinked={props.phoneLinked}
+          noticeEmailEnabled={props.noticeEmailEnabled}
           shopifyConnected={props.shopifyConnected}
         />
       ) : null}

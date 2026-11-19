@@ -6,6 +6,9 @@ import { escalationNotificationIdempotencyKey } from './operator-notify-idempote
 import type { OrgSettings } from '@shopkeeper/agent/types';
 import { composeOperatorHandoff } from './operator-handoff.js';
 import { channelNoun } from './message-handlers/support-plan/planning-notifications/headers.js';
+import { loadCardOpening } from './message-handlers/support-plan/planning-notifications/card-context.js';
+import { formatTicketEmail } from './message-handlers/support-plan/planning-notifications/format-email.js';
+import { emailWorkspaceNotice } from './operator-email.js';
 
 function formatEscalationMessage(
   customerName: string | null,
@@ -28,7 +31,8 @@ function formatEscalationMessage(
 // Resolve the thread + bound operators and push the escalation to each. Shared
 // by the internal HTTP route (dashboard sink hops here) and the in-process
 // gateway agent sink (auto-execute runs in the worker). Returns the number of
-// operators notified, or null when the thread does not exist.
+// phones notified (0 when none is bound and the workspace is emailed instead),
+// or null when the thread does not exist.
 export async function pushOperatorEscalation(
   organizationId: string,
   threadId: string,
@@ -43,14 +47,24 @@ export async function pushOperatorEscalation(
   }
 
   const members = await listOperatorBindings(organizationId);
+  const idempotencyKey = escalationNotificationIdempotencyKey(organizationId, threadId, reason || 'No reason provided');
 
   if (members.length === 0) {
-    logger.info({ organizationId, threadId }, '[OperatorEscalation] No bound members — escalation skipped');
+    const opening = await loadCardOpening({
+      organizationId,
+      threadId,
+      customerName: thread.customer?.name ?? null,
+      channelType: thread.channelType,
+    });
+    await emailWorkspaceNotice(organizationId, {
+      ...formatTicketEmail(opening, { kind: 'handoff', blocker: null }),
+      threadId,
+      idempotencyKey,
+    });
     return 0;
   }
 
   const dashboardUrl = getGatewayDashboardUrl();
-  const idempotencyKey = escalationNotificationIdempotencyKey(organizationId, threadId, reason || 'No reason provided');
   const externalMessageId = `merchant-handoff:${idempotencyKey}`;
   const stored = await db.message.findFirst({
     where: { organizationId, threadId, externalMessageId, senderType: 'note' },
