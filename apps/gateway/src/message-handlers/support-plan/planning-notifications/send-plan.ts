@@ -11,6 +11,7 @@ import {
   planNotificationIdempotencyKey,
 } from '../../../operator-notify-idempotency.js';
 import { listOperatorBindings, type OperatorNotifyOptions } from '../../../operator-notify.js';
+import { emailWorkspaceNotice } from '../../../operator-email.js';
 import { composeHandoffStatements } from '../../../operator-handoff.js';
 import { getContext, toPendingPlanToolCalls, type PendingPlan } from '../../../operator-context.js';
 import { listConfirmedOrders } from '../../../storefront-chat-verified-orders.js';
@@ -24,6 +25,7 @@ import {
 import { loadRequestSourceText, storedCustomerName } from './card-context.js';
 import { getConversationStage } from './conversation-stage.js';
 import { notifyCriticalToAllOperators } from './delivery.js';
+import { formatTicketEmail, type TicketEmailAsk } from './format-email.js';
 import {
   escalationReason,
   formatOperatorPlanMessage,
@@ -123,12 +125,17 @@ export async function sendOperatorPlanNotification(
     identity?: PlanIdentity;
     requestDisplay?: RequestDisplay;
     systemRequest?: SystemRequestKind;
+    /**
+     * The merchant's own ask or answer in the app produced this plan, so with
+     * no phone bound there is no one to tell: they are already looking at it.
+     */
+    startedByMerchant?: boolean;
   },
 ): Promise<void> {
   const escalationOnly = isEscalationOnlyPlan(plan.rawToolCalls);
   const bindings = await listOperatorBindings(organizationId);
 
-  if (bindings.length === 0) {
+  if (bindings.length === 0 && options?.startedByMerchant) {
     logger.info({ organizationId }, '[Worker] No bound operator members — skipping plan notification');
     return;
   }
@@ -163,6 +170,30 @@ export async function sendOperatorPlanNotification(
         '[Worker] Request source-text read failed',
       );
     }
+  }
+  if (bindings.length === 0) {
+    const opening = {
+      customerName,
+      channelType,
+      requestDisplay,
+      stage,
+      verifiedOrders: confirmedOrders,
+      sourceMessageText,
+    };
+    const ask: TicketEmailAsk = plan.validation?.status === 'invalid'
+      ? { kind: 'invalid_plan' }
+      : escalationOnly
+        ? {
+          kind: 'handoff',
+          blocker: await escalationBlockerFor({ organizationId, threadId, customerName, requestSummary, plan }),
+        }
+        : { kind: 'approval' };
+    await emailWorkspaceNotice(organizationId, {
+      ...formatTicketEmail(opening, ask),
+      threadId,
+      idempotencyKey: planNotificationIdempotencyKey(organizationId, threadId, plan.rawToolCalls, instruction),
+    });
+    return;
   }
   const photos = await loadCardPhotos(organizationId, plan);
   const photosHidden = photos !== null && photos.images.length === 0;

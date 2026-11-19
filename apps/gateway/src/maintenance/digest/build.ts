@@ -241,5 +241,7 @@ export async function buildOrgDigest(
     // included the threads the substance gate hid would describe a message the
     // merchant never got.
     flaggedCount: flaggedCandidates.length,
+    needsYou: narratedItems,
+    handledSection,
   };
 }

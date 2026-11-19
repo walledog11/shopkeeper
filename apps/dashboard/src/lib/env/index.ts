@@ -152,6 +152,15 @@ export function getInboundEmailDomain(): string {
   return readEnv('INBOUND_EMAIL_DOMAIN') ?? 'inbound.shopkeeper.app';
 }
 
+/**
+ * The address notice emails come from: what a workspace with no linked phone
+ * is told instead of a text. Its domain must be a verified sender in Postmark.
+ * Unset, no notice email is sent.
+ */
+export function getNoticeEmailFrom(): string | null {
+  return readEnv('NOTICE_EMAIL_FROM');
+}
+
 export function validateDashboardEnv(): void {
   const required = [
     'DATABASE_URL',

@@ -7,6 +7,7 @@ import {
   utcDayString,
 } from "@shopkeeper/db"
 import { normalizeStoredOrgSettings, resolveAgentSettings } from "@shopkeeper/agent/settings"
+import { getNoticeEmailFrom } from "@/lib/env"
 import { getOrCreateOrg } from "@/lib/server/org"
 import logger from "@/lib/server/logger"
 import type { AgentSettingsFormProps, AgentSettingsPage } from "./AgentSettingsForm"
@@ -42,6 +43,7 @@ export async function loadAgentSettingsForm(page: AgentSettingsPage): Promise<Ag
     orgName: org.name,
     shopifyConnected: shopifyIntegrations > 0,
     phoneLinked: linkedPhones > 0,
+    noticeEmailEnabled: getNoticeEmailFrom() !== null,
     llmSpend: {
       day: utcDayString(),
       defaultCapUsd: DEFAULT_DAILY_LLM_SPEND_CAP_USD,

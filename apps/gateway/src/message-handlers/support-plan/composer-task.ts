@@ -111,7 +111,7 @@ export async function notifyCommittedComposerTask(input: Pick<TaskClaimIdentity,
     await sendOperatorQuestionNotification(
       input.organizationId, task.threadId, task.thread.customer.name, task.thread.channelType,
       task.thread.requestSummary, task.pendingQuestion, cache.instruction,
-      { planId: cache.planId, sourceMessageId: request.sourceMessageId },
+      { planId: cache.planId, sourceMessageId: request.sourceMessageId, startedByMerchant: true },
     );
   } else {
     // The customer's request while this draft still answers it; otherwise —
@@ -132,6 +132,7 @@ export async function notifyCommittedComposerTask(input: Pick<TaskClaimIdentity,
         requestDisplay: requestDisplayHasContext(customerRequest)
           ? customerRequest
           : instructionRequestDisplay(cache.instruction),
+        startedByMerchant: true,
       },
     );
   }

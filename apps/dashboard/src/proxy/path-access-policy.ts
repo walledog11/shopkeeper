@@ -30,6 +30,7 @@ export const publicRoutePatterns = [
   "/api/integrations/instagram/socialapi/callback(.*)",
   "/api/integrations/gmail/callback(.*)",
   "/api/agent/io-send-internal(.*)",
+  "/api/agent/notice-email-internal",
   "/api/messages/auto-ack(.*)",
   "/api/messages/internal(.*)",
   // Gateway-to-dashboard call carrying `x-internal-secret`, not a Clerk

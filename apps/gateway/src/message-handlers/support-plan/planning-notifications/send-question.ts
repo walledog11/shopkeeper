@@ -4,14 +4,13 @@ import {
   questionNotificationIdempotencyKey,
 } from '../../../operator-notify-idempotency.js';
 import { listOperatorBindings } from '../../../operator-notify.js';
+import { emailWorkspaceNotice } from '../../../operator-email.js';
 import { removePendingPlanForThread } from '../../../operator-context.js';
 import { getGatewayDashboardUrl } from '../../../config/env.js';
-import { listConfirmedOrders } from '../../../storefront-chat-verified-orders.js';
-import { buildRequestDisplaySnapshot, requestDisplayHasContext } from '../../shared/request-display.js';
-import { loadRequestSourceText, storedCustomerName } from './card-context.js';
-import { getConversationStage } from './conversation-stage.js';
+import { loadCardOpening } from './card-context.js';
 import { notifyCriticalToAllOperators } from './delivery.js';
 import { formatQuestionMessage } from './format-question.js';
+import { formatTicketEmail } from './format-email.js';
 
 // Soft sibling of sendOperatorPlanNotification: the agent needs one fact from the
 // merchant to finish the ticket. Pushes the question and parks `pendingQuestion`
@@ -28,35 +27,38 @@ export async function sendOperatorQuestionNotification(
   options?: {
     planId?: string | null;
     sourceMessageId?: string | null;
+    /** As for the plan card: the merchant asked in the app and is looking at it. */
+    startedByMerchant?: boolean;
   },
 ): Promise<void> {
   const bindings = await listOperatorBindings(organizationId);
 
-  if (bindings.length === 0) {
+  if (bindings.length === 0 && options?.startedByMerchant) {
     logger.info({ organizationId }, '[Worker] No bound operator members — skipping question notification');
     return;
   }
 
-  const [name, stage, verifiedOrders, requestDisplay] = await Promise.all([
-    customerName ? Promise.resolve(customerName) : storedCustomerName(organizationId, threadId),
-    getConversationStage(threadId),
-    listConfirmedOrders(organizationId, threadId, channelType),
-    buildRequestDisplaySnapshot({ organizationId, threadId, sourceMessageId: options?.sourceMessageId }),
-  ]);
-  const sourceMessageText = requestDisplayHasContext(requestDisplay)
-    ? null
-    : await loadRequestSourceText(organizationId, threadId, options?.sourceMessageId).catch(() => null);
-  const message = formatQuestionMessage({
-    customerName: name,
+  const opening = await loadCardOpening({
+    organizationId,
+    threadId,
+    customerName,
     channelType,
-    requestDisplay,
-    question,
-    stage,
-    verifiedOrders,
-    sourceMessageText,
-    threadLink: `${getGatewayDashboardUrl()}/dashboard/tickets?thread=${threadId}`,
+    sourceMessageId: options?.sourceMessageId,
   });
   const idempotencyKey = questionNotificationIdempotencyKey(organizationId, threadId, question);
+  if (bindings.length === 0) {
+    await emailWorkspaceNotice(organizationId, {
+      ...formatTicketEmail(opening, { kind: 'question', question }),
+      threadId,
+      idempotencyKey,
+    });
+    return;
+  }
+  const message = formatQuestionMessage({
+    ...opening,
+    question,
+    threadLink: `${getGatewayDashboardUrl()}/dashboard/tickets?thread=${threadId}`,
+  });
 
   // This thread's plan (if any) is superseded by the question. Remove only its
   // entry across devices — a whole-queue clear would drop other threads' plans.
