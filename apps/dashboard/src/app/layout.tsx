@@ -1,16 +1,9 @@
 import type { Metadata, Viewport } from "next";
-import { Caveat } from "next/font/google";
 import { headers } from "next/headers";
 import { getMarketingSiteUrl, getShopifyOAuthAuthorizeConfig } from "@/lib/env";
 import { SHOPIFY_APP_HOME_HEADER } from "@/proxy/shopify-app-home";
 import { Providers } from "./providers";
 import "./globals.css";
-
-const caveat = Caveat({
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--font-caveat",
-});
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -58,7 +51,7 @@ export default async function RootLayout({
   // here: a third-party iframe holds no Clerk session.
   if (requestHeaders.get(SHOPIFY_APP_HOME_HEADER)) {
     return (
-      <html lang="en" className={caveat.variable}>
+      <html lang="en">
         <head>
           <meta name="shopify-api-key" content={getShopifyOAuthAuthorizeConfig()?.clientId ?? ""} />
           {/* Shopify requires App Bridge unbundled from its CDN, loaded before the app's own scripts. */}
@@ -81,7 +74,7 @@ export default async function RootLayout({
   const nonce = requestHeaders.get("x-nonce") ?? undefined;
 
   return (
-    <html lang="en" className={caveat.variable}>
+    <html lang="en">
       <body className="font-sans antialiased">
         <Providers publishableKey={publishableKey} nonce={nonce}>
           {children}

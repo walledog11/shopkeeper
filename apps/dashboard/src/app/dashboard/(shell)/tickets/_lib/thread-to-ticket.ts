@@ -1,7 +1,7 @@
 import { toAttachmentDisplayUrl } from "@/lib/attachments/blob-ref";
 import { getChannelInfo } from "@/lib/messaging/channels";
 import { getCustomerName } from "@/lib/messaging/customer-name";
-import { formatTime, formatTicketAge } from "@/lib/format/date";
+import { formatRelativeTime, formatTime } from "@/lib/format/date";
 import { isAgentTurnContent } from "@shopkeeper/agent/tools";
 import { getCurrentPlanForThread } from "@shopkeeper/agent/plan-cache-shape";
 import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings";
@@ -24,7 +24,7 @@ export function threadToTicket(thread: Thread): Ticket {
     logo: channel.logo,
     customer: getCustomerName(thread.customer),
     customerRecord: thread.customer,
-    time: formatTicketAge(thread.lastMessageAt),
+    time: formatRelativeTime(thread.lastMessageAt),
     lastMessageAt: thread.lastMessageAt,
     subject: thread.subject || thread.aiTitle || thread.aiSummary || "New Inquiry",
     preview: previewMsg?.contentText || "No messages yet.",

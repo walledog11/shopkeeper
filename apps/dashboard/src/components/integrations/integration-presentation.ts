@@ -1,4 +1,4 @@
-import { formatLastActivityTime } from "@/lib/format/date"
+import { formatRelativeTime } from "@/lib/format/date"
 import {
   INTEGRATION_DEFINITIONS,
   instagramConnectNote,
@@ -122,11 +122,11 @@ function activityCopyFor(
   const lastActivity = selectedConnection.lastActivity ?? null
   if (definition.id === "gmail" || definition.id === "email") {
     return lastActivity
-      ? `Last message ${formatLastActivityTime(lastActivity)}`
+      ? `Last message ${formatRelativeTime(lastActivity)}`
       : "No messages received yet"
   }
 
-  const parts = [lastActivity ? `Last activity ${formatLastActivityTime(lastActivity)}` : null]
+  const parts = [lastActivity ? `Last activity ${formatRelativeTime(lastActivity)}` : null]
   const threadsThisWeek = selectedConnection.threadsThisWeek ?? 0
   if (threadsThisWeek > 0) {
     parts.push(`${threadsThisWeek} conversation${threadsThisWeek === 1 ? "" : "s"} this week`)

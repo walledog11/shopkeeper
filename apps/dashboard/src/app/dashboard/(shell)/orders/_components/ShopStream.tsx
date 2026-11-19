@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { cn } from "@/lib/ui/cn"
 import type { OrderRow } from "@/lib/orders/order-contract"
 import { ShopStreamLoading } from "./ShopStreamLoading"
 import { ShopFindingCard, ShopOrderCard } from "./ShopCards"
@@ -11,7 +10,6 @@ import {
 } from "./order-requests"
 import { matchOrderFromSearch } from "./shop-page-utils"
 
-const SERIF = "[font-family:var(--m-serif),Georgia,'Times_New_Roman',serif]"
 const EMPTY_CARD_CLASS =
   "rounded-3xl border border-border bg-card px-5 py-8 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)]"
 
@@ -31,8 +29,6 @@ function ShopAttentionLead({ count }: { count: number }) {
       <span className="font-semibold tabular-nums text-foreground">{count}</span>
       {" "}
       {count === 1 ? "order needs a look" : "orders need a look"}
-      {" "}
-      <span className={cn("italic text-muted-foreground/90", SERIF)}>before you move on.</span>
     </p>
   )
 }

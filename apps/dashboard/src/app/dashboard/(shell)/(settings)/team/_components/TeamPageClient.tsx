@@ -2,7 +2,6 @@
 
 import { Suspense, useCallback, useState } from "react";
 import { UserPlus, X, Shield, User, Mail, Trash2 } from "lucide-react";
-import { timeAgoShort } from "@/lib/messaging/customer-display"
 import { errorMessageFromUnknown } from "@/lib/api/fetcher";
 import { OrgAvatar } from "@/components/OrgAvatar";
 import { Badge } from "@/components/ui/badge";

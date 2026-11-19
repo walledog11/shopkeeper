@@ -7,6 +7,8 @@ import useSWR, { useSWRConfig } from "swr"
 import { ShoppingBag } from "lucide-react"
 import { OrdersPageSkeleton } from "@/app/dashboard/_components/skeletons"
 import { dashboardPageShellClassName } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
+import { shopNavItem } from "@/app/dashboard/_components/nav-items"
+import { PageTitle } from "@/app/dashboard/_components/PageTitle"
 import { SearchFilterBar } from "@/components/ui/search-filter-bar"
 import { requestJson } from "@/lib/api/fetcher"
 import { useCursorListState } from "@/lib/api/use-cursor-list-state"
@@ -102,8 +104,9 @@ export default function OrdersPageClient() {
     return (
       <div className="flex h-full flex-col overflow-hidden bg-background">
         <div className="custom-scrollbar flex-1 overflow-y-auto overflow-x-hidden">
-          <div className={dashboardPageShellClassName("justify-center")}>
-            <div className="flex flex-col items-center justify-center gap-4 px-6 py-16 text-center">
+          <div className={dashboardPageShellClassName()}>
+            <PageTitle>{shopNavItem.name}</PageTitle>
+            <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 py-16 text-center">
               <div className="flex size-12 items-center justify-center rounded-2xl border border-border bg-card">
                 <ShoppingBag className="size-5 text-[#96BF48]/70" />
               </div>
@@ -128,6 +131,7 @@ export default function OrdersPageClient() {
     <div className="flex size-full flex-col overflow-hidden bg-background">
       <div className="custom-scrollbar flex-1 overflow-y-auto overflow-x-hidden">
         <div className={dashboardPageShellClassName()}>
+          <PageTitle>{shopNavItem.name}</PageTitle>
           <SearchFilterBar
             value={searchInput}
             onValueChange={setSearchInput}

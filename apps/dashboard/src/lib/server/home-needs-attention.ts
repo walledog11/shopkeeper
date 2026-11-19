@@ -15,7 +15,8 @@ import {
 import { toAttachmentDisplayUrl } from "@/lib/attachments/blob-ref"
 import { canonicalInboxThreadWhere } from "@/lib/messaging/inbox-filter"
 import { getChannelInfo } from "@/lib/messaging/channels"
-import { customerDisplayLabel, timeAgoShort } from "@/lib/messaging/customer-display"
+import { customerDisplayLabel } from "@/lib/messaging/customer-display"
+import { formatRelativeTime } from "@/lib/format/date"
 import { currentPlanPredicate, type ThreadIdRow } from "@/lib/server/home-summary-queries"
 
 export async function loadNeedsAttention(
@@ -94,7 +95,7 @@ export async function loadNeedsAttention(
         : null,
       customerMessage: (latestMessage.contentText ?? "").trim(),
       channelName: getChannelInfo(thread.channelType as ChannelType).name,
-      timeAgo: timeAgoShort(latestMessage.sentAt, now),
+      timeAgo: formatRelativeTime(latestMessage.sentAt, now),
       lastMessageAt: latestMessage.sentAt.toISOString(),
       headline: thread.aiTitle?.trim() || copy.headline,
       contextLine: copy.context,

@@ -18,10 +18,6 @@
   --m-accent: #ec6b4f;
   --m-acid: rgb(46, 125, 72);
   --m-good: #2f7a4a;
-  /* Legacy fallback stack — --m-caveat is still read by the app's not-found,
-     error and onboarding screens. */
-  --m-serif: Georgia, Cambria, 'Times New Roman', serif;
-  --m-caveat: var(--font-caveat), var(--m-serif);
 }
 
 /* Font tokens live on the page wrapper: the next/font variables that feed them

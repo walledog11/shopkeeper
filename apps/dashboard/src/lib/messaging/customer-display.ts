@@ -1,8 +1,5 @@
 import { STOREFRONT_VISITOR_LABEL } from "@shopkeeper/shared/customer-labels"
-import { timeAgoCard, timeAgoShort } from "@/lib/format/date"
 import { getCustomerName } from "@/lib/messaging/customer-name"
-
-export { timeAgoCard, timeAgoShort }
 
 export function realCustomerName(
   customer: { name?: string | null; platformId?: string | null } | null | undefined,

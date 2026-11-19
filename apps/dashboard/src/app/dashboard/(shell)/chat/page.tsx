@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { chatNavItem } from '@/app/dashboard/_components/nav-items';
 import Link from 'next/link';
+import { PageTitle } from '@/app/dashboard/_components/PageTitle';
+import { dashboardPageShellClassName } from '@/app/dashboard/_components/sidebar/sidebar-helpers';
 import { db } from '@shopkeeper/db';
 import { getOrCreateOrg } from '@/lib/server/org';
 import { isOrgAdmin } from '@/lib/api/permissions';
@@ -21,10 +23,10 @@ export default async function StorefrontChatPage() {
     isOrgAdmin(),
   ]);
   if (!integration) return (
-    <div className="mx-auto w-full max-w-3xl space-y-4 px-6 py-12">
-      <h1 className="text-2xl font-semibold">Website chat</h1>
+    <div className={dashboardPageShellClassName()}>
+      <PageTitle>{chatNavItem.name}</PageTitle>
       <p className="text-sm text-muted-foreground">Connect your Shopify store to customize its chat.</p>
-      <Link href="/dashboard/integrations" className="text-sm font-medium underline underline-offset-4">Go to Channels</Link>
+      <Link href="/dashboard/integrations" className="w-fit text-sm font-medium underline underline-offset-4">Go to Channels</Link>
     </div>
   );
   const clientId = getShopifyOAuthAuthorizeConfig()?.clientId;

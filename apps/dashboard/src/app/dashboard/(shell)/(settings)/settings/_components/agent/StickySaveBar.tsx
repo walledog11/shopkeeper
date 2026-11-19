@@ -49,7 +49,7 @@ export function StickySaveBar({
             size="sm"
             onClick={save}
             disabled={!canSave || saving || !isDirty || businessHoursInvalid || businessNameInvalid}
-            className="h-8 px-4 bg-amber-600 text-background hover:bg-amber-700 text-xs font-semibold disabled:opacity-40 min-w-[90px]"
+            className="h-8 px-4 text-xs font-semibold disabled:opacity-40 min-w-[90px]"
           >
             {saving ? <Loader2 className="size-3.5 animate-spin" /> : "Save changes"}
           </Button>

@@ -26,13 +26,14 @@ export function Switch({
       }}
       className={cn(
         "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed",
-        checked ? "bg-amber-600" : "bg-foreground/[0.15]",
+        // The track says on or off; the knob stays white either way.
+        checked ? "bg-foreground" : "bg-foreground/[0.15]",
         className,
       )}
     >
       <span
         className={cn(
-          "inline-block size-3.5 rounded-full bg-foreground shadow transition-transform",
+          "inline-block size-3.5 rounded-full bg-white shadow transition-transform",
           checked ? "translate-x-[18px]" : "translate-x-0.5",
         )}
       />

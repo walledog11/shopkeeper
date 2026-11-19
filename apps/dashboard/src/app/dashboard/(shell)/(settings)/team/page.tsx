@@ -2,7 +2,7 @@ import { settingsSectionMetadata } from '@/app/dashboard/_components/nav-items';
 import { Suspense } from 'react';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
-import { timeAgoShort } from '@/lib/messaging/customer-display';
+import { formatRelativeTime } from '@/lib/format/date';
 import TeamPageClient from './_components/TeamPageClient';
 
 export const metadata = settingsSectionMetadata('team');
@@ -34,7 +34,7 @@ export default async function TeamPage({ searchParams }: TeamPageProps) {
     identifier: m.publicUserData?.identifier ?? '',
     role: m.role,
     createdAt: m.createdAt,
-    joinedAgo: timeAgoShort(new Date(m.createdAt), now),
+    joinedAgo: formatRelativeTime(m.createdAt, now),
   }));
 
   const pendingInvitations = invitations.data.map(i => ({
@@ -42,7 +42,7 @@ export default async function TeamPage({ searchParams }: TeamPageProps) {
     emailAddress: i.emailAddress,
     role: i.role,
     createdAt: i.createdAt,
-    invitedAgo: timeAgoShort(new Date(i.createdAt), now),
+    invitedAgo: formatRelativeTime(i.createdAt, now),
   }));
 
   return (

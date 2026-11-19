@@ -1,6 +1,7 @@
 import { Newsreader } from "next/font/google";
 
-// Shared by the public site and auth pages without preloading it in the dashboard.
+// The one serif: the public site, the auth pages and the onboarding headlines.
+// The dashboard itself stays in the sans and never loads it.
 export const newsreader = Newsreader({
   subsets: ["latin"],
   axes: ["opsz"],

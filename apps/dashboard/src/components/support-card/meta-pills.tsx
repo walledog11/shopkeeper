@@ -2,7 +2,7 @@ import Image from "next/image"
 import type { ReactNode } from "react"
 import { cn } from "@/lib/ui/cn"
 import { getChannelInfoByName } from "@/lib/messaging/channels"
-import { timeAgoCard } from "@/lib/messaging/customer-display"
+import { formatRelativeTime } from "@/lib/format/date"
 import { getTagStyle } from "@/lib/ui/ticket-tags"
 import { supportCardMetaPillShellClassName } from "./styles"
 
@@ -58,15 +58,6 @@ export function CustomerIdentity({
   )
 }
 
-/** "6 min ago" within the week, then "Nov 3". */
-export function ticketDateLabel(at: string): string {
-  const date = new Date(at)
-  const relative = timeAgoCard(date, new Date())
-  return relative === "Just now" || relative === "Yesterday" || relative.includes("ago")
-    ? relative
-    : date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-}
-
 export function DatePill({ at, className, textClassName }: { at: string; className: string; textClassName: string }) {
-  return <MetaPill className={className}><time dateTime={at} className={textClassName}>{ticketDateLabel(at)}</time></MetaPill>
+  return <MetaPill className={className}><time dateTime={at} className={textClassName}>{formatRelativeTime(at)}</time></MetaPill>
 }

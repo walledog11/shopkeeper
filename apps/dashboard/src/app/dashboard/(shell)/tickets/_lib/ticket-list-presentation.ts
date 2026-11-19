@@ -9,7 +9,8 @@ import {
 } from "@shopkeeper/agent/plan-preview"
 import { SENDER_TYPE } from "@shopkeeper/agent/thread-constants"
 import { getChannelInfo } from "@/lib/messaging/channels"
-import { customerDisplayLabel, timeAgoShort } from "@/lib/messaging/customer-display"
+import { customerDisplayLabel } from "@/lib/messaging/customer-display"
+import { formatRelativeTime } from "@/lib/format/date"
 import type { OrgSettings, SenderType, Thread, ThreadStatus } from "@/types"
 import {
   resolveTicketCocoAction,
@@ -254,7 +255,7 @@ function buildTicketListPresentation(
     subline,
     customerLabel: customerDisplayLabel(thread.customer),
     channelName: channel.name,
-    timeAgo: timeAgoShort(new Date(thread.lastMessageAt), now),
+    timeAgo: formatRelativeTime(thread.lastMessageAt, now),
     primaryStatus: primaryStatusForTier(tier, action, questionable),
     action,
     showSubject: !mobileQueueView,
