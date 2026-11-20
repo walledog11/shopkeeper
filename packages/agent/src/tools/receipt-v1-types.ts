@@ -249,7 +249,7 @@ export interface CommunicationReceiptFactsV1 {
   providerMessageId: string | null;
 }
 
-interface ReceiptFactsByToolV1 {
+export interface ReceiptFactsByToolV1 {
   create_refund: RefundReceiptFactsV1;
   create_partial_refund: PartialRefundReceiptFactsV1;
   cancel_order: CancellationReceiptFactsV1;

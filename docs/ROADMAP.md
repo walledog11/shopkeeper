@@ -172,7 +172,6 @@ The first publication is the App Store. These block review or a new install's fi
 | The next support-prompt bullet for one bad output | Move `SUPPORT_INSTRUCTIONS` invariants into schema or executor |
 | The next approval-binding stage added to `planAgent` | Split `planAgent` into stages with typed results (bind provider facts, assess, materialize) instead of one function revising the proposal in place |
 | The next task-lifecycle bug, or a fourth plan-producing flow | One owner for claimed attempts (lease, budget, publish, settle) across auto-planning, composer, answers and follow-ups; distinct types for automatic and merchant-approved execution |
-| The next new receipt kind | Build receipt facts from validated fields instead of `as unknown as` in `receipt-v1-parse.ts`; diff old and new parses of stored receipts first, since unvalidated fields pass through today |
 | The next change to merchant-answer KB or order-ops findings | Typed fields instead of regexes in `merchant-answer-kb.ts`, `order-ops/finding.ts` |
 | Async recovery exercised | Decide async-only outbound email and retire the sync path |
 | The synchronous email rail retired | One outbound envelope in `@shopkeeper/messaging` (pending message, attribution, outcome transitions); hosts supply transport and alerts |
