@@ -6,7 +6,7 @@ import {
   type IntegrationPlatform,
   type OnboardingStep,
 } from '@shopkeeper/analytics';
-import { isRecord } from '@shopkeeper/shared/guards';
+import { isRecord, isUuid } from '@shopkeeper/shared/guards';
 import { db } from '@shopkeeper/db';
 import { BadRequestError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
@@ -29,7 +29,6 @@ type RestrictedProductEvent =
       planId: string;
     };
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 
 function hasExactKeys(
@@ -77,8 +76,7 @@ export function parseRestrictedProductEvent(value: unknown): RestrictedProductEv
     if (
       !hasExactKeys(value, ['decision', 'event', 'planId'])
       || (value.decision !== 'dismissed' && value.decision !== 'regenerated')
-      || typeof value.planId !== 'string'
-      || !UUID_RE.test(value.planId)
+      || !isUuid(value.planId)
     ) {
       throw new BadRequestError('Invalid product event');
     }

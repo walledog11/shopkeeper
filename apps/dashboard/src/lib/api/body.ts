@@ -1,3 +1,4 @@
+import { isRecord } from '@shopkeeper/shared/guards';
 import { BadRequestError, type ApiErrorDetail } from '@/lib/api/errors';
 
 interface BodyErrorOptions {
@@ -47,12 +48,8 @@ async function readJsonBody(request: Request, options: ReadJsonBodyOptions = {})
   }
 }
 
-function isJsonObject(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
 export function requireJsonObject(value: unknown, options?: BodyErrorOptions): Record<string, unknown> {
-  if (!isJsonObject(value)) {
+  if (!isRecord(value)) {
     throw badRequest(options, 'Validation failed', OBJECT_JSON_DETAILS);
   }
   return value;

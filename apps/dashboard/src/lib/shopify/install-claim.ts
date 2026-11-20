@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { isRecord } from '@shopkeeper/shared/guards';
+import { isRecord, isUuid } from '@shopkeeper/shared/guards';
 import { normalizeShopifyShopDomain } from './oauth';
 
 /**
@@ -17,7 +17,6 @@ export interface ShopifyInstallClaim {
 const VERSION = 'v1';
 const CLAIM_TTL_MS = 60 * 60_000;
 const MAX_CLAIM_LENGTH = 1024;
-const GRANT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function signature(payload: string): Buffer {
   const secret = process.env.OAUTH_ATTEMPT_SECRET?.trim();
@@ -53,6 +52,6 @@ export function readShopifyInstallClaim(token: string | null | undefined, now = 
   if (!isRecord(claims) || typeof claims.exp !== 'number' || claims.exp <= now) return null;
   const shop = normalizeShopifyShopDomain(typeof claims.shop === 'string' ? claims.shop : null);
   if (!shop || shop !== claims.shop) return null;
-  if (typeof claims.grantId !== 'string' || !GRANT_ID_PATTERN.test(claims.grantId)) return null;
+  if (!isUuid(claims.grantId)) return null;
   return { shop, grantId: claims.grantId };
 }

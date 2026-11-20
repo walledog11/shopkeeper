@@ -1,4 +1,4 @@
-import { readString } from '../values.js';
+import { readJson, readString } from '../values.js';
 import { isRecord } from '@shopkeeper/shared/guards';
 
 export const INSTAGRAM_GRAPH_VERSION = 'v25.0';
@@ -115,14 +115,6 @@ function parsePermissions(value: unknown): string[] {
       ? value.split(/[\s,]+/)
       : [];
   return [...new Set(values.map(readString).filter((item): item is string => item !== null))];
-}
-
-async function readJson(response: Response): Promise<unknown> {
-  try {
-    return await response.json() as unknown;
-  } catch {
-    return null;
-  }
 }
 
 function readProviderError(payload: unknown): ProviderErrorDescriptor | null {

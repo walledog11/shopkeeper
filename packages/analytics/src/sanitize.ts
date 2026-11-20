@@ -1,3 +1,4 @@
+import { isUuid } from '@shopkeeper/shared/guards';
 import {
   ACTION_OUTCOMES,
   EVENT_SOURCES,
@@ -17,7 +18,6 @@ import {
   type ProductEventProperties,
 } from './events.js';
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const INSERT_ID_PATTERN = /^[A-Za-z0-9._:%-]{1,200}$/;
 
 function requireRecord(value: unknown): Record<string, unknown> {
@@ -62,7 +62,7 @@ function requireNonNegativeInteger(value: unknown, name: string): number {
 
 function requireOrganizationId(value: unknown): string {
   const organizationId = requireString(value, 'organizationId');
-  if (!UUID_PATTERN.test(organizationId)) {
+  if (!isUuid(organizationId)) {
     throw new TypeError('organizationId must be an internal UUID');
   }
   return organizationId;

@@ -1,3 +1,4 @@
+import { lowerFirst } from "@shopkeeper/shared/text";
 import type { ActionEntry } from "./agent-context.js";
 import type { CommunicationReceiptFactsV1 } from "./tools/result.js";
 import type { RawToolCall } from "./types.js";
@@ -35,10 +36,6 @@ function doneClause(action: ActionEntry, customer: string): string {
     ? receiptPlaceholderValues(action.receipt).map(({ value }) => value)
     : [];
   return shown.length > 0 ? `${label} (${shown.join(", ")})` : label;
-}
-
-function lowerFirst(text: string): string {
-  return text.charAt(0).toLowerCase() + text.slice(1);
 }
 
 function joinClauses(clauses: readonly string[]): string {

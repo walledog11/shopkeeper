@@ -3,8 +3,8 @@ import { isReadToolName, PLAN_STEP_LABELS } from '@shopkeeper/agent/tools';
 import type { RequestFacts } from '@shopkeeper/agent/classifier-signals';
 import { firstDraftExcerpt } from '../../message-handlers/operator/operator-ledger.js';
 import { formatAlternativeMention, formatDeadlineLead, formatRequestPhrase } from '../briefing-fields.js';
-import { cleanBriefingText, endClause, truncateBriefingText } from './text.js';
-import { lowerFirst } from '../../lib/sentence-case.js';
+import { cleanBriefingText, truncateBriefingText } from './text.js';
+import { endSentence, lowerFirst } from '../../lib/sentence-case.js';
 import type { SystemRequestKind } from '../../message-handlers/shared/request-display.js';
 
 /** Presentation evidence only; execution always uses the original pending plan. */
@@ -46,7 +46,7 @@ export function buildConversationBrief(params: {
   let requestContext = '';
   if (facts && facts.ask !== 'none' && facts.ask !== 'other') {
     const alternativeMention = facts.alternative ? formatAlternativeMention(facts.alternative) : null;
-    requestContext = endClause([
+    requestContext = endSentence([
       `${person} ${formatRequestPhrase(facts)}`,
       facts.order ? `(${facts.order})` : '',
       alternativeMention ? `and mentioned ${alternativeMention} as an alternative` : '',
@@ -104,13 +104,13 @@ export function formatConversationParagraph(
     return `I couldn't retrieve the request details for ${person}'s conversation. Please review the original message.${link}`;
   }
   const parts = [request];
-  if (deadline) parts.push(endClause(deadline));
+  if (deadline) parts.push(endSentence(deadline));
   if (kind === 'approval') {
     if (draft) parts.push(draft);
     if (actions.length) parts.push(`I'd ${new Intl.ListFormat('en').format(actions)}.`);
     parts.push(draft && actions.length === 0 ? 'Shall I send it?' : 'Shall I go ahead with this plan?');
   } else if (kind === 'decision') {
-    if (conversation.reason) parts.push(endClause(`This needs your help: ${conversation.reason}`));
+    if (conversation.reason) parts.push(endSentence(`This needs your help: ${conversation.reason}`));
     parts.push(question || 'How would you like me to handle this?');
   } else {
     parts.push("I'm not sure this is a genuine customer enquiry. Should I keep it or mark it as spam?");

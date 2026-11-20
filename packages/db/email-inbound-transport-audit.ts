@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
+import { isRecord } from '@shopkeeper/shared/guards';
 
 type EmailInboundAuditDb = Pick<PrismaClient, 'integration' | 'organization'>;
 
@@ -54,10 +55,6 @@ export interface EmailInboundTransportAuditReport {
   dualIntegrationOrgs: DualIntegrationOrgAudit[];
   dualDeliveryRiskOrgs: DualIntegrationOrgAudit[];
   safeToBeginPhase1Ops: boolean;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function normalizeEmail(value: string | null | undefined): string | null {

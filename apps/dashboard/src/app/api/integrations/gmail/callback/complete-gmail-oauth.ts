@@ -2,7 +2,7 @@ import { after } from 'next/server';
 import { resolveGmailAccountType } from '@shopkeeper/email/providers';
 import type { IntegrationFailureCategory } from '@shopkeeper/analytics';
 import logger from '@/lib/server/logger';
-import { isRecord } from "@shopkeeper/shared/guards";
+import { isRecord, readString } from "@shopkeeper/shared/guards";
 import {
   fetchProviderWithDeadline,
   isProviderRequestTimeoutError,
@@ -131,8 +131,8 @@ async function exchangeGmailCode(input: {
     logger.error('[Gmail OAuth] Token exchange returned malformed JSON');
     return failure('token_exchange_failed', 'unknown');
   }
-  const accessToken = readNonEmptyString(payload.access_token);
-  const refreshToken = readNonEmptyString(payload.refresh_token);
+  const accessToken = readString(payload.access_token);
+  const refreshToken = readString(payload.refresh_token);
   const expiresIn = readPositiveNumber(payload.expires_in);
   if (!accessToken || !refreshToken || !expiresIn) {
     logger.error('[Gmail OAuth] Token exchange returned a malformed success response');
@@ -194,7 +194,7 @@ async function fetchGmailUser(
     ok: true,
     data: {
       email,
-      hostedDomain: readNonEmptyString(payload.hd),
+      hostedDomain: readString(payload.hd),
     },
   };
 }
@@ -214,10 +214,6 @@ async function readJson(response: Response): Promise<unknown> {
   }
 }
 
-
-function readNonEmptyString(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
-}
 
 function readPositiveNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;

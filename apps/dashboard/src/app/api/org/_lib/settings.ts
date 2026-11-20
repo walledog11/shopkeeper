@@ -9,6 +9,7 @@ import {
   parseOrgSettingsPatch,
   type OrgSettingsPatch,
 } from '@shopkeeper/agent/settings';
+import { isRecord } from '@shopkeeper/shared/guards';
 import { BadRequestError } from '@/lib/api/errors';
 
 const ALLOWED_SETTINGS_UNSET = new Set<string>(AUTONOMY_OVERRIDE_PATHS);
@@ -34,7 +35,7 @@ export function hasVersionConflict(version: string | undefined, org: VersionedOr
 }
 
 export function parseOrgPatchBody(value: unknown): OrgPatchBody {
-  if (!isPlainObject(value)) {
+  if (!isRecord(value)) {
     throw new BadRequestError('Invalid request body');
   }
   const unknownKey = Object.keys(value).find(key => !ORG_PATCH_KEYS.has(key));
@@ -148,11 +149,7 @@ function toPrismaJsonObject(value: Record<string, unknown>): Prisma.InputJsonObj
 }
 
 function toPlainRecord(value: unknown): Record<string, unknown> {
-  return isPlainObject(value) ? { ...value } : {};
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return isRecord(value) ? { ...value } : {};
 }
 
 function mergeSettingsPatch(
@@ -162,7 +159,7 @@ function mergeSettingsPatch(
   const merged = { ...currentSettings };
   for (const [key, value] of Object.entries(newSettings)) {
     const currentValue = merged[key];
-    merged[key] = isPlainObject(currentValue) && isPlainObject(value)
+    merged[key] = isRecord(currentValue) && isRecord(value)
       ? { ...currentValue, ...value }
       : value;
   }
@@ -177,7 +174,7 @@ function deleteSettingPath(settings: Record<string, unknown>, path: string) {
   }
 
   const nested = settings[first];
-  if (!isPlainObject(nested)) return;
+  if (!isRecord(nested)) return;
   delete nested[second];
   if (Object.keys(nested).length === 0) delete settings[first];
 }

@@ -1,7 +1,7 @@
 import { db } from '@shopkeeper/db';
 import { defineTool, stringArg, toolOk, type AgentToolDefinition } from '@shopkeeper/agent/tools';
 import { wrapUntrusted } from '@shopkeeper/agent/message-history';
-import { relativeAge } from '../../routes/operator/format.js';
+import { ageOf, truncate } from '../../routes/operator/format.js';
 
 // `AgentAction` is the audit trail for every tool call the agent makes, and
 // until now nothing on the operator side could read it. That mattered most for
@@ -24,15 +24,6 @@ const FIELD_EXCERPT_LIMIT = 600;
 // a list here would go stale the next time a write is added, and the category
 // already rides on the row. `read` and `internal` calls are not changes.
 const CHANGE_CATEGORIES = ['action', 'communication'] as const;
-
-function truncate(text: string, limit: number): string {
-  const trimmed = text.trim();
-  return trimmed.length > limit ? `${trimmed.slice(0, limit)}…` : trimmed;
-}
-
-function ageOf(date: Date): string {
-  return relativeAge(Date.now() - date.getTime()) || 'just now';
-}
 
 export function buildOperatorActionHistoryTools(
   params: { organizationId: string },

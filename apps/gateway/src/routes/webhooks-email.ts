@@ -1,6 +1,7 @@
 import type { Request, RequestHandler, Response, Router } from 'express';
 import { createHash, randomUUID } from 'crypto';
 import { db, EmailProvider } from '@shopkeeper/db';
+import { isUuid } from '@shopkeeper/shared/guards';
 import { getPostmarkWebhookConfig } from '../config/runtime-config.js';
 import logger from '../logger.js';
 import type { InboundEmailEvent } from '@shopkeeper/email';
@@ -126,9 +127,7 @@ export function registerEmailWebhookRoutes(router: Router): void {
       const fromName = rawFrom.replace(/<.*>/, '').trim().replace(/"/g, '') || null;
 
       const localPart = recipientAddress.split('@')[0];
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-      if (!uuidRegex.test(localPart)) {
+      if (!isUuid(localPart)) {
         await recordUnclaimedRecipient(recipientAddress, 'malformed_local_part');
         return res.status(200).send('OK');
       }

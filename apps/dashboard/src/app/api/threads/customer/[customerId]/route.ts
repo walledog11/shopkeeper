@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { db, SenderType } from '@shopkeeper/db';
+import { isUuid } from '@shopkeeper/shared/guards';
 import { withOrgRoute } from '@/lib/api/route';
 import { merchantInboxInternalChannelFilter } from '@shopkeeper/agent/merchant-inbox-surfaces';
 
 export const dynamic = 'force-dynamic';
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const GET = withOrgRoute<{ customerId: string }>(
   {
@@ -16,7 +16,7 @@ export const GET = withOrgRoute<{ customerId: string }>(
   },
   async ({ org, request, params }) => {
     const { customerId } = params;
-    if (!UUID_RE.test(customerId)) {
+    if (!isUuid(customerId)) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
     }
 

@@ -8,8 +8,9 @@ import {
   type PersonName,
 } from '@shopkeeper/agent/person-name';
 import type { RequestReason } from '@shopkeeper/agent/classifier-signals';
-import { lowerFirst } from '../../../lib/sentence-case.js';
+import { endSentence, lowerFirst } from '../../../lib/sentence-case.js';
 import { formatBlockedTicketLine } from '../../../maintenance/digest-briefing/ticket-lines.js';
+import { capitalize, countWord } from '../../../maintenance/digest-briefing/text.js';
 import type { ConfirmedOrder } from '../../../storefront-chat-verified-orders.js';
 import type { AgentPlan, PlanStep, ProposalCommunication } from '@shopkeeper/agent/types';
 import { displayApprovedDraft, merchantAnswerSlots, type MerchantAnswerSlot } from '@shopkeeper/agent/reply-placeholders';
@@ -22,7 +23,7 @@ import { firstDraftExcerpt } from '../../operator/operator-ledger.js';
 import { formatDeadlineLead, formatRequestPhrase } from '../../../maintenance/briefing-fields.js';
 import { requestDisplayHasContext, type RequestDisplay } from '../../shared/request-display.js';
 import { FRESH_STAGE } from './conversation-stage.js';
-import { channelRepliedPhrase, endSentence, formatRequestHeaderLines } from './headers.js';
+import { channelRepliedPhrase, formatRequestHeaderLines } from './headers.js';
 import type { ConversationStage, QueueNotice } from './types.js';
 
 function isSendStep(step: PlanStep): boolean {
@@ -117,15 +118,6 @@ function actionPhrase(step: PlanStep, person: PersonName, rawToolCalls: readonly
   const items = lineItemSentence(step, rawToolCalls);
   if (items) return lowerFirst(items);
   return parkedActionLabel([step], person) ?? lowerFirst(step.label || step.description);
-}
-
-const COUNT_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six'];
-function countWord(count: number): string {
-  return COUNT_WORDS[count] ?? String(count);
-}
-
-function capitalizeFirst(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 // Why the plan escalated, so the card can say what the agent concluded instead
@@ -362,7 +354,7 @@ export function formatOperatorPlanMessage(
       const sentence = doing && reply ? `${doing}, then ${reply}` : doing || reply!;
       lines.push('', `I'd ${sentence}${opensDraft}`);
     } else {
-      lines.push('', `I'd do ${countWord(actions.length)} things:`, ...actions.map((action, index) => `${index + 1}. ${capitalizeFirst(action)}`));
+      lines.push('', `I'd do ${countWord(actions.length)} things:`, ...actions.map((action, index) => `${index + 1}. ${capitalize(action)}`));
       if (reply) lines.push(`Then I'd ${reply}${opensDraft}`);
     }
     if (reply && draftBody) lines.push(`"${draftBody}"`);

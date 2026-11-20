@@ -1,18 +1,14 @@
-import { isRecord } from '@shopkeeper/shared/guards';
+import { isRecord, readString } from '@shopkeeper/shared/guards';
 
-/**
- * Reading a string out of a provider's JSON.
- *
- * There were five of these in this package under one name and three
- * behaviours. All three agreed on when to return null — the trimmed value is
- * empty — and disagreed on what they returned: two handed back the original
- * string with its whitespace still on it, one handed back the trimmed one. A
- * padded id reads fine in a log and fails an equality check.
- *
- * Trimmed is the answer. No caller wanted the padding.
- */
-export function readString(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
+export { readString };
+
+/** A provider response's JSON body, or null when there is none or it does not parse. */
+export async function readJson(response: Response): Promise<unknown> {
+  try {
+    return await response.json() as unknown;
+  } catch {
+    return null;
+  }
 }
 
 /**

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db, Prisma, ThreadFilterStatus, ThreadFilterFeedback } from '@shopkeeper/db';
+import { isUuid } from '@shopkeeper/shared/guards';
 import { BadRequestError, NotFoundError } from '@/lib/api/errors';
 import { readRequiredJsonObject } from '@/lib/api/body';
 import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
@@ -10,7 +11,6 @@ import { parseThreadPatchBody } from '@/app/api/threads/_lib/validation';
 import { assertThreadsCanReopen } from '@/app/api/threads/_lib/reopen-threads';
 import type { AgentTurnAction } from '@shopkeeper/agent/turns';
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const GET = withOrgRoute<{ id: string }>(
   {
@@ -26,7 +26,7 @@ export const GET = withOrgRoute<{ id: string }>(
       try {
         const parsed = JSON.parse(Buffer.from(before, 'base64url').toString('utf8'));
         if (typeof parsed.sentAt !== 'string' || typeof parsed.id !== 'string'
-          || !UUID.test(parsed.id)) throw new Error();
+          || !isUuid(parsed.id)) throw new Error();
         const sentAt = new Date(parsed.sentAt);
         if (!Number.isFinite(sentAt.getTime())) throw new Error();
         cursor = { sentAt, id: parsed.id };
@@ -71,7 +71,7 @@ export const GET = withOrgRoute<{ id: string }>(
       if (!message.contentText || !isAgentNoteContent(message.contentText)) return [];
       try {
         const note = JSON.parse(stripAgentNotePrefix(message.contentText));
-        return typeof note.id === 'string' && UUID.test(note.id) ? [note.id] : [];
+        return isUuid(note.id) ? [note.id] : [];
       } catch { return []; }
     });
 

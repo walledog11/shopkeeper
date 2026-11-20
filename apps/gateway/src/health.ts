@@ -7,7 +7,7 @@ import { getGatewayWorkerRedisConfig } from './config/runtime-config.js';
 import { isImessageConfigured } from './clients/spectrum.js';
 import { authorizeInternalRequest } from './routes/internal-auth.js';
 import logger from './logger.js';
-import { isRecord } from './lib/typing.js';
+import { isRecord, readString } from './lib/typing.js';
 
 const WORKER_HEARTBEAT_KEY = 'health:gateway-worker:heartbeat';
 const FAILED_QUEUE_JOB_SAMPLE_LIMIT = 5;
@@ -260,25 +260,21 @@ export async function readFailedQueueJobSnapshots(
     const data = isRecord(job.data) ? job.data : {};
     return {
       id: job.id === undefined ? null : String(job.id),
-      name: readOptionalString(job.name),
-      failedReason: readOptionalString(job.failedReason),
+      name: readString(job.name),
+      failedReason: readString(job.failedReason),
       attemptsMade: Number.isInteger(job.attemptsMade) ? job.attemptsMade! : null,
       finishedOn: formatTimestamp(job.finishedOn),
-      threadId: readOptionalString(data.threadId),
-      organizationId: readOptionalString(data.organizationId),
-      traceId: readOptionalString(data.traceId),
-      messageId: readOptionalString(data.messageId),
-      integrationId: readOptionalString(data.integrationId),
-      orderId: readOptionalString(data.orderId),
-      operatorEventId: readOptionalString(data.operatorEventId),
-      sourceMessageId: readOptionalString(data.sourceMessageId),
-      platform: readOptionalString(data.platform),
+      threadId: readString(data.threadId),
+      organizationId: readString(data.organizationId),
+      traceId: readString(data.traceId),
+      messageId: readString(data.messageId),
+      integrationId: readString(data.integrationId),
+      orderId: readString(data.orderId),
+      operatorEventId: readString(data.operatorEventId),
+      sourceMessageId: readString(data.sourceMessageId),
+      platform: readString(data.platform),
     };
   });
-}
-
-function readOptionalString(value: unknown): string | null {
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 }
 
 function formatTimestamp(value: unknown): string | null {

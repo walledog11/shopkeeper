@@ -3,6 +3,7 @@ import type {
   BaseAgentContext,
   SupportContext,
 } from "./agent-context.js";
+import { asRecord } from "@shopkeeper/shared/guards";
 import type { ReceiptV1 } from "./tools/result.js";
 import type { RawToolCall } from "./types.js";
 
@@ -48,12 +49,6 @@ export interface CompletionFact {
 }
 
 type FactContext = Pick<BaseAgentContext, "shopify"> & Partial<Pick<SupportContext, "customer" | "recentOrders" | "thread">>;
-
-function record(value: unknown): Record<string, unknown> | null {
-  return value != null && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null;
-}
 
 function textField(input: Record<string, unknown>, key: string): string | undefined {
   const value = input[key];
@@ -104,7 +99,7 @@ function mutationFacts(input: {
   ctx?: FactContext;
   orderNames?: ReadonlyMap<string, string>;
 }): CompletionFact[] {
-  const parsed = record(input.rawInput);
+  const parsed = asRecord(input.rawInput);
   if (!parsed) return [];
   const orderId = textField(parsed, "order_id");
   const customerId = textField(parsed, "customer_id");
@@ -211,7 +206,7 @@ function collectOrderNames(
       continue;
     }
     for (const candidate of Array.isArray(parsed) ? parsed : [parsed]) {
-      const order = record(candidate);
+      const order = asRecord(candidate);
       if (!order) continue;
       const id = textField(order, "id");
       const name = textField(order, "name");
@@ -246,7 +241,7 @@ function historicalOrderFacts(
 ): CompletionFact[] {
   const parsed = Array.isArray(value) ? value : [value];
   return parsed.flatMap((candidate) => {
-    const order = record(candidate);
+    const order = asRecord(candidate);
     if (!order) return [];
     const id = textField(order, "id");
     const name = textField(order, "name");

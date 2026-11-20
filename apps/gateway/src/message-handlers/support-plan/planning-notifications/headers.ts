@@ -6,6 +6,7 @@ import {
 } from '@shopkeeper/agent/person-name';
 import { CHANNEL } from '../../../constants.js';
 import { formatChannelLabel } from '../../../lib/channel-format.js';
+import { endSentence } from '../../../lib/sentence-case.js';
 import {
   formatRequestDisplayLine,
   type RequestDisplay,
@@ -27,12 +28,6 @@ export function channelRepliedPhrase(channelType: DbChannelType): string {
   if (channelType === CHANNEL.TIKTOK) return 'on TikTok';
   if (channelType === CHANNEL.SHOPIFY_CHAT) return 'in your storefront chat';
   return `on ${formatChannelLabel(channelType)}`;
-}
-
-// Summaries are model-written and arrive with or without a final stop; without
-// one they run into whatever follows.
-export function endSentence(text: string): string {
-  return /[.!?…"']$/.test(text.trim()) ? text.trim() : `${text.trim()}.`;
 }
 
 // Two lines, not one joined by an em-dash. The summary is model-written prose

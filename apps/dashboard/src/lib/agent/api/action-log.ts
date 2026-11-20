@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer";
 import type { Prisma } from "@prisma/client";
 import { db, Prisma as PrismaRuntime } from "@shopkeeper/db";
+import { isUuid } from "@shopkeeper/shared/guards";
 import { TOOL_LABELS } from "@shopkeeper/agent/tools";
 import { OPERATOR_CHANNEL_TYPES } from "@shopkeeper/agent/thread-constants";
 import { loadRequestOutcomesForExecutionIds, type RequestOutcomeActionLogSnapshot } from "@shopkeeper/agent/request-outcome";
@@ -11,7 +12,6 @@ const DEFAULT_PAGE_SIZE = 50;
 const DEFAULT_EXPORT_BATCH_SIZE = 250;
 
 const OPERATOR_DASHBOARD_PLATFORM_PREFIX = "dashboard:";
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface AgentActionCursor {
   executedAt: string;
@@ -27,7 +27,7 @@ export function decodeAgentActionCursor(cursor: string): AgentActionCursor | nul
     const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as Partial<AgentActionCursor>;
     if (!parsed.executedAt || !parsed.turnId) return null;
     if (Number.isNaN(new Date(parsed.executedAt).getTime())) return null;
-    if (!UUID_RE.test(parsed.turnId)) return null;
+    if (!isUuid(parsed.turnId)) return null;
     return { executedAt: parsed.executedAt, turnId: parsed.turnId };
   } catch {
     return null;

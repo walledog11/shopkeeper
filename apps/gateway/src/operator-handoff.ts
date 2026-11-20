@@ -4,7 +4,7 @@ import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { readModelUsage } from '@shopkeeper/agent/usage';
 import type { OrgSettings } from '@shopkeeper/agent/types';
 import { isRecord } from './lib/typing.js';
-import { endSentence } from './message-handlers/support-plan/planning-notifications/headers.js';
+import { endSentence } from './lib/sentence-case.js';
 
 const SUMMARY_SCHEMA = {
   type: 'object', additionalProperties: false,
