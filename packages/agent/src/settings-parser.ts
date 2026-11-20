@@ -4,6 +4,7 @@ import type {
   OrgSettings,
   OrgSettingsPatch,
 } from "./types.js";
+import { isRecord } from "@shopkeeper/shared/guards";
 
 export interface OrgSettingsValidationIssue {
   path: string;
@@ -150,10 +151,6 @@ const DIGEST_FREQUENCIES = [
 ] as const satisfies readonly OrgSettings["digestFrequency"][];
 const DIGEST_DAYS = ["every_day", "weekdays"] as const satisfies readonly OrgSettings["digestDays"][];
 const DAMAGE_EVIDENCE_MODES = ["photo_required", "off"] as const satisfies readonly OrgSettings["damageEvidence"][];
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function hasOwn(value: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(value, key);
@@ -310,7 +307,7 @@ function readToolsEnabled(
 ): void {
   if (!hasOwn(value, "toolsEnabled")) return;
   const candidate = value.toolsEnabled;
-  if (!isPlainObject(candidate)) {
+  if (!isRecord(candidate)) {
     addIssue(context, "toolsEnabled", "Expected an object");
     return;
   }
@@ -368,7 +365,7 @@ function readAutonomyTier(
 
 function parseSettingsObject(value: unknown, mode: ParseMode): OrgSettingsPatch {
   const context: ParseContext = { mode, issues: [] };
-  if (!isPlainObject(value)) {
+  if (!isRecord(value)) {
     addIssue(context, "settings", "Expected an object");
     if (context.issues.length > 0) throw new OrgSettingsValidationError(context.issues);
     return {};

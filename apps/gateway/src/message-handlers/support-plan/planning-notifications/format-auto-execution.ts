@@ -2,7 +2,8 @@ import type { DbChannelType } from '@shopkeeper/db';
 import { customerFirstName } from '@shopkeeper/agent/person-name';
 import type { AgentPlan } from '@shopkeeper/agent/types';
 import type { PrecomputedPlanResult } from '../planning-types.js';
-import { channelNoun, endSentence } from './headers.js';
+import { endSentence } from '../../../lib/sentence-case.js';
+import { channelNoun } from './headers.js';
 
 export function formatAutoExecutionMessage(
   customerName: string | null,

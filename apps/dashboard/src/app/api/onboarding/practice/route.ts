@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@shopkeeper/db";
+import { isUuid } from "@shopkeeper/shared/guards";
 import { generateText } from "@shopkeeper/agent/ai";
 import { resolveAgentSettings } from "@shopkeeper/agent/settings";
 import { withOrgRoute } from "@/lib/api/route";
@@ -33,7 +34,7 @@ export const POST = withOrgRoute(
   async ({ org, request }) => {
     await requireStore(org.id);
     const { sourceId, question } = await readRequiredJsonObject(request);
-    if (typeof sourceId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sourceId)) throw new BadRequestError("Choose a store policy or page.");
+    if (!isUuid(sourceId)) throw new BadRequestError("Choose a store policy or page.");
     if (typeof question !== "string" || !question.trim() || question.length > 500) throw new BadRequestError("Enter a practice question of up to 500 characters.");
     const article = await db.kbArticle.findFirst({
       where: { id: sourceId, organizationId: org.id, knowledgeBase: { organizationId: org.id, source: "shopify" } },

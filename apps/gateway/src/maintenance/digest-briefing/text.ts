@@ -49,7 +49,3 @@ export function redactBriefingContacts(text: string): string {
 export function cleanBriefingText(text: string | null | undefined): string {
   return redactBriefingContacts((text ?? '').replace(/\s+/g, ' ').trim());
 }
-
-export function endClause(text: string): string {
-  return /[.!?…"']$/.test(text) ? text : `${text}.`;
-}

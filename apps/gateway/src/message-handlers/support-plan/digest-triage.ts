@@ -1,4 +1,5 @@
 import { db } from '@shopkeeper/db';
+import { isUuid } from '@shopkeeper/shared/guards';
 import { wrapUntrusted } from '@shopkeeper/agent/message-history';
 import { canonicalInboxThreadWhere } from '@shopkeeper/agent/inbox-filter';
 import { postDashboardInternal, type DashboardApiResult } from '../../clients/dashboard-internal.js';
@@ -149,8 +150,6 @@ export async function buildDigestLedgerSection(
   ].join('\n');
 }
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /**
  * `Thread.id` is `@db.Uuid`, so Prisma raises P2023 rather than returning no rows
  * when the id is not one. The model does supply non-ids: the turn this was found
@@ -159,7 +158,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
  * database error into the transcript and spending an iteration on it.
  */
 export function isThreadId(value: string): boolean {
-  return UUID_PATTERN.test(value.trim());
+  return isUuid(value.trim());
 }
 
 /**

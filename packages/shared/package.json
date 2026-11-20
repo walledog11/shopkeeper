@@ -22,6 +22,10 @@
       "types": "./dist/guards.d.ts",
       "default": "./dist/guards.js"
     },
+    "./text": {
+      "types": "./dist/text.d.ts",
+      "default": "./dist/text.js"
+    },
     "./customer-labels": {
       "types": "./dist/customer-labels.d.ts",
       "default": "./dist/customer-labels.js"

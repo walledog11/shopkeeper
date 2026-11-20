@@ -16,6 +16,7 @@
  */
 
 import { db, Prisma } from "@shopkeeper/db";
+import { isUuid } from "@shopkeeper/shared/guards";
 import { ConflictError, ForbiddenError } from "./errors.js";
 import { hashInstruction, hashPlan } from "./agent-actions.js";
 import {
@@ -78,10 +79,8 @@ function proposalCommunication(row: Parameters<typeof communicationFromColumns>[
 // proposals existed can carry any string, and asking Postgres to compare one
 // against a uuid column is an error rather than a miss — so a plan ID that
 // cannot be a proposal ID names no proposal.
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 function sourceRequestIds(value: unknown): string[] {
-  if (!Array.isArray(value) || !value.every((id) => typeof id === "string" && UUID.test(id))) {
+  if (!Array.isArray(value) || !value.every(isUuid)) {
     throw new ConflictError("The durable proposal source is invalid. Regenerate it before approving.");
   }
   return value;
@@ -93,7 +92,7 @@ export async function readDurableProposalExecutionSource(input: {
   threadId: string;
   proposalId?: string | null;
 }): Promise<DurableProposalExecutionSource | null> {
-  if (!input.proposalId || !UUID.test(input.proposalId)) return null;
+  if (!input.proposalId || !isUuid(input.proposalId)) return null;
   const proposal = await db.agentProposal.findFirst({
     where: {
       id: input.proposalId,
@@ -156,7 +155,7 @@ export interface ProposalApprovalInput {
 export async function authorizeAgentProposal(
   input: ProposalApprovalInput,
 ): Promise<AuthorizedProposal | null> {
-  if (!input.proposalId || !UUID.test(input.proposalId)) return null;
+  if (!input.proposalId || !isUuid(input.proposalId)) return null;
   const approvedHash = hashPlan({
     instruction: input.instruction, rawToolCalls: input.approvedToolCalls,
     communication: input.communication,
@@ -292,7 +291,7 @@ export async function rejectAgentProposal(
     now?: Date;
   },
 ): Promise<boolean> {
-  if (!UUID.test(input.proposalId)) return false;
+  if (!isUuid(input.proposalId)) return false;
   const named = await tx.agentProposal.findFirst({
     where: { id: input.proposalId, organizationId: input.organizationId },
     select: { taskId: true },

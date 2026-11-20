@@ -1,5 +1,6 @@
 import express, { type Request, type Response, type Router } from 'express';
 import { ApiError } from '@shopkeeper/shared/errors';
+import { readString } from '../lib/typing.js';
 import {
   acceptMemberAgentRequest,
   cancelMemberAgentTask,
@@ -25,10 +26,6 @@ import { authorizeInternalRequest } from './internal-auth.js';
 import { ensureAgentTaskEnqueued, memberAgentTaskBudget, submitTicketPlanRequest } from '../agent-task-ingest.js';
 import { readAgentPlanCache } from '@shopkeeper/agent/plan-cache';
 import { parseMerchantAnswers } from '@shopkeeper/agent/reply-placeholders';
-
-function stringField(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
-}
 
 type MemberRequestRecord = NonNullable<Awaited<ReturnType<typeof getMemberAgentRequest>>>;
 
@@ -80,10 +77,10 @@ export function registerInternalOperatorRoutes(router: Router): void {
     if (!authorizeInternalRequest(req, res, 'InternalOperator')) return;
 
     const body = req.body as Record<string, unknown>;
-    const organizationId = stringField(body.organizationId);
-    const clerkUserId = stringField(body.clerkUserId);
-    const threadId = stringField(body.threadId);
-    const answer = stringField(body.answer);
+    const organizationId = readString(body.organizationId);
+    const clerkUserId = readString(body.clerkUserId);
+    const threadId = readString(body.threadId);
+    const answer = readString(body.answer);
     if (!organizationId || !clerkUserId || !threadId || !answer || typeof body.saveToKb !== 'boolean') {
       return res.status(400).json({
         error: 'organizationId, clerkUserId, threadId, answer and saveToKb are required',
@@ -118,11 +115,11 @@ export function registerInternalOperatorRoutes(router: Router): void {
   router.post('/operator/plan-requests', internalJsonParser(), async (req: Request, res: Response) => {
     if (!authorizeInternalRequest(req, res, 'InternalOperator')) return;
     const body = req.body as Record<string, unknown>;
-    const organizationId = stringField(body.organizationId);
-    const clerkUserId = stringField(body.clerkUserId);
-    const threadId = stringField(body.threadId);
-    const clientRequestId = stringField(body.clientRequestId);
-    const instruction = stringField(body.instruction);
+    const organizationId = readString(body.organizationId);
+    const clerkUserId = readString(body.clerkUserId);
+    const threadId = readString(body.threadId);
+    const clientRequestId = readString(body.clientRequestId);
+    const instruction = readString(body.instruction);
     if (!organizationId || !clerkUserId || !threadId || !clientRequestId || !instruction || typeof body.force !== 'boolean') {
       return res.status(400).json({ error: 'organizationId, clerkUserId, threadId, clientRequestId, instruction, and force are required' });
     }
@@ -144,10 +141,10 @@ export function registerInternalOperatorRoutes(router: Router): void {
   router.post('/operator/requests', internalJsonParser(), async (req: Request, res: Response) => {
     if (!authorizeInternalRequest(req, res, 'InternalOperator')) return;
     const body = req.body as Record<string, unknown>;
-    const organizationId = stringField(body.organizationId);
-    const clerkUserId = stringField(body.clerkUserId);
-    const clientRequestId = stringField(body.clientRequestId);
-    const instruction = stringField(body.instruction);
+    const organizationId = readString(body.organizationId);
+    const clerkUserId = readString(body.clerkUserId);
+    const clientRequestId = readString(body.clientRequestId);
+    const instruction = readString(body.instruction);
     if (!organizationId || !clerkUserId || !clientRequestId || !instruction) {
       return res.status(400).json({
         error: 'organizationId, clerkUserId, clientRequestId, and instruction are required',
@@ -188,13 +185,13 @@ export function registerInternalOperatorRoutes(router: Router): void {
 
   router.get('/operator/requests', async (req: Request, res: Response) => {
     if (!authorizeInternalRequest(req, res, 'InternalOperator')) return;
-    const organizationId = stringField(req.query.organizationId);
-    const clerkUserId = stringField(req.query.clerkUserId);
+    const organizationId = readString(req.query.organizationId);
+    const clerkUserId = readString(req.query.clerkUserId);
     if (!organizationId || !clerkUserId) {
       return res.status(400).json({ error: 'organizationId and clerkUserId are required' });
     }
     try {
-      const threadId = stringField(req.query.threadId);
+      const threadId = readString(req.query.threadId);
       const requests = await listMemberAgentRequests({ organizationId, clerkUserId, ...(threadId ? { threadId } : {}) });
       return res.status(200).json({ requests: requests.map((request) => durableRequestPayload(request as MemberRequestRecord)) });
     } catch (err) {
@@ -206,9 +203,9 @@ export function registerInternalOperatorRoutes(router: Router): void {
 
   router.get('/operator/requests/:requestId', async (req: Request, res: Response) => {
     if (!authorizeInternalRequest(req, res, 'InternalOperator')) return;
-    const organizationId = stringField(req.query.organizationId);
-    const clerkUserId = stringField(req.query.clerkUserId);
-    const requestId = stringField(req.params.requestId);
+    const organizationId = readString(req.query.organizationId);
+    const clerkUserId = readString(req.query.clerkUserId);
+    const requestId = readString(req.params.requestId);
     if (!organizationId || !clerkUserId || !requestId) {
       return res.status(400).json({ error: 'organizationId, clerkUserId, and requestId are required' });
     }
@@ -229,9 +226,9 @@ export function registerInternalOperatorRoutes(router: Router): void {
   router.post('/operator/requests/:requestId/cancel', internalJsonParser(), async (req: Request, res: Response) => {
     if (!authorizeInternalRequest(req, res, 'InternalOperator')) return;
     const body = req.body as Record<string, unknown>;
-    const organizationId = stringField(body.organizationId);
-    const clerkUserId = stringField(body.clerkUserId);
-    const requestId = stringField(req.params.requestId);
+    const organizationId = readString(body.organizationId);
+    const clerkUserId = readString(body.clerkUserId);
+    const requestId = readString(req.params.requestId);
     const taskRevision = typeof body.taskRevision === 'number' ? body.taskRevision : null;
     if (!organizationId || !clerkUserId || !requestId || taskRevision === null) {
       return res.status(400).json({
@@ -292,10 +289,10 @@ export function registerInternalOperatorRoutes(router: Router): void {
     if (!authorizeInternalRequest(req, res, 'InternalOperator')) return;
 
     const body = req.body as Record<string, unknown>;
-    const organizationId = stringField(body.organizationId);
-    const clerkUserId = stringField(body.clerkUserId);
-    const planId = stringField(body.planId);
-    const decision = stringField(body.decision);
+    const organizationId = readString(body.organizationId);
+    const clerkUserId = readString(body.clerkUserId);
+    const planId = readString(body.planId);
+    const decision = readString(body.decision);
     if (!organizationId || !clerkUserId || !planId || (decision !== 'approve' && decision !== 'dismiss')) {
       return res.status(400).json({
         error: 'organizationId, clerkUserId, planId, and decision (approve|dismiss) are required',

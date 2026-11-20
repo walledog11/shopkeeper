@@ -5,7 +5,8 @@ import logger from '../../logger.js';
 import { isRecord } from '../../lib/typing.js';
 import { BRIEFING_RECITE_MAX } from './constants.js';
 import type { BriefingItem } from './types.js';
-import { cleanBriefingText, endClause } from './text.js';
+import { endSentence } from '../../lib/sentence-case.js';
+import { cleanBriefingText } from './text.js';
 
 const MAX_SOURCE_CHARS = 4_000;
 const SYSTEM = `Write concise, natural morning-briefing copy for a shop owner.
@@ -98,8 +99,8 @@ export async function narrateBriefingItems(
       const draft = readSummary(summary.draft, source.draft);
       return { ...item, conversation: {
         ...item.conversation,
-        ...(request ? { request: endClause(`${item.conversation.person} ${request}`) } : {}),
-        ...(draft ? { draft: endClause(`I've drafted a reply ${draft}`) } : {}),
+        ...(request ? { request: endSentence(`${item.conversation.person} ${request}`) } : {}),
+        ...(draft ? { draft: endSentence(`I've drafted a reply ${draft}`) } : {}),
       } };
     });
   } catch {

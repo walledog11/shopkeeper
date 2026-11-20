@@ -3,6 +3,7 @@ import { wrapUntrusted } from '@shopkeeper/agent/message-history';
 import { isReadToolName, PLAN_STEP_LABELS } from '@shopkeeper/agent/tools';
 import { merchantAnswerSlotsInCalls } from '@shopkeeper/agent/reply-placeholders';
 import { buildDigestLedgerSection } from '../support-plan/digest-triage.js';
+import { truncate } from '../../routes/operator/format.js';
 import type { OperatorContext, ToolCall } from '../../operator-context.js';
 import {
   formatRequestDisplayLine,
@@ -37,11 +38,6 @@ function extractSendDraftBody(toolCall: { name: string; input?: unknown }): stri
     return typeof body === 'string' ? body : null;
   }
   return null;
-}
-
-function truncate(text: string, limit: number): string {
-  const trimmed = text.trim();
-  return trimmed.length > limit ? `${trimmed.slice(0, limit)}…` : trimmed;
 }
 
 function planStepLines(rawToolCalls: ToolCall[]): string[] {

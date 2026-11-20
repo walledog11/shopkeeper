@@ -10,3 +10,13 @@ export function relativeAge(ms: number | null): string {
   if (ms < 86_400_000) return `${Math.round(ms / 3_600_000)}h ago`;
   return `${Math.round(ms / 86_400_000)}d ago`;
 }
+
+export function ageOf(date: Date): string {
+  return relativeAge(Date.now() - date.getTime()) || 'just now';
+}
+
+/** `text` trimmed and, past `limit` characters, cut with an ellipsis. */
+export function truncate(text: string, limit: number): string {
+  const trimmed = text.trim();
+  return trimmed.length > limit ? `${trimmed.slice(0, limit)}…` : trimmed;
+}

@@ -1,6 +1,6 @@
 import { isRecord } from '@shopkeeper/shared/guards';
 
-import { readString } from '../values.js';
+import { readJson, readString } from '../values.js';
 
 export const SOCIALAPI_PRODUCTION_BASE_URL = 'https://api.social-api.ai/v1';
 
@@ -126,14 +126,6 @@ interface SocialApiClientConfig {
 
 function readCode(value: unknown): string | number | null {
   return typeof value === 'string' || typeof value === 'number' ? value : null;
-}
-
-async function readJson(response: Response): Promise<unknown> {
-  try {
-    return await response.json() as unknown;
-  } catch {
-    return null;
-  }
 }
 
 function normalizeBaseUrl(value: string): string {

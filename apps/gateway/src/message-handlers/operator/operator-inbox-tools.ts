@@ -7,7 +7,7 @@ import { canonicalInboxThreadWhere } from '@shopkeeper/agent/inbox-filter';
 import { wrapUntrusted } from '@shopkeeper/agent/message-history';
 import { getCurrentPlanForThread } from '@shopkeeper/agent/plan-cache-shape';
 import { SENDER_TYPE, THREAD_STATUS } from '@shopkeeper/agent/thread-constants';
-import { relativeAge } from '../../routes/operator/format.js';
+import { ageOf, truncate } from '../../routes/operator/format.js';
 import type { PendingDigest } from '../../operator-context.js';
 import { submitTicketPlanRequest } from '../../agent-task-ingest.js';
 import {
@@ -62,15 +62,6 @@ const MESSAGE_EXCERPT_LIMIT = 600;
 // update_thread_status tool keeps the value until its eval-gated retirement — so
 // list both rather than silently hiding pending threads behind `open`.
 const ACTIVE_STATUSES = [THREAD_STATUS.OPEN, THREAD_STATUS.PENDING] as const satisfies readonly ThreadStatus[];
-
-function truncate(text: string, limit: number): string {
-  const trimmed = text.trim();
-  return trimmed.length > limit ? `${trimmed.slice(0, limit)}…` : trimmed;
-}
-
-function ageOf(date: Date): string {
-  return relativeAge(Date.now() - date.getTime()) || 'just now';
-}
 
 // Everything a ticket carries — customer name, summary, message bodies — is
 // customer-authored, so the whole rendered block is wrapped once as untrusted

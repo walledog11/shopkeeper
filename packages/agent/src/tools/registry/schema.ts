@@ -1,4 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
+import { isRecord } from "@shopkeeper/shared/guards";
 import type { ToolCategory } from "../../types.js";
 import type { ShopifyOAuthScope } from "../../shopify/integration-health.js";
 import type {
@@ -79,16 +80,12 @@ function fieldSchema(field: FieldDefinition): Record<string, unknown> {
   };
 }
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function validationMessage(path: string, message: string): ToolInputValidationError {
   return new ToolInputValidationError(`${path} ${message}`);
 }
 
 function parseObject(fields: FieldMap, input: unknown, path: string): Record<string, unknown> {
-  if (!isPlainObject(input)) {
+  if (!isRecord(input)) {
     throw validationMessage(path, "must be an object.");
   }
 

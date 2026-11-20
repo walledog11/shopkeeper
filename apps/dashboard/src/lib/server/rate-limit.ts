@@ -6,6 +6,7 @@ import {
   type FixedWindowCounterClient,
   type RateLimitResult,
 } from '@shopkeeper/agent/rate-limit';
+import { readEnv } from '@/lib/env/helpers';
 import { getRedis } from '@/lib/server/redis';
 
 interface RateLimitOptions {
@@ -76,9 +77,9 @@ export function isE2ERateLimitBypassEnabled(
   env: NodeJS.ProcessEnv = process.env,
   options: RateLimitOptions = {},
 ): boolean {
-  return readEnv(env, 'NODE_ENV') !== 'production' &&
+  return readEnv('NODE_ENV', env) !== 'production' &&
     !isE2EServer(env) &&
-    readEnv(env, 'E2E_TEST_RUN') === 'true' &&
+    readEnv('E2E_TEST_RUN', env) === 'true' &&
     !isE2ERateLimitForceEnabled(env, options);
 }
 
@@ -86,18 +87,14 @@ export function isE2ERateLimitForceEnabled(
   env: NodeJS.ProcessEnv = process.env,
   options: RateLimitOptions = {},
 ): boolean {
-  return readEnv(env, 'NODE_ENV') === 'test' &&
-    readEnv(env, 'E2E_TEST_RUN') === 'true' &&
-    readEnv(env, 'E2E_RATE_LIMIT_TEST_MODE') === 'force-header' &&
+  return readEnv('NODE_ENV', env) === 'test' &&
+    readEnv('E2E_TEST_RUN', env) === 'true' &&
+    readEnv('E2E_RATE_LIMIT_TEST_MODE', env) === 'force-header' &&
     options.forceForE2E === true;
 }
 
-function readEnv(env: NodeJS.ProcessEnv, name: string): string | undefined {
-  return env[name];
-}
-
 function isE2EServer(env: NodeJS.ProcessEnv): boolean {
-  return readEnv(env, 'E2E_SERVER') === 'true' && readEnv(env, 'E2E_TEST_RUN') === 'true';
+  return readEnv('E2E_SERVER', env) === 'true' && readEnv('E2E_TEST_RUN', env) === 'true';
 }
 
 /** Returns a 429 response with standard rate-limit headers */

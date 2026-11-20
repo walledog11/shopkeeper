@@ -5,6 +5,7 @@ import {
   type IncrementOpsAlertWindowResult,
 } from '../ops-alerts.js';
 import { getGatewayOpsAlertConfig, type GatewayOpsAlertConfig } from '../config/runtime-config.js';
+import { readString } from '../lib/typing.js';
 import type { Request } from 'express';
 
 export type WebhookSignatureProvider =
@@ -45,12 +46,12 @@ export interface WebhookSignatureRequestMetadata {
 
 export function buildWebhookSignatureRequestMetadata(req: Request): WebhookSignatureRequestMetadata {
   return {
-    method: normalizeText(req.method),
-    path: normalizeText(`${req.baseUrl ?? ''}${req.path ?? ''}`) ?? normalizeText(req.originalUrl?.split('?')[0]),
+    method: readString(req.method),
+    path: readString(`${req.baseUrl ?? ''}${req.path ?? ''}`) ?? readString(req.originalUrl?.split('?')[0]),
     userAgent: readHeader(req, 'user-agent'),
     contentType: readHeader(req, 'content-type'),
     requestId: readHeader(req, 'x-request-id'),
-    ip: normalizeText(req.ip),
+    ip: readString(req.ip),
   };
 }
 
@@ -62,7 +63,7 @@ export async function recordWebhookSignatureFailure(
   const config = deps.config ?? getGatewayOpsAlertConfig();
   const emit = deps.emitAlert ?? emitOpsAlert;
   const incr = deps.incrementWindow ?? incrementOpsAlertWindow;
-  const route = normalizeText(deps.route) ?? normalizeText(deps.request?.path) ?? 'unknown';
+  const route = readString(deps.route) ?? readString(deps.request?.path) ?? 'unknown';
 
   const window = await incr(deps.counterClient, {
     keyParts: ['webhook_signature', provider, reason],
@@ -101,11 +102,7 @@ export async function recordWebhookSignatureFailure(
 function readHeader(req: Request, name: string): string | null {
   const value = req.headers[name.toLowerCase()];
   if (Array.isArray(value)) {
-    return normalizeText(value[0]);
+    return readString(value[0]);
   }
-  return normalizeText(value);
-}
-
-function normalizeText(value: unknown): string | null {
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+  return readString(value);
 }

@@ -1,3 +1,4 @@
+import { asRecord } from "@shopkeeper/shared/guards";
 import type { BaseAgentContext, SupportContext } from "./agent-context.js";
 import {
   expectedCustomerRecipient,
@@ -296,7 +297,7 @@ export function unsupportedReplyCompletionClaims(
 ): string[] {
   const field = REPLY_TEXT_FIELDS[toolCall.name];
   if (!field) return [];
-  const input = recordInput(toolCall.input);
+  const input = asRecord(toolCall.input);
   const value = input?.[field];
   if (typeof value !== "string" || !value.trim()) return [];
   const claims = claimingSentences(value);
@@ -323,8 +324,3 @@ export function unsupportedReplyCompletionClaims(
   ));
 }
 
-function recordInput(value: unknown): Record<string, unknown> | null {
-  return value != null && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null;
-}
