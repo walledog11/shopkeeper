@@ -62,14 +62,3 @@ export function getChannelInfoByName(channelName: string): ChannelInfo {
   }
   return { ...DEFAULT_CHANNEL_INFO, name: channelName, label: channelName }
 }
-
-export function getActionLogChannelInfo(entry: {
-  channelType: ChannelType | string | null | undefined
-  instruction?: string | null
-}): ChannelInfo {
-  const instruction = entry.instruction?.trim()
-  if (instruction?.startsWith('order-risk-review:')) {
-    return getChannelInfo('shopify')
-  }
-  return getChannelInfo(entry.channelType)
-}

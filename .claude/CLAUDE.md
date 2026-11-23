@@ -40,11 +40,9 @@ approval or execution. Deploys, env, migrations and incident recovery are in
   (Next.js) owns interactive UI and the rest of provider delivery. Both send through
   `packages/messaging/` (`@shopkeeper/messaging`), each supplying its own alerting and
   analytics.
-- **Modules:** support is v1. Order-ops is monitoring-only behind
-  `ORDER_RISK_MONITOR_ENABLED` (read tools + `flag_order` only, outside autonomy tiers).
-  Shop management (flash sales, repricing) is operator-only: its write tools live in
-  `apps/gateway/src/message-handlers/operator/operator-shop-tools.ts`, never the shared
-  registry.
+- **Modules:** support is v1. Shop management (flash sales, repricing) is operator-only:
+  its write tools live in `apps/gateway/src/message-handlers/operator/operator-shop-tools.ts`,
+  never the shared registry.
 - **Inbound flow:** webhook → `apps/gateway/src/routes/webhooks.ts` (verify, enqueue) →
   `apps/gateway/src/message-handlers/` (upsert, sanitize, dedupe by `externalMessageId`)
   → classify + summarize → plan in-process
@@ -149,11 +147,10 @@ These are the product. Do not loosen one without saying so in the PR.
   until the merchant confirms it; never auto-promote one.
 - **Customer-facing input stays in capture-mode planning** with deterministic
   adjudication. Deterministic keyword fast paths (`yes`/`no`/`OPEN n`) stay.
-- **Monitors are flag-gated and notify- or propose-only** (`ORDER_RISK_MONITOR_ENABLED`,
-  `RETURN_LIFECYCLE_MONITOR_ENABLED`). A module's external writes need their own rollout
-  gate, distinct from its monitor flag; enabling a monitor never enables writes. Order-ops
-  runs read tools plus `flag_order` only, outside autonomy tiers; a mutating order action
-  would also need the shared execution claim and a per-module cap, which does not exist.
+- **A monitor is flag-gated and notify- or propose-only.** None ships today. A module's
+  external writes need their own rollout gate, distinct from its monitor flag; enabling a
+  monitor never enables writes, and a mutating module action also needs the shared
+  execution claim and a per-module cap.
 - **A new financial tool needs a prompt branch**, not just a registry entry: the
   compensation decision tree escalates anything it doesn't enumerate.
 - **A validator rewrite that narrows what it inspects can loosen a safety check.** Diff

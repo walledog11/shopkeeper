@@ -121,15 +121,6 @@ export interface CreatedReturn {
   status?: string | null;
 }
 
-export interface ReturnWatchToolData {
-  returnWatch: {
-    shopifyReturnId: string;
-    returnName: string | null;
-    orderId: string;
-    tool: "create_return" | "create_exchange";
-  };
-}
-
 // Returns null when the order does not exist.
 export async function fetchReturnableLineItems(
   ctx: ShopifyContext,
@@ -316,14 +307,6 @@ export async function createReturn(
     } : undefined;
     const result = toolOk(
       `Opened return ${returnName} (status ${returnStatus}) on order ${orderId} for: ${itemList}. No refund was issued - this only authorizes the customer to send the items back. Tell the customer the return is set up.`,
-      {
-        returnWatch: {
-          shopifyReturnId: returnId,
-          returnName,
-          orderId,
-          tool: "create_return",
-        },
-      } satisfies ReturnWatchToolData,
     );
     return receipt ? { ...result, receipt } : result;
   } catch (err) {

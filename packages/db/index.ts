@@ -115,15 +115,6 @@ export type {
   MerchantPreferenceRecord,
 } from './merchant-preferences.js';
 export {
-  ensureReturnWatchFromClosure,
-  listOpenReturnWatches,
-  markReturnWatchPlanPushed,
-  markReturnWatchSkipped,
-  recordReturnWatch,
-  type RecordReturnWatchParams,
-  type ReturnWatchTool,
-} from './return-watch.js';
-export {
   beginIntegrationDisconnect,
   claimIntegrationDisconnect,
   completeIntegrationDisconnect,

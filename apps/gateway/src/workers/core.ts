@@ -15,16 +15,14 @@ import { createInboundWorker } from './inbound.js';
 import { createIntegrationDisconnectWorker } from './integration-disconnect.js';
 import { createOperatorEventWorker } from './operator-event.js';
 import { createAgentTaskWorker } from './agent-task.js';
-import { createOrderReviewWorker } from './order-review.js';
 import { createOutboundEmailWorker } from './outbound-email.js';
 import type { GatewayWorkerResources, SharedGatewayWorkerOptions } from './resources.js';
-import type { AgentTaskJobData, OperatorEventJobData, OrderReviewJobData, OutboundEmailJobData } from '../types.js';
+import type { AgentTaskJobData, OperatorEventJobData, OutboundEmailJobData } from '../types.js';
 
 export interface CoreWorkerResources extends GatewayWorkerResources {
   messageWorker: Worker<InboundJobData>;
   aiSummaryWorker: Worker<AiSummaryJobData>;
   aiSummaryQueue: Queue<AiSummaryJobData>;
-  orderReviewWorker: Worker<OrderReviewJobData>;
   outboundEmailWorker: Worker<OutboundEmailJobData>;
   gmailSyncWorker: Worker<GmailSyncJobData>;
   operatorEventWorker: Worker<OperatorEventJobData>;
@@ -47,7 +45,6 @@ export function createCoreWorkerResources(
   });
   const messageWorker = createInboundWorker({ aiSummaryQueue, workerOptions });
   const aiSummaryWorker = createAiSummaryWorker(workerOptions);
-  const orderReviewWorker = createOrderReviewWorker({ workerOptions });
   const outboundEmailWorker = createOutboundEmailWorker({ workerOptions });
   const gmailSyncWorker = createGmailSyncWorker({
     inboundQueue,
@@ -62,7 +59,6 @@ export function createCoreWorkerResources(
     messageWorker,
     aiSummaryWorker,
     aiSummaryQueue,
-    orderReviewWorker,
     outboundEmailWorker,
     gmailSyncWorker,
     operatorEventWorker,
@@ -72,7 +68,6 @@ export function createCoreWorkerResources(
     workers: [
       messageWorker,
       aiSummaryWorker,
-      orderReviewWorker,
       outboundEmailWorker,
       gmailSyncWorker,
       operatorEventWorker,

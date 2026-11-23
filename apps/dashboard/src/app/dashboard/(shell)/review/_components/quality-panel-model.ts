@@ -30,7 +30,6 @@ export interface ReviewFilterConfig {
 export type ReviewItemCode =
   | "error"
   | "escalated"
-  | "flagged_order"
   | "store_action"
   | "auto_reply"
   | "auto_action"
@@ -62,7 +61,6 @@ const STORE_ACTION_TOOLS = [
   "issue_store_credit",
   "create_gift_card",
   "issue_discount",
-  "flag_order",
 ] as const
 
 // One list, filtered. Every label answers the same question — "show me what?"
@@ -80,7 +78,7 @@ export const REVIEW_FILTERS: ReviewFilterConfig[] = [
     id: "attention",
     label: "Needs review",
     emptyTitle: "Nothing needs review",
-    emptyBody: "Handoffs, failed or blocked steps, and flagged orders land here.",
+    emptyBody: "Handoffs and failed or blocked steps land here.",
     query: { attention: true, excludeOperator: true },
   },
   {
@@ -108,13 +106,8 @@ export const REVIEW_FILTERS: ReviewFilterConfig[] = [
 
 const MONEY_TOOLS = new Set<string>(STORE_ACTION_TOOLS)
 
-const EXTRA_TOOL_LABELS: Record<string, string> = {
-  flag_order: "Flagged order",
-  update_shopify_order_address: "Updated shipping address",
-}
-
 function toolLabel(tool: string): string {
-  return TOOL_LABELS[tool] ?? EXTRA_TOOL_LABELS[tool] ?? tool
+  return TOOL_LABELS[tool] ?? tool
 }
 
 function field(input: unknown, key: string): string | null {
@@ -177,7 +170,7 @@ export function isErrorStatus(status: string | undefined): boolean {
 
 export function outcomeTone(action: ActionLogEntry["actions"][number]): Tone {
   if (isErrorStatus(action.status)) return "error"
-  if (MONEY_TOOLS.has(action.tool) || action.tool === "flag_order") return "money"
+  if (MONEY_TOOLS.has(action.tool)) return "money"
   return "note"
 }
 
@@ -188,9 +181,6 @@ export function reviewItemChrome(entry: ActionLogEntry): ReviewItemChrome {
 
   const escalation = entry.actions.find((action) => action.tool === "escalate_to_human" || action.status === "escalated")
   if (escalation) return { tone: "attention", icon: "alert", code: "escalated", label: "Handed to you" }
-
-  const flag = entry.actions.find((action) => action.tool === "flag_order")
-  if (flag) return { tone: "attention", icon: "alert", code: "flagged_order", label: "Flagged order" }
 
   const storeAction = entry.actions.find((action) => MONEY_TOOLS.has(action.tool))
   if (storeAction) {

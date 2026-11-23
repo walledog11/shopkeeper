@@ -5,8 +5,8 @@ import type {
   AgentRecentMessage,
 } from "./agent-context.js";
 
-export const UNTRUSTED_OPEN_TAG = "<customer_message>";
-export const UNTRUSTED_CLOSE_TAG = "</customer_message>";
+const UNTRUSTED_OPEN_TAG = "<customer_message>";
+const UNTRUSTED_CLOSE_TAG = "</customer_message>";
 
 // Wrap untrusted external text (customer / supplier / social-DM prose) in
 // explicit boundary tags so the model can tell data from instructions. Any

@@ -8,8 +8,6 @@ import { registerWorkspaceDeletionSweepMaintenanceJob } from './workspace-deleti
 import { registerOperatorEventSweepMaintenanceJob } from './operator-event-sweep.js';
 import { registerAgentTaskSweepMaintenanceJob } from './agent-task-sweep.js';
 import { registerUnknownOutcomeSweepMaintenanceJob } from './unknown-outcome-sweep.js';
-import { registerOrderRiskMaintenanceJob } from './order-risk-monitor.js';
-import { registerReturnLifecycleMaintenanceJob } from './return-lifecycle-monitor.js';
 import { registerOutboundSendSweepMaintenanceJob } from './outbound-send-sweep.js';
 import { registerPlatformSpendWatchMaintenanceJob } from './platform-spend-watch.js';
 import { registerQueueHealthMaintenanceJob } from './queue-health.js';
@@ -38,8 +36,6 @@ const maintenanceJobRegistrations: MaintenanceJobRegistration[] = [
   registerPlanRecoveryMaintenanceJob,
   registerDigestMaintenanceJob,
   registerVoiceSynthesisMaintenanceJob,
-  registerOrderRiskMaintenanceJob,
-  registerReturnLifecycleMaintenanceJob,
   registerOutboundSendSweepMaintenanceJob,
   registerOperatorEventSweepMaintenanceJob,
   registerAgentTaskSweepMaintenanceJob,

@@ -22,7 +22,6 @@ import {
   fetchReturnableLineItems,
   mapReturnReason,
   runReturnCreate,
-  type ReturnWatchToolData,
 } from "./returns.js";
 
 const exchangeReceipts = shopifyReceiptResults("create_exchange", "order");
@@ -221,14 +220,6 @@ export async function createExchange(
     } : undefined;
     const result = toolOk(
       `Opened exchange ${returnName} (status ${returnStatus}) on order ${orderId}: returning ${quantity}x ${returnedName} in exchange for ${quantity}x ${replacementName}. No refund was issued, nothing was charged or shipped, and no price difference was worked out. ${EXCHANGE_EFFECT_DESCRIPTION} ${EXCHANGE_REPLY_GUIDANCE}`,
-      {
-        returnWatch: {
-          shopifyReturnId: returnId,
-          returnName,
-          orderId,
-          tool: "create_exchange",
-        },
-      } satisfies ReturnWatchToolData,
     );
     return receipt ? { ...result, receipt } : result;
   } catch (err) {

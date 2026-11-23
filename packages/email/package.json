@@ -30,33 +30,9 @@
       "types": "./dist/reply.d.ts",
       "default": "./dist/reply.js"
     },
-    "./mime-build": {
-      "types": "./dist/mime-build.d.ts",
-      "default": "./dist/mime-build.js"
-    },
-    "./mime-parse": {
-      "types": "./dist/mime-parse.d.ts",
-      "default": "./dist/mime-parse.js"
-    },
-    "./inbound-normalize": {
-      "types": "./dist/inbound-normalize.d.ts",
-      "default": "./dist/inbound-normalize.js"
-    },
     "./inbound-transport": {
       "types": "./dist/inbound-transport.d.ts",
       "default": "./dist/inbound-transport.js"
-    },
-    "./address-filter": {
-      "types": "./dist/address-filter.d.ts",
-      "default": "./dist/address-filter.js"
-    },
-    "./token": {
-      "types": "./dist/token.d.ts",
-      "default": "./dist/token.js"
-    },
-    "./gmail": {
-      "types": "./dist/gmail/index.d.ts",
-      "default": "./dist/gmail/index.js"
     },
     "./senders": {
       "types": "./dist/senders/index.d.ts",

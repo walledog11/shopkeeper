@@ -51,7 +51,6 @@ import { GET as getOrgData, DELETE as deleteOrgData } from '@/app/api/org/data/r
 import { GET as getGdprReport } from '@/app/api/org/gdpr-export/route';
 import { GET as getShopifyCustomer } from '@/app/api/shopify/customer/route';
 import { GET as getShopifyCustomers } from '@/app/api/shopify/customers/route';
-import { POST as createShopifyThread } from '@/app/api/threads/shopify/route';
 import { GET as getTeam, POST as inviteTeamMember, DELETE as removeTeamMember } from '@/app/api/team/route';
 
 let callerOrg: Awaited<ReturnType<typeof createTestOrg>>;
@@ -248,33 +247,6 @@ describe('tenant data surfaces', () => {
     const foreignUnchanged = await db.customer.findUniqueOrThrow({ where: { id: foreignCustomer.id } });
     expect(callerUpdated.name).toBe('Caller Shopper');
     expect(foreignUnchanged.name).toBe('Foreign Existing');
-  });
-
-  it('creates Shopify-started threads in the active organization without mutating a foreign customer', async () => {
-    const email = 'thread-shopify@example.com';
-    const foreignCustomer = await createTestCustomer(otherOrg.id, email, { name: 'Foreign Thread Customer' });
-
-    const res = await createShopifyThread(jsonReq('http://localhost/api/threads/shopify', {
-      shopifyCustomerId: '9988',
-      customerEmail: email,
-      customerName: 'Caller Thread Customer',
-      orderName: '#1001',
-    }));
-
-    expect(res.status).toBe(200);
-    const body = await json<{ threadId: string; isNew: boolean }>(res);
-    expect(body.isNew).toBe(true);
-
-    const thread = await db.thread.findUniqueOrThrow({ where: { id: body.threadId }, include: { customer: true } });
-    expect(thread.organizationId).toBe(callerOrg.id);
-    expect(thread.customer.organizationId).toBe(callerOrg.id);
-    expect(thread.customer.name).toBe('Caller Thread Customer');
-    expect(thread.shopifyCustomerId).toBe('9988');
-    expect(thread.tag).toBe('Order #1001');
-
-    const foreignUnchanged = await db.customer.findUniqueOrThrow({ where: { id: foreignCustomer.id } });
-    expect(foreignUnchanged.name).toBe('Foreign Thread Customer');
-    await expect(db.thread.count({ where: { organizationId: otherOrg.id, customerId: foreignCustomer.id } })).resolves.toBe(0);
   });
 
   it('passes only the active Clerk organization to team membership APIs', async () => {

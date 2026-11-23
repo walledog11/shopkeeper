@@ -14,8 +14,6 @@ import { mockClerkSession } from '@/test-fixtures/clerk-session';
 import { ChannelType, db } from '@shopkeeper/db';
 import {
   createTestOrg,
-  createTestCustomer,
-  createTestThread,
   createTestIntegration,
   cleanupTestData,
 } from '@shopkeeper/db/test-helpers';
@@ -29,10 +27,7 @@ import {
   PATCH as patchKbArticle,
   DELETE as deleteKbArticle,
 } from '@/app/api/kb/[id]/route';
-import { DELETE as deleteKbBase } from '@/app/api/kb/bases/[id]/route';
-import { POST as createKbArticle } from '@/app/api/kb/bases/[id]/articles/route';
 import { DELETE as deleteIntegration } from '@/app/api/integrations/[id]/route';
-import { POST as aiSummary } from '@/app/api/ai/summary/route';
 
 let callerOrg!: Awaited<ReturnType<typeof createTestOrg>>;
 let otherOrg!: Awaited<ReturnType<typeof createTestOrg>>;
@@ -94,37 +89,6 @@ describe('cross-org isolation — id-style routes return 404 for foreign resourc
     expect(stillThere).not.toBeNull();
   });
 
-  it('DELETE /api/kb/bases/[id] returns 404 for another org base id', async () => {
-    const foreignKb = await db.knowledgeBase.create({
-      data: { organizationId: otherOrg.id, name: 'Other', source: 'user' },
-    });
-    const res = await deleteKbBase(
-      new Request(`http://x/api/kb/bases/${foreignKb.id}`, { method: 'DELETE' }),
-      params(foreignKb.id),
-    );
-    expect(res.status).toBe(404);
-
-    const stillThere = await db.knowledgeBase.findUnique({ where: { id: foreignKb.id } });
-    expect(stillThere).not.toBeNull();
-  });
-
-  it('POST /api/kb/bases/[id]/articles returns 404 for another org base id', async () => {
-    const foreignKb = await db.knowledgeBase.create({
-      data: { organizationId: otherOrg.id, name: 'Other', source: 'user' },
-    });
-    const res = await createKbArticle(
-      jsonReq(
-        `http://x/api/kb/bases/${foreignKb.id}/articles`,
-        { title: 'planted', body: 'planted' },
-      ),
-      params(foreignKb.id),
-    );
-    expect(res.status).toBe(404);
-
-    const articleCount = await db.kbArticle.count({ where: { knowledgeBaseId: foreignKb.id } });
-    expect(articleCount).toBe(0);
-  });
-
   it('DELETE /api/integrations/[id] returns 404 for another org integration id', async () => {
     const foreign = await createTestIntegration(otherOrg.id, { platform: ChannelType.email });
     const res = await deleteIntegration(
@@ -135,18 +99,5 @@ describe('cross-org isolation — id-style routes return 404 for foreign resourc
 
     const stillThere = await db.integration.findUnique({ where: { id: foreign.id } });
     expect(stillThere).not.toBeNull();
-  });
-
-  it('POST /api/ai/summary returns 404 for another org thread id', async () => {
-    const foreignCustomer = await createTestCustomer(otherOrg.id, 'foreign@test.com');
-    const foreignThread = await createTestThread(otherOrg.id, foreignCustomer.id, ChannelType.email);
-
-    const res = await aiSummary(
-      jsonReq('http://x/api/ai/summary', { threadId: foreignThread.id }),
-    );
-    expect(res.status).toBe(404);
-
-    const unchanged = await db.thread.findUnique({ where: { id: foreignThread.id } });
-    expect(unchanged?.aiSummary).toBeNull();
   });
 });

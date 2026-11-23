@@ -56,7 +56,7 @@ function buildTurnGroupWhereSql(orgId: string, filters?: ActionLogFilters): Pris
   }
   if (filters?.attention) {
     clauses.push(PrismaRuntime.sql`(
-      a.tool IN (${PrismaRuntime.join(["escalate_to_human", "flag_order"])})
+      a.tool = 'escalate_to_human'
       OR a.status IN (${PrismaRuntime.join(["error", "policy_block", "unknown"])})
     )`);
   }

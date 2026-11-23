@@ -1,14 +1,8 @@
 "use client"
 
-import { useState } from "react"
 import type { OrderRow } from "@/lib/orders/order-contract"
 import { ShopStreamLoading } from "./ShopStreamLoading"
-import { ShopFindingCard, ShopOrderCard } from "./ShopCards"
-import {
-  fetchOrdersSearch,
-  type OrderAttentionFinding,
-} from "./order-requests"
-import { matchOrderFromSearch } from "./shop-page-utils"
+import { ShopOrderCard } from "./ShopCards"
 
 const EMPTY_CARD_CLASS =
   "rounded-3xl border border-border bg-card px-5 py-8 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)]"
@@ -21,97 +15,8 @@ function ShopEmptyCard({ children }: { children: React.ReactNode }) {
   )
 }
 
-function ShopAttentionLead({ count }: { count: number }) {
-  if (count === 0) return null
-
-  return (
-    <p className="px-0.5 text-sm leading-relaxed text-muted-foreground">
-      <span className="font-semibold tabular-nums text-foreground">{count}</span>
-      {" "}
-      {count === 1 ? "order needs a look" : "orders need a look"}
-    </p>
-  )
-}
-
-export function ShopStream({
-  findings,
-  isLoading,
-  error,
-  onOpenOrder,
-  onRetry,
-}: {
-  findings: OrderAttentionFinding[]
-  isLoading: boolean
-  error: unknown
-  onOpenOrder: (order: OrderRow) => void
-  onRetry: () => void
-}) {
-  const [openingId, setOpeningId] = useState<string | null>(null)
-  const [openErrorById, setOpenErrorById] = useState<Record<string, string>>({})
-
-  if (isLoading) {
-    return <ShopStreamLoading label="Loading orders" />
-  }
-
-  if (error) {
-    return (
-      <div className={EMPTY_CARD_CLASS} role="alert">
-        <p className="text-center text-sm font-semibold text-red-700">Couldn’t load orders that need a look.</p>
-        <button
-          type="button"
-          onClick={onRetry}
-          className="mx-auto mt-3 block text-xs font-semibold text-red-700 hover:underline"
-        >
-          Try again
-        </button>
-      </div>
-    )
-  }
-
-  if (findings.length === 0) {
-    return <ShopEmptyCard>Nothing needs a look right now. Search when you want a specific order.</ShopEmptyCard>
-  }
-
-  const openFinding = async (finding: OrderAttentionFinding) => {
-    setOpeningId(finding.id)
-    setOpenErrorById(current => {
-      if (!current[finding.id]) return current
-      const next = { ...current }
-      delete next[finding.id]
-      return next
-    })
-
-    try {
-      const page = await fetchOrdersSearch(`/api/orders?q=${encodeURIComponent(finding.orderName)}`)
-      const match = matchOrderFromSearch(page.orders, finding.orderId)
-      if (match) {
-        onOpenOrder(match)
-        return
-      }
-      setOpenErrorById(current => ({ ...current, [finding.id]: "Couldn’t find that order in Shopify." }))
-    } catch {
-      setOpenErrorById(current => ({ ...current, [finding.id]: "Couldn’t open that order." }))
-    } finally {
-      setOpeningId(null)
-    }
-  }
-
-  return (
-    <section className="flex flex-col gap-3" data-testid="shop-attention">
-      <ShopAttentionLead count={findings.length} />
-      <ul className="flex flex-col gap-3">
-        {findings.map(finding => (
-          <ShopFindingCard
-            key={finding.id}
-            finding={finding}
-            isOpening={openingId === finding.id}
-            error={openErrorById[finding.id] ?? null}
-            onOpen={() => { void openFinding(finding) }}
-          />
-        ))}
-      </ul>
-    </section>
-  )
+export function ShopSearchPrompt() {
+  return <ShopEmptyCard>Search by order number or customer email to open an order.</ShopEmptyCard>
 }
 
 export function ShopSearchResults({

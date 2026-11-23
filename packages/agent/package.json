@@ -126,10 +126,6 @@
       "types": "./dist/task-run.d.ts",
       "default": "./dist/task-run.js"
     },
-    "./task-approval": {
-      "types": "./dist/task-approval.d.ts",
-      "default": "./dist/task-approval.js"
-    },
     "./run": {
       "types": "./dist/run.d.ts",
       "default": "./dist/run.js"
@@ -198,14 +194,6 @@
       "types": "./dist/shopify/billing.d.ts",
       "default": "./dist/shopify/billing.js"
     },
-    "./order-ops": {
-      "types": "./dist/order-ops/index.d.ts",
-      "default": "./dist/order-ops/index.js"
-    },
-    "./order-ops-finding": {
-      "types": "./dist/order-ops/finding.d.ts",
-      "default": "./dist/order-ops/finding.js"
-    },
     "./lock": {
       "types": "./dist/lock/index.d.ts",
       "default": "./dist/lock/index.js"
@@ -221,10 +209,6 @@
     "./observability": {
       "types": "./dist/observability/index.d.ts",
       "default": "./dist/observability/index.js"
-    },
-    "./errors": {
-      "types": "./dist/errors.d.ts",
-      "default": "./dist/errors.js"
     },
     "./message-dispatch": {
       "types": "./dist/message-dispatch.d.ts",
@@ -310,10 +294,6 @@
       "types": "./dist/dashboard-destinations.d.ts",
       "default": "./dist/dashboard-destinations.js"
     },
-    "./guards": {
-      "types": "./dist/guards.d.ts",
-      "default": "./dist/guards.js"
-    },
     "./request-outcome": {
       "types": "./dist/request-outcome.d.ts",
       "default": "./dist/request-outcome.js"
@@ -329,10 +309,6 @@
     "./merchant-preference-capture": {
       "types": "./dist/merchant-preference-capture.d.ts",
       "default": "./dist/merchant-preference-capture.js"
-    },
-    "./env": {
-      "types": "./dist/env.d.ts",
-      "default": "./dist/env.js"
     }
   },
   "scripts": {

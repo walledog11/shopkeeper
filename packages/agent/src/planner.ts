@@ -87,8 +87,6 @@ export interface PlanAgentOptions {
    * It may only read and draft, and its plan always goes to the merchant.
    */
   withheldMessageFollowUp?: boolean;
-  /** Set by a monitor planning its own instruction on a customer thread (a return arriving). */
-  systemRequest?: boolean;
 }
 
 const KB_MISS_REPLY_REFUSAL =
@@ -258,9 +256,8 @@ export async function planAgent(
     && !options?.merchantContinuation
     && !options?.withheldMessageFollowUp;
   // A direct-message sender confirms the order before anything about it is
-  // discussed or proposed, a photo request included. A monitor's plan is the
-  // merchant's business, not the sender's request.
-  const orderVerification = customerOriginated && !options?.systemRequest ? orderVerificationState(ctx) : null;
+  // discussed or proposed, a photo request included.
+  const orderVerification = customerOriginated ? orderVerificationState(ctx) : null;
   const orderUnconfirmed = orderVerification !== null && orderVerification.kind !== "verified";
   const asksOrderVerification = orderVerification?.kind === "asked" || orderVerification?.kind === "ask";
   // Routing and review read the claim's photo state whatever the order's

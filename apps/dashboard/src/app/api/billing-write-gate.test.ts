@@ -28,12 +28,9 @@ vi.mock('@/lib/server/logger', () => ({
 }));
 
 import { POST as agentAsk } from './agent/ask/route';
-import { POST as aiSummary } from './ai/summary/route';
-import { POST as threadsShopify } from './threads/shopify/route';
 import { PATCH as shopifyCustomerPatch } from './shopify/customer/route';
 import { POST as shopifyCustomersPost } from './shopify/customers/route';
-import { POST as kbBasesPost } from './kb/bases/route';
-import { POST as kbArticlePost } from './kb/bases/[id]/articles/route';
+import { POST as kbContextPost } from './kb/context/route';
 import { PATCH as kbArticlePatch } from './kb/[id]/route';
 import { POST as integrationsPost } from './integrations/route';
 import { POST as imessageBindPost } from './integrations/imessage/bind/route';
@@ -47,12 +44,9 @@ type RouteHandler = (
 
 const GATED_ROUTES: Array<{ name: string; handler: RouteHandler; params?: Record<string, string> }> = [
   { name: 'POST /api/agent/ask', handler: agentAsk },
-  { name: 'POST /api/ai/summary', handler: aiSummary },
-  { name: 'POST /api/threads/shopify', handler: threadsShopify },
   { name: 'PATCH /api/shopify/customer', handler: shopifyCustomerPatch },
   { name: 'POST /api/shopify/customers', handler: shopifyCustomersPost },
-  { name: 'POST /api/kb/bases', handler: kbBasesPost },
-  { name: 'POST /api/kb/bases/[id]/articles', handler: kbArticlePost, params: { id: 'kb_1' } },
+  { name: 'POST /api/kb/context', handler: kbContextPost },
   { name: 'PATCH /api/kb/[id]', handler: kbArticlePatch, params: { id: 'art_1' } },
   { name: 'POST /api/integrations', handler: integrationsPost },
   { name: 'POST /api/integrations/imessage/bind', handler: imessageBindPost },

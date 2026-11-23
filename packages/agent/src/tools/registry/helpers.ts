@@ -1,9 +1,7 @@
 import type { BaseAgentContext, SupportContext } from "../../agent-context.js";
-import type { ReturnWatchToolData } from "../../shopify/returns.js";
-import logger from "../../logger.js";
 import { toolError, toolPolicyBlock, type ToolResult } from "../result.js";
 import { unmetScopes } from "../../shopify/integration-health.js";
-import type { AgentToolDefinition, ShopifyToolContext, ToolCapability, ToolExecutionDeps } from "./types.js";
+import type { AgentToolDefinition, ShopifyToolContext, ToolCapability } from "./types.js";
 
 export const noShopify = toolError("Error: no Shopify integration connected.");
 export const noThread = toolError("Error: this tool requires a conversation thread.");
@@ -60,46 +58,4 @@ export function unmetToolCapability(
     }
   }
   return null;
-}
-
-function readReturnWatchData(result: ToolResult): ReturnWatchToolData["returnWatch"] | null {
-  if (result.status !== "ok" || !result.data || typeof result.data !== "object") return null;
-  const payload = result.data as Partial<ReturnWatchToolData>;
-  const watch = payload.returnWatch;
-  if (!watch || typeof watch.shopifyReturnId !== "string" || typeof watch.orderId !== "string") {
-    return null;
-  }
-  if (watch.tool !== "create_return" && watch.tool !== "create_exchange") return null;
-  return watch;
-}
-
-export async function maybeRecordReturnWatch(
-  ctx: BaseAgentContext,
-  result: ToolResult,
-  deps: Pick<ToolExecutionDeps, "recordReturnWatch">,
-): Promise<void> {
-  const watch = readReturnWatchData(result);
-  if (!watch) return;
-
-  const threadCtx = threadContextOf(ctx);
-  try {
-    await deps.recordReturnWatch({
-      organizationId: threadCtx?.orgId ?? ctx.orgId,
-      threadId: threadCtx?.threadId ?? null,
-      orderId: watch.orderId,
-      shopifyReturnId: watch.shopifyReturnId,
-      returnName: watch.returnName,
-      tool: watch.tool,
-    });
-  } catch (error) {
-    logger.warn(
-      {
-        err: error instanceof Error ? error.message : String(error),
-        organizationId: threadCtx?.orgId ?? ctx.orgId,
-        orderId: watch.orderId,
-        shopifyReturnId: watch.shopifyReturnId,
-      },
-      "[return-watch] failed to record return watch",
-    );
-  }
 }

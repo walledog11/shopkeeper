@@ -41,7 +41,6 @@ import {
 } from "./reconciliation-probes/index.js";
 import { SUGGESTED_REFUND_QUERY } from "./refund-shop-money.js";
 import { ORDER_RETURNS_QUERY } from "./return-labels.js";
-import { ORDER_RETURN_STATUSES_QUERY } from "./return-status.js";
 import { RETURNABLE_FULFILLMENTS_QUERY } from "./returns.js";
 import {
   ORDER_IDENTITIES_QUERY,
@@ -170,10 +169,6 @@ export const SHOPIFY_QUERY_DOCUMENTS: Record<string, ShopifyQueryDocument> = {
   },
   orderReturns: {
     document: ORDER_RETURNS_QUERY,
-    variables: { id: "gid://shopify/Order/1" },
-  },
-  orderReturnStatuses: {
-    document: ORDER_RETURN_STATUSES_QUERY,
     variables: { id: "gid://shopify/Order/1" },
   },
   returnableFulfillments: {

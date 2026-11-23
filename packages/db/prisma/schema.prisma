@@ -1018,11 +1018,9 @@ model AgentAction {
   @@map("agent_actions")
 }
 
-// Durable return↔ticket association for the return-lifecycle monitor (B3).
-// Created when create_return/create_exchange succeeds; updated when Shopify
-// closes the return and a plan-approval card is pushed. `arrived_at` is a legacy
-// column name retained to avoid a destructive rename; it records observation of
-// the terminal return state, not a carrier-confirmed warehouse arrival.
+// Written for the return-lifecycle monitor, which was removed unused. Nothing
+// reads or writes it now except customer redaction, which still deletes its rows;
+// a later release drops the table (destructive cleanup ships after the code).
 model ReturnWatch {
   id                  String            @id @default(uuid()) @db.Uuid
   organizationId      String            @map("organization_id") @db.Uuid

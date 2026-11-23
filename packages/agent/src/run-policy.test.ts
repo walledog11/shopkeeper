@@ -42,7 +42,6 @@ vi.mock("@shopkeeper/db", () => ({
   commitDailyRefundSpendReservation: mockCommitDailyRefundSpendReservation,
   releaseDailyRefundSpendReservation: mockReleaseDailyRefundSpendReservation,
   markDailyRefundSpendReservationUnknown: mockMarkDailyRefundSpendReservationUnknown,
-  recordReturnWatch: vi.fn(),
   db: {
     kbArticle: { findMany: vi.fn().mockResolvedValue([]) },
     kbCitation: { createMany: vi.fn().mockResolvedValue({ count: 0 }) },

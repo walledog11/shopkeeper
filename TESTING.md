@@ -69,14 +69,12 @@ judge, and `recorded-stochastic-core-fixtures.json` for the two core cases that 
 off the hard release gate. Free checks live in `harness.integration.test.ts`; paid cases
 in `index.integration.test.ts`. Both skip unless `EVAL_RUN=1` or `REQUIRE_MODEL_EVALS=1`,
 so ordinary runs never bill. Path-triggered pushes run only the free deterministic
-preflight in `evals.yml`. A second paid suite, the order-ops eval
-(`apps/gateway/src/order-ops.eval.integration.test.ts`,
-`npm run test:evals -w apps/gateway`), follows the same skip and ceiling rules.
+preflight in `evals.yml`.
 
-Each suite has one paid command, `test:evals`, and it refuses to start without both
-ceilings, `EVAL_MAX_USD` and `EVAL_MAX_MODEL_CALLS`; the call cap is the strict backstop.
-The canonical paid run is a manual dispatch of `evals.yml` (`release` or `targeted`),
-which sizes both suites' ceilings before any model call:
+The one paid command, `test:evals`, refuses to start without both ceilings,
+`EVAL_MAX_USD` and `EVAL_MAX_MODEL_CALLS`; the call cap is the strict backstop. The
+canonical paid run is a manual dispatch of `evals.yml` (`release` or `targeted`), which
+checks the ceilings against an estimate before any model call:
 
 ```sh
 gh workflow run evals.yml -f mode=release -f max_usd=0.90 -f max_model_calls=120

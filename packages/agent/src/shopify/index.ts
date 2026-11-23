@@ -98,12 +98,6 @@ export {
   readInventoryStatus,
   type InventoryVariantStatus,
 } from "./inventory.js";
-export {
-  fetchOrderReturnStatuses,
-  formatReturnClosedNotification,
-  safeFetchOrderReturnStatuses,
-  type MonitoredReturnStatus,
-} from "./return-status.js";
 export { updateShopifyOrderAddress } from "./order-address.js";
 export { cancelOrder } from "./order-cancellation.js";
 export { createShopifyOrder, type CreateShopifyOrderOptions } from "./order-creation.js";

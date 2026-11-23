@@ -10,10 +10,6 @@ export function getMessageQueue() {
   return getGatewayBullMqQueue(QUEUE.INBOUND);
 }
 
-export function getOrderReviewQueue() {
-  return getGatewayBullMqQueue(QUEUE.ORDER_REVIEW);
-}
-
 export function getGmailSyncQueue() {
   return getGatewayBullMqQueue(QUEUE.GMAIL_SYNC) as Queue<GmailSyncJobData>;
 }

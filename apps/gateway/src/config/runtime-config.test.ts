@@ -3,8 +3,6 @@ import {
   getGatewayRuntimeRole,
   getGatewayOpsAlertConfig,
   getGatewayWorkerRedisConfig,
-  isOrderRiskMonitorEnabled,
-  isReturnLifecycleMonitorEnabled,
 } from './runtime-config.js';
 
 afterEach(() => {
@@ -39,27 +37,5 @@ describe('getGatewayOpsAlertConfig', () => {
     vi.stubEnv('OPS_ALERTS_ENABLED', 'true');
     vi.stubEnv('OPS_ALERT_WINDOW_SECS', '0');
     expect(() => getGatewayOpsAlertConfig()).toThrow(/OPS_ALERT_WINDOW_SECS/);
-  });
-});
-
-describe('isOrderRiskMonitorEnabled', () => {
-  it('defaults to disabled when unset', () => {
-    expect(isOrderRiskMonitorEnabled()).toBe(false);
-  });
-
-  it('rejects invalid boolean strings', () => {
-    vi.stubEnv('ORDER_RISK_MONITOR_ENABLED', 'maybe');
-    expect(() => isOrderRiskMonitorEnabled()).toThrow(/ORDER_RISK_MONITOR_ENABLED/);
-  });
-});
-
-describe('isReturnLifecycleMonitorEnabled', () => {
-  it('defaults to disabled when unset', () => {
-    expect(isReturnLifecycleMonitorEnabled()).toBe(false);
-  });
-
-  it('rejects invalid boolean strings', () => {
-    vi.stubEnv('RETURN_LIFECYCLE_MONITOR_ENABLED', 'maybe');
-    expect(() => isReturnLifecycleMonitorEnabled()).toThrow(/RETURN_LIFECYCLE_MONITOR_ENABLED/);
   });
 });

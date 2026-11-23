@@ -64,13 +64,11 @@ function classifyInactiveThreadClose(
   context: {
     operatorPendingThreadIds: Set<string>;
     pendingExecutionThreadIds: Set<string>;
-    openWatchThreadIds: Set<string>;
   },
 ): InactiveThreadCloseDecision {
   if (thread.escalatedAt) return 'skip';
   if (context.operatorPendingThreadIds.has(thread.id)) return 'skip';
   if (context.pendingExecutionThreadIds.has(thread.id)) return 'skip';
-  if (context.openWatchThreadIds.has(thread.id)) return 'skip';
   if (hasMerchantWorkCachedPlan(thread, settings)) return 'skip';
 
   // A persisted outbound attempt is not evidence that the customer received a
@@ -96,12 +94,11 @@ function classifyInactiveThreadClose(
 }
 
 async function loadSweepContext(
-  client: Pick<typeof db, 'operatorContext' | 'planExecution' | 'returnWatch' | 'organization'> = db,
+  client: Pick<typeof db, 'operatorContext' | 'planExecution' | 'organization'> = db,
   organizationId?: string,
 ): Promise<{
   operatorPendingThreadIds: Set<string>;
   pendingExecutionThreadIds: Set<string>;
-  openWatchThreadIds: Set<string>;
   settingsByOrg: Map<string, ReturnType<typeof resolveAgentSettings>>;
 }> {
   const operatorPendingThreadIds = new Set<string>();
@@ -125,13 +122,6 @@ async function loadSweepContext(
     pendingExecutions.map((row) => row.threadId!).filter(Boolean),
   );
 
-  const openWatchThreadIds = new Set<string>();
-  const returnWatches = await client.returnWatch.findMany({
-    where: { organizationId, status: 'open' },
-    select: { threadId: true },
-  });
-  for (const row of returnWatches) if (row.threadId) openWatchThreadIds.add(row.threadId);
-
   const orgs = await client.organization.findMany({ where: { id: organizationId }, select: { id: true, settings: true } });
   const settingsByOrg = new Map(
     orgs.map((org) => [org.id, resolveAgentSettings(org.settings)]),
@@ -140,7 +130,6 @@ async function loadSweepContext(
   return {
     operatorPendingThreadIds,
     pendingExecutionThreadIds,
-    openWatchThreadIds,
     settingsByOrg,
   };
 }

@@ -5,7 +5,6 @@ import { firstDraftExcerpt } from '../../message-handlers/operator/operator-ledg
 import { formatAlternativeMention, formatDeadlineLead, formatRequestPhrase } from '../briefing-fields.js';
 import { cleanBriefingText, truncateBriefingText } from './text.js';
 import { endSentence, lowerFirst } from '../../lib/sentence-case.js';
-import type { SystemRequestKind } from '../../message-handlers/shared/request-display.js';
 
 /** Presentation evidence only; execution always uses the original pending plan. */
 export interface ConversationBrief {
@@ -32,10 +31,9 @@ export function buildConversationBrief(params: {
   rawToolCalls?: readonly { name: string; input?: unknown }[];
   operatorQuestion?: string | null;
   escalationReason?: string | null;
-  systemEvent?: SystemRequestKind;
   now: Date;
 }): ConversationBrief {
-  const sourceText = params.systemEvent ? '' : cleanBriefingText(params.sourceText);
+  const sourceText = cleanBriefingText(params.sourceText);
   const person = personSubject(classifyPerson({
     customerName: params.customerName,
     channelType: params.channelType,
@@ -54,11 +52,7 @@ export function buildConversationBrief(params: {
   } else if (params.topic) {
     requestContext = `${person} wrote about ${cleanBriefingText(params.topic)}.`;
   }
-  const request = params.systemEvent === 'return_arrival'
-    ? `A returned item from ${person} has arrived.`
-    : params.systemEvent === 'delivery_exception'
-      ? `There's a delivery issue with ${person}'s order.`
-      : sourceText
+  const request = sourceText
     ? `${person} wrote: "${truncateBriefingText(sourceText, 360)}"`
     : requestContext || `${person} needs your review.`;
   const calls = params.rawToolCalls ?? [];
@@ -86,7 +80,7 @@ export function buildConversationBrief(params: {
   const escalation = calls.find((call) => call.name === 'escalate_to_human')?.input as { reason?: unknown } | undefined;
   const reason = cleanBriefingText(typeof escalation?.reason === 'string' ? escalation.reason : params.escalationReason) || null;
   return {
-    person, sourceText, requestContext: params.systemEvent ? '' : requestContext,
+    person, sourceText, requestContext,
     request, draftText, actions, question, reason,
     draft: draftText ? `I've drafted a reply: "${cleanBriefingText(draftText)}"` : null,
     deadline: facts ? formatDeadlineLead(facts, params.now) : null,

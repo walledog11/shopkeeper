@@ -28,11 +28,3 @@ export function orderStatusMeta(order: OrderRow): { label: string; tone: TicketC
   if (fulfillment.tone === "positive") return { label: fulfillment.label, tone: "neutral" }
   return { label: fulfillment.label, tone: "neutral" }
 }
-
-export function matchOrderFromSearch(orders: readonly OrderRow[], orderId: string | null): OrderRow | null {
-  if (orderId) {
-    const exact = orders.find(order => String(order.id) === orderId)
-    if (exact) return exact
-  }
-  return orders[0] ?? null
-}

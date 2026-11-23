@@ -6,26 +6,6 @@ import {
 
 export type { OrdersPageResponse as OrdersResponse }
 
-export interface OrderAttentionFinding {
-  id: string
-  orderId: string | null
-  orderName: string
-  reason: string
-  at: string
-}
-
-export interface OrderAttentionReturn {
-  threadId: string
-  customerName: string
-  summary: string | null
-  at: string
-}
-
-export interface OrderAttentionResponse {
-  findings: OrderAttentionFinding[]
-  returns: OrderAttentionReturn[]
-}
-
 export async function fetchOrdersPage(pageInfo: string): Promise<OrdersPageResponse> {
   const fallback = "Unable to load more orders."
   const payload = await requestJson<unknown>(

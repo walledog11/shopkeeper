@@ -3,7 +3,6 @@ import {
   commitDailyRefundSpendReservation,
   db,
   markDailyRefundSpendReservationUnknown,
-  recordReturnWatch,
   releaseDailyRefundSpendReservation,
   reserveDailyRefundSpend,
 } from "@shopkeeper/db";
@@ -245,7 +244,6 @@ const TOOL_EXECUTION_DEPS: ToolExecutionDeps = {
     });
   },
   getSupportStats,
-  recordReturnWatch,
 };
 
 type ReservationInput = Parameters<typeof reserveDailyRefundSpend>[0]["input"];
@@ -507,9 +505,9 @@ export async function executeToolWithStatus(
   args: unknown,
   ctx: BaseAgentContext,
   settings?: OrgSettings,
-  // Module-supplied tool definitions (e.g. order-ops' flag_order) resolved ahead
-  // of the shared registry, so a module can inject its own terminal tool without
-  // registering it in the support tool set.
+  // Module-supplied tool definitions (e.g. the operator's shop-management tools)
+  // resolved ahead of the shared registry, so a module can inject its own tools
+  // without registering them in the support tool set.
   moduleTools?: Record<string, AgentToolDefinition>,
   authorization: SupportAuthorizationOptions = {},
 ): Promise<ExecuteToolResult> {

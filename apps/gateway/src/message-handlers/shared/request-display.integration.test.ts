@@ -11,7 +11,6 @@ import {
   buildRequestDisplaySnapshot,
   formatRequestDisplayLine,
   readRequestDisplay,
-  systemRequestDisplay,
 } from './request-display.js';
 import { CLASSIFIER_VERSION } from '../inbound/classification-contract.js';
 
@@ -171,11 +170,6 @@ describe('buildRequestDisplaySnapshot', () => {
 });
 
 describe('request rendering', () => {
-  it('renders proactive work as explicitly system-originated', () => {
-    expect(formatRequestDisplayLine(systemRequestDisplay('delivery_exception'), 'Dana'))
-      .toBe('System follow-up: a delivery exception needs review');
-  });
-
   it('reads an address-change snapshot only from structured fields', () => {
     const display = readRequestDisplay({
       version: 1,

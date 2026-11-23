@@ -128,7 +128,7 @@ export async function generateThreadPlan(
   organizationId: string,
   threadId: string,
   allowAutoExecute: boolean,
-  options: { instruction?: string; sourceMessageId?: string; systemRequest?: boolean } = {},
+  options: { instruction?: string; sourceMessageId?: string } = {},
 ): Promise<GeneratedThreadPlan> {
   const generationStartedAt = Date.now();
   const thread = await requireOrgThread(threadId, organizationId);
@@ -226,7 +226,6 @@ export async function generateThreadPlan(
   const scope: PlanAttemptScope = {
     organizationId, threadId, allowAutoExecute, instruction, thread, settings,
     pendingCustomerMessageId, generationStartedAt,
-    ...(options.systemRequest ? { systemRequest: true } : {}),
     ...(durableResult.kind === 'claimed' ? { durableTurn: {
       requestId: durableResult.claim.requestId,
       taskId: durableResult.claim.taskId,
@@ -297,7 +296,6 @@ interface PlanAttemptScope {
   pendingCustomerMessageId: string;
   generationStartedAt: number;
   durableTurn?: DurableTurnIdentity;
-  systemRequest?: boolean;
 }
 
 function supportTaskModelBudget(
@@ -349,7 +347,6 @@ async function runPlanAttempt(scope: PlanAttemptScope): Promise<GeneratedThreadP
       ...(scope.durableTurn?.runtimeVersion !== undefined
         ? { runtimeVersion: scope.durableTurn.runtimeVersion }
         : {}),
-      ...(scope.systemRequest ? { systemRequest: true } : {}),
     },
   );
   const cacheRecord = buildAgentPlanCacheRecord({
