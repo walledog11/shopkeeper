@@ -20,7 +20,6 @@ import {
   buildRequestDisplaySnapshot,
   requestDisplayHasContext,
   type RequestDisplay,
-  type SystemRequestKind,
 } from '../../shared/request-display.js';
 import { loadRequestSourceText, storedCustomerName } from './card-context.js';
 import { getConversationStage } from './conversation-stage.js';
@@ -124,7 +123,6 @@ export async function sendOperatorPlanNotification(
     exclude?: OperatorNotificationExclude;
     identity?: PlanIdentity;
     requestDisplay?: RequestDisplay;
-    systemRequest?: SystemRequestKind;
     /**
      * The merchant's own ask or answer in the app produced this plan, so with
      * no phone bound there is no one to tell: they are already looking at it.
@@ -150,7 +148,6 @@ export async function sendOperatorPlanNotification(
     threadId,
     sourceMessageId: options?.identity?.sourceMessageId,
     rawToolCalls: plan.rawToolCalls,
-    ...(options?.systemRequest ? { systemEvent: options.systemRequest } : {}),
   });
   // Only when the snapshot cannot ground the card itself. A read failure must
   // not widen the critical push's failure surface: without it the card falls

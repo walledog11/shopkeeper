@@ -28,7 +28,6 @@ vi.mock("@shopkeeper/db", () => ({
   commitDailyRefundSpendReservation: mockCommitDailyRefundSpendReservation,
   releaseDailyRefundSpendReservation: mockReleaseDailyRefundSpendReservation,
   markDailyRefundSpendReservationUnknown: mockMarkDailyRefundSpendReservationUnknown,
-  recordReturnWatch: vi.fn(),
 }));
 
 // The model's relevance judgment is not under test here; every candidate answers.

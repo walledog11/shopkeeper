@@ -1,6 +1,5 @@
 import type { ToolInput } from "./input-fields.js";
 import type Anthropic from "@anthropic-ai/sdk";
-import type { RecordReturnWatchParams } from "@shopkeeper/db";
 import type { BaseAgentContext, TaskModelBudget } from "../../agent-context.js";
 import type { OrgSettings, ToolCategory } from "../../types.js";
 import type { ShopifyOAuthScope } from "../../shopify/integration-health.js";
@@ -209,10 +208,6 @@ export interface ToolExecutionDeps {
   }): Promise<KnowledgeBaseToolArticle[] | null>;
   recordKnowledgeBaseCitations(orgId: string, threadId: string, articleIds: readonly string[]): Promise<unknown>;
   getSupportStats(orgId: string, days: number): Promise<SupportStatsSummary>;
-  // Server-only DB write, injected like the operations above so the registry
-  // graph (which feeds client-imported TOOL_LABELS) never statically pulls
-  // `@shopkeeper/db`.
-  recordReturnWatch(params: RecordReturnWatchParams): Promise<void>;
 }
 
 export interface ToolPolicyMetadata {

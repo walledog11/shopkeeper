@@ -117,30 +117,6 @@ export function getInboundAttachmentLimits(): InboundAttachmentLimits {
   };
 }
 
-export function isOrderRiskMonitorEnabled(): boolean {
-  return parseBooleanEnv('ORDER_RISK_MONITOR_ENABLED', false);
-}
-
-export function isReturnLifecycleMonitorEnabled(): boolean {
-  return parseBooleanEnv('RETURN_LIFECYCLE_MONITOR_ENABLED', false);
-}
-
-export interface GatewayRuntimeFlags {
-  monitors: {
-    orderRisk: boolean;
-    returnLifecycle: boolean;
-  };
-}
-
-export function getGatewayRuntimeFlags(): GatewayRuntimeFlags {
-  return {
-    monitors: {
-      orderRisk: isOrderRiskMonitorEnabled(),
-      returnLifecycle: isReturnLifecycleMonitorEnabled(),
-    },
-  };
-}
-
 // Max pending plans held per operator context (bounded 1–5). Each ticket keeps
 // its own card, so one ticket's card never pushes another's off the phone; with
 // more than one waiting, a bare yes/no names none and is asked which.

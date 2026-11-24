@@ -59,9 +59,8 @@ released configuration is defective, release the prior app version first and the
 `restore`.
 
 **What the order topics do.** Only `orders/create` has work: `handleShopifyJob`
-records the order's conversation attribution, and the order-review queue takes it
-when `ORDER_RISK_MONITOR_ENABLED` is on. An order opens no thread, since it is
-not a conversation. The gateway acknowledges `orders/fulfilled`, `orders/updated`
+records the order's conversation attribution. An order opens no thread, since it
+is not a conversation. The gateway acknowledges `orders/fulfilled`, `orders/updated`
 and `orders/cancelled` and drops them.
 
 **Verifying delivery.** A new order leaves one `conversation_attributions` row,

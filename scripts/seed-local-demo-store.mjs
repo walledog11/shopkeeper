@@ -1,9 +1,8 @@
-// Seeds inbox customers, a couple of tickets, and order-attention rows for the
-// local Shopify demo store so the dashboard customers / orders UI has activity
-// to render next to the in-process simulator catalog.
+// Seeds inbox customers and a couple of tickets for the local Shopify demo store
+// so the dashboard customers / orders UI has activity to render next to the
+// in-process simulator catalog.
 //
 // Run: node scripts/seed-local-demo-store.mjs
-import { randomUUID } from 'node:crypto';
 import { loadLocalEnv } from './load-local-env.mjs';
 
 loadLocalEnv();
@@ -133,52 +132,12 @@ async function main() {
     });
   }
 
-  const flagged = [
-    {
-      orderId: '6000001042',
-      name: '#1042',
-      reason: 'No scan in five days after leaving the warehouse.',
-      minutesAgo: 40,
-    },
-    {
-      orderId: '6000001033',
-      name: '#1033',
-      reason: 'First-time customer, $240 unpaid, threatening a chargeback.',
-      minutesAgo: 125,
-    },
-  ];
-
-  for (const finding of flagged) {
-    const instruction = `order-risk-review:${finding.orderId}`;
-    const existing = await db.agentAction.findFirst({
-      where: { organizationId: org.id, tool: 'flag_order', instruction },
-      select: { id: true },
-    });
-    if (existing) continue;
-    await db.agentAction.create({
-      data: {
-        turnId: randomUUID(),
-        organizationId: org.id,
-        tool: 'flag_order',
-        category: 'action',
-        input: { order_number: finding.name, reason: finding.reason },
-        status: 'escalated',
-        mode: 'auto_executed',
-        instruction,
-        summary: `Flagged order ${finding.name} for review: ${finding.reason}`,
-        durationMs: 420,
-        executedAt: ago(finding.minutesAgo),
-      },
-    });
-  }
-
   const shop = org.integrations[0]?.externalAccountId ?? 'demo-store.shopkeeper.test';
   console.log('[seed-local-demo-store] ready', {
     organization: org.name,
     shop,
     customers: await db.customer.count({ where: { organizationId: org.id } }),
     threads: await db.thread.count({ where: { organizationId: org.id, deletedAt: null } }),
-    flagged: await db.agentAction.count({ where: { organizationId: org.id, tool: 'flag_order' } }),
   });
 }
 

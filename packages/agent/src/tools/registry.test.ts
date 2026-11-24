@@ -76,7 +76,6 @@ function makeDeps(): ToolExecutionDeps {
     selectAnsweringKbArticles: vi.fn().mockResolvedValue([]),
     recordKnowledgeBaseCitations: vi.fn().mockResolvedValue(undefined),
     getSupportStats: vi.fn().mockResolvedValue(null),
-    recordReturnWatch: vi.fn().mockResolvedValue(undefined),
   };
 }
 

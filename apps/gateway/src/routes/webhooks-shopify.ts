@@ -1,11 +1,10 @@
 import type { Request, Response, Router } from 'express';
 import { createHmac, timingSafeEqual, randomUUID } from 'crypto';
-import { isOrderRiskMonitorEnabled } from '../config/runtime-config.js';
 import logger from '../logger.js';
 import { CHANNEL, JOB } from '../constants.js';
 import { rateLimit, sendTooManyRequests } from '../rate-limit.js';
 import { webhookJsonParser } from './body-parsers.js';
-import { getMessageQueue, getOrderReviewQueue, getRateLimitRedis, resolveOrganizationId } from './webhooks-shared.js';
+import { getMessageQueue, getRateLimitRedis, resolveOrganizationId } from './webhooks-shared.js';
 import {
   buildWebhookSignatureRequestMetadata,
   recordWebhookSignatureFailure,
@@ -100,9 +99,8 @@ export function registerShopifyWebhookRoutes(router: Router): void {
       }
     }
 
-    // A new order is the only order event with work: conversation attribution,
-    // and order review when the risk monitor is on. The other order topics are
-    // acknowledged and dropped.
+    // A new order is the only order event with work (conversation attribution).
+    // The other order topics are acknowledged and dropped.
     if (topic !== 'orders/create') {
       return res.status(200).send('OK');
     }
@@ -133,18 +131,6 @@ export function registerShopifyWebhookRoutes(router: Router): void {
         rawPayload: req.body,
         traceId,
       });
-
-      // Order-ops (module #2): a new order also enters the risk-review queue.
-      // Flag-gated; the stable jobId dedupes webhook retries so each order is
-      // reviewed once. The per-order agent run happens in-process in the worker.
-      const orderId = (req.body as { id?: number | string } | undefined)?.id;
-      if (isOrderRiskMonitorEnabled() && orderId != null) {
-        await getOrderReviewQueue().add(
-          JOB.ORDER_REVIEW,
-          { organizationId, orderId: String(orderId), traceId },
-          { jobId: `order-review:${shopDomain}:${orderId}` },
-        );
-      }
 
       logger.info({ organizationId, topic, traceId }, '[Webhook] Shopify order event queued');
       return res.status(200).send('OK');

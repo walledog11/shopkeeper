@@ -186,7 +186,7 @@ describe('loadLiveOperatorContext', () => {
   async function currentPendingPlan(params: {
     thread: Awaited<ReturnType<typeof createTestThread>>;
     instruction?: string;
-    system?: boolean;
+    merchantAsk?: boolean;
   }): Promise<PendingPlan> {
     const instruction = params.instruction ?? 'reply to the customer';
     const message = await createTestMessage(params.thread.id, 'Please help with this order');
@@ -225,8 +225,8 @@ describe('loadLiveOperatorContext', () => {
       sourceMessageId: message.id,
       planHash: hashPlan(cache.plan),
       instructionHash: hashInstruction(instruction),
-      ...(params.system ? {
-        requestDisplay: { version: 1, kind: 'system', event: 'return_arrival' },
+      ...(params.merchantAsk ? {
+        requestDisplay: { version: 1, kind: 'instruction', text: 'Offer her an exchange' },
       } : {}),
     };
   }
@@ -237,7 +237,7 @@ describe('loadLiveOperatorContext', () => {
     const liveCustomer = await createTestCustomer(org.id, 'live@example.com', { name: 'Live' });
     const liveThread = await createTestThread(org.id, liveCustomer.id, 'email');
     const terminal = await currentPendingPlan({ thread });
-    const live = await currentPendingPlan({ thread: liveThread, system: true });
+    const live = await currentPendingPlan({ thread: liveThread, merchantAsk: true });
     await db.planExecution.create({
       data: {
         planId: terminal.planId!,
@@ -258,7 +258,7 @@ describe('loadLiveOperatorContext', () => {
 
     const pruned = await loadLiveOperatorContext(org.id, 'q7', await getContext(org.id, 'q7'));
     expect(pruned.pendingPlans.map((plan) => plan.planId)).toEqual([live.planId]);
-    expect(pruned.pendingPlans[0]?.requestDisplay?.kind).toBe('system');
+    expect(pruned.pendingPlans[0]?.requestDisplay?.kind).toBe('instruction');
     // The stale entry is also removed from the stored queue.
     expect((await getContext(org.id, 'q7')).pendingPlans.map((plan) => plan.planId)).toEqual([live.planId]);
   });

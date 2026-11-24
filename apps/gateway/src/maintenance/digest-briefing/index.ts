@@ -6,11 +6,7 @@ export { formatHandledSection } from './handled-section.js';
 export { formatNeedsYouProse } from './needs-you.js';
 export { formatPhotoWaitLine, loadPhotoWaits } from './photo-waits.js';
 export { rowHasNoRequest, rowRequestFacts } from './request-facts.js';
-export {
-  countWord,
-  resolveHandledWindowStart,
-  truncateBriefingText,
-} from './text.js';
+export { countWord, resolveHandledWindowStart } from './text.js';
 export {
   formatBlockedTicketLine,
   formatTicketLine,

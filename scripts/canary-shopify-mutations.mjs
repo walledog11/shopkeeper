@@ -79,7 +79,6 @@ const TEST_ORDER_ONLY_FAMILIES = new Set([
   'update_shopify_order_address',
   'return_label',
   'fulfill_order',
-  'order_risk_fixture',
 ]);
 
 if (
@@ -544,75 +543,6 @@ async function createCanaryOrderFixture(
     name: order.name ?? null,
     customerId: String(order.customer.id).replace(/^gid:\/\/shopify\/Customer\//, ''),
     variants,
-  };
-}
-
-async function createOrderRiskCanaryFixture(ctx, currency) {
-  const email = `shopkeeper-order-risk-canary+${Date.now()}@example.com`;
-  const variables = {
-    order: {
-      email,
-      test: true,
-      financialStatus: 'PENDING',
-      lineItems: [{
-        title: 'Shopkeeper order-risk canary',
-        quantity: 1,
-        priceSet: { shopMoney: { amount: '300.00', currencyCode: currency } },
-      }],
-      customer: {
-        toUpsert: { email, firstName: 'Canary', lastName: 'Shopkeeper' },
-      },
-      billingAddress: {
-        firstName: 'Canary',
-        lastName: 'Shopkeeper',
-        address1: '1 Canary Test St',
-        city: 'Portland',
-        provinceCode: 'OR',
-        zip: '97201',
-        countryCode: 'US',
-      },
-      shippingAddress: {
-        firstName: 'Canary',
-        lastName: 'Shopkeeper',
-        address1: '1 Canary Test St',
-        city: 'Vancouver',
-        provinceCode: 'BC',
-        zip: 'V6B 1A1',
-        countryCode: 'CA',
-      },
-      tags: ['shopkeeper-canary', 'shopkeeper-order-risk-canary'],
-    },
-    options: { sendReceipt: false, sendFulfillmentReceipt: false },
-  };
-  const skipped = await shopifyGraphql(
-    ctx,
-    skippedMutationDocument({
-      document: CANARY_FULFILLED_ORDER_CREATE_MUTATION,
-      rootField: 'orderCreate',
-    }),
-    variables,
-    { maxRetries: 0 },
-  );
-  if (skipped && typeof skipped === 'object' && 'orderCreate' in skipped) {
-    throw new Error('Shopify did not honor @skip for the order-risk fixture preflight.');
-  }
-  const data = await shopifyGraphql(
-    ctx,
-    CANARY_FULFILLED_ORDER_CREATE_MUTATION,
-    variables,
-    { maxRetries: 0 },
-  );
-  const userErrors = data.orderCreate?.userErrors ?? [];
-  if (userErrors.length > 0) {
-    throw new Error(`Could not create order-risk test order: ${userErrors.map((error) => error.message).join(', ')}`);
-  }
-  const order = data.orderCreate?.order;
-  if (!order?.id || order.test !== true) {
-    throw new Error('Shopify did not return a test order for the order-risk fixture.');
-  }
-  return {
-    id: String(order.id).replace(/^gid:\/\/shopify\/Order\//, ''),
-    name: order.name ?? null,
   };
 }
 
@@ -1427,18 +1357,6 @@ async function runCanaries(ctx, inspection, returnFixture, exchangeFixture) {
         message: result.message,
         probeOutcome: probe.outcome,
         probeMessage: probe.message,
-      };
-    }));
-  }
-
-  if (shouldRun('order_risk_fixture') && inspection.shop.mutationsAllowed) {
-    results.push(await runFamily('order_risk_fixture', async () => {
-      const fixture = await createOrderRiskCanaryFixture(ctx, inspection.shop.currency);
-      return {
-        status: 'ok',
-        message: `Created controlled order-risk test fixture ${fixture.name ?? fixture.id}.`,
-        orderId: fixture.id,
-        orderName: fixture.name,
       };
     }));
   }

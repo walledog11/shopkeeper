@@ -295,9 +295,9 @@ export async function runAgent(
       operatorMode,
     });
     // runAgent is the support/composer entry: it builds a support-shaped system
-    // prompt and tool set. Thread-less modules (order-ops and later) run through the
-    // shared loop (runAgentLoop) via their own entrypoint, not here — the executor
-    // and loop are thread-optional, so nothing blocks them.
+    // prompt and tool set. A thread-less module runs through the shared loop
+    // (runAgentLoop) via its own entrypoint, not here — the executor and loop are
+    // thread-optional, so nothing blocks it.
     if (!isSupportContext(ctx)) {
       return finish({ summary: "This agent run requires a support context.", actionsPerformed }, "unsupported_context");
     }

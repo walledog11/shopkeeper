@@ -90,12 +90,6 @@ export interface AiSummaryJobData {
   modelOutageSince?: number;
 }
 
-export interface OrderReviewJobData {
-  organizationId: string;
-  orderId: string;
-  traceId?: string;
-}
-
 export type OutboundEmailSource =
   | 'dispatch_message'
   | 'agent_send_reply'

@@ -107,13 +107,9 @@ const baselineDashboardEstimate = (
   + judgedFixtures.length * repeats * judgeCostPerRun
 ) * dashboardUsdContingency;
 const TARGETED_COLD_START_USD_PER_REPEAT = 0.046 * 1.2;
-const dashboardEstimate = mode === 'targeted'
+const estimatedUsd = mode === 'targeted'
   ? Math.max(baselineDashboardEstimate, TARGETED_COLD_START_USD_PER_REPEAT * repeats)
   : baselineDashboardEstimate;
-// The gateway suite is the five `order-ops.eval.integration.test.ts` fixtures at ~2 model
-const gatewayCallEstimate = mode === 'targeted' ? 0 : 3;
-const gatewayEstimate = mode === 'targeted' ? 0 : 0.03;
-const estimatedUsd = dashboardEstimate + gatewayEstimate;
 // Aggregate release/baseline runs can use observed average usage because dozens
 // of fixtures share one ceiling. A small targeted run cannot: one planner may
 // consume all 10 configured iterations, then retry once with the full registry.
@@ -128,10 +124,9 @@ const targetedCallEstimate = fixtures.reduce((total, fixture) => (
   + (fixture.expectedPlan?.expectedAgentActions ? AGENT_MAX_ITERATIONS : 0)
   + (judgedFixtures.includes(fixture) ? 1 : 0)
 ), 0) * repeats;
-const dashboardCallEstimate = mode === 'targeted'
+const estimatedCalls = mode === 'targeted'
   ? targetedCallEstimate
   : Math.ceil(fixtures.length * repeats * RELEASE_DASHBOARD_CALLS_PER_RUN);
-const estimatedCalls = dashboardCallEstimate + gatewayCallEstimate;
 
 if (estimatedUsd > maxUsd) {
   throw new Error(`Estimated $${estimatedUsd.toFixed(2)} exceeds the approved $${maxUsd.toFixed(2)} ceiling`);
@@ -140,39 +135,18 @@ if (estimatedCalls > maxCalls) {
   throw new Error(`Estimated ${estimatedCalls} calls exceeds the approved ${maxCalls}-call ceiling`);
 }
 
-// The release gateway is one hard case with at most one confirmation retry. A
-// percentage of the total ceiling substantially over-reserved it and starved
-// the 48-fixture dashboard job: run 32627931331 spent $0.0088 in the gateway
-// while the dashboard crossed its $0.6375 sub-limit at $0.6633, still below the
-// $0.75 total authorization. Keep $0.05 for the bounded gateway path and leave
-// $0.70 for the larger release suite. Drift/baseline retain proportional room.
-const gatewayUsd = gatewayEstimate === 0 ? 0 : Math.max(gatewayEstimate * 1.5, 0.05);
-const dashboardMaxUsd = maxUsd - gatewayUsd;
-if (dashboardMaxUsd <= dashboardEstimate) {
-  throw new Error(`Dashboard allocation $${dashboardMaxUsd.toFixed(2)} does not cover its $${dashboardEstimate.toFixed(2)} estimate`);
-}
-const gatewayMaxCalls = mode === 'targeted' ? 0 : 6;
-const dashboardMaxCalls = maxCalls - gatewayMaxCalls;
-if (dashboardMaxCalls <= 0) throw new Error('Call ceiling leaves no dashboard allocation');
-
 const output = {
   fixture_count: fixtures.length,
   judged_fixture_count: judgedFixtures.length,
   estimated_usd: estimatedUsd.toFixed(4),
   estimated_calls: String(estimatedCalls),
-  dashboard_max_usd: dashboardMaxUsd.toFixed(4),
-  dashboard_max_calls: String(dashboardMaxCalls),
-  gateway_max_usd: gatewayUsd.toFixed(4),
-  gateway_max_calls: String(gatewayMaxCalls),
+  dashboard_max_usd: maxUsd.toFixed(4),
+  dashboard_max_calls: String(maxCalls),
 };
 
 console.log(
   `[eval:preflight] mode=${mode} fixtures=${fixtures.length} repeats=${repeats} judges=${judgedFixtures.length} `
   + `estimate=$${output.estimated_usd}/${maxUsd.toFixed(2)} calls=${estimatedCalls}/${maxCalls}`,
-);
-console.log(
-  `[eval:preflight] allocations dashboard=$${output.dashboard_max_usd}/${output.dashboard_max_calls}calls `
-  + `gateway=$${output.gateway_max_usd}/${output.gateway_max_calls}calls`,
 );
 
 const githubOutput = args.get('github-output');

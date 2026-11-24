@@ -1,4 +1,4 @@
-import { isRecord } from "./guards.js";
+import { isRecord } from "@shopkeeper/shared/guards";
 import { bindReplyPlaceholders, isResultBinding } from "./reply-placeholders.js";
 import type {
   AgentPlan,

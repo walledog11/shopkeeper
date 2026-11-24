@@ -17,7 +17,7 @@ logging, locks, and thread sinks where needed.
   - `@shopkeeper/agent/tools`, `@shopkeeper/agent/executor`, `@shopkeeper/agent/shopify`
   - `@shopkeeper/agent/settings`, `@shopkeeper/agent/spend`, `@shopkeeper/agent/usage`
   - `@shopkeeper/agent/ai`, `@shopkeeper/agent/logger`, `@shopkeeper/agent/lock`
-  - `@shopkeeper/agent/observability`, `@shopkeeper/agent/order-ops`
+  - `@shopkeeper/agent/observability`
   - `@shopkeeper/agent/turn`, `@shopkeeper/agent/plan-execution`, `@shopkeeper/agent/thread-auth`
 
 See `package.json` `exports` for the full list of supported subpaths.

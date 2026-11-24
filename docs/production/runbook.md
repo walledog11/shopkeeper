@@ -743,7 +743,7 @@ A retry-exhausted job lands in its queue's `failed` set. It is evidence, not pro
 operation failed — compare with Postgres and provider truth before replaying or removing it. Queues:
 `inbound-messages` (email, new Shopify orders, deferred Instagram DMs), `ai-summary` (summary, plan
 precompute, auto-ack, notifications), `outbound-email`, `gmail-sync`, `gmail-watch-maintenance`,
-`order-review`, `operator-event`, `agent-task`, `integration-disconnect`.
+`operator-event`, `agent-task`, `integration-disconnect`.
 
 Inspect with production `REDIS_URL` loaded (e.g. via `railway run`); it prints counts and identifiers
 only — never dump raw `job.data`, which can hold message content. The script calls `loadGatewayEnv`,
@@ -770,7 +770,6 @@ If the evidence does not fit the safe condition, escalate instead of replaying:
 | `ai-summary` | `sourceMessageId`, latest customer message, cached-plan identity, any `PlanExecution` | Only while `sourceMessageId` is still the latest customer request; leave stale jobs superseded. No stable source identity = not replayable. |
 | `gmail-sync` | History cursor, Gmail message ID, stable `gmail-inbound-<integration>-<message>` jobs | Replay after credentials/provider recover; the checkpoint is monotonic and inbound jobs use stable IDs. |
 | `gmail-watch-maintenance` | Watch expiration/status, catch-up admission, Pub/Sub config | Prefer the next 12-hour run after the fix; one manual run only for an expired/near-expiry watch or overdue catch-up. Never create a second repeat schedule. |
-| `order-review` | Organization/order identity, existing `AgentAction` rows | One original job after the model/provider fix; duplicate audit observations and model cost are possible. |
 | `outbound-email` | `Message.sendStatus`, `sendAttemptedAt`, `providerMessageId`, RFC `Message-ID`, provider activity | **Never generic replay** — [outbound-email recovery](#failed-or-unknown-outbound-email-recovery). |
 | `operator-event` | `OperatorEvent.status`, claim timestamps, `replyText`, `replyDeliveredAt`, provider activity | **Never replay a claimed or terminal turn.** A `pending` event may be re-enqueued with its same ID; the sweep reconciles stale claims to `unknown` and may resend a committed reply but never reruns the turn. |
 | `agent-task`, `integration-disconnect` | The durable task / `IntegrationDisconnect` row | No generic replay; their sweeps own retry. Escalate. |
@@ -783,7 +782,7 @@ job's identity (production `REDIS_URL` in the shell; this does not read `apps/ga
 
 ```bash
 cd apps/gateway
-QUEUE_NAME='gmail-sync' JOB_ID='<failed-job-id>' npx tsx -e "import { getGatewayBullMqQueue, closeGatewayBullMqQueues } from './src/clients/gateway-queues.ts'; import { closeGatewayRedisConnections } from './src/clients/redis-client.ts'; (async () => { const replayable = new Set(['inbound-messages','ai-summary','gmail-sync','gmail-watch-maintenance','order-review']); const name = process.env.QUEUE_NAME ?? ''; const id = process.env.JOB_ID ?? ''; if (!replayable.has(name) || !id) throw new Error('QUEUE_NAME is not generically replayable or JOB_ID is missing'); const q = getGatewayBullMqQueue(name); try { const job = await q.getJob(id); if (!job) throw new Error('Job not found'); if (await job.getState() !== 'failed') throw new Error('Job is not failed'); await job.retry('failed'); console.log('Retried job', job.id, 'on', name); } finally { await closeGatewayBullMqQueues(); await closeGatewayRedisConnections(); } })().catch((e) => { console.error(e); process.exit(1); });"
+QUEUE_NAME='gmail-sync' JOB_ID='<failed-job-id>' npx tsx -e "import { getGatewayBullMqQueue, closeGatewayBullMqQueues } from './src/clients/gateway-queues.ts'; import { closeGatewayRedisConnections } from './src/clients/redis-client.ts'; (async () => { const replayable = new Set(['inbound-messages','ai-summary','gmail-sync','gmail-watch-maintenance']); const name = process.env.QUEUE_NAME ?? ''; const id = process.env.JOB_ID ?? ''; if (!replayable.has(name) || !id) throw new Error('QUEUE_NAME is not generically replayable or JOB_ID is missing'); const q = getGatewayBullMqQueue(name); try { const job = await q.getJob(id); if (!job) throw new Error('Job not found'); if (await job.getState() !== 'failed') throw new Error('Job is not failed'); await job.retry('failed'); console.log('Retried job', job.id, 'on', name); } finally { await closeGatewayBullMqQueues(); await closeGatewayRedisConnections(); } })().catch((e) => { console.error(e); process.exit(1); });"
 ```
 
 Removing a stale failed record is housekeeping, not recovery: capture its sanitized evidence, verify

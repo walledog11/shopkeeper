@@ -13,8 +13,6 @@ const REQUEST_DISPLAY_VERSION = 1 as const;
 const REQUEST_FACTS_MIN_VERSION = 5;
 const DISPLAY_TOPIC_LIMIT = 120;
 
-export type SystemRequestKind = 'delivery_exception' | 'return_arrival';
-
 export type RequestDisplay =
   | {
       version: typeof REQUEST_DISPLAY_VERSION;
@@ -23,11 +21,6 @@ export type RequestDisplay =
       facts: RequestFacts;
       noRequest: boolean;
       topic: string | null;
-    }
-  | {
-      version: typeof REQUEST_DISPLAY_VERSION;
-      kind: 'system';
-      event: SystemRequestKind;
     }
   | {
       version: typeof REQUEST_DISPLAY_VERSION;
@@ -40,21 +33,12 @@ export type RequestDisplay =
       kind: 'unavailable';
     };
 
-const SYSTEM_REQUEST_LINES: Record<SystemRequestKind, string> = {
-  delivery_exception: 'System follow-up: a delivery exception needs review',
-  return_arrival: 'System follow-up: a returned item arrived',
-};
-
 function boundedTopic(text: string | null | undefined): string | null {
   const compact = text?.replace(/\s+/g, ' ').trim();
   if (!compact) return null;
   return compact.length > DISPLAY_TOPIC_LIMIT
     ? `${compact.slice(0, DISPLAY_TOPIC_LIMIT).trimEnd()}…`
     : compact;
-}
-
-export function systemRequestDisplay(event: SystemRequestKind): RequestDisplay {
-  return { version: REQUEST_DISPLAY_VERSION, kind: 'system', event };
 }
 
 export function instructionRequestDisplay(text: string): RequestDisplay {
@@ -75,7 +59,6 @@ export function requestDisplayHasContext(
   now = new Date(),
 ): boolean {
   if (!display || display.kind === 'unavailable') return false;
-  if (display.kind === 'system') return true;
   if (display.kind === 'instruction') return display.text !== '';
   return formatFactsBriefingLine(display.facts, null, now, {
     noRequest: display.noRequest,
@@ -99,9 +82,7 @@ export async function buildRequestDisplaySnapshot(params: {
   threadId: string;
   sourceMessageId?: string | null;
   rawToolCalls?: readonly unknown[];
-  systemEvent?: SystemRequestKind;
 }): Promise<RequestDisplay> {
-  if (params.systemEvent) return systemRequestDisplay(params.systemEvent);
   if (!params.sourceMessageId) return unavailableRequestDisplay();
 
   const thread = await db.thread.findFirst({
@@ -137,16 +118,8 @@ export async function buildRequestDisplaySnapshot(params: {
   };
 }
 
-function readSystemRequestKind(value: unknown): SystemRequestKind | null {
-  return value === 'delivery_exception' || value === 'return_arrival' ? value : null;
-}
-
 export function readRequestDisplay(value: unknown): RequestDisplay | undefined {
   if (!isRecord(value) || value.version !== REQUEST_DISPLAY_VERSION) return undefined;
-  if (value.kind === 'system') {
-    const event = readSystemRequestKind(value.event);
-    return event ? systemRequestDisplay(event) : unavailableRequestDisplay();
-  }
   if (value.kind === 'unavailable') return unavailableRequestDisplay();
   if (value.kind === 'instruction') {
     return typeof value.text === 'string' && value.text.trim()
@@ -181,7 +154,6 @@ export function formatRequestDisplayLine(
   if (!display || display.kind === 'unavailable') {
     return 'Request details unavailable — open the thread for the original message';
   }
-  if (display.kind === 'system') return SYSTEM_REQUEST_LINES[display.event];
   if (display.kind === 'instruction') return `You asked: ${display.text}`;
   return formatFactsBriefingLine(display.facts, person, now, {
     noRequest: display.noRequest,

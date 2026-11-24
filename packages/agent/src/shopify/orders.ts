@@ -121,11 +121,10 @@ export async function getOrderFulfillmentStatus(
 export async function listRecentUnfulfilledOrderIds(
   ctx: ShopifyContext,
   limit = 10,
-  createdSince?: Date,
 ): Promise<string[]> {
   const { orders } = await findShopifyOrders(
     ctx,
-    { open: true, unfulfilled: true, paid: true, ...(createdSince ? { createdAtMin: createdSince } : {}) },
+    { open: true, unfulfilled: true, paid: true },
     { first: limit, lineItems: 1 },
   );
   return orders.map((order) => String(order.id));

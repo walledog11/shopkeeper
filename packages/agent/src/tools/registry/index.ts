@@ -1,9 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { resolveAgentSettings } from "../../settings.js";
-import type { BaseAgentContext } from "../../agent-context.js";
 import type { OrgSettings } from "../../types.js";
 import { CUSTOMER_TOOL_DEFINITIONS } from "./customer.js";
-import { contextCapabilities } from "./helpers.js";
 import { KNOWLEDGE_TOOL_DEFINITIONS } from "./knowledge.js";
 import { MESSAGING_TOOL_DEFINITIONS } from "./messaging.js";
 import { ORDER_TOOL_DEFINITIONS } from "./order.js";
@@ -190,19 +188,4 @@ export function selectAgentTools(
     if (grantedScopes && !toolScopesGranted(tool.name, grantedScopes)) return false;
     return true;
   });
-}
-
-// Capability-aware selection for module loops: on top of the category/allowlist
-// filter, drops any tool whose declared capabilities the context can't satisfy.
-// A thread-less module (order-ops) selects reads + escalation without ever
-// surfacing thread-io tools, so the shared executor never has to reject them.
-export function selectAgentToolsForContext(
-  ctx: BaseAgentContext,
-  settings?: OrgSettings,
-  allowedToolNames?: readonly string[] | null,
-): Anthropic.Tool[] {
-  const provided = contextCapabilities(ctx);
-  return selectAgentTools(settings, allowedToolNames).filter((tool) =>
-    (TOOL_CAPABILITIES[tool.name] ?? []).every((capability) => provided.has(capability))
-  );
 }

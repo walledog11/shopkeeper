@@ -22,7 +22,6 @@ type QueueHealthQueueLabel =
   | 'aiSummary'
   | 'outboundEmail'
   | 'gmailSync'
-  | 'orderReview'
   | 'operatorEvent'
   | 'agentTask'
   | 'integrationDisconnect';
@@ -209,7 +208,6 @@ export const registerQueueHealthMaintenanceJob: MaintenanceJobRegistration = asy
   const summaryQueue = createMaintenanceQueue(context, QUEUE.AI_SUMMARY);
   const outboundEmailQueue = createMaintenanceQueue(context, QUEUE.OUTBOUND_EMAIL);
   const gmailSyncQueue = createMaintenanceQueue(context, QUEUE.GMAIL_SYNC);
-  const orderReviewQueue = createMaintenanceQueue(context, QUEUE.ORDER_REVIEW);
   const operatorEventQueue = createMaintenanceQueue(context, QUEUE.OPERATOR_EVENT);
   const agentTaskQueue = createMaintenanceQueue(context, QUEUE.AGENT_TASK);
   const integrationDisconnectQueue = createMaintenanceQueue(
@@ -236,7 +234,6 @@ export const registerQueueHealthMaintenanceJob: MaintenanceJobRegistration = asy
         queue: agentTaskQueue,
         thresholds: AGENT_TASK_THRESHOLDS,
       },
-      { label: 'orderReview', queueName: QUEUE.ORDER_REVIEW, queue: orderReviewQueue },
       {
         label: 'operatorEvent',
         queueName: QUEUE.OPERATOR_EVENT,
@@ -265,7 +262,6 @@ export const registerQueueHealthMaintenanceJob: MaintenanceJobRegistration = asy
       summaryQueue,
       outboundEmailQueue,
       gmailSyncQueue,
-      orderReviewQueue,
       operatorEventQueue,
       agentTaskQueue,
       integrationDisconnectQueue,

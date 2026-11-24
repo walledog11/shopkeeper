@@ -176,8 +176,8 @@ async function quoteModelFullRefund(
   }
 }
 
-// A context carries a support thread iff it has a `thread`. Thread-less modules
-// (order-ops, Track 3) supply a BaseAgentContext with no thread/customer.
+// A context carries a support thread iff it has a `thread`. A thread-less module
+// supplies a BaseAgentContext with no thread/customer.
 export function isSupportContext(ctx: BaseAgentContext): ctx is SupportContext {
   return (ctx as Partial<SupportContext>).thread != null;
 }

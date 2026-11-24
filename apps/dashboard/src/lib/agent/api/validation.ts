@@ -217,7 +217,7 @@ export interface ActionLogFilters {
   tools?: string[];
   modes?: ActionLogMode[];
   errorsOnly?: boolean;
-  // Turns that need a human: escalations, fraud flags, errors, policy blocks.
+  // Turns that need a human: escalations, errors, policy blocks.
   attention?: boolean;
   // Drop operator-channel turns (Concierge/Telegram) — the merchant was the requester.
   excludeOperator?: boolean;

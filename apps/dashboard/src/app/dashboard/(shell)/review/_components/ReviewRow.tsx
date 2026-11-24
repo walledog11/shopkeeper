@@ -6,7 +6,7 @@ import {
   formatRequestOutcomeSummary,
 } from "@/lib/agent/action-log-display"
 import { RelativeTime } from "@/components/ui/relative-time"
-import { getActionLogChannelInfo } from "@/lib/messaging/channels"
+import { getChannelInfo } from "@/lib/messaging/channels"
 import { boardCardShellClassName } from "@/lib/ui/board-card-styles"
 import { cn } from "@/lib/ui/cn"
 import type { ActionLogEntry } from "@/types"
@@ -32,7 +32,7 @@ export function ReviewRow({
   isNew: boolean
   onOpen: () => void
 }) {
-  const channel = getActionLogChannelInfo(entry)
+  const channel = getChannelInfo(entry.channelType)
   const headline = formatActionLogHeadline(entry)
   const href = actionLogEntryHref(entry)
   const sourceLabel = sourceLinkLabel(href)

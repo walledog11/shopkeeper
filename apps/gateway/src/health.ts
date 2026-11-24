@@ -49,7 +49,6 @@ const DIAGNOSTIC_QUEUES = [
   { label: 'outboundEmail', queueName: QUEUE.OUTBOUND_EMAIL },
   { label: 'gmailSync', queueName: QUEUE.GMAIL_SYNC },
   { label: 'gmailWatchMaintenance', queueName: QUEUE.GMAIL_WATCH },
-  { label: 'orderReview', queueName: QUEUE.ORDER_REVIEW },
   { label: 'operatorEvent', queueName: QUEUE.OPERATOR_EVENT },
   { label: 'agentTask', queueName: QUEUE.AGENT_TASK },
   { label: 'integrationDisconnect', queueName: QUEUE.INTEGRATION_DISCONNECT },

@@ -240,7 +240,6 @@ describe('health routes', () => {
         'outboundEmail',
         'gmailSync',
         'gmailWatchMaintenance',
-        'orderReview',
         'operatorEvent',
         'agentTask',
         'integrationDisconnect',
@@ -254,7 +253,6 @@ describe('health routes', () => {
         'outbound-email',
         'gmail-sync',
         'gmail-watch-maintenance',
-        'order-review',
         'operator-event',
         'integration-disconnect',
       ]));

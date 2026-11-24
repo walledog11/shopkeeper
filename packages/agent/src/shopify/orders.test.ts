@@ -34,17 +34,6 @@ describe("listRecentUnfulfilledOrderIds", () => {
     });
   });
 
-  it("bounds discovery to the given window when one is supplied", async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(ordersPage([{ id: 1001 }]));
-    vi.stubGlobal("fetch", fetchMock);
-    const since = new Date("2026-08-03T00:00:00.000Z");
-
-    await listRecentUnfulfilledOrderIds(ctx, 10, since);
-
-    expect(graphqlRequest(fetchMock.mock.calls[0]?.[1])?.variables.query)
-      .toContain('created_at:>="2026-08-03T00:00:00.000Z"');
-  });
-
   it("returns an empty list when Shopify responds with no orders", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(ordersPage([])));
 

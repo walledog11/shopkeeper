@@ -1,6 +1,6 @@
 import { SENDER_TYPE } from "./thread-constants.js"
 import type { AgentPlan, ClassifierAlignmentState, PlanRoutingEvidence, PlanRoutingEvidenceCode, PlanSignal, PlanStep, PlanValidation, PlanValidationIssue, PlanValidationIssueCode, RawToolCall, ToolCategory } from "./types.js"
-import { isRecord } from "./guards.js"
+import { isRecord } from "@shopkeeper/shared/guards"
 import { isProposalCommunication } from "./proposal-communication.js"
 import { PLAN_ROUTING_EVIDENCE_CODES } from "./routing-evidence.js"
 export type PlanThreadMessage = {

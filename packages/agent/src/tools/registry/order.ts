@@ -1,4 +1,4 @@
-import { noShopify, requireShopify, maybeRecordReturnWatch } from "./helpers.js";
+import { noShopify, requireShopify } from "./helpers.js";
 import { defineTool } from "./schema.js";
 import { TOOL_INPUT_FIELDS } from "./input-fields.js";
 import { toolPolicyBlock } from "../result.js";
@@ -244,10 +244,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     planStepLabel: "Open return",
     execute: async (input, ctx, _settings, deps) => {
       const shopify = requireShopify(ctx);
-      if (!shopify) return noShopify;
-      const result = await deps.createReturn(input, shopify);
-      await maybeRecordReturnWatch(ctx, result, deps);
-      return result;
+      return shopify ? deps.createReturn(input, shopify) : noShopify;
     },
   }),
   defineTool({
@@ -268,10 +265,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     },
     execute: async (input, ctx, _settings, deps) => {
       const shopify = requireShopify(ctx);
-      if (!shopify) return noShopify;
-      const result = await deps.createExchange(input, shopify);
-      await maybeRecordReturnWatch(ctx, result, deps);
-      return result;
+      return shopify ? deps.createExchange(input, shopify) : noShopify;
     },
   }),
   defineTool({

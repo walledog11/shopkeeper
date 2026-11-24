@@ -3,35 +3,25 @@
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import useSWR, { useSWRConfig } from "swr"
+import { useSWRConfig } from "swr"
 import { ShoppingBag } from "lucide-react"
 import { OrdersPageSkeleton } from "@/app/dashboard/_components/skeletons"
 import { dashboardPageShellClassName } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
 import { shopNavItem } from "@/app/dashboard/_components/nav-items"
 import { PageTitle } from "@/app/dashboard/_components/PageTitle"
 import { SearchFilterBar } from "@/components/ui/search-filter-bar"
-import { requestJson } from "@/lib/api/fetcher"
 import { useCursorListState } from "@/lib/api/use-cursor-list-state"
 import { INTEGRATIONS_SWR_KEY, useIntegrations } from "@/hooks/useIntegrations"
 import { isShopifyIntegrationActive, isShopifyOrdersUnavailable } from "@/lib/integrations/shopify-connection"
 import type { OrderRow } from "@/lib/orders/order-contract"
 import { OrderDetailDialog } from "./OrderDetailDialog"
-import { ShopSearchResults, ShopStream } from "./ShopStream"
+import { ShopSearchPrompt, ShopSearchResults } from "./ShopStream"
 import { dedupeOrders } from "./orders-board-model"
 import {
   fetchOrdersPage,
   fetchOrdersSearch,
-  type OrderAttentionResponse,
   type OrdersResponse,
 } from "./order-requests"
-
-function useOrderAttention(enabled: boolean) {
-  return useSWR<OrderAttentionResponse>(
-    enabled ? "/api/orders/attention" : null,
-    (url) => requestJson<OrderAttentionResponse>(url, { cache: "no-store" }),
-    { revalidateOnFocus: true, dedupingInterval: 5_000, shouldRetryOnError: false },
-  )
-}
 
 async function fetchColumnPage(pageInfo: string) {
   const page = await fetchOrdersPage(pageInfo)
@@ -73,7 +63,6 @@ export default function OrdersPageClient() {
   const searchActive = debouncedSearch.length > 0
   const hasActiveShopify = Boolean(shopify)
 
-  const attention = useOrderAttention(hasActiveShopify && !searchActive)
   const search = useCursorListState<OrderRow, OrdersResponse>({
     enabled: hasActiveShopify && searchActive,
     buildUrl: () => `/api/orders?q=${encodeURIComponent(debouncedSearch)}`,
@@ -154,13 +143,7 @@ export default function OrdersPageClient() {
               onRetry={() => { void search.mutate() }}
             />
           ) : (
-            <ShopStream
-              findings={attention.data?.findings ?? []}
-              isLoading={attention.isLoading}
-              error={attention.error}
-              onOpenOrder={openOrder}
-              onRetry={() => { void attention.mutate() }}
-            />
+            <ShopSearchPrompt />
           )}
         </div>
       </div>

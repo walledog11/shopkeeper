@@ -5,11 +5,11 @@ import dbHelpers from './db-helpers.cjs';
 const { ChannelType, SenderType, db, deleteTestCustomers, disconnectDb, getE2EOrg } = dbHelpers;
 
 const createdCustomerIds = new Set<string>();
-const createdKnowledgeBaseIds = new Set<string>();
+const createdArticleIds = new Set<string>();
 
 test.afterAll(async () => {
-  if (createdKnowledgeBaseIds.size > 0) {
-    await db.knowledgeBase.deleteMany({ where: { id: { in: [...createdKnowledgeBaseIds] } } });
+  if (createdArticleIds.size > 0) {
+    await db.kbArticle.deleteMany({ where: { id: { in: [...createdArticleIds] } } });
   }
   if (createdCustomerIds.size > 0) {
     await deleteTestCustomers([...createdCustomerIds]);
@@ -24,46 +24,26 @@ test.afterAll(async () => {
 test('browser smoke creates KB article through authenticated app APIs', async ({ page }) => {
   test.skip(process.env.E2E_AUTH_BYPASS !== 'true', 'E2E auth bypass is disabled');
 
-  const runId = randomUUID();
-  const kbName = `Risk KB ${runId}`;
-  const articleTitle = `Risk KB Article ${runId}`;
+  const articleTitle = `Risk KB Article ${randomUUID()}`;
 
   await page.goto('/dashboard/kb');
   await expect(page.getByRole('searchbox', { name: 'Search memory' })).toBeVisible();
 
-  const result = await page.evaluate(async ({ kbName, articleTitle }) => {
-    const kbRes = await fetch('/api/kb/bases', {
+  const result = await page.evaluate(async (content) => {
+    const articleRes = await fetch('/api/kb/context', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: kbName }),
-    });
-    const kbBody = await kbRes.json();
-
-    const articleRes = await fetch(`/api/kb/bases/${kbBody.knowledgeBase.id}/articles`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: articleTitle,
-        body: 'Risk smoke article body',
-        tags: ['risk-smoke'],
-      }),
+      body: JSON.stringify({ content, category: 'auto' }),
     });
     const articleBody = await articleRes.json();
+    return { articleId: articleBody.article?.id, articleStatus: articleRes.status };
+  }, articleTitle);
 
-    return {
-      articleId: articleBody.article?.id,
-      articleStatus: articleRes.status,
-      kbId: kbBody.knowledgeBase?.id,
-      kbStatus: kbRes.status,
-    };
-  }, { kbName, articleTitle });
-
-  expect(result.kbStatus).toBe(201);
   expect(result.articleStatus).toBe(201);
-  createdKnowledgeBaseIds.add(result.kbId);
+  createdArticleIds.add(result.articleId);
 
   await page.goto('/dashboard/kb');
-  await expect(page.getByText(articleTitle)).toBeVisible();
+  await expect(page.getByText(articleTitle).first()).toBeVisible();
 });
 
 test('browser smoke blocks billing-gated message writes without persistence', async ({ page }) => {

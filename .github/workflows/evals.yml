@@ -7,7 +7,6 @@ on:
       - 'packages/agent/**'
       - 'apps/dashboard/src/lib/agent/**'
       - 'apps/dashboard/src/lib/messaging/**'
-      - 'apps/gateway/src/order-ops.eval.integration.test.ts'
       - 'packages/db/refund-spend.ts'
       - 'scripts/eval-budget-preflight.mjs'
       - '.github/workflows/evals.yml'
@@ -16,7 +15,6 @@ on:
       - 'packages/agent/**'
       - 'apps/dashboard/src/lib/agent/**'
       - 'apps/dashboard/src/lib/messaging/**'
-      - 'apps/gateway/src/order-ops.eval.integration.test.ts'
       - 'packages/db/refund-spend.ts'
       - 'scripts/eval-budget-preflight.mjs'
       - '.github/workflows/evals.yml'
@@ -47,12 +45,12 @@ on:
         # dollars, not calls, and the preflight's per-call estimate runs about
         # 9% light against what the core suite actually costs. Measured
         # 2026-09-10 at 49 core fixtures, release mode, judges off.
-        description: 'Approved total spend allocation across dashboard and gateway jobs'
+        description: 'Approved total spend for the run'
         type: string
         required: true
         default: '0.90'
       max_model_calls:
-        description: 'Hard total model-call allocation across dashboard and gateway jobs'
+        description: 'Hard total model-call ceiling for the run'
         type: string
         required: true
         default: '120'
@@ -94,8 +92,6 @@ jobs:
         run: node ./scripts/test-bootstrap.mjs
       - name: Run dashboard harness checks without model calls
         run: npm run test:integration -w apps/dashboard -- --run src/lib/agent/__evals__/harness.integration.test.ts
-      - name: Run deterministic gateway pre-filter without model calls
-        run: npm run test:integration -w apps/gateway -- --run src/order-ops.eval.integration.test.ts -t 'order-ops deterministic pre-filter'
       - name: Stop test services
         if: always()
         run: npm run test:services:down
@@ -107,8 +103,6 @@ jobs:
     outputs:
       dashboard_max_usd: ${{ steps.budget.outputs.dashboard_max_usd }}
       dashboard_max_calls: ${{ steps.budget.outputs.dashboard_max_calls }}
-      gateway_max_usd: ${{ steps.budget.outputs.gateway_max_usd }}
-      gateway_max_calls: ${{ steps.budget.outputs.gateway_max_calls }}
       estimated_usd: ${{ steps.budget.outputs.estimated_usd }}
       estimated_calls: ${{ steps.budget.outputs.estimated_calls }}
     steps:
@@ -269,68 +263,22 @@ jobs:
       - if: always()
         run: npm run test:services:down
 
-  release-gateway:
-    name: Paid release gate — gateway hard case
-    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'release'
-    needs: [deterministic-preflight, budget-preflight]
-    runs-on: ubuntu-latest
-    env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      EVAL_REPEATS: '1'
-      EVAL_RETRY_HARD: '1'
-      EVAL_MAX_USD: ${{ needs.budget-preflight.outputs.gateway_max_usd }}
-      EVAL_MAX_MODEL_CALLS: ${{ needs.budget-preflight.outputs.gateway_max_calls }}
-      REQUIRE_MODEL_EVALS: '1'
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm }
-      - name: Require model credentials
-        run: test -n "$ANTHROPIC_API_KEY" && test "$ANTHROPIC_API_KEY" != test-anthropic-key
-      - run: npm ci
-      - run: npm run test:services:up
-      - run: node ./scripts/test-bootstrap.mjs
-      - name: Run clear-fraud hard gate with failed-case-only confirmation
-        run: |
-          set -o pipefail
-          npm run test:evals -w apps/gateway -- -t 'clear-fraud-multi-signal' 2>&1 | tee gateway-eval.log
-      - name: Require conclusive gateway and budget summaries
-        run: |
-          test -s gateway-eval.log
-          grep -qE '\[order-ops-eval:gates\] clear-fraud (1/1|retries 2/2)' gateway-eval.log
-          grep -qE '\[order-ops-eval:budget\] spent=\$[0-9]' gateway-eval.log
-          grep -qE '\[order-ops-eval:usage\] in=[0-9]' gateway-eval.log
-      - name: Upload complete gateway evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-gateway-evidence
-          path: |
-            gateway-eval.log
-            test-results/eval-ledger.jsonl
-          if-no-files-found: warn
-      - if: always()
-        run: npm run test:services:down
-
   release-summary:
     name: Conclusive release-gate result
     if: always() && github.event_name == 'workflow_dispatch' && inputs.mode == 'release'
-    needs: [release-dashboard, release-gateway, budget-preflight]
+    needs: [release-dashboard, budget-preflight]
     runs-on: ubuntu-latest
     steps:
       - name: Report one paid invocation as pass or fail
         env:
           DASHBOARD_RESULT: ${{ needs.release-dashboard.result }}
-          GATEWAY_RESULT: ${{ needs.release-gateway.result }}
           MAX_USD: ${{ inputs.max_usd }}
           MAX_MODEL_CALLS: ${{ inputs.max_model_calls }}
         run: |
           {
             echo '## Release eval conclusion'
             echo "- Dashboard: $DASHBOARD_RESULT"
-            echo "- Gateway: $GATEWAY_RESULT"
             printf -- '- Approved maximum: %s / %s calls\n' "$MAX_USD" "$MAX_MODEL_CALLS"
             echo '- A failure is a blocker or targeted-diagnosis input; it does not trigger another paid run.'
           } >> "$GITHUB_STEP_SUMMARY"
           test "$DASHBOARD_RESULT" = success
-          test "$GATEWAY_RESULT" = success

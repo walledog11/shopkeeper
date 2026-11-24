@@ -9,7 +9,7 @@ import {
   formatRequestOutcomeDisplay,
 } from "@/lib/agent/action-log-display"
 import { getToolChipLabel } from "@/lib/agent/tool-action-display"
-import { getActionLogChannelInfo } from "@/lib/messaging/channels"
+import { getChannelInfo } from "@/lib/messaging/channels"
 import type { ActionLogEntry } from "@/types"
 import {
   TONE_STYLES,
@@ -55,7 +55,7 @@ export function ReviewDetail({
   entry: ActionLogEntry
   onClose: () => void
 }) {
-  const channel = getActionLogChannelInfo(entry)
+  const channel = getChannelInfo(entry.channelType)
   const headline = formatActionLogHeadline(entry)
   const href = actionLogEntryHref(entry)
   const sourceLabel = sourceLinkLabel(href)

@@ -119,7 +119,6 @@ async function loadOperatorWaitingItems(
           sourceText: sourceMessageText,
           facts: requestFacts,
           topic: requestDisplay.kind === 'classified' ? requestDisplay.topic : null,
-          systemEvent: requestDisplay.kind === 'system' ? requestDisplay.event : undefined,
           rawToolCalls: pendingPlan.rawToolCalls,
           operatorQuestion: readAgentPlanCacheRecordShape(thread?.cachedPlan)?.plan.routingEvidence?.question,
           now,

@@ -125,16 +125,14 @@ The first publication is the App Store. These block review or a new install's fi
   reconciled). Drop `AGENT_RUNTIME_VERSION` from Railway only once no pre-#165 revision
   can be a rollback target ([agent-runtime](agent-runtime.md), *Deployment and
   rollback*). Retire the identity-less operator queue reader once
-  `audit:operator-context-compatibility -- --strict` reports none.
+  `audit:operator-context-compatibility -- --strict` reports none. Once the monitor
+  removal is deployed, drop `return_watches` and its customer-redaction delete in a later
+  release (nothing else reads or writes it).
 - **Moderate advisories in production dependencies:** Next 16.4.3 (an `unstable_cache`
   disclosure; the home summary uses `unstable_cache`) and nodemailer below 10.1.4, whose
   address parser reads the From header of every Gmail-synced message through
   `mailparser` (`parseMime`). Both are pinned in the root `overrides`; CI's dependency
   audit fails only on high. Closes when both are upgraded.
-- **Built but off, with no trigger:** the order-risk and return-lifecycle monitors
-  (`ORDER_RISK_MONITOR_ENABLED`, `RETURN_LIFECYCLE_MONITOR_ENABLED`) have no row here or
-  under Parked saying when they turn on, yet every shared change carries them. Give each
-  a Parked trigger or remove it.
 - **Postmark:** credential canary to an off-domain recipient, then restore the
   forwarding integration and send one reply with an attachment.
 - **Storefront chat on the dev store:** browser matrix, episode boundary, the
@@ -172,7 +170,7 @@ The first publication is the App Store. These block review or a new install's fi
 | The next support-prompt bullet for one bad output | Move `SUPPORT_INSTRUCTIONS` invariants into schema or executor |
 | The next approval-binding stage added to `planAgent` | Split `planAgent` into stages with typed results (bind provider facts, assess, materialize) instead of one function revising the proposal in place |
 | The next task-lifecycle bug, or a fourth plan-producing flow | One owner for claimed attempts (lease, budget, publish, settle) across auto-planning, composer, answers and follow-ups; distinct types for automatic and merchant-approved execution |
-| The next change to merchant-answer KB or order-ops findings | Typed fields instead of regexes in `merchant-answer-kb.ts`, `order-ops/finding.ts` |
+| The next change to merchant-answer KB | Typed fields instead of regexes in `merchant-answer-kb.ts` |
 | Async recovery exercised | Decide async-only outbound email and retire the sync path |
 | The synchronous email rail retired | One outbound envelope in `@shopkeeper/messaging` (pending message, attribution, outcome transitions); hosts supply transport and alerts |
 | A few weeks of real merchant traffic | Baseline outcomes from `request_episode_outcomes`/`agent_actions`/`agent_tasks`/`agent_turn_usage` |

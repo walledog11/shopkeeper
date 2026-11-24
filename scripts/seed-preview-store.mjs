@@ -450,8 +450,6 @@ async function main() {
         { amount: 40, customer_id: jonas.id }],
       ['send_email', 'communication', 'error', 'auto_executed', 'Postmark rejected the address.', t5.id,
         { subject: 'Your linen care guide', body: 'Cool wash, line dry, warm iron while slightly damp.' }],
-      ['flag_order', 'action', 'success', 'auto_executed', 'Flagged order #1044: billing and shipping countries differ.', null,
-        { order_number: '1044' }],
     ];
     for (const [index, [tool, category, status, mode, summary, threadId, input]] of actions.entries()) {
       await prisma.agentAction.create({
