@@ -125,9 +125,7 @@ The first publication is the App Store. These block review or a new install's fi
   reconciled). Drop `AGENT_RUNTIME_VERSION` from Railway only once no pre-#165 revision
   can be a rollback target ([agent-runtime](agent-runtime.md), *Deployment and
   rollback*). Retire the identity-less operator queue reader once
-  `audit:operator-context-compatibility -- --strict` reports none. Once the monitor
-  removal is deployed, drop `return_watches` and its customer-redaction delete in a later
-  release (nothing else reads or writes it).
+  `audit:operator-context-compatibility -- --strict` reports none.
 - **Moderate advisories in production dependencies:** Next 16.4.3 (an `unstable_cache`
   disclosure; the home summary uses `unstable_cache`) and nodemailer below 10.1.4, whose
   address parser reads the From header of every Gmail-synced message through

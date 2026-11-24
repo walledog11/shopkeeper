@@ -286,13 +286,6 @@ async function deleteSelectedCustomerData(
       { threadId: { in: selection.threadIds } }, { taskId: { in: taskIds } },
     ] } });
     await tx.agentTask.deleteMany({ where: { organizationId, id: { in: taskIds } } });
-    const watchWhere = {
-      organizationId,
-      OR: [
-        { threadId: { in: selection.threadIds } },
-        ...(customerOrderIds.length > 0 ? [{ orderId: { in: customerOrderIds } }] : []),
-      ],
-    };
 
     await tx.storefrontChatSession.deleteMany({
       where: {
@@ -318,7 +311,6 @@ async function deleteSelectedCustomerData(
         ],
       },
     });
-    await tx.returnWatch.deleteMany({ where: watchWhere });
     await tx.voiceEdit.deleteMany({ where: threadWhere });
     await tx.kbCitation.deleteMany({ where: threadWhere });
     await tx.agentAction.deleteMany({
