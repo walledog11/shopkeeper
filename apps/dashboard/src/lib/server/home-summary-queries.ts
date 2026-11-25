@@ -1,5 +1,4 @@
-import { db, Prisma } from "@shopkeeper/db"
-import { AGENT_PLAN_CACHE_VERSION } from "@shopkeeper/agent/plan-cache-shape"
+import { db } from "@shopkeeper/db"
 import type { ChannelType } from "@/types"
 import {
   HOME_OVERNIGHT_TOPIC_LIMIT,
@@ -17,8 +16,6 @@ export type MetricsRow = {
   auto_resolved_pct: number | null
   replies_sent_24h: bigint
   overnight_cleared_count: bigint
-  needs_you_count: bigint
-  refunds_pending: bigint
   vips_in_queue: bigint
   has_sent_reply: boolean
 }
@@ -44,10 +41,6 @@ export type RepeatCustomerRow = {
   name: string | null
   platform_id: string
   ticket_count: bigint
-}
-
-export type ThreadIdRow = {
-  id: string
 }
 
 type HomeSummaryWindows = {
@@ -83,60 +76,9 @@ export function getHomeSummaryWindows(now: Date): HomeSummaryWindows {
   }
 }
 
-// A refund waiting on the merchant is a refund step in a plan that is waiting on
-// them, not a ticket's tag: a Returns ticket whose refund already went through
-// waits on nobody.
-const REFUND_TOOLS = ["create_refund", "create_partial_refund"] as const
-
-function planStepsUseTool(tools: readonly string[]) {
-  return Prisma.sql`
-    CASE WHEN jsonb_typeof(t.cached_plan #> '{plan,steps}') = 'array'
-      THEN EXISTS (
-        SELECT 1 FROM jsonb_array_elements(t.cached_plan #> '{plan,steps}') AS step
-        WHERE step->>'tool' IN (${Prisma.join(tools)})
-      )
-      ELSE FALSE
-    END
-  `
-}
-
-export function currentPlanPredicate(organizationId: string) {
-  return Prisma.sql`
-    t.status = 'open'
-    AND t.cached_plan IS NOT NULL
-    AND t.cached_plan_message_id IS NOT NULL
-    AND t.cached_plan->>'version' = ${String(AGENT_PLAN_CACHE_VERSION)}
-    AND CASE
-      WHEN jsonb_typeof(t.cached_plan #> '{plan,steps}') = 'array'
-      THEN jsonb_array_length(t.cached_plan #> '{plan,steps}') > 0
-        OR (
-          t.cached_plan #>> '{plan,validation,status}' = 'invalid'
-        )
-      ELSE FALSE
-    END
-    AND t.cached_plan_message_id = (
-      SELECT m.id
-      FROM messages m
-      WHERE m.thread_id = t.id
-        AND m.deleted_at IS NULL
-        AND m.sender_type <> 'note'
-      ORDER BY m.sent_at DESC, m.id DESC
-      LIMIT 1
-    )
-    AND EXISTS (
-      SELECT 1
-      FROM messages cached_message
-      WHERE cached_message.id = t.cached_plan_message_id
-        AND cached_message.thread_id = t.id
-        AND cached_message.deleted_at IS NULL
-        AND cached_message.sender_type = 'customer'
-    )
-    AND ${canonicalInboxThreadSql(organizationId)}
-  `
-}
-
-// The headline counts: open, waiting on the merchant, replies sent. The app
-// home inside Shopify admin shows these without the rest of the summary.
+// The headline counts: open and replies sent. The app home inside Shopify
+// admin shows these, with the needs-you count (`loadNeedsYouThreads`), without
+// the rest of the summary.
 export function loadHomeMetricRows(
   organizationId: string,
   now: Date,
@@ -212,17 +154,6 @@ export function loadHomeMetricRows(
           AND t.updated_at >= ${last24h}
           AND t.updated_at <= ${now}
       )::bigint AS overnight_cleared_count,
-      (
-        SELECT COUNT(*)::bigint
-        FROM threads t
-        WHERE ${currentPlanPredicate(organizationId)}
-      ) AS needs_you_count,
-      (
-        SELECT COUNT(*)::bigint
-        FROM threads t
-        WHERE ${currentPlanPredicate(organizationId)}
-          AND ${planStepsUseTool(REFUND_TOOLS)}
-      ) AS refunds_pending,
       (
         SELECT COUNT(*)::bigint
         FROM inbox_threads vip_thread

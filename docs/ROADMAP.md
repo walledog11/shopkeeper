@@ -108,9 +108,10 @@ The first publication is the App Store. These block review or a new install's fi
   the operator thread quotes the customer's message, the draft and each write's values
   (an address, a note), and operator turns read it back as an assistant row without
   `wrapUntrusted`. Wrap the customer-derived spans where cards are mirrored.
-- **Dashboard refinement, next:** one count of what needs the merchant (Home's summary
-  and the inbox's Needs review count plans differently), a phone-width pass, and a read
-  of every text and email the merchant receives.
+- **Dashboard refinement, next:** inbox rows with one pattern (the title says what the
+  customer wants, plus one status and one action; today some buttons are statuses and
+  some titles are the proposal), a phone-width pass, and a read of every text and email
+  the merchant receives.
 - **Concurrency-safe LLM allowances.** Parallel calls can spend the same remainder, and a
   usage write that fails (or names an unpriced model) is logged by `recordSpend` and
   dropped. Reserve before each provider call and reconcile after; keep unknown

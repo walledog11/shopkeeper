@@ -6,12 +6,14 @@ import { shopifyPermissionRows, type ShopifyPermissionRow } from '@/lib/integrat
 import logger from '@/lib/server/logger';
 import { getHomeChannelState } from '@/lib/server/home-summary';
 import { getHomeSummaryWindows, loadHomeMetricRows } from '@/lib/server/home-summary-queries';
+import { loadNeedsYouThreads } from '@/lib/server/needs-you';
 import {
   isShopifyIntegrationOperational,
   missingShopifyScopes,
   recordedShopifyScopes,
 } from '@/lib/server/shopify-integration';
 import type { ChatConfigurationResponse } from '@/lib/storefront-chat/configuration';
+import type { OrgSettings } from '@/types';
 import { isStorefrontChatGloballyEnabled } from '@/lib/storefront-chat/enabled';
 import { chatConfigurationFromIntegration } from '@/lib/storefront-chat/service';
 import { buildShopifyThemeEditorAppEmbedUrl } from '@/lib/storefront-chat/theme-editor';
@@ -153,12 +155,19 @@ async function refreshGrant(
 async function loadMetrics(organizationId: string): Promise<ShopifyAppHomeMetrics | null> {
   const now = new Date();
   try {
-    const [row] = await loadHomeMetricRows(organizationId, now, getHomeSummaryWindows(now));
-    if (!row) return { needsYou: 0, open: 0, repliesSent24h: 0 };
+    const organization = await db.organization.findUnique({
+      where: { id: organizationId },
+      select: { settings: true },
+    });
+    // The same count as the dashboard's Home and inbox.
+    const [[row], needsYou] = await Promise.all([
+      loadHomeMetricRows(organizationId, now, getHomeSummaryWindows(now)),
+      loadNeedsYouThreads(organizationId, organization?.settings as Partial<OrgSettings> | null),
+    ]);
     return {
-      needsYou: Number(row.needs_you_count),
-      open: Number(row.open_count),
-      repliesSent24h: Number(row.replies_sent_24h),
+      needsYou: needsYou.length,
+      open: Number(row?.open_count ?? 0),
+      repliesSent24h: Number(row?.replies_sent_24h ?? 0),
     };
   } catch (error) {
     logger.error({ err: error, orgId: organizationId }, '[Shopify app home] Failed to load counts');

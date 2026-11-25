@@ -138,6 +138,7 @@ function Harness() {
       spamTickets: [],
       tickets: [],
       totalCount: 0,
+      needsYouCount: null,
     },
   }
 

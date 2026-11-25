@@ -3,7 +3,6 @@ import type { HomeActionDisplay } from "@shopkeeper/agent/plan-preview"
 
 export const HOME_SUMMARY_REFRESH_INTERVAL_MS =
   process.env.NEXT_PUBLIC_GATEWAY_EVENTS_URL ? 60_000 : 30_000
-export const HOME_NEEDS_ATTENTION_LIMIT = 5
 export const HOME_OVERNIGHT_TOPIC_LIMIT = 4
 export const HOME_REPEAT_CUSTOMER_LIMIT = 4
 
@@ -36,7 +35,7 @@ export interface HomeNeedsAttentionItem {
   orderRef: string | null
   tag: string | null
   isVip: boolean
-  /** True when the cached plan escalates without drafting a customer reply. */
+  /** True when the ticket is flagged with nothing to send: no plan, or a plan that escalates without a reply. */
   isEscalationOnly: boolean
   /** Why the agent escalated — from escalate_to_human or routing signals. */
   escalationReason: string | null

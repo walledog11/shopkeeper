@@ -5,6 +5,7 @@ import { useMemo } from "react"
 import {
   buildInboxRow,
   INBOX_SECTION_ORDER,
+  isActionDecision,
   type InboxSection,
 } from "../../_lib/inbox-row"
 import { InboxTicketRow } from "./InboxTicketRow"
@@ -25,6 +26,8 @@ export interface InboxStreamProps {
   approvingTicketId: string | null
   isSearchMode: boolean
   hasMore: boolean
+  /** The server's count of tickets that need the merchant, for when the list runs past one page. */
+  needsYouCount?: number | null
   isLoadingMore: boolean
   hasAnyConversation: boolean
   onOpen: (id: string) => void
@@ -61,6 +64,7 @@ export function InboxStream({
   approvingTicketId,
   isSearchMode,
   hasMore,
+  needsYouCount = null,
   isLoadingMore,
   hasAnyConversation,
   onOpen,
@@ -141,6 +145,14 @@ export function InboxStream({
     />
   )
 
+  // What needs the merchant, by the rule Home counts with: a row that offers an
+  // action. A drafting row sits in this section without needing them yet.
+  const needsReviewCount = isSearchMode
+    ? grouped.needs_review.length
+    : hasMore && needsYouCount !== null
+      ? needsYouCount
+      : grouped.needs_review.filter(entry => isActionDecision(entry.row.decision)).length
+
   const showWaitingFold = grouped.needs_review.length > 0 && grouped.waiting_on_customer.length > 0
   const showExternalFold = (grouped.needs_review.length > 0 || grouped.waiting_on_customer.length > 0)
     && grouped.external.length > 0
@@ -150,7 +162,7 @@ export function InboxStream({
       <InboxStreamSection
         count={grouped.needs_review.length}
         testId="inbox-section-needs-review"
-        lead={<InboxNeedsReviewLead count={grouped.needs_review.length} />}
+        lead={<InboxNeedsReviewLead count={needsReviewCount} />}
       >
         {grouped.needs_review.map(entry => renderCard(entry))}
       </InboxStreamSection>

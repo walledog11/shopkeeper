@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { MouseEvent } from "react";
 import { cn } from "@/lib/ui/cn";
-import { isNavItemActive, type NavItem, type NavSection } from "../nav-items";
+import { inboxNavItem, isNavItemActive, type NavItem, type NavSection } from "../nav-items";
 import { OpenCountBadge } from "./OpenCountBadge";
 import {
   mobileNavGroupCardClass,
@@ -15,8 +15,9 @@ import {
   useDashboardNavPrefetch,
 } from "./useDashboardNavPrefetch";
 
+// What needs the merchant waits in the inbox, so that is where its count goes.
 function itemBadgeCount(item: NavItem, needsYouCount: number): number | null {
-  if (item.href === "/dashboard/review" && needsYouCount > 0) return needsYouCount;
+  if (item.href === inboxNavItem.href && needsYouCount > 0) return needsYouCount;
   return null;
 }
 

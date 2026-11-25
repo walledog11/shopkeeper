@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { getResolvedCachedPlanForThread } from "@/lib/agent/cached-thread-plan"
 import { useMobileChromeOverride } from "@/app/dashboard/_components/mobile-chrome/MobileChromeContext"
+import { usePanelBriefingData } from "@/app/dashboard/_components/agent-panel/usePanelBriefingData"
 import { useIsMobile } from "@/hooks/useMobile"
 import { useActiveThreadSelection } from "../_hooks/useActiveThreadSelection"
 import { useAgentTurns } from "../_hooks/useAgentTurns"
@@ -35,6 +36,9 @@ export function useInboxPageView({
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const { stream, spam } = useInboxThreads(includeClosed)
+  // Past the first page the loaded rows undercount what needs the merchant, so
+  // the header takes Home's count, made by the same rule over every open ticket.
+  const needsYouSummary = usePanelBriefingData(stream.hasMore)
   const { isSearchLoading, isSearchMode, mutateSearch, searchThreads } = useTicketSearchSource(searchQuery)
 
   const knownThreads = useMemo<Thread[]>(
@@ -195,6 +199,9 @@ export function useInboxPageView({
         spamTickets,
         tickets,
         totalCount: stream.totalCount ?? stream.threads.length,
+        needsYouCount: stream.hasMore && needsYouSummary.hasSummary
+          ? needsYouSummary.summary.metrics.needsYouCount
+          : null,
       },
       actions: {
         onAgentComplete: handleAgentComplete,
