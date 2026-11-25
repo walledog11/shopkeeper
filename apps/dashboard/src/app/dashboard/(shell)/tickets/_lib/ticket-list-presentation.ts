@@ -27,7 +27,14 @@ export type TicketTriageTier =
   | "waiting_customer"
   | "closed"
 
-export type TicketListPresentationStatusTone = "send" | "caution" | "neutral" | "danger"
+type TicketListPresentationStatusTone = "send" | "caution" | "neutral" | "danger"
+
+export interface TicketListPresentationStatus {
+  label: string
+  tone: TicketListPresentationStatusTone
+  /** Says why the row's action is needed, so the row shows it beside the button. */
+  addsToAction: boolean
+}
 
 export interface TicketListPresentation {
   tier: TicketTriageTier
@@ -36,7 +43,7 @@ export interface TicketListPresentation {
   customerLabel: string
   channelName: string
   timeAgo: string
-  primaryStatus: { label: string; tone: TicketListPresentationStatusTone }
+  primaryStatus: TicketListPresentationStatus
   action: TicketCocoAction | null
   showSubject: boolean
 }
@@ -109,38 +116,41 @@ function headlineFallback(
   return "New customer message"
 }
 
+// A ticket's state, never an action: the row's button is the action. A review
+// row shows its state only when it says why (flagged, a refund, a Shopify
+// change); "Ready to send" beside Send, or "Needs review" beside Review, would
+// say nothing the button doesn't.
 function primaryStatusForTier(
   tier: TicketTriageTier,
   action: TicketCocoAction | null,
   questionable: boolean,
-): TicketListPresentation["primaryStatus"] {
+): TicketListPresentationStatus {
+  const reason = (label: string): TicketListPresentationStatus => ({ label, tone: "caution", addsToAction: true })
   switch (tier) {
     case "escalated":
-      return { label: "Flagged for you", tone: "caution" }
+      return reason("Flagged for you")
     case "answer":
-      return { label: "Answer needed", tone: "caution" }
+      return { label: "Answer needed", tone: "caution", addsToAction: false }
     case "review":
-      if (questionable) {
-        return { label: "Review sender", tone: "caution" }
-      }
-      if (action?.variant === "caution") {
-        return { label: action.shortLabel === "Refund" ? "Review refund" : "Needs review", tone: "caution" }
-      }
-      return { label: action?.label ?? "Needs review", tone: "caution" }
+      if (questionable) return reason("Unrecognized sender")
+      if (action?.id === "review-refund") return reason("Refund")
+      if (action?.id === "your-call") return reason("Shopify change")
+      if (action?.id === "link-customer") return reason("Customer not linked")
+      if (action?.id === "fix-invalid-draft") return reason("Draft blocked")
+      return { label: "Needs review", tone: "caution", addsToAction: false }
     case "ready":
-      return { label: "Ready to send", tone: "send" }
+      return { label: "Ready to send", tone: "send", addsToAction: false }
     case "working":
-      if (action?.variant === "loading") return { label: action.label, tone: "neutral" }
-      if (action?.handler === "draft-reply" || action?.handler === "refresh-draft") {
-        return { label: action.label, tone: "neutral" }
-      }
-      return { label: "Drafting…", tone: "neutral" }
+      if (action?.variant === "loading") return { label: action.label, tone: "neutral", addsToAction: false }
+      if (action?.handler === "draft-reply") return { label: "No draft yet", tone: "neutral", addsToAction: false }
+      if (action?.handler === "refresh-draft") return { label: "Draft out of date", tone: "neutral", addsToAction: false }
+      return { label: "Drafting…", tone: "neutral", addsToAction: false }
     case "noise":
-      return { label: "Review sender", tone: "caution" }
+      return reason("Unrecognized sender")
     case "waiting_customer":
-      return { label: "Waiting on customer", tone: "neutral" }
+      return { label: "Waiting on customer", tone: "neutral", addsToAction: false }
     case "closed":
-      return { label: "Closed", tone: "neutral" }
+      return { label: "Closed", tone: "neutral", addsToAction: false }
   }
 }
 

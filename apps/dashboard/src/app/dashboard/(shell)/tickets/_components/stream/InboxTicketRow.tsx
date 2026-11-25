@@ -23,20 +23,36 @@ const actionClassName =
 const primaryActionClassName = cn(actionClassName, "bg-foreground text-background hover:bg-foreground/85")
 const secondaryActionClassName = cn(actionClassName, "border border-border bg-white text-[#1a1a1a] hover:bg-foreground/[0.04]")
 
+// The button is always what the merchant does; why lives in the status.
 function actionButtonLabel(row: InboxRowModel, isSending: boolean): string {
   if (isSending) return "Sending"
-  if (row.decision === "send") return "Send"
-  return row.status.label
+  return row.decision === "send" ? "Send" : "Review"
 }
 
-// A row's status when no action button already says it.
+// The row's state. Beside an action it shows only a reason the button doesn't
+// give: "Flagged for you" or "Refund" next to Review, but nothing next to Send.
 function rowStatus(
   row: InboxRowModel,
   variant: InboxRowVariant,
 ): { label: string; tone: MerchantMetaStatusTone } | null {
   if (variant === "spam") return { label: "Filed as spam", tone: "neutral" }
   if (variant === "trust") return { label: "Outside your store", tone: "caution" }
-  return row.decision ? null : row.status
+  if (!row.decision) return row.status
+  return row.status.addsToAction ? row.status : null
+}
+
+function StatusPill({
+  status,
+  className,
+}: {
+  status: { label: string; tone: MerchantMetaStatusTone }
+  className?: string
+}) {
+  return (
+    <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", merchantMetaStatusPillClass[status.tone], className)}>
+      {status.label}
+    </span>
+  )
 }
 
 export interface InboxTicketRowActions {
@@ -71,6 +87,9 @@ export function InboxTicketRow({
   const dim = row.isClosed
   const canAnswer = variant === "default" && row.decision === "answer" && Boolean(row.merchantQuestion)
   const showDecision = variant === "default" && (row.decision === "send" || row.decision === "review")
+  // Beside an action button a phone's first line has no room for the status as
+  // well as the name, so there the status moves above the title.
+  const hasRowAction = showDecision || canAnswer || (variant === "spam" && Boolean(actions.onRecover))
   // An answer row leads with what the agent is asking the merchant.
   const detail = canAnswer ? row.merchantQuestion : row.preview
   const inkClass = dim ? merchantMutedClass : merchantInkClass
@@ -114,16 +133,13 @@ export function InboxTicketRow({
               ) : null}
             </div>
             <div className="ml-auto flex shrink-0 items-center gap-2">
-              {status ? (
-                <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", merchantMetaStatusPillClass[status.tone])}>
-                  {status.label}
-                </span>
-              ) : null}
+              {status ? <StatusPill status={status} className={cn(hasRowAction && "hidden sm:inline")} /> : null}
               <RelativeTime at={meta.lastMessageAt} className={cn("text-xs tabular-nums", merchantMutedClass)} />
             </div>
           </div>
 
           <div className="col-start-2 col-end-4 row-start-2 min-w-0 sm:col-end-3">
+            {status && hasRowAction ? <StatusPill status={status} className="mb-1 inline-block sm:hidden" /> : null}
             {variant !== "spam" ? (
               <p className={cn("truncate text-sm font-medium", inkClass)}>{row.headline}</p>
             ) : null}

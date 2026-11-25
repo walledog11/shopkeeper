@@ -7,7 +7,7 @@ import { getChannelInfo } from "@/lib/messaging/channels"
 import { customerDisplayLabel } from "@/lib/messaging/customer-display"
 import {
   buildTicketListPresentationFromTicket,
-  type TicketListPresentationStatusTone,
+  type TicketListPresentationStatus,
   type TicketTriageTier,
 } from "./ticket-list-presentation"
 import type { OrgSettings, SenderType, ThreadRequestDisposition, ThreadStatus, Ticket } from "@/types"
@@ -29,18 +29,13 @@ export const INBOX_SECTION_ORDER: readonly InboxSection[] = [
   "spam",
 ]
 
-export interface InboxRowStatus {
-  label: string
-  tone: TicketListPresentationStatusTone
-}
-
 export interface InboxRow {
   customerLabel: string
   channelName: string
   headline: string
   preview: string
   when: string
-  status: InboxRowStatus
+  status: TicketListPresentationStatus
   decision: InboxRowDecision | null
   /** On a send row, the whole reply its Send button delivers. */
   draft: string | null

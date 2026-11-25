@@ -130,6 +130,14 @@ describe("buildInboxRow", () => {
     expect(buildInboxRow(ticket(refundPlan)).decision).toBe("review")
   })
 
+  // The inbox titled this row "Refund $42 for a cracked mug", which reads as
+  // done; the refund is the reason it needs review, shown as its status.
+  it("titles a row with what the customer wants, and says why it needs review", () => {
+    const row = buildInboxRow(ticket({ ...refundPlan, aiTitle: null }))
+    expect(row.headline).toBe("Asking where order #1848 is.")
+    expect(row.status).toMatchObject({ label: "Refund", addsToAction: true })
+  })
+
   it("offers Answer when the agent needs a fact only the merchant has", () => {
     const row = buildInboxRow(ticket(questionPlan))
     expect(row.decision).toBe("answer")
@@ -153,7 +161,7 @@ describe("buildInboxRow", () => {
     expect(row.tier).toBe("noise")
     expect(row.isQuestionable).toBe(true)
     expect(row.preview).toBe("This reads like a cold pitch.")
-    expect(row.status.label).toBe("Review sender")
+    expect(row.status.label).toBe("Unrecognized sender")
   })
 
   it("keeps questionable senders with a real question in needs review", () => {
