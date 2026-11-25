@@ -1,15 +1,14 @@
 "use client"
 
 import { useState } from "react"
-import { useOrganization } from "@clerk/nextjs"
+import { useIsWorkspaceAdmin } from "@/app/dashboard/_components/WorkspaceRoleContext"
 import { ToggleRow } from "@/components/settings-form/shared"
 import { useOrg } from "@/hooks/useOrg"
 import { patchSpamFilterEnabled } from "@/lib/org/org-requests"
 import { SOLID_SETTINGS_TILE } from "@/lib/ui/glass-card-styles"
 
 export function EmailSpamFilterCard() {
-  const { membership } = useOrganization()
-  const isAdmin = membership?.role === "org:admin"
+  const isAdmin = useIsWorkspaceAdmin()
   const { data: org, mutate, isLoading } = useOrg({ revalidateOnFocus: false })
   const [pending, setPending] = useState<boolean | null>(null)
   const [error, setError] = useState<string | null>(null)

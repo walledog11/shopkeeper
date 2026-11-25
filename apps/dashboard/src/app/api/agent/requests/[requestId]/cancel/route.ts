@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
-import { BadRequestError, UnauthorizedError } from "@/lib/api/errors";
+import { BadRequestError } from "@/lib/api/errors";
+import { requireCurrentUserId } from "@/lib/api/permissions";
 import { withOrgRoute } from "@/lib/api/route";
 import { postGatewayAgentRequestCancel } from "@/lib/agent/api/gateway-operator-turn";
 
@@ -8,8 +8,7 @@ import { postGatewayAgentRequestCancel } from "@/lib/agent/api/gateway-operator-
 export const POST = withOrgRoute<{ requestId: string }>(
   { context: "Agent request cancel", errorMessage: "Failed to cancel agent request" },
   async ({ org, params, request }) => {
-    const { userId } = await auth();
-    if (!userId) throw new UnauthorizedError();
+    const userId = await requireCurrentUserId();
     const body = (await request.json().catch(() => null)) as { taskRevision?: unknown } | null;
     if (typeof body?.taskRevision !== "number") {
       throw new BadRequestError("taskRevision is required");

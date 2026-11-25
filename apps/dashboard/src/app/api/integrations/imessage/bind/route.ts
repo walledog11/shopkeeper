@@ -9,8 +9,8 @@
  */
 import { NextResponse } from "next/server";
 import { createOrgMemberBindToken, db } from "@shopkeeper/db";
-import { auth } from "@clerk/nextjs/server";
-import { ApiError, UnauthorizedError } from "@/lib/api/errors";
+import { ApiError } from "@/lib/api/errors";
+import { requireCurrentUserId } from "@/lib/api/permissions";
 import { withOrgRoute } from "@/lib/api/route";
 import { normalizeImessageLineHandle } from "@/lib/integrations/imessage-visibility";
 
@@ -26,8 +26,7 @@ function isImessageLineConfigured(): boolean {
 export const GET = withOrgRoute(
   { context: "iMessage bind GET", errorMessage: "Failed to fetch iMessage bindings" },
   async ({ org }) => {
-    const { userId } = await auth();
-    if (!userId) throw new UnauthorizedError();
+    const userId = await requireCurrentUserId();
 
     const bindings = await db.orgMemberImessageBinding.findMany({
       where: { orgMember: { organizationId: org.id, clerkUserId: userId } },
@@ -50,8 +49,7 @@ export const GET = withOrgRoute(
 export const POST = withOrgRoute(
   { context: "iMessage bind POST", errorMessage: "Failed to start iMessage connect", requireBillingWriteAllowed: true },
   async ({ org }) => {
-    const { userId } = await auth();
-    if (!userId) throw new UnauthorizedError();
+    const userId = await requireCurrentUserId();
 
     if (!isImessageLineConfigured()) {
       throw new ApiError("iMessage isn't available on this workspace yet.", 409);
@@ -76,8 +74,7 @@ export const POST = withOrgRoute(
 export const DELETE = withOrgRoute(
   { context: "iMessage bind DELETE", errorMessage: "Failed to disconnect iMessage" },
   async ({ org, request }) => {
-    const { userId } = await auth();
-    if (!userId) throw new UnauthorizedError();
+    const userId = await requireCurrentUserId();
 
     const { searchParams } = new URL(request.url);
     const targetSenderId = searchParams.get("senderId");

@@ -113,10 +113,13 @@ function openingLines(input: {
 }
 
 // One action as the rest of "I'd …": the items it changes when the planner bound
-// them from Shopify, else its label.
+// them from Shopify; for any other store write, its description, which carries
+// every value it sets (the new address, the amount, the note) so "yes" never
+// approves a write the merchant can't see; else its label.
 function actionPhrase(step: PlanStep, person: PersonName, rawToolCalls: readonly CardToolCall[] | undefined): string {
   const items = lineItemSentence(step, rawToolCalls);
   if (items) return lowerFirst(items);
+  if (step.category === 'action' && step.description) return lowerFirst(step.description);
   return parkedActionLabel([step], person) ?? lowerFirst(step.label || step.description);
 }
 

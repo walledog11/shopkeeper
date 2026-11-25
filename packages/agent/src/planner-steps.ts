@@ -9,29 +9,31 @@ function describeTool(name: string, input: unknown): string {
   switch (name) {
     case "search_kb":
       return `Search knowledge base for "${String(a.query ?? "")}"`;
+    // Every value the write sets, because this is what the merchant approves:
+    // on the card and in the dashboard, a bare label asks for a blind yes.
     case "update_shopify_order_address": {
-      const parts = [a.address1, a.city, a.province, a.zip].filter(Boolean);
+      const parts = [a.address1, a.address2, a.city, a.province, a.zip, a.country].filter(Boolean);
       return `Update their shipping address on Shopify to ${parts.join(", ")}`;
     }
     case "update_shopify_customer_info": {
       const changes: string[] = [];
-      if (a.email) changes.push(`email -> ${a.email}`);
-      if (a.phone) changes.push(`phone -> ${a.phone}`);
-      if (a.first_name || a.last_name) changes.push(`name -> ${[a.first_name, a.last_name].filter(Boolean).join(" ")}`);
-      return changes.length ? `Update: ${changes.join(", ")}` : "Update customer info";
+      if (a.email) changes.push(`email to ${a.email}`);
+      if (a.phone) changes.push(`phone to ${a.phone}`);
+      if (a.first_name || a.last_name) changes.push(`name to ${[a.first_name, a.last_name].filter(Boolean).join(" ")}`);
+      return changes.length ? `Change their ${changes.join(", ")} on Shopify` : "Update their details on Shopify";
     }
     case "create_refund":
-      return a.amount ? `Issue $${a.amount} refund` : "Issue full refund";
+      return a.amount ? `Refund $${a.amount}` : "Refund the whole order";
     case "cancel_order":
-      return `Cancel order and refund payment${a.reason ? ` (${a.reason})` : ""}`;
+      return `Cancel the order and refund the payment${a.reason ? ` (${a.reason})` : ""}`;
     case "create_shopify_order": {
       const items = (a.line_items as { title?: string; variant_id?: string; quantity: number }[] ?? [])
         .map(li => `${li.quantity}x ${li.title ?? `variant ${li.variant_id}`}`)
         .join(", ");
-      return `Create order for ${a.first_name} ${a.last_name}${items ? ` - ${items}` : ""}`;
+      return `Create an order for ${a.first_name} ${a.last_name}${items ? `: ${items}` : ""}`;
     }
     case "add_shopify_customer_note":
-      return "Add note to Shopify customer";
+      return a.note ? `Add a note to their Shopify profile: "${String(a.note).trim()}"` : "Add a note to their Shopify profile";
     case "send_reply": {
       const text = String(a.text ?? "");
       return text.length > 80 ? `"${text.slice(0, 80)}…"` : `"${text}"`;
@@ -56,17 +58,17 @@ function describeTool(name: string, input: unknown): string {
       return qty ? `Add ${qty}x item to order` : "Edit order";
     }
     case "issue_discount":
-      return `Issue ${a.percentage}% discount code${a.reason ? ` (${a.reason})` : ""}`;
+      return `Issue a ${a.percentage}% discount code${a.reason ? ` (${a.reason})` : ""}`;
     case "create_exchange":
       return `Set up exchange - return variant ${a.variant_id}, record replacement variant ${a.exchange_variant_id}${a.quantity ? ` (${a.quantity}x)` : ""}`;
     case "issue_store_credit":
-      return `Issue $${a.amount} store credit`;
+      return `Issue $${a.amount} in store credit`;
     case "create_gift_card":
-      return `Create $${a.amount} gift card${a.reason ? ` (${a.reason})` : ""}`;
+      return `Create a $${a.amount} gift card${a.reason ? ` (${a.reason})` : ""}`;
     case "attach_return_label":
-      return `Attach return label${a.tracking_number ? ` (tracking ${a.tracking_number})` : ""}`;
+      return `Attach the return label${a.tracking_number ? ` (tracking ${a.tracking_number})` : ""}`;
     case "fulfill_order":
-      return `Mark order fulfilled${a.tracking_number ? ` (tracking ${a.tracking_number})` : ""}${a.notify_customer === false ? ", no customer email" : ""}`;
+      return `Mark the order fulfilled${a.tracking_number ? ` (tracking ${a.tracking_number})` : ""}${a.notify_customer === false ? ", without emailing them" : ""}`;
     default:
       return name.replace(/_/g, " ");
   }

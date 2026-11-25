@@ -127,7 +127,15 @@ export function InboxTicketRow({
             {variant !== "spam" ? (
               <p className={cn("truncate text-sm font-medium", inkClass)}>{row.headline}</p>
             ) : null}
-            {detail && !answering ? (
+            {/* Send delivers this reply in one click, so the row shows all of it. */}
+            {row.draft ? (
+              <p
+                data-testid="ticket-row-draft"
+                className={cn("mt-1 whitespace-pre-wrap break-words border-l-2 border-border pl-3 text-sm", inkClass)}
+              >
+                {row.draft}
+              </p>
+            ) : detail && !answering ? (
               <p className={cn("truncate text-sm", canAnswer ? "text-amber-800" : merchantMutedClass, dim && "opacity-70")}>
                 {detail}
               </p>

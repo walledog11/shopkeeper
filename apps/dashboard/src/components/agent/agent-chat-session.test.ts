@@ -57,17 +57,22 @@ describe("sendAgentChatInstruction", () => {
     })
   })
 
-  it("returns API errors as failed chat results", async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse({ error: "Plan failed" }, { status: 500 }))
-
-    await expect(sendAgentChatInstruction({
-      fetchImpl,
+  it("words a server error plainly and keeps a refusal's own reason", async () => {
+    const send = (response: Response) => sendAgentChatInstruction({
+      fetchImpl: vi.fn(async () => response),
       instruction: "refund",
       clientRequestId: "11111111-1111-4111-8111-111111111111",
       pollIntervalMs: 0,
-    })).resolves.toEqual({
+    })
+
+    await expect(send(jsonResponse({ error: "Internal Server Error" }, { status: 500 }))).resolves.toEqual({
       ok: false,
-      error: "Plan failed",
+      failure: { detail: "Our servers hit a snag. Try again in a few seconds.", recovery: "retry" },
+    })
+    const cap = "AI spend cap reached for today. Increase the daily limit in Settings or wait until midnight UTC."
+    await expect(send(jsonResponse({ error: cap, code: "spend_cap_reached" }, { status: 429 }))).resolves.toEqual({
+      ok: false,
+      failure: { detail: cap, recovery: null },
     })
   })
 
@@ -144,7 +149,7 @@ describe("sendAgentChatInstruction", () => {
       pollIntervalMs: 0,
     })).resolves.toEqual({
       ok: false,
-      error: "This request needs review before it can continue.",
+      failure: { detail: "This request needs review before it can continue.", recovery: null },
     })
   })
 })

@@ -12,10 +12,9 @@
 import { NextResponse } from "next/server";
 
 export const maxDuration = 60;
-import { auth } from "@clerk/nextjs/server";
-import { UnauthorizedError } from "@/lib/api/errors";
 import { readRequiredJsonObject } from "@/lib/api/body";
 import { withOrgRoute } from "@/lib/api/route";
+import { requireCurrentUserId } from "@/lib/api/permissions";
 import { postGatewayPlanDecision } from "@/lib/agent/api/gateway-operator-turn";
 import { getOperatorPendingPlans } from "@/lib/agent/api/operator-pending";
 import { parseAgentPlanDecisionBody } from "@/lib/agent/api/validation";
@@ -26,8 +25,7 @@ import logger from "@/lib/server/logger";
 export const GET = withOrgRoute(
   { context: "Agent pending GET", errorMessage: "Failed to load pending plans", customerData: { resource: "pending_plans" } },
   async ({ org }) => {
-    const { userId } = await auth();
-    if (!userId) throw new UnauthorizedError();
+    const userId = await requireCurrentUserId();
     return NextResponse.json({ plans: await getOperatorPendingPlans(org.id, userId) });
   },
 );
@@ -53,8 +51,7 @@ export const POST = withOrgRoute(
     },
   },
   async ({ org, request }) => {
-    const { userId } = await auth();
-    if (!userId) throw new UnauthorizedError();
+    const userId = await requireCurrentUserId();
 
     const { planId, decision, merchantAnswers } = parseAgentPlanDecisionBody(await readRequiredJsonObject(request));
 

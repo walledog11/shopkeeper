@@ -1,6 +1,6 @@
 import { getCurrentPlanForThread } from "@shopkeeper/agent/plan-cache-shape"
 import { decideAutonomy } from "@shopkeeper/agent/autonomy"
-import { buildPlanPreview } from "@shopkeeper/agent/plan-preview"
+import { buildPlanPreview, planReplyText } from "@shopkeeper/agent/plan-preview"
 import { SENDER_TYPE } from "@shopkeeper/agent/thread-constants"
 import type { TicketCardMeta } from "@/components/support-card/metadata"
 import { getChannelInfo } from "@/lib/messaging/channels"
@@ -42,6 +42,8 @@ export interface InboxRow {
   when: string
   status: InboxRowStatus
   decision: InboxRowDecision | null
+  /** On a send row, the whole reply its Send button delivers. */
+  draft: string | null
   merchantQuestion: string | null
   section: InboxSection
   tier: TicketTriageTier
@@ -205,6 +207,7 @@ export function buildInboxRow(ticket: Ticket, options: BuildInboxRowOptions = {}
     when: presentation.timeAgo,
     status: presentation.primaryStatus,
     decision,
+    draft: decision === "send" ? planReplyText(getCurrentPlanForThread(ticket, planMessages(ticket))) : null,
     merchantQuestion,
     section,
     tier: presentation.tier,

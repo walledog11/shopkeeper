@@ -3,6 +3,7 @@
 import { AlertCircle, Bot, Check, RefreshCw, Smartphone } from "lucide-react"
 import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import { TOOL_LABELS } from "@shopkeeper/agent/tools"
+import { RequestFailureNotice } from "@/components/agent/RequestFailureNotice"
 import type { AgentTurn } from "@/types"
 import type { AgentRequestFailure } from "../../../_hooks/useConversationAgentFlow"
 
@@ -22,34 +23,6 @@ function InstructionBubble({ instruction }: { instruction: string }) {
     <div className="px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed bg-foreground/[0.08] text-strong rounded-md rounded-tr-sm">
       <span className="text-violet-600 font-semibold">@{AGENT_DISPLAY_NAME.toLowerCase()}</span>{" "}
       {instruction}
-    </div>
-  )
-}
-
-// Not the agent speaking: the request failed before it could answer.
-function RequestFailureNotice({ failure }: { failure: AgentRequestFailure }) {
-  const { recovery } = failure
-  return (
-    <div
-      role="alert"
-      data-testid="agent-request-failure"
-      className="flex w-fit max-w-[80%] items-start gap-2.5 rounded-xl border border-red-500/20 bg-red-500/[0.06] px-3.5 py-3"
-    >
-      <AlertCircle aria-hidden className="mt-px size-4 shrink-0 text-red-600" />
-      <div className="min-w-0 text-[13px] leading-snug">
-        <p className="font-semibold text-strong">{failure.title}</p>
-        <p className="mt-0.5 text-muted-foreground">{failure.detail}</p>
-        {recovery ? (
-          <button
-            type="button"
-            onClick={recovery.kind === "retry" ? recovery.run : () => window.location.reload()}
-            className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg border border-border bg-white px-2.5 py-1 text-xs font-semibold text-strong transition-colors hover:bg-foreground/[0.04]"
-          >
-            <RefreshCw aria-hidden className="size-3" />
-            {recovery.kind === "retry" ? "Try again" : "Reload"}
-          </button>
-        ) : null}
-      </div>
     </div>
   )
 }
@@ -127,7 +100,11 @@ export default function AgentPrivateTurns({
               <InstructionBubble instruction={requestFailure.instruction} />
             </div>
           )}
-          <RequestFailureNotice failure={requestFailure} />
+          <RequestFailureNotice
+            title={requestFailure.title}
+            detail={requestFailure.detail}
+            recovery={requestFailure.recovery}
+          />
         </div>
       )}
 

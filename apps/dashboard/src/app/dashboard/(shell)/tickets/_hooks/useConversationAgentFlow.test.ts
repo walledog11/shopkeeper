@@ -5,7 +5,7 @@
 import React, { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import type { AgentRequestResult } from "./conversation-agent-requests"
+import { PlanningEndedError, type AgentRequestResult } from "./conversation-agent-requests"
 
 const requestMocks = vi.hoisted(() => ({
   dismissAgentPlan: vi.fn().mockResolvedValue(undefined),
@@ -358,5 +358,46 @@ describe("useConversationAgentFlow execution state", () => {
     expect(shownPlanId()).toBe("plan-5")
     renderHarness(ticket, null)
     expect(shownPlanId()).toBeNull()
+  })
+
+  it("offers no plan beside a failed load of the latest one until a retry loads it", async () => {
+    const cached: AgentPlan = {
+      planId: "plan-cached",
+      instruction: "reply",
+      rawToolCalls: [{ id: "reply-1", name: "send_reply", input: { text: "It shipped Tuesday." } }],
+      steps: [{
+        id: "reply-1",
+        tool: "send_reply",
+        label: "Reply to customer",
+        description: "Reply to the customer",
+        category: "communication",
+        enabled: true,
+      }],
+    }
+    const settle = () => act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 0))
+    })
+    requestMocks.recoverAgentPlan.mockRejectedValueOnce(new TypeError("Failed to fetch"))
+    const { current, renderHarness } = mountFlow()
+
+    renderHarness({ id: "ticket-1" } as Ticket, cached)
+    await settle()
+    expect(current.value?.requestFailure?.title).toBe("Couldn't load the latest plan.")
+    expect(current.value?.pendingPlan).toBeNull()
+
+    const recovery = current.value?.requestFailure?.recovery
+    act(() => {
+      if (recovery?.kind === "retry") recovery.run()
+    })
+    await settle()
+    expect(current.value?.requestFailure).toBeNull()
+    expect(current.value?.pendingPlan?.planId).toBe("plan-cached")
+
+    // A planning request that ended is an answer: the cached plan is current.
+    requestMocks.recoverAgentPlan.mockRejectedValueOnce(new PlanningEndedError("Planning was stopped."))
+    renderHarness({ id: "ticket-2" } as Ticket, cached)
+    await settle()
+    expect(current.value?.requestFailure?.detail).toBe("Planning was stopped.")
+    expect(current.value?.pendingPlan?.planId).toBe("plan-cached")
   })
 })

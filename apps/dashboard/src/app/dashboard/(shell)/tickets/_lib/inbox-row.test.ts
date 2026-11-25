@@ -115,6 +115,17 @@ describe("buildInboxRow", () => {
     expect(row.status.label).toBe("Ready to send")
   })
 
+  it("carries every word of the reply its Send button delivers", () => {
+    const text = `Hi Maria,\n\n${"Order #1848 left our warehouse Tuesday and is with the carrier. ".repeat(4)}\n\nThanks for waiting!`
+    const row = buildInboxRow(ticket(withPlan(
+      [{ id: "s1", tool: "send_reply", category: "communication", label: "Send reply", description: "Reply to Maria" }],
+      [{ id: "s1", name: "send_reply", input: { text } }],
+    )))
+    expect(row.decision).toBe("send")
+    expect(row.draft).toBe(text)
+    expect(buildInboxRow(ticket(refundPlan)).draft).toBeNull()
+  })
+
   it("offers Review when money is involved", () => {
     expect(buildInboxRow(ticket(refundPlan)).decision).toBe("review")
   })
