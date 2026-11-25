@@ -10,7 +10,7 @@ import {
   resolveBillingPlanDisplayName,
 } from '@shopkeeper/shared/billing';
 import { parseBooleanEnv } from "@shopkeeper/shared/env";
-import { parseProductAnalyticsConfig } from '@shopkeeper/analytics';
+import { resolveProductAnalyticsConfig } from '@shopkeeper/analytics';
 
 export function getDashboardAppUrl(): string {
   const appUrl = readEnv('APP_URL');
@@ -203,7 +203,12 @@ export function validateDashboardEnv(): void {
     }
   }
 
-  parseProductAnalyticsConfig();
+  // Analytics off, not the app: the dashboard serves the public site and the
+  // health check as well.
+  const analytics = resolveProductAnalyticsConfig();
+  if (analytics.problem) {
+    console.error(`[Dashboard] Product analytics is off: ${analytics.problem}`);
+  }
 
   const redisUrl = process.env.UPSTASH_REDIS_REST_URL?.trim();
   const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();

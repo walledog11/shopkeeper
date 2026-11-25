@@ -135,9 +135,9 @@ daily LLM spend cap (`llm_daily_spend`).
 
 - **Boot:** `DATABASE_URL`, `DIRECT_DATABASE_URL`, `CLERK_SECRET_KEY`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`,
   `ANTHROPIC_API_KEY`, `INTERNAL_API_SECRET`, `APP_URL`, `TOKEN_ENCRYPTION_KEY`, `OAUTH_ATTEMPT_SECRET`,
-  `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `PRODUCT_ANALYTICS_ENABLED`,
+  `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`,
   `PLAN_EXECUTION_LEDGER_MODE`. The runtime also refuses production boot without `BLOB_READ_WRITE_TOKEN`.
-- **Launch:** `GATEWAY_INTERNAL_URL` (the **public** gateway URL despite the name — every dashboard →
+- **Launch:** `PRODUCT_ANALYTICS_ENABLED` (see [Product Analytics](#product-analytics)), `GATEWAY_INTERNAL_URL` (the **public** gateway URL despite the name — every dashboard →
   gateway hop: outbound-email enqueue, operator turns, storefront chat, dev webhook proxies), `POSTMARK_API_KEY`, `INBOUND_EMAIL_DOMAIN`,
   `BLOB_READ_WRITE_TOKEN` (private attachments, served by `GET /api/attachments`), `SHOPIFY_CLIENT_ID`,
   `SHOPIFY_CLIENT_SECRET`, `SHOPIFY_APP_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`,
@@ -163,9 +163,9 @@ daily LLM spend cap (`llm_daily_spend`).
 ### Gateway
 
 - **Boot:** `DATABASE_URL`, `DIRECT_DATABASE_URL`, `REDIS_URL`, `ANTHROPIC_API_KEY`, `INTERNAL_API_SECRET`,
-  `DASHBOARD_URL`, `TOKEN_ENCRYPTION_KEY`, `PRODUCT_ANALYTICS_ENABLED`, `PLAN_EXECUTION_LEDGER_MODE`,
+  `DASHBOARD_URL`, `TOKEN_ENCRYPTION_KEY`, `PLAN_EXECUTION_LEDGER_MODE`,
   plus `POSTMARK_INBOUND_USERNAME`/`POSTMARK_INBOUND_PASSWORD` unless `EMAIL_INBOUND_MODE=gmail-only`.
-- **Launch:** `SHOPIFY_APP_SECRET`, `SHOPIFY_CLIENT_ID` and `SHOPIFY_CLIENT_SECRET` (the dashboard's
+- **Launch:** `PRODUCT_ANALYTICS_ENABLED` (see [Product Analytics](#product-analytics)), `SHOPIFY_APP_SECRET`, `SHOPIFY_CLIENT_ID` and `SHOPIFY_CLIENT_SECRET` (the dashboard's
   values: every refresh of a store's hour-long Shopify token presents them), `POSTMARK_INBOUND_USERNAME`, `POSTMARK_INBOUND_PASSWORD` (basic
   auth on `/webhooks/email/inbound` and `/webhooks/email/bounce`), `BLOB_READ_WRITE_TOKEN`,
   `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GMAIL_PUBSUB_TOPIC`, `GMAIL_PUBSUB_AUDIENCE`,
@@ -1298,7 +1298,10 @@ Codes are single-use with a 24-hour TTL (`ORG_MEMBER_BIND_TOKEN_TTL_SECONDS`), m
 
 ## Product Analytics
 
-Both apps require an explicit `PRODUCT_ANALYTICS_ENABLED` in production. Ship new instrumentation
+Set `PRODUCT_ANALYTICS_ENABLED` explicitly on both apps in production. A missing or invalid value,
+or capture turned on without a usable token and HTTPS host, turns capture off and logs
+`Product analytics is off: <reason>` at startup; it no longer stops the app (2026-11-25: a missing
+value took the dashboard, the public site and the health check down together). Ship new instrumentation
 with capture off (`PRODUCT_ANALYTICS_ENABLED=false`, `POSTHOG_PROJECT_TOKEN=<project-token>`,
 `POSTHOG_HOST=https://us.i.posthog.com`), using the environment-specific project's token. Analytics
 is server-only and organization-scoped: no browser PostHog key, autocapture, session replay, cookies

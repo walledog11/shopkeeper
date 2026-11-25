@@ -1,5 +1,5 @@
 import { parseBillingPriceIds, type BillingPriceIds } from '@shopkeeper/shared/billing';
-import { parseProductAnalyticsConfig } from '@shopkeeper/analytics';
+import { resolveProductAnalyticsConfig } from '@shopkeeper/analytics';
 import logger from '../logger.js';
 import {
   parseGatewayProductionConfig,
@@ -82,7 +82,11 @@ export function validateGatewayEnv(): void {
     throw new Error('[Gateway] Missing required environment variable: PLAN_EXECUTION_LEDGER_MODE');
   }
 
-  parseProductAnalyticsConfig();
+  // Analytics off, not the gateway: inbound messages matter more than events.
+  const analytics = resolveProductAnalyticsConfig();
+  if (analytics.problem) {
+    logger.error(`[Gateway] Product analytics is off: ${analytics.problem}`);
+  }
 
   const redisUrl = requireEnv('REDIS_URL');
   try {

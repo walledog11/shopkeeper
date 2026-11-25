@@ -1,60 +1,66 @@
 import { describe, expect, it } from 'vitest';
 import {
-  parseProductAnalyticsConfig,
   resolveAnalyticsEnvironment,
+  resolveProductAnalyticsConfig,
 } from './config.js';
 
-describe('parseProductAnalyticsConfig', () => {
+describe('resolveProductAnalyticsConfig', () => {
   it('defaults to disabled outside production', () => {
-    expect(parseProductAnalyticsConfig({ NODE_ENV: 'development' })).toEqual({
-      enabled: false,
-      environment: 'development',
-      host: 'https://us.i.posthog.com',
+    expect(resolveProductAnalyticsConfig({ NODE_ENV: 'development' })).toEqual({
+      config: {
+        enabled: false,
+        environment: 'development',
+        host: 'https://us.i.posthog.com',
+      },
+      problem: null,
     });
   });
 
-  it('requires an explicit strict boolean in production', () => {
-    expect(() => parseProductAnalyticsConfig({ NODE_ENV: 'production' })).toThrow(
-      /explicitly set/,
-    );
-    expect(() =>
-      parseProductAnalyticsConfig({
+  it('turns capture off, with the reason, without an explicit strict boolean in production', () => {
+    expect(resolveProductAnalyticsConfig({ NODE_ENV: 'production' })).toMatchObject({
+      config: { enabled: false, environment: 'production' },
+      problem: expect.stringMatching(/explicitly set/),
+    });
+    expect(
+      resolveProductAnalyticsConfig({
         NODE_ENV: 'production',
         PRODUCT_ANALYTICS_ENABLED: 'yes',
       }),
-    ).toThrow(/either true or false/);
+    ).toMatchObject({
+      config: { enabled: false },
+      problem: expect.stringMatching(/either true or false/),
+    });
   });
 
-  it('requires a token and HTTPS host when enabled', () => {
-    expect(() =>
-      parseProductAnalyticsConfig({
+  it('turns capture off when enabled without a token and HTTPS host', () => {
+    expect(
+      resolveProductAnalyticsConfig({
         NODE_ENV: 'production',
         PRODUCT_ANALYTICS_ENABLED: 'true',
       }),
-    ).toThrow(/POSTHOG_PROJECT_TOKEN/);
+    ).toMatchObject({
+      config: { enabled: false },
+      problem: expect.stringMatching(/POSTHOG_PROJECT_TOKEN/),
+    });
 
-    expect(() =>
-      parseProductAnalyticsConfig({
-        NODE_ENV: 'production',
-        PRODUCT_ANALYTICS_ENABLED: 'true',
-        POSTHOG_PROJECT_TOKEN: 'phc_test',
-        POSTHOG_HOST: 'http://posthog.example.com',
-      }),
-    ).toThrow(/HTTPS URL/);
-
-    expect(() =>
-      parseProductAnalyticsConfig({
-        NODE_ENV: 'production',
-        PRODUCT_ANALYTICS_ENABLED: 'true',
-        POSTHOG_PROJECT_TOKEN: 'phc_test',
-        POSTHOG_HOST: 'not-a-url',
-      }),
-    ).toThrow(/HTTPS URL/);
+    for (const host of ['http://posthog.example.com', 'not-a-url']) {
+      expect(
+        resolveProductAnalyticsConfig({
+          NODE_ENV: 'production',
+          PRODUCT_ANALYTICS_ENABLED: 'true',
+          POSTHOG_PROJECT_TOKEN: 'phc_test',
+          POSTHOG_HOST: host,
+        }),
+      ).toMatchObject({
+        config: { enabled: false },
+        problem: expect.stringMatching(/HTTPS URL/),
+      });
+    }
   });
 
   it('returns enabled configuration with normalized environment metadata', () => {
     expect(
-      parseProductAnalyticsConfig({
+      resolveProductAnalyticsConfig({
         NODE_ENV: 'production',
         PRODUCT_ANALYTICS_ENABLED: 'true',
         POSTHOG_PROJECT_TOKEN: ' phc_test ',
@@ -62,21 +68,24 @@ describe('parseProductAnalyticsConfig', () => {
         RAILWAY_ENVIRONMENT_NAME: 'staging',
       }),
     ).toEqual({
-      enabled: true,
-      environment: 'staging',
-      projectToken: 'phc_test',
-      host: 'https://posthog.example.com',
+      config: {
+        enabled: true,
+        environment: 'staging',
+        projectToken: 'phc_test',
+        host: 'https://posthog.example.com',
+      },
+      problem: null,
     });
   });
 
   it('always disables analytics in tests', () => {
     expect(
-      parseProductAnalyticsConfig({
+      resolveProductAnalyticsConfig({
         NODE_ENV: 'test',
         PRODUCT_ANALYTICS_ENABLED: 'true',
         POSTHOG_PROJECT_TOKEN: 'phc_shell_value',
       }),
-    ).toMatchObject({ enabled: false, environment: 'test' });
+    ).toMatchObject({ config: { enabled: false, environment: 'test' }, problem: null });
   });
 });
 
