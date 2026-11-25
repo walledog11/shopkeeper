@@ -145,8 +145,10 @@ export default function AgentPanelPendingLedger({ enabled = true }: { enabled?: 
 
   return (
     <section className="flex flex-col gap-2.5">
+      {/* No count here: the briefing above gives the one count of what needs the
+          merchant, and these are only the plans already put to them. */}
       <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        {plans.length === 1 ? "1 plan waiting on you" : `${plans.length} plans waiting on you`}
+        Waiting for your approval
       </h3>
       {plans.map((plan) => (
         <PendingPlanCard

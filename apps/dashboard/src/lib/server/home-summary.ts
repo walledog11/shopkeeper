@@ -13,11 +13,17 @@ import { isEmailIntegrationConfigured } from "@/lib/integrations/onboarding-setu
 import { getChannelInfo } from "@/lib/messaging/channels"
 import { getCustomerName } from "@/lib/messaging/customer-name"
 import { loadNeedsAttention } from "@/lib/server/home-needs-attention"
+import { loadNeedsYouThreads } from "@/lib/server/needs-you"
 import { getMerchantPreferencesPageData } from "@/lib/server/merchant-preferences-data"
 import { getHomeSummaryWindows, loadHomeSummaryRows } from "@/lib/server/home-summary-queries"
 import { isShopifyIntegrationOperational } from "@/lib/server/shopify-integration"
 
 const ORDERS_TO_SHIP_LIMIT = 10
+
+// A refund waiting on the merchant is a refund step in a plan that is waiting on
+// them, not a ticket's tag: a Returns ticket whose refund already went through
+// waits on nobody.
+const REFUND_TOOLS = new Set(["create_refund", "create_partial_refund"])
 
 function numberFromDb(value: bigint | number): number {
   return typeof value === "bigint" ? Number(value) : value
@@ -97,17 +103,21 @@ export async function getHomeSummary(
   now = new Date(),
 ): Promise<HomeSummary> {
   const windows = getHomeSummaryWindows(now)
+  const needsYouLoad = loadNeedsYouThreads(organizationId, settings)
   const [
     { metricRows, dailyRows, topicRows, channelRows, repeatRows },
+    needsYou,
     needsAttention,
     merchantPreferences,
     ordersToShip,
   ] = await Promise.all([
     loadHomeSummaryRows(organizationId, now, windows),
-    loadNeedsAttention(organizationId, settings, now),
+    needsYouLoad,
+    needsYouLoad.then(threads => loadNeedsAttention(organizationId, settings, now, threads)),
     getMerchantPreferencesPageData(organizationId),
     loadOrdersToShip(organizationId),
   ])
+  const carded = new Set(needsAttention.map(item => item.threadId))
 
   const metric = metricRows[0] ?? {
     open_count: BigInt(0),
@@ -117,8 +127,6 @@ export async function getHomeSummary(
     auto_resolved_pct: null,
     replies_sent_24h: BigInt(0),
     overnight_cleared_count: BigInt(0),
-    needs_you_count: BigInt(0),
-    refunds_pending: BigInt(0),
     vips_in_queue: BigInt(0),
     has_sent_reply: false,
   }
@@ -150,8 +158,11 @@ export async function getHomeSummary(
       autoResolvedPct: metric.auto_resolved_pct,
       repliesSent24h: numberFromDb(metric.replies_sent_24h),
       overnightClearedCount: numberFromDb(metric.overnight_cleared_count),
-      needsYouCount: numberFromDb(metric.needs_you_count),
-      refundsPending: numberFromDb(metric.refunds_pending),
+      // One card per ticket that needs the merchant, so the count is the deck.
+      needsYouCount: needsAttention.length,
+      refundsPending: needsYou.filter(thread => (
+        carded.has(thread.id) && thread.plan?.steps.some(step => REFUND_TOOLS.has(step.tool))
+      )).length,
       vipsInQueue: numberFromDb(metric.vips_in_queue),
       hasSentReply: metric.has_sent_reply,
     },

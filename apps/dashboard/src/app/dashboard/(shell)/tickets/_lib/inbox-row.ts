@@ -10,7 +10,7 @@ import {
   type TicketListPresentationStatusTone,
   type TicketTriageTier,
 } from "./ticket-list-presentation"
-import type { OrgSettings, ThreadRequestDisposition, Ticket } from "@/types"
+import type { OrgSettings, SenderType, ThreadRequestDisposition, ThreadStatus, Ticket } from "@/types"
 
 /** Work the merchant can do from the list, plus sender-trust judgment. */
 export type InboxRowDecision = "send" | "review" | "answer" | "trust"
@@ -51,6 +51,23 @@ export interface InboxRow {
   isQuestionable: boolean
 }
 
+/**
+ * What the row rule reads. A loaded ticket carries it, and so does a stored
+ * thread with its newest conversation message, which is how the server counts
+ * every open ticket by the same rule as the inbox.
+ */
+export interface InboxDecisionInput {
+  status: ThreadStatus
+  filterStatus: Ticket["filterStatus"]
+  channelType: Ticket["channelType"]
+  requestDisposition: ThreadRequestDisposition | null
+  escalatedAt: string | Date | null
+  cachedPlan: unknown
+  cachedPlanMessageId: string | null
+  /** Oldest first; the newest conversation message decides whether the cached plan is current. */
+  messages: ReadonlyArray<{ id: string; sender: SenderType }>
+}
+
 export interface BuildInboxRowOptions {
   orgSettings?: Partial<OrgSettings> | null
   now?: Date
@@ -62,8 +79,8 @@ function clamp(text: string | null | undefined, max: number): string {
   return cleaned.length > max ? `${cleaned.slice(0, max - 1)}…` : cleaned
 }
 
-function planMessages(ticket: Ticket) {
-  return ticket.messages.map(message => ({ id: message.id, senderType: message.sender }))
+function planMessages(thread: Pick<InboxDecisionInput, "messages">) {
+  return thread.messages.map(message => ({ id: message.id, senderType: message.sender }))
 }
 
 function latestNonNoteMessage(ticket: Ticket) {
@@ -82,8 +99,8 @@ function dispositionBlocksMerchantWork(
 }
 
 /** Shopify webhook threads are platform notifications, not customer conversations. */
-function isShopifySystemThread(ticket: Ticket): boolean {
-  return ticket.channelType === "shopify"
+function isShopifySystemThread(thread: Pick<InboxDecisionInput, "channelType">): boolean {
+  return thread.channelType === "shopify"
 }
 
 function questionableNeedsMerchant(
@@ -113,25 +130,28 @@ function resolveMerchantQuestion(
   return verdict.kind === "needs_merchant_input" ? verdict.question : null
 }
 
-function rowDecision(ticket: Ticket, orgSettings?: Partial<OrgSettings> | null): InboxRowDecision | null {
-  if (ticket.status === "closed") return null
-  if (ticket.filterStatus === "filtered") return null
-  if (isShopifySystemThread(ticket)) return null
-  if (dispositionBlocksMerchantWork(ticket.requestDisposition)) return null
+export function inboxRowDecision(
+  thread: InboxDecisionInput,
+  orgSettings?: Partial<OrgSettings> | null,
+): InboxRowDecision | null {
+  if (thread.status === "closed") return null
+  if (thread.filterStatus === "filtered") return null
+  if (isShopifySystemThread(thread)) return null
+  if (dispositionBlocksMerchantWork(thread.requestDisposition)) return null
 
-  const plan = getCurrentPlanForThread(ticket, planMessages(ticket))
-  if (ticket.filterStatus === "questionable" && !plan) return "trust"
+  const plan = getCurrentPlanForThread(thread, planMessages(thread))
+  if (thread.filterStatus === "questionable" && !plan) return "trust"
 
-  if (ticket.escalatedAt) return "review"
+  if (thread.escalatedAt) return "review"
   if (!plan) return null
 
-  const { kind } = decideAutonomy(plan, orgSettings, { filterStatus: ticket.filterStatus })
+  const { kind } = decideAutonomy(plan, orgSettings, { filterStatus: thread.filterStatus })
   if (kind === "escalate") return "review"
   if (kind === "needs_merchant_input") return "answer"
 
   // Unrecognized senders can still ask a real question, but routine deflection
   // drafts do not need merchant approval — trust the sender first.
-  if (ticket.filterStatus === "questionable") return null
+  if (thread.filterStatus === "questionable") return null
 
   if (kind === "quick_reply") return "send"
   return "review"
@@ -195,7 +215,7 @@ export function buildInboxRow(ticket: Ticket, options: BuildInboxRowOptions = {}
     now,
     activeTab: ticket.status === "closed" ? "closed" : "open",
   })
-  const decision = rowDecision(ticket, orgSettings)
+  const decision = inboxRowDecision(ticket, orgSettings)
   const merchantQuestion = decision === "answer" ? resolveMerchantQuestion(ticket, orgSettings) : null
   const section = resolveInboxSection(ticket, presentation.tier, decision)
 
@@ -228,6 +248,11 @@ export function decisionRank(decision: InboxRowDecision | null): number {
   return decision === null ? 1 : DECISION_RANK[decision]
 }
 
+/**
+ * The one answer to "does this ticket need the merchant?": its row offers them
+ * an action (Send, Review or Answer). Home, the agent panel, the nav badge and
+ * the inbox's own count all count with it, so they show the same number.
+ */
 export function isActionDecision(decision: InboxRowDecision | null): decision is Exclude<InboxRowDecision, "trust"> {
   return decision === "send" || decision === "review" || decision === "answer"
 }

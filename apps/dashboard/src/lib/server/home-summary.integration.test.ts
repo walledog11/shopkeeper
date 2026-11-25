@@ -8,7 +8,6 @@ import {
 import { buildAgentPlanCacheRecord } from "@shopkeeper/agent/plan-cache"
 import { resolveAgentSettings } from "@shopkeeper/agent/settings"
 import {
-  HOME_NEEDS_ATTENTION_LIMIT,
   HOME_OVERNIGHT_TOPIC_LIMIT,
   HOME_REPEAT_CUSTOMER_LIMIT,
 } from "@/lib/home/summary-contract"
@@ -185,7 +184,7 @@ describe("getHomeSummary", () => {
     expect(summary.series.totalRepliesByDay[6]).toBe(3)
   })
 
-  it("bounds needs-attention, overnight-topic, and repeat-customer lists", async () => {
+  it("cards every ticket that needs the merchant, and bounds overnight-topic and repeat-customer lists", async () => {
     for (let index = 0; index < 7; index++) {
       await createNeedsAttentionThread(new Date(NOW.getTime() - index * 60_000))
     }
@@ -216,7 +215,7 @@ describe("getHomeSummary", () => {
 
     expect(summary.metrics.needsYouCount).toBe(7)
     expect(summary.metrics.overnightClearedCount).toBe(5)
-    expect(summary.needsAttention).toHaveLength(HOME_NEEDS_ATTENTION_LIMIT)
+    expect(summary.needsAttention).toHaveLength(7)
     expect(summary.overnight.topics).toHaveLength(HOME_OVERNIGHT_TOPIC_LIMIT)
     expect(summary.repeatCustomers).toHaveLength(HOME_REPEAT_CUSTOMER_LIMIT)
     expect(summary.repeatCustomers.every(customer => customer.ticketCount === 3)).toBe(true)
@@ -258,6 +257,53 @@ describe("getHomeSummary", () => {
     const summary = await getHomeSummary(org.id, null, NOW)
 
     expect(summary.metrics.refundsPending).toBe(1)
+  })
+
+  // 2026-11-25: Home said "5 still need your eye" while the inbox said "8 need
+  // review". Home counted current plans only, capped at five cards, so an
+  // escalation without a draft never reached it.
+  it("counts what the inbox counts: an escalation without a draft, not a thank-you's leftover plan", async () => {
+    const cacheQuickReply = async (threadId: string, messageId: string) => {
+      await db.thread.update({
+        where: { id: threadId },
+        data: {
+          cachedPlanMessageId: messageId,
+          cachedPlan: buildAgentPlanCacheRecord({
+            instruction: "Reply",
+            lastCustomerMessageId: messageId,
+            settings: resolveAgentSettings(null),
+            plan: QUICK_REPLY_PLAN,
+          }) as unknown as Parameters<typeof db.thread.update>[0]["data"]["cachedPlan"],
+        },
+      })
+    }
+
+    const ready = await createThread()
+    await cacheQuickReply(ready.id, (await addMessage(ready.id, SenderType.customer, TODAY)).id)
+
+    const flagged = await createThread()
+    await createMessage({ threadId: flagged.id, senderType: SenderType.customer, sentAt: TODAY, contentText: "Where is my refund?" })
+    await addMessage(flagged.id, SenderType.ai, new Date(TODAY.getTime() + 60_000))
+    await db.thread.update({ where: { id: flagged.id }, data: { escalatedAt: TODAY } })
+
+    const flaggedWithDraft = await createThread()
+    await cacheQuickReply(flaggedWithDraft.id, (await addMessage(flaggedWithDraft.id, SenderType.customer, TODAY)).id)
+    await db.thread.update({ where: { id: flaggedWithDraft.id }, data: { escalatedAt: TODAY } })
+
+    const thanks = await createThread()
+    await cacheQuickReply(thanks.id, (await addMessage(thanks.id, SenderType.customer, TODAY)).id)
+    await db.thread.update({ where: { id: thanks.id }, data: { requestDisposition: "acknowledgement" } })
+
+    const summary = await getHomeSummary(org.id, null, NOW)
+    const cards = new Map(summary.needsAttention.map(item => [item.threadId, item]))
+
+    expect(summary.metrics.needsYouCount).toBe(3)
+    expect([...cards.keys()].sort()).toEqual([ready.id, flagged.id, flaggedWithDraft.id].sort())
+    expect(cards.get(ready.id)?.kind).toBe("quick_reply")
+    // The card quotes the customer, not the agent's handoff that came after.
+    expect(cards.get(flagged.id)).toMatchObject({ isEscalationOnly: true, customerMessage: "Where is my refund?" })
+    // Flagged for the merchant, so the card asks for a review, not a one-tap send.
+    expect(cards.get(flaggedWithDraft.id)?.kind).toBe("needs_review")
   })
 
   it("surfaces a zero-step invalid plan as fix-only merchant work", async () => {

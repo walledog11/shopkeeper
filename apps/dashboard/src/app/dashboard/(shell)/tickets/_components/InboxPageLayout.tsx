@@ -61,6 +61,7 @@ interface InboxPageLayoutListState {
   spamTickets: Ticket[]
   tickets: Ticket[]
   totalCount: number
+  needsYouCount: number | null
 }
 
 interface InboxPageLayoutActions {
@@ -228,7 +229,7 @@ export function InboxPageLayout({
     orgSettings,
     toast,
   } = conversation
-  const { activeTicketId, approvingTicketId, searchQuery, spamTickets, tickets, totalCount } = list
+  const { activeTicketId, approvingTicketId, needsYouCount, searchQuery, spamTickets, tickets, totalCount } = list
   const lastDialogSnapshot = useRef<InboxDialogSnapshot | null>(null)
 
   const conversationTab = (activeThread?.status ?? activeThreadPreview?.status) === "closed"
@@ -272,6 +273,7 @@ export function InboxPageLayout({
               approvingTicketId={approvingTicketId}
               isSearchMode={flags.isSearchMode}
               hasMore={flags.hasMore}
+              needsYouCount={needsYouCount}
               isLoadingMore={flags.isLoadingMore}
               hasAnyConversation={totalCount > 0}
               onOpen={actions.onOpen}
