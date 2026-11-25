@@ -23,20 +23,22 @@ const actionClassName =
 const primaryActionClassName = cn(actionClassName, "bg-foreground text-background hover:bg-foreground/85")
 const secondaryActionClassName = cn(actionClassName, "border border-border bg-white text-[#1a1a1a] hover:bg-foreground/[0.04]")
 
+// The button is always what the merchant does; why lives in the status.
 function actionButtonLabel(row: InboxRowModel, isSending: boolean): string {
   if (isSending) return "Sending"
-  if (row.decision === "send") return "Send"
-  return row.status.label
+  return row.decision === "send" ? "Send" : "Review"
 }
 
-// A row's status when no action button already says it.
+// The row's state. Beside an action it shows only a reason the button doesn't
+// give: "Flagged for you" or "Refund" next to Review, but nothing next to Send.
 function rowStatus(
   row: InboxRowModel,
   variant: InboxRowVariant,
 ): { label: string; tone: MerchantMetaStatusTone } | null {
   if (variant === "spam") return { label: "Filed as spam", tone: "neutral" }
   if (variant === "trust") return { label: "Outside your store", tone: "caution" }
-  return row.decision ? null : row.status
+  if (!row.decision) return row.status
+  return row.status.addsToAction ? row.status : null
 }
 
 export interface InboxTicketRowActions {
