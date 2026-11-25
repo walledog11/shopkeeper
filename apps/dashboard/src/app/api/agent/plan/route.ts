@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
-import { BadRequestError, UnauthorizedError } from "@/lib/api/errors";
+import { BadRequestError } from "@/lib/api/errors";
+import { requireCurrentUserId } from "@/lib/api/permissions";
 import { readRequiredJsonObject } from "@/lib/api/body";
 import { withOrgRoute } from "@/lib/api/route";
 import { requireOrgThread } from "@shopkeeper/agent/thread-auth";
@@ -17,8 +17,7 @@ export const GET = withOrgRoute(
     customerData: { resource: "thread", idQuery: "threadId" },
   },
   async ({ org, request }) => {
-    const { userId } = await auth();
-    if (!userId) throw new UnauthorizedError();
+    const userId = await requireCurrentUserId();
     const threadId = new URL(request.url).searchParams.get("threadId");
     if (!threadId) throw new BadRequestError("threadId is required");
     await requireOrgThread(threadId, org.id);
@@ -34,8 +33,7 @@ export const POST = withOrgRoute(
     rateLimit: { key: "agent:plan", limit: 20, windowSecs: 60 },
   },
   async ({ org, request }) => {
-    const { userId } = await auth();
-    if (!userId) throw new UnauthorizedError();
+    const userId = await requireCurrentUserId();
     const body = parseAgentPlanBody(await readRequiredJsonObject(request));
     await requireOrgThread(body.threadId, org.id);
     const { status, payload } = await postGatewayPlanRequest({ organizationId: org.id, clerkUserId: userId, ...body });
@@ -56,8 +54,7 @@ export const DELETE = withOrgRoute(
     // The dismissing member, for the durable proposal's own scope check.
     // `getOrCreateOrg` has already established a signed-in session, so a missing
     // user here is a broken one rather than an anonymous caller.
-    const { userId } = await auth();
-    if (!userId) throw new UnauthorizedError();
+    const userId = await requireCurrentUserId();
     const cleared = await dismissCurrentCachedPlan({
       orgId: org.id,
       threadId,

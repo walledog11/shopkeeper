@@ -1,6 +1,6 @@
 "use client"
 
-import { useOrganization } from "@clerk/nextjs"
+import { useIsWorkspaceAdmin } from "@/app/dashboard/_components/WorkspaceRoleContext"
 import type { OrgSettings, OrgSettingsPatch } from "@/types"
 import { AgentAutonomySection } from "./AgentAutonomySection"
 import { AiUsageLimitSection, ApprovalLimitsSection } from "./ApprovalLimitsSection"
@@ -33,8 +33,7 @@ export default function AgentSettingsForm(props: AgentSettingsFormProps) {
   // These settings decide how much the agent may do on its own and how much it
   // may refund, so saving them is admin-only server-side. Members can read the
   // page; the save bar tells them why they can't apply a change.
-  const { membership } = useOrganization()
-  const isAdmin = membership?.role === "org:admin"
+  const isAdmin = useIsWorkspaceAdmin()
 
   return (
     <div className="flex w-full flex-col gap-4">

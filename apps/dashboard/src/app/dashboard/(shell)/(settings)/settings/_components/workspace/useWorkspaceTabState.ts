@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useOrganization, useOrganizationList } from "@clerk/nextjs"
+import { useIsWorkspaceAdmin } from "@/app/dashboard/_components/WorkspaceRoleContext"
 import {
   clearWorkspaceTicketsRequest,
   deleteWorkspaceRequest,
@@ -143,11 +144,11 @@ function useDeleteWorkspaceFlow({
 
 export function useWorkspaceTabState(props: WorkspaceTabProps) {
   const { orgName } = props
-  const { organization, membership } = useOrganization()
+  const { organization } = useOrganization()
   const { setActive, userMemberships } = useOrganizationList({
     userMemberships: { infinite: false },
   })
-  const isAdmin = membership?.role === "org:admin"
+  const isAdmin = useIsWorkspaceAdmin()
   const nextOrgId = userMemberships?.data?.find(m => m.organization.id !== organization?.id)?.organization.id ?? null
   const isOnlyWorkspace = userMemberships?.data !== undefined && nextOrgId === null
 

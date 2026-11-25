@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import useSWR from "swr"
-import { useOrganization } from "@clerk/nextjs"
+import { useIsWorkspaceAdmin } from "@/app/dashboard/_components/WorkspaceRoleContext"
 import { fetcher } from "@/lib/api/fetcher"
 import { Button } from "@/components/ui/button"
 import { formatUnixDate } from "@/lib/format/date"
@@ -228,8 +228,7 @@ export default function BillingTab() {
   const { data, isLoading, error } = useSWR<BillingInfo>("/api/billing", fetcher)
   // Billing state stays readable for everyone; only admins can open the Stripe
   // portal, which is what the server enforces.
-  const { membership } = useOrganization()
-  const isAdmin = membership?.role === "org:admin"
+  const isAdmin = useIsWorkspaceAdmin()
 
   if (isLoading) {
     return <BillingSkeleton />

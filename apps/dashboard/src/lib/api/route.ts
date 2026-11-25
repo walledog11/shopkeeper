@@ -1,9 +1,7 @@
 import type { NextRequest } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
-import { getE2EAuthIdentity } from '@/lib/e2e-auth';
 import { getOrCreateOrg } from '@/lib/server/org';
-import { ConflictError, handleApiError, NotFoundError, UnauthorizedError } from '@/lib/api/errors';
-import { assertOrgAdmin } from '@/lib/api/permissions';
+import { ConflictError, handleApiError, NotFoundError } from '@/lib/api/errors';
+import { assertOrgAdmin, currentUserId, requireCurrentUserId } from '@/lib/api/permissions';
 import { assertBillingWriteAllowed } from '@shopkeeper/db/billing-write-gate';
 import { recordCustomerDataAccess, type CustomerDataResource } from '@shopkeeper/db';
 import logger from '@/lib/server/logger';
@@ -60,9 +58,7 @@ export function withOrgRoute<P = Record<string, never>>(
         const { key, limit, windowSecs } = options.rateLimit;
         let identity = org.id;
         if (options.rateLimit.scope === 'user') {
-          const userId = getE2EAuthIdentity()?.userId ?? (await auth()).userId;
-          if (!userId) throw new UnauthorizedError();
-          identity = `${org.id}:${userId}`;
+          identity = `${org.id}:${await requireCurrentUserId()}`;
         }
         const rl = await rateLimit(`${key}:${identity}`, limit, windowSecs);
         if (!rl.success) return tooManyRequests(rl.reset);
@@ -96,7 +92,7 @@ async function recordMemberAccess(
   request: Request,
 ): Promise<void> {
   try {
-    const userId = getE2EAuthIdentity()?.userId ?? (await auth()).userId;
+    const userId = await currentUserId();
     const fromParam = customerData.idParam
       ? (params as Record<string, unknown> | null)?.[customerData.idParam]
       : undefined;

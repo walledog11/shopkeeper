@@ -1,10 +1,25 @@
 import type { ActionEntry } from "@/lib/agent/runner"
 import type { GatewayAgentRequestPayload } from "@/lib/agent/api/gateway-operator-turn"
+import { requestFailureMessage, type RequestFailureCopy } from "@/lib/api/client-error-message"
+import { ApiRequestError, errorMessageFromPayload } from "@/lib/api/fetcher"
+
+/** Sending an instruction again under its first identity reattaches to work that already reached the server. */
+export interface ChatResend {
+  instruction: string
+  clientRequestId: string
+}
 
 export type ChatMessage =
   | { role: "user"; text: string; timestamp: Date }
   | { role: "agent"; summary: string; actions: ActionEntry[]; timestamp: Date; awaitingApproval?: boolean }
   | { role: "thinking"; status?: string }
+  // Not the agent speaking: the request failed before the agent could answer.
+  | {
+      role: "failure"
+      detail: string
+      recovery: ({ kind: "retry" } & ChatResend) | { kind: "reload" } | null
+      timestamp: Date
+    }
 
 export interface OperatorTranscript {
   messages: Array<{ role: "user" | "agent"; text: string }>
@@ -84,7 +99,16 @@ export async function stopAgentChatRequest(request: AgentRequestControl, fetchIm
 
 export type SendAgentChatResult =
   | { ok: true; summary: string; actionsPerformed: ActionEntry[]; awaitingApproval?: boolean }
-  | { ok: false; error: string }
+  | { ok: false; failure: RequestFailureCopy }
+
+// A response that refused the request: the server's reason when it gave one the
+// merchant can act on (the AI limit, billing), else plain copy for its status.
+function refused(response: Response, data: AgentChatPayload | null): SendAgentChatResult {
+  return {
+    ok: false,
+    failure: requestFailureMessage(new ApiRequestError(errorMessageFromPayload(data, ""), response.status, data)),
+  }
+}
 
 export function isAgentRequestActive(request: GatewayAgentRequestPayload): boolean {
   return ["accepted", "attached", "queued", "running", "reconciling"].includes(request.status)
@@ -122,11 +146,11 @@ async function pollAgentRequest(
           actionsPerformed: response.actionsPerformed,
         }
       }
-      return { ok: false, error: data.status === "reconciling"
+      return { ok: false, failure: { recovery: null, detail: data.status === "reconciling"
         ? data.cancelledAt
           ? "Stopped further work. An action had already started; check its outcome before continuing."
           : "This request needs review before it can continue."
-        : "The request did not complete." }
+        : "The request did not complete." } }
     }
     if (data?.response && !["accepted", "attached", "queued", "running"].includes(data.status ?? "")) {
       return {
@@ -139,11 +163,12 @@ async function pollAgentRequest(
     if (pollIntervalMs > 0) await new Promise(resolve => setTimeout(resolve, pollIntervalMs))
     const statusResponse = await fetchImpl(statusUrl)
     data = await statusResponse.json().catch(() => null) as AgentChatPayload | null
-    if (!statusResponse.ok) {
-      return { ok: false, error: data?.error ?? "Could not recover the request status." }
-    }
+    if (!statusResponse.ok) return refused(statusResponse, data)
   }
-  return { ok: false, error: "The request is still running. Its result will appear when it completes." }
+  return {
+    ok: false,
+    failure: { detail: "The request is still running. Reload to see its result when it finishes.", recovery: "reload" },
+  }
 }
 
 export function resumeAgentChatRequest(
@@ -187,12 +212,12 @@ export async function sendAgentChatInstruction({
 
   let data = await res.json().catch(() => null) as AgentChatPayload | null
 
-  if (!res.ok) {
-    return { ok: false, error: data?.error ?? "Something went wrong." }
-  }
+  if (!res.ok) return refused(res, data)
 
   const statusUrl = data?.statusUrl ?? (data?.requestId ? `/api/agent/requests/${data.requestId}` : null)
-  if (!statusUrl) return { ok: false, error: "The request was accepted without a recovery identity." }
+  if (!statusUrl) {
+    return { ok: false, failure: { detail: "Couldn't follow this request. Reload to see its result.", recovery: "reload" } }
+  }
 
   return pollAgentRequest(statusUrl, data, fetchImpl, pollIntervalMs, onStatus, onRequest)
 }

@@ -14,6 +14,7 @@ import { WalkthroughCard, WalkthroughNote } from "@/components/agent/Walkthrough
 import type { PanelSuggestionChip } from "@/lib/agent/panel-briefing"
 import { AgentChatComposer } from "./AgentChatComposer"
 import { AgentChatMessage } from "./AgentChatMessage"
+import { RequestFailureNotice } from "./RequestFailureNotice"
 import { useAgentWalkthrough } from "./useAgentWalkthrough"
 import { CONCIERGE_BUBBLE } from "@/components/support-card/styles"
 import { messageKey, type AgentChatState } from "./useAgentChatState"
@@ -40,6 +41,7 @@ export function AgentChatView({
     firstName,
     greeting,
     handleClearPanel,
+    handleRetry,
     handleSendText,
     initial,
     input,
@@ -200,6 +202,21 @@ export function AgentChatView({
                 {msg.status ?? fillerPhrase}
               </div>
             </div>
+          )
+        }
+
+        if (msg.role === "failure") {
+          // Only the latest failure offers to send again; a later message moved on.
+          const latest = index === messages.length - 1
+          return (
+            <RequestFailureNotice
+              key={messageKey(msg, index)}
+              title="Couldn't finish this request."
+              detail={msg.detail}
+              recovery={msg.recovery?.kind === "retry"
+                ? latest && !isRunning ? { kind: "retry", run: () => void handleRetry() } : null
+                : msg.recovery}
+            />
           )
         }
 

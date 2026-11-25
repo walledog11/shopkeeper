@@ -20,8 +20,10 @@ import {
   sendAgentChatInstruction,
   transcriptToChatMessages,
   type ChatMessage,
+  type ChatResend,
   type AgentRequestControl,
 } from "./agent-chat-session"
+import { requestFailureMessage, type RequestFailureCopy } from "@/lib/api/client-error-message"
 
 const DEFAULT_FILLER_PHRASES = getConciergeFillerPhrases("")
 const PENDING_REQUEST_STORAGE_KEY = "shopkeeper:agent:pending-request"
@@ -53,9 +55,20 @@ interface SendInstructionOptions {
 export function messageKey(message: ChatMessage, index: number): string {
   if (message.role === "thinking") return `thinking-${index}`
   const time = message.timestamp.toISOString()
+  if (message.role === "failure") return `failure-${index}-${time}`
   return message.role === "user"
     ? `user-${index}-${time}-${message.text}`
     : `agent-${index}-${time}-${message.summary}`
+}
+
+// A failed request as the panel shows it. Only an instruction this panel sent
+// can be sent again; a request picked back up after a reload recovers by
+// reloading, which picks it up again.
+function failureMessage(failure: RequestFailureCopy, resend: ChatResend | null): ChatMessage {
+  const recovery = failure.recovery === "retry" && resend
+    ? { kind: "retry" as const, ...resend }
+    : failure.recovery ? { kind: "reload" as const } : null
+  return { role: "failure", detail: failure.detail, recovery, timestamp: new Date() }
 }
 
 export function useAgentChatState({ restoreHistory = true }: UseAgentChatStateProps) {
@@ -167,12 +180,12 @@ export function useAgentChatState({ restoreHistory = true }: UseAgentChatStatePr
                   timestamp: new Date(),
                   awaitingApproval: requestResult.awaitingApproval,
                 }
-              : { role: "agent" as const, summary: requestResult.error, actions: [], timestamp: new Date() },
+              : failureMessage(requestResult.failure, null),
           ])
         }).catch(() => {
           setMessages(prev => [
             ...prev.slice(0, -1),
-            { role: "agent", summary: "Request status is temporarily unavailable.", actions: [], timestamp: new Date() },
+            failureMessage({ detail: "Request status is temporarily unavailable.", recovery: "reload" }, null),
           ])
         }).finally(() => {
           window.localStorage.removeItem(PENDING_REQUEST_STORAGE_KEY)
@@ -195,27 +208,19 @@ export function useAgentChatState({ restoreHistory = true }: UseAgentChatStatePr
     router.push(navigation.href)
   }, [pathname, router])
 
-  const sendInstruction = useCallback(async (text: string, options: SendInstructionOptions = {}) => {
-    const trimmed = text.trim()
-    const displayText = (options.displayText ?? text).trim()
-    if (!trimmed || !displayText || isRunning) return
-
-    const sentAt = new Date()
-    setFillerPhrases([...getConciergeFillerPhrases(trimmed)])
+  // Runs an instruction whose "thinking" row is the last message, and settles
+  // that row with the answer or the failure.
+  const runInstruction = useCallback(async ({ instruction, clientRequestId }: ChatResend) => {
+    setFillerPhrases([...getConciergeFillerPhrases(instruction)])
     setIsRunning(true)
     setActiveRequest(null)
     setStopError(null)
-    setMessages(prev => [
-      ...prev,
-      { role: "user", text: displayText, timestamp: sentAt },
-      { role: "thinking" },
-    ])
+    const settle = (message: ChatMessage) => setMessages(prev => [...prev.slice(0, -1), message])
 
     try {
-      const clientRequestId = crypto.randomUUID()
       window.localStorage.setItem(PENDING_REQUEST_STORAGE_KEY, clientRequestId)
       const result = await sendAgentChatInstruction({
-        instruction: trimmed,
+        instruction,
         clientRequestId,
         onRequest: updateRequest,
         onStatus: (status) => {
@@ -227,37 +232,51 @@ export function useAgentChatState({ restoreHistory = true }: UseAgentChatStatePr
       })
 
       if (!result.ok) {
-        setMessages(prev => [
-          ...prev.slice(0, -1),
-          { role: "agent", summary: result.error, actions: [], timestamp: new Date() },
-        ])
+        settle(failureMessage(result.failure, { instruction, clientRequestId }))
         return
       }
 
       const navigation = extractConciergeNavigation(result.actionsPerformed)
       if (navigation) navigateConcierge(navigation)
 
-      setMessages(prev => [
-        ...prev.slice(0, -1),
-        {
-          role: "agent",
-          summary: result.summary,
-          actions: result.actionsPerformed,
-          timestamp: new Date(),
-          awaitingApproval: result.awaitingApproval,
-        },
-      ])
-    } catch {
-      setMessages(prev => [
-        ...prev.slice(0, -1),
-        { role: "agent", summary: "Request failed. Please try again.", actions: [], timestamp: new Date() },
-      ])
+      settle({
+        role: "agent",
+        summary: result.summary,
+        actions: result.actionsPerformed,
+        timestamp: new Date(),
+        awaitingApproval: result.awaitingApproval,
+      })
+    } catch (error) {
+      settle(failureMessage(requestFailureMessage(error), { instruction, clientRequestId }))
     } finally {
       window.localStorage.removeItem(PENDING_REQUEST_STORAGE_KEY)
       setIsRunning(false)
       textareaRef.current?.focus()
     }
-  }, [isRunning, navigateConcierge, updateRequest])
+  }, [navigateConcierge, updateRequest])
+
+  const sendInstruction = useCallback(async (text: string, options: SendInstructionOptions = {}) => {
+    const trimmed = text.trim()
+    const displayText = (options.displayText ?? text).trim()
+    if (!trimmed || !displayText || isRunning) return
+
+    setMessages(prev => [
+      ...prev,
+      { role: "user", text: displayText, timestamp: new Date() },
+      { role: "thinking" },
+    ])
+    await runInstruction({ instruction: trimmed, clientRequestId: crypto.randomUUID() })
+  }, [isRunning, runInstruction])
+
+  // Sends the latest failed instruction again under its first identity, so work
+  // the first attempt already started is picked up, never run twice.
+  const handleRetry = useCallback(async () => {
+    const failed = messages.at(-1)
+    if (isRunning || failed?.role !== "failure" || failed.recovery?.kind !== "retry") return
+    const { instruction, clientRequestId } = failed.recovery
+    setMessages(prev => [...prev.slice(0, -1), { role: "thinking" }])
+    await runInstruction({ instruction, clientRequestId })
+  }, [isRunning, messages, runInstruction])
 
   const handleSend = useCallback(async () => {
     const text = input.trim()
@@ -283,6 +302,7 @@ export function useAgentChatState({ restoreHistory = true }: UseAgentChatStatePr
     greeting,
     handleKeyDown,
     handleClearPanel,
+    handleRetry,
     handleSend,
     handleSendText,
     initial,

@@ -104,6 +104,13 @@ The first publication is the App Store. These block review or a new install's fi
   has no typing or "Seen" for Instagram; ask the vendor.
 - **Agent rough edges seen live:** a status question naming the customer uses the full
   order read.
+- **Mirrored phone cards reach operator history unwrapped.** A plan card mirrored onto
+  the operator thread quotes the customer's message, the draft and each write's values
+  (an address, a note), and operator turns read it back as an assistant row without
+  `wrapUntrusted`. Wrap the customer-derived spans where cards are mirrored.
+- **Dashboard refinement, next:** one count of what needs the merchant (Home's summary
+  and the inbox's Needs review count plans differently), a phone-width pass, and a read
+  of every text and email the merchant receives.
 - **Concurrency-safe LLM allowances.** Parallel calls can spend the same remainder, and a
   usage write that fails (or names an unpriced model) is logged by `recordSpend` and
   dropped. Reserve before each provider call and reconcile after; keep unknown

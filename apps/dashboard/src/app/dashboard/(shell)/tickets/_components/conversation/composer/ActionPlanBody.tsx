@@ -26,14 +26,6 @@ function signalDisplayText(signal: PlanSignal): string {
   return signal.message
 }
 
-function stepChipLabel(step: PlanStep): string {
-  const text = (step.description || step.label || "").replace(/^"|"$/g, "").trim()
-  if (text.length <= 72) return text
-  const clipped = text.slice(0, 71)
-  const lastSpace = clipped.lastIndexOf(" ")
-  return `${(lastSpace > 40 ? clipped.slice(0, lastSpace) : clipped).trimEnd()}…`
-}
-
 export function ActionPlanBody({
   actionSteps,
   blockingSignals,
@@ -158,13 +150,14 @@ export function ActionPlanBody({
                 key={step.id}
                 data-testid="action-plan-step"
                 data-step-id={step.id}
-                className="inline-flex items-center gap-1.5 rounded-full border border-amber-600/25 bg-amber-600/[0.08] px-3 py-1.5 text-xs font-medium text-amber-700/90"
+                className="inline-flex items-start gap-1.5 rounded-xl border border-amber-600/25 bg-amber-600/[0.08] px-3 py-1.5 text-xs font-medium leading-relaxed text-amber-700/90"
               >
                 {isExecuting
-                  ? <Loader2 className="size-3 animate-spin" />
-                  : <span className="size-1.5 rounded-full bg-amber-600" />
+                  ? <Loader2 className="mt-0.5 size-3 shrink-0 animate-spin" />
+                  : <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-amber-600" />
                 }
-                {stepChipLabel(step)}
+                {/* In full: this is what Approve writes to Shopify. */}
+                <span className="min-w-0">{formatPlanStepSentence(step, customerName)}</span>
               </span>
             ))}
           </div>

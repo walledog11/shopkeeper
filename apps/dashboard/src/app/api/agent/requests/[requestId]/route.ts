@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
-import { UnauthorizedError } from "@/lib/api/errors";
 import { withOrgRoute } from "@/lib/api/route";
+import { requireCurrentUserId } from "@/lib/api/permissions";
 import { getGatewayAgentRequest } from "@/lib/agent/api/gateway-operator-turn";
 
 export const GET = withOrgRoute<{ requestId: string }>(
@@ -11,8 +10,7 @@ export const GET = withOrgRoute<{ requestId: string }>(
     customerData: { resource: "agent_request", idParam: "requestId" },
   },
   async ({ org, params }) => {
-    const { userId } = await auth();
-    if (!userId) throw new UnauthorizedError();
+    const userId = await requireCurrentUserId();
     const { status, payload } = await getGatewayAgentRequest({
       organizationId: org.id,
       clerkUserId: userId,

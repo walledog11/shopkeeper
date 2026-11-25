@@ -1,6 +1,6 @@
 "use client"
 
-import { useOrganization } from "@clerk/nextjs"
+import { useIsWorkspaceAdmin } from "@/app/dashboard/_components/WorkspaceRoleContext"
 import { Check, Loader2, Plus } from "lucide-react"
 import { MemoryLibrarySkeleton } from "@/app/dashboard/_components/skeletons"
 import { dashboardChromeColumnClassName } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
@@ -28,7 +28,7 @@ export function KbPageView({ state }: { state: KbPageState }) {
     selectedArticle, setArticleDraft, setEditDraft, setSearch, startEdit, visibleBooks,
     selectedBookId, selectBook, closeBook, storeProfile, preferences, refresh,
   } = state
-  const { membership } = useOrganization()
+  const isAdmin = useIsWorkspaceAdmin()
   const mobile = useIsMobile()
   const detailOpen = Boolean(expandedArticle || selectedArticle || isCreatingArticle)
   useMobileChromeOverride(mobile && detailOpen ? "detail" : null)
@@ -71,7 +71,7 @@ export function KbPageView({ state }: { state: KbPageState }) {
                 onCloseBook={closeBook}
                 onAddNote={beginAddContext}
                 onOpenArticle={expandArticle}
-                profile={{ storeProfile, preferences, canEdit: membership?.role === "org:admin", onChanged: refresh }}
+                profile={{ storeProfile, preferences, canEdit: isAdmin, onChanged: refresh }}
               />
             )}
           </div>

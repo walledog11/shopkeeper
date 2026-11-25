@@ -16,10 +16,9 @@
 import { NextResponse } from "next/server";
 
 export const maxDuration = 60;
-import { auth } from "@clerk/nextjs/server";
-import { UnauthorizedError } from "@/lib/api/errors";
 import { readRequiredJsonObject } from "@/lib/api/body";
 import { withOrgRoute } from "@/lib/api/route";
+import { requireCurrentUserId } from "@/lib/api/permissions";
 import { listGatewayAgentRequests, postGatewayAgentRequest } from "@/lib/agent/api/gateway-operator-turn";
 import { getOperatorTranscript } from "@/lib/agent/api/operator-transcript";
 import { parseAgentChatBody } from "@/lib/agent/api/validation";
@@ -30,8 +29,7 @@ import logger from "@/lib/server/logger";
 export const GET = withOrgRoute(
   { context: "Agent chat GET", errorMessage: "Failed to load conversation", customerData: { resource: "operator_chat" } },
   async ({ org }) => {
-    const { userId } = await auth();
-    if (!userId) throw new UnauthorizedError();
+    const userId = await requireCurrentUserId();
     const [messages, recent] = await Promise.all([
       getOperatorTranscript(org.id, userId),
       listGatewayAgentRequests({ organizationId: org.id, clerkUserId: userId }).catch(() => null),
@@ -64,8 +62,7 @@ export const POST = withOrgRoute(
     },
   },
   async ({ org, request }) => {
-    const { userId } = await auth();
-    if (!userId) throw new UnauthorizedError();
+    const userId = await requireCurrentUserId();
 
     const { clientRequestId, instruction } = parseAgentChatBody(await readRequiredJsonObject(request));
 

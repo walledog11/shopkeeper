@@ -6,8 +6,8 @@
  */
 import { NextResponse } from "next/server";
 import { createOrgMemberBindToken, db } from "@shopkeeper/db";
-import { auth } from "@clerk/nextjs/server";
-import { ApiError, UnauthorizedError } from "@/lib/api/errors";
+import { ApiError } from "@/lib/api/errors";
+import { requireCurrentUserId } from "@/lib/api/permissions";
 import { withOrgRoute } from "@/lib/api/route";
 import { normalizeTelegramBotUsername } from "@/lib/integrations/telegram-visibility";
 import { getTelegramMemberStatus } from "@/lib/server/telegram-integration";
@@ -21,8 +21,7 @@ function getBotUsername(): string | null {
 export const GET = withOrgRoute(
   { context: "Telegram GET", errorMessage: "Failed to fetch Telegram integration" },
   async ({ org }) => {
-    const { userId } = await auth();
-    if (!userId) throw new UnauthorizedError();
+    const userId = await requireCurrentUserId();
 
     const status = await getTelegramMemberStatus(org.id, userId);
     return NextResponse.json(status);
@@ -32,8 +31,7 @@ export const GET = withOrgRoute(
 export const POST = withOrgRoute(
   { context: "Telegram POST", errorMessage: "Failed to start Telegram connect", requireBillingWriteAllowed: true },
   async ({ org }) => {
-    const { userId } = await auth();
-    if (!userId) throw new UnauthorizedError();
+    const userId = await requireCurrentUserId();
 
     const botUsername = getBotUsername();
     if (!botUsername) {
@@ -69,8 +67,7 @@ export const POST = withOrgRoute(
 export const DELETE = withOrgRoute(
   { context: "Telegram DELETE", errorMessage: "Failed to disconnect Telegram" },
   async ({ org, request }) => {
-    const { userId } = await auth();
-    if (!userId) throw new UnauthorizedError();
+    const userId = await requireCurrentUserId();
 
     const { searchParams } = new URL(request.url);
     const targetChatId = searchParams.get("chatId");

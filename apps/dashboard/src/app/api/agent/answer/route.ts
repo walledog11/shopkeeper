@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
-import { UnauthorizedError } from "@/lib/api/errors";
 import { readRequiredJsonObject } from "@/lib/api/body";
 import { withOrgRoute } from "@/lib/api/route";
+import { requireCurrentUserId } from "@/lib/api/permissions";
 import { requireOrgThread } from "@shopkeeper/agent/thread-auth";
 import { parseAgentAnswerBody } from "@/lib/agent/api/validation";
 import { postGatewayAnswer } from "@/lib/agent/api/gateway-operator-turn";
@@ -21,8 +20,7 @@ export const POST = withOrgRoute(
     rateLimit: { key: "agent:answer", limit: 20, windowSecs: 60 },
   },
   async ({ org, request }) => {
-    const { userId } = await auth();
-    if (!userId) throw new UnauthorizedError();
+    const userId = await requireCurrentUserId();
     const { threadId, answer, saveToKb } = parseAgentAnswerBody(await readRequiredJsonObject(request));
     await requireOrgThread(threadId, org.id);
     const { status, payload } = await postGatewayAnswer({

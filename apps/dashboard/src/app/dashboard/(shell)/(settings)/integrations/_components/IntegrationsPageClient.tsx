@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
-import { useOrganization } from "@clerk/nextjs"
+import { useIsWorkspaceAdmin } from "@/app/dashboard/_components/WorkspaceRoleContext"
 import { AlertCircle, AlertTriangle, CheckCircle2, Info } from "lucide-react"
 import { cn } from "@/lib/ui/cn"
 import { errorMessageFromUnknown } from "@/lib/api/fetcher"
@@ -112,8 +112,7 @@ function IntegrationsPageContent({
   storefrontChatGloballyEnabled,
 }: IntegrationsPageProps) {
   const searchParams = useSearchParams()
-  const { membership } = useOrganization()
-  const isAdmin = membership?.role === "org:admin"
+  const isAdmin = useIsWorkspaceAdmin()
   const { data, mutate } = useIntegrations({ fallbackData: initialIntegrations })
   const integrations = useMemo(() => data ?? [], [data])
   const loaded = data !== undefined

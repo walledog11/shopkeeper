@@ -12,6 +12,8 @@ import { RightRailProvider } from "../_components/right-rail/RightRailContext";
 import DashboardRightRail from "../_components/right-rail/DashboardRightRail";
 import RealtimeProvider from "@/components/realtime/RealtimeProvider";
 import { auth } from "@clerk/nextjs/server";
+import { isOrgAdmin } from "@/lib/api/permissions";
+import { WorkspaceRoleProvider } from "../_components/WorkspaceRoleContext";
 import { getOrCreateOrg } from "@/lib/server/org";
 import { getIncompleteOnboardingRedirect } from "@/lib/server/onboarding-guard";
 import { resolveAgentSettings } from "@shopkeeper/agent/settings";
@@ -123,6 +125,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     });
   }
 
+  const isAdmin = await isOrgAdmin();
   const cookieStore = await cookies();
   const dismissedNotificationIds = parseDismissedNotificationIds(
     cookieStore.get(NOTIFICATION_DISMISSALS_COOKIE)?.value,
@@ -130,6 +133,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const visibleNotifications = notifications.filter(notification => !dismissedNotificationIds.has(notification.id));
 
   return (
+    <WorkspaceRoleProvider isAdmin={isAdmin}>
     <RightRailProvider>
     <HelpProvider>
       <AgentPanelProvider>
@@ -157,5 +161,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
       </AgentPanelProvider>
     </HelpProvider>
     </RightRailProvider>
+    </WorkspaceRoleProvider>
   );
 }

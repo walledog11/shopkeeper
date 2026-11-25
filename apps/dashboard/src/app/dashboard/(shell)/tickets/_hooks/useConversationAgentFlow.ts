@@ -15,6 +15,7 @@ import {
 } from "./conversation-agent-requests"
 import { REPLAN_CUSTOMER_REPLY_INSTRUCTION } from "@/lib/agent/replan-instruction"
 import { requestFailureMessage, type RequestFailureCopy } from "@/lib/api/client-error-message"
+import type { RequestFailureRecovery } from "@/components/agent/RequestFailureNotice"
 import { captureClientProductEvent } from "@/lib/product-events"
 
 interface UseConversationAgentFlowProps {
@@ -59,7 +60,14 @@ export interface AgentRequestFailure {
   instruction: string
   title: string
   detail: string
-  recovery: { kind: "retry"; run: () => void } | { kind: "reload" } | null
+  recovery: RequestFailureRecovery
+  /**
+   * Whether the ticket's latest plan is unknown: a newer one may be drafting.
+   * The cached plan is then not offered beside the failure, so the ticket shows
+   * one state, the failure and its retry, instead of an approvable plan under
+   * "Couldn't load the latest plan".
+   */
+  planUnknown: boolean
 }
 
 export function getAgentCommandState(replyText: string) {
@@ -146,8 +154,9 @@ export function useConversationAgentFlow({
   const supersededByServer = override !== null && serverPlan !== null
     && !override.replaces.includes(planStateKey(serverPlan))
   if (supersededByServer) dispatchPendingPlan({ type: "release" })
-  const pendingPlan = override && !supersededByServer ? override.plan : serverPlan
-  const currentPlanKeys = [serverPlan, pendingPlan].flatMap(plan => plan ? [planStateKey(plan)] : [])
+  const shownPlan = override && !supersededByServer ? override.plan : serverPlan
+  const currentPlanKeys = [serverPlan, shownPlan].flatMap(plan => plan ? [planStateKey(plan)] : [])
+  const pendingPlan = requestFailure?.ticketId === ticket.id && requestFailure.planUnknown ? null : shownPlan
   const overrideServerPlan = (plan: AgentPlan | null) => {
     dispatchPendingPlan({ type: "set", override: { ticketId: ticket.id, plan, replaces: currentPlanKeys } })
   }
@@ -170,7 +179,7 @@ export function useConversationAgentFlow({
   const reportFailure = (
     kind: keyof typeof FAILURE_TITLES,
     error: unknown,
-    options: { instruction?: string; retry?: () => void } = {},
+    options: { instruction?: string; retry?: () => void; planUnknown?: boolean } = {},
   ) => {
     const copy: RequestFailureCopy = error instanceof PlanningEndedError
       ? { detail: error.message, recovery: null }
@@ -186,6 +195,7 @@ export function useConversationAgentFlow({
         : copy.recovery === "retry" && retry
           ? { kind: "retry", run: () => { setRequestFailure(null); retry() } }
           : null,
+      planUnknown: options.planUnknown ?? false,
     })
   }
 
@@ -207,7 +217,12 @@ export function useConversationAgentFlow({
       overrideServerPlan(plan)
     }).catch(error => {
       if (!current()) return
-      reportFailure("restore", error, { retry: () => setRestoreAttempt(attempt => attempt + 1) })
+      // A planning request that ended is an answer, and the cached plan stands;
+      // a request that failed on the way leaves the latest plan unknown.
+      reportFailure("restore", error, {
+        retry: () => setRestoreAttempt(attempt => attempt + 1),
+        planUnknown: !(error instanceof PlanningEndedError),
+      })
     }).finally(() => {
       if (!current()) return
       setIsPlanLoading(false)
