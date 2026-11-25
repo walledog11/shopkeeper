@@ -45,9 +45,7 @@ export function resolveAnalyticsEnvironment(env: NodeJS.ProcessEnv): AnalyticsEn
   return env.NODE_ENV === 'production' ? 'production' : 'development';
 }
 
-export function parseProductAnalyticsConfig(
-  env: NodeJS.ProcessEnv = process.env,
-): ProductAnalyticsConfig {
+function parseProductAnalyticsConfig(env: NodeJS.ProcessEnv): ProductAnalyticsConfig {
   const enabled = parseEnabled(env);
   const host = readEnv(env, 'POSTHOG_HOST') ?? DEFAULT_POSTHOG_HOST;
   const projectToken = readEnv(env, 'POSTHOG_PROJECT_TOKEN');
@@ -74,4 +72,26 @@ export function parseProductAnalyticsConfig(
     ...(projectToken ? { projectToken } : {}),
     host,
   };
+}
+
+// The settings, or why they can't be used. A bad analytics setting turns capture
+// off instead of stopping the app: no event is worth an outage (a missing flag
+// once took the dashboard, the public site and the health check down together),
+// and off is the privacy-safe reading of a setting nobody can trust. Each app
+// logs the problem at startup.
+export function resolveProductAnalyticsConfig(
+  env: NodeJS.ProcessEnv = process.env,
+): { config: ProductAnalyticsConfig; problem: string | null } {
+  try {
+    return { config: parseProductAnalyticsConfig(env), problem: null };
+  } catch (error) {
+    return {
+      config: {
+        enabled: false,
+        environment: resolveAnalyticsEnvironment(env),
+        host: readEnv(env, 'POSTHOG_HOST') ?? DEFAULT_POSTHOG_HOST,
+      },
+      problem: error instanceof Error ? error.message : String(error),
+    };
+  }
 }

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 // Deterministic configuration unit coverage.
+import logger from '../logger.js';
 import {
   getEmailInboundMode,
   getGatewayDashboardUrl,
@@ -157,10 +158,13 @@ describe('validateGatewayEnv', () => {
     expect(() => validateGatewayEnv()).not.toThrow();
   });
 
-  it('requires an explicit product analytics setting in production', () => {
+  it('turns product analytics off, not the gateway, when its setting is missing', () => {
+    const error = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
     stubProductionGatewayEnv();
     vi.stubEnv('PRODUCT_ANALYTICS_ENABLED', '');
 
-    expect(() => validateGatewayEnv()).toThrow(/PRODUCT_ANALYTICS_ENABLED/);
+    expect(() => validateGatewayEnv()).not.toThrow();
+    expect(error).toHaveBeenCalledWith(expect.stringMatching(/Product analytics is off: PRODUCT_ANALYTICS_ENABLED/));
+    error.mockRestore();
   });
 });

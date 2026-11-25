@@ -106,19 +106,22 @@ describe('validateDashboardEnv', () => {
     expect(() => validateDashboardEnv()).toThrow(/NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY/);
   });
 
-  it('requires an explicit product analytics setting in production', () => {
+  // 2026-11-25: a missing PRODUCT_ANALYTICS_ENABLED stopped the server from
+  // booting, which took the app, the public site and the health check down.
+  it('turns product analytics off, not the app, when its setting is missing or unusable', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     stubProductionDashboardEnv();
     vi.stubEnv('PRODUCT_ANALYTICS_ENABLED', '');
 
-    expect(() => validateDashboardEnv()).toThrow(/PRODUCT_ANALYTICS_ENABLED/);
-  });
+    expect(() => validateDashboardEnv()).not.toThrow();
+    expect(error).toHaveBeenLastCalledWith(expect.stringMatching(/Product analytics is off: PRODUCT_ANALYTICS_ENABLED/));
 
-  it('requires valid PostHog configuration when product analytics is enabled', () => {
-    stubProductionDashboardEnv();
     vi.stubEnv('PRODUCT_ANALYTICS_ENABLED', 'true');
     vi.stubEnv('POSTHOG_PROJECT_TOKEN', '');
 
-    expect(() => validateDashboardEnv()).toThrow(/POSTHOG_PROJECT_TOKEN/);
+    expect(() => validateDashboardEnv()).not.toThrow();
+    expect(error).toHaveBeenLastCalledWith(expect.stringMatching(/Product analytics is off: POSTHOG_PROJECT_TOKEN/));
+    error.mockRestore();
   });
 });
 

@@ -157,6 +157,17 @@ describe('analytics lifecycle', () => {
     ).not.toThrow();
   });
 
+  // 2026-11-25: a missing PRODUCT_ANALYTICS_ENABLED stopped the dashboard from
+  // booting, and the gateway initializes the same way.
+  it('initializes a no-op sink, not a crash, when the production setting is missing', () => {
+    expect(() =>
+      initializeProductAnalytics({
+        delivery: 'batched',
+        env: { NODE_ENV: 'production' },
+      }),
+    ).not.toThrow();
+  });
+
   it('flushes the installed sink and swallows shutdown failures', async () => {
     const { logger, warnings } = recordingLogger();
     const shutdown = vi.fn(async () => {

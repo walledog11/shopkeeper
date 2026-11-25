@@ -1,5 +1,5 @@
 import {
-  parseProductAnalyticsConfig,
+  resolveProductAnalyticsConfig,
   type AnalyticsEnvironment,
 } from './config.js';
 import type { ProductEvent } from './events.js';
@@ -98,7 +98,8 @@ export function installProductAnalytics(options: InstallProductAnalyticsOptions)
 }
 
 export function initializeProductAnalytics(options: InitializeProductAnalyticsOptions): void {
-  const config = parseProductAnalyticsConfig(options.env);
+  // The app logged any problem with these settings at startup.
+  const { config } = resolveProductAnalyticsConfig(options.env);
   const sink = config.enabled
     ? options.delivery === 'immediate'
       ? new ImmediatePostHogSink(config)
