@@ -17,7 +17,6 @@ import type { ConversationStage } from './types.js';
 export function channelNoun(channelType: DbChannelType): string {
   if (channelType === CHANNEL.IG_DM) return 'Instagram DM';
   if (channelType === CHANNEL.EMAIL) return 'email';
-  if (channelType === CHANNEL.TIKTOK) return 'TikTok message';
   if (channelType === CHANNEL.SHOPIFY_CHAT) return 'storefront chat message';
   return `${formatChannelLabel(channelType)} message`;
 }
@@ -25,7 +24,6 @@ export function channelNoun(channelType: DbChannelType): string {
 export function channelRepliedPhrase(channelType: DbChannelType): string {
   if (channelType === CHANNEL.IG_DM) return 'on Instagram';
   if (channelType === CHANNEL.EMAIL) return 'by email';
-  if (channelType === CHANNEL.TIKTOK) return 'on TikTok';
   if (channelType === CHANNEL.SHOPIFY_CHAT) return 'in your storefront chat';
   return `on ${formatChannelLabel(channelType)}`;
 }

@@ -248,27 +248,6 @@ describe('POST /api/messages', () => {
     expect(res.status).toBe(502);
   });
 
-  it('returns 502 when no TikTok Shop integration is configured without saving an agent message', async () => {
-    const customer = await createTestCustomer(org.id, 'tiktok_sender_456');
-    const thread = await createTestThread(org.id, customer.id, ChannelType.tiktok);
-
-    const req = new Request('http://localhost:3000/api/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ threadId: thread.id, text: 'Reply should not persist' }),
-    });
-
-    const res = await POST(req);
-    expect(res.status).toBe(502);
-    const body = await res.json() as { error: string };
-    expect(body.error).toBe('No TikTok Shop integration configured');
-
-    const agentMessageCount = await db.message.count({
-      where: { threadId: thread.id, senderType: SenderType.agent },
-    });
-    expect(agentMessageCount).toBe(0);
-  });
-
   it('persists a merchant reply for the active storefront session without a provider call', async () => {
     vi.stubEnv('STOREFRONT_CHAT_ENABLED', 'true');
     const shopDomain = `storefront-${org.id.slice(0, 8)}.myshopify.com`;

@@ -16,7 +16,7 @@ export function instagramConnectNote(
 }
 
 export type IntegrationChannelKind = "store" | "support" | "operator"
-export type WorkspaceConnectType = "email" | "ig" | "shopify" | "tiktok_shop"
+export type WorkspaceConnectType = "email" | "ig" | "shopify"
 export type PersonalDeviceType = "imessage"
 export type IntegrationId =
   | "email"
@@ -24,7 +24,6 @@ export type IntegrationId =
   | "imessage"
   | "instagram"
   | "shopify"
-  | "tiktok-shop"
 
 type IntegrationDefinitionCore = {
   id: IntegrationId
@@ -35,11 +34,11 @@ type IntegrationDefinitionCore = {
   permissions: readonly string[]
 }
 
-type OAuthIntegrationId = "gmail" | "instagram" | "shopify" | "tiktok-shop"
+type OAuthIntegrationId = "gmail" | "instagram" | "shopify"
 
 type OAuthBlock = {
   authPath: string
-  analyticsPlatform: "email" | "ig_dm" | "shopify" | "tiktok"
+  analyticsPlatform: "email" | "ig_dm" | "shopify"
   successCopy: string
   reauthorizePath?: (integration: Integration) => string | null
 }
@@ -52,7 +51,7 @@ export type IntegrationDefinition =
       connectType: WorkspaceConnectType
       details: "gmail" | "shopify" | "oauth"
       oauth: OAuthBlock
-      availabilityFlag?: "tiktok-shop" | "instagram"
+      availabilityFlag?: "instagram"
       matches: (integration: Integration) => boolean
     })
   | (IntegrationDefinitionCore & {
@@ -160,29 +159,6 @@ export const INTEGRATION_DEFINITIONS: IntegrationDefinition[] = [
     },
     availabilityFlag: "instagram",
     matches: (integration) => integration.platform === "ig_dm",
-  },
-  {
-    kind: "oauth",
-    id: "tiktok-shop",
-    platform: "tiktok",
-    name: "TikTok Shop",
-    logo: "/logos/tiktok-logo.png",
-    description: "Buyer messages from your TikTok Shop.",
-    connectType: "tiktok_shop",
-    channelKind: "support",
-    details: "oauth",
-    permissions: [
-      "Read buyer-service conversations for your TikTok Shop",
-      "Send text replies from your seller account",
-      "View shop and seller authorization details",
-    ],
-    oauth: {
-      authPath: "/api/integrations/tiktok-shop/auth",
-      analyticsPlatform: "tiktok",
-      successCopy: "TikTok Shop connected.",
-    },
-    availabilityFlag: "tiktok-shop",
-    matches: (integration) => integration.platform === "tiktok",
   },
   {
     kind: "personal-device",

@@ -17,7 +17,6 @@ const EMAIL_CONFIG = getIntegrationDefinition('email') as WorkspaceIntegrationDe
 const GMAIL_CONFIG = getIntegrationDefinition('gmail') as WorkspaceIntegrationDefinition;
 const FLAGS = {
   instagramConnectTransport: "socialapi" as const,
-  tiktokShopConfigured: true,
   imessageHandle: null,
 };
 

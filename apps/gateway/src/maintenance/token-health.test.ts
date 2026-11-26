@@ -4,19 +4,15 @@ const {
   fetchAccount,
   fetchSubscription,
   findMany,
-  getTikTokConfig,
   logger,
   refreshInstagramToken,
-  refreshTikTokToken,
   update,
 } = vi.hoisted(() => ({
   fetchAccount: vi.fn(),
   fetchSubscription: vi.fn(),
   findMany: vi.fn(),
-  getTikTokConfig: vi.fn(),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
   refreshInstagramToken: vi.fn(),
-  refreshTikTokToken: vi.fn(),
   update: vi.fn(),
 }));
 
@@ -28,12 +24,6 @@ vi.mock('../clients/instagram-graph.js', () => ({
   fetchConnectedInstagramAccount: fetchAccount,
   fetchInstagramMessageSubscription: fetchSubscription,
   refreshInstagramAccessToken: refreshInstagramToken,
-}));
-vi.mock('../clients/tiktok-shop.js', () => ({
-  refreshTikTokShopAccessToken: refreshTikTokToken,
-}));
-vi.mock('../config/runtime-config.js', () => ({
-  getTikTokShopApiConfig: getTikTokConfig,
 }));
 vi.mock('../logger.js', () => ({ default: logger }));
 vi.mock('./registration.js', () => ({
@@ -98,14 +88,11 @@ describe('runTokenHealthCheck', () => {
     fetchSubscription.mockReset();
     findMany.mockReset();
     findMany.mockResolvedValue([]);
-    getTikTokConfig.mockReset();
     logger.info.mockClear();
     logger.warn.mockClear();
     logger.error.mockClear();
     refreshInstagramToken.mockReset();
-    refreshTikTokToken.mockReset();
     update.mockReset();
-    getTikTokConfig.mockReturnValue({ appKey: null, appSecret: null, enabled: false, refreshTokenUrl: null, refreshTokenMethod: 'POST' });
     update.mockResolvedValue({});
     fetchAccount.mockResolvedValue({
       ok: true,
@@ -367,52 +354,6 @@ describe('runTokenHealthCheck', () => {
     expect(update).toHaveBeenCalledWith({
       where: { id: 'integration-2' },
       data: expect.objectContaining({ refreshToken: null }),
-    });
-  });
-
-  it('refreshes expiring TikTok Shop tokens', async () => {
-    getTikTokConfig.mockReturnValue({
-      appKey: 'tts-app-key',
-      appSecret: 'tts-app-secret',
-      enabled: true,
-      refreshTokenMethod: 'POST',
-      refreshTokenUrl: 'https://auth.tiktok.test/token',
-    });
-    findMany
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([
-        {
-          id: 'tiktok-integration-1',
-          organizationId: 'org-1',
-          externalAccountId: 'shop-1',
-          metadata: { provider: 'tiktok_shop' },
-          refreshToken: 'tts-refresh',
-          tokenExpiresAt: new Date(Date.now() + 60_000),
-        },
-      ]);
-    refreshTikTokToken.mockResolvedValue({
-      accessToken: 'tts-access-new',
-      refreshToken: 'tts-refresh-new',
-      tokenExpiresAt: new Date(Date.now() + 3_600_000),
-    });
-
-    await runTokenHealthCheck();
-
-    expect(refreshTikTokToken).toHaveBeenCalledWith(expect.objectContaining({
-      appKey: 'tts-app-key',
-      refreshTokenUrl: 'https://auth.tiktok.test/token',
-    }), 'tts-refresh');
-    expect(update).toHaveBeenCalledWith({
-      where: { id: 'tiktok-integration-1' },
-      data: expect.objectContaining({
-        accessToken: 'tts-access-new',
-        refreshToken: 'tts-refresh-new',
-        tokenExpiresAt: expect.any(Date),
-        metadata: expect.objectContaining({
-          provider: 'tiktok_shop',
-          tiktokShop: expect.objectContaining({ lastRefreshAt: expect.any(String) }),
-        }),
-      }),
     });
   });
 });

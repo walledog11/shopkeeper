@@ -25,7 +25,7 @@ packages/
   agent/       @shopkeeper/agent — planner, tools, Shopify client, execution, policy
   db/          Prisma schema and shared client (Neon Postgres)
   email/       Gmail and Postmark helpers
-  integrations/ Instagram, SocialAPI, TikTok Shop clients
+  integrations/ Instagram and SocialAPI clients
   analytics/   product analytics helpers
   shared/      small cross-package utilities
 extensions/

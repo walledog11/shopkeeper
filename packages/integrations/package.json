@@ -13,10 +13,6 @@
     "./socialapi": {
       "types": "./dist/socialapi/index.d.ts",
       "default": "./dist/socialapi/index.js"
-    },
-    "./tiktok": {
-      "types": "./dist/tiktok/index.d.ts",
-      "default": "./dist/tiktok/index.js"
     }
   },
   "scripts": {

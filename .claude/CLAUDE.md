@@ -56,8 +56,8 @@ approval or execution. Deploys, env, migrations and incident recovery are in
   merchant's per-store switch). The merchant controls the agent through iMessage (one
   platform-wide Photon line; a handle is linked by texting a single-use code). Telegram is
   an internal test transport only — never in positioning, onboarding or marketing.
-  Shopify is the system of record and action. TikTok Shop is wired but off
-  (`TIKTOK_SHOP_ENABLED=false`). WhatsApp is not built — **do not propose it as the next
+  Shopify is the system of record and action. TikTok Shop was cut (2026-11-26); the
+  `tiktok` enum value stays for stored rows only. WhatsApp is not built — **do not propose it as the next
   channel**: it is a merchant-control channel (another way to reach the agent), not
   customer reach, and US penetration is low (decision 2026-08-07).
 - Internal `channelType` value `operator` is the merchant's durable operator thread

@@ -6,7 +6,7 @@ function captureRawBody(req: Request, _res: unknown, buf: Buffer): void {
   req.rawBody = buf;
 }
 
-// Signed provider webhooks (Telegram, Meta, Shopify, Photon, TikTok, Gmail).
+// Signed provider webhooks (Telegram, Meta, Shopify, Photon, Gmail).
 // Keeps the raw buffer because their HMAC/signature checks verify over it.
 export function webhookJsonParser(): RequestHandler {
   return express.json({

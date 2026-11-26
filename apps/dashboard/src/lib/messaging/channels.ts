@@ -22,7 +22,8 @@ const DEFAULT_CHANNEL_INFO: ChannelInfo = {
 const CHANNEL_CHROME: Record<ChannelType, Pick<ChannelInfo, 'logo' | 'badgeClassName'>> = {
   ig_dm: { logo: '/logos/instagram-outline.svg', badgeClassName: 'bg-pink-500/15 text-pink-600' },
   email: { logo: '/logos/email.svg', badgeClassName: 'bg-blue-500/15 text-blue-600' },
-  tiktok: { logo: '/logos/tiktok-logo.png', badgeClassName: 'bg-slate-500/15 text-stone-600' },
+  // TikTok Shop is retired; the enum value stays so any stored row still renders.
+  tiktok: { logo: DEFAULT_CHANNEL_INFO.logo, badgeClassName: DEFAULT_CHANNEL_INFO.badgeClassName },
   shopify: { logo: '/logos/shopify.svg', badgeClassName: 'bg-green-500/15 text-green-600' },
   shopify_chat: { logo: '/logos/shopify.svg', badgeClassName: 'bg-green-500/15 text-green-600' },
   operator: { logo: '/logos/sms.svg', badgeClassName: 'bg-emerald-500/15 text-emerald-600' },

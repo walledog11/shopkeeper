@@ -20,7 +20,6 @@ const SIGNED_WEBHOOK_ROUTES = [
   '/webhooks/meta',
   '/webhooks/shopify',
   '/webhooks/photon',
-  '/webhooks/tiktok-shop',
   '/webhooks/gmail/push',
   '/webhooks/socialapi',
 ] as const;

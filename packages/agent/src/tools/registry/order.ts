@@ -70,7 +70,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     execute: async (input, ctx, _settings, deps) => {
       const shopify = requireShopify(ctx);
       if (!shopify) return noShopify;
-      // An email confirms an Instagram or TikTok sender's order and unlocks
+      // An email confirms an Instagram sender's order and unlocks
       // reading it (order-verification), so here it is only ever compared where
       // each guess is counted: this read takes the order number alone.
       const channelType = (ctx as Partial<SupportContext>).thread?.channelType;

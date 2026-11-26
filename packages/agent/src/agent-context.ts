@@ -218,7 +218,7 @@ export interface RequestEvidence {
 }
 
 /**
- * One order a direct-message sender (Instagram, TikTok) was asked to confirm, and
+ * One order an Instagram sender was asked to confirm, and
  * what came of it. Gateway code compares their own message with the order's email
  * or shipping zip on Shopify; nothing here is ever the model's judgement.
  */
@@ -293,7 +293,7 @@ export interface SupportContext extends BaseAgentContext {
   // Absent on hosts that do not load it, which reads as no photo and no request.
   requestEvidence?: RequestEvidence;
   /**
-   * This sender's order confirmations, on Instagram and TikTok threads only.
+   * This sender's order confirmations, on Instagram threads only.
    * Separate from `authState`/`verifiedOrders`, which switch on the storefront
    * policy. Read through `orderVerificationState`.
    */

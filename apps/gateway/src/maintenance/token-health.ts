@@ -13,8 +13,6 @@ import {
   refreshInstagramAccessToken,
   type InstagramProviderError,
 } from '../clients/instagram-graph.js';
-import { refreshTikTokShopAccessToken } from '../clients/tiktok-shop.js';
-import { getTikTokShopApiConfig } from '../config/runtime-config.js';
 import { CHANNEL, JOB, QUEUE } from '../constants.js';
 import logger from '../logger.js';
 import {
@@ -28,7 +26,6 @@ import {
 const CONCURRENCY = 5;
 const INSTAGRAM_REFRESH_WINDOW_MS = 7 * ONE_DAY_MS;
 const INSTAGRAM_MIN_REFRESH_AGE_MS = ONE_DAY_MS;
-const TIKTOK_REFRESH_WINDOW_MS = 7 * ONE_DAY_MS;
 // A Shopify refresh token lapses after 90 days unused. A store idle this long
 // (no Shopify call has refreshed its hour-long token) is refreshed here.
 const SHOPIFY_IDLE_REFRESH_MS = 7 * ONE_DAY_MS;
@@ -370,7 +367,6 @@ export async function runTokenHealthCheck(): Promise<void> {
 
   logger.info('[TokenHealth] Daily check complete');
 
-  await runTikTokShopTokenRefresh();
   await runShopifyTokenUpkeep();
 }
 
@@ -407,100 +403,6 @@ async function runShopifyTokenUpkeep(): Promise<void> {
   }
 
   logger.info({ stores: integrations.length, ...counts }, '[TokenHealth] Shopify token upkeep complete');
-}
-
-async function runTikTokShopTokenRefresh(): Promise<void> {
-  logger.info('[TokenHealth] Running TikTok Shop token refresh');
-
-  const config = getTikTokShopApiConfig();
-  if (!config.enabled || !config.appKey || !config.appSecret || !config.refreshTokenUrl) {
-    logger.info('[TokenHealth] TikTok Shop token refresh not configured — skipping');
-    return;
-  }
-
-  const now = Date.now();
-  const tiktokIntegrations = await db.integration.findMany({
-    where: { platform: CHANNEL.TIKTOK, refreshToken: { not: null } },
-    select: {
-      id: true,
-      organizationId: true,
-      externalAccountId: true,
-      metadata: true,
-      refreshToken: true,
-      tokenExpiresAt: true,
-    },
-  });
-
-  const expiringIntegrations = tiktokIntegrations.filter((integration) => {
-    if (integration.tokenExpiresAt?.getTime() === 0) return false;
-    if (!integration.tokenExpiresAt) return true;
-    return integration.tokenExpiresAt.getTime() - now <= TIKTOK_REFRESH_WINDOW_MS;
-  });
-
-  logger.info(
-    { count: expiringIntegrations.length, total: tiktokIntegrations.length },
-    '[TokenHealth] Checking TikTok Shop integrations',
-  );
-
-  for (let i = 0; i < expiringIntegrations.length; i += CONCURRENCY) {
-    await Promise.all(
-      expiringIntegrations.slice(i, i + CONCURRENCY).map(async (integration) => {
-        if (!integration.refreshToken) return;
-        try {
-          const refreshed = await refreshTikTokShopAccessToken(config, integration.refreshToken);
-          await db.integration.update({
-            where: { id: integration.id },
-            data: {
-              accessToken: refreshed.accessToken,
-              refreshToken: refreshed.refreshToken ?? integration.refreshToken,
-              tokenExpiresAt: refreshed.tokenExpiresAt,
-              metadata: mergeTikTokShopMetadata(integration.metadata, {
-                lastRefreshAt: new Date().toISOString(),
-                lastRefreshError: null,
-              }),
-            },
-          });
-          logger.info(
-            { organizationId: integration.organizationId, accountId: integration.externalAccountId },
-            '[TokenHealth] TikTok Shop token refreshed',
-          );
-        } catch (err) {
-          const expiresAtMs = integration.tokenExpiresAt?.getTime() ?? 0;
-          await db.integration.update({
-            where: { id: integration.id },
-            data: {
-              ...(expiresAtMs > 0 && expiresAtMs < now ? { tokenExpiresAt: EPOCH_SENTINEL } : {}),
-              metadata: mergeTikTokShopMetadata(integration.metadata, {
-                lastRefreshError: err instanceof Error ? err.message : String(err),
-                lastRefreshErrorAt: new Date().toISOString(),
-              }),
-            },
-          });
-          logger.error(
-            {
-              organizationId: integration.organizationId,
-              accountId: integration.externalAccountId,
-              err: err instanceof Error ? err.message : String(err),
-            },
-            '[TokenHealth] TikTok Shop token refresh failed',
-          );
-        }
-      }),
-    );
-  }
-}
-
-function mergeTikTokShopMetadata(
-  metadata: unknown,
-  patch: Record<string, unknown>,
-): Record<string, unknown> {
-  const root = metadata && typeof metadata === 'object' && !Array.isArray(metadata)
-    ? { ...(metadata as Record<string, unknown>) }
-    : {};
-  const current = root.tiktokShop && typeof root.tiktokShop === 'object' && !Array.isArray(root.tiktokShop)
-    ? root.tiktokShop as Record<string, unknown>
-    : {};
-  return { ...root, tiktokShop: { ...current, ...patch } };
 }
 
 export const registerTokenHealthMaintenanceJob: MaintenanceJobRegistration = async (context) => {

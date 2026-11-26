@@ -40,12 +40,6 @@ const originalEnv = {
   E2E_OUTBOUND_RECORD_PATH: process.env.E2E_OUTBOUND_RECORD_PATH,
   INBOUND_EMAIL_DOMAIN: process.env.INBOUND_EMAIL_DOMAIN,
   OUTBOUND_EMAIL_ASYNC: process.env.OUTBOUND_EMAIL_ASYNC,
-  TIKTOK_SHOP_API_BASE_URL: process.env.TIKTOK_SHOP_API_BASE_URL,
-  TIKTOK_SHOP_APP_KEY: process.env.TIKTOK_SHOP_APP_KEY,
-  TIKTOK_SHOP_APP_SECRET: process.env.TIKTOK_SHOP_APP_SECRET,
-  TIKTOK_SHOP_ENABLED: process.env.TIKTOK_SHOP_ENABLED,
-  TIKTOK_SHOP_SEND_MESSAGE_PATH: process.env.TIKTOK_SHOP_SEND_MESSAGE_PATH,
-  TIKTOK_SHOP_TOKEN_URL: process.env.TIKTOK_SHOP_TOKEN_URL,
 };
 
 beforeEach(async () => {
@@ -69,12 +63,6 @@ afterEach(async () => {
   } else {
     process.env.OUTBOUND_EMAIL_ASYNC = originalEnv.OUTBOUND_EMAIL_ASYNC;
   }
-  restoreEnv('TIKTOK_SHOP_API_BASE_URL', originalEnv.TIKTOK_SHOP_API_BASE_URL);
-  restoreEnv('TIKTOK_SHOP_APP_KEY', originalEnv.TIKTOK_SHOP_APP_KEY);
-  restoreEnv('TIKTOK_SHOP_APP_SECRET', originalEnv.TIKTOK_SHOP_APP_SECRET);
-  restoreEnv('TIKTOK_SHOP_ENABLED', originalEnv.TIKTOK_SHOP_ENABLED);
-  restoreEnv('TIKTOK_SHOP_SEND_MESSAGE_PATH', originalEnv.TIKTOK_SHOP_SEND_MESSAGE_PATH);
-  restoreEnv('TIKTOK_SHOP_TOKEN_URL', originalEnv.TIKTOK_SHOP_TOKEN_URL);
 
   if (tempDir) {
     await rm(tempDir, { recursive: true, force: true });

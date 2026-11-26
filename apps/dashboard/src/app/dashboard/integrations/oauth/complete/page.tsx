@@ -19,7 +19,6 @@ const PROVIDER_LABELS: Record<OAuthProvider, string> = {
   gmail: 'Gmail',
   instagram: 'Instagram',
   shopify: 'Shopify',
-  'tiktok-shop': 'TikTok Shop',
 };
 
 const OAUTH_COMPLETE_DELAY_MS = 250;

@@ -25,7 +25,7 @@ item is checked by using the app in a browser, with screenshots in the PR.
    the narration that came with its last tool calls. Closes when a request forced past
    each limit answers from what it already found, and a request that still can't answer
    says so and reaches Sentry.
-3. **Cut what isn't the v1 support loop:** TikTok Shop, direct Meta Instagram, the
+3. **Cut what isn't the v1 support loop:** direct Meta Instagram, the
    operator shop-management tools (flash sales, repricing), and the compatibility paths
    and their audits that exist only for pre-launch data (reset the dev workspace
    instead). Decide website chat and the Telegram test transport. Closes when they are
@@ -205,7 +205,6 @@ Resumes with the first real merchant.
 
 | Trigger | Work |
 | --- | --- |
-| A merchant asks for TikTok Shop | Configure-and-enable or cut — no more adapter code |
 | A merchant asks for account binding | Storefront chat Customer Account OAuth (blockers in the storefront doc) |
 | A merchant asks to change a line quantity | Quantity edits in `edit_shopify_order` |
 | The first merchant chooses email forwarding | Verify their sending domain in Postmark |

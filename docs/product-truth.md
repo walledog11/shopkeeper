@@ -10,7 +10,7 @@ Where customers ask for help:
 
 - Instagram DMs (`ig_dm`, via SocialAPI): core V1 social support channel. Comments are not ingested.
 - Storefront chat (theme app extension `shopkeeper-chat`, `shopify_chat` threads): on-site shopper chat. Off by default: a store takes chats only when `STOREFRONT_CHAT_ENABLED` is on and the merchant has turned it on for that store.
-- TikTok Shop: wired end to end but off (`TIKTOK_SHOP_ENABLED=false`); enable or cut when a merchant asks.
+- TikTok Shop: cut (2026-11-26). Build it again only for a named merchant who needs it.
 - Gmail: simple customer email fallback.
 - Postmark/email forwarding: advanced fallback for custom-domain support teams.
 
@@ -53,7 +53,6 @@ The dashboard should not be positioned as the primary day-to-day inbox. It is th
 - Do not treat WhatsApp/iMessage as customer-origin channels.
 - Do not propose WhatsApp as the next channel to build, and do not offer it as the alternative when a customer-origin channel is judged not ready. Adding a merchant-control channel does not substitute for adding customer reach.
 - Do not hide or deprioritize Instagram merely because it is technically incomplete; Instagram is strategically core.
-- Do not treat TikTok generic DMs and TikTok Shop buyer messages as the same thing.
 
 ## Intended Product Experience
 

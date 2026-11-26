@@ -1,6 +1,6 @@
 import type { WorkspaceConnectType } from "@/lib/integrations/catalog"
 import type { Integration } from "@/types"
-import { AtSign, MessageSquare, ShoppingBag, Store } from "lucide-react"
+import { AtSign, MessageSquare, ShoppingBag } from "lucide-react"
 import { ConfigureAccountRow } from "./ConfigureAccountRow"
 import { PermissionActionLink } from "./PermissionRow"
 
@@ -9,7 +9,6 @@ const CONNECTION_ICONS = {
   ig: MessageSquare,
   shopify: ShoppingBag,
   imessage: MessageSquare,
-  tiktok_shop: Store,
 } as const
 
 export function ConnectedAccountRow({

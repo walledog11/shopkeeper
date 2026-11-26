@@ -122,38 +122,6 @@ describe("buildContext customer image attachments", () => {
     }]);
   });
 
-  it("carries a stored TikTok attachment into recent agent-message context", async () => {
-    const org = await createTestOrg();
-    orgIds.push(org.id);
-    const customer = await createTestCustomer(org.id, `tiktok_${randomUUID()}`);
-    const thread = await createTestThread(org.id, customer.id, ChannelType.tiktok);
-    const message = await createTestMessage(thread.id, "[TikTok image attachment]");
-    const reference = `blob:attachments/${org.id}/image-id/tiktok-image.jpg`;
-    await db.message.update({
-      where: { id: message.id },
-      data: { attachments: [reference] },
-    });
-    getSpy.mockResolvedValueOnce({
-      statusCode: 200,
-      stream: new ReadableStream({
-        start(controller) {
-          controller.enqueue(PNG);
-          controller.close();
-        },
-      }),
-      blob: { contentType: "image/png", size: PNG.byteLength },
-    });
-
-    const context = await buildContext(thread.id, org.id, sink);
-
-    expect(context.recentMessages[0]?.attachments?.[0]).toMatchObject({
-      type: "image",
-      reference,
-      status: "available",
-      mediaType: "image/png",
-    });
-  });
-
   it("does not hydrate private attachments for channels without image vision", async () => {
     const org = await createTestOrg();
     orgIds.push(org.id);

@@ -7,43 +7,6 @@ export const tips: Category = {
   icon: "💡",
   articles: [
     {
-      id: "tiktok-dm-strategy",
-      title: "TikTok DM strategy: turning comments into conversions",
-      summary: "TikTok comments are buying signals. Learn how to move high-intent commenters into DMs and close the sale.",
-      tag: "Strategy",
-      readingTime: 4,
-      body: [
-        {
-          text: "TikTok comments are one of the highest-intent signals a brand can get. When someone asks 'where can I buy this?' or 'does this come in blue?', that's a buying signal — and moving them into a DM conversation is where the sale happens.",
-        },
-        {
-          callout: "TikTok's algorithm boosts videos with active comment threads. Responding fast doesn't just convert commenters — it pushes your video to more people.",
-        },
-        {
-          heading: "Reply fast to high-intent comments",
-          text: "Aim to respond to product questions within 30 minutes. The faster you engage, the higher the chance the commenter is still in a buying mindset.",
-          steps: [
-            "Pin a comment that says 'DM us for details' on product videos",
-            "Use the TikTok comment reply feature to send a short video reply, then direct to DMs for specifics",
-            "Set up your agent to handle common DM questions instantly (sizing, shipping, availability)",
-          ],
-        },
-        {
-          heading: "What to say in the first DM",
-          tips: [
-            "Reference the video they came from — it shows you're paying attention",
-            "Ask one qualifying question (e.g., 'Which color were you interested in?') before pitching",
-            "Keep it conversational — TikTok audiences expect casual, not corporate",
-          ],
-        },
-        {
-          heading: "When to escalate to a human",
-          text: "Let your agent handle FAQs. Escalate to a human when: the customer mentions a problem with a past order, they ask for a discount or custom deal, or they've sent 3+ messages without converting.",
-          warning: "Never let an upset customer wait more than 10 minutes without a human response. Sentiment can shift fast on social platforms.",
-        },
-      ],
-    },
-    {
       id: "instagram-dm-volume",
       title: "Managing high-volume Instagram DMs without burnout",
       summary: "When a post goes viral, DM volume can spike 10x overnight. Here's how to build a system that scales with you.",
@@ -106,7 +69,7 @@ export const tips: Category = {
         {
           heading: "Where to set expectations",
           tips: [
-            "DM auto-reply (Instagram, TikTok)",
+            "Instagram DM auto-reply",
             "Your bio or link-in-bio page",
             "Order confirmation emails",
             "Your website's Contact page",
@@ -205,7 +168,7 @@ export const tips: Category = {
         {
           heading: "Set up a simple tag taxonomy",
           steps: [
-            "Create channel tags: instagram, tiktok, sms, email",
+            "Create channel tags: instagram, email",
             "Create topic tags: order-issue, returns, product-question, collab, billing",
             "Create priority tags: urgent, vip, escalated",
           ],

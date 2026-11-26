@@ -11,7 +11,7 @@ export interface ConfirmedOrder {
 /**
  * The orders this conversation's sender has shown are theirs, for the operator
  * card. A storefront shopper entered a code mailed to the order's email; an
- * Instagram or TikTok sender sent the order's email or shipping zip, read from
+ * Instagram sender sent the order's email or shipping zip, read from
  * the rows buildContext reads: the connected store's only, so the card never
  * vouches for a same-named order in another store.
  */

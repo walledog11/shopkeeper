@@ -41,7 +41,6 @@ const DAYS_7 = 7 * 24 * 60 * 60 * 1000;
 const CHANNEL_EPISODE_POLICY: Partial<Record<DbChannelType, ChannelEpisodePolicy>> = {
   [CHANNEL.SHOPIFY_CHAT]: { idleMs: HOURS_24, providerConversationScoped: false },
   [CHANNEL.IG_DM]: { idleMs: HOURS_24, providerConversationScoped: false },
-  [CHANNEL.TIKTOK]: { idleMs: HOURS_24, providerConversationScoped: true },
   // Email has no stable provider conversation key in normalized ingestion yet,
   // so today it always falls back to the 7-day idle boundary. The flag is set so
   // that adding the key is the only change required.

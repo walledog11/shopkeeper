@@ -19,7 +19,6 @@ import {
   sendEmailSynchronously,
 } from "./email-dispatch"
 import { dashboardMessagingHost } from "./messaging-host"
-import { dispatchTikTokShopMessage } from "./tiktok-shop-dispatch"
 import { isStorefrontChatGloballyEnabled, isStorefrontChatEnabledForIntegration } from "@/lib/storefront-chat/enabled"
 
 export type { DispatchMessageResult } from "@shopkeeper/messaging"
@@ -79,9 +78,7 @@ export function dispatchAcknowledgement(
     text,
     thread.channelType === CHANNEL_TYPE.IG_DM
       ? () => dispatchInstagramDirect(thread, org, text, "auto_ack", dashboardMessagingHost)
-      : thread.channelType === CHANNEL_TYPE.TIKTOK
-        ? () => dispatchTikTokShopMessage(thread, org, text, "auto_ack")
-        : null,
+      : null,
   )
 }
 
@@ -96,8 +93,6 @@ function sendOnChannel(
   switch (thread.channelType) {
     case CHANNEL_TYPE.IG_DM:
       return dispatchInstagramDirect(thread, org, text, source, dashboardMessagingHost)
-    case CHANNEL_TYPE.TIKTOK:
-      return dispatchTikTokShopMessage(thread, org, text, source)
     case CHANNEL_TYPE.EMAIL:
       return sendEmailSynchronously(thread, org, text, {
         source,
@@ -142,8 +137,8 @@ export async function dispatchMessage(
 
   // Refuse before the provider rather than dropping the files silently. Only
   // email has an outbound attachment path: Instagram's send client is text-only
-  // and Meta fetches media by public URL, storefront chat has no shopper-
-  // reachable route to a private blob, and TikTok is gated off.
+  // and Meta fetches media by public URL, and storefront chat has no shopper-
+  // reachable route to a private blob.
   if (attachments.length > 0 && !isEmailChannel) {
     return { ok: false, error: "Attachments can only be sent on email conversations" }
   }

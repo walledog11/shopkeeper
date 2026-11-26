@@ -35,10 +35,10 @@ export function resolveAiSummarySourceMessageId(
 }
 
 // Messaging channels with nothing else to tell a waiting customer. Handed to a
-// person, an Instagram or TikTok customer hears nothing until the merchant acts.
+// person, an Instagram customer hears nothing until the merchant acts.
 // Storefront chat shows the same sentence in its widget, and an email customer
 // does not expect an instant reply.
-const HANDOFF_ACK_CHANNELS: ReadonlySet<string> = new Set([CHANNEL.IG_DM, CHANNEL.TIKTOK]);
+const HANDOFF_ACK_CHANNELS: ReadonlySet<string> = new Set([CHANNEL.IG_DM]);
 
 async function acknowledgeHandoff(organizationId: string, threadId: string, channelType: string): Promise<void> {
   if (!HANDOFF_ACK_CHANNELS.has(channelType)) return;

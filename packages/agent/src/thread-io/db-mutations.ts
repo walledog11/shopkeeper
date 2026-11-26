@@ -152,7 +152,7 @@ export async function awaitOrderVerificationMutation(
   });
   if (!thread) return toolNotFound("Error: thread not found.");
   if (!ORDER_VERIFICATION_CHANNELS.has(thread.channelType)) {
-    return toolError("Error: order confirmation applies to Instagram and TikTok conversations only.");
+    return toolError("Error: order confirmation applies to Instagram conversations only.");
   }
   const rawName = String(input.order_name ?? "").trim();
   // Stored, then written into later prompts and the merchant's card, so only

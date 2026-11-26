@@ -380,7 +380,6 @@ const CHANNELS_FILTERED_AS_SPAM: ReadonlySet<string> = new Set<string>([CHANNEL.
 const CHANNELS_CAPPED_AT_QUESTIONABLE: ReadonlySet<string> = new Set<string>([
   CHANNEL.SHOPIFY_CHAT,
   CHANNEL.IG_DM,
-  CHANNEL.TIKTOK,
 ]);
 
 /**

@@ -433,7 +433,7 @@ test('rejects undeliverable channel dispatch without outbound or agent persisten
   const clerkEnv = requireClerkE2EEnv();
   const org = await getE2EOrg();
   const runId = randomUUID();
-  const customerPlatformId = `tiktok-e2e-${runId}`;
+  const customerPlatformId = `retired-channel-e2e-${runId}`;
   const customerMessage = `unsupported channel inbound ${runId}`;
   const replyText = `unsupported channel reply ${runId}`;
 
@@ -463,7 +463,7 @@ test('rejects undeliverable channel dispatch without outbound or agent persisten
       organizationId: org.id,
       senderType: SenderType.customer,
       contentText: customerMessage,
-      externalMessageId: `tiktok-${runId}`,
+      externalMessageId: `retired-channel-${runId}`,
     },
   });
 
@@ -488,13 +488,11 @@ test('rejects undeliverable channel dispatch without outbound or agent persisten
 
   expect(dispatchResult.ok).toBe(false);
   expect(dispatchResult.status).toBe(502);
-  // TikTok Shop is wired end to end but gated off, so it no longer falls
-  // through to the generic "Unsupported channel" branch in dispatch-message.ts
-  // — it reaches its own dispatcher and fails there for want of an integration.
-  // The invariant under test is unchanged: an undeliverable dispatch must not
-  // record outbound or persist an agent message.
+  // `tiktok` is a retired channel the enum still holds, so it reaches the
+  // generic "Unsupported channel" branch in dispatch-message.ts. An undeliverable
+  // dispatch must not record outbound or persist an agent message.
   expect(dispatchResult.body).toMatchObject({
-    error: 'No TikTok Shop integration configured',
+    error: 'Unsupported channel',
   });
 
   const outboundRecords = await readOutboundRecords();

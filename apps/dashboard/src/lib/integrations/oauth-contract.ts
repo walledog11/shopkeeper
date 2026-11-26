@@ -2,7 +2,6 @@ const OAUTH_PROVIDERS = [
   'gmail',
   'instagram',
   'shopify',
-  'tiktok-shop',
 ] as const;
 
 export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];
@@ -25,10 +24,6 @@ export const OAUTH_ERROR_MESSAGES = {
   token_exchange_failed: 'Authentication failed. Please try again.',
   state_mismatch: 'Security check failed. Please try again.',
   server_error: 'Something went wrong on our end. Please try again.',
-  tiktok_shop_invalid_callback: 'Invalid callback from TikTok Shop. Please try again.',
-  tiktok_shop_missing_shop: 'TikTok Shop did not return a seller or shop id. Please check your app permissions.',
-  tiktok_shop_state_mismatch: 'Security check failed. Please try again.',
-  tiktok_shop_token_failed: 'Could not obtain a TikTok Shop access token. Please try again.',
   shopify_state_mismatch: 'Security check failed. Please try again.',
   shopify_hmac_invalid: 'Authentication failed. The response from Shopify could not be verified.',
   shopify_token_failed: 'Could not obtain a Shopify access token. Please try again.',

@@ -33,11 +33,10 @@ export interface IntegrationCardCallbacks {
   claimInstalledStore: (() => Promise<boolean>) | null
 }
 
-const DISCONNECT_NOTES: Record<"email" | "instagram" | "shopify" | "tiktok-shop", string> = {
+const DISCONNECT_NOTES: Record<"email" | "instagram" | "shopify", string> = {
   email: "Your past tickets stay. Forwarded email intake through this connection stops. Gmail is unaffected.",
   instagram: "Your past tickets stay. New Instagram DMs will stop arriving.",
   shopify: "Order lookups and syncing will stop. Your Shopify store itself isn't affected.",
-  "tiktok-shop": "Your past tickets stay. New TikTok Shop buyer messages will stop arriving.",
 }
 
 function DeleteConnectionAction({
@@ -364,9 +363,7 @@ function DeclarativeOAuthDetails({ model, callbacks }: { model: IntegrationCardM
         <DeleteConnectionAction
           canManageWorkspace={model.canManageWorkspace}
           integration={integration}
-          note={definition.id === "instagram"
-            ? DISCONNECT_NOTES.instagram
-            : DISCONNECT_NOTES["tiktok-shop"]}
+          note={DISCONNECT_NOTES.instagram}
           onDisconnect={callbacks.disconnect}
         />
       </ConfigureSection>

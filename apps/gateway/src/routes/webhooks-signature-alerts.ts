@@ -13,7 +13,6 @@ export type WebhookSignatureProvider =
   | 'shopify'
   | 'telegram'
   | 'photon'
-  | 'tiktok_shop'
   | 'socialapi';
 export type WebhookSignatureFailureReason =
   | 'missing_signature'

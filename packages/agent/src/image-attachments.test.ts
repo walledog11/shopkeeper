@@ -48,10 +48,9 @@ beforeEach(() => {
 });
 
 describe("shouldHydrateAgentMessageImages", () => {
-  it("hydrates Instagram, email, and TikTok customer attachments", () => {
+  it("hydrates Instagram and email customer attachments", () => {
     expect(shouldHydrateAgentMessageImages("ig_dm")).toBe(true);
     expect(shouldHydrateAgentMessageImages("email")).toBe(true);
-    expect(shouldHydrateAgentMessageImages("tiktok")).toBe(true);
     expect(shouldHydrateAgentMessageImages("shopify_chat")).toBe(false);
   });
 });
