@@ -25,11 +25,11 @@ item is checked by using the app in a browser, with screenshots in the PR.
    the narration that came with its last tool calls. Closes when a request forced past
    each limit answers from what it already found, and a request that still can't answer
    says so and reaches Sentry.
-3. **Cut what isn't the v1 support loop:** direct Meta Instagram, the
-   operator shop-management tools (flash sales, repricing), and the compatibility paths
-   and their audits that exist only for pre-launch data (reset the dev workspace
-   instead). Decide website chat and the Telegram test transport. Closes when they are
-   deleted and the full loop still runs.
+3. **Cut what isn't the v1 support loop:** the operator shop-management tools (flash
+   sales, repricing), and the compatibility paths and their audits that exist only for
+   pre-launch data (reset the dev workspace instead). Website chat and the Telegram test
+   transport stay; direct Meta Instagram stays until SocialAPI's review closes. Closes
+   when they are deleted and the full loop still runs.
 4. **A Voice page.** Sample customer messages (recent real ones plus where's my order,
    refund, damaged item, product question, angry customer), each with the reply the
    agent would send, rewritten live as tone, length, sign-off or plain feedback ("less
@@ -67,6 +67,7 @@ Resumes when *Next* is done, in this order.
 2. **Close SocialAPI vendor diligence** before any external merchant's data flows: DPA,
    written retention/deletion answers and the terms §11.4 contradiction. When SocialAPI
    answers, add its retention to `/privacy`. Gates are in [socialapi-s0-diligence](production/socialapi-s0-diligence-2026-09-07.md).
+   Direct Meta Instagram is the fallback until this closes; cut it once it passes.
 3. **First live SocialAPI merchant connect** (runbook: *Instagram via SocialAPI*). Closes
    when `verify:production:env` passes, a workspace connects from the dashboard, and its
    next DM routes to it. Needs a paid SocialAPI plan: Free allows 50 replies per billing
@@ -173,11 +174,9 @@ Resumes with the first real merchant.
   can be a rollback target ([agent-runtime](agent-runtime.md), *Deployment and
   rollback*). Retire the identity-less operator queue reader once
   `audit:operator-context-compatibility -- --strict` reports none.
-- **Moderate advisories in production dependencies:** Next 16.4.3 (an `unstable_cache`
-  disclosure; the home summary uses `unstable_cache`) and nodemailer below 10.1.4, whose
-  address parser reads the From header of every Gmail-synced message through
-  `mailparser` (`parseMime`). Both are pinned in the root `overrides`; CI's dependency
-  audit fails only on high. Closes when both are upgraded.
+- **Moderate advisories in production dependencies:** fast-uri (pinned at 3.1.8 in the
+  root `overrides`, inside the vulnerable range), glob and minimatch. CI's dependency
+  audit fails only on high. Closes when `npm audit --omit=dev` is clean.
 - **Postmark:** credential canary to an off-domain recipient, then restore the
   forwarding integration and send one reply with an attachment.
 - **Storefront chat on the dev store:** browser matrix, episode boundary, the
