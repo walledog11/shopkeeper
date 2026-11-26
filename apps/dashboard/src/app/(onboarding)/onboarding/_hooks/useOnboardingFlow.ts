@@ -77,15 +77,13 @@ function resolveBrowserTimezone(): string | undefined {
   }
 }
 
-// A new workspace starts in Draft only, so nothing reaches a customer before
-// the merchant has seen the agent's replies.
 function settingsBody(data: OnboardingData, complete: boolean): OnboardingSettingsRequest {
   const name = data.storeName.trim();
   const timezone = resolveBrowserTimezone();
   return {
     ...(name ? { name } : {}),
     settings: {
-      autonomyTier: "watch",
+      autonomyTier: "guarded",
       autoExecuteMode: "off",
       ...(timezone ? { digestTimezone: timezone } : {}),
       ...(complete ? { onboardingCompletedAt: new Date().toISOString() } : {}),

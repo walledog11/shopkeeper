@@ -1,10 +1,10 @@
 import type { ComponentType } from "react";
-import { Inbox, Mail, ShieldCheck, Smartphone } from "lucide-react";
-import { Accent, Headline, Lede } from "./primitives";
+import { Inbox, Mail, Smartphone } from "lucide-react";
+import { Headline, Lede } from "./primitives";
 import type { StepId } from "../_lib/onboarding-model";
 
-// The last step says what happens from here, in Draft only: every reply waits
-// for the merchant, and refunds and order changes stay with them.
+// The last step says what happens from here: routine questions are answered,
+// and anything else comes to the merchant first.
 export function StepLive({ channels, hasMessaging, onNavigate, disabled }: {
   /** The customer channels connected so far, as the merchant would name them. */
   channels: string[];
@@ -14,12 +14,12 @@ export function StepLive({ channels, hasMessaging, onNavigate, disabled }: {
 }) {
   return (
     <div className="flex flex-col items-center">
-      <Headline>I’m ready to start.<Accent>You have the final say.</Accent></Headline>
-      <Lede>Here’s how we’ll work together while you get to know my replies.</Lede>
+      <Headline>I’m ready to start.</Headline>
+      <Lede>Here’s how I’ll look after your customers.</Lede>
       <ul className="mt-7 w-full max-w-[560px] space-y-2.5 text-left">
-        <LiveRow icon={Mail} title="I’ll draft a reply to every new message.">
+        <LiveRow icon={Mail} title="I’ll answer routine questions in your voice.">
           {channels.length > 0 ? (
-            <>From {channels.join(" and ")}.</>
+            <>Like where an order is, from {channels.join(" and ")}.</>
           ) : (
             <>
               No customer messages can reach me yet.{" "}
@@ -29,11 +29,10 @@ export function StepLive({ channels, hasMessaging, onNavigate, disabled }: {
             </>
           )}
         </LiveRow>
-        <LiveRow icon={hasMessaging ? Smartphone : Inbox} title="You approve each one before it’s sent.">
-          {hasMessaging ? "I’ll text each draft to your iPhone. Reply yes and I send it." : "Drafts wait for you in your inbox."}
-        </LiveRow>
-        <LiveRow icon={ShieldCheck} title="Refunds and order changes stay with you.">
-          When you trust my replies, you can let me answer routine questions on my own in Settings.
+        <LiveRow icon={hasMessaging ? Smartphone : Inbox} title="I’ll ask you before anything else.">
+          {hasMessaging
+            ? "Refunds, cancellations and order changes come to your phone first. Reply yes and I do it."
+            : "Refunds, cancellations and order changes wait for your OK in your inbox."}
         </LiveRow>
       </ul>
     </div>
