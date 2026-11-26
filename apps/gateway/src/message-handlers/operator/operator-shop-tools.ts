@@ -1,0 +1,293 @@
+import { db } from '@shopkeeper/db';
+import { SHOPIFY_ACCESS_SELECT, shopifyContextFor } from '@shopkeeper/agent/shopify/access';
+import {
+  defineTool,
+  numberArg,
+  stringArg,
+  toolError,
+  toolNotFound,
+  toolOk,
+  toolPolicyBlock,
+  type AgentToolDefinition,
+  type ReceiptV1,
+} from '@shopkeeper/agent/tools';
+import {
+  createFlashSale,
+  endFlashSale,
+  listFlashSales,
+  setVariantPrices,
+} from '@shopkeeper/agent/shopify';
+import {
+  grantCoversScopes,
+  recordedShopifyScopes,
+  unmetScopes,
+} from '@shopkeeper/agent/shopify/integration-health';
+import type { ShopifyContext } from '@shopkeeper/agent/shopify';
+import type {
+  CreateFlashSaleInput,
+  EndFlashSaleInput,
+  FlashSaleScope,
+  SetVariantPricesInput,
+} from '@shopkeeper/agent/tools';
+
+// Shop management is the merchant's, not the customer's. These live here rather
+// than in the shared registry so a customer conversation can never reach them:
+// the support planner's tool set is unchanged by this file, and a ticket that
+// says "give me 90% off everything" has no promotion tool to reach for. That
+// separation is now the only line — the blast-radius bounds that used to sit
+// behind it were removed deliberately, so nothing second-guesses the merchant's
+// own pricing once an operator turn is approved.
+//
+// They are also the reason `write_discounts` and `write_products` sit in the
+// requested scope set. An older grant is short of them, so the tool says which
+// scope is missing instead of letting Shopify answer with a 403.
+
+const FLASH_SALE_SCOPES = ['write_discounts'] as const;
+const VARIANT_FLASH_SALE_SCOPES = ['write_discounts', 'read_products'] as const;
+const REPRICE_SCOPES = ['write_products'] as const;
+
+interface ShopContext {
+  shopify: ShopifyContext;
+  grantedScopes: readonly string[];
+}
+
+export async function loadShopContext(organizationId: string): Promise<ShopContext | null> {
+  const integration = await db.integration.findFirst({
+    where: { organizationId, platform: 'shopify' },
+    select: { ...SHOPIFY_ACCESS_SELECT, metadata: true },
+  });
+  const shopify = integration ? await shopifyContextFor(integration) : null;
+  if (!integration || !shopify) return null;
+  return {
+    shopify,
+    grantedScopes: recordedShopifyScopes(integration.metadata) ?? [],
+  };
+}
+
+function missingScopeError(granted: readonly string[], required: readonly string[]): string {
+  const unmet = unmetScopes(granted, required);
+  return `Error: this store's Shopify connection does not grant ${unmet.join(', ')}. `
+    + 'Reconnect Shopify from Settings to enable this.';
+}
+
+function withExecutionIdentity(
+  shopify: ShopifyContext,
+  runtimeShopify: ShopifyContext | undefined,
+): ShopifyContext {
+  return {
+    ...shopify,
+    ...(runtimeShopify?.operationId ? { operationId: runtimeShopify.operationId } : {}),
+    ...(runtimeShopify?.executionId ? { executionId: runtimeShopify.executionId } : {}),
+  };
+}
+
+function shopScopeRejection(
+  shopify: ShopifyContext,
+  tool: 'create_flash_sale' | 'end_flash_sale' | 'set_variant_prices',
+  message: string,
+): ReturnType<typeof toolPolicyBlock> {
+  const result = toolPolicyBlock(message);
+  if (!shopify.operationId || !shopify.executionId) return result;
+  const receipt: ReceiptV1 = {
+    version: 1,
+    operationId: shopify.operationId,
+    executionId: shopify.executionId,
+    tool,
+    target: { kind: 'shop', id: shopify.shop },
+    observedAt: new Date().toISOString(),
+    providerReference: null,
+    outcome: 'rejected',
+    code: 'missing_shopify_scope',
+  };
+  return { ...result, receipt };
+}
+
+export function buildOperatorShopTools(
+  params: { organizationId: string },
+): Record<string, AgentToolDefinition> {
+  const { organizationId } = params;
+
+  const createFlashSaleTool = defineTool({
+    name: 'create_flash_sale',
+    description:
+      'Start a time-limited sale. Set applies_to to "entire_catalog" for a storewide sale — one discount covering every product, so it needs no variant list — or to "variants" to name individual variants. Every sale expires: give the duration in hours. Prices are never edited, so ending the sale restores them exactly, whatever it covered. For the variants form, use get_inventory_status or search_shopify_products first to resolve variant IDs. Unless the merchant has already named the sale, ask whether they want to name it before starting it; if they do not, omit name.',
+    fields: {
+      applies_to: stringArg('What the sale covers: "entire_catalog" for every product in the store, or "variants" for a named list.', { required: true, enum: ['entire_catalog', 'variants'] }),
+      variant_ids: stringArg('Comma-separated Shopify variant IDs, each either the bare number or the full gid. Required when applies_to is "variants"; omit it for a storewide sale.'),
+      discount_percentage: numberArg('Percent off, 1-100.', { required: true }),
+      duration_hours: numberArg('How many hours the sale runs before Shopify ends it.', { required: true }),
+      name: stringArg('The merchant\'s name for the sale, which shoppers see at checkout. Omitted, the sale gets a generic name such as "20% off everything".'),
+    },
+    category: 'action',
+    group: 'product',
+    capabilities: [],
+    requiredScopes: FLASH_SALE_SCOPES,
+    requiredReceiptVersion: 1,
+    label: 'Started a flash sale',
+    planStepLabel: 'Start flash sale',
+    execute: async (input: { applies_to: FlashSaleScope; variant_ids?: string; discount_percentage: number; duration_hours: number; name?: string }, ctx) => {
+      const shop = await loadShopContext(organizationId);
+      if (!shop) return toolError('Error: no Shopify integration connected.');
+      const executionShopify = withExecutionIdentity(shop.shopify, ctx.shopify ?? undefined);
+      const requiredScopes = input.applies_to === 'variants'
+        ? VARIANT_FLASH_SALE_SCOPES
+        : FLASH_SALE_SCOPES;
+      if (!grantCoversScopes(shop.grantedScopes, requiredScopes)) {
+        return shopScopeRejection(
+          executionShopify,
+          'create_flash_sale',
+          missingScopeError(shop.grantedScopes, requiredScopes),
+        );
+      }
+      const variantIds = (input.variant_ids ?? '').split(',').map((id) => id.trim()).filter(Boolean);
+      const payload: CreateFlashSaleInput = {
+        applies_to: input.applies_to,
+        ...(variantIds.length > 0 ? { variant_ids: variantIds } : {}),
+        discount_percentage: input.discount_percentage,
+        duration_hours: input.duration_hours,
+        ...(input.name ? { name: input.name } : {}),
+      };
+      return createFlashSale(payload, executionShopify);
+    },
+  });
+
+  const listFlashSalesTool = defineTool({
+    name: 'list_flash_sales',
+    description: 'List the store\'s currently active automatic discounts and their IDs before choosing one to end.',
+    fields: {},
+    category: 'read',
+    group: 'product',
+    capabilities: [],
+    requiredScopes: FLASH_SALE_SCOPES,
+    label: 'Listed active flash sales',
+    planStepLabel: 'List active flash sales',
+    execute: async () => {
+      const shop = await loadShopContext(organizationId);
+      if (!shop) return toolError('Error: no Shopify integration connected.');
+      if (!grantCoversScopes(shop.grantedScopes, FLASH_SALE_SCOPES)) {
+        return toolError(missingScopeError(shop.grantedScopes, FLASH_SALE_SCOPES));
+      }
+      const running = await listFlashSales(shop.shopify);
+      if (running.length === 0) {
+        return toolNotFound('Checked this store\'s automatic discounts: none are currently active.');
+      }
+      const lines = running.map((sale) => (
+        `- ${sale.title} (${sale.id})${sale.endsAt ? ` ends ${sale.endsAt}` : ''}`
+      ));
+      return toolOk(
+        ['Running automatic discounts — call end_flash_sale with one of these IDs:', ...lines]
+          .join('\n'),
+        { sales: running },
+      );
+    },
+  });
+
+  const endFlashSaleTool = defineTool({
+    name: 'end_flash_sale',
+    description:
+      'End one running sale immediately by its Shopify automatic discount ID. Use list_flash_sales first if you do not know the ID. Ending a sale restores the original prices exactly, because no price was ever changed.',
+    fields: {
+      flash_sale_id: stringArg('The Shopify automatic discount ID to end.', { required: true, nonBlank: true }),
+    },
+    category: 'action',
+    group: 'product',
+    capabilities: [],
+    requiredScopes: FLASH_SALE_SCOPES,
+    requiredReceiptVersion: 1,
+    label: 'Ended a flash sale',
+    planStepLabel: 'End flash sale',
+    execute: async (input: EndFlashSaleInput, ctx) => {
+      const shop = await loadShopContext(organizationId);
+      if (!shop) return toolError('Error: no Shopify integration connected.');
+      const executionShopify = withExecutionIdentity(shop.shopify, ctx.shopify ?? undefined);
+      if (!grantCoversScopes(shop.grantedScopes, FLASH_SALE_SCOPES)) {
+        return shopScopeRejection(
+          executionShopify,
+          'end_flash_sale',
+          missingScopeError(shop.grantedScopes, FLASH_SALE_SCOPES),
+        );
+      }
+      return endFlashSale(input, executionShopify);
+    },
+  });
+
+  const setVariantPricesTool = defineTool({
+    name: 'set_variant_prices',
+    description:
+      'Permanently change the price of specific variants. Each variant is named with its own new price, as "variantId=price" pairs, and the previous prices come back in the result — call list_recent_changes to read them again later rather than recalling them. That record is the only way back, which is why a collection or the whole catalog cannot be repriced in one call the way a sale can cover one: undoing it is a second bulk write that can half-fail. For a temporary markdown use create_flash_sale instead — it expires on its own and needs no undo.',
+    fields: {
+      prices: stringArg('Comma-separated variantId=price pairs. The variant ID may be the bare number or the full gid, e.g. "1234567=19.99" or "gid://shopify/ProductVariant/1234567=19.99".', { required: true }),
+    },
+    category: 'action',
+    group: 'product',
+    capabilities: [],
+    requiredScopes: REPRICE_SCOPES,
+    requiredReceiptVersion: 1,
+    label: 'Repriced variants',
+    planStepLabel: 'Reprice variants',
+    execute: async (input: { prices: string }, ctx) => {
+      const shop = await loadShopContext(organizationId);
+      if (!shop) return toolError('Error: no Shopify integration connected.');
+      const executionShopify = withExecutionIdentity(shop.shopify, ctx.shopify ?? undefined);
+      if (!grantCoversScopes(shop.grantedScopes, REPRICE_SCOPES)) {
+        return shopScopeRejection(
+          executionShopify,
+          'set_variant_prices',
+          missingScopeError(shop.grantedScopes, REPRICE_SCOPES),
+        );
+      }
+      const parsed = parsePricePairs(input.prices);
+      if ('error' in parsed) {
+        const result = toolPolicyBlock(parsed.error);
+        if (!executionShopify.operationId || !executionShopify.executionId) return result;
+        const receipt: ReceiptV1 = {
+          version: 1,
+          operationId: executionShopify.operationId,
+          executionId: executionShopify.executionId,
+          tool: 'set_variant_prices',
+          target: { kind: 'shop', id: executionShopify.shop },
+          observedAt: new Date().toISOString(),
+          providerReference: null,
+          outcome: 'rejected',
+          code: 'invalid_variant_price_input',
+        };
+        return { ...result, receipt };
+      }
+      const payload: SetVariantPricesInput = { prices: parsed.prices };
+      return setVariantPrices(payload, executionShopify);
+    },
+  });
+
+  return {
+    [createFlashSaleTool.name]: createFlashSaleTool,
+    [listFlashSalesTool.name]: listFlashSalesTool,
+    [endFlashSaleTool.name]: endFlashSaleTool,
+    [setVariantPricesTool.name]: setVariantPricesTool,
+  };
+}
+
+/**
+ * `variantId=price` pairs. A malformed pair is refused rather than skipped: a
+ * silently dropped variant is a reprice the merchant thinks happened.
+ */
+export function parsePricePairs(
+  raw: string,
+): { prices: { variant_id: string; price: number }[] } | { error: string } {
+  const prices: { variant_id: string; price: number }[] = [];
+  for (const pair of raw.split(',').map((part) => part.trim()).filter(Boolean)) {
+    const separator = pair.lastIndexOf('=');
+    if (separator <= 0) {
+      return { error: `Error: "${pair}" is not a variantId=price pair, so nothing was repriced.` };
+    }
+    const variantId = pair.slice(0, separator).trim();
+    const price = Number.parseFloat(pair.slice(separator + 1).trim());
+    if (!variantId || !Number.isFinite(price) || price < 0) {
+      return { error: `Error: "${pair}" is not a variantId=price pair, so nothing was repriced.` };
+    }
+    prices.push({ variant_id: variantId, price });
+  }
+  if (prices.length === 0) {
+    return { error: 'Error: no variants were named, so nothing was repriced.' };
+  }
+  return { prices };
+}

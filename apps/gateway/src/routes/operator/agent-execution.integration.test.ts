@@ -91,16 +91,20 @@ describe('executeFreeFormInstruction', () => {
     expect(Object.keys(moduleTools).sort()).toEqual([
       'answer_operator_question',
       'approve_pending_plan',
+      'create_flash_sale',
       'draft_email',
       'draft_ticket_reply',
+      'end_flash_sale',
       'get_order_status',
       'get_ticket',
       'list_active_tickets',
+      'list_flash_sales',
       'list_recent_changes',
       'mark_ticket_spam',
       'reject_pending_plan',
       'revise_pending_plan',
       'search_product_help',
+      'set_variant_prices',
     ]);
     const event = await db.operatorEvent.findUniqueOrThrow({ where: { id: message.turnId } });
     expect(event.agentRequestId).toBeTruthy();

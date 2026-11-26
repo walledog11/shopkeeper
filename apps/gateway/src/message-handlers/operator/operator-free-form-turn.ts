@@ -4,6 +4,7 @@ import { buildOperatorInboxTools } from './operator-inbox-tools.js';
 import { buildOperatorActionHistoryTools } from './operator-action-history-tools.js';
 import { buildOperatorProductHelpTools } from './operator-product-help-tools.js';
 import { buildOperatorOrderTools } from './operator-order-tools.js';
+import { buildOperatorShopTools } from './operator-shop-tools.js';
 import { buildOperatorDashboardNavTools } from './operator-dashboard-nav-tools.js';
 import {
   executeOperatorAgentTurn,
@@ -60,6 +61,7 @@ export async function runOperatorFreeFormTurn(
     ...buildOperatorActionHistoryTools({ organizationId }),
     ...buildOperatorProductHelpTools(),
     ...buildOperatorOrderTools({ organizationId }),
+    ...buildOperatorShopTools({ organizationId }),
     ...(deskMode ? buildOperatorDashboardNavTools() : {}),
   };
 

@@ -94,6 +94,35 @@ export type GetOrderTrackingInput = ToolInput<"get_order_tracking">;
  */
 export type GetInventoryStatusInput = ToolInput<"get_inventory_status">;
 
+/**
+ * A sale is one automatic discount with an expiry, so what it covers is a
+ * property of that single object rather than a count of writes. `applies_to`
+ * names the target the way Shopify models it; `variant_ids` belongs to the
+ * enumerated form and is meaningless without it.
+ */
+export interface CreateFlashSaleInput {
+  applies_to: FlashSaleScope;
+  variant_ids?: string[];
+  discount_percentage: number;
+  duration_hours: number;
+  name?: string;
+}
+
+export type FlashSaleScope = "entire_catalog" | "variants";
+
+/** Omitting the id lists what is running, so ending one is always one call. */
+export interface EndFlashSaleInput {
+  flash_sale_id?: string;
+}
+
+/**
+ * Enumerated repricing. Each variant is named with its own new price; there is
+ * no pattern, percentage-across-a-collection, or wildcard form to express.
+ */
+export interface SetVariantPricesInput {
+  prices: { variant_id: string; price: number }[];
+}
+
 export type SearchKbInput = ToolInput<"search_kb">;
 
 export type SupportStatsInput = ToolInput<"get_support_stats">;

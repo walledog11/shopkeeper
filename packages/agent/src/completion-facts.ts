@@ -171,8 +171,12 @@ function mutationFacts(input: {
     }
     case "edit_shopify_order":
       return orderId ? [fact("order_update", input.tool, input.outcome, input.executionReference, orderOptions)] : [];
+    case "create_flash_sale":
+    case "end_flash_sale":
     case "issue_discount":
       return [fact("discount", input.tool, input.outcome, input.executionReference)];
+    case "set_variant_prices":
+      return [fact("price_update", input.tool, input.outcome, input.executionReference)];
     default:
       return [];
   }

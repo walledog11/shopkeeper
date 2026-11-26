@@ -60,6 +60,25 @@ export {
   type LowStockVariant,
 } from "./low-stock.js";
 export {
+  AUTOMATIC_DISCOUNT_CREATE_MUTATION,
+  AUTOMATIC_DISCOUNT_DELETE_MUTATION,
+  AUTOMATIC_DISCOUNTS_QUERY,
+  createFlashSale,
+  endFlashSale,
+  listFlashSales,
+  loadSaleVariants,
+  readFlashSales,
+  type FlashSaleSummary,
+  type SaleVariant,
+} from "./flash-sales.js";
+export {
+  VARIANT_PRICE_UPDATE_MUTATION,
+  VARIANT_PRODUCT_QUERY,
+  formatOriginalPrices,
+  setVariantPrices,
+  type RecordedPriceChange,
+} from "./variant-pricing.js";
+export {
   createPartialRefund,
   parseRefundItems,
   quotePartialRefundForApproval,

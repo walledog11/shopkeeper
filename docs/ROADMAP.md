@@ -125,10 +125,8 @@ Resumes with the first real merchant.
    protection*: access log and weekly review, the Terms' data processing section, the
    incident response policy), so every answer is Yes except consent, data sale and
    automated decisions (Not applicable). The reason for each requested scope is in the
-   Shopify configuration reference (*Access scopes*). Drop `write_discounts` and
-   `write_products` from `SHOPIFY_OAUTH_SCOPES` and `shopify.app.toml` first: nothing
-   uses them since the shop tools were cut. Release the current `shopify.app.toml` and
-   chat extension with `shopify app deploy` before submitting.
+   Shopify configuration reference (*Access scopes*); release the current
+   `shopify.app.toml` and chat extension with `shopify app deploy` before submitting.
    Left: listing copy, icon and screenshots; a screencast; reviewer test credentials.
    Closes when the submission form is complete.
 7. **Listing day:** the site's call to action is a waitlist. Point it and the pricing
@@ -231,6 +229,9 @@ Resumes with the first real merchant.
 
 ## Decisions on record
 
+- **Flash sales and repricing stay.** They're how a merchant changes prices and runs a
+  sale from their phone. Cutting code means cutting what makes the app slower, flakier
+  or harder to use, never a capability a merchant would use. (2026-11-26)
 - **Work serves an item in *Next*.** Cleanups, consistency passes and refactors land only
   as part of one, and a change is done when it has been used in the app, not when its
   tests pass. Two weeks of cleanup PRs closed nothing. (2026-11-26)

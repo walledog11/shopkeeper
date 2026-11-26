@@ -35,7 +35,9 @@ interface VariantPricesData {
   } | null)[];
 }
 
-// Exchanges compare prices; approval line items read the titles.
+// Shared with the flash-sale variant load, which uses the titles. Exchanges and
+// that caller both ignore `inventoryQuantity`; it stays because the document is
+// shared and other readers of this query still ask for stock.
 export const VARIANT_PRICES_QUERY = `query variantPrices($ids: [ID!]!) {
   nodes(ids: $ids) {
     ... on ProductVariant {

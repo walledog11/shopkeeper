@@ -1,9 +1,11 @@
+import { db } from '@shopkeeper/db';
 import {
   runUnknownOutcomeReconciliation,
   type UnknownOutcomeSweepCounts,
 } from '@shopkeeper/agent/unknown-outcome-reconciliation';
+import type { ShopifyContext } from '@shopkeeper/agent/shopify';
+import { SHOPIFY_ACCESS_SELECT, shopifyContextFor } from '@shopkeeper/agent/shopify/access';
 import { JOB, QUEUE } from '../constants.js';
-import { loadShopifyContext } from '../lib/shopify-context.js';
 import logger from '../logger.js';
 import { emitOpsAlert, incrementOpsAlertWindow, type OpsAlertCounterClient } from '../ops-alerts.js';
 import {
@@ -22,6 +24,14 @@ const SWEEP_INTERVAL_MS = 15 * 60 * 1000;
 // What stays unknown after probing repeats on every sweep; the founder hears
 // about each distinct set of counts once a day, not every 15 minutes.
 const STILL_UNKNOWN_ALERT_WINDOW_SECS = 24 * 60 * 60;
+
+async function loadShopifyContext(organizationId: string): Promise<ShopifyContext | null> {
+  const integration = await db.integration.findFirst({
+    where: { organizationId, platform: 'shopify', accessToken: { not: null } },
+    select: SHOPIFY_ACCESS_SELECT,
+  });
+  return integration ? shopifyContextFor(integration) : null;
+}
 
 async function alertUnresolvedOutcomes(
   result: UnknownOutcomeSweepCounts,

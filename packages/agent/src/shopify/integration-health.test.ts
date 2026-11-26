@@ -93,7 +93,8 @@ describe("missingShopifyScopes", () => {
   });
 
   // The reads left over are the ones with no matching write in the requested
-  // set: a write grant implies its read.
+  // set. `read_products` dropped off this list when `write_products` joined it
+  // for enumerated-variant repricing, because a write grant implies its read.
   it("accepts a write grant in place of the implied read", () => {
     const impliedReads = SHOPIFY_OAUTH_SCOPES.filter((scope) => !scope.startsWith("read_"));
 

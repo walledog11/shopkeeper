@@ -92,9 +92,10 @@ authorized tool sets. Discovery grants no additional authority.
 
 The default support turn holds reads and controls only. Gift cards, exchanges,
 replacement orders, fulfillment, outbound email and analytics are reached
-through discovery or a merchant instruction. A gift card is merchant-directed
-only, never inferred from a customer complaint. Removing an operator feature is
-the merchant's decision, never a side effect of simplifying support.
+through discovery or a merchant instruction, and promotions and repricing are
+operator-only module tools that a support turn never holds. A gift card is
+merchant-directed only, never inferred from a customer complaint. Simplifying
+support never justifies deleting a working operator feature.
 
 Support request refusal checks use classifier intents and `requestFacts` aligned
 to the latest customer message, rather than English words in instructions or

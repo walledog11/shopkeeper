@@ -6,7 +6,9 @@ import type {
   CustomerInfoReceiptFactsV1,
   CustomerInfoReceiptFieldV1,
   CustomerNoteReceiptFactsV1,
+  EndFlashSaleReceiptFactsV1,
   ExchangeReceiptFactsV1,
+  FlashSaleReceiptFactsV1,
   FulfillmentReceiptFactsV1,
   GiftCardReceiptFactsV1,
   InternalNoteReceiptFactsV1,
@@ -28,6 +30,9 @@ import type {
   TicketSpamReceiptFactsV1,
   ToolResult,
   ToolStatus,
+  VariantPriceReceiptBatchV1,
+  VariantPriceReceiptChangeV1,
+  VariantPriceReceiptFactsV1,
 } from './receipt-v1-types.js';
 
 export type { ReceiptV1 } from './receipt-v1-types.js';
@@ -192,6 +197,107 @@ function parseTicketSpamFacts(value: unknown): TicketSpamReceiptFactsV1 {
     afterFilterState: "filtered",
     decidedAt: isoTimestamp(value.decidedAt, "facts.decidedAt"),
   };
+}
+
+function parseVariantPriceFacts(value: unknown): VariantPriceReceiptFactsV1 {
+  if (!isRecord(value)) throw new ReceiptValidationError("variant price facts must be an object");
+  if (value.currency !== null && (typeof value.currency !== "string" || !/^[A-Z]{3}$/.test(value.currency))) {
+    throw new ReceiptValidationError("facts.currency must be a three-letter uppercase code or null");
+  }
+  const currency = value.currency;
+  const products = new Set<string>();
+  const variants = new Set<string>();
+  const batches = nonEmptyArray(value.batches, "facts.batches must be a non-empty array")
+    .map((candidate, batchIndex): VariantPriceReceiptBatchV1 => {
+      if (!isRecord(candidate)) {
+        throw new ReceiptValidationError(`facts.batches[${batchIndex}] must be an object`);
+      }
+      const productId = nonEmptyString(candidate.productId, `facts.batches[${batchIndex}].productId`);
+      if (products.has(productId)) {
+        throw new ReceiptValidationError("facts.batches product IDs must be unique");
+      }
+      products.add(productId);
+      const outcome = oneOf(
+        candidate.outcome,
+        `facts.batches[${batchIndex}].outcome`,
+        ["succeeded", "failed", "unknown"] as const,
+      );
+      const confirmation = oneOf(candidate.confirmation, `facts.batches[${batchIndex}].confirmation`, [
+        "mutation_response", "read_after_ambiguous_response", "provider_rejected", "not_attempted",
+      ] as const);
+      const changes = nonEmptyArray(candidate.changes, `facts.batches[${batchIndex}].changes must be a non-empty array`)
+        .map((change, changeIndex): VariantPriceReceiptChangeV1 => {
+          const field = `facts.batches[${batchIndex}].changes[${changeIndex}]`;
+          if (!isRecord(change)) throw new ReceiptValidationError(`${field} must be an object`);
+          const changeProductId = nonEmptyString(change.productId, `${field}.productId`);
+          const variantId = nonEmptyString(change.variantId, `${field}.variantId`);
+          if (changeProductId !== productId) {
+            throw new ReceiptValidationError("variant price change product must match its batch");
+          }
+          if (variants.has(variantId)) {
+            throw new ReceiptValidationError("variant price receipt variants must be unique");
+          }
+          variants.add(variantId);
+          const originalPrice = moneyDecimal(change.originalPrice, `${field}.originalPrice`);
+          const requestedPrice = moneyDecimal(change.requestedPrice, `${field}.requestedPrice`);
+          const observedPrice = change.observedPrice === null
+            ? null
+            : moneyDecimal(change.observedPrice, `${field}.observedPrice`);
+          if (outcome === "succeeded" && observedPrice !== requestedPrice) {
+            throw new ReceiptValidationError("successful variant price changes must observe the requested price");
+          }
+          return { productId: changeProductId, variantId, originalPrice, requestedPrice, observedPrice };
+        });
+      return { productId, outcome, confirmation, changes };
+    });
+  return { currency, batches };
+}
+
+function parseEndFlashSaleFacts(value: unknown): EndFlashSaleReceiptFactsV1 {
+  if (!isRecord(value)) throw new ReceiptValidationError("ended flash sale facts must be an object");
+  return {
+    flashSaleId: nonEmptyString(value.flashSaleId, "facts.flashSaleId"),
+    confirmation: oneOf(
+      value.confirmation,
+      "facts.confirmation",
+      ["deleted", "absent_after_ambiguous_response"] as const,
+    ),
+  };
+}
+
+function parseFlashSaleFacts(value: unknown): FlashSaleReceiptFactsV1 {
+  if (!isRecord(value)) throw new ReceiptValidationError("flash sale facts must be an object");
+  const flashSaleId = nonEmptyString(value.flashSaleId, "facts.flashSaleId");
+  const appliesTo = oneOf(value.appliesTo, "facts.appliesTo", ["entire_catalog", "variants"] as const);
+  if (!Array.isArray(value.variantIds)) {
+    throw new ReceiptValidationError("facts.variantIds must be an array");
+  }
+  const seen = new Set<string>();
+  const variantIds = value.variantIds.map((candidate, index) => {
+    const variantId = nonEmptyString(candidate, `facts.variantIds[${index}]`);
+    if (seen.has(variantId)) {
+      throw new ReceiptValidationError("facts.variantIds must be unique");
+    }
+    seen.add(variantId);
+    return variantId;
+  });
+  if (appliesTo === "entire_catalog" && variantIds.length !== 0) {
+    throw new ReceiptValidationError("catalog flash sale facts cannot name variants");
+  }
+  if (appliesTo === "variants" && variantIds.length === 0) {
+    throw new ReceiptValidationError("variant flash sale facts require variants");
+  }
+  const discountPercentage = positiveDecimal(value.discountPercentage, "facts.discountPercentage");
+  if (Number(discountPercentage) > 100) {
+    throw new ReceiptValidationError("facts.discountPercentage cannot exceed 100");
+  }
+  const startsAt = isoTimestamp(value.startsAt, "facts.startsAt");
+  const endsAt = isoTimestamp(value.endsAt, "facts.endsAt");
+  if (Date.parse(endsAt) <= Date.parse(startsAt)) {
+    throw new ReceiptValidationError("facts.endsAt must be after facts.startsAt");
+  }
+  const providerStatus = nonEmptyString(value.providerStatus, "facts.providerStatus");
+  return { flashSaleId, appliesTo, variantIds, discountPercentage, startsAt, endsAt, providerStatus };
 }
 
 function parseGiftCardFacts(value: unknown): GiftCardReceiptFactsV1 {
@@ -632,6 +738,18 @@ function validateCommunication(base: ReceiptBaseV1, value: Record<string, unknow
   return facts;
 }
 
+function validateVariantPriceReceipt(base: ReceiptBaseV1, value: Record<string, unknown>): VariantPriceReceiptFactsV1 {
+  nonEmptyString(value.providerReference, "providerReference");
+  if (value.providerReference !== base.target.id) {
+    throw new ReceiptValidationError("variant price providerReference must match the shop target");
+  }
+  const facts = parseVariantPriceFacts(value.facts);
+  if (value.outcome === "succeeded" && facts.batches.some(batch => batch.outcome !== "succeeded")) {
+    throw new ReceiptValidationError("successful variant price receipts require successful batches");
+  }
+  return facts;
+}
+
 const validateOrderAddressReceipt = factIdentity(parseOrderAddressFacts, "order address", "orderId", "orderId");
 const communicationContract: ReceiptContract<CommunicationReceiptFactsV1> = {
   targetKind: "thread",
@@ -669,6 +787,15 @@ const RECEIPT_CONTRACTS: { [Tool in ReceiptToolV1]: ReceiptContract<ReceiptFacts
   update_shopify_customer_info: { targetKind: "customer", succeeded: factIdentity(parseCustomerInfoFacts, "customer info", "customerId", "customerId") },
   add_shopify_customer_note: { targetKind: "customer", succeeded: factIdentity(parseCustomerNoteFacts, "customer note", "customerId", "customerId") },
   create_gift_card: { targetKind: "customer", succeeded: factIdentity(parseGiftCardFacts, "gift card", "customerId", "giftCardId") },
+  create_flash_sale: { targetKind: "shop", succeeded: factIdentity(parseFlashSaleFacts, "flash sale", null, "flashSaleId") },
+  end_flash_sale: {
+    targetKind: "discount", failureTargets: ["shop", "discount"],
+    succeeded: factIdentity(parseEndFlashSaleFacts, "ended flash sale", "flashSaleId", "flashSaleId"),
+  },
+  set_variant_prices: {
+    targetKind: "shop", succeeded: validateVariantPriceReceipt,
+    partial: { label: "partial variant price", validate: validateVariantPriceReceipt },
+  },
   add_internal_note: { targetKind: "thread", succeeded: factIdentity(parseInternalNoteFacts, "internal note", "threadId", "messageId") },
   update_thread_status: { targetKind: "thread", succeeded: threadStateIdentity(parseThreadStatusFacts, "thread status") },
   update_thread_tag: { targetKind: "thread", succeeded: threadStateIdentity(parseThreadTagFacts, "thread tag") },

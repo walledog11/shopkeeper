@@ -69,7 +69,6 @@ const SPECIFIC_CLAIM_ACTIONS: readonly [RegExp, ReadonlySet<CompletionAction>][]
   [/\b(?:customer notes?|notes?)\b/i, new Set(["customer_note"])],
   [/\b(?:shipments?|shipped|shipping|fulfilled|fulfilling)\b/i, new Set(["fulfillment"])],
   [/\bdiscounts?\b/i, new Set(["discount"])],
-  // No tool changes a price, so a claim that one changed never grounds.
   [/\bprices?\b/i, new Set(["price_update"])],
 ];
 const GENERIC_ORDER_ACTIONS = new Set<CompletionAction>(["fulfillment", "order_creation", "order_update"]);
