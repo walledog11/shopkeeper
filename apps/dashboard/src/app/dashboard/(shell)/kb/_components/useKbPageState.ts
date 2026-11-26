@@ -26,7 +26,7 @@ export function useKbPageState(initialKbData?: KbPageData, initialBookId?: strin
   })
   const knowledgeBases = useMemo(() => data?.knowledgeBases ?? [], [data])
   const storeProfile = useMemo(
-    () => data?.storeProfile ?? { name: "", aiContext: "", brandVoice: "", voiceProposal: null },
+    () => data?.storeProfile ?? { name: "", aiContext: "", voice: "", voiceProposal: null },
     [data?.storeProfile],
   )
   const preferences = useMemo(() => data?.preferences ?? { active: [], proposed: [] }, [data?.preferences])

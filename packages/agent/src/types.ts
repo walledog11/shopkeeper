@@ -14,7 +14,8 @@ export type BusinessHoursDay = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | '
 export interface OrgSettings {
   // AI draft / summary
   aiContext: string;   // optional store details (policies, products) fed into AI drafts; business name comes from org.name
-  brandVoice: string;  // tone brief appended to AI system prompt
+  brandVoice: string;  // the merchant's own notes on tone, appended to the Voice section
+  voiceTraits?: VoiceTraits; // tone choices from the Voice page, composed into the Voice section
 
   // Fixed product identity — always resolved to AGENT_DISPLAY_NAME; not merchant-configurable.
   agentName: string;
@@ -110,6 +111,7 @@ export type RoutingDecision = 'auto_execute' | 'needs_review' | 'escalate'
 
 export type ClassifierAlignmentState = 'aligned' | 'missing' | 'unaligned' | 'not_applicable'
 
+import type { VoiceTraits } from "./voice-traits.js";
 import type { PlanRoutingEvidenceCode } from './routing-evidence.js'
 export type { PlanRoutingEvidenceCode }
 

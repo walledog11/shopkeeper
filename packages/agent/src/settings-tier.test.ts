@@ -45,11 +45,11 @@ describe("resolveAgentSettings", () => {
     }
   });
 
-  it("applies watch-tier toolsEnabled defaults (action + communication blocked)", () => {
+  it("applies watch-tier toolsEnabled defaults (replies drafted, actions blocked)", () => {
     const resolved = resolveAgentSettings({ autonomyTier: "watch" });
     expect(resolved.toolsEnabled).toEqual({
       action: false,
-      communication: false,
+      communication: true,
       internal: true,
       read: true,
     });
@@ -83,10 +83,10 @@ describe("resolveAgentSettings", () => {
   it("merges partial toolsEnabled overrides on top of tier defaults", () => {
     const resolved = resolveAgentSettings({
       autonomyTier: "watch",
-      toolsEnabled: { action: true } as never,
+      toolsEnabled: { communication: false } as never,
     });
     expect(resolved.toolsEnabled).toEqual({
-      action: true,
+      action: false,
       communication: false,
       internal: true,
       read: true,

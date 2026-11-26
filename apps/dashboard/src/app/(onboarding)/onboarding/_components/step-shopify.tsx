@@ -1,13 +1,15 @@
 import { Check, ChevronRight, FlaskConical, Loader2, ShoppingBag, Sparkles } from "lucide-react";
+import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/ui/cn";
 import type { Integration } from "@/types";
-import { Headline, Lede } from "./primitives";
+import { Accent, Headline, Lede } from "./primitives";
 import type { KbSyncViewModel, OnboardingData } from "../_lib/onboarding-model";
 import type { LaunchOnboardingOAuth } from "../_hooks/useOnboardingFlow";
 
 export function StepShopify({
+  firstName,
   data,
   update,
   disabled,
@@ -23,6 +25,7 @@ export function StepShopify({
   onClaim,
   claiming,
 }: {
+  firstName: string | null;
   data: OnboardingData;
   update: (patch: Partial<OnboardingData>) => void;
   disabled: boolean;
@@ -50,8 +53,12 @@ export function StepShopify({
 
   return (
     <div className="flex flex-col items-center">
-      <Headline>{connected ? "Your store is connected." : "Connect Shopify."}</Headline>
-      <Lede>Shopkeeper reads orders, products, and policies from this store.</Lede>
+      {connected
+        ? <Headline>I’m connected to your store.</Headline>
+        : <Headline>{firstName ? `Hi ${firstName}, I’m ${AGENT_DISPLAY_NAME}.` : `Hi, I’m ${AGENT_DISPLAY_NAME}.`}<Accent>Let’s start with your store.</Accent></Headline>}
+      <Lede>{connected
+        ? "I can see your orders, products and policies, so I can answer your customers the way you would."
+        : "I’ll read your orders, products and policies, so I can answer your customers the way you would."}</Lede>
 
       <div className={cn(
         "mt-7 w-full max-w-[520px] rounded-2xl border border-foreground/10 bg-card px-6 py-5 text-left",
@@ -225,8 +232,8 @@ function learnedSummary(kbSync: Extract<KbSyncViewModel, { status: "succeeded" }
   const parts: string[] = [];
   if (kbSync.policies > 0) parts.push(`${kbSync.policies} ${kbSync.policies === 1 ? "policy" : "policies"}`);
   if (kbSync.pages > 0) parts.push(`${kbSync.pages} ${kbSync.pages === 1 ? "page" : "pages"}`);
-  if (parts.length === 0) return "Store synced.";
-  return `Synced ${parts.join(" and ")}.`;
+  if (parts.length === 0) return "I read your store.";
+  return `I read ${parts.join(" and ")} on your store.`;
 }
 
 function AccessRow({ label, hint, on }: { label: string; hint: string; on: boolean }) {

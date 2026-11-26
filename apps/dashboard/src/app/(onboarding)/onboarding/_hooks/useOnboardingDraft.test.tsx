@@ -10,7 +10,7 @@ let root: Root;
 let container: HTMLDivElement;
 let hook: ReturnType<typeof useOnboardingDraft>;
 function Harness({ org = "org-a", pinned = null }: { org?: string; pinned?: number | null }) {
-  const value = useOnboardingDraft({ userId: "user-a", organizationId: org, clerkLoaded: true, founderName: null, organizationName: null, pinnedStepIndex: pinned, savedEmail: undefined });
+  const value = useOnboardingDraft({ userId: "user-a", organizationId: org, organizationName: null, pinnedStepIndex: pinned, savedEmail: undefined });
   useEffect(() => { hook = value; });
   return <span>{value.idx}:{value.data.shopDomain}</span>;
 }
@@ -21,7 +21,7 @@ describe("onboarding navigation and persistence", () => {
   it("updates the resume URL when advancing and restores that step after remount", async () => {
     await act(async () => root.render(<Harness pinned={1} />));
     await act(async () => hook.advance());
-    expect(window.location.search).toBe("?step=connect");
+    expect(window.location.search).toBe("?step=voice");
     expect(hook.idx).toBe(2);
     await act(async () => root.unmount()); root = createRoot(container);
     await act(async () => root.render(<Harness pinned={2} />));
@@ -30,7 +30,7 @@ describe("onboarding navigation and persistence", () => {
   it("responds to browser back/forward navigation", async () => {
     await act(async () => root.render(<Harness pinned={1} />));
     await act(async () => hook.go(3));
-    await act(async () => { window.history.replaceState(null, "", "/onboarding?step=email"); window.dispatchEvent(new PopStateEvent("popstate")); });
+    await act(async () => { window.history.replaceState(null, "", "/onboarding?step=about"); window.dispatchEvent(new PopStateEvent("popstate")); });
     expect(hook.idx).toBe(1);
   });
   it("does not copy a draft into another workspace", async () => {
@@ -41,7 +41,7 @@ describe("onboarding navigation and persistence", () => {
     expect(JSON.parse(localStorage.getItem(`${STORAGE_KEY}:user-a:org-a`)!).shopDomain).toBe("first.myshopify.com");
   });
   it("carries a new user's store address into the workspace just created", async () => {
-    function NewWorkspace({ org }: { org?: string }) { const value = useOnboardingDraft({ userId: "user-a", organizationId: org, clerkLoaded: true, founderName: null, organizationName: null, pinnedStepIndex: null, savedEmail: undefined }); useEffect(() => { hook = value; }); return null; }
+    function NewWorkspace({ org }: { org?: string }) { const value = useOnboardingDraft({ userId: "user-a", organizationId: org, organizationName: null, pinnedStepIndex: null, savedEmail: undefined }); useEffect(() => { hook = value; }); return null; }
     await act(async () => root.render(<NewWorkspace />));
     await act(async () => hook.update({ shopDomain: "new.myshopify.com" }));
     await act(async () => root.render(<NewWorkspace org="created" />));

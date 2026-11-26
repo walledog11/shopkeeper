@@ -21,13 +21,13 @@ export function StepConnect({ imessageHandle }: { imessageHandle: string | null 
   const { imessage, refreshImessage } = useOperatorChannels();
   return (
     <div className="flex flex-col items-center">
-      <Headline>Link your phone.</Headline>
-      <Lede>Review drafts and approve store changes from iMessage. This is your private connection to Shopkeeper.</Lede>
+      <Headline>Where should I reach you?</Headline>
+      <Lede>I’ll text you whenever I need your OK, like before a refund. Reply yes and I do it.</Lede>
       <div className="mt-6 grid w-full max-w-[560px] grid-cols-1 gap-4 text-left">
         {imessageHandle ? <ImessageConnector handle={imessageHandle} onRefresh={refreshImessage} handles={imessage?.handles ?? []} />
           : <p className="rounded-2xl border border-foreground/10 bg-foreground/[0.04] px-6 py-6 text-[13px] leading-relaxed text-foreground/60">iMessage connection is currently unavailable. You can review drafts and approve actions in the dashboard.</p>}
         <ChannelShell icon={Monitor} name="Prefer the dashboard?" tagline="All your drafts and approvals, in one place." connected={false}>
-          <p className="text-[12.5px] leading-relaxed text-foreground/55">Choose “Use the dashboard” below to continue. You can link your phone later in Settings → Phone &amp; briefing.</p>
+          <p className="text-[12.5px] leading-relaxed text-foreground/55">Choose “Skip for now” below, and anything that needs your OK will wait in your inbox. You can link your phone later in Settings → Phone &amp; briefing.</p>
         </ChannelShell>
       </div>
     </div>

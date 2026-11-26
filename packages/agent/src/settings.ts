@@ -9,12 +9,14 @@ import type {
 } from "./types.js";
 
 export {
+  BRAND_VOICE_MAX_CHARS,
   MAX_DAILY_LLM_SPEND_CAP_USD,
   OrgSettingsValidationError,
   parseOrgSettingsPatch,
   type OrgSettingsValidationIssue,
 } from "./settings-parser.js";
 export type { OrgSettingsPatch } from "./types.js";
+export { VOICE_TRAITS, voiceGuidance, type VoiceTraitId, type VoiceTraits } from "./voice-traits.js";
 
 export type AutonomyTier = NonNullable<OrgSettings["autonomyTier"]>;
 export type AutoExecuteMode = NonNullable<OrgSettings["autoExecuteMode"]>;
@@ -80,11 +82,14 @@ export const AGENT_SETTINGS_DEFAULTS: OrgSettings = {
 };
 
 export const TIER_DEFAULTS: Record<AutonomyTier, Partial<OrgSettings>> = {
+  // Draft only: every reply is drafted for the merchant's approval, because a
+  // draft is a send_reply call and `decideAutonomy` never lets this tier's plans
+  // run unreviewed. Refunds and order changes stay with the merchant.
   watch: {
     maxRefundAmount: 0,
     toolsEnabled: {
       action: false,
-      communication: false,
+      communication: true,
       internal: true,
       read: true,
     },

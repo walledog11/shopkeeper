@@ -1,12 +1,15 @@
+import type { VoiceTraits } from "@shopkeeper/agent/settings";
 import { requestJson, requestOk } from "@/lib/api/fetcher";
 
 export interface OnboardingSettingsRequest {
   name?: string;
   settings: {
-    autonomyTier: "guarded";
-    autoExecuteMode: "off";
+    autonomyTier?: "guarded";
+    autoExecuteMode?: "off";
     digestTimezone?: string;
     onboardingCompletedAt?: string;
+    aiContext?: string;
+    voiceTraits?: VoiceTraits;
   };
 }
 

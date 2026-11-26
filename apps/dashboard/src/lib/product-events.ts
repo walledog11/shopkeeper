@@ -1,7 +1,9 @@
+import type { OnboardingStep } from '@shopkeeper/analytics';
+
 export type ClientProductEvent =
   | {
       event: 'onboarding_step_completed';
-      step: 'store' | 'shopify' | 'email' | 'autonomy' | 'plan';
+      step: OnboardingStep;
     }
   | {
       event: 'integration_connection_started';

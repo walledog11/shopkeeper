@@ -6,17 +6,15 @@ describe("parseStoredOnboardingState", () => {
   it("returns validated onboarding data without leaking storage metadata", () => {
     expect(parseStoredOnboardingState(JSON.stringify({
       storeName: "Acme",
-      founderName: "Ari",
+      sells: "Mugs",
       primaryEmail: "support@acme.test",
       idx: 3,
       ignored: "value",
     }))).toEqual({
       data: {
-        shopDomain: "",
-        forwardingEmail: "",
+        ...DEFAULT_DATA,
         storeName: "Acme",
-        founderName: "Ari",
-        gmailEmail: "",
+        sells: "Mugs",
         primaryEmail: "support@acme.test",
       },
       idx: 3,
@@ -43,7 +41,7 @@ describe("parseStoredOnboardingState", () => {
   it("replaces invalid field values with safe defaults", () => {
     expect(parseStoredOnboardingState(JSON.stringify({
       storeName: null,
-      founderName: 42,
+      sells: 42,
       primaryEmail: [],
       idx: 1,
     }))).toEqual({

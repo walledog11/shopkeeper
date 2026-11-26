@@ -5,6 +5,7 @@ import type {
   OrgSettingsPatch,
 } from "./types.js";
 import { isRecord } from "@shopkeeper/shared/guards";
+import { VOICE_TRAITS } from "./voice-traits.js";
 
 export interface OrgSettingsValidationIssue {
   path: string;
@@ -30,6 +31,7 @@ interface ParseContext {
 const SETTINGS_KEYS = [
   "aiContext",
   "brandVoice",
+  "voiceTraits",
   "autoPlanOnOpen",
   "autoExecuteMode",
   "toolsEnabled",
@@ -84,9 +86,12 @@ const BOOLEAN_FIELDS = [
   "salesPulseEnabled",
 ] as const satisfies readonly (keyof OrgSettings)[];
 
+/** The longest voice brief a workspace can store. */
+export const BRAND_VOICE_MAX_CHARS = 200;
+
 const STRING_FIELDS = [
   ["aiContext", 2000],
-  ["brandVoice", 200],
+  ["brandVoice", BRAND_VOICE_MAX_CHARS],
   ["autoAckMessage", 500],
   ["onboardingCompletedAt", 64],
   ["lastSuccessfulDigestAt", 64],
@@ -325,6 +330,32 @@ function readToolsEnabled(
   output.toolsEnabled = tools;
 }
 
+function readVoiceTraits(
+  value: Record<string, unknown>,
+  output: Record<string, unknown>,
+  context: ParseContext,
+): void {
+  if (!hasOwn(value, "voiceTraits")) return;
+  const candidate = value.voiceTraits;
+  if (!isRecord(candidate)) {
+    addIssue(context, "voiceTraits", "Expected an object");
+    return;
+  }
+
+  rejectUnknownKeys(candidate, VOICE_TRAITS.map((trait) => trait.id), "voiceTraits", context);
+  const traits: Record<string, string> = {};
+  for (const trait of VOICE_TRAITS) {
+    if (!hasOwn(candidate, trait.id)) continue;
+    const chosen = trait.options.find((option) => option.value === candidate[trait.id]);
+    if (chosen) {
+      traits[trait.id] = chosen.value;
+    } else {
+      addIssue(context, `voiceTraits.${trait.id}`, `Expected one of: ${trait.options.map((option) => option.value).join(", ")}`);
+    }
+  }
+  output.voiceTraits = traits;
+}
+
 function readBusinessHoursDays(
   value: Record<string, unknown>,
   output: Record<string, unknown>,
@@ -399,6 +430,7 @@ function parseSettingsObject(value: unknown, mode: ParseMode): OrgSettingsPatch 
   readEnum(value, "digestDays", DIGEST_DAYS, output, context);
   readEnum(value, "damageEvidence", DAMAGE_EVIDENCE_MODES, output, context);
   readToolsEnabled(value, output, context);
+  readVoiceTraits(value, output, context);
   readBusinessHoursDays(value, output, context);
 
   // Only a row written before autoExecuteMode existed falls back to the old

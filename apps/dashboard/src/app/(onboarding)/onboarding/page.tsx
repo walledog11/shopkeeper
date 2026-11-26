@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
-import { auth, clerkClient } from "@clerk/nextjs/server";
+import { auth, clerkClient, currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
+import { db } from "@shopkeeper/db";
 import { getE2EAuthIdentity } from "@/lib/e2e-auth";
 import { normalizeImessageLineHandle } from "@/lib/integrations/imessage-visibility";
 import { isShopifySimulatorEnabled } from "@/lib/integrations/shopify-simulator";
@@ -9,17 +10,27 @@ import { normalizeShopifyShopDomain } from "@/lib/shopify/oauth";
 import { readShopifyInstallClaim } from "@/lib/shopify/install-claim";
 import { resolveInstagramConnectTransport } from "@/lib/socialapi/config";
 import { isStorefrontChatGloballyEnabled } from "@/lib/storefront-chat/enabled";
-import {
-  resolveOnboardingStepIndex,
-  type OnboardingResumeStep,
-} from "@/lib/integrations/onboarding-setup";
 import { OnboardingExperience } from "./_components/OnboardingExperience";
-import { STEPS } from "./_lib/onboarding-model";
+import { STEPS, type OnboardingViewer } from "./_lib/onboarding-model";
 import { parseOAuthOutcome } from "@/lib/integrations/oauth-contract";
 
-function parseResumeStep(value: string | string[] | undefined): OnboardingResumeStep | null {
-  if (value === "shopify" || value === "email" || value === "connect" || value === "plan") return value;
-  return null;
+function parseResumeStep(value: string | string[] | undefined): number | null {
+  const idx = STEPS.findIndex(step => step.id === value);
+  return idx >= 0 ? idx : null;
+}
+
+// The person and workspace come from the server, so the first render is the
+// step itself rather than a wait for the sign-in script.
+async function loadViewer(userId: string | null, orgId: string | null, testLogin: boolean): Promise<OnboardingViewer> {
+  const [user, organization] = await Promise.all([
+    userId && !testLogin ? currentUser().catch(() => null) : null,
+    orgId ? db.organization.findUnique({ where: { clerkOrgId: orgId }, select: { name: true } }) : null,
+  ]);
+  return {
+    userId,
+    firstName: user?.firstName?.trim() || null,
+    organization: orgId ? { id: orgId, name: organization?.name ?? "" } : null,
+  };
 }
 
 // The wizard creates a workspace for someone who has none. A member with no
@@ -49,16 +60,14 @@ export default async function OnboardingPage({
   }>;
 }) {
   const params = await searchParams;
-  const { step } = params;
-  const resumeStep = parseResumeStep(step);
-  const pinnedStepIndex = resumeStep
-    ? resolveOnboardingStepIndex(resumeStep, 0, STEPS.map(s => s.id))
-    : null;
+  const pinnedStepIndex = parseResumeStep(params.step);
 
-  const { orgId, userId } = await auth();
-  if (!orgId && userId && !getE2EAuthIdentity() && await belongsToAWorkspace(userId)) {
+  const testLogin = getE2EAuthIdentity();
+  const { orgId, userId } = testLogin ?? await auth();
+  if (!orgId && userId && !testLogin && await belongsToAWorkspace(userId)) {
     redirect("/select-org");
   }
+  const viewer = await loadViewer(userId, orgId ?? null, Boolean(testLogin));
   const imessageHandle = normalizeImessageLineHandle(process.env.IMESSAGE_LINE_HANDLE);
   const shopifySimulatorEnabled = isShopifySimulatorEnabled();
   const instagramConnectTransport = resolveInstagramConnectTransport(orgId);
@@ -80,6 +89,7 @@ export default async function OnboardingPage({
 
   return (
     <OnboardingExperience
+      viewer={viewer}
       imessageHandle={imessageHandle}
       shopifySimulatorEnabled={shopifySimulatorEnabled}
       instagramConnectTransport={instagramConnectTransport}

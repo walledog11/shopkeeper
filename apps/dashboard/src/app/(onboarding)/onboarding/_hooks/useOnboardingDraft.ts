@@ -16,11 +16,9 @@ function reducer(state: DraftState, action: Action): DraftState {
   return { ...state, idx: Math.max(0, Math.min(STEPS.length - 1, action.idx)) };
 }
 
-export function useOnboardingDraft({ userId, organizationId, clerkLoaded, founderName, organizationName, pinnedStepIndex, savedEmail, suggestedShop = null }: {
-  userId: string | undefined;
+export function useOnboardingDraft({ userId, organizationId, organizationName, pinnedStepIndex, savedEmail, suggestedShop = null }: {
+  userId: string | null | undefined;
   organizationId: string | undefined;
-  clerkLoaded: boolean;
-  founderName: string | null | undefined;
   organizationName: string | null | undefined;
   pinnedStepIndex: number | null;
   savedEmail: string | undefined;
@@ -31,7 +29,7 @@ export function useOnboardingDraft({ userId, organizationId, clerkLoaded, founde
   const [state, dispatch] = useReducer(reducer, { data: DEFAULT_DATA, idx: pinnedStepIndex ?? 0, scope: null });
 
   useEffect(() => {
-    if (!clerkLoaded || !scope || state.scope === scope) return;
+    if (!scope || state.scope === scope) return;
     let stored = null;
     try { stored = parseStoredOnboardingState(localStorage.getItem(scope)); } catch { /* Storage is optional. */ }
     // Carry the draft into an organization just created by this user, never into another workspace.
@@ -41,10 +39,9 @@ export function useOnboardingDraft({ userId, organizationId, clerkLoaded, founde
       data: {
         ...data,
         storeName: organizationName || data.storeName,
-        founderName: founderName || data.founderName,
         shopDomain: suggestedShop || data.shopDomain,
       } });
-  }, [clerkLoaded, founderName, organizationName, pinnedStepIndex, scope, state, suggestedShop, userId]);
+  }, [organizationName, pinnedStepIndex, scope, state, suggestedShop, userId]);
 
   useEffect(() => {
     if (savedEmail) dispatch({ type: "patch", patch: { primaryEmail: savedEmail } });

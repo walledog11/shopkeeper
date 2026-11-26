@@ -13,7 +13,7 @@ export const AUTONOMY_TIERS: AutonomyTierOption[] = [
     id: "watch",
     label: "Draft only",
     cap: 0,
-    blurb: "Drafts everything. Nothing is sent or changed.",
+    blurb: "Drafts every reply for your OK. Refunds and order changes stay with you.",
   },
   {
     id: "guarded",

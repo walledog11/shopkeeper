@@ -5,6 +5,8 @@ import { parseMerchantAnswers } from "@shopkeeper/agent/reply-placeholders";
 import type { MerchantAnswers } from "@shopkeeper/agent/types";
 import { decodeAgentActionCursor, type AgentActionCursor } from "@/lib/agent/api/action-log";
 import type { RawToolCall } from "@/types";
+import { parseOrgSettingsPatch, type VoiceTraits } from "@shopkeeper/agent/settings";
+import { findVoiceScenario } from "@/lib/agent/voice";
 
 function invalidField(field: string, message: string, code = "invalid"): never {
   throw new BadRequestError("Validation failed", [{ code, field, message }]);
@@ -206,6 +208,40 @@ export function parseAgentVoiceBody(body: unknown) {
   return {
     action: parseOptionalString(candidate.action, "action"),
   };
+}
+
+export function parseVoicePreviewBody(body: unknown) {
+  const candidate = requireObject(body);
+  const scenario = findVoiceScenario(candidate.scenarioId);
+  if (!scenario) invalidField("scenarioId", "scenarioId must name a sample conversation");
+  return { traits: parseVoiceTraits(candidate.traits), scenario };
+}
+
+// The same validation a saved voice gets, so a preview can only be written in a
+// voice the merchant could save.
+function parseVoiceTraits(value: unknown): VoiceTraits {
+  try {
+    return parseOrgSettingsPatch({ voiceTraits: value ?? {} }).voiceTraits ?? {};
+  } catch {
+    invalidField("traits", "traits must choose a listed option for each named voice trait");
+  }
+}
+
+const VOICE_EXAMPLE_MAX_CHARS = 2000;
+
+export function parseVoiceExampleBody(body: unknown) {
+  const candidate = requireObject(body);
+  const scenario = findVoiceScenario(candidate.scenarioId);
+  if (!scenario) invalidField("scenarioId", "scenarioId must name a sample conversation");
+  const draft = (parseOptionalString(candidate.draft, "draft") ?? "").trim();
+  const reply = (parseOptionalString(candidate.reply, "reply") ?? "").trim();
+  if (!reply || reply.length > VOICE_EXAMPLE_MAX_CHARS) {
+    invalidField("reply", `Write a reply of up to ${VOICE_EXAMPLE_MAX_CHARS} characters`);
+  }
+  if (draft.length > VOICE_EXAMPLE_MAX_CHARS) {
+    invalidField("draft", `draft must be at most ${VOICE_EXAMPLE_MAX_CHARS} characters`);
+  }
+  return { scenario, draft, reply };
 }
 
 export type ActionLogMode = "human_approved" | "auto_executed" | "read_only";

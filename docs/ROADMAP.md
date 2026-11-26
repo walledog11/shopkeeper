@@ -25,24 +25,18 @@ item is checked by using the app in a browser, with screenshots in the PR.
    the narration that came with its last tool calls. Closes when a request forced past
    each limit answers from what it already found, and a request that still can't answer
    says so and reaches Sentry.
-3. **Cut what isn't the v1 support loop:** direct Meta Instagram, the
-   operator shop-management tools (flash sales, repricing), and the compatibility paths
-   and their audits that exist only for pre-launch data (reset the dev workspace
-   instead). Decide website chat and the Telegram test transport. Closes when they are
+3. **Cut the compatibility paths and their audits** that exist only for pre-launch data
+   (reset the dev workspace instead). Website chat and the Telegram test transport stay;
+   direct Meta Instagram stays until SocialAPI's review closes. Closes when they are
    deleted and the full loop still runs.
-4. **A Voice page.** Sample customer messages (recent real ones plus where's my order,
-   refund, damaged item, product question, angry customer), each with the reply the
-   agent would send, rewritten live as tone, length, sign-off or plain feedback ("less
-   formal") change. "Which sounds more like you?" puts two versions side by side; picks
-   and edits become the examples replies are written from (`VoiceEdit`). Not live A/B on
-   customers: a solo store's volume can't tell versions apart. Closes when a merchant sets
-   the voice without writing a brief and the next real draft matches it.
-5. **Onboarding built on the Voice page.** Install from Shopify; the agent introduces
-   itself and asks what a new hire would (what you sell, how returns work, what it must
-   never promise); it drafts replies to real recent messages, or ones built from the
-   store if no channel is connected; the merchant reacts and picks the voice; link the
-   phone; go live in draft-only. Closes when a fresh install reaches its first approved
-   draft without typing a store domain or setting up forwarding.
+4. **Voice practice on real replies.** The Voice page asks one customer question at a time
+   with two replies to pick from, and each pick sets one voice choice. Closes when a
+   merchant sets the voice by picking replies, and the next real draft matches it.
+5. **Practice questions from the merchant's own store.** Setup's voice step and the Voice
+   page's practice answer made-up customers. Draw them from the store's real recent
+   messages, or from its products and policies when no channel is connected. Closes when
+   a fresh install's first real message gets a draft the merchant approves, with no store
+   domain typed and no forwarding set up.
 6. **Four plain settings sections and a calmer app.** How it sounds; what it may do
    without asking (with examples, one money limit); when and where it reaches you;
    account and billing. Everything else takes a default. One place per job (Home stops
@@ -67,6 +61,7 @@ Resumes when *Next* is done, in this order.
 2. **Close SocialAPI vendor diligence** before any external merchant's data flows: DPA,
    written retention/deletion answers and the terms §11.4 contradiction. When SocialAPI
    answers, add its retention to `/privacy`. Gates are in [socialapi-s0-diligence](production/socialapi-s0-diligence-2026-09-07.md).
+   Direct Meta Instagram is the fallback until this closes; cut it once it passes.
 3. **First live SocialAPI merchant connect** (runbook: *Instagram via SocialAPI*). Closes
    when `verify:production:env` passes, a workspace connects from the dashboard, and its
    next DM routes to it. Needs a paid SocialAPI plan: Free allows 50 replies per billing
@@ -173,11 +168,9 @@ Resumes with the first real merchant.
   can be a rollback target ([agent-runtime](agent-runtime.md), *Deployment and
   rollback*). Retire the identity-less operator queue reader once
   `audit:operator-context-compatibility -- --strict` reports none.
-- **Moderate advisories in production dependencies:** Next 16.4.3 (an `unstable_cache`
-  disclosure; the home summary uses `unstable_cache`) and nodemailer below 10.1.4, whose
-  address parser reads the From header of every Gmail-synced message through
-  `mailparser` (`parseMime`). Both are pinned in the root `overrides`; CI's dependency
-  audit fails only on high. Closes when both are upgraded.
+- **Moderate advisories in production dependencies:** fast-uri (pinned at 3.1.8 in the
+  root `overrides`, inside the vulnerable range), glob and minimatch. CI's dependency
+  audit fails only on high. Closes when `npm audit --omit=dev` is clean.
 - **Postmark:** credential canary to an off-domain recipient, then restore the
   forwarding integration and send one reply with an attachment.
 - **Storefront chat on the dev store:** browser matrix, episode boundary, the
@@ -232,6 +225,9 @@ Resumes with the first real merchant.
 
 ## Decisions on record
 
+- **Flash sales and repricing stay.** They're how a merchant changes prices and runs a
+  sale from their phone. Cutting code means cutting what makes the app slower, flakier
+  or harder to use, never a capability a merchant would use. (2026-11-26)
 - **Work serves an item in *Next*.** Cleanups, consistency passes and refactors land only
   as part of one, and a change is done when it has been used in the app, not when its
   tests pass. Two weeks of cleanup PRs closed nothing. (2026-11-26)
