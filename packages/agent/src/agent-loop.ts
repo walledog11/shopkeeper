@@ -1,5 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { anthropic } from "./ai/anthropic.js";
+import { anthropic, isModelProviderError } from "./ai/anthropic.js";
 import logger from "./logger.js";
 import { resolveModelTuning } from "./model-tuning.js";
 import { recordSpend } from "./spend.js";
@@ -52,6 +52,25 @@ function capturedToolResult(name: string, outstandingFollowUps: ReadonlySet<stri
 const CAPTURE_TERMINAL_PROMPT =
   "You have not responded to the customer yet. Call send_reply now, or call escalate_to_human / ask_operator if you cannot resolve this. Do not stop without one of these tools.";
 
+// Sent with the one closing call an execute or read-only turn gets when it
+// reaches its step limit or token budget. Tools stay defined (the cached prefix
+// holds) but tool_choice forbids them, so the merchant gets an answer from what
+// the turn already read instead of a canned stop line or the narration that came
+// with its last tool calls.
+const LIMIT_ANSWER_PROMPT =
+  "This request has reached its limit, so no more tools can run. Answer now using only what you have already found and done: say what you found, what you did, and anything you could not finish. Do not say you will look anything else up.";
+
+// The result for a tool call the model asked for in the response that crossed
+// the token budget. Every tool_use needs a tool_result before the next call.
+const NOT_RUN_AT_LIMIT = "Not run: this request reached its limit before this step.";
+
+function firstText(content: readonly Anthropic.ContentBlock[]): string | null {
+  for (const block of content) {
+    if (block.type === "text") return block.text;
+  }
+  return null;
+}
+
 export type AgentLoopStop =
   | "end_turn"
   | "terminal_captured"
@@ -103,6 +122,10 @@ export interface RunAgentLoopParams {
   // Support planning sets this; operator planning does not (no customer to
   // reply to).
   captureReprompt?: boolean;
+  // execute / read_only: at the step limit or token budget, make one closing
+  // call that may not use tools and return its text as finalText (null if that
+  // call fails or says nothing). The stop reason still names the limit.
+  answerAtLimit?: boolean;
   // capture: add authorized discovery schemas within the same bounded turn.
   // Observations, transcript and budget are kept; discovery performs no effect
   // and is never recorded as a plan step.
@@ -276,10 +299,85 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
     reprompted,
   });
 
-  const iterate = async (i: number): Promise<AgentLoopResult> => {
-    if (i >= maxIterations) return done("max_iterations", null, i);
+  // The one closing call a turn gets at a limit (see LIMIT_ANSWER_PROMPT). The
+  // fences every call passes (stop, lease, task budget) apply and propagate as
+  // they do in `iterate`. Only a provider failure is caught: the turn has already
+  // reached its limit, and a failed closing call should leave it unanswered, not
+  // turn it into a failed turn.
+  const answerAtLimit = async (
+    stop: "max_iterations" | "token_budget",
+    iterations: number,
+    unansweredCalls: readonly Anthropic.ToolUseBlock[],
+  ): Promise<AgentLoopResult> => {
     ctx.assertExecutionAllowed?.();
-    if (tokenBudget !== undefined && usageTotals.budgetTokens >= tokenBudget) return done("token_budget", null, i);
+    params.signal?.throwIfAborted();
+    await params.beforeModelCall?.();
+    await ctx.taskBudget?.reserveModelCall();
+
+    messages.push({
+      role: "user",
+      content: [
+        ...unansweredCalls.map((call): Anthropic.ToolResultBlockParam => ({
+          type: "tool_result",
+          tool_use_id: call.id,
+          content: NOT_RUN_AT_LIMIT,
+          is_error: true,
+        })),
+        { type: "text", text: LIMIT_ANSWER_PROMPT },
+      ],
+    });
+
+    let response: Anthropic.Message;
+    try {
+      response = await timeStep({
+        organizationId: ctx.orgId,
+        threadId: (ctx as Partial<AgentContext>).thread?.id ?? null,
+        step: "model_call",
+        detail: `${mode} ${model} limit_answer`,
+      }, () => anthropic.messages.create({
+        model,
+        max_tokens: maxTokensPerCall,
+        system: systemPromptBlocks,
+        messages,
+        tools,
+        tool_choice: { type: "none" },
+        cache_control: { type: "ephemeral" },
+        ...resolveModelTuning(model, mode),
+      }, params.signal ? { signal: params.signal } : undefined));
+    } catch (error) {
+      if (params.signal?.aborted || !isModelProviderError(error)) throw error;
+      logger.error(
+        { err: error, orgId: ctx.orgId, stop, iterations },
+        "[agent] turn reached its limit and its closing answer failed",
+      );
+      return done(stop, null, iterations);
+    }
+
+    const usage = recordModelUsage(usageTotals, response);
+    await recordSpend(ctx.orgId, usage, model);
+    await ctx.taskBudget?.recordModelUsage(usage, model);
+    messages.push({ role: "assistant", content: response.content });
+
+    const answer = firstText(response.content)?.trim() || null;
+    if (answer) {
+      logger.info({ orgId: ctx.orgId, stop, iterations: iterations + 1, usage }, "[agent] answered at its limit");
+    } else {
+      logger.error(
+        { orgId: ctx.orgId, stop, stopReason: response.stop_reason },
+        "[agent] turn reached its limit and its closing answer was empty",
+      );
+    }
+    return done(stop, answer, iterations + 1);
+  };
+
+  const iterate = async (i: number): Promise<AgentLoopResult> => {
+    if (i >= maxIterations) {
+      return params.answerAtLimit ? answerAtLimit("max_iterations", i, []) : done("max_iterations", null, i);
+    }
+    ctx.assertExecutionAllowed?.();
+    if (tokenBudget !== undefined && usageTotals.budgetTokens >= tokenBudget) {
+      return params.answerAtLimit ? answerAtLimit("token_budget", i, []) : done("token_budget", null, i);
+    }
     params.signal?.throwIfAborted();
     await params.beforeModelCall?.();
     await ctx.taskBudget?.reserveModelCall();
@@ -345,13 +443,7 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
 
     messages.push({ role: "assistant", content: response.content });
 
-    let finalText: string | null = null;
-    for (const block of response.content) {
-      if (block.type === "text") {
-        finalText = block.text;
-        break;
-      }
-    }
+    const finalText = firstText(response.content);
 
     if (response.stop_reason === "max_tokens") return done("max_tokens", finalText, i + 1);
 
@@ -371,7 +463,11 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
     // that finished cleanly returns end_turn above with its finalText even if the
     // budget is exhausted. Weighted so cache traffic doesn't count at full price.
     if (tokenBudget !== undefined && usageTotals.budgetTokens >= tokenBudget) {
-      return done("token_budget", finalText, i + 1);
+      // finalText here is only the narration that came with the tool calls ("Let
+      // me check that order"), so an answering turn replaces it.
+      return params.answerAtLimit
+        ? answerAtLimit("token_budget", i + 1, toolUseBlocks)
+        : done("token_budget", finalText, i + 1);
     }
 
     if (mode === "capture") {

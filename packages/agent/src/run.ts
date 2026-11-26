@@ -365,6 +365,7 @@ export async function runAgent(
       usageTotals,
       runTools: (toolCalls) => executeToolCalls(toolCalls, { quoteModelRefunds: true }),
       getEscalationReason: () => escalationReason,
+      answerAtLimit: true,
       ...(readOnly ? {} : { tokenBudget: TOKEN_BUDGET }),
     });
 
@@ -375,17 +376,23 @@ export async function runAgent(
           actionsPerformed,
         }, "escalated");
       case "max_iterations":
+      case "token_budget": {
+        // At either limit the loop has already made its closing call, so
+        // finalText is the model's answer from what the turn found. A line of our
+        // own is only for when that call failed or said nothing, and it claims
+        // nothing about what ran: earlier steps of the turn may have.
+        const dispatchFailure = gatewayOperatorMode
+          ? summarizeOperatorTurnDispatchFailure(actionsPerformed)
+          : null;
         return finish({
-          summary: gatewayOperatorMode
-            ? (summarizeOperatorTurnDispatchFailure(actionsPerformed)
-              ?? (readOnly
-                ? "I could not finish answering that. Try asking a narrower question."
-                : "Reached maximum steps without completing the task."))
-            : readOnly
+          summary: dispatchFailure
+            ?? loop.finalText
+            ?? (readOnly
               ? "I could not finish answering that. Try asking a narrower question."
-              : "Reached maximum steps without completing the task.",
+              : "I couldn't finish that one. Ask again, or name the ticket or customer and I'll go straight to it."),
           actionsPerformed,
-        }, "max_iterations");
+        }, loop.stop);
+      }
       case "max_tokens":
         return finish({
           summary: readOnly
@@ -393,22 +400,6 @@ export async function runAgent(
             : "Agent response was cut off - the request may be too complex. Try breaking it into smaller steps.",
           actionsPerformed,
         }, "max_tokens");
-      case "token_budget": {
-        const dispatchFailure = gatewayOperatorMode
-          ? summarizeOperatorTurnDispatchFailure(actionsPerformed)
-          : null;
-        // The budget is a token ceiling, not a step count, and it is reached mid-turn
-        // with nothing sent. Saying "too many steps" described a four-call turn as
-        // the merchant's fault for asking too much, and said nothing about whether
-        // the customer had been written to. Say what is true: it stopped, and
-        // nothing went out.
-        return finish({
-          summary: dispatchFailure
-            ?? loop.finalText?.trim()
-            ?? "I ran out of room to finish that one, so I stopped before sending anything. Tell me the ticket or customer and I'll go straight at it.",
-          actionsPerformed,
-        }, "token_budget");
-      }
       default:
         return finish({
           summary: readOnly

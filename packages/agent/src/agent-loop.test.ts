@@ -163,6 +163,52 @@ describe("runAgentLoop token budget", () => {
     // The over-budget iteration stops before its tools run: only iter 0 executed.
     expect(runTools).toHaveBeenCalledTimes(1);
   });
+
+  it("answers at the budget instead of returning the narration that came with the last tool calls", async () => {
+    const narration = {
+      stop_reason: "tool_use",
+      content: [
+        { type: "text", text: "Let me check that order." },
+        { type: "tool_use", id: "tu_2", name: "get_shopify_orders", input: {} },
+      ],
+      usage: { input_tokens: 60, output_tokens: 0 },
+    };
+    mockCreate
+      .mockResolvedValueOnce(toolUse({ input_tokens: 60, output_tokens: 0 }))
+      .mockResolvedValueOnce(narration)
+      .mockResolvedValueOnce(endTurn("Order #1001 shipped Tuesday.", { input_tokens: 5, output_tokens: 5 }));
+    const messages: Parameters<typeof runAgentLoop>[0]["messages"] = [{ role: "user", content: "go" }];
+
+    const result = await runAgentLoop({
+      ctx,
+      mode: "execute",
+      messages,
+      systemPromptBlocks: [],
+      tools: [],
+      model: "test-model",
+      maxIterations: 10,
+      maxTokensPerCall: 4096,
+      tokenBudget: 100,
+      usageTotals: createModelUsageMetrics(),
+      runTools: toolResult,
+      getEscalationReason: () => null,
+      answerAtLimit: true,
+    });
+
+    expect(result.stop).toBe("token_budget");
+    expect(result.finalText).toBe("Order #1001 shipped Tuesday.");
+    const closing = mockCreate.mock.calls[2][0] as { tool_choice: unknown; messages: { role: string; content: unknown }[] };
+    expect(closing.tool_choice).toEqual({ type: "none" });
+    // The call the budget stopped is answered as not run, so the request is valid.
+    // (The mock holds the loop's own array, which has the answer appended since.)
+    expect(closing.messages.at(-2)).toMatchObject({
+      role: "user",
+      content: [
+        { type: "tool_result", tool_use_id: "tu_2", is_error: true },
+        { type: "text" },
+      ],
+    });
+  });
 });
 
 it('does not start another attempt after its shared token budget has been spent', async () => {

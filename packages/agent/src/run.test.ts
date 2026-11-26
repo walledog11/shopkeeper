@@ -214,8 +214,11 @@ describe("runAgent loop behavior", () => {
     expect(result.actionsPerformed[0].tool).toBe("add_internal_note");
   });
 
-  it("returns the exhaustion message when max iterations is reached", async () => {
-    mockCreate.mockResolvedValue(toolUse("update_thread_tag", { tag: "loop" }));
+  it("answers from what it found when it reaches max iterations", async () => {
+    mockCreate
+      .mockResolvedValueOnce(toolUse("update_thread_tag", { tag: "loop" }))
+      .mockResolvedValueOnce(toolUse("update_thread_tag", { tag: "loop" }, "tu_2"))
+      .mockResolvedValueOnce(endTurn("I tagged the thread twice but couldn't finish the rest."));
 
     const result = await runAgent(
       makeCtx(),
@@ -224,8 +227,10 @@ describe("runAgent loop behavior", () => {
       { ...AGENT_SETTINGS_DEFAULTS, maxIterations: 2 },
     );
 
-    expect(result.summary).toBe("Reached maximum steps without completing the task.");
+    expect(result.summary).toBe("I tagged the thread twice but couldn't finish the rest.");
     expect(result.actionsPerformed).toHaveLength(2);
+    expect(mockCreate).toHaveBeenCalledTimes(3);
+    expect(mockCreate.mock.calls[2][0]).toMatchObject({ tool_choice: { type: "none" } });
   });
 });
 
