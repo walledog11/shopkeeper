@@ -16,6 +16,7 @@ export {
   type OrgSettingsValidationIssue,
 } from "./settings-parser.js";
 export type { OrgSettingsPatch } from "./types.js";
+export { VOICE_TRAITS, voiceGuidance, type VoiceTraitId, type VoiceTraits } from "./voice-traits.js";
 
 export type AutonomyTier = NonNullable<OrgSettings["autonomyTier"]>;
 export type AutoExecuteMode = NonNullable<OrgSettings["autoExecuteMode"]>;

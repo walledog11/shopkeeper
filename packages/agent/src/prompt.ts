@@ -1,5 +1,6 @@
 import type { OrgSettings } from "./types.js";
 import { merchantLocalTime, resolveAgentSettings } from "./settings.js";
+import { voiceGuidance } from "./voice-traits.js";
 import { isOperatorChannel, ORDER_VERIFICATION_CHANNELS } from "./thread-constants.js";
 import {
   hasUnresolvedShopifyCustomer,
@@ -39,8 +40,11 @@ function buildMerchantPreferencesSection(ctx: AgentContext): string {
 }
 
 function buildVoiceSection(s: OrgSettings): string {
-  if (!s.brandVoice?.trim()) return "";
-  return `\n\n## Voice\nMatch this tone in every customer-facing reply:\n${promptText(s.brandVoice, CONTEXT_BUDGETS.brandVoiceChars)}`;
+  const lines = [...voiceGuidance(s.voiceTraits), promptText(s.brandVoice, CONTEXT_BUDGETS.brandVoiceChars)]
+    .filter(Boolean);
+  // The Memory page shows these same lines, so the merchant reads what the agent reads.
+  if (lines.length === 0) return "";
+  return `\n\n## Voice\nMatch this tone in every customer-facing reply:\n${lines.join("\n")}`;
 }
 
 /**

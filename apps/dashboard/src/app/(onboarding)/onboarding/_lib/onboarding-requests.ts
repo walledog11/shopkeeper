@@ -1,3 +1,4 @@
+import type { VoiceTraits } from "@shopkeeper/agent/settings";
 import { requestJson, requestOk } from "@/lib/api/fetcher";
 
 export interface OnboardingSettingsRequest {
@@ -8,7 +9,7 @@ export interface OnboardingSettingsRequest {
     digestTimezone?: string;
     onboardingCompletedAt?: string;
     aiContext?: string;
-    brandVoice?: string;
+    voiceTraits?: VoiceTraits;
   };
 }
 

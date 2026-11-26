@@ -20,6 +20,7 @@ import {
   type OAuthOutcome,
 } from "@/lib/integrations/oauth-contract";
 import { claimShopifyInstall, updateShopifyStorefrontChat } from "@/lib/integrations/requests";
+import { VOICE_PRESETS } from "@/lib/agent/voice";
 import { isShopifyIntegrationActive } from "@/lib/integrations/shopify-connection";
 import { captureClientProductEvent } from "@/lib/product-events";
 import type { Integration } from "@/types";
@@ -302,14 +303,15 @@ export function useOnboardingFlow(
     }
   }, [refreshIntegrations]);
 
-  const canContinue = stepId === "shopify" ? hasShopify : stepId === "voice" ? Boolean(data.voice) : true;
+  const voicePreset = VOICE_PRESETS.find(preset => preset.label === data.voice);
+  const canContinue = stepId === "shopify" ? hasShopify : stepId === "voice" ? Boolean(voicePreset) : true;
 
   const { run: runNext, state: nextState } = useSingleFlightOperation(async () => {
     if (!canContinue) return false;
     if (stepId === "shopify" && !await runSettings().catch(() => false)) return false;
     const storeProfile = composeStoreProfile(data);
     if (stepId === "about" && storeProfile && !await runSave({ aiContext: storeProfile }).catch(() => false)) return false;
-    if (stepId === "voice" && !await runSave({ brandVoice: data.voice }).catch(() => false)) return false;
+    if (stepId === "voice" && voicePreset && !await runSave({ voiceTraits: voicePreset.traits }).catch(() => false)) return false;
 
     // A skipped channel or phone step isn't a completed one.
     const skipped = (stepId === "email" && !hasCustomerChannel) || (stepId === "connect" && !hasMessaging);

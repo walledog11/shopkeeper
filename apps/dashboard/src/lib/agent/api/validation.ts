@@ -5,7 +5,7 @@ import { parseMerchantAnswers } from "@shopkeeper/agent/reply-placeholders";
 import type { MerchantAnswers } from "@shopkeeper/agent/types";
 import { decodeAgentActionCursor, type AgentActionCursor } from "@/lib/agent/api/action-log";
 import type { RawToolCall } from "@/types";
-import { BRAND_VOICE_MAX_CHARS } from "@shopkeeper/agent/settings";
+import { parseOrgSettingsPatch, type VoiceTraits } from "@shopkeeper/agent/settings";
 import { findVoiceScenario } from "@/lib/agent/voice";
 
 function invalidField(field: string, message: string, code = "invalid"): never {
@@ -210,30 +210,38 @@ export function parseAgentVoiceBody(body: unknown) {
   };
 }
 
-function parseVoiceBrief(value: unknown): string {
-  const brief = (parseOptionalString(value, "brief") ?? "").trim();
-  if (brief.length > BRAND_VOICE_MAX_CHARS) {
-    invalidField("brief", `brief must be at most ${BRAND_VOICE_MAX_CHARS} characters`);
-  }
-  return brief;
-}
-
 export function parseVoicePreviewBody(body: unknown) {
   const candidate = requireObject(body);
   const scenario = findVoiceScenario(candidate.scenarioId);
   if (!scenario) invalidField("scenarioId", "scenarioId must name a sample conversation");
-  return { brief: parseVoiceBrief(candidate.brief), scenario };
+  return { traits: parseVoiceTraits(candidate.traits), scenario };
 }
 
-export function parseVoiceRewriteBody(body: unknown) {
+// The same validation a saved voice gets, so a preview can only be written in a
+// voice the merchant could save.
+function parseVoiceTraits(value: unknown): VoiceTraits {
+  try {
+    return parseOrgSettingsPatch({ voiceTraits: value ?? {} }).voiceTraits ?? {};
+  } catch {
+    invalidField("traits", "traits must choose a listed option for each named voice trait");
+  }
+}
+
+const VOICE_EXAMPLE_MAX_CHARS = 2000;
+
+export function parseVoiceExampleBody(body: unknown) {
   const candidate = requireObject(body);
-  const change = (parseOptionalString(candidate.change, "change") ?? "").trim();
-  if (!change || change.length > 300) invalidField("change", "Say what to change, in up to 300 characters");
-  return { brief: parseVoiceBrief(candidate.brief), change };
-}
-
-export function parseVoiceAlternativesBody(body: unknown) {
-  return { brief: parseVoiceBrief(requireObject(body).brief) };
+  const scenario = findVoiceScenario(candidate.scenarioId);
+  if (!scenario) invalidField("scenarioId", "scenarioId must name a sample conversation");
+  const draft = (parseOptionalString(candidate.draft, "draft") ?? "").trim();
+  const reply = (parseOptionalString(candidate.reply, "reply") ?? "").trim();
+  if (!reply || reply.length > VOICE_EXAMPLE_MAX_CHARS) {
+    invalidField("reply", `Write a reply of up to ${VOICE_EXAMPLE_MAX_CHARS} characters`);
+  }
+  if (draft.length > VOICE_EXAMPLE_MAX_CHARS) {
+    invalidField("draft", `draft must be at most ${VOICE_EXAMPLE_MAX_CHARS} characters`);
+  }
+  return { scenario, draft, reply };
 }
 
 export type ActionLogMode = "human_approved" | "auto_executed" | "read_only";

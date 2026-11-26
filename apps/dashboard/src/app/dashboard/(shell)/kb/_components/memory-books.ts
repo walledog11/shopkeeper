@@ -32,7 +32,7 @@ export interface MemoryBook {
 interface StoreProfile {
   name: string
   aiContext: string
-  brandVoice: string
+  voice: string
   voiceProposal: VoiceProposal | null
 }
 
@@ -106,10 +106,10 @@ export function buildMemoryBooks(
       kind: "tone",
       title: "Tone & voice",
       description: "How the agent should sound when it speaks for you.",
-      pages: storeProfile.brandVoice.trim() ? [{
+      pages: storeProfile.voice ? [{
         id: "tone:brief",
-        title: "Voice brief",
-        body: storeProfile.brandVoice.trim(),
+        title: "Your voice",
+        body: storeProfile.voice,
         articleId: null,
         updatedAt: null,
       }] : [],

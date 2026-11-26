@@ -10,8 +10,9 @@ import { parseVoicePreviewBody } from "@/lib/agent/api/validation";
 export const maxDuration = 60;
 
 // The reply the agent would send to one sample customer in a voice the merchant
-// is trying out. Same model and same voice section as a real draft; a text-only
-// call, so nothing is sent, stored or changed.
+// is trying out: their saved notes with the trait choices being compared. Same
+// model and same voice section as a real draft; a text-only call, so nothing is
+// sent, stored or changed.
 export const POST = withOrgRoute(
   {
     context: "Voice preview POST",
@@ -20,10 +21,10 @@ export const POST = withOrgRoute(
     rateLimit: { key: "agent:voice-preview", limit: 40, windowSecs: 60 },
   },
   async ({ org, request }) => {
-    const { brief, scenario } = parseVoicePreviewBody(await readRequiredJsonObject(request));
+    const { traits, scenario } = parseVoicePreviewBody(await readRequiredJsonObject(request));
     const settings = resolveAgentSettings(org.settings);
     const reply = await generateText(
-      buildVoicePreviewPrompt(org.name, { ...settings, brandVoice: brief }),
+      buildVoicePreviewPrompt(org.name, { ...settings, voiceTraits: traits }),
       [{
         role: "user",
         content: JSON.stringify({ customerName: scenario.customerName, message: scenario.message, facts: scenario.facts }),

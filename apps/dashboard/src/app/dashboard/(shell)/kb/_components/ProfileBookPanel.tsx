@@ -60,12 +60,12 @@ export function ProfileBookPanel({ book, profile }: { book: MemoryBook; profile:
               onResolve={accept => resolveVoiceProposal(accept ? "approve" : "dismiss")}
             />
           ) : null}
-          <p className="text-sm text-muted-foreground">
-            {storeProfile.brandVoice.trim() || "No voice set yet."}{" "}
-            <Link href={voiceNavItem.href} className="font-medium text-strong underline underline-offset-4">
-              Hear it and change it on the Voice page
-            </Link>
+          <p className="whitespace-pre-line text-sm text-muted-foreground">
+            {storeProfile.voice || "No voice set yet."}
           </p>
+          <Link href={voiceNavItem.href} className="text-sm font-medium text-strong underline underline-offset-4">
+            Teach it your voice on the Voice page
+          </Link>
         </>
       ) : (
         <PreferencesPanel profile={profile} />

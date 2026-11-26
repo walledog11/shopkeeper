@@ -29,18 +29,14 @@ item is checked by using the app in a browser, with screenshots in the PR.
    (reset the dev workspace instead). Website chat and the Telegram test transport stay;
    direct Meta Instagram stays until SocialAPI's review closes. Closes when they are
    deleted and the full loop still runs.
-4. **A Voice page.** Sample customer messages (recent real ones plus where's my order,
-   refund, damaged item, product question, angry customer), each with the reply the
-   agent would send, rewritten live as tone, length, sign-off or plain feedback ("less
-   formal") change. "Which sounds more like you?" puts two versions side by side; picks
-   and edits become the examples replies are written from (`VoiceEdit`). Not live A/B on
-   customers: a solo store's volume can't tell versions apart. Closes when a merchant sets
-   the voice without writing a brief and the next real draft matches it.
-5. **Onboarding replies from the merchant's own store.** Setup's voice step answers a
-   made-up customer. Draft its samples from the store's real recent messages, or from its
-   products and policies when no channel is connected. Closes when a fresh install's
-   first real message gets a draft the merchant approves, with no store domain typed and
-   no forwarding set up.
+4. **Voice practice on real replies.** The Voice page asks one customer question at a time
+   with two replies to pick from, and each pick sets one voice choice. Closes when a
+   merchant sets the voice by picking replies, and the next real draft matches it.
+5. **Practice questions from the merchant's own store.** Setup's voice step and the Voice
+   page's practice answer made-up customers. Draw them from the store's real recent
+   messages, or from its products and policies when no channel is connected. Closes when
+   a fresh install's first real message gets a draft the merchant approves, with no store
+   domain typed and no forwarding set up.
 6. **Four plain settings sections and a calmer app.** How it sounds; what it may do
    without asking (with examples, one money limit); when and where it reaches you;
    account and billing. Everything else takes a default. One place per job (Home stops

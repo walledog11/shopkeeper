@@ -14,7 +14,7 @@ export interface OnboardingData {
   sells: string;
   returns: string;
   never: string;
-  /** The voice the merchant picked from the sample replies. */
+  /** The starting voice the merchant picked from the sample replies, by its label. */
   voice: string;
 }
 

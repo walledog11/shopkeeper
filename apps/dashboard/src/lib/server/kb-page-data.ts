@@ -1,5 +1,5 @@
 import { db, parseVoiceProposal } from '@shopkeeper/db';
-import { normalizeStoredOrgSettings } from '@shopkeeper/agent/settings';
+import { normalizeStoredOrgSettings, voiceGuidance } from '@shopkeeper/agent/settings';
 import type { KnowledgeBase, VoiceProposal } from '@/types';
 import { getMerchantPreferencesPageData, type MerchantPreferencesPageData } from '@/lib/server/merchant-preferences-data';
 
@@ -8,7 +8,8 @@ export interface KbPageData {
   storeProfile: {
     name: string;
     aiContext: string;
-    brandVoice: string;
+    /** The voice as the agent reads it: what the Voice page learned, then the merchant's notes. */
+    voice: string;
     voiceProposal: VoiceProposal | null;
   };
   preferences: MerchantPreferencesPageData;
@@ -72,7 +73,7 @@ export async function getKbPageData(org: {
     storeProfile: {
       name: org.name,
       aiContext: settings.aiContext ?? '',
-      brandVoice: settings.brandVoice ?? '',
+      voice: [...voiceGuidance(settings.voiceTraits), settings.brandVoice?.trim() ?? ''].filter(Boolean).join('\n'),
       voiceProposal: parseVoiceProposal(org.voiceProposal),
     },
     preferences,

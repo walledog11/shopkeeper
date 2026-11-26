@@ -7,5 +7,6 @@ export const metadata: Metadata = { title: "Voice" }
 
 export default async function VoicePage() {
   const org = await getOrCreateOrg()
-  return <VoicePageClient initialBrief={resolveAgentSettings(org.settings).brandVoice} />
+  const settings = resolveAgentSettings(org.settings)
+  return <VoicePageClient initialTraits={settings.voiceTraits ?? {}} initialNotes={settings.brandVoice} />
 }
