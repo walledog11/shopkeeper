@@ -471,7 +471,7 @@ letter (F) is not reused.
   `create_gift_card`, `create_exchange`, `create_shopify_order`) without a
   photo. `damageEvidenceState` is the one owner of where a claim stands. The
   agent asks once, and only on a channel that can carry a photo
-  (`shouldHydrateAgentMessageImages`: Instagram, email, TikTok), which is the
+  (`shouldHydrateAgentMessageImages`: Instagram, email), which is the
   only time `await_customer_photo` is offered. Compensation proposed without a
   photo, a reply to the ask that has none, or a channel that cannot carry one
   raises the structural `damage_photo_missing` escalation, never an approvable
@@ -499,7 +499,7 @@ letter (F) is not reused.
   Reopen this only on a new observed failure. `search_kb` itself
   returns and cites only the candidates `selectAnsweringKbArticles` judges to
   answer the query, and not_found when none do or the check cannot decide.
-- **Q. An Instagram or TikTok sender confirms an order by its email or shipping
+- **Q. An Instagram sender confirms an order by its email or shipping
   zip.** When the sender has no linked Shopify customer and asks to change an
   order or reports a damaged, defective or wrong item
   (`requestNeedsOrderVerification`), the agent asks which order, then for the

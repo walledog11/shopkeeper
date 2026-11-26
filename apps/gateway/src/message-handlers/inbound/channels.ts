@@ -10,8 +10,6 @@ import {
   downloadInstagramAttachment,
   isSupportedInstagramBinaryAttachment,
 } from '../../clients/instagram-media.js';
-import { normalizeTikTokShopWebhookPayload } from '../../clients/tiktok-shop.js';
-import { downloadTikTokShopImage } from '../../clients/tiktok-shop-media.js';
 import logger from '../../logger.js';
 import { CHANNEL, STATUS } from '../../constants.js';
 import { loadActiveInstagramIntegration } from '../../lib/instagram-integration.js';
@@ -146,18 +144,6 @@ async function persistProviderAttachments<T>(
   return (await mapWithConcurrency(accepted, limits.uploadConcurrency, item =>
     uploadOrgAttachment(organizationId, item.name, item.contentType, item.contentBase64, messageIdentity),
   )).filter((ref): ref is string => ref !== null);
-}
-
-function formatTikTokShopMessage(
-  text: string,
-  storedAttachmentCount: number,
-): string {
-  const trimmed = text.trim();
-  const parts = trimmed && trimmed !== '[Attachment]' ? [trimmed] : [];
-  if (storedAttachmentCount > 0) {
-    parts.push('[TikTok image attachment]');
-  }
-  return parts.join('\n') || '[Attachment]';
 }
 
 export async function handleIgDmJob(job: Job<InboundJobData>, aiSummaryQueue: Queue): Promise<void> {
@@ -480,56 +466,4 @@ export async function handleShopifyJob(job: Job<InboundJobData>): Promise<void> 
   const { topic, rawPayload } = job.data as { topic: string; rawPayload: ShopifyOrderPayload };
   if (topic !== 'orders/create') return;
   await recordConversationAttributionSafely(organizationId, rawPayload, traceId);
-}
-
-export async function handleTikTokShopJob(job: Job<InboundJobData>, aiSummaryQueue: Queue): Promise<void> {
-  const { organizationId, traceId } = job.data;
-  const message = job.data.tiktokMessage ?? normalizeTikTokShopWebhookPayload(job.data.rawPayload);
-
-  if (!message || message.isEcho) return;
-  const integration = await db.integration.findFirst({
-    where: {
-      ...(job.data.integrationId ? { id: job.data.integrationId } : {}),
-      organizationId, platform: CHANNEL.TIKTOK, externalAccountId: message.accountId, lifecycleStatus: 'active',
-    },
-    select: { id: true },
-  });
-  if (!integration) return;
-  const externalMessageId = job.data.inboundMessageId ?? (message.messageId ? `tiktok:${message.accountId}:${message.messageId}` : null);
-  if (await alreadyIngested(organizationId, externalMessageId, aiSummaryQueue)) return;
-
-  const buyerIdentity = message.buyerId ?? message.conversationId;
-  const platformId = `tiktok:${message.accountId}:${buyerIdentity}`;
-
-  try {
-    const storedAttachmentRefs = await persistProviderAttachments(
-      organizationId,
-      message.attachments,
-      downloadTikTokShopImage,
-      externalMessageId,
-    );
-    const messageText = formatTikTokShopMessage(message.text, storedAttachmentRefs.length);
-
-    await processInboundMessage(organizationId, platformId, CHANNEL.TIKTOK, messageText, aiSummaryQueue, {
-      attachments: storedAttachmentRefs,
-      customerName: message.customerName,
-      externalMessageId,
-      integrationId: integration.id,
-      externalSpaceId: message.conversationId,
-      traceId,
-      isRealCustomerMessage: true,
-    });
-    logger.info(
-      {
-        accountId: message.accountId,
-        conversationId: message.conversationId,
-        organizationId,
-        traceId,
-      },
-      '[Worker] Successfully saved TikTok Shop buyer message',
-    );
-  } catch (error) {
-    logger.error({ err: error, traceId }, '[Worker] DB operation failed for TikTok Shop buyer message');
-    throw error;
-  }
 }

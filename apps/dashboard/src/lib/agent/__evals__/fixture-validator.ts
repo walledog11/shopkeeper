@@ -11,7 +11,6 @@ const SUITES = new Set(["core", "extended"])
 const CHANNELS = new Set([
   "ig_dm",
   "email",
-  "tiktok",
   "shopify",
   "operator",
   "shopify_chat",

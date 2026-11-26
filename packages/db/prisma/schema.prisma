@@ -1272,7 +1272,7 @@ enum OrderVerificationMethod {
   zip
 }
 
-// What a direct-message sender (Instagram, TikTok) has shown about one order:
+// What a direct-message sender (Instagram) has shown about one order:
 // that they know its email or shipping zip. Gateway code compares the customer's
 // own message with Shopify; the model only records that it asked. Keyed to the
 // sender, the store and the order, so it survives an episode rollover and never

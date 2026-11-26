@@ -7,11 +7,57 @@ Technical contracts and settled engineering decisions live with the code they go
 ([agent-runtime](agent-runtime.md), [runbook](production/runbook.md),
 [transport plan](socialapi-transport-plan.md)), not here.
 
-Last updated: 2026-11-18.
+Last updated: 2026-11-26.
 
-## Next — the first real merchant
+## Next — make the app ready to use
 
-In order. This is the product's critical path.
+In order. Using the app showed it isn't ready for a merchant: requests that end without
+an answer, a setup that asks for chores before showing the agent, settings a first-time
+owner can't judge, and no way to hear the agent's voice before a customer does. Every
+item is checked by using the app in a browser, with screenshots in the PR.
+
+1. **Run the real agent in the cloud dev environment.** The dashboard, gateway and
+   simulated Shopify store already run there; the models need an Anthropic key on the
+   environment. Closes when a seeded store plans a ticket and answers a merchant request
+   with the real models.
+2. **No request ends without an answer.** At the step limit or token budget a merchant
+   request ends on a canned line ("Reached maximum steps…", "I ran out of room…") or on
+   the narration that came with its last tool calls. Closes when a request forced past
+   each limit answers from what it already found, and a request that still can't answer
+   says so and reaches Sentry.
+3. **Cut what isn't the v1 support loop:** direct Meta Instagram, the
+   operator shop-management tools (flash sales, repricing), and the compatibility paths
+   and their audits that exist only for pre-launch data (reset the dev workspace
+   instead). Decide website chat and the Telegram test transport. Closes when they are
+   deleted and the full loop still runs.
+4. **A Voice page.** Sample customer messages (recent real ones plus where's my order,
+   refund, damaged item, product question, angry customer), each with the reply the
+   agent would send, rewritten live as tone, length, sign-off or plain feedback ("less
+   formal") change. "Which sounds more like you?" puts two versions side by side; picks
+   and edits become the examples replies are written from (`VoiceEdit`). Not live A/B on
+   customers: a solo store's volume can't tell versions apart. Closes when a merchant sets
+   the voice without writing a brief and the next real draft matches it.
+5. **Onboarding built on the Voice page.** Install from Shopify; the agent introduces
+   itself and asks what a new hire would (what you sell, how returns work, what it must
+   never promise); it drafts replies to real recent messages, or ones built from the
+   store if no channel is connected; the merchant reacts and picks the voice; link the
+   phone; go live in draft-only. Closes when a fresh install reaches its first approved
+   draft without typing a store domain or setting up forwarding.
+6. **Four plain settings sections and a calmer app.** How it sounds; what it may do
+   without asking (with examples, one money limit); when and where it reaches you;
+   account and billing. Everything else takes a default. One place per job (Home stops
+   duplicating the inbox), one request per page instead of 4–10, and a phone-first pass
+   over every screen, text and email the merchant gets. Closes when every remaining
+   setting is a question a first-time shop owner can answer.
+
+Alongside, on a deadline: **expiring Shopify offline tokens, before 2027-01-01** (built;
+runbook *Shopify access tokens*). Closes when the gateway holds `SHOPIFY_CLIENT_ID` and
+`SHOPIFY_CLIENT_SECRET` and the dev store's integration has a refresh token: opening the
+app in Shopify admin, or the next daily token-health run, swaps its non-expiring token.
+
+## Paused — the first real merchant
+
+Resumes when *Next* is done, in this order.
 
 1. **Run an unlinked Instagram sender's damage claim with a photo** through order
    confirmation. Closes when the agent asks for the order, then its email or zip, then a
@@ -30,26 +76,23 @@ In order. This is the product's critical path.
    the brand's listing and, after reconnecting, the same sender's next DM lands on the
    same customer and a reply reaches them. If SocialAPI issues new author IDs on
    reconnect, record that in the transport plan (invariant 6) instead.
-5. **Expiring Shopify offline tokens, before 2027-01-01** (built; runbook *Shopify access
-   tokens*). Closes when the gateway holds `SHOPIFY_CLIENT_ID` and `SHOPIFY_CLIENT_SECRET`
-   and the dev store's integration has a refresh token: opening the app in Shopify admin,
-   or the next daily token-health run, swaps its non-expiring token.
-6. **Re-prove every Shopify write after the GraphQL rewrite.** #254–#256 replaced every
+5. **Re-prove every Shopify write after the GraphQL rewrite.** #254–#256 replaced every
    Shopify read and write, and evals cannot see this layer. Run `canary:shopify-mutations
    -- --validate`, then `-- --execute` on the dev store, and one `simulate:refund`. Closes
    when every write passes and no Shopify write has changed since.
-7. **Install the Shopify app on a real, non-dev store.** First check its distribution in
+6. **Install the Shopify app on a real, non-dev store.** First check its distribution in
    the Partner dashboard; it can't be changed once chosen. Custom distribution installs on
-   one store (or one Plus organization), so it can't serve item 8. Public distribution
+   one store (or one Plus organization), so it can't serve item 7. Public distribution
    needs Shopify's app review before any non-development install, even unlisted (next
    section). Closes when the install grants every `SHOPIFY_OAUTH_SCOPES` scope and a
    missing scope shows the reconnect path.
-8. **Two supervised external merchants** complete real approved loops with no
+7. **Two supervised external merchants** complete real approved loops with no
    wrong-recipient, unauthorized-money, duplicate-action or lost-message incident.
 
-## Next — Shopify App Store submission
+## Paused — Shopify App Store submission
 
 The first publication is the App Store. These block review or a new install's first day.
+Resumes with the first real merchant.
 
 1. **Charge through Shopify** (built: Shopify App Pricing, plans read from the Partner API;
    runbook *Shopify install and billing*). Closes when the `starter` and `pro` plans exist in the
@@ -108,8 +151,6 @@ The first publication is the App Store. These block review or a new install's fi
   the operator thread quotes the customer's message, the draft and each write's values
   (an address, a note), and operator turns read it back as an assistant row without
   `wrapUntrusted`. Wrap the customer-derived spans where cards are mirrored.
-- **Dashboard refinement, next:** a phone-width pass, then a read of every text and
-  email the merchant receives.
 - **Concurrency-safe LLM allowances.** Parallel calls can spend the same remainder, and a
   usage write that fails (or names an unpriced model) is logged by `recordSpend` and
   dropped. Reserve before each provider call and reconcile after; keep unknown
@@ -164,7 +205,6 @@ The first publication is the App Store. These block review or a new install's fi
 
 | Trigger | Work |
 | --- | --- |
-| A merchant asks for TikTok Shop | Configure-and-enable or cut — no more adapter code |
 | A merchant asks for account binding | Storefront chat Customer Account OAuth (blockers in the storefront doc) |
 | A merchant asks to change a line quantity | Quantity edits in `edit_shopify_order` |
 | The first merchant chooses email forwarding | Verify their sending domain in Postmark |
@@ -192,6 +232,9 @@ The first publication is the App Store. These block review or a new install's fi
 
 ## Decisions on record
 
+- **Work serves an item in *Next*.** Cleanups, consistency passes and refactors land only
+  as part of one, and a change is done when it has been used in the app, not when its
+  tests pass. Two weeks of cleanup PRs closed nothing. (2026-11-26)
 - **Make it work before making it certifiable.** A gate or hardening item earns its place
   once the path it guards runs. Money, tenant isolation and truthful outcomes are never
   skipped. (2026-09-10)

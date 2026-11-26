@@ -76,7 +76,6 @@ export const reference: Category = {
         {
           heading: "Coming soon",
           steps: [
-            "TikTok — Shop messages and video comments.",
             "Shopify — Order and Inbox messages.",
           ],
         },

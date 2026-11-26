@@ -465,8 +465,8 @@ column, and whenever a tool starts failing-and-warning for no apparent reason.
 
 ## Webhook Routing
 
-Point provider traffic directly at the gateway. The dashboard's `/api/webhooks/meta`,
-`/api/webhooks/email` and `/api/webhooks/tiktok-shop` routes are local-development proxies.
+Point provider traffic directly at the gateway. The dashboard's `/api/webhooks/meta` and
+`/api/webhooks/email` routes are local-development proxies.
 
 | Provider | Production URL |
 | --- | --- |
@@ -477,7 +477,6 @@ Point provider traffic directly at the gateway. The dashboard's `/api/webhooks/m
 | Photon Spectrum (iMessage operator) | `https://<gateway>/webhooks/photon` |
 | SocialAPI (Instagram) | `https://<gateway>/webhooks/socialapi` |
 | Meta (direct Instagram) | `https://<gateway>/webhooks/meta` |
-| TikTok Shop (gated off) | `https://<gateway>/webhooks/tiktok-shop` |
 | Clerk lifecycle | `https://<dashboard>/api/webhooks/clerk` |
 | Stripe | `https://<dashboard>/api/billing/webhook` |
 

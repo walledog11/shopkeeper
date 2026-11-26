@@ -1,4 +1,4 @@
-export const CHANNEL = { IG_DM: 'ig_dm', EMAIL: 'email', SHOPIFY: 'shopify', SHOPIFY_CHAT: 'shopify_chat', TIKTOK: 'tiktok' } as const;
+export const CHANNEL = { IG_DM: 'ig_dm', EMAIL: 'email', SHOPIFY: 'shopify', SHOPIFY_CHAT: 'shopify_chat' } as const;
 export const STATUS = { OPEN: 'open' } as const;
 export const MODEL = {
   // Brand-voice synthesis rewrites a setting that shapes every future reply and
@@ -44,7 +44,6 @@ export const QUEUE = {
 } as const;
 export const JOB = {
   IG_DM: 'process-ig-dm',
-  TIKTOK_SHOP: 'process-tiktok-shop-message',
   EMAIL: 'process-email',
   TOKEN_HEALTH_CHECK: 'check-ig-tokens',
   TOKEN_HEALTH_ID: 'ig-token-health-daily',

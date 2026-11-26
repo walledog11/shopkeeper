@@ -7,7 +7,6 @@ import { normalizeImessageLineHandle } from "@/lib/integrations/imessage-visibil
 import { getShopifyOAuthAuthorizeConfig } from "@/lib/env"
 import { resolveInstagramConnectTransport } from "@/lib/socialapi/config"
 import { isStorefrontChatGloballyEnabled } from "@/lib/storefront-chat/enabled"
-import { isTikTokShopOAuthConfigured } from "@/lib/tiktok-shop/config"
 import { getOrCreateOrg } from "@/lib/server/org"
 import { getIntegrationsForOrg } from "@/lib/server/integrations-list"
 
@@ -19,7 +18,6 @@ export default async function IntegrationsPage() {
   const initialIntegrations = await getIntegrationsForOrg(org)
   const imessageHandle = normalizeImessageLineHandle(process.env.IMESSAGE_LINE_HANDLE)
   const instagramConnectTransport = resolveInstagramConnectTransport(orgId)
-  const tiktokShopConfigured = isTikTokShopOAuthConfigured()
   const storefrontChatGloballyEnabled = isStorefrontChatGloballyEnabled()
   const shopifyClientId = getShopifyOAuthAuthorizeConfig()?.clientId ?? null
 
@@ -28,7 +26,6 @@ export default async function IntegrationsPage() {
       <IntegrationsPageClient
         imessageHandle={imessageHandle}
         instagramConnectTransport={instagramConnectTransport}
-        tiktokShopConfigured={tiktokShopConfigured}
         initialIntegrations={initialIntegrations}
         shopifyClientId={shopifyClientId}
         storefrontChatGloballyEnabled={storefrontChatGloballyEnabled}

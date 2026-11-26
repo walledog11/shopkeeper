@@ -6,8 +6,8 @@ import {
 import { emitOpsAlert, incrementOpsAlertWindow } from '@/lib/server/ops-alerts';
 import { getDashboardOpsAlertConfig, type DashboardOpsAlertConfig } from '@/lib/env';
 
-export type ProviderSendAlertProvider = 'meta' | 'socialapi' | 'postmark' | 'shopify' | 'gmail' | 'tiktok_shop';
-export type ProviderSendAlertChannel = 'ig_dm' | 'email' | 'tiktok' | 'webhook_registration';
+export type ProviderSendAlertProvider = 'meta' | 'socialapi' | 'postmark' | 'shopify' | 'gmail';
+export type ProviderSendAlertChannel = 'ig_dm' | 'email' | 'webhook_registration';
 
 export interface ProviderSendAlertDependencies {
   counterClient: OpsAlertCounterClient;

@@ -64,7 +64,6 @@ export interface ThreadSetup {
   channelType:
     | "ig_dm"
     | "email"
-    | "tiktok"
     | "shopify"
     | "operator"
     | "shopify_chat";

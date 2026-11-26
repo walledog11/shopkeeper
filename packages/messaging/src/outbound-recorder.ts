@@ -1,5 +1,5 @@
-export type OutboundChannel = 'email' | 'ig_dm' | 'tiktok';
-export type OutboundProvider = 'postmark' | 'meta' | 'socialapi' | 'gmail' | 'tiktok_shop';
+export type OutboundChannel = 'email' | 'ig_dm';
+export type OutboundProvider = 'postmark' | 'meta' | 'socialapi' | 'gmail';
 export type OutboundSource =
   | 'dispatch_message'
   | 'agent_send_reply'

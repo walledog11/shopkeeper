@@ -23,9 +23,6 @@ function agentReplyDispatchError(
   if (result.outcome === "unknown") {
     return toolUnknown(`Unknown: ${result.error}. Do not send it again automatically.`);
   }
-  if (channelType === CHANNEL_TYPE.TIKTOK && result.providerStatus !== undefined) {
-    return toolError(`Error: TikTok Shop dispatch failed (${result.providerStatus}).`);
-  }
   if (result.error === "Email not configured" && result.detail) {
     return toolError(`Error: email not configured — ${result.detail}`);
   }
@@ -35,9 +32,6 @@ function agentReplyDispatchError(
 
   const agentMessage = {
     "No Instagram integration configured": "no Instagram integration configured",
-    "No TikTok Shop integration configured": "no TikTok Shop integration configured",
-    "TikTok Shop messaging is not configured": "TikTok Shop messaging is not configured",
-    "TikTok Shop token expired": "TikTok Shop token expired",
     "No email integration configured": "no email integration configured",
     "Email not configured": "email not configured",
     "Email dispatch failed": "email dispatch failed",
@@ -76,7 +70,6 @@ export async function sendAgentReply(
   if (!thread) return communicationFailure(ctx, 'send_reply', { kind: 'thread', id: ctx.threadId }, 'not_found', 'thread_not_found', "Error: thread not found.");
   if (
     thread.channelType !== CHANNEL_TYPE.IG_DM &&
-    thread.channelType !== CHANNEL_TYPE.TIKTOK &&
     thread.channelType !== CHANNEL_TYPE.EMAIL &&
     thread.channelType !== CHANNEL_TYPE.SHOPIFY_CHAT
   ) {
@@ -135,9 +128,6 @@ export async function sendAgentReply(
 
   if (thread.channelType === CHANNEL_TYPE.IG_DM) {
     return communicationSuccess(ctx, 'send_reply', { threadId: thread.id, destination: { kind: 'thread', id: thread.id }, text: input.text, message: result.message }, `Reply sent to customer via Instagram DM.`);
-  }
-  if (thread.channelType === CHANNEL_TYPE.TIKTOK) {
-    return communicationSuccess(ctx, 'send_reply', { threadId: thread.id, destination: { kind: 'thread', id: thread.id }, text: input.text, message: result.message }, `Reply sent to customer via TikTok Shop.`);
   }
   return communicationSuccess(ctx, 'send_reply', { threadId: thread.id, destination: { kind: 'thread', id: thread.id }, text: input.text, message: result.message }, `Reply sent to customer via email.`);
 }

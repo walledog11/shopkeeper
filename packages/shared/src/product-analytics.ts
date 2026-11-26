@@ -2,7 +2,6 @@
 export const ACTIVATION_INBOUND_CHANNELS = [
   'email',
   'ig_dm',
-  'tiktok',
   'shopify_chat',
 ] as const;
 

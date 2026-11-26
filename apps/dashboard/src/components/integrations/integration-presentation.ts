@@ -22,7 +22,6 @@ import { deriveGmailPresentation, type GmailPresentation } from "./gmail-configu
 export interface IntegrationDeploymentFlags {
   /** The Instagram connect this workspace may start; null when neither transport is open. */
   instagramConnectTransport: InstagramConnectTransport
-  tiktokShopConfigured: boolean
   imessageHandle: string | null
 }
 
@@ -80,9 +79,6 @@ function availabilityFor(
     return configured
       ? { state: "available", label: null }
       : { state: "not-configured", label: "Connect" }
-  }
-  if (definition.kind === "oauth" && definition.availabilityFlag === "tiktok-shop" && !flags.tiktokShopConfigured) {
-    return { state: "coming-soon", label: "Coming soon" }
   }
   // Closed to *new* connections only. A workspace that already holds the connection
   // keeps its card and its Configure action: the gate exists so a merchant does not

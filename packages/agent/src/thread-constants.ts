@@ -1,7 +1,6 @@
 export const CHANNEL_TYPE = {
   IG_DM: 'ig_dm',
   EMAIL: 'email',
-  TIKTOK: 'tiktok',
   SHOPIFY: 'shopify',
   // Storefront chat widget. Distinct from SHOPIFY, which is merchant-side and
   // falls back to email — this one delivers into the shopper's open widget.
@@ -22,7 +21,7 @@ export function isOperatorChannel(channelType: string | null | undefined): boole
 
 // Direct-message channels where a sender with no linked Shopify customer
 // confirms an order by its email or zip (order-verification).
-export const ORDER_VERIFICATION_CHANNELS: ReadonlySet<string> = new Set([CHANNEL_TYPE.IG_DM, CHANNEL_TYPE.TIKTOK]);
+export const ORDER_VERIFICATION_CHANNELS: ReadonlySet<string> = new Set([CHANNEL_TYPE.IG_DM]);
 
 // What a channel is called in front of a person — badges, KB provenance, digest
 // copy. One map, because it had drifted into two that disagreed.
@@ -35,7 +34,6 @@ export const ORDER_VERIFICATION_CHANNELS: ReadonlySet<string> = new Set([CHANNEL
 export const CHANNEL_DISPLAY_NAME: Readonly<Record<string, string>> = {
   [CHANNEL_TYPE.EMAIL]: 'Email',
   [CHANNEL_TYPE.IG_DM]: 'Instagram',
-  [CHANNEL_TYPE.TIKTOK]: 'TikTok Shop',
   [CHANNEL_TYPE.SHOPIFY]: 'Shopify',
   [CHANNEL_TYPE.SHOPIFY_CHAT]: 'Storefront chat',
   [CHANNEL_TYPE.OPERATOR]: 'Messages',

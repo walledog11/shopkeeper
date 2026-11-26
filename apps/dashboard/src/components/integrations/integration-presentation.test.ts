@@ -9,7 +9,6 @@ import {
 
 const FLAGS = {
   instagramConnectTransport: "socialapi" as const,
-  tiktokShopConfigured: true,
   imessageHandle: "+15555550100",
 }
 
@@ -113,13 +112,6 @@ describe("integration presentation", () => {
       recovery: true,
     },
     {
-      label: "expired TikTok Shop token",
-      id: "tiktok-shop",
-      record: integration({ id: "tiktok-expired", platform: "tiktok", tokenExpiresAt: "2020-01-01T00:00:00.000Z" }),
-      status: "needs-attention",
-      recovery: true,
-    },
-    {
       label: "Shopify missing scopes",
       id: "shopify",
       record: integration({ id: "shopify-scopes", platform: "shopify", connectionState: "active", missingScopes: ["read_returns"] }),
@@ -145,14 +137,11 @@ describe("integration presentation", () => {
       flags: {
         ...FLAGS,
         instagramConnectTransport: null,
-        tiktokShopConfigured: false,
         imessageHandle: "   ",
       },
       isAdmin: true,
     })
     expect(models.find((model) => model.definition.id === "instagram")?.availability.state).toBe("coming-soon")
-    expect(models.find((model) => model.definition.id === "tiktok-shop")?.availability.state).toBe("coming-soon")
-    expect(models.find((model) => model.definition.id === "tiktok-shop")?.visible).toBe(false)
   })
 
   it("keeps a connected Instagram card manageable after direct connect closes", () => {

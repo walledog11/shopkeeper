@@ -5,7 +5,7 @@ import { normalizeOrderName } from "./order-reference.js";
 import { currentRequestSignals } from "./planner-safety/request.js";
 import { ORDER_VERIFICATION_CHANNELS } from "./thread-constants.js";
 
-// Direct-message order verification (Instagram, TikTok). A sender with no
+// Direct-message order verification (Instagram). A sender with no
 // Shopify customer behind them shows an order is theirs by sending its email or
 // shipping zip. Gateway code compares their own message with Shopify
 // (order-verification-answer); the model only records that it asked

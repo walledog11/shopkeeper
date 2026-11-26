@@ -23,7 +23,6 @@ function analyticsIntegrationPlatform(platform: string): IntegrationPlatform | n
     || platform === 'email'
     || platform === 'ig_dm'
     || platform === 'imessage'
-    || platform === 'tiktok'
   ) {
     return platform;
   }

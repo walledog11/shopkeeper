@@ -13,7 +13,6 @@ import { deriveIntegrationCardModels } from "./integration-presentation"
 
 const FLAGS = {
   instagramConnectTransport: "socialapi" as const,
-  tiktokShopConfigured: true,
   imessageHandle: "+15555550100",
 }
 
@@ -46,7 +45,7 @@ function callbacks(): IntegrationCardCallbacks {
   }
 }
 
-function model(id: "gmail" | "email" | "tiktok-shop", isAdmin: boolean, integrations: Integration[] = []) {
+function model(id: "gmail" | "email", isAdmin: boolean, integrations: Integration[] = []) {
   return deriveIntegrationCardModels({
     integrations,
     flags: FLAGS,

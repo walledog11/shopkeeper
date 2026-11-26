@@ -12,7 +12,6 @@ import { CHANNEL_TYPE } from "./thread-constants.js";
 const IMAGE_HYDRATION_CHANNEL_TYPES = new Set<string>([
   CHANNEL_TYPE.IG_DM,
   CHANNEL_TYPE.EMAIL,
-  CHANNEL_TYPE.TIKTOK,
 ]);
 
 export function shouldHydrateAgentMessageImages(channelType: string): boolean {

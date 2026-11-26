@@ -11,11 +11,11 @@ describe('OAuth lifecycle contract', () => {
       status: 'connected',
     });
     expect(parseOAuthOutcome(new URLSearchParams(
-      'provider=tiktok-shop&status=failed&error=tiktok_shop_token_failed',
+      'provider=shopify&status=failed&error=shopify_token_failed',
     ))).toEqual({
-      provider: 'tiktok-shop',
+      provider: 'shopify',
       status: 'failed',
-      error: 'tiktok_shop_token_failed',
+      error: 'shopify_token_failed',
     });
   });
 

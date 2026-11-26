@@ -52,7 +52,7 @@ export const GET = withOrgRoute(
       },
     })
 
-    // An Instagram or TikTok sender who confirmed one of the requested orders by
+    // An Instagram sender who confirmed one of the requested orders by
     // its email or zip: their conversation carries this customer's details, and
     // customers/redact deletes it with them.
     const confirmingSenders = privacyRequest && privacyRequest.orderIds.length > 0

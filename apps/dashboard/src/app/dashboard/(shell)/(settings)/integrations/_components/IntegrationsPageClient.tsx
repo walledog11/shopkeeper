@@ -89,7 +89,6 @@ function renderIntegrationSkeletonSection(
 interface IntegrationsPageProps {
   imessageHandle: string | null
   instagramConnectTransport: InstagramConnectTransport
-  tiktokShopConfigured: boolean
   initialIntegrations?: Integration[]
   shopifyClientId: string | null
   storefrontChatGloballyEnabled: boolean
@@ -106,7 +105,6 @@ export default function IntegrationsPageClient(props: IntegrationsPageProps) {
 function IntegrationsPageContent({
   imessageHandle,
   instagramConnectTransport,
-  tiktokShopConfigured,
   initialIntegrations,
   shopifyClientId,
   storefrontChatGloballyEnabled,
@@ -157,7 +155,6 @@ function IntegrationsPageContent({
     integrations,
     flags: {
       instagramConnectTransport,
-      tiktokShopConfigured,
       imessageHandle,
     },
     isAdmin,
@@ -166,7 +163,6 @@ function IntegrationsPageContent({
     instagramConnectTransport,
     integrations,
     isAdmin,
-    tiktokShopConfigured,
   ])
 
   const visibleModels = useMemo(() => models.filter((model) => model.visible), [models])
