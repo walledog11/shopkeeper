@@ -9,17 +9,17 @@ const QUESTIONS = [
   {
     field: "sells",
     question: "What do you sell, and who buys it?",
-    placeholder: "Handmade ceramic mugs and planters. Most people buy them as gifts.",
+    placeholder: "For example: handmade ceramic mugs and planters, mostly bought as gifts.",
   },
   {
     field: "returns",
     question: "How do returns and refunds work?",
-    placeholder: "30 days for unused items. If something arrives broken, we replace it for free.",
+    placeholder: "For example: 30 days for unused items, and a free replacement if something arrives broken.",
   },
   {
     field: "never",
     question: "Is there anything I should never promise or do?",
-    placeholder: "Never promise a delivery date. Don't offer discounts without asking me.",
+    placeholder: "For example: never promise a delivery date, and don’t offer discounts without asking me.",
   },
 ] as const satisfies readonly { field: keyof OnboardingData; question: string; placeholder: string }[];
 
@@ -50,7 +50,7 @@ export function StepAbout({ data, update, kbSync, disabled }: {
               disabled={disabled}
               placeholder={placeholder}
               onChange={event => update({ [field]: event.target.value })}
-              className="min-h-16 bg-card text-base leading-relaxed md:text-[14px]"
+              className="min-h-16 bg-card text-base leading-relaxed placeholder:text-foreground/35 md:text-[14px]"
             />
           </div>
         ))}
