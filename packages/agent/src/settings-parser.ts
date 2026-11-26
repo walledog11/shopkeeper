@@ -84,9 +84,12 @@ const BOOLEAN_FIELDS = [
   "salesPulseEnabled",
 ] as const satisfies readonly (keyof OrgSettings)[];
 
+/** The longest voice brief a workspace can store. */
+export const BRAND_VOICE_MAX_CHARS = 200;
+
 const STRING_FIELDS = [
   ["aiContext", 2000],
-  ["brandVoice", 200],
+  ["brandVoice", BRAND_VOICE_MAX_CHARS],
   ["autoAckMessage", 500],
   ["onboardingCompletedAt", 64],
   ["lastSuccessfulDigestAt", 64],

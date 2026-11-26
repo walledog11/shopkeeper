@@ -1,6 +1,8 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
+import { voiceNavItem } from "@/app/dashboard/_components/nav-items"
 import { Check, Loader2, Sparkles, Trash2, X } from "lucide-react"
 import {
   MERCHANT_PREFERENCE_CATEGORIES,
@@ -58,16 +60,12 @@ export function ProfileBookPanel({ book, profile }: { book: MemoryBook; profile:
               onResolve={accept => resolveVoiceProposal(accept ? "approve" : "dismiss")}
             />
           ) : null}
-          <ProfileTextEditor
-            key={storeProfile.brandVoice}
-            field="brandVoice"
-            label="Brand voice"
-            value={storeProfile.brandVoice}
-            maxLength={200}
-            rows={3}
-            placeholder="e.g. Friendly and direct. Never over-apologise. Use plain language."
-            profile={profile}
-          />
+          <p className="text-sm text-muted-foreground">
+            {storeProfile.brandVoice.trim() || "No voice set yet."}{" "}
+            <Link href={voiceNavItem.href} className="font-medium text-strong underline underline-offset-4">
+              Hear it and change it on the Voice page
+            </Link>
+          </p>
         </>
       ) : (
         <PreferencesPanel profile={profile} />
@@ -85,7 +83,7 @@ function ProfileTextEditor({
   placeholder,
   profile,
 }: {
-  field: "aiContext" | "brandVoice"
+  field: "aiContext"
   label: string
   value: string
   maxLength: number

@@ -9,6 +9,7 @@ import type {
 } from "./types.js";
 
 export {
+  BRAND_VOICE_MAX_CHARS,
   MAX_DAILY_LLM_SPEND_CAP_USD,
   OrgSettingsValidationError,
   parseOrgSettingsPatch,

@@ -50,6 +50,9 @@ export interface AIMessage {
  */
 export interface GenerateTextOptions {
   maxTokens?: number;
+  // Defaults to Haiku. A preview of what a real reply will say passes the model
+  // that drafts real replies, so the two read the same.
+  model?: string;
   // When provided, the call is gated by the org's daily LLM spend cap and the
   // token usage is recorded against the org. Omit only for tests / paths that
   // genuinely have no org context.
@@ -70,8 +73,9 @@ export async function generateText(
     await enforceSpendCap(options.orgId, resolveAgentSettings(options.settings ?? null));
   }
 
+  const model = options?.model ?? HAIKU_MODEL;
   const response = await anthropic.messages.create({
-    model: HAIKU_MODEL,
+    model,
     max_tokens: options?.maxTokens ?? 1024,
     thinking: { type: "disabled" },
     system: systemPrompt,
@@ -79,7 +83,7 @@ export async function generateText(
   });
 
   if (options?.orgId) {
-    await recordSpend(options.orgId, readModelUsage(response), HAIKU_MODEL);
+    await recordSpend(options.orgId, readModelUsage(response), model);
   }
 
   const textBlock = response.content.find(

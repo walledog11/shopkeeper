@@ -1,4 +1,4 @@
-import { Inbox, Settings2, Box, BrainCircuit, ScanEye, User, MessageCircle } from "lucide-react";
+import { Inbox, Settings2, Box, BrainCircuit, ScanEye, User, MessageCircle, MessageSquareText } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Metadata } from "next";
 import { isRouteActive } from "./sidebar/sidebar-helpers";
@@ -37,7 +37,14 @@ export const reviewNavItem: NavItem = {
   description: "Approve and refine agent responses",
 };
 
-const topBarAgentItems: NavItem[] = [memoryNavItem, reviewNavItem];
+export const voiceNavItem: NavItem = {
+  name: "Voice",
+  href: "/dashboard/voice",
+  icon: MessageSquareText,
+  description: "Hear how replies sound and tune them",
+};
+
+const topBarAgentItems: NavItem[] = [voiceNavItem, memoryNavItem, reviewNavItem];
 
 export const shopNavItem: NavItem = {
   name: "Shop",
@@ -144,10 +151,7 @@ export const mobileNavSections = (websiteChat: boolean): NavSection[] => [
   { heading: "Shop", items: websiteChat ? [shopNavItem, chatNavItem] : [shopNavItem] },
   {
     heading: "Shopkeeper",
-    items: [
-      topBarAgentItems[1],
-      topBarAgentItems[0],
-    ],
+    items: [reviewNavItem, voiceNavItem, memoryNavItem],
   },
   { heading: "Workspace", items: [settingsNavItem] },
 ];

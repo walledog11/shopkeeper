@@ -5,6 +5,8 @@ import { parseMerchantAnswers } from "@shopkeeper/agent/reply-placeholders";
 import type { MerchantAnswers } from "@shopkeeper/agent/types";
 import { decodeAgentActionCursor, type AgentActionCursor } from "@/lib/agent/api/action-log";
 import type { RawToolCall } from "@/types";
+import { BRAND_VOICE_MAX_CHARS } from "@shopkeeper/agent/settings";
+import { findVoiceScenario } from "@/lib/agent/voice";
 
 function invalidField(field: string, message: string, code = "invalid"): never {
   throw new BadRequestError("Validation failed", [{ code, field, message }]);
@@ -206,6 +208,32 @@ export function parseAgentVoiceBody(body: unknown) {
   return {
     action: parseOptionalString(candidate.action, "action"),
   };
+}
+
+function parseVoiceBrief(value: unknown): string {
+  const brief = (parseOptionalString(value, "brief") ?? "").trim();
+  if (brief.length > BRAND_VOICE_MAX_CHARS) {
+    invalidField("brief", `brief must be at most ${BRAND_VOICE_MAX_CHARS} characters`);
+  }
+  return brief;
+}
+
+export function parseVoicePreviewBody(body: unknown) {
+  const candidate = requireObject(body);
+  const scenario = findVoiceScenario(candidate.scenarioId);
+  if (!scenario) invalidField("scenarioId", "scenarioId must name a sample conversation");
+  return { brief: parseVoiceBrief(candidate.brief), scenario };
+}
+
+export function parseVoiceRewriteBody(body: unknown) {
+  const candidate = requireObject(body);
+  const change = (parseOptionalString(candidate.change, "change") ?? "").trim();
+  if (!change || change.length > 300) invalidField("change", "Say what to change, in up to 300 characters");
+  return { brief: parseVoiceBrief(candidate.brief), change };
+}
+
+export function parseVoiceAlternativesBody(body: unknown) {
+  return { brief: parseVoiceBrief(requireObject(body).brief) };
 }
 
 export type ActionLogMode = "human_approved" | "auto_executed" | "read_only";
