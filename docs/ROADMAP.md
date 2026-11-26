@@ -36,12 +36,11 @@ item is checked by using the app in a browser, with screenshots in the PR.
    and edits become the examples replies are written from (`VoiceEdit`). Not live A/B on
    customers: a solo store's volume can't tell versions apart. Closes when a merchant sets
    the voice without writing a brief and the next real draft matches it.
-5. **Onboarding built on the Voice page.** Install from Shopify; the agent introduces
-   itself and asks what a new hire would (what you sell, how returns work, what it must
-   never promise); it drafts replies to real recent messages, or ones built from the
-   store if no channel is connected; the merchant reacts and picks the voice; link the
-   phone; go live in draft-only. Closes when a fresh install reaches its first approved
-   draft without typing a store domain or setting up forwarding.
+5. **Onboarding replies from the merchant's own store.** Setup's voice step answers a
+   made-up customer. Draft its samples from the store's real recent messages, or from its
+   products and policies when no channel is connected. Closes when a fresh install's
+   first real message gets a draft the merchant approves, with no store domain typed and
+   no forwarding set up.
 6. **Four plain settings sections and a calmer app.** How it sounds; what it may do
    without asking (with examples, one money limit); when and where it reaches you;
    account and billing. Everything else takes a default. One place per job (Home stops

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useClerk, useOrganizationList, useUser } from "@clerk/nextjs";
+import { useClerk, useOrganizationList } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { isApiRequestError } from "@/lib/api/fetcher";
 import { useIntegrations } from "@/hooks/useIntegrations";
@@ -23,7 +23,7 @@ import { claimShopifyInstall, updateShopifyStorefrontChat } from "@/lib/integrat
 import { isShopifyIntegrationActive } from "@/lib/integrations/shopify-connection";
 import { captureClientProductEvent } from "@/lib/product-events";
 import type { Integration } from "@/types";
-import { RETURN_TO, STEPS, type StepId, type OnboardingData } from "../_lib/onboarding-model";
+import { RETURN_TO, STEPS, composeStoreProfile, type OnboardingData, type OnboardingViewer, type StepId } from "../_lib/onboarding-model";
 import { selectOnboardingIntegrations } from "../_lib/onboarding-integrations";
 import {
   createForwardingEmail,
@@ -77,13 +77,15 @@ function resolveBrowserTimezone(): string | undefined {
   }
 }
 
+// A new workspace starts in Draft only, so nothing reaches a customer before
+// the merchant has seen the agent's replies.
 function settingsBody(data: OnboardingData, complete: boolean): OnboardingSettingsRequest {
   const name = data.storeName.trim();
   const timezone = resolveBrowserTimezone();
   return {
     ...(name ? { name } : {}),
     settings: {
-      autonomyTier: "guarded",
+      autonomyTier: "watch",
       autoExecuteMode: "off",
       ...(timezone ? { digestTimezone: timezone } : {}),
       ...(complete ? { onboardingCompletedAt: new Date().toISOString() } : {}),
@@ -92,6 +94,7 @@ function settingsBody(data: OnboardingData, complete: boolean): OnboardingSettin
 }
 
 export function useOnboardingFlow(
+  viewer: OnboardingViewer,
   pinnedStepIndex: number | null,
   oauthOutcome: OAuthOutcome | null = null,
   storefrontChatGloballyEnabled = false,
@@ -99,7 +102,6 @@ export function useOnboardingFlow(
   shopifyClaim: OnboardingShopifyClaim | null = null,
 ) {
   const router = useRouter();
-  const { user } = useUser();
   const { signOut } = useClerk();
   const organizationList = useOrganizationList({ userMemberships: { infinite: false } });
   const { setActive, userMemberships } = organizationList;
@@ -109,7 +111,7 @@ export function useOnboardingFlow(
     organization,
     organizationOperation,
     organizationReady,
-  } = useOnboardingOrganization();
+  } = useOnboardingOrganization(viewer.organization);
 
   const { data: integrationRows, mutate: refreshIntegrations } = useIntegrations({
     enabled: organizationReady,
@@ -122,10 +124,8 @@ export function useOnboardingFlow(
 
   const savedEmail = (selected.preferredEmail?.fromEmail ?? selected.preferredEmail?.externalAccountId)?.trim();
   const { advance, back: draftBack, go, clear: clearDraft, hydrated, data, idx, update } = useOnboardingDraft({
-    userId: user?.id,
+    userId: viewer.userId,
     organizationId: organization?.id,
-    clerkLoaded,
-    founderName: user?.firstName,
     organizationName: organization?.name,
     pinnedStepIndex,
     savedEmail,
@@ -151,6 +151,12 @@ export function useOnboardingFlow(
   const { run: runCompletion, state: completionState } = useSingleFlightOperation(async () => {
     if (!await ensureOrgForDraft()) return false;
     await persistOnboardingSettings(settingsBody(data, true));
+    return true;
+  }, settingsError);
+
+  // The store profile and voice are saved as the merchant leaves their step.
+  const { run: runSave, state: saveState } = useSingleFlightOperation(async (settings: OnboardingSettingsRequest["settings"]) => {
+    await persistOnboardingSettings({ settings });
     return true;
   }, settingsError);
 
@@ -298,27 +304,25 @@ export function useOnboardingFlow(
     }
   }, [refreshIntegrations]);
 
-  const canContinue = useMemo(() => {
-    if (stepId === "shopify") return hasShopify;
-    return true;
-  }, [hasShopify, stepId]);
+  const canContinue = stepId === "shopify" ? hasShopify : stepId === "voice" ? Boolean(data.voice) : true;
 
   const { run: runNext, state: nextState } = useSingleFlightOperation(async () => {
     if (!canContinue) return false;
     if (stepId === "shopify" && !await runSettings().catch(() => false)) return false;
+    const storeProfile = composeStoreProfile(data);
+    if (stepId === "about" && storeProfile && !await runSave({ aiContext: storeProfile }).catch(() => false)) return false;
+    if (stepId === "voice" && !await runSave({ brandVoice: data.voice }).catch(() => false)) return false;
 
-    const analyticsStep = stepId;
-    const completedOptionalStep = analyticsStep !== "email" || hasCustomerChannel;
-    if (analyticsStep !== "plan" && analyticsStep !== "connect" && completedOptionalStep) {
-      void captureClientProductEvent({ event: "onboarding_step_completed", step: analyticsStep });
-    }
+    // A skipped channel or phone step isn't a completed one.
+    const skipped = (stepId === "email" && !hasCustomerChannel) || (stepId === "connect" && !hasMessaging);
+    if (!skipped) void captureClientProductEvent({ event: "onboarding_step_completed", step: stepId });
     advance();
     return true;
   }, "Couldn't continue onboarding. Try again.");
 
   const { run: runFinish, state: finishState } = useSingleFlightOperation(async () => {
     if (!hasShopify || !await runCompletion().catch(() => false)) return false;
-    void captureClientProductEvent({ event: "onboarding_step_completed", step: "plan" });
+    void captureClientProductEvent({ event: "onboarding_step_completed", step: "live" });
     clearDraft();
     router.push("/dashboard");
     router.refresh();
@@ -333,6 +337,7 @@ export function useOnboardingFlow(
   const pending = [
     organizationOperation,
     settingsState,
+    saveState,
     completionState,
     emailState,
     shopifySimulationState,
@@ -377,9 +382,11 @@ export function useOnboardingFlow(
       ? [settingsState, shopifyClaimState, oauthState, shopifySimulationState, organizationOperation, exitState]
       : stepId === "email"
         ? [emailState, settingsState, oauthState, organizationOperation, exitState]
-        : stepId === "plan"
-          ? [completionState, organizationOperation, exitState]
-          : [organizationOperation, exitState];
+        : stepId === "about" || stepId === "voice"
+          ? [saveState, organizationOperation, exitState]
+          : stepId === "live"
+            ? [completionState, organizationOperation, exitState]
+            : [organizationOperation, exitState];
   const error = relevantErrors.map(operationError).find(Boolean) ?? null;
 
   const orgPending = isOperationPending(organizationOperation);
@@ -420,11 +427,12 @@ export function useOnboardingFlow(
       hasShopify,
       oauthPendingProvider: toOnboardingOAuthPending(pendingProvider),
       orgEnsureFailed: organizationOperation.status === "failed",
-      orgEnsuring: !clerkLoaded || orgPending,
+      orgEnsuring: (!organizationReady && !clerkLoaded) || orgPending,
       orgReady: organizationReady && !orgPending,
       saving: isOperationPending(nextState)
         || isOperationPending(finishState)
         || isOperationPending(settingsState)
+        || isOperationPending(saveState)
         || isOperationPending(completionState)
         || orgPending,
       shopifySimulating: isOperationPending(simulationState)

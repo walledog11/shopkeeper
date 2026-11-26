@@ -3,10 +3,12 @@ import { requestJson, requestOk } from "@/lib/api/fetcher";
 export interface OnboardingSettingsRequest {
   name?: string;
   settings: {
-    autonomyTier: "guarded";
-    autoExecuteMode: "off";
+    autonomyTier?: "watch";
+    autoExecuteMode?: "off";
     digestTimezone?: string;
     onboardingCompletedAt?: string;
+    aiContext?: string;
+    brandVoice?: string;
   };
 }
 

@@ -76,8 +76,8 @@ export function StepEmail({
 
   return (
     <div className="flex flex-col items-center">
-      <Headline>Connect customer channels.</Headline>
-      <Lede>Start with one channel. Shopkeeper prepares replies for you to review.</Lede>
+      <Headline>Where do customers write to you?</Headline>
+      <Lede>Connect one, and I’ll draft a reply to every new message. You can add more later.</Lede>
 
       {(emailConnected || instagramConnected) && (
         <div className="mt-6 w-full max-w-[560px] space-y-2 text-left">

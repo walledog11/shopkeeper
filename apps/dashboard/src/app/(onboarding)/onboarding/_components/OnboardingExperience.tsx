@@ -4,11 +4,14 @@ import { useEffect, useRef } from "react";
 import Image from "next/image";
 import { Loader2 } from "lucide-react";
 import { Footer } from "./chrome";
+import { StepAbout } from "./step-about";
 import { StepShopify } from "./step-shopify";
 import { StepConnect } from "./step-connect";
 import { StepEmail } from "./step-email";
-import { StepPlan } from "./step-plan";
+import { StepLive } from "./step-live";
+import { StepVoice } from "./step-voice";
 import { useOnboardingFlow, type OnboardingShopifyClaim } from "../_hooks/useOnboardingFlow";
+import type { OnboardingViewer } from "../_lib/onboarding-model";
 import type { OAuthOutcome } from "@/lib/integrations/oauth-contract";
 import type { InstagramConnectTransport } from "@/lib/socialapi/config";
 
@@ -20,10 +23,16 @@ export interface OnboardingChannelConfig {
   shopifyClientId: string | null;
 }
 
-export function OnboardingExperience({ pinnedStepIndex, oauthOutcome, suggestedShop, shopifyClaim, ...channels }: OnboardingChannelConfig & {
-  pinnedStepIndex: number | null; oauthOutcome: OAuthOutcome | null; suggestedShop: string | null; shopifyClaim: OnboardingShopifyClaim | null;
+export function OnboardingExperience({ viewer, pinnedStepIndex, oauthOutcome, suggestedShop, shopifyClaim, ...channels }: OnboardingChannelConfig & {
+  viewer: OnboardingViewer; pinnedStepIndex: number | null; oauthOutcome: OAuthOutcome | null; suggestedShop: string | null; shopifyClaim: OnboardingShopifyClaim | null;
 }) {
-  const { data, emailIntegrations, exit, idx, instagramRow, kbSync, shopifyRow, status, step, handlers } = useOnboardingFlow(pinnedStepIndex, oauthOutcome, channels.storefrontChatGloballyEnabled, suggestedShop, shopifyClaim);
+  const { data, emailIntegrations, exit, idx, instagramRow, kbSync, shopifyRow, status, step, handlers } = useOnboardingFlow(viewer, pinnedStepIndex, oauthOutcome, channels.storefrontChatGloballyEnabled, suggestedShop, shopifyClaim);
+  const connectedChannels = [
+    emailIntegrations.gmail && "Gmail",
+    emailIntegrations.forwarding && "your forwarded inbox",
+    status.hasInstagramReady && "Instagram",
+    status.hasStorefrontChat && "your website chat",
+  ].filter((channel): channel is string => Boolean(channel));
   const contentRef = useRef<HTMLElement>(null);
   const previousStep = useRef(idx);
   useEffect(() => {
@@ -46,7 +55,7 @@ export function OnboardingExperience({ pinnedStepIndex, oauthOutcome, suggestedS
         {!status.hydrated ? <p role="status" className="flex items-center gap-2 py-16 text-sm text-strong"><Loader2 size={17} className="animate-spin" />Preparing your workspace…</p> : <>
           {status.error && <p role="alert" className="mx-auto mb-4 max-w-[560px] rounded-xl border border-destructive/20 bg-destructive/[0.06] px-4 py-3 text-center text-[13px] text-destructive">{status.error}</p>}
           <div key={step.id} className="animate-[ob-fade-in_360ms_ease] motion-reduce:animate-none">
-            {step.id === "shopify" && <StepShopify data={data} update={handlers.update} connected={status.hasShopify} shopifyRow={shopifyRow} kbSync={kbSync} onOAuth={handlers.launchOAuth}
+            {step.id === "shopify" && <StepShopify firstName={viewer.firstName} data={data} update={handlers.update} connected={status.hasShopify} shopifyRow={shopifyRow} kbSync={kbSync} onOAuth={handlers.launchOAuth}
               onSimulate={handlers.simulateShopify} simulatorEnabled={channels.shopifySimulatorEnabled} simulating={status.shopifySimulating} oauthPending={status.oauthPendingProvider === "shopify"} disabled={disabled}
               claimShop={status.shopifyClaimOpen ? shopifyClaim?.shop ?? null : null} onClaim={handlers.claimShopify} claiming={status.shopifyClaiming} />}
             {step.id === "email" && <StepEmail data={data} update={handlers.update} instagramConnected={status.hasInstagramReady} instagramConnectTransport={channels.instagramConnectTransport}
@@ -55,17 +64,17 @@ export function OnboardingExperience({ pinnedStepIndex, oauthOutcome, suggestedS
               emailSaving={status.emailSaving} oauthPendingProvider={status.oauthPendingProvider} onSaveForwarding={email => { void handlers.saveEmailIntegration(email, "postmark"); }}
               onSaveGmail={email => { void handlers.saveEmailIntegration(email, "gmail"); }} onOAuth={handlers.launchOAuth} shopifyRow={shopifyRow}
               storefrontChatGloballyEnabled={channels.storefrontChatGloballyEnabled} shopifyClientId={channels.shopifyClientId} onUpdateStorefrontChat={handlers.updateStorefrontChat} disabled={disabled} />}
+            {step.id === "about" && <StepAbout data={data} update={handlers.update} kbSync={kbSync} disabled={disabled} />}
+            {step.id === "voice" && <StepVoice data={data} update={handlers.update} disabled={disabled} />}
             {step.id === "connect" && <StepConnect imessageHandle={channels.imessageHandle} />}
-            {step.id === "plan" && <StepPlan hasCustomerChannel={status.hasCustomerChannel} hasEmail={Boolean(emailIntegrations.gmail)} hasForwarding={Boolean(emailIntegrations.forwarding)}
-              hasInstagram={status.hasInstagramReady} hasMessaging={status.hasMessaging} hasShopify={status.hasShopify} hasStorefrontChat={status.hasStorefrontChat}
-              storeDomain={shopifyRow?.externalAccountId} kbSync={kbSync} onNavigate={handlers.navigate} saving={disabled} />}
+            {step.id === "live" && <StepLive channels={connectedChannels} hasMessaging={status.hasMessaging} onNavigate={handlers.navigate} disabled={disabled} />}
           </div>
         </>}
         </div>
       </main>
-      <Footer idx={idx} stepId={step.id} canContinue={step.id === "plan" ? status.hasShopify : status.canContinue}
+      <Footer idx={idx} stepId={step.id} canContinue={step.id === "live" ? status.hasShopify : status.canContinue}
         hasCustomerChannel={status.hasCustomerChannel} hasMessaging={status.hasMessaging} saving={disabled}
-        onNext={step.id === "plan" ? handlers.finish : handlers.next} onBack={handlers.back}
+        onNext={step.id === "live" ? handlers.finish : handlers.next} onBack={handlers.back}
         onNavigate={handlers.navigate} exitLabel={exit.label} onExit={exit.action} />
     </div>
   </div>;

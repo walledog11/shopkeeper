@@ -60,10 +60,12 @@ test('onboarding guard walks a new org from Shopify to a completed dashboard', a
     },
   });
 
+  // Setup resumes where the merchant left it once the store is connected.
   res = await request.get('/dashboard', { maxRedirects: 0 });
   expect(res.status()).toBeGreaterThanOrEqual(300);
   expect(res.status()).toBeLessThan(400);
-  expect(locationOf(res)).toContain('step=email');
+  expect(locationOf(res)).toContain('/onboarding');
+  expect(locationOf(res)).not.toContain('step=');
 
   // 3. Save the forwarding support address through the real integrations route.
   const saveRes = await request.post('/api/integrations', {
@@ -74,7 +76,7 @@ test('onboarding guard walks a new org from Shopify to a completed dashboard', a
   res = await request.get('/dashboard', { maxRedirects: 0 });
   expect(res.status()).toBeGreaterThanOrEqual(300);
   expect(res.status()).toBeLessThan(400);
-  expect(locationOf(res)).toContain('step=plan');
+  expect(locationOf(res)).toContain('/onboarding');
 
   // 4. Finish onboarding — stamp completion via the real org route.
   const patchRes = await request.patch('/api/org', {

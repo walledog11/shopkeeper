@@ -8,35 +8,8 @@ export type EmailIntegrationLike = {
   metadata?: unknown | null
 } | null | undefined
 
-export type OnboardingResumeStep = "shopify" | "email" | "connect" | "plan"
-
 export function isEmailIntegrationConfigured(integration: EmailIntegrationLike): boolean {
   if (!integration || integration.platform !== "email") return false
   if (getEmailProvider(integration) === "postmark") return true
   return !!((integration.fromEmail ?? integration.externalAccountId)?.trim())
-}
-
-export function resolveOnboardingRedirectStep(args: {
-  onboardingCompletedAt?: string
-  hasShopify: boolean
-  hasEmail: boolean
-  hasInstagram?: boolean
-  hasStorefrontChat?: boolean
-  hasPhone: boolean
-}): OnboardingResumeStep | null {
-  if (args.onboardingCompletedAt) return null
-  if (!args.hasShopify) return "shopify"
-  if (!args.hasEmail && !args.hasInstagram && !args.hasStorefrontChat) return "email"
-  if (!args.hasPhone) return "connect"
-  return "plan"
-}
-
-export function resolveOnboardingStepIndex(
-  stepId: OnboardingResumeStep | null | undefined,
-  fallbackIdx: number,
-  stepIds: readonly string[],
-): number {
-  if (!stepId) return fallbackIdx
-  const idx = stepIds.indexOf(stepId)
-  return idx >= 0 ? idx : fallbackIdx
 }

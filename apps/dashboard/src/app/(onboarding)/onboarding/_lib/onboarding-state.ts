@@ -9,10 +9,6 @@ export interface StoredOnboardingState {
   idx: number;
 }
 
-function storedString(value: unknown): string {
-  return typeof value === "string" ? value : "";
-}
-
 export function parseStoredOnboardingState(raw: string | null): StoredOnboardingState | null {
   if (!raw) return null;
 
@@ -27,19 +23,12 @@ export function parseStoredOnboardingState(raw: string | null): StoredOnboarding
       && stored.idx < STEPS.length
       ? stored.idx
       : 0;
-
-    return {
-      data: {
-        ...DEFAULT_DATA,
-        shopDomain: storedString(stored.shopDomain),
-        forwardingEmail: storedString(stored.forwardingEmail),
-        storeName: storedString(stored.storeName),
-        founderName: storedString(stored.founderName),
-        gmailEmail: storedString(stored.gmailEmail),
-        primaryEmail: storedString(stored.primaryEmail),
-      },
-      idx,
-    };
+    const data = { ...DEFAULT_DATA };
+    for (const key of Object.keys(DEFAULT_DATA) as (keyof OnboardingData)[]) {
+      const value = stored[key];
+      if (typeof value === "string") data[key] = value;
+    }
+    return { data, idx };
   } catch {
     return null;
   }

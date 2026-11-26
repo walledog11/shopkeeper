@@ -7,11 +7,17 @@ import {
   useSingleFlightOperation,
   type OperationState,
 } from "@/hooks/useSingleFlightOperation";
+import type { OnboardingViewer } from "../_lib/onboarding-model";
 
 const ORGANIZATION_ERROR = "Couldn't prepare your workspace. Try again.";
 
-export function useOnboardingOrganization() {
-  const { isLoaded: organizationLoaded, organization } = useOrganization();
+/**
+ * The workspace being set up. The server's answer is used until the sign-in
+ * script loads, so setup renders at once; the script is needed only to create a
+ * workspace for someone who has none.
+ */
+export function useOnboardingOrganization(initialOrganization: OnboardingViewer["organization"]) {
+  const { isLoaded: organizationLoaded, organization: clerkOrganization } = useOrganization();
   const organizationList = useOrganizationList({ userMemberships: { infinite: false } });
   const {
     createOrganization,
@@ -19,6 +25,7 @@ export function useOnboardingOrganization() {
     setActive,
   } = organizationList;
   const clerkLoaded = organizationLoaded && organizationListLoaded;
+  const organization = clerkOrganization ?? initialOrganization;
 
   const { run: runOrganization, state: organizationOperation } = useSingleFlightOperation(async (storeName: string) => {
     if (organization) return true;

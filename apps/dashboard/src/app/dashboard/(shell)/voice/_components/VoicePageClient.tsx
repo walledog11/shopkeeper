@@ -9,44 +9,33 @@ import { dashboardChromeColumnClassName } from "@/app/dashboard/_components/side
 import { useIsWorkspaceAdmin } from "@/app/dashboard/_components/WorkspaceRoleContext"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
+import { CustomerBubble, VoiceReplyBubble } from "@/components/agent/VoiceReplyBubble"
 import { requestJson } from "@/lib/api/fetcher"
 import { VOICE_PRESETS, VOICE_SCENARIOS, type VoiceScenario } from "@/lib/agent/voice"
+import {
+  draftVoiceReply,
+  errorMessage,
+  rewriteVoiceBrief,
+  suggestVoiceOptions,
+  type VoiceReply,
+} from "@/lib/agent/voice-requests"
 import { cn } from "@/lib/ui/cn"
 
-type Reply =
-  | { status: "loading" }
-  | { status: "ready"; text: string }
-  | { status: "error"; message: string }
 
 interface VoiceOption {
   label: string
   brief: string
-  reply: Reply
+  reply: VoiceReply
 }
 
 const COMPARE_SCENARIO = VOICE_SCENARIOS[0]
-
-function errorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error && error.message ? error.message : fallback
-}
-
-function draftReply(brief: string, scenario: VoiceScenario): Promise<Reply> {
-  return requestJson<{ reply: string }>(
-    "/api/agent/voice/preview",
-    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ brief, scenarioId: scenario.id }) },
-    "Couldn't draft this reply.",
-  ).then(
-    ({ reply }) => ({ status: "ready" as const, text: reply }),
-    (error: unknown) => ({ status: "error" as const, message: errorMessage(error, "Couldn't draft this reply.") }),
-  )
-}
 
 export default function VoicePageClient({ initialBrief }: { initialBrief: string }) {
   const isAdmin = useIsWorkspaceAdmin()
   const [savedBrief, setSavedBrief] = useState(initialBrief)
   const [brief, setBrief] = useState(initialBrief)
   const [repliesBrief, setRepliesBrief] = useState(initialBrief)
-  const [replies, setReplies] = useState<Record<string, Reply>>({})
+  const [replies, setReplies] = useState<Record<string, VoiceReply>>({})
   const [change, setChange] = useState("")
   const [rewriting, setRewriting] = useState(false)
   const [rewriteError, setRewriteError] = useState<string | null>(null)
@@ -61,9 +50,9 @@ export default function VoicePageClient({ initialBrief }: { initialBrief: string
   const previewAll = useCallback((nextBrief: string) => {
     const request = ++latestPreview.current
     setRepliesBrief(nextBrief)
-    setReplies(Object.fromEntries(VOICE_SCENARIOS.map((scenario) => [scenario.id, { status: "loading" } as Reply])))
+    setReplies(Object.fromEntries(VOICE_SCENARIOS.map((scenario) => [scenario.id, { status: "loading" } as VoiceReply])))
     for (const scenario of VOICE_SCENARIOS) {
-      void draftReply(nextBrief, scenario).then((reply) => {
+      void draftVoiceReply(nextBrief, scenario.id).then((reply) => {
         if (request !== latestPreview.current) return
         setReplies((current) => ({ ...current, [scenario.id]: reply }))
       })
@@ -85,13 +74,9 @@ export default function VoicePageClient({ initialBrief }: { initialBrief: string
     setRewriting(true)
     setRewriteError(null)
     try {
-      const result = await requestJson<{ brief: string }>(
-        "/api/agent/voice/rewrite",
-        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ brief, change }) },
-        "Couldn't change the voice.",
-      )
+      const nextBrief = await rewriteVoiceBrief(brief, change)
       setChange("")
-      tryBrief(result.brief)
+      tryBrief(nextBrief)
     } catch (error) {
       setRewriteError(errorMessage(error, "Couldn't change the voice."))
     } finally {
@@ -104,14 +89,10 @@ export default function VoicePageClient({ initialBrief }: { initialBrief: string
     setCompareError(null)
     setOptions(null)
     try {
-      const result = await requestJson<{ options: { label: string; brief: string }[] }>(
-        "/api/agent/voice/alternatives",
-        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ brief }) },
-        "Couldn't suggest two voices.",
-      )
-      setOptions(result.options.map((option) => ({ ...option, reply: { status: "loading" } })))
-      result.options.forEach((option, index) => {
-        void draftReply(option.brief, COMPARE_SCENARIO).then((reply) => {
+      const suggested = await suggestVoiceOptions(brief)
+      setOptions(suggested.map((option) => ({ ...option, reply: { status: "loading" } })))
+      suggested.forEach((option, index) => {
+        void draftVoiceReply(option.brief, COMPARE_SCENARIO.id).then((reply) => {
           setOptions((current) => current?.map((entry, entryIndex) => (entryIndex === index ? { ...entry, reply } : entry)) ?? null)
         })
       })
@@ -249,7 +230,7 @@ export default function VoicePageClient({ initialBrief }: { initialBrief: string
                     reply={replies[scenario.id] ?? { status: "loading" }}
                     onRetry={() => {
                       setReplies((current) => ({ ...current, [scenario.id]: { status: "loading" } }))
-                      void draftReply(repliesBrief, scenario).then((reply) => setReplies((current) => ({ ...current, [scenario.id]: reply })))
+                      void draftVoiceReply(repliesBrief, scenario.id).then((reply) => setReplies((current) => ({ ...current, [scenario.id]: reply })))
                     }}
                   />
                 ))}
@@ -274,7 +255,7 @@ export default function VoicePageClient({ initialBrief }: { initialBrief: string
                     <div key={`${index}-${option.label}`} className="flex flex-col gap-3 rounded-2xl border border-foreground/10 bg-card p-4">
                       <div className="text-sm font-semibold text-strong">{option.label}</div>
                       <p className="text-xs text-muted-foreground">{option.brief}</p>
-                      <ReplyBubble reply={option.reply} />
+                      <VoiceReplyBubble reply={option.reply} />
                       <Button variant="outline" className="self-start" onClick={() => tryBrief(option.brief)}>Use this voice</Button>
                     </div>
                   ))}
@@ -288,39 +269,12 @@ export default function VoicePageClient({ initialBrief }: { initialBrief: string
   )
 }
 
-function SampleConversation({ scenario, reply, onRetry }: { scenario: VoiceScenario; reply: Reply; onRetry: () => void }) {
+function SampleConversation({ scenario, reply, onRetry }: { scenario: VoiceScenario; reply: VoiceReply; onRetry: () => void }) {
   return (
     <div className="flex flex-col gap-3 rounded-2xl border border-foreground/10 bg-card p-4">
       <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{scenario.label}</div>
-      <div className="max-w-[85%] self-start rounded-2xl rounded-tl-sm bg-foreground/[0.05] px-3 py-2 text-sm text-foreground">
-        <div className="mb-0.5 text-xs font-medium text-muted-foreground">{scenario.customerName}</div>
-        {scenario.message}
-      </div>
-      <ReplyBubble reply={reply} onRetry={onRetry} />
-    </div>
-  )
-}
-
-function ReplyBubble({ reply, onRetry }: { reply: Reply; onRetry?: () => void }) {
-  if (reply.status === "loading") {
-    return (
-      <div className="flex items-center gap-2 self-end rounded-2xl rounded-tr-sm bg-foreground/[0.03] px-3 py-2 text-sm text-muted-foreground">
-        <Loader2 className="size-3.5 animate-spin" />
-        Writing a reply…
-      </div>
-    )
-  }
-  if (reply.status === "error") {
-    return (
-      <div role="alert" className="flex flex-wrap items-center gap-2 self-end text-sm text-destructive">
-        {reply.message}
-        {onRetry ? <button type="button" onClick={onRetry} className="underline underline-offset-4">Try again</button> : null}
-      </div>
-    )
-  }
-  return (
-    <div className="max-w-[90%] self-end whitespace-pre-wrap rounded-2xl rounded-tr-sm bg-foreground px-3 py-2 text-sm text-background">
-      {reply.text}
+      <CustomerBubble name={scenario.customerName} message={scenario.message} />
+      <VoiceReplyBubble reply={reply} onRetry={onRetry} />
     </div>
   )
 }

@@ -77,8 +77,9 @@ function StepRail({ idx, disabled, onNavigate }: { idx: number; disabled: boolea
 }
 
 function nextLabel(stepId: StepId, hasCustomerChannel: boolean, hasMessaging: boolean): string {
-  if (stepId === "email") return hasCustomerChannel ? "Continue" : "Set up messages later";
-  if (stepId === "connect") return hasMessaging ? "Try your first draft" : "Use the dashboard";
-  if (stepId === "plan") return "Open your workspace";
+  if (stepId === "voice") return "Use this voice";
+  if (stepId === "email") return hasCustomerChannel ? "Continue" : "Skip for now";
+  if (stepId === "connect") return hasMessaging ? "Continue" : "Skip for now";
+  if (stepId === "live") return "Open Shopkeeper";
   return "Continue";
 }
