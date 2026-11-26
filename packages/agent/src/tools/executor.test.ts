@@ -286,13 +286,13 @@ describe("execution refuses a fabricated tool call in every authority mode", () 
   });
 
   it("rejects an operator module tool named from a support turn", async () => {
-    // create_flash_sale is a gateway module tool. Discovery cannot return it
+    // approve_pending_plan is a gateway module tool. Discovery cannot return it
     // because it is not in the registry; execution cannot run it because the
     // support turn supplies no module tools. Both halves, not just the first.
-    const result = await executeToolWithStatus("create_flash_sale", { percent: 90 }, supportCtx());
+    const result = await executeToolWithStatus("approve_pending_plan", {}, supportCtx());
 
     expect(result.status).toBe("error");
-    expect(result.result).toContain('unknown tool "create_flash_sale"');
+    expect(result.result).toContain('unknown tool "approve_pending_plan"');
   });
 
   it.each([

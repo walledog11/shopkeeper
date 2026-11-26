@@ -25,11 +25,10 @@ item is checked by using the app in a browser, with screenshots in the PR.
    the narration that came with its last tool calls. Closes when a request forced past
    each limit answers from what it already found, and a request that still can't answer
    says so and reaches Sentry.
-3. **Cut what isn't the v1 support loop:** the operator shop-management tools (flash
-   sales, repricing), and the compatibility paths and their audits that exist only for
-   pre-launch data (reset the dev workspace instead). Website chat and the Telegram test
-   transport stay; direct Meta Instagram stays until SocialAPI's review closes. Closes
-   when they are deleted and the full loop still runs.
+3. **Cut the compatibility paths and their audits** that exist only for pre-launch data
+   (reset the dev workspace instead). Website chat and the Telegram test transport stay;
+   direct Meta Instagram stays until SocialAPI's review closes. Closes when they are
+   deleted and the full loop still runs.
 4. **A Voice page.** Sample customer messages (recent real ones plus where's my order,
    refund, damaged item, product question, angry customer), each with the reply the
    agent would send, rewritten live as tone, length, sign-off or plain feedback ("less

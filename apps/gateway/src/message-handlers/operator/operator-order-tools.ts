@@ -6,9 +6,9 @@ import {
   type GetOrderByNameInput,
 } from '@shopkeeper/agent/tools';
 import { getOrderStatusByName } from '@shopkeeper/agent/shopify';
-import { loadShopContext } from './operator-shop-tools.js';
+import { loadShopifyContext } from '../../lib/shopify-context.js';
 
-// Operator-only, like the shop tools, so the support planner's tool set is
+// Operator-only, so the support planner's tool set is
 // unchanged by this file. get_order_by_name stays the read for questions about
 // items, amounts or the address; this one exists so a plain status question is
 // answered from facts that cannot be padded into a paragraph.
@@ -31,9 +31,9 @@ export function buildOperatorOrderTools(
     label: 'Checked order status',
     planStepLabel: 'Check order status',
     execute: async (input: GetOrderByNameInput) => {
-      const shop = await loadShopContext(organizationId);
-      if (!shop) return toolError('Error: no Shopify integration connected.');
-      return getOrderStatusByName(input, shop.shopify);
+      const shopify = await loadShopifyContext(organizationId);
+      if (!shopify) return toolError('Error: no Shopify integration connected.');
+      return getOrderStatusByName(input, shopify);
     },
   });
 

@@ -40,9 +40,8 @@ approval or execution. Deploys, env, migrations and incident recovery are in
   (Next.js) owns interactive UI and the rest of provider delivery. Both send through
   `packages/messaging/` (`@shopkeeper/messaging`), each supplying its own alerting and
   analytics.
-- **Modules:** support is v1. Shop management (flash sales, repricing) is operator-only:
-  its write tools live in `apps/gateway/src/message-handlers/operator/operator-shop-tools.ts`,
-  never the shared registry.
+- **Modules:** support is v1. Shop management (flash sales, repricing) was cut on
+  2026-11-26. Operator-only tools live in gateway `moduleTools`, never the shared registry.
 - **Inbound flow:** webhook → `apps/gateway/src/routes/webhooks.ts` (verify, enqueue) →
   `apps/gateway/src/message-handlers/` (upsert, sanitize, dedupe by `externalMessageId`)
   → classify + summarize → plan in-process
@@ -124,16 +123,10 @@ These are the product. Do not loosen one without saying so in the PR.
   that leaves that record untouched. Invalid input is rejected before any write or
   provider call, a provider failure persists no local success, and a replayed webhook
   applies once.
-- **Shop-management writes stay operator-only** (gateway `moduleTools`); a test asserts
-  they never appear in `TOOL_DEFINITIONS`. Promotions are expiring automatic discounts,
-  never price edits. No refund tool lets the model name the amount. Every shop write
-  declares its Shopify scope (`requiredScopes`) and names a missing grant instead of
-  letting Shopify 403. **What a write may target follows how reversible it is, not how
-  large it is:** a sale is one discount that Shopify expires and one delete undoes, so
-  `create_flash_sale` may cover the whole catalog; `set_variant_prices` is N permanent
-  edits whose only rollback is the prior prices in its own result, so it names every
-  variant. Nothing bounds the size of a merchant-approved change — operator-only reach
-  plus the merchant's approval is the containment; do not reintroduce a size bound.
+- **Operator-only tools stay out of the shared registry** (gateway `moduleTools`), so a
+  support turn can neither discover nor execute them. No refund tool lets the model name
+  the amount. Every Shopify write declares its scope (`requiredScopes`) and names a
+  missing grant instead of letting Shopify 403.
 - **One decision, one owner.** `decideAutonomy` is the only planning-time answer to "may
   this run without a human?"; execution-time policy is the backstop. Never re-derive it.
 - **Validate, don't repair.** An invalid plan is kept intact for the merchant to see and

@@ -62,21 +62,20 @@ describe('list_recent_changes', () => {
     expect(result.message).toContain('No changes are on record');
   });
 
-  // The whole point of the tool: a reprice is permanent and the original prices
-  // exist nowhere else once the result leaves the model's context window.
-  it('reads back the original prices a reprice returned', async () => {
+  // The point of the tool: what a change was given and returned, once the result
+  // has left the model's context window.
+  it('reads back the input and result of an earlier change', async () => {
     await recordAction(org.id, {
-      tool: 'set_variant_prices',
+      tool: 'create_refund',
       category: 'action',
-      input: { prices: 'gid://shopify/ProductVariant/111=200.00' },
-      output: 'Repriced 1 variant(s).\nOriginal prices, for the record: '
-        + 'gid://shopify/ProductVariant/111 $148.00 -> $200.00',
+      input: { order_id: 'gid://shopify/Order/111' },
+      output: 'Refunded $148.00 on order #1001 (refund gid://shopify/Refund/222).',
     });
 
     const { message } = await listChanges();
-    expect(message).toContain('set_variant_prices');
-    expect(message).toContain('gid://shopify/ProductVariant/111');
-    expect(message).toContain('$148.00 -> $200.00');
+    expect(message).toContain('create_refund');
+    expect(message).toContain('gid://shopify/Order/111');
+    expect(message).toContain('gid://shopify/Refund/222');
   });
 
   it('leaves out reads and internal calls, which changed nothing', async () => {
@@ -96,9 +95,9 @@ describe('list_recent_changes', () => {
 
   it('never reaches another org', async () => {
     await recordAction(otherOrg.id, {
-      tool: 'set_variant_prices',
+      tool: 'create_refund',
       category: 'action',
-      output: 'Repriced 3 variant(s).',
+      output: 'Refunded $10.00.',
     });
 
     const { message } = await listChanges();
@@ -106,29 +105,29 @@ describe('list_recent_changes', () => {
   });
 
   it('filters to one tool by name', async () => {
-    await recordAction(org.id, { tool: 'create_flash_sale', category: 'action', output: 'Sale started.' });
-    await recordAction(org.id, { tool: 'set_variant_prices', category: 'action', output: 'Repriced.' });
+    await recordAction(org.id, { tool: 'cancel_order', category: 'action', output: 'Cancelled.' });
+    await recordAction(org.id, { tool: 'create_refund', category: 'action', output: 'Refunded.' });
 
-    const { message } = await listChanges({ tool: 'set_variant_prices' });
-    expect(message).toContain('set_variant_prices');
-    expect(message).not.toContain('create_flash_sale');
+    const { message } = await listChanges({ tool: 'create_refund' });
+    expect(message).toContain('create_refund');
+    expect(message).not.toContain('cancel_order');
   });
 
   it('says so when the named tool has no calls on record', async () => {
-    await recordAction(org.id, { tool: 'create_flash_sale', category: 'action' });
+    await recordAction(org.id, { tool: 'cancel_order', category: 'action' });
 
-    const { message } = await listChanges({ tool: 'set_variant_prices' });
-    expect(message).toContain('No set_variant_prices calls are on record');
+    const { message } = await listChanges({ tool: 'create_refund' });
+    expect(message).toContain('No create_refund calls are on record');
   });
 
   // An unconfirmed write is the row most worth reading: it is the one case where
   // the merchant has to go look at the store before acting again.
   it('names a status that is not success', async () => {
     await recordAction(org.id, {
-      tool: 'set_variant_prices',
+      tool: 'create_refund',
       category: 'action',
       status: 'unknown',
-      output: 'Unknown: repricing may have committed at Shopify but could not be confirmed.',
+      output: 'Unknown: the refund may have committed at Shopify but could not be confirmed.',
     });
 
     const { message } = await listChanges();
@@ -139,19 +138,19 @@ describe('list_recent_changes', () => {
     const base = Date.now() - 60 * 60 * 1000;
     for (let index = 0; index < 12; index += 1) {
       await recordAction(org.id, {
-        tool: 'create_flash_sale',
+        tool: 'cancel_order',
         category: 'action',
-        output: `sale-${index}`,
+        output: `cancel-${index}`,
         executedAt: new Date(base + index * 1000),
       });
     }
 
     const { message } = await listChanges();
     expect(message).toContain('10 recent changes, newest first');
-    expect(message).toContain('sale-11');
-    expect(message).toContain('sale-2');
-    expect(message).not.toContain('sale-0');
-    expect(message.indexOf('sale-11')).toBeLessThan(message.indexOf('sale-10'));
+    expect(message).toContain('cancel-11');
+    expect(message).toContain('cancel-2');
+    expect(message).not.toContain('cancel-0');
+    expect(message.indexOf('cancel-11')).toBeLessThan(message.indexOf('cancel-10'));
   });
 
   // A refund note or an email body is customer-authored prose sitting in an

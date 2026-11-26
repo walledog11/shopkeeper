@@ -34,7 +34,6 @@ Prefer `railway run` (or the env file noted in each file) over copying secrets l
 | `inspect-ticket-memory.ts` | What Memory one ticket's planning could read: pre-loaded articles, searches, citations |
 | `review-customer-data-access.ts` | Runbook *Customer data access review* (weekly) |
 | `measure-agent-prompt.ts` | Per-section prompt token counts (`count_tokens`, no spend) before changing tool schemas |
-| `inspect-flash-sales.ts` | The only live-store check of the `end_flash_sale` discount query |
 | `backdate-episode-clock.ts`, `inspect-escalation-routing.ts` | [Storefront chat verification](../../../../docs/production/storefront-chat-verification-2026-08.md) |
 
 ## Adding a script

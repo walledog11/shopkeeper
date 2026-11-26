@@ -109,8 +109,8 @@ const SUPPORT_TOOLS = selectAgentTools(undefined, null, null)
 const GUEST_TOOLS = selectAgentTools(undefined, GUEST_TOOL_NAMES, null);
 const VERIFIED_TOOLS = selectAgentTools(undefined, VERIFIED_TOOL_NAMES, null);
 const OPERATOR_MODULE_TOOL: Anthropic.Tool = {
-  name: "create_flash_sale",
-  description: "Start a flash sale discounting the catalog or named variants for a number of hours.",
+  name: "approve_pending_plan",
+  description: "Approve the merchant's pending plan card and run it.",
   input_schema: { type: "object", properties: {}, additionalProperties: false },
 };
 const MERCHANT_TOOLS = [...SUPPORT_TOOLS, OPERATOR_MODULE_TOOL];
@@ -136,10 +136,10 @@ describe("discoverCapabilityTools", () => {
   });
 
   it("surfaces a merchant turn's capability without reaching its module schemas", () => {
-    // create_flash_sale is a gateway module tool, not a registry one. Discovery
+    // approve_pending_plan is a gateway module tool, not a registry one. Discovery
     // reads the registry, so the only way to hold it stays the module's own
     // tool set — asking for it here is not a second way in.
-    expect(discovered(MERCHANT_TOOLS, "run a flash sale on the catalog")).not.toContain("create_flash_sale");
+    expect(discovered(MERCHANT_TOOLS, "approve the pending plan")).not.toContain("approve_pending_plan");
     expect(discovered(MERCHANT_TOOLS, "how support is doing this week")).toContain("get_support_stats");
   });
 

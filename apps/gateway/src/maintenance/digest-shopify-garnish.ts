@@ -1,4 +1,3 @@
-import { db } from '@shopkeeper/db';
 import {
   formatLowStockLine,
   formatSalesPulseLine,
@@ -6,9 +5,8 @@ import {
   shiftWindowByDays,
   ShopifyRequestError,
   summarizeOrdersInWindow,
-  type ShopifyContext,
 } from '@shopkeeper/agent/shopify';
-import { SHOPIFY_ACCESS_SELECT, shopifyContextFor } from '@shopkeeper/agent/shopify/access';
+import { loadShopifyContext } from '../lib/shopify-context.js';
 import logger from '../logger.js';
 import { resolveHandledWindowStart } from './digest-briefing/index.js';
 
@@ -23,14 +21,6 @@ function resolveLowStockThreshold(settings: Record<string, unknown>): number | n
   if (threshold == null) return null;
   if (typeof threshold !== 'number' || !Number.isFinite(threshold) || threshold < 0) return null;
   return Math.floor(threshold);
-}
-
-async function loadShopifyContext(organizationId: string): Promise<ShopifyContext | null> {
-  const integration = await db.integration.findFirst({
-    where: { organizationId, platform: 'shopify', accessToken: { not: null } },
-    select: SHOPIFY_ACCESS_SELECT,
-  });
-  return integration ? shopifyContextFor(integration) : null;
 }
 
 function logGarnishFailure(

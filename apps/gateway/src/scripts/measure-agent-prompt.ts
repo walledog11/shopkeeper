@@ -24,7 +24,6 @@ async function main() {
   const { buildSystemPromptParts } = await import('@shopkeeper/agent/prompt');
   const { buildContext } = await import('@shopkeeper/agent/build-context');
   const { resolveAgentSettings } = await import('@shopkeeper/agent/settings');
-  const { buildOperatorShopTools } = await import('../message-handlers/operator/operator-shop-tools.js');
   const { buildOperatorInboxTools } = await import('../message-handlers/operator/operator-inbox-tools.js');
   const { buildOperatorProductHelpTools } = await import('../message-handlers/operator/operator-product-help-tools.js');
   const { gatewayThreadSink } = await import('../message-handlers/support-plan/agent-thread-sink.js');
@@ -67,7 +66,6 @@ async function main() {
   const moduleTools = {
     ...buildOperatorInboxTools({ organizationId: orgId, clerkUserId: 'measure-agent-prompt' }),
     ...buildOperatorProductHelpTools(),
-    ...buildOperatorShopTools({ organizationId: orgId }),
   };
   const tools = Object.values(moduleTools).map((def) => ({
     name: def.name,

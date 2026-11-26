@@ -3,15 +3,10 @@ import { defineTool, stringArg, toolOk, type AgentToolDefinition } from '@shopke
 import { wrapUntrusted } from '@shopkeeper/agent/message-history';
 import { ageOf, truncate } from '../../routes/operator/format.js';
 
-// `AgentAction` is the audit trail for every tool call the agent makes, and
-// until now nothing on the operator side could read it. That mattered most for
-// the one write with no reversal tool: `set_variant_prices` is permanent, and
-// the original prices come back only in its own result, so the undo existed
-// only for as long as that result stayed in the model's context window.
-// Operator threads are one per binding and effectively permanent, so the
-// context window is the thing that turns over, not the thread — asked to
-// reverse a reprice a day later the agent guessed variant IDs and fell back to
-// product search. This reads the record back instead of remembering it.
+// `AgentAction` is the audit trail for every tool call the agent makes. Operator
+// threads are one per binding and effectively permanent, so the context window
+// is the thing that turns over, not the thread: asked about a change a day
+// later, the agent would be recalling it. This reads the record back instead.
 
 interface ListRecentChangesInput {
   tool?: string;
@@ -33,9 +28,9 @@ export function buildOperatorActionHistoryTools(
   const listRecentChanges = defineTool({
     name: 'list_recent_changes',
     description:
-      'Read back the changes you have already made for this store — repricing, sales, refunds, emails sent — with the exact input each one was given and the result it returned. Call this before undoing or reporting on an earlier change instead of recalling it from the conversation: the record here is complete and current, and what you remember may be neither. A set_variant_prices result carries the original prices, which is the only way to put a permanent reprice back. Failed and unconfirmed changes are listed too, so this also answers whether something actually went through.',
+      'Read back the changes you have already made for this store — refunds, order edits, emails sent — with the exact input each one was given and the result it returned. Call this before undoing or reporting on an earlier change instead of recalling it from the conversation: the record here is complete and current, and what you remember may be neither. Failed and unconfirmed changes are listed too, so this also answers whether something actually went through.',
     fields: {
-      tool: stringArg('Only list calls to this tool, e.g. "set_variant_prices". Omit to list every recent change.'),
+      tool: stringArg('Only list calls to this tool, e.g. "create_refund". Omit to list every recent change.'),
     },
     category: 'read',
     group: 'insights',

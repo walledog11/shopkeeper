@@ -11,10 +11,6 @@ import {
   CUSTOMER_CREATE_MUTATION,
   CUSTOMER_UPDATE_MUTATION,
 } from "./customer-writes.js";
-import {
-  AUTOMATIC_DISCOUNT_CREATE_MUTATION,
-  AUTOMATIC_DISCOUNT_DELETE_MUTATION,
-} from "./flash-sales.js";
 import { FULFILLMENT_CREATE_MUTATION } from "./fulfillment.js";
 import { GIFT_CARD_CREATE_MUTATION } from "./gift-cards.js";
 import { ORDER_SHIPPING_ADDRESS_UPDATE_MUTATION } from "./order-address.js";
@@ -30,7 +26,6 @@ import { REFUND_CREATE_MUTATION } from "./refunds.js";
 import { PARTIAL_REFUND_MUTATION } from "./partial-refunds.js";
 import { REVERSE_DELIVERY_CREATE_WITH_SHIPPING_MUTATION } from "./return-labels.js";
 import { RETURN_CREATE_MUTATION } from "./returns.js";
-import { VARIANT_PRICE_UPDATE_MUTATION } from "./variant-pricing.js";
 
 export interface ShopifyMutationDocument {
   document: string;
@@ -107,18 +102,6 @@ export const SHOPIFY_MUTATION_DOCUMENTS: Record<string, ShopifyMutationDocument>
   returnCreate: {
     document: RETURN_CREATE_MUTATION,
     rootField: "returnCreate",
-  },
-  flashSaleCreate: {
-    document: AUTOMATIC_DISCOUNT_CREATE_MUTATION,
-    rootField: "discountAutomaticBasicCreate",
-  },
-  flashSaleEnd: {
-    document: AUTOMATIC_DISCOUNT_DELETE_MUTATION,
-    rootField: "discountAutomaticDelete",
-  },
-  variantPriceUpdate: {
-    document: VARIANT_PRICE_UPDATE_MUTATION,
-    rootField: "productVariantsBulkUpdate",
   },
 };
 

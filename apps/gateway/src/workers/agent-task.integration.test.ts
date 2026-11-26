@@ -50,10 +50,10 @@ import { readAgentPlanCacheRecordShape } from '@shopkeeper/agent/plan-cache-shap
 const fetchMock = vi.fn();
 let orgId: string | undefined;
 
-function discountMutations() {
+function customerUpdateMutations() {
   return fetchMock.mock.calls.filter(([, init]) => (
     typeof (init as RequestInit | undefined)?.body === 'string'
-    && ((init as RequestInit).body as string).includes('discountAutomaticBasicCreate')
+    && ((init as RequestInit).body as string).includes('customerUpdate')
   ));
 }
 
@@ -70,14 +70,14 @@ async function seedQueuedTask() {
     platform: ChannelType.shopify,
     externalAccountId: 'task-stop-store.myshopify.com',
     accessToken: 'shpat_test',
-    metadata: { oauthScopes: ['write_discounts', 'read_products'] },
+    metadata: { oauthScopes: ['write_customers'] },
   });
   const input = {
     organizationId: org.id,
     clerkUserId: member.clerkUserId,
     threadId: thread.id,
     dedupeKey: randomUUID(),
-    instruction: 'Put the whole store on 20% off for the weekend',
+    instruction: "Change customer 123's first name to Jamie",
   };
   const chatId = `task-stop-${randomUUID()}`;
   await db.orgMemberTelegramChat.create({ data: { orgMemberId: member.id, chatId } });
@@ -95,13 +95,13 @@ async function seedQueuedTask() {
   return { input, task, event };
 }
 
-const storewideSale = {
+const customerRename = {
   stop_reason: 'tool_use',
   content: [{
     type: 'tool_use',
-    id: 'tu_sale',
-    name: 'create_flash_sale',
-    input: { applies_to: 'entire_catalog', discount_percentage: 20, duration_hours: 48 },
+    id: 'tu_customer',
+    name: 'update_shopify_customer_info',
+    input: { customer_id: '123', first_name: 'Jamie' },
   }],
   usage: { input_tokens: 900, output_tokens: 60 },
 };
@@ -118,9 +118,9 @@ beforeEach(() => {
   fetchMock.mockReset();
   fetchMock.mockResolvedValue(new Response(JSON.stringify({
     data: {
-      discountAutomaticBasicCreate: {
-        automaticDiscountNode: null,
-        userErrors: [{ field: ['title'], message: 'Title has already been taken' }],
+      customerUpdate: {
+        customer: null,
+        userErrors: [{ field: ['id'], message: 'Customer does not exist' }],
       },
     },
   }), { status: 200, headers: { 'content-type': 'application/json' } }));
@@ -149,7 +149,7 @@ describe('processAgentTaskJob', () => {
     };
     const { task } = await acceptTicketAgentRequest(input);
     anthropicCreate.mockResolvedValueOnce({
-      ...storewideSale,
+      ...customerRename,
       content: [{ type: 'tool_use', id: 'tu_reply', name: 'send_reply', input: { text: 'Thanks for contacting us. We are reviewing your request.' } }],
     }).mockResolvedValue(finished);
 
@@ -230,16 +230,16 @@ describe('processAgentTaskJob', () => {
         taskId: task.id,
         expectedRevision: task.revision,
       });
-      return storewideSale;
+      return customerRename;
     });
     anthropicCreate.mockResolvedValue(finished);
 
     await processAgentTaskJob({ organizationId: input.organizationId, taskId: task.id, revision: task.revision });
 
-    expect(discountMutations()).toHaveLength(0);
+    expect(customerUpdateMutations()).toHaveLength(0);
     expect(anthropicCreate).toHaveBeenCalledTimes(1);
     const action = await db.agentAction.findFirstOrThrow({
-      where: { organizationId: input.organizationId, tool: 'create_flash_sale' },
+      where: { organizationId: input.organizationId, tool: 'update_shopify_customer_info' },
     });
     expect(action.taskId).toBe(task.id);
     expect(action.dispatchState).toBe('prepared');
@@ -262,11 +262,11 @@ describe('processAgentTaskJob', () => {
     await updateContext(input.organizationId, task.initiatingActorKey, {
       pendingQuestion: { threadId: ticket.id, question: 'Does the customer want a replacement?' },
     });
-    anthropicCreate.mockResolvedValueOnce(storewideSale).mockResolvedValue(finished);
+    anthropicCreate.mockResolvedValueOnce(customerRename).mockResolvedValue(finished);
 
     await processAgentTaskJob({ organizationId: input.organizationId, taskId: task.id, revision: task.revision });
 
-    expect(discountMutations()).toHaveLength(1);
+    expect(customerUpdateMutations()).toHaveLength(1);
     const stored = await db.agentTask.findUniqueOrThrow({ where: { id: task.id } });
     expect(stored.modelCallsUsed).toBe(2);
     expect(stored.spentNanoUsd).toBeGreaterThan(0n);

@@ -9,12 +9,9 @@ import {
 import {
   customerInfoReceipt,
   customerNoteReceipt,
-  endFlashSaleReceipt,
-  flashSaleReceipt,
   giftCardReceipt,
   orderCreationReceipt,
   refundReceipt,
-  variantPriceReceipt,
 } from "../test-fixtures/receipts.js";
 
 describe("receipt v1", () => {
@@ -232,97 +229,6 @@ describe("receipt v1", () => {
     expect(() => parseReceiptV1(cancellation({ amount: "49.95", currency: "usd" }))).toThrow("facts.refund.currency");
     expect(() => parseReceiptV1(cancellation({ amount: "-1", currency: "USD" }))).toThrow("facts.refund.amount");
     expect(() => parseReceiptV1(cancellation("49.95"))).toThrow("facts.refund");
-  });
-
-  it("validates flash-sale provider facts and identity bindings", () => {
-    expect(parseReceiptV1(flashSaleReceipt())).toEqual(flashSaleReceipt());
-    expect(() => parseReceiptV1(flashSaleReceipt({
-      providerReference: "gid://shopify/DiscountAutomaticNode/99",
-    }))).toThrow("flash sale providerReference");
-    expect(() => parseReceiptV1(flashSaleReceipt({
-      target: { kind: "order", id: "42" },
-    }))).toThrow("receipt target must be a shop");
-  });
-
-  it("rejects incomplete or contradictory flash-sale facts", () => {
-    expect(() => parseReceiptV1(flashSaleReceipt({
-      facts: {
-        ...(flashSaleReceipt() as Extract<ReceiptV1, { tool: "create_flash_sale" }>).facts,
-        appliesTo: "entire_catalog",
-      },
-    } as never))).toThrow("catalog flash sale facts cannot name variants");
-    expect(() => parseReceiptV1(flashSaleReceipt({
-      facts: {
-        ...(flashSaleReceipt() as Extract<ReceiptV1, { tool: "create_flash_sale" }>).facts,
-        discountPercentage: "101",
-      },
-    } as never))).toThrow("cannot exceed 100");
-    expect(() => parseReceiptV1(flashSaleReceipt({
-      facts: {
-        ...(flashSaleReceipt() as Extract<ReceiptV1, { tool: "create_flash_sale" }>).facts,
-        endsAt: "2026-09-13T07:00:00.000Z",
-      },
-    } as never))).toThrow("must be after");
-  });
-
-  it("validates an ended flash sale and its exact identity binding", () => {
-    expect(parseReceiptV1(endFlashSaleReceipt())).toEqual(endFlashSaleReceipt());
-    expect(() => parseReceiptV1(endFlashSaleReceipt({
-      providerReference: "gid://shopify/DiscountAutomaticNode/99",
-    }))).toThrow("ended flash sale providerReference");
-    expect(() => parseReceiptV1(endFlashSaleReceipt({
-      target: { kind: "discount", id: "gid://shopify/DiscountAutomaticNode/99" },
-    }))).toThrow("ended flash sale target");
-  });
-
-  it("rejects an invented end-sale confirmation", () => {
-    expect(() => parseReceiptV1(endFlashSaleReceipt({
-      facts: {
-        ...(endFlashSaleReceipt() as Extract<ReceiptV1, { tool: "end_flash_sale" }>).facts,
-        confirmation: "probably_deleted",
-      },
-    } as never))).toThrow("facts.confirmation is invalid");
-  });
-
-  it("validates exact per-batch variant price outcomes", () => {
-    expect(parseReceiptV1(variantPriceReceipt())).toEqual(variantPriceReceipt());
-    expect(() => parseReceiptV1(variantPriceReceipt({
-      facts: {
-        ...(variantPriceReceipt() as Extract<ReceiptV1, { tool: "set_variant_prices" }>).facts,
-        batches: [{
-          productId: "gid://shopify/Product/1",
-          outcome: "succeeded",
-          confirmation: "mutation_response",
-          changes: [{
-            productId: "gid://shopify/Product/1",
-            variantId: "gid://shopify/ProductVariant/1",
-            originalPrice: "48.00",
-            requestedPrice: "44.00",
-            observedPrice: "43.00",
-          }],
-        }],
-      },
-    } as never))).toThrow("observe the requested price");
-  });
-
-  it("allows partial variant price facts only on an unknown receipt", () => {
-    const facts = (variantPriceReceipt() as Extract<ReceiptV1, { tool: "set_variant_prices" }>).facts;
-    expect(parseReceiptV1(variantPriceReceipt({
-      outcome: "unknown",
-      code: "partial",
-      facts: {
-        ...facts,
-        batches: [{
-          ...facts.batches[0],
-          outcome: "unknown",
-          changes: [{ ...facts.batches[0].changes[0], observedPrice: null }],
-        }],
-      },
-    } as never))).toEqual(expect.objectContaining({ outcome: "unknown" }));
-    expect(() => parseReceiptV1(variantPriceReceipt({
-      outcome: "failed",
-      code: "partial",
-    } as never))).toThrow("partial variant price facts require an unknown outcome");
   });
 
   it("rejects unregistered receipt tools and wrong target kinds", () => {

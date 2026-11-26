@@ -179,41 +179,6 @@ export interface GiftCardReceiptFactsV1 {
   notificationRequested: true;
 }
 
-export interface FlashSaleReceiptFactsV1 {
-  flashSaleId: string;
-  appliesTo: "entire_catalog" | "variants";
-  variantIds: string[];
-  discountPercentage: string;
-  startsAt: string;
-  endsAt: string;
-  providerStatus: string;
-}
-
-export interface EndFlashSaleReceiptFactsV1 {
-  flashSaleId: string;
-  confirmation: "deleted" | "absent_after_ambiguous_response";
-}
-
-export interface VariantPriceReceiptChangeV1 {
-  productId: string;
-  variantId: string;
-  originalPrice: string;
-  requestedPrice: string;
-  observedPrice: string | null;
-}
-
-export interface VariantPriceReceiptBatchV1 {
-  productId: string;
-  outcome: "succeeded" | "failed" | "unknown";
-  confirmation: "mutation_response" | "read_after_ambiguous_response" | "provider_rejected" | "not_attempted";
-  changes: VariantPriceReceiptChangeV1[];
-}
-
-export interface VariantPriceReceiptFactsV1 {
-  currency: string | null;
-  batches: VariantPriceReceiptBatchV1[];
-}
-
 export interface InternalNoteReceiptFactsV1 {
   threadId: string;
   messageId: string;
@@ -263,9 +228,6 @@ export interface ReceiptFactsByToolV1 {
   update_shopify_customer_info: CustomerInfoReceiptFactsV1;
   add_shopify_customer_note: CustomerNoteReceiptFactsV1;
   create_gift_card: GiftCardReceiptFactsV1;
-  create_flash_sale: FlashSaleReceiptFactsV1;
-  end_flash_sale: EndFlashSaleReceiptFactsV1;
-  set_variant_prices: VariantPriceReceiptFactsV1;
   add_internal_note: InternalNoteReceiptFactsV1;
   update_thread_status: ThreadStatusReceiptFactsV1;
   update_thread_tag: ThreadTagReceiptFactsV1;
@@ -303,13 +265,6 @@ type OrderEditPartialUnknownReceiptV1 = ReceiptBaseV1<"edit_shopify_order"> & {
   facts: OrderEditReceiptFactsV1;
 };
 
-type VariantPricePartialUnknownReceiptV1 = ReceiptBaseV1<"set_variant_prices"> & {
-  outcome: "unknown";
-  code: string;
-  providerReference: string;
-  facts: VariantPriceReceiptFactsV1;
-};
-
 type CommunicationPartialUnknownReceiptV1 = ReceiptBaseV1<"send_reply" | "send_email" | "send_ticket_reply"> & {
   outcome: "unknown";
   code: string;
@@ -321,7 +276,6 @@ export type ReceiptFailureV1 =
   | ReceiptFailureWithoutPartialFactsV1
   | OrderAddressPartialUnknownReceiptV1
   | OrderEditPartialUnknownReceiptV1
-  | VariantPricePartialUnknownReceiptV1
   | CommunicationPartialUnknownReceiptV1;
 
 export type ReceiptV1 = ReceiptSuccessV1 | ReceiptFailureV1;
