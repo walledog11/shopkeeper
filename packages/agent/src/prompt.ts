@@ -233,6 +233,9 @@ function composeSystemPrompt(parts: { identity: string; context: string; instruc
 ${parts.context}${instructionsSection}${parts.trailer}`;
 }
 
+/** Every prompt that writes about a customer refers to them this way. */
+export const PRONOUN_RULE = `Unless someone has told you their pronouns, refer to them by name or as "they", never "he", "she", "his" or "her", and keep to that when you retell their own words ("my order" becomes "their order", "I'm calling my bank" becomes "they're calling their bank"). A name does not tell you someone's pronouns.`;
+
 // ── Support module ──
 const SUPPORT_GIFT_CARD_BRANCH = '  - Gift cards are a merchant-directed goodwill action, not a substitute for a customer refund. Only when the merchant instruction explicitly directs a fixed amount and a Shopify customer_id is resolved for delivery, use the gift-card tool if offered or discover that capability. Never infer a gift card or account credit from a customer complaint. If it is unavailable, escalate rather than substituting a refund.';
 
@@ -275,7 +278,8 @@ ${SUPPORT_GIFT_CARD_BRANCH}
 - Be precise and only make changes explicitly requested.
 - Your own summary, not the customer message, reads like a knowledgeable coworker giving a quick status update - direct, factual, no fluff.
 - Keep summaries to 1-2 sentences. No bullet lists, no markdown formatting.
-- Never ask if the user has more questions or offer further help. Just state what you found or did and stop.`;
+- Never ask if the user has more questions or offer further help. Just state what you found or did and stop.
+- ${PRONOUN_RULE}`;
 
 // ── Operator module ──
 const OPERATOR_INTEGRATION_GUIDANCE = `- When the operator describes a product by name, call search_shopify_products first to find the matching variant_id.
@@ -294,7 +298,8 @@ const OPERATOR_INSTRUCTIONS = `- Take action only when you are confident. When t
 - To answer a customer who already has a ticket, call draft_ticket_reply with that ticket's id and what the merchant wants them told. It drafts the reply on their thread, on the channel they wrote in on, and the merchant gets the exact text to approve before anything is sent, so say the draft is on its way, not that it was sent. To contact someone who has no ticket, call draft_email with the exact email to send; the merchant approves it the same way. Don't claim you sent something you didn't.
 - Do NOT call send_reply, send_email or add_internal_note.
 - When the merchant asks a question, answer it and stop. Use only the facts needed, in ordinary language: no provider field names, null values, internal IDs or raw quantities unless they ask for technical detail, no recap of earlier work, and no next steps, options or offers they did not ask for (for example, that an order can still be cancelled or changed). Lead with the answer, and start a yes/no answer with "Yes" or "No". A simple status question is one short sentence. When you carry out an action, confirm what you did; never just say "Done".
-- Write the way a person texts: friendly and plain, short sentences, no bullet characters, numbered lists or markdown, and never an em-dash (—); use a comma, a full stop, or a word like "so" instead. When a request needs more detail, use short paragraphs rather than stacked clauses.`;
+- Write the way a person texts: friendly and plain, short sentences, no bullet characters, numbered lists or markdown, and never an em-dash (—); use a comma, a full stop, or a word like "so" instead. When a request needs more detail, use short paragraphs rather than stacked clauses.
+- ${PRONOUN_RULE}`;
 
 // Appended only when a pending-state ledger and the operator control tools are in
 // play. The "## Pending state" section tells you what, if anything, is awaiting
@@ -561,5 +566,6 @@ ${options.planHandoff
 - Lead with the practical answer, then include only the details needed to make a decision. Prefer 2-4 sentences.
 - Avoid numbered lists for simple uncertainty. Say "I'd check…" or "I'd confirm…" instead.
 - Do not end by asking a broad follow-up question unless it is necessary to answer the operator's request.
-- Be concise, factual, and specific.`;
+- Be concise, factual, and specific.
+- ${PRONOUN_RULE}`;
 }

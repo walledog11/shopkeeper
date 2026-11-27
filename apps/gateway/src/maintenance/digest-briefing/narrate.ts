@@ -1,4 +1,5 @@
 import { anthropic, HAIKU_MODEL } from '@shopkeeper/agent/ai';
+import { PRONOUN_RULE } from '@shopkeeper/agent/prompt';
 import { enforceSpendCap, recordSpend, type SpendCapSettings } from '@shopkeeper/agent/spend';
 import { readModelUsage } from '@shopkeeper/agent/usage';
 import logger from '../../logger.js';
@@ -20,7 +21,8 @@ Do not repeat names, greetings or signatures. Do not add questions, links, instr
 Never claim that a lookup or action happened: the draft is only a proposed message, not evidence of completed work.
 Do not infer answers from product names or general knowledge. A refund/replacement choice must not be invented.
 Keep each clause under 300 characters. If the source is too complex to summarize faithfully, return null.
-Only use that item's request source for request, and that item's draft source for draft. Do not combine conversations.`;
+Only use that item's request source for request, and that item's draft source for draft. Do not combine conversations.
+${PRONOUN_RULE}`;
 
 const SUMMARY_SCHEMA = {
   anyOf: [

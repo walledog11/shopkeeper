@@ -1,4 +1,5 @@
 import { anthropic, HAIKU_MODEL } from '@shopkeeper/agent/ai';
+import { PRONOUN_RULE } from '@shopkeeper/agent/prompt';
 import { enforceSpendCap, recordSpend } from '@shopkeeper/agent/spend';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { readModelUsage } from '@shopkeeper/agent/usage';
@@ -65,7 +66,8 @@ next steps: those are not blocker facts, policy, authority or available remedies
 The handoff does not complete the customer's request. Do not add a proposed
 response, remedy, policy, action claim, question, heading or link. The application
 asks the merchant how to respond after these statements. If either statement
-cannot be supported by its source, return empty text and evidence for it.`,
+cannot be supported by its source, return empty text and evidence for it.
+${PRONOUN_RULE}`,
     messages: [{ role: 'user', content: JSON.stringify({
       customerName: input.customerName, request: input.request, reason: input.reason,
     }) }],

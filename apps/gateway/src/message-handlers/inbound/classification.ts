@@ -6,6 +6,7 @@ import {
 } from '@shopkeeper/db';
 import { isSpendCapError } from '@shopkeeper/db';
 import { requestAwaitsMerchant } from '@shopkeeper/agent/task-ledger';
+import { PRONOUN_RULE } from '@shopkeeper/agent/prompt';
 import type Anthropic from '@anthropic-ai/sdk';
 import {
   anthropic,
@@ -249,6 +250,8 @@ Read the customer message and produce these fields in strict JSON:
   - "deadlineText": the customer's own words that set that date ("before Friday", "by the 30th"), at most 40 characters. Null when they named no timing.
   - "alternative": a second option the customer said they would also accept, from the same list as "ask" ("refund or exchange" → ask "refund", alternative "exchange"). Null when they offered none.
   - "reason": why the customer wants it (not the classification "reason" above), exactly one of "damaged" (arrived broken, cracked, torn, dented or crushed), "defective" (arrived intact but does not work or has a manufacturing fault), "wrong_item" (a different item, size or colour than the one they ordered), "not_received" (never arrived), "late" (arrived or is arriving later than expected), "changed_mind" (no longer wants it, including when it does not fit, suit or meet their needs and nothing is wrong with it), "other". Null when they gave no reason.
+
+In every field: ${PRONOUN_RULE}
 
 Respond ONLY in strict JSON: {"title":"...","summary":"...","tag":"...","classification":"...","reason":"...","language":"en","intents":${JSON.stringify(emptyIntents())},"requestSummary":"...","requestDisposition":"...","requestFacts":{"ask":"none","subject":null,"order":null,"deadline":null,"deadlineText":null,"alternative":null,"reason":null}}`;
 
