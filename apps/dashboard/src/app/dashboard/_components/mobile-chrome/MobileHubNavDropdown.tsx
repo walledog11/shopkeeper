@@ -225,7 +225,7 @@ export function MobileHubNavDropdown({
                               >
                                 <User className="size-[18px] shrink-0 stroke-[1.5] text-sidebar-foreground/70" />
                                 <div className="min-w-0 flex-1">
-                                  <p className="text-sm font-medium leading-tight">Account settings</p>
+                                  <p className="text-sm font-medium leading-tight">Your login</p>
                                   <p className="mt-0.5 truncate text-xs text-muted-foreground">{fullName}</p>
                                 </div>
                               </Link>

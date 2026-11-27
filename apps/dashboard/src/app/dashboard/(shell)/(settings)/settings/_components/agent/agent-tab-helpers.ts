@@ -47,7 +47,7 @@ function hasSettingsPath(settings: SettingsLike, path: AutonomyOverridePath): bo
   return isRecord(nested) && Object.prototype.hasOwnProperty.call(nested, second)
 }
 
-export function readSettingsPath(settings: SettingsLike, path: AutonomyOverridePath): unknown {
+function readSettingsPath(settings: SettingsLike, path: AutonomyOverridePath): unknown {
   const [first, second] = path.split(".")
   const root = settings as Record<string, unknown>
   if (!second) return root[first]
@@ -96,13 +96,8 @@ function tierResolvedSettings(tier: AutonomyTier): OrgSettings {
   return resolveAgentSettings({ autonomyTier: tier })
 }
 
-export function tierDefaultForPath(tier: AutonomyTier, path: AutonomyOverridePath): unknown {
+function tierDefaultForPath(tier: AutonomyTier, path: AutonomyOverridePath): unknown {
   return readSettingsPath(tierResolvedSettings(tier), path)
-}
-
-export function resetPathToTierDefault(settings: OrgSettings, path: AutonomyOverridePath): OrgSettings {
-  const tier = settings.autonomyTier ?? "guarded"
-  return writeSettingsPath(settings, path, tierDefaultForPath(tier, path)) as OrgSettings
 }
 
 export function applyTierDefaultsToInheritedSettings(

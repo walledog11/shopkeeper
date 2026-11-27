@@ -1,9 +1,7 @@
-import { settingsSectionMetadata } from "@/app/dashboard/_components/nav-items"
-import AgentSettingsForm from "../_components/agent/AgentSettingsForm"
-import { loadAgentSettingsForm } from "../_components/agent/load-agent-settings"
+import { redirect } from "next/navigation"
+import { settingsSectionHref } from "@/app/dashboard/_components/nav-items"
 
-export const metadata = settingsSectionMetadata("hours")
-
-export default async function HoursSettingsPage() {
-  return <AgentSettingsForm {...await loadAgentSettingsForm("hours")} />
+// Business hours moved to When and where it reaches you.
+export default function HoursSettingsPage() {
+  redirect(settingsSectionHref("briefing"))
 }

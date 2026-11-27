@@ -45,13 +45,18 @@ describe("deterministic compensation policy matrix", () => {
     )).toMatchObject({ blocked: true });
   });
 
-  it("blocks compensation in watch mode and requires gift-card delivery identity", () => {
+  it("holds watch mode to the default refund cap and requires gift-card delivery identity", () => {
     const settings = resolveAgentSettings({ autonomyTier: "watch" });
+    expect(checkStaticToolPolicy(
+      "create_refund",
+      { order_id: "1001", amount: "50.01", currency: "USD" },
+      settings,
+    )).toMatchObject({ blocked: true });
     expect(checkStaticToolPolicy(
       "create_refund",
       { order_id: "1001", amount: "1.00", currency: "USD" },
       settings,
-    )).toMatchObject({ blocked: true });
+    )).toMatchObject({ blocked: false });
 
     const guarded = resolveAgentSettings({ autonomyTier: "guarded" });
     expect(checkStaticToolPolicy("create_gift_card", { amount: "20.00" }, guarded)).toMatchObject({

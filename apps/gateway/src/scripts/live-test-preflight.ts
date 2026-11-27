@@ -114,7 +114,7 @@ async function main(): Promise<void> {
 
   const phones = await db.orgMemberImessageBinding.count({ where: { orgMember: { organizationId: organization.id } } });
   if (phones > 0) ok(`${phones} phone(s) linked for approvals`);
-  else fail('No phone linked: approval cards have nowhere to go (Settings → Phone & briefing)');
+  else fail('No phone linked: approval cards have nowhere to go (Settings → When and where it reaches you)');
 
   const settings = resolveAgentSettings(organization.settings);
   const limit = settings.maxRefundAmount;

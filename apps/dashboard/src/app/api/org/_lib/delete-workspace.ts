@@ -3,7 +3,7 @@ import { readOptionalJsonObject } from '@/lib/api/body';
 import logger from '@/lib/server/logger';
 
 export const LAST_WORKSPACE_MESSAGE =
-  'This is your only workspace. Create another workspace first, or delete your account from Account settings.';
+  'This is your only workspace. Create another workspace first, or delete your account from Your login.';
 
 export interface ClerkMembershipList {
   data: Array<{ organization: { id: string } }>;

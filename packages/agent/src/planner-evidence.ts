@@ -128,7 +128,7 @@ function compensationOverCapReason({ toolName, amount, cap, currency }: Compensa
   const total = formatMoney(amount, currency, { exact: true });
   const limit = formatMoney(cap, currency);
   return toolName === "create_refund"
-    ? `The full refund is ${total} with shipping and tax, over your ${limit} limit for a single refund. Refund it yourself in Shopify, or raise the limit in Settings → Approvals & limits.`
+    ? `The full refund is ${total} with shipping and tax, over your ${limit} limit for a single refund. Refund it yourself in Shopify, or raise the limit in Settings → What it can do on its own.`
     : `This comes to ${total}, over your ${limit} limit for a single refund or gift card. ${OVER_CAP_NEXT_STEP}`;
 }
 

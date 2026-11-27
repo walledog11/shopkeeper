@@ -42,7 +42,7 @@ export function ShopifyPermissionRows() {
           href={settingsSectionHref("approvals")}
           className="text-xs font-semibold text-amber-700 transition-colors hover:text-amber-800"
         >
-          Change in Approvals & limits →
+          Change in What it can do on its own →
         </Link>
       </div>
     </>

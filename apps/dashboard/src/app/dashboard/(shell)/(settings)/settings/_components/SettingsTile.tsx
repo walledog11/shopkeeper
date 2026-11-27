@@ -30,35 +30,24 @@ export function SettingsTile({
   id,
   label,
 }: SettingsTileProps) {
-  const hasHeaderAside = description != null || action != null
-
   return (
     <div
       id={id}
       className={cn(
         SOLID_SETTINGS_TILE,
-        "flex flex-col items-stretch gap-2",
+        "flex flex-col items-stretch gap-3",
         id && "scroll-mt-6",
         className,
       )}
     >
-      <div
-        className={cn(
-          "flex flex-wrap items-start gap-x-3 gap-y-1",
-          hasHeaderAside && "justify-between",
-        )}
-      >
-        <p className="shrink-0 text-sm font-semibold text-strong">{label}</p>
-        {hasHeaderAside ? (
-          <div className="flex min-w-0 max-w-[min(100%,40rem)] flex-1 items-start justify-end gap-3">
-            {description != null ? (
-              <div className="text-right text-sm leading-snug text-muted-foreground">
-                {description}
-              </div>
-            ) : null}
-            {action ? <div className="shrink-0">{action}</div> : null}
-          </div>
-        ) : null}
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+        <div className="min-w-0 flex-1 basis-60 space-y-1">
+          <p className="text-sm font-semibold text-strong">{label}</p>
+          {description != null ? (
+            <div className="max-w-2xl text-sm leading-snug text-muted-foreground">{description}</div>
+          ) : null}
+        </div>
+        {action ? <div className="shrink-0">{action}</div> : null}
       </div>
       {children ? (
         <div className="min-w-0 text-sm text-muted-foreground">{children}</div>

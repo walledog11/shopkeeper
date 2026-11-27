@@ -10,7 +10,6 @@ import {
   collectExplicitOverridePaths,
   hydrateSettings,
   rawInputsFor,
-  resetPathToTierDefault,
 } from "./agent-tab-helpers";
 
 function makeSettings(overrides: Partial<OrgSettings> = {}): OrgSettings {
@@ -150,15 +149,6 @@ describe("agent tab helpers", () => {
 
     expect(next.autonomyTier).toBe("trusted");
     expect(next.maxRefundAmount).toBe(75);
-  });
-
-  it("resets an override to the current tier default", () => {
-    const reset = resetPathToTierDefault(
-      makeSettings({ autonomyTier: "trusted", maxRefundAmount: 250 }),
-      "maxRefundAmount",
-    );
-
-    expect(reset.maxRefundAmount).toBe(100);
   });
 
   it("builds a persistence patch that omits inherited override fields", () => {

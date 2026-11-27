@@ -30,7 +30,6 @@ import {
 } from "@/components/integrations/integration-presentation"
 import { useIntegrationsOAuth } from "@/components/integrations/useIntegrationsOAuth"
 import { CARD_ACTIONS, CARD_DESCRIPTION, CARD_SHELL } from "@/components/integrations/integration-card-styles"
-import ImessageCard from "@/components/integrations/ImessageCard"
 import { getShopifyDisconnectMessage, resolveShopifyConnectionState } from "@/lib/integrations/shopify-connection"
 import { normalizeShopifyShopDomain } from "@/lib/shopify/oauth"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -44,9 +43,9 @@ import {
 
 const INTEGRATION_CARD_GRID = "grid items-stretch gap-4 auto-rows-fr grid-cols-[repeat(auto-fill,minmax(340px,1fr))]"
 
-// Wide screens keep the store and the phone in one column beside the customer
-// channels; narrow ones stack the sections in reading order.
-const CHANNEL_SECTIONS_GRID = "grid items-start gap-8 lg:grid-cols-2 lg:grid-rows-[auto_1fr] lg:[grid-template-areas:'store_support'_'operator_support']"
+// Wide screens put the store beside the customer channels; narrow ones stack
+// the sections in reading order. The merchant's phone is linked in Settings.
+const CHANNEL_SECTIONS_GRID = "grid items-start gap-8 lg:grid-cols-2 lg:[grid-template-areas:'store_support']"
 const CHANNEL_SECTION_AREA: Record<IntegrationChannelKind, string> = {
   store: "lg:[grid-area:store]",
   support: "lg:[grid-area:support]",
@@ -289,9 +288,6 @@ function IntegrationsPageContent({
 
   function renderIntegrationCard(model: IntegrationCardModel) {
     const { definition } = model
-    if (definition.kind === "personal-device" && definition.device === "imessage") {
-      return <ImessageCard key={definition.id} config={definition} handle={imessageHandle} />
-    }
     return (
       <IntegrationCard
         key={definition.id}
@@ -328,7 +324,7 @@ function IntegrationsPageContent({
         {!isAdmin ? (
           <div className="flex items-center gap-3 rounded-lg border border-foreground/[0.10] bg-foreground/[0.03] px-4 py-3 text-sm text-muted-foreground">
             <Info className="size-4 shrink-0" />
-            <span>Only admins can change channels. You can still link your own iPhone.</span>
+            <span>Only admins can change channels.</span>
           </div>
         ) : null}
 

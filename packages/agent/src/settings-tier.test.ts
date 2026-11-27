@@ -31,7 +31,7 @@ describe("resolveAgentSettings", () => {
 
   describe("per-tier defaults", () => {
     const cases: Array<{ tier: AutonomyTier; maxRefund: number }> = [
-      { tier: "watch",   maxRefund: 0    },
+      { tier: "watch",   maxRefund: 50   },
       { tier: "guarded", maxRefund: 50   },
       { tier: "trusted", maxRefund: 100  },
     ];
@@ -45,25 +45,15 @@ describe("resolveAgentSettings", () => {
     }
   });
 
-  it("applies watch-tier toolsEnabled defaults (replies drafted, actions blocked)", () => {
-    const resolved = resolveAgentSettings({ autonomyTier: "watch" });
-    expect(resolved.toolsEnabled).toEqual({
-      action: false,
-      communication: true,
-      internal: true,
-      read: true,
-    });
-  });
-
-  it("leaves toolsEnabled at base defaults for tiers that do not override it", () => {
-    const resolved = resolveAgentSettings({ autonomyTier: "trusted" });
+  it.each(["watch", "trusted"] as const)("leaves toolsEnabled at base defaults for %s", (tier) => {
+    const resolved = resolveAgentSettings({ autonomyTier: tier });
     expect(resolved.toolsEnabled).toEqual(AGENT_SETTINGS_DEFAULTS.toolsEnabled);
   });
 
   it("lets explicit settings override tier defaults", () => {
     const resolved = resolveAgentSettings({ autonomyTier: "watch", maxRefundAmount: 100 });
     expect(resolved.autonomyTier).toBe("watch");
-    // Override wins over watch-tier default of 0.
+    // Override wins over watch-tier default of 50.
     expect(resolved.maxRefundAmount).toBe(100);
   });
 
@@ -86,7 +76,7 @@ describe("resolveAgentSettings", () => {
       toolsEnabled: { communication: false } as never,
     });
     expect(resolved.toolsEnabled).toEqual({
-      action: false,
+      action: true,
       communication: false,
       internal: true,
       read: true,

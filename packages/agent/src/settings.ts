@@ -82,17 +82,11 @@ export const AGENT_SETTINGS_DEFAULTS: OrgSettings = {
 };
 
 export const TIER_DEFAULTS: Record<AutonomyTier, Partial<OrgSettings>> = {
-  // Draft only: every reply is drafted for the merchant's approval, because a
-  // draft is a send_reply call and `decideAutonomy` never lets this tier's plans
-  // run unreviewed. Refunds and order changes stay with the merchant.
+  // "Show me every reply first": the same tools and refund limit as the
+  // default, because the merchant's answer is only about replies.
+  // `decideAutonomy` holds every plan in this tier for them, replies included.
   watch: {
-    maxRefundAmount: 0,
-    toolsEnabled: {
-      action: false,
-      communication: true,
-      internal: true,
-      read: true,
-    },
+    maxRefundAmount: 50,
   },
   guarded: {
     maxRefundAmount: 50,
