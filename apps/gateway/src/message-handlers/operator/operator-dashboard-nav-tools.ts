@@ -5,7 +5,7 @@ import {
   getDashboardDestination,
   NAVIGATE_DASHBOARD_TOOL,
 } from '@shopkeeper/agent/dashboard-destinations';
-import { defineTool, stringArg, toolError, toolOk, type AgentToolDefinition } from '@shopkeeper/agent/tools';
+import { defineTool, OPERATOR_TOOL_LABELS, stringArg, toolError, toolOk, type AgentToolDefinition } from '@shopkeeper/agent/tools';
 
 interface NavigateDashboardInput {
   destination: string;
@@ -27,8 +27,7 @@ export function buildOperatorDashboardNavTools(): Record<string, AgentToolDefini
     category: 'read',
     group: 'knowledge',
     capabilities: [],
-    label: 'Opened dashboard page',
-    planStepLabel: 'Open dashboard page',
+    ...OPERATOR_TOOL_LABELS.navigate_dashboard,
     execute: async (input: NavigateDashboardInput) => {
       const destination = getDashboardDestination(input.destination);
       if (!destination) {

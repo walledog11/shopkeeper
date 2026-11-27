@@ -88,7 +88,6 @@ export function useAgentChatState({ restoreHistory = true }: UseAgentChatStatePr
   const [stopError, setStopError] = useState<string | null>(null)
   const [fillerPhrases, setFillerPhrases] = useState<string[]>([...DEFAULT_FILLER_PHRASES])
   const fillerPhrase = useFillerPhrase(fillerPhrases, isRunning)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const restoreHistoryRef = useRef(restoreHistory)
 
@@ -196,10 +195,6 @@ export function useAgentChatState({ restoreHistory = true }: UseAgentChatStatePr
         console.error("[AgentChat] fetchOperatorTranscript failed:", err)
       })
   }, [updateRequest])
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages])
 
   const navigateConcierge = useCallback((navigation: NavigateDashboardPayload) => {
     if (navigation.href === pathname) return
@@ -313,7 +308,6 @@ export function useAgentChatState({ restoreHistory = true }: UseAgentChatStatePr
     stopError,
     handleStop,
     messages,
-    messagesEndRef,
     setInput,
     textareaRef,
   }

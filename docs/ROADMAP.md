@@ -16,31 +16,26 @@ an answer, a setup that asks for chores before showing the agent, settings a fir
 owner can't judge, and no way to hear the agent's voice before a customer does. Every
 item is checked by using the app in a browser, with screenshots in the PR.
 
-1. **Run the real agent in the cloud dev environment.** The dashboard, gateway and
-   simulated Shopify store already run there; the models need an Anthropic key on the
-   environment. Closes when a seeded store plans a ticket and answers a merchant request
-   with the real models.
-2. **No request ends without an answer.** At the step limit or token budget a merchant
-   request ends on a canned line ("Reached maximum steps…", "I ran out of room…") or on
-   the narration that came with its last tool calls. Closes when a request forced past
-   each limit answers from what it already found, and a request that still can't answer
-   says so and reaches Sentry.
-3. **Cut the compatibility paths and their audits** that exist only for pre-launch data
+1. **No request ends without an answer.** With the real models, a request forced past
+   the step limit or the token budget answers from what it already found. Left: when that
+   closing answer fails or comes back empty, the merchant gets a plain line but the
+   gateway only logs the error. Closes when that case reaches Sentry.
+2. **Cut the compatibility paths and their audits** that exist only for pre-launch data
    (reset the dev workspace instead). Website chat and the Telegram test transport stay;
    direct Meta Instagram stays until SocialAPI's review closes. Settings no longer offer
    the Trusted level, a daily refund total or blocking custom items, but the core still
    reads all three from stored settings: retire them, with the trusted tier's auto-execute
    path, once production holds no rows that use them. Closes when they are deleted and
    the full loop still runs.
-4. **Voice practice on real replies.** The Voice page asks one customer question at a time
+3. **Voice practice on real replies.** The Voice page asks one customer question at a time
    with two replies to pick from, and each pick sets one voice choice. Closes when a
    merchant sets the voice by picking replies, and the next real draft matches it.
-5. **Practice questions from the merchant's own store.** Setup's voice step and the Voice
+4. **Practice questions from the merchant's own store.** Setup's voice step and the Voice
    page's practice answer made-up customers. Draw them from the store's real recent
    messages, or from its products and policies when no channel is connected. Closes when
    a fresh install's first real message gets a draft the merchant approves, with no store
    domain typed and no forwarding set up.
-6. **A calmer app.** Settings are four plain sections. Left: one place per job (Home
+5. **A calmer app.** Settings are four plain sections. Left: one place per job (Home
    stops duplicating the inbox), one request per page instead of 4–10, and a phone-first
    pass over every other screen, text and email the merchant gets. Closes when a
    first-time owner can do each job from one obvious place, on a phone.

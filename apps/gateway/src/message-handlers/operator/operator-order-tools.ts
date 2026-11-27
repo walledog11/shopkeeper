@@ -1,5 +1,6 @@
 import {
   defineTool,
+  OPERATOR_TOOL_LABELS,
   stringArg,
   toolError,
   type AgentToolDefinition,
@@ -28,8 +29,7 @@ export function buildOperatorOrderTools(
     group: 'order',
     capabilities: [],
     requiredScopes: ['read_orders'],
-    label: 'Checked order status',
-    planStepLabel: 'Check order status',
+    ...OPERATOR_TOOL_LABELS.get_order_status,
     execute: async (input: GetOrderByNameInput) => {
       const shop = await loadShopContext(organizationId);
       if (!shop) return toolError('Error: no Shopify integration connected.');

@@ -1,4 +1,4 @@
-import { defineTool, stringArg, toolNotFound, toolOk, type AgentToolDefinition } from '@shopkeeper/agent/tools';
+import { defineTool, OPERATOR_TOOL_LABELS, stringArg, toolNotFound, toolOk, type AgentToolDefinition } from '@shopkeeper/agent/tools';
 import { searchProductHelp } from '@shopkeeper/agent/product-help';
 
 export function buildOperatorProductHelpTools(): Record<string, AgentToolDefinition> {
@@ -14,8 +14,7 @@ export function buildOperatorProductHelpTools(): Record<string, AgentToolDefinit
     category: 'read',
     group: 'knowledge',
     capabilities: [],
-    label: 'Searched product help',
-    planStepLabel: 'Search product help',
+    ...OPERATOR_TOOL_LABELS.search_product_help,
     execute: async (input: { query: string }) => {
       const results = searchProductHelp(input.query, 3);
       if (results.length === 0) {
