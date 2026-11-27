@@ -89,10 +89,6 @@ export const INTEGRATION_CHANNEL_SECTIONS: {
     kind: "support",
     title: "Customer channels",
   },
-  {
-    kind: "operator",
-    title: "Your phone",
-  },
 ]
 
 export const INTEGRATION_DEFINITIONS: IntegrationDefinition[] = [

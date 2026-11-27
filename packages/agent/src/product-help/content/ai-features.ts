@@ -78,16 +78,16 @@ export const aiFeatures: Category = {
           ],
         },
         {
-          heading: "Trust level",
+          heading: "What it does without asking",
           steps: [
-            "Settings → Approvals & limits → Trust level controls how much {agent} does without asking.",
-            "At the lowest level it drafts and waits for you on everything.",
-            "Higher levels let it send routine replies on its own, still inside the compensation limits you set.",
+            "Settings → What it can do on its own asks whether {agent} answers routine questions, like where an order is, on its own.",
+            "Say no and every reply waits for your OK.",
+            "Refunds, cancellations and order changes always wait for your OK, and never go past the refund limit you set.",
           ],
         },
         {
           tips: [
-            "Review page shows everything {agent} has done, so you can raise the trust level on evidence rather than hope.",
+            "The Review page shows everything {agent} has done, so you can decide on evidence rather than hope.",
           ],
         },
       ],

@@ -3,7 +3,7 @@ import type { LucideIcon } from "lucide-react";
 import { Camera, CircleX, Globe, PackageSearch, Repeat2, ShieldAlert, Store, Truck, UserRoundCheck } from "lucide-react";
 import { cn } from "@/lib/ui/cn";
 
-// The three lanes are `decideAutonomy`'s outcomes in the default "Ask first"
+// The three lanes are `decideAutonomy`'s outcomes in the default
 // tier: a read-and-reply sends on its own, anything that writes to Shopify waits
 // for approval, and the escalation reasons in `routing-evidence.ts` (dispute
 // language, wholesale, a claimed prior approval) go straight to the merchant.

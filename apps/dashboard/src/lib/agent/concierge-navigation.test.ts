@@ -19,7 +19,7 @@ describe("extractConciergeNavigation", () => {
     expect(extractConciergeNavigation(actions)).toEqual({
       type: "navigate",
       href: "/dashboard/settings/approvals",
-      label: "Approvals & limits",
+      label: "What it can do on its own",
     });
   });
 

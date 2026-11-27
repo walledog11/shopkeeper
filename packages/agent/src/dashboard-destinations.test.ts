@@ -8,7 +8,7 @@ import {
 describe("dashboard destinations", () => {
   it("resolves known destination ids", () => {
     expect(getDashboardDestination("integrations")?.href).toBe("/dashboard/integrations");
-    expect(getDashboardDestination("approvals")?.label).toBe("Approvals & limits");
+    expect(getDashboardDestination("approvals")?.label).toBe("What it can do on its own");
     expect(getDashboardDestination("billing")?.href).toBe("/dashboard/settings/billing");
     expect(getDashboardDestination("account_settings")?.href).toBe("/dashboard/account");
     expect(getDashboardDestination("missing")).toBeNull();

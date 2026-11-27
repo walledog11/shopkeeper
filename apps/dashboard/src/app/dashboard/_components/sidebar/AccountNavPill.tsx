@@ -36,9 +36,9 @@ export function AccountNavPill({
   const link = (
     <Link
       href={href}
-      aria-label={`${fullName} account settings`}
+      aria-label={`${fullName}: your login`}
       aria-current={isActive ? "page" : undefined}
-      title="Account settings"
+      title="Your login"
       onClick={(event) => {
         if (isActive) event.preventDefault();
         onClose?.();

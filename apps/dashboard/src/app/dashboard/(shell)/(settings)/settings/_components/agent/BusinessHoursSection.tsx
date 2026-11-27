@@ -47,14 +47,14 @@ export function BusinessHoursSection({ controller }: { controller: AgentTabContr
         </div>
       </div>
 
-      <div className="flex items-end gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:flex sm:items-end sm:gap-4">
         <SelectField
           label="Opens at"
           ariaLabel="Business hours start"
           value={rawInputs.bhStart}
           onChange={value => setRawInput("bhStart", value)}
           options={HOUR_OPTIONS}
-          widthClassName="w-40"
+          widthClassName="w-full sm:w-40"
         />
         <SelectField
           label="Closes at"
@@ -62,7 +62,7 @@ export function BusinessHoursSection({ controller }: { controller: AgentTabContr
           value={rawInputs.bhEnd}
           onChange={value => setRawInput("bhEnd", value)}
           options={HOUR_OPTIONS}
-          widthClassName="w-40"
+          widthClassName="w-full sm:w-40"
           selectClassName={businessHoursInvalid ? "border-red-600/60" : undefined}
         />
       </div>

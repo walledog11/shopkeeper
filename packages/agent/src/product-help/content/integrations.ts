@@ -85,24 +85,24 @@ export const integrations: Category = {
           heading: "What you'll need",
           steps: [
             "An iPhone with iMessage enabled.",
-            "Access to your Shopkeeper dashboard (Settings → Phone & briefing).",
+            "Access to your Shopkeeper dashboard (Settings → When and where it reaches you).",
           ],
         },
         {
           heading: "How to connect",
           steps: [
-            "Open Settings → Phone & briefing.",
+            "Open Settings → When and where it reaches you.",
             "Click Link your iPhone — a QR code and connect code appear.",
             "Scan the QR with your iPhone camera (or tap the text link) and send the prefilled message.",
             "You'll receive a welcome text within about 30 seconds when the link succeeds.",
-            "Phone & briefing shows your linked handle; you can link additional iPhones from the same page.",
+            "That page shows your linked handle; you can link additional iPhones from it.",
           ],
         },
         {
           heading: "Troubleshooting",
           steps: [
             "Connect codes expire after 24 hours — click Link your iPhone again to mint a fresh code.",
-            "If the line doesn't recognize you, go to Settings → Phone & briefing → iMessage → Unlink, then link again with a new code.",
+            "If the line doesn't recognize you, go to Settings → When and where it reaches you → iMessage → Unlink, then link again with a new code.",
             "Only handles you link can use the operator line — texting a fresh code re-links that iPhone to whoever minted it.",
           ],
         },

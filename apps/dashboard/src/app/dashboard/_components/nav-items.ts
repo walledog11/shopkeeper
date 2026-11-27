@@ -1,4 +1,4 @@
-import { Inbox, Settings2, Box, BrainCircuit, ScanEye, User, MessageCircle, MessageSquareText } from "lucide-react";
+import { Inbox, Settings2, Box, BrainCircuit, ScanEye, User, MessageCircle } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Metadata } from "next";
 import { isRouteActive } from "./sidebar/sidebar-helpers";
@@ -37,14 +37,7 @@ export const reviewNavItem: NavItem = {
   description: "Approve and refine agent responses",
 };
 
-export const voiceNavItem: NavItem = {
-  name: "Voice",
-  href: "/dashboard/voice",
-  icon: MessageSquareText,
-  description: "Hear how replies sound and tune them",
-};
-
-const topBarAgentItems: NavItem[] = [voiceNavItem, memoryNavItem, reviewNavItem];
+const topBarAgentItems: NavItem[] = [memoryNavItem, reviewNavItem];
 
 export const shopNavItem: NavItem = {
   name: "Shop",
@@ -64,41 +57,51 @@ export const chatNavItem: NavItem = {
 
 export const accountSettingsNavItem: NavItem = {
   name: "Account",
-  mobileName: "Account settings",
+  mobileName: "Your login",
   href: "/dashboard/account",
   icon: User,
   description: "Profile, sign-in, and logout",
 };
 
-export interface SettingsSection {
-  id: string;
+export interface SettingsPage {
   label: string;
   href: string;
 }
 
+export interface SettingsSection extends SettingsPage {
+  id: string;
+  /** Pages reached from the section's own page, shown in the rail as the section. */
+  pages?: SettingsPage[];
+}
+
 /**
- * Every settings page, in rail order. Channels, Team and Account keep the URLs
- * they had before Settings had one home; the (settings) route group gives them
- * its layout without moving them.
+ * Every settings section, in rail order: four questions a shop owner can
+ * answer, then Channels, which is setup rather than a setting. Pages keep the
+ * URLs they had before; the (settings) route group gives them its layout.
  */
 export const settingsSectionGroups: { heading: string; sections: SettingsSection[] }[] = [
   {
-    heading: "Store",
+    heading: "Settings",
     sections: [
-      { id: "general", label: "General", href: "/dashboard/settings/general" },
-      { id: "approvals", label: "Approvals & limits", href: "/dashboard/settings/approvals" },
-      { id: "hours", label: "Hours & away", href: "/dashboard/settings/hours" },
-      { id: "briefing", label: "Phone & briefing", href: "/dashboard/settings/briefing" },
-      { id: "channels", label: "Channels", href: "/dashboard/integrations" },
-      { id: "team", label: "Team", href: "/dashboard/team" },
-      { id: "billing", label: "Usage & billing", href: "/dashboard/settings/billing" },
-      { id: "data", label: "Data & privacy", href: "/dashboard/settings/data" },
+      { id: "voice", label: "How it sounds", href: "/dashboard/voice" },
+      { id: "approvals", label: "What it can do on its own", href: "/dashboard/settings/approvals" },
+      { id: "briefing", label: "When and where it reaches you", href: "/dashboard/settings/briefing" },
+      {
+        id: "billing",
+        label: "Account & billing",
+        href: "/dashboard/settings/billing",
+        pages: [
+          { label: "Team", href: "/dashboard/team" },
+          { label: "Your data", href: "/dashboard/settings/data" },
+          { label: "Your login", href: "/dashboard/account" },
+        ],
+      },
     ],
   },
   {
-    heading: "You",
+    heading: "Setup",
     sections: [
-      { id: "account", label: "Account", href: "/dashboard/account" },
+      { id: "channels", label: "Channels", href: "/dashboard/integrations" },
     ],
   },
 ];
@@ -121,14 +124,22 @@ export function settingsSectionMetadata(id: string): Metadata {
 }
 
 export function activeSettingsSection(pathname: string): SettingsSection | null {
-  return settingsSections.find(section => isRouteActive(pathname, section.href)) ?? null;
+  return settingsSections.find(section => (
+    isRouteActive(pathname, section.href)
+    || section.pages?.some(page => isRouteActive(pathname, page.href))
+  )) ?? null;
+}
+
+/** The page under a section the path is on, when it isn't the section's own page. */
+export function activeSettingsSubpage(pathname: string): SettingsPage | null {
+  return activeSettingsSection(pathname)?.pages?.find(page => isRouteActive(pathname, page.href)) ?? null;
 }
 
 export const settingsNavItem: NavItem = {
   name: "Settings",
-  href: settingsSectionHref("general"),
+  href: settingsSectionHref("voice"),
   icon: Settings2,
-  description: "Your store, approvals, channels, team, and billing",
+  description: "How it sounds, what it may do, how it reaches you, and billing",
 };
 
 /** The Settings item stands for every settings page, not only the one it opens. */
@@ -151,7 +162,7 @@ export const mobileNavSections = (websiteChat: boolean): NavSection[] => [
   { heading: "Shop", items: websiteChat ? [shopNavItem, chatNavItem] : [shopNavItem] },
   {
     heading: "Shopkeeper",
-    items: [reviewNavItem, voiceNavItem, memoryNavItem],
+    items: [reviewNavItem, memoryNavItem],
   },
   { heading: "Workspace", items: [settingsNavItem] },
 ];

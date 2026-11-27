@@ -64,7 +64,7 @@ export const gettingStarted: Category = {
         },
         {
           heading: "Settings",
-          text: "Settings in the top navigation is one place for everything you set once: General, Approvals & limits, Hours & away, Phone & briefing, Channels, Team, Usage & billing, Data & privacy, and your Account (also behind your avatar).",
+          text: "Settings in the top navigation is one place for everything you set once: How it sounds, What it can do on its own, When and where it reaches you, Account & billing (with Team, Your data and Your login), and Channels.",
         },
         {
           heading: "Channels",

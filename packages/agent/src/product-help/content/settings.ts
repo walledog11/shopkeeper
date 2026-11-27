@@ -33,9 +33,10 @@ export const settings: Category = {
         {
           heading: "Where to find them",
           steps: [
-            "Settings → General: your business name and store timezone.",
+            "Settings → How it sounds: pick the reply you would rather send, and {agent} learns how you sound.",
             "Memory → Store profile, Tone & voice and Preferences: about-your-store details, brand voice, and how you like things handled.",
-            "Settings → Approvals & limits: your trust level and compensation limits. {agent} never issues more than them, even with your approval; anything larger comes to you.",
+            "Settings → What it can do on its own: whether routine replies go out without you, and the largest refund. {agent} never refunds more than that, even with your approval; anything larger comes to you.",
+            "Settings → Account & billing: your business name.",
           ],
         },
         {
@@ -71,15 +72,15 @@ export const settings: Category = {
       title: "Account and workspace settings",
       body: [
         {
-          text: "Your personal login lives under Settings → Account. Billing lives under Usage & billing, and exports and workspace admin under Data & privacy.",
+          text: "Settings → Account & billing holds your plan and invoices, with Team, Your data and Your login linked at the bottom.",
         },
         {
           heading: "What lives where",
           steps: [
-            "Click your avatar to open Account and update your profile, sign-in methods, or log out.",
-            "Open Settings → Usage & billing for your plan, payment method and invoices.",
-            "Open Settings → Data & privacy for data exports and customer data requests.",
-            "Use the danger zone at the bottom of Data & privacy to archive every ticket or delete the workspace. Archiving deletes nothing; deleting the workspace erases its data.",
+            "Click your avatar to open Your login and update your profile, sign-in methods, or log out.",
+            "Open Settings → Account & billing for your plan, payment method and invoices.",
+            "Open Settings → Account & billing → Your data for data exports and customer data requests.",
+            "Use the bottom of Your data to archive every ticket or delete the workspace. Archiving deletes nothing; deleting the workspace erases its data.",
           ],
         },
       ],
@@ -94,9 +95,9 @@ export const settings: Category = {
         {
           heading: "How to change it",
           steps: [
-            "Open Settings → Phone & briefing.",
+            "Open Settings → When and where it reaches you.",
             "Switch it off, or choose once or twice a day, the time, and every day or weekdays only.",
-            "Times follow the store timezone, set in Settings → General.",
+            "Times follow your timezone, set on the same page.",
             "Save your changes.",
           ],
         },

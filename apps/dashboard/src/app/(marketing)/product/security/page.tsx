@@ -23,7 +23,7 @@ export const metadata: Metadata = {
   twitter: { card: "summary_large_image", title, description, images: [previewImage] },
 };
 
-// The lanes are `decideAutonomy` in the default "Ask first" tier; "Never" is
+// The lanes are `decideAutonomy` in the default tier; "Never" is
 // the compensation caps (`compensation_over_cap`), the claimed-approval
 // escalation (`forwarded_prompt_injection`) and approval binding to the exact
 // proposal (agent-runtime "Approval binding").
@@ -135,7 +135,7 @@ export default function SecurityPage() {
       <section aria-labelledby="lanes-heading" className="mx-auto max-w-6xl px-5 pb-20 sm:px-8 sm:pb-28">
         <h2 id="lanes-heading" className="m-display m-h2 max-w-2xl">What it does alone, and what waits for you.</h2>
         <p className="m-lede mt-5 max-w-2xl text-[1.125rem]">
-          This is Ask first, the default. In Draft only, it sends nothing and changes nothing.
+          This is the default. You can also have it show you every reply before it goes out.
         </p>
         <div className="m-lanes mt-12">
           {lanes.map((lane) => (
@@ -164,10 +164,10 @@ export default function SecurityPage() {
           <div className="max-w-xl">
             <h2 id="limits-heading" className="m-display m-h2">Limits you set.</h2>
             <ul className="m-lede mt-6 space-y-3 text-[1.0625rem]">
-              <li>A cap on each refund or gift card, and on the day’s total. Both hold even when you approve.</li>
+              <li>A cap on each refund or gift card. It holds even when you approve.</li>
               <li>Block cancellations altogether.</li>
               <li>Require a photo before any damage refund.</li>
-              <li>Choose how much it does alone: Draft only, Ask first or Trusted.</li>
+              <li>Choose whether it answers routine questions on its own or shows you every reply first.</li>
             </ul>
           </div>
           <SettingsPreview />

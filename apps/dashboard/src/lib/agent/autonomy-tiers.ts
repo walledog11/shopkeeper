@@ -1,37 +1,23 @@
 import type { AutonomyTier } from "@shopkeeper/agent/settings";
 
-export interface AutonomyTierOption {
-  id: AutonomyTier;
+export interface RoutineReplyChoice {
+  tier: AutonomyTier;
   label: string;
-  cap: number;
-  blurb: string;
+  detail: string;
   recommended?: boolean;
 }
 
-export const AUTONOMY_TIERS: AutonomyTierOption[] = [
-  {
-    id: "watch",
-    label: "Draft only",
-    cap: 0,
-    blurb: "Drafts every reply for your OK. Refunds and order changes stay with you.",
-  },
-  {
-    id: "guarded",
-    label: "Ask first",
-    cap: 50,
-    blurb: "Answers routine questions. Asks before anything else.",
-    recommended: true,
-  },
-  {
-    // Differs from Ask first only in its compensation limit until merchants can
-    // turn on auto-execution, so the blurb promises no more than that.
-    id: "trusted",
-    label: "Trusted",
-    cap: 100,
-    blurb: "Like Ask first, with a higher limit on refunds and gift cards.",
-  },
+/**
+ * The one question settings ask about autonomy: may the agent send routine
+ * replies on its own? Refunds, cancellations and order changes wait for the
+ * merchant's OK either way.
+ */
+export const ROUTINE_REPLY_CHOICES: readonly RoutineReplyChoice[] = [
+  { tier: "guarded", label: "Yes, answer them", detail: "Routine replies go out on their own.", recommended: true },
+  { tier: "watch", label: "No, show me every reply first", detail: "Every reply waits for your OK." },
 ];
 
-export function visibleAutonomyTiers(): AutonomyTierOption[] {
-  return AUTONOMY_TIERS;
+/** A workspace stored on the retired "trusted" level reads as the yes. */
+export function routineReplyChoice(tier: AutonomyTier | undefined): RoutineReplyChoice {
+  return ROUTINE_REPLY_CHOICES.find((choice) => choice.tier === tier) ?? ROUTINE_REPLY_CHOICES[0];
 }

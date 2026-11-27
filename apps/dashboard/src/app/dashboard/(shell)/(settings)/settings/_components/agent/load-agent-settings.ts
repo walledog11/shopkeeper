@@ -27,7 +27,7 @@ export async function loadAgentSettingsForm(page: AgentSettingsPage): Promise<Ag
     page === "briefing"
       ? db.orgMemberImessageBinding.count({ where: { orgMember: { organizationId: org.id } } })
       : 0,
-    page === "usage"
+    page === "billing"
       ? getDailyLlmSpendNano(org.id).catch((error) => {
           logger.error({ err: error, organizationId: org.id }, "[settings] LLM spend read failed")
           return null

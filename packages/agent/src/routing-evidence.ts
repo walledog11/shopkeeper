@@ -1,6 +1,6 @@
 // What a merchant can do about a compensation over their limit, which holds even
 // with their approval.
-export const OVER_CAP_NEXT_STEP = "Issue it yourself in Shopify, or raise the limit in Settings → Approvals & limits.";
+export const OVER_CAP_NEXT_STEP = "Issue it yourself in Shopify, or raise the limit in Settings → What it can do on its own.";
 
 /**
  * Every plan routing evidence code, with the fixed merchant-facing reason for

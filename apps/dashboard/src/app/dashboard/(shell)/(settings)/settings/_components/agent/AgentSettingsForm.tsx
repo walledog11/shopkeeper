@@ -2,17 +2,17 @@
 
 import { useIsWorkspaceAdmin } from "@/app/dashboard/_components/WorkspaceRoleContext"
 import type { OrgSettings, OrgSettingsPatch } from "@/types"
-import { AgentAutonomySection } from "./AgentAutonomySection"
-import { AiUsageLimitSection, ApprovalLimitsSection } from "./ApprovalLimitsSection"
+import { AiUsageLimitSection } from "./AiUsageLimitSection"
 import { MorningBriefingSection } from "./MorningBriefingSection"
+import { PermissionsSection } from "./PermissionsSection"
 import { StickySaveBar } from "./StickySaveBar"
-import { StoreGeneralSection } from "./StoreSections"
+import { BusinessNameSection, StoreTimezoneSection } from "./StoreSections"
 import { WhenOnDutySection } from "./WhenOnDutySection"
 import { useAgentTabState } from "./useAgentTabState"
 import type { LlmSpendSnapshot } from "./llm-spend-presentation"
 
 /** The settings pages that edit the workspace's agent settings. */
-export type AgentSettingsPage = "general" | "approvals" | "hours" | "briefing" | "usage"
+export type AgentSettingsPage = "approvals" | "briefing" | "billing"
 
 export interface AgentSettingsFormProps {
   page: AgentSettingsPage
@@ -29,7 +29,7 @@ export interface AgentSettingsFormProps {
 
 export default function AgentSettingsForm(props: AgentSettingsFormProps) {
   const { page } = props
-  const controller = useAgentTabState({ ...props, prefillTimezone: page === "general" })
+  const controller = useAgentTabState({ ...props, prefillTimezone: page === "briefing" })
   // These settings decide how much the agent may do on its own and how much it
   // may refund, so saving them is admin-only server-side. Members can read the
   // page; the save bar tells them why they can't apply a change.
@@ -37,23 +37,25 @@ export default function AgentSettingsForm(props: AgentSettingsFormProps) {
 
   return (
     <div className="flex w-full flex-col gap-4">
-      {page === "general" ? <StoreGeneralSection controller={controller} /> : null}
-      {page === "approvals" ? (
+      {page === "approvals" ? <PermissionsSection controller={controller} /> : null}
+      {page === "briefing" ? (
         <>
-          <AgentAutonomySection controller={controller} />
-          <ApprovalLimitsSection controller={controller} />
+          <MorningBriefingSection
+            controller={controller}
+            phoneLinked={props.phoneLinked}
+            noticeEmailEnabled={props.noticeEmailEnabled}
+            shopifyConnected={props.shopifyConnected}
+          />
+          <WhenOnDutySection controller={controller} />
+          <StoreTimezoneSection controller={controller} />
         </>
       ) : null}
-      {page === "hours" ? <WhenOnDutySection controller={controller} /> : null}
-      {page === "briefing" ? (
-        <MorningBriefingSection
-          controller={controller}
-          phoneLinked={props.phoneLinked}
-          noticeEmailEnabled={props.noticeEmailEnabled}
-          shopifyConnected={props.shopifyConnected}
-        />
+      {page === "billing" ? (
+        <>
+          <BusinessNameSection controller={controller} />
+          <AiUsageLimitSection controller={controller} llmSpend={props.llmSpend} />
+        </>
       ) : null}
-      {page === "usage" ? <AiUsageLimitSection controller={controller} llmSpend={props.llmSpend} /> : null}
 
       <StickySaveBar controller={controller} canSave={isAdmin} />
     </div>

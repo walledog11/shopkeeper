@@ -11,7 +11,6 @@ import {
   hydrateSettings,
   hydrateSettingsFromStorage,
   rawInputsFor,
-  resetPathToTierDefault,
   resolveBrowserTimezone,
   storeTimezonePatch,
   writeSettingsPath,
@@ -86,16 +85,11 @@ export function useAgentTabState({
   const nameDirty = trimmedBusinessName !== initialNameRef.current
   const isDirty = serializedPatch !== initialPatchRef.current || nameDirty
   const businessNameInvalid = nameDirty && trimmedBusinessName.length === 0
-  const autonomyTier = settingsState.autonomyTier ?? "guarded"
   const businessHoursInvalid = payload.businessHoursEnabled
     && !isValidBusinessHoursWindow(payload.businessHoursStart, payload.businessHoursEnd)
 
   function markExplicit(path: AutonomyOverridePath) {
     setExplicitOverridePaths(prev => prev.includes(path) ? prev : [...prev, path])
-  }
-
-  function clearExplicit(path: AutonomyOverridePath) {
-    setExplicitOverridePaths(prev => prev.filter(item => item !== path))
   }
 
   function applyBaseline(target: OrgSettingsPatch) {
@@ -128,15 +122,6 @@ export function useAgentTabState({
   function setAutonomyOverride(path: AutonomyOverridePath, value: unknown) {
     markExplicit(path)
     dispatch({ type: "reset", payload: writeSettingsPath(settingsState, path, value) as OrgSettings })
-  }
-
-  function resetAutonomyOverride(path: AutonomyOverridePath) {
-    clearExplicit(path)
-    const next = resetPathToTierDefault(settingsState, path)
-    dispatch({ type: "reset", payload: next })
-    if (path === "maxRefundAmount") {
-      setRawInput("maxRefund", rawInputsFor(next).maxRefund)
-    }
   }
 
   async function save() {
@@ -215,8 +200,6 @@ export function useAgentTabState({
     settingsState,
     dispatch,
     payload,
-    explicitOverrideSet,
-    autonomyTier,
     businessName,
     setBusinessName,
     businessNameInvalid,
@@ -233,7 +216,6 @@ export function useAgentTabState({
     save,
     selectTier,
     setAutonomyOverride,
-    resetAutonomyOverride,
   }
 }
 

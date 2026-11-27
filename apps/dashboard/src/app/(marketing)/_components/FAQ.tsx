@@ -15,7 +15,7 @@ const faqs = [
   },
   {
     q: "Will it send anything without my OK?",
-    a: "Only what you allow. In Draft only, every reply waits for you. In Ask first, the default, it answers routine questions on its own and waits for your yes on anything that changes an order or costs money.",
+    a: "Only what you allow. By default it answers routine questions on its own and waits for your yes on anything that changes an order or costs money. You can also have it show you every reply first.",
   },
   {
     q: "Do I need an iPhone?",

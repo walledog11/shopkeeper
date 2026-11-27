@@ -3,9 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Check, ChevronLeft, ChevronRight, Loader2, PenLine } from "lucide-react"
 import { BRAND_VOICE_MAX_CHARS, VOICE_TRAITS, type VoiceTraitId, type VoiceTraits } from "@shopkeeper/agent/settings"
-import { PageTitle } from "@/app/dashboard/_components/PageTitle"
-import { voiceNavItem } from "@/app/dashboard/_components/nav-items"
-import { dashboardChromeColumnClassName } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
 import { useIsWorkspaceAdmin } from "@/app/dashboard/_components/WorkspaceRoleContext"
 import { CustomerBubble } from "@/components/agent/VoiceReplyBubble"
 import { Button } from "@/components/ui/button"
@@ -171,159 +168,149 @@ export default function VoicePageClient({ initialTraits, initialNotes }: { initi
   const pickedOption = pickedTrait?.options.find((option) => round && option.value === round.values[round.answer as Side])
 
   return (
-    <div className="relative flex size-full flex-col overflow-hidden bg-background">
-      <div className={cn(dashboardChromeColumnClassName(), "flex min-h-0 flex-1 flex-col")}>
-        <div className="relative z-20 flex shrink-0 flex-col gap-3 pb-3 pt-3 md:pt-0">
-          <PageTitle>{voiceNavItem.name}</PageTitle>
-        </div>
-
-        <div className="custom-scrollbar flex-1 overflow-y-auto">
-          <div className="grid gap-6 py-6 pb-24 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
-            <section aria-labelledby="practice-heading" className="flex min-w-0 flex-col gap-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h2 id="practice-heading" className="text-base font-semibold text-strong">Practice</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Pick the reply you’d rather send. Each pick teaches Shopkeeper how you sound.
-                  </p>
-                </div>
-                <div role="group" aria-label="Kind of question" className="flex rounded-full bg-foreground/[0.05] p-1">
-                  {VOICE_CATEGORIES.map((entry) => (
-                    <button
-                      key={entry.id}
-                      type="button"
-                      aria-pressed={entry.id === category}
-                      onClick={() => chooseCategory(entry.id)}
-                      className={cn(
-                        "rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
-                        entry.id === category ? "bg-background text-strong shadow-sm" : "text-muted-foreground hover:text-strong",
-                      )}
-                    >
-                      {entry.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-foreground/10 bg-card p-4 sm:p-6">
-                {round && scenario ? (
-                  <>
-                    <div className="text-xs font-medium text-muted-foreground">A customer asks</div>
-                    <div className="mt-2 flex flex-col">
-                      <CustomerBubble name={scenario.customerName} message={scenario.message} />
-                    </div>
-
-                    {writing ? (
-                      <form
-                        className="mt-6 flex flex-col gap-3"
-                        onSubmit={(event) => {
-                          event.preventDefault()
-                          void saveWritten()
-                        }}
-                      >
-                        <label htmlFor="voice-written" className="text-sm font-medium text-strong">
-                          How would you answer {scenario.customerName}?
-                        </label>
-                        <Textarea
-                          id="voice-written"
-                          value={written}
-                          maxLength={2000}
-                          rows={5}
-                          autoFocus
-                          onChange={(event) => setWritten(event.target.value)}
-                        />
-                        <div className="flex flex-wrap gap-2">
-                          <Button type="submit" disabled={savingWritten || !written.trim()}>
-                            {savingWritten ? <Loader2 className="animate-spin" /> : null}
-                            Save my reply
-                          </Button>
-                          <Button type="button" variant="ghost" onClick={() => setWriting(false)}>Cancel</Button>
-                        </div>
-                      </form>
-                    ) : (
-                      <div className="mt-6 grid gap-3 md:grid-cols-2">
-                        {SIDES.map((side) => (
-                          <ReplyOption
-                            key={`${round.id}-${side}`}
-                            label={side === "a" ? "Reply A" : "Reply B"}
-                            reply={round.replies[side]}
-                            picked={round.answer === side}
-                            disabled={!isAdmin}
-                            onPick={() => void pick(side)}
-                            onRetry={() => draftSide(round, traits, side)}
-                          />
-                        ))}
-                      </div>
-                    )}
-
-                    {pickedTrait && pickedOption ? (
-                      <p role="status" className="mt-4 flex items-center gap-1.5 text-sm text-muted-foreground">
-                        <Check className="size-4 text-strong" />
-                        Got it: {pickedOption.label}.
-                      </p>
-                    ) : null}
-                    {writtenNote ? <p role="status" className="mt-4 text-sm text-muted-foreground">{writtenNote}</p> : null}
-                    {saveError ? <p role="alert" className="mt-4 text-sm text-destructive">{saveError}</p> : null}
-                    {!isAdmin ? <p className="mt-4 text-sm text-muted-foreground">Only an admin can change the voice.</p> : null}
-
-                    <div className="mt-6 flex flex-wrap items-center gap-2 border-t border-foreground/10 pt-4">
-                      <Button variant="ghost" onClick={() => go(index - 1)} disabled={index === 0}>
-                        <ChevronLeft />
-                        Back
-                      </Button>
-                      <Button variant="ghost" onClick={() => go(index + 1)}>
-                        Next
-                        <ChevronRight />
-                      </Button>
-                      <span className="flex-1" />
-                      {!writing ? (
-                        <Button
-                          variant="outline"
-                          onClick={() => setWriting(true)}
-                          disabled={!isAdmin || round.replies.a.status !== "ready"}
-                        >
-                          <PenLine />
-                          Write my own reply
-                        </Button>
-                      ) : null}
-                    </div>
-                  </>
-                ) : (
-                  <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="size-4 animate-spin" />
-                    Getting a customer question ready…
-                  </p>
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_280px] xl:items-start">
+      <section aria-labelledby="practice-heading" className="flex min-w-0 flex-col gap-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 id="practice-heading" className="text-base font-semibold text-strong">Practice</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Pick the reply you’d rather send. Each pick teaches Shopkeeper how you sound.
+            </p>
+          </div>
+          <div role="group" aria-label="Kind of question" className="flex rounded-full bg-foreground/[0.05] p-1">
+            {VOICE_CATEGORIES.map((entry) => (
+              <button
+                key={entry.id}
+                type="button"
+                aria-pressed={entry.id === category}
+                onClick={() => chooseCategory(entry.id)}
+                className={cn(
+                  "rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
+                  entry.id === category ? "bg-background text-strong shadow-sm" : "text-muted-foreground hover:text-strong",
                 )}
-              </div>
-              <p className="text-xs text-muted-foreground">The customers and orders here are made up. Nothing is sent.</p>
-            </section>
-
-            <aside className="flex flex-col gap-4">
-              <section aria-labelledby="learned-heading" className="rounded-2xl border border-foreground/10 bg-card p-4">
-                <h2 id="learned-heading" className="text-sm font-semibold text-strong">What I’ve learned</h2>
-                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-foreground/[0.08]">
-                  <div className={cn("h-full rounded-full bg-foreground transition-all", PROGRESS_WIDTHS[learned])} />
-                </div>
-                <p className="mt-2 text-xs text-muted-foreground">{learned} of {VOICE_TRAITS.length} learned</p>
-                <dl className="mt-4 space-y-2.5">
-                  {VOICE_TRAITS.map((trait) => {
-                    const chosen = trait.options.find((option) => option.value === traits[trait.id])
-                    return (
-                      <div key={trait.id} className="flex items-baseline justify-between gap-3 text-sm">
-                        <dt className="text-muted-foreground">{trait.label}</dt>
-                        <dd className={cn("text-right", chosen ? "font-medium text-strong" : "text-muted-foreground")}>
-                          {chosen?.label ?? "—"}
-                        </dd>
-                      </div>
-                    )
-                  })}
-                </dl>
-              </section>
-              <VoiceNotes initialNotes={initialNotes} disabled={!isAdmin} />
-            </aside>
+              >
+                {entry.label}
+              </button>
+            ))}
           </div>
         </div>
-      </div>
+
+        <div className="rounded-2xl border border-foreground/10 bg-card p-4 sm:p-6">
+          {round && scenario ? (
+            <>
+              <div className="text-xs font-medium text-muted-foreground">A customer asks</div>
+              <div className="mt-2 flex flex-col">
+                <CustomerBubble name={scenario.customerName} message={scenario.message} />
+              </div>
+
+              {writing ? (
+                <form
+                  className="mt-6 flex flex-col gap-3"
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    void saveWritten()
+                  }}
+                >
+                  <label htmlFor="voice-written" className="text-sm font-medium text-strong">
+                    How would you answer {scenario.customerName}?
+                  </label>
+                  <Textarea
+                    id="voice-written"
+                    value={written}
+                    maxLength={2000}
+                    rows={5}
+                    autoFocus
+                    onChange={(event) => setWritten(event.target.value)}
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="submit" disabled={savingWritten || !written.trim()}>
+                      {savingWritten ? <Loader2 className="animate-spin" /> : null}
+                      Save my reply
+                    </Button>
+                    <Button type="button" variant="ghost" onClick={() => setWriting(false)}>Cancel</Button>
+                  </div>
+                </form>
+              ) : (
+                <div className="mt-6 grid gap-3 md:grid-cols-2">
+                  {SIDES.map((side) => (
+                    <ReplyOption
+                      key={`${round.id}-${side}`}
+                      label={side === "a" ? "Reply A" : "Reply B"}
+                      reply={round.replies[side]}
+                      picked={round.answer === side}
+                      disabled={!isAdmin}
+                      onPick={() => void pick(side)}
+                      onRetry={() => draftSide(round, traits, side)}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {pickedTrait && pickedOption ? (
+                <p role="status" className="mt-4 flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <Check className="size-4 text-strong" />
+                  Got it: {pickedOption.label}.
+                </p>
+              ) : null}
+              {writtenNote ? <p role="status" className="mt-4 text-sm text-muted-foreground">{writtenNote}</p> : null}
+              {saveError ? <p role="alert" className="mt-4 text-sm text-destructive">{saveError}</p> : null}
+              {!isAdmin ? <p className="mt-4 text-sm text-muted-foreground">Only an admin can change the voice.</p> : null}
+
+              <div className="mt-6 flex flex-wrap items-center gap-2 border-t border-foreground/10 pt-4">
+                <Button variant="ghost" onClick={() => go(index - 1)} disabled={index === 0}>
+                  <ChevronLeft />
+                  Back
+                </Button>
+                <Button variant="ghost" onClick={() => go(index + 1)}>
+                  Next
+                  <ChevronRight />
+                </Button>
+                <span className="flex-1" />
+                {!writing ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => setWriting(true)}
+                    disabled={!isAdmin || round.replies.a.status !== "ready"}
+                  >
+                    <PenLine />
+                    Write my own reply
+                  </Button>
+                ) : null}
+              </div>
+            </>
+          ) : (
+            <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
+              Getting a customer question ready…
+            </p>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">The customers and orders here are made up. Nothing is sent.</p>
+      </section>
+
+      <aside className="flex flex-col gap-4">
+        <section aria-labelledby="learned-heading" className="rounded-2xl border border-foreground/10 bg-card p-4">
+          <h2 id="learned-heading" className="text-sm font-semibold text-strong">What I’ve learned</h2>
+          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-foreground/[0.08]">
+            <div className={cn("h-full rounded-full bg-foreground transition-all", PROGRESS_WIDTHS[learned])} />
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">{learned} of {VOICE_TRAITS.length} learned</p>
+          <dl className="mt-4 space-y-2.5">
+            {VOICE_TRAITS.map((trait) => {
+              const chosen = trait.options.find((option) => option.value === traits[trait.id])
+              return (
+                <div key={trait.id} className="flex items-baseline justify-between gap-3 text-sm">
+                  <dt className="text-muted-foreground">{trait.label}</dt>
+                  <dd className={cn("text-right", chosen ? "font-medium text-strong" : "text-muted-foreground")}>
+                    {chosen?.label ?? "—"}
+                  </dd>
+                </div>
+              )
+            })}
+          </dl>
+        </section>
+        <VoiceNotes initialNotes={initialNotes} disabled={!isAdmin} />
+      </aside>
     </div>
   )
 }

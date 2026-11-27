@@ -2,8 +2,10 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { ChevronLeft } from "lucide-react"
 import {
   activeSettingsSection,
+  activeSettingsSubpage,
   settingsSectionGroups,
   settingsSections,
 } from "@/app/dashboard/_components/nav-items"
@@ -62,8 +64,19 @@ export function SettingsNav() {
 }
 
 export function SettingsPageTitle() {
-  const section = activeSettingsSection(usePathname())
+  const pathname = usePathname()
+  const section = activeSettingsSection(pathname)
   if (!section) return null
+  const page = activeSettingsSubpage(pathname)
+  if (!page) return <PageTitle showOnPhone>{section.label}</PageTitle>
 
-  return <PageTitle showOnPhone>{section.label}</PageTitle>
+  return (
+    <div className="flex flex-col gap-1">
+      <Link href={section.href} className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-strong">
+        <ChevronLeft className="size-4" />
+        {section.label}
+      </Link>
+      <PageTitle showOnPhone>{page.label}</PageTitle>
+    </div>
+  )
 }
