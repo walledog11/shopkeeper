@@ -72,7 +72,7 @@ export function HeaderSearch({ variant = "topBar" }: HeaderSearchProps) {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.2 }}
-                className="fixed inset-0 z-[60] flex flex-col bg-sidebar md:hidden"
+                className="fixed inset-0 z-[80] flex flex-col bg-sidebar md:hidden"
               >
                 <div className="min-h-0 flex-1">
                   <AgentChatClient

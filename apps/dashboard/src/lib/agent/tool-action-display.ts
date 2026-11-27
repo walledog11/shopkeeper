@@ -1,14 +1,17 @@
 import type { ActionEntry } from "@shopkeeper/agent/context";
-import { TOOL_CATEGORIES, TOOL_LABELS, PLAN_STEP_LABELS } from "@shopkeeper/agent/tools";
+import { OPERATOR_TOOL_LABELS, TOOL_CATEGORIES, TOOL_LABELS, PLAN_STEP_LABELS } from "@shopkeeper/agent/tools";
 
 export type ToolChipVariant = "read" | "executed" | "pending" | "error";
 
+const OPERATOR_LABELS: Partial<Record<string, { label: string; planStepLabel: string }>> = OPERATOR_TOOL_LABELS;
+
 export function getToolChipLabel(action: Pick<ActionEntry, "tool"> & { status?: ActionEntry["status"] }): string {
-  const actionLabel = PLAN_STEP_LABELS[action.tool] ?? action.tool;
+  const operatorLabels = OPERATOR_LABELS[action.tool];
+  const actionLabel = PLAN_STEP_LABELS[action.tool] ?? operatorLabels?.planStepLabel ?? action.tool;
   if (action.status === "policy_block") return `Blocked: ${actionLabel}`;
   if (action.status === "unknown") return `Needs review: ${actionLabel}`;
   if (action.status === "error") return `Failed: ${actionLabel}`;
-  return TOOL_LABELS[action.tool] ?? action.tool;
+  return TOOL_LABELS[action.tool] ?? operatorLabels?.label ?? action.tool;
 }
 
 export function getToolChipVariant(action: ActionEntry): ToolChipVariant {

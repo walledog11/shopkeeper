@@ -1,4 +1,4 @@
-import { defineTool, stringArg, toolError, toolOk, toolUnknown, type AgentToolDefinition, type ToolResult } from '@shopkeeper/agent/tools';
+import { defineTool, OPERATOR_TOOL_LABELS, stringArg, toolError, toolOk, toolUnknown, type AgentToolDefinition, type ToolResult } from '@shopkeeper/agent/tools';
 import { ConflictError } from '@shopkeeper/shared/errors';
 import { withdrawActionAuthority, type SupportContext } from '@shopkeeper/agent/context';
 import { merchantAnswerSlotsInCalls, parseMerchantAnswers } from '@shopkeeper/agent/reply-placeholders';
@@ -113,8 +113,7 @@ export function buildOperatorSessionTools(
     category: 'action',
     group: 'thread',
     capabilities: [],
-    label: 'Approved pending plan',
-    planStepLabel: 'Approve pending plan',
+    ...OPERATOR_TOOL_LABELS.approve_pending_plan,
     policy: { categoryPermission: false },
     execute: async (input: ApproveInput, ctx) => {
       // The merchant's decision authorized one drafted plan. Whenever that plan
@@ -184,8 +183,7 @@ export function buildOperatorSessionTools(
     category: 'action',
     group: 'thread',
     capabilities: [],
-    label: 'Dismissed pending plan',
-    planStepLabel: 'Dismiss pending plan',
+    ...OPERATOR_TOOL_LABELS.reject_pending_plan,
     policy: { categoryPermission: false },
     execute: async (input: PlanRefInput) => {
       const selected = selectPendingPlan(context.pendingPlans, input.plan_ref, context.pendingDigest);
@@ -218,8 +216,7 @@ export function buildOperatorSessionTools(
     category: 'action',
     group: 'thread',
     capabilities: [],
-    label: 'Revised pending plan',
-    planStepLabel: 'Revise pending plan',
+    ...OPERATOR_TOOL_LABELS.revise_pending_plan,
     policy: { categoryPermission: false },
     execute: async (input: ReviseGuidanceInput) => {
       const selected = selectPendingPlan(context.pendingPlans, input.plan_ref, context.pendingDigest);
@@ -252,8 +249,7 @@ export function buildOperatorSessionTools(
     category: 'action',
     group: 'thread',
     capabilities: [],
-    label: 'Recorded merchant answer',
-    planStepLabel: 'Record merchant answer',
+    ...OPERATOR_TOOL_LABELS.answer_operator_question,
     policy: { categoryPermission: false },
     execute: async (input: AnswerQuestionInput) => {
       const pendingQuestion = context.pendingQuestion;

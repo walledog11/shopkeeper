@@ -1,7 +1,7 @@
 import { db, ThreadStatus } from '@shopkeeper/db';
 import { createHash, randomUUID } from 'node:crypto';
 import { ApiError } from '@shopkeeper/shared/errors';
-import { defineTool, SEND_EMAIL_FIELDS, stringArg, toolError, toolNotFound, toolOk, type AgentToolDefinition, type ReceiptV1 } from '@shopkeeper/agent/tools';
+import { defineTool, OPERATOR_TOOL_LABELS, SEND_EMAIL_FIELDS, stringArg, toolError, toolNotFound, toolOk, type AgentToolDefinition, type ReceiptV1 } from '@shopkeeper/agent/tools';
 import { openEmailThreadFor } from '@shopkeeper/agent/thread-io';
 import { canonicalInboxThreadWhere } from '@shopkeeper/agent/inbox-filter';
 import { wrapUntrusted } from '@shopkeeper/agent/message-history';
@@ -90,8 +90,7 @@ export function buildOperatorInboxTools(
     category: 'read',
     group: 'thread',
     capabilities: [],
-    label: 'Listed active tickets',
-    planStepLabel: 'List active tickets',
+    ...OPERATOR_TOOL_LABELS.list_active_tickets,
     execute: async (input: ListActiveTicketsInput) => {
       const threads = await db.thread.findMany({
         where: {
@@ -165,8 +164,7 @@ export function buildOperatorInboxTools(
     category: 'read',
     group: 'thread',
     capabilities: [],
-    label: 'Read ticket',
-    planStepLabel: 'Read ticket',
+    ...OPERATOR_TOOL_LABELS.get_ticket,
     execute: async (input: GetTicketInput) => {
       // `Thread.id` is a uuid column, so a non-id (an order number lifted from
       // the briefing prose, say) raises P2023 rather than matching nothing.
@@ -252,8 +250,7 @@ export function buildOperatorInboxTools(
     category: 'internal',
     group: 'thread',
     capabilities: [],
-    label: 'Drafted ticket reply',
-    planStepLabel: 'Draft ticket reply',
+    ...OPERATOR_TOOL_LABELS.draft_ticket_reply,
     policy: { categoryPermission: false },
     execute: async (input: DraftTicketReplyInput, ctx) => {
       const thread = await findInboxThread(organizationId, input.ticket_id);
@@ -290,8 +287,7 @@ export function buildOperatorInboxTools(
     category: 'internal',
     group: 'messaging',
     capabilities: [],
-    label: 'Drafted email',
-    planStepLabel: 'Draft email',
+    ...OPERATOR_TOOL_LABELS.draft_email,
     policy: { categoryPermission: false },
     execute: async (input: DraftEmailInput, ctx) => {
       const email = { to: input.to.trim(), subject: input.subject.trim(), body: input.body.trim() };
@@ -328,8 +324,7 @@ export function buildOperatorInboxTools(
     category: 'action',
     group: 'thread',
     capabilities: [],
-    label: 'Marked ticket as spam',
-    planStepLabel: 'Mark ticket as spam',
+    ...OPERATOR_TOOL_LABELS.mark_ticket_spam,
     policy: { categoryPermission: false },
     requiredReceiptVersion: 1,
     execute: async (input: MarkTicketSpamInput, ctx) => {

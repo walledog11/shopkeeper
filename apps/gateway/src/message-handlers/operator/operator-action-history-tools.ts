@@ -1,5 +1,5 @@
 import { db } from '@shopkeeper/db';
-import { defineTool, stringArg, toolOk, type AgentToolDefinition } from '@shopkeeper/agent/tools';
+import { defineTool, OPERATOR_TOOL_LABELS, stringArg, toolOk, type AgentToolDefinition } from '@shopkeeper/agent/tools';
 import { wrapUntrusted } from '@shopkeeper/agent/message-history';
 import { ageOf, truncate } from '../../routes/operator/format.js';
 
@@ -40,8 +40,7 @@ export function buildOperatorActionHistoryTools(
     category: 'read',
     group: 'insights',
     capabilities: [],
-    label: 'Read recent changes',
-    planStepLabel: 'Read recent changes',
+    ...OPERATOR_TOOL_LABELS.list_recent_changes,
     execute: async (input: ListRecentChangesInput) => {
       const tool = input.tool?.trim();
       const actions = await db.agentAction.findMany({

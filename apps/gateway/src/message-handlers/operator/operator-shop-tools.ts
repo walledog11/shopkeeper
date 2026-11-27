@@ -2,6 +2,7 @@ import { db } from '@shopkeeper/db';
 import { SHOPIFY_ACCESS_SELECT, shopifyContextFor } from '@shopkeeper/agent/shopify/access';
 import {
   defineTool,
+  OPERATOR_TOOL_LABELS,
   numberArg,
   stringArg,
   toolError,
@@ -123,8 +124,7 @@ export function buildOperatorShopTools(
     capabilities: [],
     requiredScopes: FLASH_SALE_SCOPES,
     requiredReceiptVersion: 1,
-    label: 'Started a flash sale',
-    planStepLabel: 'Start flash sale',
+    ...OPERATOR_TOOL_LABELS.create_flash_sale,
     execute: async (input: { applies_to: FlashSaleScope; variant_ids?: string; discount_percentage: number; duration_hours: number; name?: string }, ctx) => {
       const shop = await loadShopContext(organizationId);
       if (!shop) return toolError('Error: no Shopify integration connected.');
@@ -159,8 +159,7 @@ export function buildOperatorShopTools(
     group: 'product',
     capabilities: [],
     requiredScopes: FLASH_SALE_SCOPES,
-    label: 'Listed active flash sales',
-    planStepLabel: 'List active flash sales',
+    ...OPERATOR_TOOL_LABELS.list_flash_sales,
     execute: async () => {
       const shop = await loadShopContext(organizationId);
       if (!shop) return toolError('Error: no Shopify integration connected.');
@@ -194,8 +193,7 @@ export function buildOperatorShopTools(
     capabilities: [],
     requiredScopes: FLASH_SALE_SCOPES,
     requiredReceiptVersion: 1,
-    label: 'Ended a flash sale',
-    planStepLabel: 'End flash sale',
+    ...OPERATOR_TOOL_LABELS.end_flash_sale,
     execute: async (input: EndFlashSaleInput, ctx) => {
       const shop = await loadShopContext(organizationId);
       if (!shop) return toolError('Error: no Shopify integration connected.');
@@ -223,8 +221,7 @@ export function buildOperatorShopTools(
     capabilities: [],
     requiredScopes: REPRICE_SCOPES,
     requiredReceiptVersion: 1,
-    label: 'Repriced variants',
-    planStepLabel: 'Reprice variants',
+    ...OPERATOR_TOOL_LABELS.set_variant_prices,
     execute: async (input: { prices: string }, ctx) => {
       const shop = await loadShopContext(organizationId);
       if (!shop) return toolError('Error: no Shopify integration connected.');

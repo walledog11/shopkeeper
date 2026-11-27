@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { ChannelType, db } from "@shopkeeper/db";
+import { SHOPIFY_OAUTH_SCOPES } from "@shopkeeper/agent/shopify/integration-health";
 import { NotFoundError } from "@/lib/api/errors";
 import { withOrgRoute } from "@/lib/api/route";
 import {
@@ -32,9 +33,12 @@ export const POST = withOrgRoute(
           platform: ChannelType.shopify,
           externalAccountId: `demo-${org.id}.shopkeeper.test`,
           accessToken: SHOPIFY_SIMULATOR_TOKEN,
+          // The demo store serves every read and write, so it holds the full
+          // grant. With none recorded, the agent hides every scoped tool.
           metadata: {
             simulated: true,
             label: "Shopkeeper demo store",
+            oauthScopes: [...SHOPIFY_OAUTH_SCOPES],
           },
         },
       });

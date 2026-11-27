@@ -51,12 +51,19 @@ export function AgentChatView({
     stopError,
     handleStop,
     messages,
-    messagesEndRef,
     setInput,
     textareaRef,
   } = state
 
   const [showStartFreshConfirm, setShowStartFreshConfirm] = useState(false)
+  // Each view keeps its own end marker: the desktop and phone headers both
+  // mount this view over one shared state, and a shared marker lands on
+  // whichever is hidden, so the visible panel never scrolled to a new answer.
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages])
+
   const walkthrough = openContext?.walkthrough ?? null
   // The bottom-anchored layout belongs to the briefing. A walkthrough fills the
   // panel from the top, and no longer pads itself with chat lines to get there.
