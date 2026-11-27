@@ -6,6 +6,7 @@ import type { BaseAgentContext, AgentResult } from "@shopkeeper/agent/context";
 import type { OrgSettings, RawToolCall } from "@/types";
 import { recordAgentFailure, type AgentFailureAlertRoute } from "@/lib/server/agent-failure-alerts";
 import type { OpsAlertCounterClient } from "@/lib/server/ops-alerts";
+import { captureUnansweredLimit } from "@/lib/server/ops-alert-notify";
 
 export interface RunAgentOptions extends Omit<CoreRunAgentOptions, "recordToolFailure"> {
   failureRoute?: AgentFailureAlertRoute;
@@ -22,6 +23,7 @@ export function runAgent(
   const { failureRoute = "unknown", failureCounterClient, ...rest } = options ?? {};
   return coreRunAgent(ctx, instruction, approvedToolCalls, settings, {
     ...rest,
+    onUnansweredLimit: captureUnansweredLimit,
     recordToolFailure: failureCounterClient
       ? (kind, tool, detail) =>
           recordAgentFailure(

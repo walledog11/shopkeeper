@@ -1,6 +1,11 @@
 import * as Sentry from '@sentry/node';
 import type { ErrorEvent } from '@sentry/node';
 import type { NextFunction, Request, Response } from 'express';
+import {
+  UNANSWERED_LIMIT_MESSAGE,
+  unansweredLimitCaptureContext,
+  type UnansweredLimitEvent,
+} from '@shopkeeper/agent/observability';
 import type { ShutdownResource } from './shutdown.js';
 
 const FLUSH_TIMEOUT_MS = 2_000;
@@ -8,8 +13,9 @@ const REPEAT_WINDOW_MS = 60 * 60 * 1000;
 const MAX_TRACKED_ERRORS = 1_000;
 
 /**
- * Error reports from one gateway process: a crash, a 5xx route error, and a job
- * BullMQ has given up on. Unset `SENTRY_DSN` leaves them in the logs only.
+ * Error reports from one gateway process: a crash, a 5xx route error, a job
+ * BullMQ has given up on, and an agent request that ended at its limit without
+ * an answer. Unset `SENTRY_DSN` leaves them in the logs only.
  *
  * Nothing is captured implicitly. The SDK's default integrations would attach
  * inbound request headers (`x-internal-secret`, webhook signatures), record
@@ -49,6 +55,11 @@ export function initializeGatewaySentry(role: 'server' | 'worker'): void {
  */
 export function captureJobFailure(queue: string, error: Error, extra: Record<string, unknown>): void {
   Sentry.captureException(error, { tags: { queue }, extra });
+}
+
+/** The merchant got the fallback line instead of an answer. Identifiers only. */
+export function captureUnansweredLimit(event: UnansweredLimitEvent): void {
+  Sentry.captureMessage(UNANSWERED_LIMIT_MESSAGE, unansweredLimitCaptureContext(event));
 }
 
 // Express 5 hands thrown and rejected route errors here. A 4xx is the caller's

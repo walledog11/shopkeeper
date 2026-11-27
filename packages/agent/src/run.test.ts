@@ -219,18 +219,48 @@ describe("runAgent loop behavior", () => {
       .mockResolvedValueOnce(toolUse("update_thread_tag", { tag: "loop" }))
       .mockResolvedValueOnce(toolUse("update_thread_tag", { tag: "loop" }, "tu_2"))
       .mockResolvedValueOnce(endTurn("I tagged the thread twice but couldn't finish the rest."));
+    const onUnansweredLimit = vi.fn();
 
     const result = await runAgent(
       makeCtx(),
       "Loop forever",
       undefined,
       { ...AGENT_SETTINGS_DEFAULTS, maxIterations: 2 },
+      { onUnansweredLimit },
     );
 
     expect(result.summary).toBe("I tagged the thread twice but couldn't finish the rest.");
     expect(result.actionsPerformed).toHaveLength(2);
     expect(mockCreate).toHaveBeenCalledTimes(3);
     expect(mockCreate.mock.calls[2][0]).toMatchObject({ tool_choice: { type: "none" } });
+    expect(onUnansweredLimit).not.toHaveBeenCalled();
+  });
+
+  it("reports a limit whose closing answer comes back empty", async () => {
+    mockCreate
+      .mockResolvedValueOnce(toolUse("update_thread_tag", { tag: "loop" }))
+      .mockResolvedValueOnce(toolUse("update_thread_tag", { tag: "loop" }, "tu_2"))
+      .mockResolvedValueOnce(endTurn(""));
+    const onUnansweredLimit = vi.fn();
+    const ctx = makeCtx();
+
+    const result = await runAgent(
+      ctx,
+      "Loop forever",
+      undefined,
+      { ...AGENT_SETTINGS_DEFAULTS, maxIterations: 2 },
+      { onUnansweredLimit, turnId: "turn_limit" },
+    );
+
+    expect(result.summary).toContain("couldn't finish");
+    expect(onUnansweredLimit).toHaveBeenCalledTimes(1);
+    expect(onUnansweredLimit).toHaveBeenCalledWith({
+      stop: "max_iterations",
+      orgId: ctx.orgId,
+      threadId: ctx.thread.id,
+      turnId: "turn_limit",
+      readOnly: false,
+    });
   });
 });
 
