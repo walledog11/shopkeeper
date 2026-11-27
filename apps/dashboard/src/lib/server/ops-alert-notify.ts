@@ -1,6 +1,12 @@
 import * as Sentry from '@sentry/nextjs';
 import logger from '@/lib/server/logger';
-import type { OpsAlertCaptureContext, OpsAlertInput } from '@shopkeeper/agent/observability';
+import {
+  UNANSWERED_LIMIT_MESSAGE,
+  unansweredLimitCaptureContext,
+  type OpsAlertCaptureContext,
+  type OpsAlertInput,
+  type UnansweredLimitEvent,
+} from '@shopkeeper/agent/observability';
 
 const ERROR_DETAIL_LIMIT = 300;
 
@@ -49,4 +55,9 @@ export function captureOpsAlertToSentry(
     logger.warn({ err: (error as Error).message }, '[OpsAlert] Sentry capture errored');
     return false;
   }
+}
+
+/** An agent request that ended at its limit without an answer: the merchant got the fallback line. */
+export function captureUnansweredLimit(event: UnansweredLimitEvent): void {
+  Sentry.captureMessage(UNANSWERED_LIMIT_MESSAGE, unansweredLimitCaptureContext(event));
 }

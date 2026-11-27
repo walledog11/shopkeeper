@@ -1,4 +1,5 @@
 import logger from "./logger.js";
+import type { UnansweredLimitEvent } from "./observability/unanswered-limit.js";
 import { randomUUID } from "node:crypto";
 import {
   authorizeAgentActionDispatch,
@@ -71,6 +72,10 @@ export interface RunAgentOptions extends RunAgentPolicyOptions {
   // and join AgentAction rows back to the note when rendering inline.
   turnId?: string;
   onActionsPersisted?: (actions: PersistedAgentAction[]) => void;
+  // Called when the run reached its step limit or token budget and its closing
+  // answer failed or came back empty, so the merchant got the fallback line.
+  // Each host sends it to its own Sentry, keeping error reporting out of the core.
+  onUnansweredLimit?: (event: UnansweredLimitEvent) => void;
   // Host-injected module tools appended to the selected tool set for this run
   // (e.g. the gateway's operator control tools). Resolved ahead of the shared
   // registry by the executor. Read-only mode offers only read-category ones.
@@ -384,6 +389,19 @@ export async function runAgent(
         const dispatchFailure = gatewayOperatorMode
           ? summarizeOperatorTurnDispatchFailure(actionsPerformed)
           : null;
+        if (!dispatchFailure && !loop.finalText) {
+          try {
+            options?.onUnansweredLimit?.({
+              stop: loop.stop,
+              orgId: ctx.orgId,
+              threadId: supportThread?.id ?? null,
+              turnId,
+              readOnly,
+            });
+          } catch (error) {
+            logger.error({ err: error, orgId: ctx.orgId }, "[agent] unanswered-limit report failed");
+          }
+        }
         return finish({
           summary: dispatchFailure
             ?? loop.finalText

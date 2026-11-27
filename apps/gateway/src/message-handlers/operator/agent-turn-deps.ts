@@ -6,6 +6,7 @@ import type { PlanExecutionDeps } from '@shopkeeper/agent/plan-execution';
 import type { AgentContext, TaskModelBudget } from '@shopkeeper/agent/context';
 import { getGatewayLockProvider } from '../../clients/agent-runtime.js';
 import { captureAgentActionsCompleted } from '../../product-analytics.js';
+import { captureUnansweredLimit } from '../../sentry.js';
 import { gatewayThreadSink } from '../support-plan/agent-thread-sink.js';
 
 // Injected turn seams for the gateway worker — counterpart to the dashboard's
@@ -24,6 +25,7 @@ const gatewayRunAgent: ExecuteTurnRunAgent = (ctx, instruction, approvedToolCall
   runAgent(ctx, instruction, approvedToolCalls, settings, {
     ...options,
     onActionsPersisted: captureAgentActionsCompleted,
+    onUnansweredLimit: captureUnansweredLimit,
   });
 
 export function buildGatewayTurnDeps(): ExecuteAgentTurnDeps {
