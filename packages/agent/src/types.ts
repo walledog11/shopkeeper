@@ -107,7 +107,6 @@ export interface PlanStep {
   enabled: boolean
 }
 
-export type RoutingDecision = 'auto_execute' | 'needs_review' | 'escalate'
 
 export type ClassifierAlignmentState = 'aligned' | 'missing' | 'unaligned' | 'not_applicable'
 
@@ -215,13 +214,10 @@ export type ProposalCommunication =
       allowedResultBindings: ResultBinding[]
     }
 
-/** `legacy_warning` is only ever read off a plan cached before signals existed. */
-export type PlanSignalCode = ProducedPlanSignalCode | 'legacy_warning'
-
 export type PlanSignalSeverity = 'blocking' | 'advisory'
 
 export interface PlanSignal {
-  code: PlanSignalCode
+  code: ProducedPlanSignalCode
   /** Whether the agent may act on this plan without a human. */
   severity: PlanSignalSeverity
   /** For humans only. Never matched on — branch on `code`. */
@@ -271,20 +267,6 @@ export interface AgentPlan {
    * a proposal that authorizes no message.
    */
   suspendedAtProposal?: boolean
-  /**
-   * @deprecated Derived from `signals` so plans cached by an earlier release stay
-   * readable. Read `signals` instead — this is display text with no code attached.
-   */
-  warnings?: string[]
-  /**
-   * @deprecated Legacy v1-v6 cache compatibility only. Current plans persist
-   * `routingEvidence` and derive their verdict with `decideAutonomy`.
-   */
-  routing?: {
-    decision: RoutingDecision
-    signals?: string[]
-    question?: string | null
-  }
 }
 
 // Terminal result exposed to approval surfaces after a reviewed plan runs.

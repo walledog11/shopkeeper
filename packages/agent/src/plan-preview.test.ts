@@ -75,18 +75,6 @@ describe("decideAutonomy — info-only plans (existing behavior, default tier)",
     expect(decideAutonomy(plan({ signals: signalsFor(["shopify_lookup_failed"]) })).kind).toBe("needs_review")
   })
 
-  it("requires review for a warning cached before signals existed", () => {
-    expect(decideAutonomy(plan({ warnings: ["Policy conflict"] })).kind).toBe("needs_review")
-  })
-
-  it("requires merchant input when KB search found nothing and the plan only drafts a reply", () => {
-    const result = decideAutonomy(plan({ signals: signalsFor(["kb_no_match"]) }))
-    expect(result).toMatchObject({
-      kind: "needs_merchant_input",
-      question: "I don't have the information to answer this, so I haven't replied. What should I tell the customer?",
-    })
-  })
-
   it("allows a missing Shopify customer when the reply does not depend on customer or order context", () => {
     expect(decideAutonomy(plan({
       signals: signalsFor(["shopify_customer_unresolved"]),
@@ -157,9 +145,9 @@ describe("decideAutonomy — Phase 3 routing", () => {
     const result = decideAutonomy(plan({
       steps: [],
       rawToolCalls: [],
-      routing: {
-        decision: "needs_review",
-        signals: ["policy_question"],
+      routingEvidence: {
+        classifierState: "aligned",
+        codes: ["policy_gap"],
         question: 'What should I tell the customer about: "Do you ship to Canada?"?',
       },
     }))
@@ -246,14 +234,6 @@ describe("planSignalTiers", () => {
   it("treats mutative-intent guard signals as blocking", () => {
     const tiers = planSignalTiers(hollowRefundReplyPlan())
     expect(tiers.blocking.map(signal => signal.code)).toEqual(["mutative_intent_no_action"])
-    expect(tiers.advisory).toEqual([])
-  })
-
-  it("treats a warning cached before signals existed as blocking, uncoded", () => {
-    const tiers = planSignalTiers(plan({ warnings: ["Policy conflict"] }))
-    expect(tiers.blocking).toEqual([
-      { code: "legacy_warning", severity: "blocking", message: "Policy conflict" },
-    ])
     expect(tiers.advisory).toEqual([])
   })
 

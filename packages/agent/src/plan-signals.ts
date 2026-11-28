@@ -6,8 +6,6 @@ import { TOOL_CATEGORIES, TOOL_DEFINITION_REGISTRY } from "./tools/registry/inde
 // The one place a plan signal's English lives. Producers push a code, consumers
 // branch on that code and render this text without ever reading it, so
 // rewording a line here cannot change what the agent is allowed to do.
-// `legacy_warning` has no entry on purpose: it carries prose stored on a plan
-// cached before signals existed, not a message this table owns.
 export const PLAN_SIGNAL_MESSAGES: Record<ProducedPlanSignalCode, string> = {
   shopify_customer_unresolved:
     "Couldn't find a Shopify customer - verify the correct account is linked before approving.",
@@ -144,21 +142,12 @@ export function buildPlanSignals(
   return signals
 }
 
-// Signals for a plan from any source, including one cached before signals
-// existed. Those carry warnings with no code, so each is surfaced as blocking
-// rather than guessed at from its text.
-export function planSignals(plan: Pick<AgentPlan, "signals" | "warnings"> | null | undefined): PlanSignal[] {
-  if (!plan) return []
-  if (plan.signals) return plan.signals
-  return (plan.warnings ?? []).map(message => ({
-    code: "legacy_warning" as const,
-    severity: "blocking" as const,
-    message,
-  }))
+export function planSignals(plan: Pick<AgentPlan, "signals"> | null | undefined): PlanSignal[] {
+  return plan?.signals ?? []
 }
 
 export function planSignalTiers(
-  plan: Pick<AgentPlan, "signals" | "warnings"> | null | undefined,
+  plan: Pick<AgentPlan, "signals"> | null | undefined,
 ): { blocking: PlanSignal[]; advisory: PlanSignal[] } {
   const blocking: PlanSignal[] = []
   const advisory: PlanSignal[] = []
@@ -170,7 +159,7 @@ export function planSignalTiers(
 }
 
 export function planHasSignal(
-  plan: Pick<AgentPlan, "signals" | "warnings"> | null | undefined,
+  plan: Pick<AgentPlan, "signals"> | null | undefined,
   code: ProducedPlanSignalCode,
 ): boolean {
   return planSignals(plan).some(signal => signal.code === code)

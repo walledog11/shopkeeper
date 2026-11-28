@@ -316,7 +316,7 @@ describe('Message worker — email branch', () => {
     getMockAnthropicCreate().mockResolvedValue(classifierResponse('genuine'));
 
     const handler = getCapturedHandlers().get('inbound-messages');
-    const job = makeEmailJob(org.id, { inboundMessageId: 'duplicate-mid-001' });
+    const job = makeEmailJob(org.id, { externalMessageId: 'duplicate-mid-001' });
 
     await handler!(job);
     await handler!(job);
@@ -336,12 +336,12 @@ describe('Message worker — email branch', () => {
     await handler!(makeEmailJob(org.id, {
       integrationId: gmail.id,
       receivedAt: '2026-07-13T12:00:00.000Z',
-      inboundMessageId: 'gmail-newer',
+      externalMessageId: 'gmail-newer',
     }));
     await handler!(makeEmailJob(org.id, {
       integrationId: postmark.id,
       receivedAt: '2026-07-13T11:00:00.000Z',
-      inboundMessageId: 'postmark-delayed',
+      externalMessageId: 'postmark-delayed',
     }));
 
     const threads = await db.thread.findMany({
@@ -372,13 +372,13 @@ describe('Message worker — email branch', () => {
       senderEmail: 'Customer@Example.com',
       integrationId: gmail.id,
       receivedAt: '2026-07-13T12:00:00.000Z',
-      inboundMessageId: 'gmail-mixed-case',
+      externalMessageId: 'gmail-mixed-case',
     }));
     await handler!(makeEmailJob(org.id, {
       senderEmail: 'customer@example.com',
       integrationId: postmark.id,
       receivedAt: '2026-07-13T13:00:00.000Z',
-      inboundMessageId: 'postmark-lower-case',
+      externalMessageId: 'postmark-lower-case',
     }));
 
     expect(await db.customer.count({ where: { organizationId: org.id } })).toBe(1);
@@ -397,12 +397,12 @@ describe('Message worker — email branch', () => {
     await handler!(makeEmailJob(org.id, {
       integrationId: gmail.id,
       receivedAt: '2026-07-13T12:00:00.000Z',
-      inboundMessageId: sharedId,
+      externalMessageId: sharedId,
     }));
     await handler!(makeEmailJob(org.id, {
       integrationId: postmark.id,
       receivedAt: '2026-07-13T13:00:00.000Z',
-      inboundMessageId: sharedId,
+      externalMessageId: sharedId,
     }));
 
     const message = await db.message.findFirstOrThrow({
@@ -457,9 +457,9 @@ describe('Message worker — email branch', () => {
     const sharedExternalId = 'shared-message-id-across-orgs';
 
     try {
-      await handler!(makeEmailJob(org.id, { inboundMessageId: sharedExternalId }));
+      await handler!(makeEmailJob(org.id, { externalMessageId: sharedExternalId }));
       await handler!(makeEmailJob(otherOrg.id, {
-        inboundMessageId: sharedExternalId,
+        externalMessageId: sharedExternalId,
         senderEmail: 'other-org-customer@example.com',
       }));
 
@@ -480,7 +480,7 @@ describe('Message worker — email branch', () => {
     const handler = getCapturedHandlers().get('inbound-messages');
     const job = makeEmailJob(org.id, {
       senderEmail: 'missing-message-id@example.com',
-      inboundMessageId: null,
+      externalMessageId: null,
       body: 'Same text sent twice.',
     });
 

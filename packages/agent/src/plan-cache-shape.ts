@@ -153,7 +153,6 @@ function isAgentPlan(value: unknown): value is AgentPlan {
   if (!Array.isArray(value.steps) || !value.steps.every(isPlanStep)) return false
   if (!Array.isArray(value.rawToolCalls) || !value.rawToolCalls.every(isRawToolCall)) return false
   if (value.readResults !== undefined && !isStringRecord(value.readResults)) return false
-  if (value.warnings !== undefined && (!Array.isArray(value.warnings) || !value.warnings.every(w => typeof w === "string"))) return false
   if (value.signals !== undefined && (!Array.isArray(value.signals) || !value.signals.every(isPlanSignal))) return false
   if (!isPlanValidation(value.validation)) return false
   if (!isPlanRoutingEvidence(value.routingEvidence)) return false
@@ -161,13 +160,6 @@ function isAgentPlan(value: unknown): value is AgentPlan {
   if (value.damagePhotos !== undefined && (!Array.isArray(value.damagePhotos) || !value.damagePhotos.every(ref => typeof ref === "string"))) return false
   if (value.communication !== undefined && !isProposalCommunication(value.communication)) return false
   if (value.suspendedAtProposal !== undefined && typeof value.suspendedAtProposal !== "boolean") return false
-  if (value.routing !== undefined) {
-    if (!isRecord(value.routing)) return false
-    const { decision, signals, question } = value.routing
-    if (decision !== "auto_execute" && decision !== "needs_review" && decision !== "escalate") return false
-    if (signals !== undefined && (!Array.isArray(signals) || !signals.every(s => typeof s === "string"))) return false
-    if (question !== undefined && question !== null && typeof question !== "string") return false
-  }
   return true
 }
 
@@ -231,9 +223,7 @@ export function extractCachedQuestion(cachedPlan: unknown): string | null {
     }
   }
   const evidenceQuestion = plan.routingEvidence?.question
-  if (typeof evidenceQuestion === "string" && evidenceQuestion.trim()) return evidenceQuestion
-  const routingQuestion = plan.routing?.question
-  return typeof routingQuestion === "string" && routingQuestion.trim() ? routingQuestion : null
+  return typeof evidenceQuestion === "string" && evidenceQuestion.trim() ? evidenceQuestion : null
 }
 
 export function getLastConversationMessage(messages: PlanThreadMessage[]): PlanThreadMessage | null {

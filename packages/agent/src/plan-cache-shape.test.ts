@@ -163,18 +163,14 @@ describe("readAgentPlanCacheRecordShape", () => {
     })).toBeNull()
   })
 
-  it("writes typed evidence and strips the deprecated routing verdict", () => {
+  it("writes typed evidence", () => {
     const cached = buildAgentPlanCacheRecord({
       instruction: PLAN.instruction,
       lastCustomerMessageId: "cust_1",
       settings: resolveAgentSettings(null),
-      plan: {
-        ...PLAN,
-        routing: { decision: "auto_execute", signals: ["legacy"] },
-      },
+      plan: PLAN,
     })
     expect(cached.version).toBe(7)
-    expect(cached.plan.routing).toBeUndefined()
     expect(cached.plan.routingEvidence).toEqual({ classifierState: "not_applicable", codes: [] })
   })
 

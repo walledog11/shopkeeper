@@ -112,7 +112,6 @@ describe('answer_operator_question', () => {
         instruction: 'Shipping question',
         steps: [{ id: 'a1', category: 'internal', tool: 'ask_operator', label: 'Ask', description: 'x', enabled: true }],
         rawToolCalls: [{ id: 'a1', name: 'ask_operator', input: { question: 'Do we ship to Canada?' } }],
-        warnings: [],
       },
     });
     await db.thread.update({
@@ -130,7 +129,6 @@ describe('answer_operator_question', () => {
       instruction: 'Shipping question',
       steps: [{ id: 'r1', category: 'write', tool: 'send_reply', label: 'Reply to customer', description: '"Yes, $15 flat."', enabled: true }],
       rawToolCalls: [{ id: 'r1', name: 'send_reply', input: { text: 'Yes, $15 flat.' } }],
-      warnings: [],
     });
 
     const result = await tools.answer_operator_question.execute({ answer: 'Yes, $15 flat to Canada.' }, baseCtx, settings, emptyDeps);
@@ -195,7 +193,6 @@ describe('answer_operator_question', () => {
       instruction: 'Shipping question',
       steps: [{ id: 'r1', category: 'communication', tool: 'send_reply', label: 'Reply', description: 'x', enabled: true }],
       rawToolCalls: [{ id: 'r1', name: 'send_reply', input: { text: 'Yes, $15 flat.' } }],
-      warnings: [],
     });
     const tools = await buildTools(memberKey, member.clerkUserId);
 
@@ -232,7 +229,7 @@ describe('answer_operator_question', () => {
         planAgentSpy.mockImplementation(async () => {
           await updateContext(org.id, memberKey, { pendingQuestion: replacement });
           return {
-            instruction: 'Return request', steps: [], rawToolCalls: [], warnings: [],
+            instruction: 'Return request', steps: [], rawToolCalls: [],
           };
         });
       }

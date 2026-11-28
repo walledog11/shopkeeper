@@ -75,15 +75,7 @@ export interface PendingDigestItem {
   needsThreadReview?: boolean;
 }
 
-/**
- * `items` is the whole briefing, in the order the merchant read it, and it is the
- * only list. A `threadIds` field carrying just the flagged subset used to sit
- * beside it and was still the gate on the reply/spam tools after the ordinals had
- * moved on: a briefing whose needs-you items were all approvals and escalations
- * wrote `threadIds: []` and every triage call failed "not in the current digest".
- * The field is now write-only (see `serializePendingDigest`) so nothing can gate
- * on it again.
- */
+/** `items` is the whole briefing, in the order the merchant read it, and it is the only list. */
 export interface PendingDigest {
   items: PendingDigestItem[];
   sentAt: string;
@@ -111,30 +103,12 @@ export function pendingPlanNeedsThreadReview(
   )) === true;
 }
 
-/**
- * The persisted shape. `threadIds` is a compatibility field only: the previous
- * deploy's `readPendingDigest` requires it to be an array, so a row written
- * without it would leave a rolled-back gateway with no pending digest at all.
- * Nothing reads it back into `PendingDigest`. Drop it once no deploy that
- * requires it can be rolled back to.
- */
-export function serializePendingDigest(digest: PendingDigest): {
-  items: PendingDigestItem[];
-  sentAt: string;
-  threadIds: string[];
-} {
-  return {
-    items: digest.items,
-    sentAt: digest.sentAt,
-    threadIds: digest.items.flatMap((item) => (item.kind === 'flagged' ? [item.threadId] : [])),
-  };
+/** The persisted shape. */
+export function serializePendingDigest(digest: PendingDigest): PendingDigest {
+  return { items: digest.items, sentAt: digest.sentAt };
 }
 
-function readPendingDigestItems(value: unknown, threadIds: string[]): PendingDigestItem[] {
-  if (!Array.isArray(value)) {
-    // Pre-merge row: the only numbered list it ever had was the flagged one.
-    return threadIds.map((threadId) => ({ threadId, kind: 'flagged' as const }));
-  }
+function readPendingDigestItems(value: unknown[]): PendingDigestItem[] {
   return value.flatMap((entry) => {
     if (!isRecord(entry) || typeof entry.threadId !== 'string') return [];
     if (typeof entry.kind !== 'string' || !DIGEST_ITEM_KINDS.has(entry.kind)) return [];
@@ -295,19 +269,8 @@ export function mostRecentPendingPlan(plans: PendingPlan[]): PendingPlan | null 
 }
 
 export function readPendingDigest(value: unknown): PendingDigest | null {
-  if (!isRecord(value) || typeof value.sentAt !== 'string') return null;
-
-  // Legacy rows carry only `threadIds`; current rows carry `items` and write
-  // `threadIds` for rollback. Either alone is enough to rebuild the list.
-  const threadIds = Array.isArray(value.threadIds)
-    ? value.threadIds.filter((threadId): threadId is string => typeof threadId === 'string')
-    : [];
-  if (!Array.isArray(value.items) && threadIds.length === 0) return null;
-
-  return {
-    items: readPendingDigestItems(value.items, threadIds),
-    sentAt: value.sentAt,
-  };
+  if (!isRecord(value) || typeof value.sentAt !== 'string' || !Array.isArray(value.items)) return null;
+  return { items: readPendingDigestItems(value.items), sentAt: value.sentAt };
 }
 
 export function readPendingQuestion(value: unknown): PendingQuestion | null {

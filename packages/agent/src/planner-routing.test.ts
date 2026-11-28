@@ -178,7 +178,6 @@ describe("planAgent routing", () => {
     );
 
     expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual(["escalate_to_human"]);
-    expect(plan.routing).toBeUndefined();
     expect(plan.signals?.map((signal) => signal.code)).toContain("mutative_intent_no_action");
   });
 
@@ -195,7 +194,6 @@ describe("planAgent routing", () => {
       AGENT_SETTINGS_DEFAULTS,
     );
 
-    expect(plan.routing).toBeUndefined();
     expect(plan.routingEvidence?.codes).toContain("out_of_scope_commercial_request");
     expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual(["escalate_to_human"]);
   });

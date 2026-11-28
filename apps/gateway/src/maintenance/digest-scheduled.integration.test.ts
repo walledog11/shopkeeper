@@ -237,7 +237,6 @@ describe('sendScheduledDigests — first-night briefing', () => {
     }, source.id)];
     const pendingDigest = {
       items: [{ threadId: thread.id, kind: 'approval', planId: pendingPlans[0]!.planId }],
-      threadIds: [],
       sentAt: '2026-08-23T12:00:00.000Z',
     };
     await db.thread.update({

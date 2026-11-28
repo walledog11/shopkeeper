@@ -145,7 +145,6 @@ export function refundPlan(): AgentPlan {
     ],
     routingEvidence: { classifierState: 'not_applicable', codes: [] },
     validation: { status: 'valid', issues: [] },
-    warnings: [],
   };
 }
 
@@ -171,7 +170,6 @@ export function actionPlan(
     communication: { mode: 'none' },
     routingEvidence: { classifierState: 'not_applicable', codes: [] },
     validation: { status: 'valid', issues: [] },
-    warnings: [],
   };
 }
 

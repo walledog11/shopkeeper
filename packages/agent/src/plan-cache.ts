@@ -24,10 +24,8 @@ export function buildAgentPlanCacheRecord(params: {
   settings: unknown;
   plan: AgentPlan;
 }): AgentPlanCacheRecord {
-  const currentPlan: AgentPlan = { ...params.plan };
-  delete currentPlan.routing;
   const plan: AgentPlan = {
-    ...currentPlan,
+    ...params.plan,
     validation: params.plan.validation ?? { status: "valid", issues: [] },
     routingEvidence: params.plan.routingEvidence ?? {
       classifierState: "not_applicable",

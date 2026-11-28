@@ -99,7 +99,6 @@ async function seedCardedSupportTask(memberKey: string, customerName = 'Ray Doe'
       instruction: 'Discount request',
       steps: [{ id: 's1', category: 'communication', tool: 'send_reply', label: 'Reply', description: 'x', enabled: true }],
       rawToolCalls,
-      warnings: [],
     },
   });
   await db.thread.update({
@@ -271,7 +270,6 @@ describe('revise_pending_plan', () => {
       instruction: 'Discount request',
       steps: [{ id: 'r1', category: 'write', tool: 'send_reply', label: 'Reply to customer', description: '"Here is 10% off."', enabled: true }],
       rawToolCalls: [{ id: 'r1', name: 'send_reply', input: { text: 'Here is 10% off.' } }],
-      warnings: [],
     });
 
     const result = await tools.revise_pending_plan.execute({ guidance: 'Give them 10% off' }, baseCtx, settings, emptyDeps);
@@ -314,7 +312,6 @@ describe('revise_pending_plan', () => {
       instruction: 'Discount request',
       steps: [{ id: 'r1', category: 'communication', tool: 'send_reply', label: 'Reply', description: 'x', enabled: true }],
       rawToolCalls: [{ id: 'r1', name: 'send_reply', input: { text: 'Here is 10% off.' } }],
-      warnings: [],
     });
     const tools = await buildTools(memberKey, member.clerkUserId);
 
