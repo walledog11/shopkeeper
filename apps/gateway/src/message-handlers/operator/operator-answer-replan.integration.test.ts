@@ -131,7 +131,6 @@ describe('applyOperatorAnswerReplan', () => {
           enabled: true,
         }],
         rawToolCalls: [{ id: 'tc1', name: 'ask_operator', input: { question: 'Do we ship to Canada?' } }],
-        warnings: [],
       },
     });
     await db.thread.update({
@@ -195,7 +194,6 @@ describe('applyOperatorAnswerReplan', () => {
           enabled: true,
         }],
         rawToolCalls: [{ id: 'tc1', name: 'ask_operator', input: { question: 'Do we ship to Canada?' } }],
-        warnings: [],
       },
     });
     await db.thread.update({
@@ -214,7 +212,6 @@ describe('applyOperatorAnswerReplan', () => {
         enabled: true,
       }],
       rawToolCalls: [{ id: 'tc_reply', name: 'send_reply', input: { text: 'Yes, we ship to Canada for $15 flat.' } }],
-      warnings: [],
     };
     planAgentSpy.mockResolvedValue(replannedPlan);
 
@@ -272,7 +269,7 @@ describe('applyOperatorAnswerReplan', () => {
     const nativeNotifications = await vi.importActual<typeof import('../support-plan/planning-notifications.js')>('../support-plan/planning-notifications.js');
     sendOperatorPlanNotificationSpy.mockImplementation(nativeNotifications.sendOperatorPlanNotification);
     planAgentSpy.mockResolvedValue({
-      instruction: 'Return process with merchant guidance', warnings: [],
+      instruction: 'Return process with merchant guidance',
       steps: [{ id: 'reply', tool: 'send_reply', category: 'communication', label: 'Reply', description: 'Reply', enabled: true }],
       rawToolCalls: [{ id: 'reply', name: 'send_reply', input: { text: draft } }],
       communication: { mode: 'exact_draft', destination: { kind: 'thread', id: thread.id, channel: 'email' }, draft, allowedResultBindings: [] },
@@ -325,7 +322,7 @@ describe('applyOperatorAnswerReplan durable continuation', () => {
 
   function replyPlan(threadId: string): AgentPlan {
     return {
-      instruction: 'Refund request', warnings: [],
+      instruction: 'Refund request',
       steps: [{ id: 'reply', tool: 'send_reply', category: 'communication', label: 'Reply', description: 'Reply', enabled: true }],
       rawToolCalls: [{ id: 'reply', name: 'send_reply', input: { text: 'We can accept the return.' } }],
       communication: {

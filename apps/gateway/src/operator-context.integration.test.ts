@@ -132,14 +132,10 @@ describe('updateContext + getContext round-trip', () => {
     const ctx = await getContext(org.id, '999');
     expect(ctx.pendingDigest).toEqual(digest);
 
-    // The stored row keeps a derived `threadIds` that the in-memory shape no
-    // longer has: the previous deploy's reader requires the key, so a rollback
-    // would otherwise find no pending digest. Nothing reads it back — the two
-    // disagreeing about the same briefing is the bug this shape replaced.
     const row = await db.operatorContext.findUniqueOrThrow({
       where: { organizationId_memberKey: { organizationId: org.id, memberKey: '999' } },
     });
-    expect(row.pendingDigest).toEqual({ ...digest, threadIds: ['t2'] });
+    expect(row.pendingDigest).toEqual(digest);
   });
 
   it('persists and clears pendingQuestion', async () => {
@@ -177,12 +173,7 @@ describe('updateContext + getContext round-trip', () => {
             rawToolCalls: [{ id: 'tc_1', name: 'get_order' }, { id: 'tc_2' }],
           },
         ],
-        // Stored shape, not the in-memory one: a row written before the merged
-        // list carries `threadIds` and no `items`.
-        pendingDigest: {
-          threadIds: ['thread_1', 123],
-          sentAt: '2026-06-03T00:00:00.000Z',
-        },
+        pendingDigest: { sentAt: '2026-06-03T00:00:00.000Z' },
       },
     });
 
@@ -193,13 +184,7 @@ describe('updateContext + getContext round-trip', () => {
       instruction: 'check status',
       rawToolCalls: [{ id: 'tc_1', name: 'get_order' }],
     });
-    // No `items` key on the stored row: it predates the merged list, so every
-    // ordinal it ever showed was a flagged one and it has to keep resolving that
-    // way rather than reading as an empty briefing.
-    expect(ctx.pendingDigest).toEqual({
-      items: [{ threadId: 'thread_1', kind: 'flagged' }],
-      sentAt: '2026-06-03T00:00:00.000Z',
-    });
+    expect(ctx.pendingDigest).toBeNull();
   });
 
   it('clears pendingPlan when set to null', async () => {

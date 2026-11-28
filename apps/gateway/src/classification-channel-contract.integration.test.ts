@@ -377,12 +377,12 @@ describe('inbound classification channel contract', () => {
     const inboundHandler = getCapturedHandlers().get('inbound-messages')!;
     await inboundHandler(makeEmailJob(org.id, {
       body: 'Where is order #1024?',
-      inboundMessageId: 'classification-contract-email-1',
+      externalMessageId: 'classification-contract-email-1',
     }));
 
     await inboundHandler(makeEmailJob(org.id, {
       body: REQUEST_TEXT,
-      inboundMessageId: 'classification-contract-email-2',
+      externalMessageId: 'classification-contract-email-2',
     }));
     expect(getMockAnthropicCreate()).toHaveBeenCalledTimes(1);
 

@@ -188,27 +188,6 @@ export async function resolveKnowledgeBaseIdByName(
   return created.id;
 }
 
-export async function resolveUserKnowledgeBaseId(organizationId: string): Promise<string> {
-  const notesKb = await db.knowledgeBase.findFirst({
-    where: {
-      organizationId,
-      source: "user",
-      name: { equals: NOTES_KB_FOLDER, mode: "insensitive" },
-    },
-    select: { id: true },
-  });
-  if (notesKb) return notesKb.id;
-
-  const legacy = await db.knowledgeBase.findFirst({
-    where: { organizationId, source: "user" },
-    orderBy: { createdAt: "asc" },
-    select: { id: true },
-  });
-  if (legacy) return legacy.id;
-
-  return resolveKnowledgeBaseIdByName(organizationId, NOTES_KB_FOLDER);
-}
-
 export async function saveMerchantAnswerToKb(
   input: SaveMerchantAnswerToKbInput,
 ): Promise<SaveMerchantAnswerToKbResult> {

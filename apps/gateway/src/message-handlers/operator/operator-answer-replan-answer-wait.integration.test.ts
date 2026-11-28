@@ -189,7 +189,6 @@ describe('applyOperatorAnswerReplan durable continuation', () => {
       },
       routingEvidence: { classifierState: 'not_applicable', codes: [] },
       validation: { status: 'valid', issues: [] },
-      warnings: [],
     } satisfies AgentPlan);
     postDashboardInternal.mockImplementation(async (_path: string, body: {
       operationId: string; executionId: string; threadId: string; input: { text: string };

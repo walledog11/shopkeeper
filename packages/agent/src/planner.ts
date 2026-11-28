@@ -654,9 +654,6 @@ export async function planAgent(
     readResults,
     signals: signals.length > 0 ? signals : undefined,
     validation,
-    // Phase 1: derived from `signals` so plans cached by an earlier release stay
-    // readable. Drops out with the last consumer of `AgentPlan.warnings`.
-    warnings: signals.length > 0 ? signals.map(signal => signal.message) : undefined,
     routingEvidence,
     ...(communication ? { communication } : {}),
     // Beside `damage_photo_attached`, which the same state raised.

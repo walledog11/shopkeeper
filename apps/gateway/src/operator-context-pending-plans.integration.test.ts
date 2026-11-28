@@ -150,7 +150,7 @@ describe('selectPendingPlan', () => {
     const digest = { items: [
       { threadId: 'decision-thread', kind: 'decision' as const },
       { threadId: a.threadId, planId: a.planId, kind: 'approval' as const },
-    ], threadIds: [], sentAt: new Date().toISOString() };
+    ], sentAt: new Date().toISOString() };
     expect(selectPendingPlan([a], '1', digest)).toHaveProperty('error');
     expect(selectPendingPlan([a], '2', digest)).toEqual({ plan: a });
     expect(selectPendingPlan([a], 'Sarah', digest)).toEqual({ plan: a });
@@ -159,13 +159,13 @@ describe('selectPendingPlan', () => {
   it('does not approve a replacement draft via an old briefing ordinal', () => {
     const replacement = { ...a, planId: 'replacement-plan' };
     const digest = { items: [{ threadId: a.threadId, planId: a.planId, kind: 'approval' as const }],
-      threadIds: [], sentAt: new Date().toISOString() };
+      sentAt: new Date().toISOString() };
     expect(selectPendingPlan([replacement], '1', digest)).toEqual({ error: expect.stringContaining('no longer pending'), code: 'needs_disambiguation' });
   });
 
   it('does not approve a merchant question through a name or bare yes', () => {
     const digest = { items: [{ threadId: a.threadId, planId: a.planId, kind: 'decision' as const }],
-      threadIds: [], sentAt: new Date().toISOString() };
+      sentAt: new Date().toISOString() };
     expect(selectPendingPlan([a], 'Sarah', digest)).toHaveProperty('error');
     expect(selectPendingPlan([a], undefined, digest)).toHaveProperty('error');
   });

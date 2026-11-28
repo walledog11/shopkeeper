@@ -1,5 +1,6 @@
-import { LegacySettingsRedirect } from "../_components/LegacySettingsRedirect"
+import { redirect } from "next/navigation"
+import { settingsSectionHref } from "@/app/dashboard/_components/nav-items"
 
 export default function SettingsPage() {
-  return <LegacySettingsRedirect />
+  redirect(settingsSectionHref("voice"))
 }

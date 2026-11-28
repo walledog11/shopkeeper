@@ -1,18 +1,12 @@
 import type { InboundEmailEvent, InboundEmailIngressTransport } from './inbound-event.js';
 
-/** BullMQ payload for process-email jobs (includes legacy fields for in-flight jobs). */
+/** BullMQ payload for process-email jobs. */
 export interface InboundEmailJobPayload extends InboundEmailEvent {
   platform: 'email';
-  /** Legacy alias of externalMessageId — kept until in-flight jobs drain. */
-  inboundMessageId: string | null;
 }
 
 export function toInboundEmailJobPayload(event: InboundEmailEvent): InboundEmailJobPayload {
-  return {
-    ...event,
-    platform: 'email',
-    inboundMessageId: event.externalMessageId,
-  };
+  return { ...event, platform: 'email' };
 }
 
 type InboundEmailJobLike = {
@@ -24,24 +18,17 @@ type InboundEmailJobLike = {
   subject?: string;
   body?: string;
   externalMessageId?: string | null;
-  inboundMessageId?: string | null;
   receivedAt?: string;
   traceId?: string;
   attachments?: InboundEmailEvent['attachments'];
   ingressTransport?: InboundEmailIngressTransport;
 };
 
-function inferLegacyIngressTransport(data: InboundEmailJobLike): InboundEmailIngressTransport {
-  const id = data.externalMessageId ?? data.inboundMessageId;
-  if (typeof id === 'string' && id.startsWith('gmail:')) return 'gmail_sync';
-  return 'postmark_forward';
-}
-
-/** Maps a queued process-email job (new or legacy shape) to InboundEmailEvent. */
+/** Maps a queued process-email job to InboundEmailEvent. */
 export function parseInboundEmailJobData(data: InboundEmailJobLike): InboundEmailEvent | null {
   if (data.platform !== 'email') return null;
   if (!data.organizationId || !data.senderEmail || !data.body) return null;
-  if (!data.traceId || !data.receivedAt) return null;
+  if (!data.traceId || !data.receivedAt || !data.ingressTransport) return null;
 
   return {
     organizationId: data.organizationId,
@@ -50,10 +37,10 @@ export function parseInboundEmailJobData(data: InboundEmailJobLike): InboundEmai
     senderName: data.senderName ?? null,
     subject: data.subject?.trim() || 'No Subject',
     body: data.body,
-    externalMessageId: data.externalMessageId ?? data.inboundMessageId ?? null,
+    externalMessageId: data.externalMessageId ?? null,
     receivedAt: data.receivedAt,
     traceId: data.traceId,
     attachments: data.attachments,
-    ingressTransport: data.ingressTransport ?? inferLegacyIngressTransport(data),
+    ingressTransport: data.ingressTransport,
   };
 }

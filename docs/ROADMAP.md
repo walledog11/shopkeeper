@@ -16,13 +16,12 @@ an answer, a setup that asks for chores before showing the agent, settings a fir
 owner can't judge, and no way to hear the agent's voice before a customer does. Every
 item is checked by using the app in a browser, with screenshots in the PR.
 
-1. **Cut the compatibility paths and their audits** that exist only for pre-launch data
-   (reset the dev workspace instead). Website chat and the Telegram test transport stay;
-   direct Meta Instagram stays until SocialAPI's review closes. Settings no longer offer
-   the Trusted level, a daily refund total or blocking custom items, but the core still
-   reads all three from stored settings: retire them, with the trusted tier's auto-execute
-   path, once production holds no rows that use them. Closes when they are deleted and
-   the full loop still runs.
+1. **Cut the remaining compatibility paths.** The old stored formats are gone. Left: the
+   trusted tier with its auto-execute path, the daily refund total, blocking custom items
+   and numeric timezone offsets, which the core still reads from stored settings
+   (production holds none of them apart from the dev workspace's Trusted level, so move
+   it off Trusted first), and the old-login Instagram branch once that connection is
+   disconnected. Closes when they are deleted and the full loop still runs.
 2. **Voice practice on real replies.** The Voice page asks one customer question at a time
    with two replies to pick from, and each pick sets one voice choice. Closes when a
    merchant sets the voice by picking replies, and the next real draft matches it.

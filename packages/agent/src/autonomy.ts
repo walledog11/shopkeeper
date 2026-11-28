@@ -17,7 +17,6 @@ import type {
   OrgSettings,
   PlanRoutingEvidence,
   PlanRoutingEvidenceCode,
-  PlanSignalCode,
   PlanValidationIssue,
   ProducedPlanSignalCode,
   RawToolCall,
@@ -34,7 +33,6 @@ export type AutonomyKind =
 export type AutonomyReasonCode =
   | PlanRoutingEvidenceCode
   | ProducedPlanSignalCode
-  | "legacy_warning"
   | "questionable_sender"
   | "thread_already_escalated"
   | "auto_execute_rollout_disabled"
@@ -166,21 +164,8 @@ function executableCalls(plan: AgentPlan): RawToolCall[] {
 
 function routingEvidence(plan: AgentPlan, context: AutonomyContext): PlanRoutingEvidence {
   if (plan.routingEvidence) return plan.routingEvidence;
-  // Read-only compatibility for v1-v6 cache records. Current v7 writers strip
-  // `routing`, and legacy versions are never current/executable.
-  if (plan.routing) {
-    return {
-      classifierState: context.classifierState ?? "not_applicable",
-      codes: [],
-      question: plan.routing.question ?? null,
-    };
-  }
   const classifierState = context.classifierState ?? "not_applicable";
   return { classifierState, codes: [] };
-}
-
-function signalReason(code: PlanSignalCode): AutonomyReasonCode {
-  return code;
 }
 
 export function decideAutonomy(
@@ -239,20 +224,14 @@ export function decideAutonomy(
   }
 
   const askOperator = plan.rawToolCalls.find((call) => call.name === "ask_operator") ?? null;
-  // Current plans carry the planner's decision about whether the merchant has
+  // The plan carries the planner's decision about whether the merchant has
   // supplied the missing fact. An advisory search miss cannot overturn it.
-  const legacyKbGap = !plan.routingEvidence
-    && planSignals(plan).some((signal) => signal.code === "kb_no_match")
-    && plan.rawToolCalls.some((call) => call.name === "send_reply")
-    && !plan.rawToolCalls.some((call) => TOOL_CATEGORIES[call.name] === "action");
-  if (askOperator || evidence.question || evidence.codes.includes("policy_gap") || evidence.codes.includes("kb_gap") || legacyKbGap) {
+  if (askOperator || evidence.question || evidence.codes.includes("policy_gap") || evidence.codes.includes("kb_gap")) {
     return {
       kind: "needs_merchant_input",
       reasons: askOperator
         ? ["explicit_merchant_question"]
-        : legacyKbGap
-          ? ["kb_gap"]
-          : evidence.codes.filter((code) => code === "policy_gap" || code === "kb_gap"),
+        : evidence.codes.filter((code) => code === "policy_gap" || code === "kb_gap"),
       question: questionText(askOperator) ?? evidence.question ?? merchantGapQuestion(),
     };
   }
@@ -283,7 +262,7 @@ export function decideAutonomy(
   if (blockingSignals.length > 0) {
     return {
       kind: "needs_review",
-      reasons: blockingSignals.map((signal) => signalReason(signal.code)),
+      reasons: blockingSignals.map((signal) => signal.code),
       approvalAllowed: true,
       toolCalls: calls,
     };

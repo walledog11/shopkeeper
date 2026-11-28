@@ -221,7 +221,7 @@ describe('processGmailSyncJob', () => {
         integrationId: 'integration-1',
         receivedAt: '2026-07-13T17:20:00.000Z',
         senderEmail: 'customer@example.test',
-        inboundMessageId: '<accepted@example.test>',
+        externalMessageId: '<accepted@example.test>',
         traceId: 'trace-1',
       } satisfies Partial<InboundJobData>),
       { jobId: 'gmail-inbound-integration-1-accepted' },
@@ -230,7 +230,7 @@ describe('processGmailSyncJob', () => {
       2,
       'process-email',
       expect.objectContaining({
-        inboundMessageId: 'gmail:alias',
+        externalMessageId: 'gmail:alias',
       }),
       { jobId: 'gmail-inbound-integration-1-alias' },
     );
@@ -398,13 +398,13 @@ describe('processGmailSyncJob', () => {
     });
     expect(inboundQueue.add).toHaveBeenCalledWith(
       'process-email',
-      expect.objectContaining({ inboundMessageId: '<recovered@example.test>' }),
+      expect.objectContaining({ externalMessageId: '<recovered@example.test>' }),
       { jobId: 'gmail-inbound-integration-1-recovered' },
     );
     expect(inboundQueue.add).toHaveBeenCalledWith(
       'process-email',
       expect.objectContaining({
-        inboundMessageId: '<arrived-during-recovery@example.test>',
+        externalMessageId: '<arrived-during-recovery@example.test>',
       }),
       { jobId: 'gmail-inbound-integration-1-arrived-during-recovery' },
     );

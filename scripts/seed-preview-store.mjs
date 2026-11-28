@@ -37,7 +37,7 @@ function toolCall(id, name, input) {
 }
 
 // The app's own builder, so a seeded plan is always in the format the app reads.
-function cachedPlan({ instruction, steps, rawToolCalls, warnings }) {
+function cachedPlan({ instruction, steps, rawToolCalls }) {
   return buildAgentPlanCacheRecord({
     instruction,
     lastCustomerMessageId: null,
@@ -46,7 +46,6 @@ function cachedPlan({ instruction, steps, rawToolCalls, warnings }) {
       instruction,
       steps,
       rawToolCalls,
-      ...(warnings ? { warnings } : {}),
     },
   });
 }
@@ -158,7 +157,6 @@ async function main() {
               },
             },
           ],
-          warnings: ['Refund of $128 exceeds the $75 cap for the Ask first trust level.'],
         }),
       },
     });
