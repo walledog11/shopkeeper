@@ -24,7 +24,6 @@ function input(overrides: Partial<Parameters<typeof completeSocialApiOAuth>[0]> 
   return {
     appUrl: 'https://app.example.com',
     attemptState: ATTEMPT,
-    clerkOrganizationId: 'org_assigned',
     code: 'auth-code',
     organizationId: 'db-org-id',
     providerState: 'provider-state',
@@ -36,9 +35,8 @@ function input(overrides: Partial<Parameters<typeof completeSocialApiOAuth>[0]> 
 
 describe('completeSocialApiOAuth', () => {
   beforeEach(() => {
-    vi.stubEnv('SOCIALAPI_ENABLED', 'true');
     vi.stubEnv('SOCIALAPI_API_KEY', 'sapi-key');
-    vi.stubEnv('SOCIALAPI_BRAND_ASSIGNMENTS', 'org_assigned:brand_1');
+    vi.stubEnv('SOCIALAPI_BRAND_ID', 'brand_1');
     exchangeInstagramCode.mockResolvedValue({
       ok: true,
       data: { accountId: 'acc_1', platform: 'instagram', username: 'merchant' },
@@ -102,8 +100,8 @@ describe('completeSocialApiOAuth', () => {
     expect(exchangeInstagramCode).not.toHaveBeenCalled();
   });
 
-  it('rejects a callback for a workspace that lost its assignment', async () => {
-    vi.stubEnv('SOCIALAPI_BRAND_ASSIGNMENTS', 'org_other:brand_9');
+  it('rejects a callback once SocialAPI is no longer configured', async () => {
+    vi.stubEnv('SOCIALAPI_BRAND_ID', '');
 
     const result = await completeSocialApiOAuth(input());
 
@@ -115,7 +113,7 @@ describe('completeSocialApiOAuth', () => {
     expect(exchangeInstagramCode).not.toHaveBeenCalled();
   });
 
-  it('rejects a callback whose assigned brand changed mid-flow', async () => {
+  it('rejects a callback whose brand changed mid-flow', async () => {
     const result = await completeSocialApiOAuth(input({ savedBrandId: 'brand_stale' }));
 
     expect(result).toMatchObject({ ok: false, error: 'instagram_not_available' });

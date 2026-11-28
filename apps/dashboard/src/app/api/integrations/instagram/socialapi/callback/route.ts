@@ -39,7 +39,6 @@ export async function POST(request: Request) {
     complete: ({ code, organizationId, searchParams, session }) => completeSocialApiOAuth({
       appUrl,
       attemptState: session.attemptId,
-      clerkOrganizationId: session.clerkOrgId,
       code,
       organizationId,
       providerState: searchParams.get('state'),

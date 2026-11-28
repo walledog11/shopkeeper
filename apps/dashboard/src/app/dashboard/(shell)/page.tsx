@@ -3,7 +3,6 @@ import { auth, currentUser } from "@clerk/nextjs/server"
 import { cookies } from "next/headers"
 import { localGreeting, resolveAgentSettings, storeTimeZone } from "@shopkeeper/agent/settings"
 import type { OrgSettings } from "@/types"
-import { isInstagramIntegrationEnabledForOrg } from "@/lib/env"
 import {
   readWorkflowBannerDismissed,
   readWorkflowBannerExpanded,
@@ -13,6 +12,7 @@ import {
 import { getOrCreateOrg } from "@/lib/server/org"
 import { getHomeChannelState } from "@/lib/server/home-summary"
 import { getCachedHomeSummary } from "@/lib/server/cached-home-summary"
+import { resolveInstagramConnectTransport } from "@/lib/socialapi/config"
 import DashboardHomeClient from "../_components/home/DashboardHomeClient"
 
 export const metadata: Metadata = { title: "Home" }
@@ -45,7 +45,7 @@ export default async function DashboardPage() {
       initialChannelState={initialChannelState}
       workflowBannerDismissed={workflowBannerDismissed}
       workflowBannerExpanded={workflowBannerExpanded}
-      instagramAvailable={isInstagramIntegrationEnabledForOrg(orgId)}
+      instagramAvailable={resolveInstagramConnectTransport(orgId) !== null}
     />
   )
 }

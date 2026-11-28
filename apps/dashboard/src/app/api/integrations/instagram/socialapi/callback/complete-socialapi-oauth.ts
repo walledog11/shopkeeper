@@ -4,7 +4,7 @@ import {
   type SocialApiError,
 } from '@shopkeeper/integrations/socialapi';
 import logger from '@/lib/server/logger';
-import { resolveSocialApiBrandForOrg } from '@/lib/socialapi/config';
+import { getSocialApiConnectConfig } from '@/lib/socialapi/config';
 import type { OAuthCallbackCompletionResult } from '@/app/api/integrations/_lib/oauth-callback-runner';
 import { InstagramAccountInUseError } from '@/app/api/integrations/_lib/instagram-connection';
 import { persistSocialApiConnection } from '@/app/api/integrations/_lib/socialapi-connection';
@@ -24,7 +24,6 @@ export type CompleteSocialApiOAuthResult = OAuthCallbackCompletionResult<SocialA
 export interface CompleteSocialApiOAuthInput {
   appUrl: string;
   attemptState: string;
-  clerkOrganizationId: string | undefined;
   code: string;
   organizationId: string;
   providerState: string | null;
@@ -65,16 +64,15 @@ function logProviderError(step: string, error: SocialApiError): void {
 export async function completeSocialApiOAuth(
   input: CompleteSocialApiOAuthInput,
 ): Promise<CompleteSocialApiOAuthResult> {
-  // The brand is re-resolved from the operator's assignment map rather than
-  // read from the callback: the sealed cookie is only used to prove the
-  // assignment has not changed underneath a flow that is already in the air.
-  const assignment = resolveSocialApiBrandForOrg(input.clerkOrganizationId);
-  if (!assignment) {
-    logger.error('[SocialAPI OAuth] Callback for a workspace with no assigned brand');
+  // The brand is re-read from configuration rather than from the callback: the
+  // sealed cookie only proves it has not changed under a flow already in the air.
+  const socialApi = getSocialApiConnectConfig();
+  if (!socialApi) {
+    logger.error('[SocialAPI OAuth] Callback while SocialAPI is not configured');
     return failure('instagram_not_available', 'validation_failed');
   }
-  if (input.savedBrandId && input.savedBrandId !== assignment.brandId) {
-    logger.error('[SocialAPI OAuth] Assigned brand changed during the connect attempt');
+  if (input.savedBrandId && input.savedBrandId !== socialApi.brandId) {
+    logger.error('[SocialAPI OAuth] SocialAPI brand changed during the connect attempt');
     return failure('instagram_not_available', 'validation_failed');
   }
 
@@ -87,8 +85,8 @@ export async function completeSocialApiOAuth(
   }
 
   const api = createSocialApiClient({
-    apiKey: assignment.apiKey,
-    baseUrl: assignment.baseUrl,
+    apiKey: socialApi.apiKey,
+    baseUrl: socialApi.baseUrl,
   });
 
   const exchange = await api.exchangeInstagramCode({
@@ -101,12 +99,12 @@ export async function completeSocialApiOAuth(
     return failure('token_exchange_failed', providerFailureCategory(exchange.error));
   }
 
-  // Ownership is verified against the assigned brand rather than taken from the
-  // exchange: a brand-scoped lookup is what proves this account landed in the
-  // workspace's own brand and not somewhere else in the vendor account.
+  // Ownership is verified against the configured brand rather than taken from the
+  // exchange: a brand-scoped lookup proves this account landed in our brand and
+  // not somewhere else in the vendor account.
   const account = await api.getInstagramAccount({
     accountId: exchange.data.accountId,
-    brandId: assignment.brandId,
+    brandId: socialApi.brandId,
   });
   if (!account.ok) {
     logProviderError('Account verification', account.error);
@@ -129,7 +127,7 @@ export async function completeSocialApiOAuth(
   let persisted;
   try {
     persisted = await persistSocialApiConnection({
-      brandId: assignment.brandId,
+      brandId: socialApi.brandId,
       connectedAt: new Date(),
       organizationId: input.organizationId,
       providerAccountId: account.data.id,
