@@ -143,15 +143,14 @@ daily LLM spend cap (`llm_daily_spend`).
   `SHOPIFY_CLIENT_SECRET`, `SHOPIFY_APP_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`,
   `PRICE_ID_STARTER`, `PRICE_ID_PRO`, `CLERK_WEBHOOK_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
   `GMAIL_PUBSUB_TOPIC` (`projects/<project>/topics/<topic>`), `IMESSAGE_LINE_HANDLE` (the handle
-  merchants text; not a secret), `INSTAGRAM_INTEGRATION_ENABLED` (see [direct Meta](#instagram-via-direct-meta)).
+  merchants text; not a secret), `INSTAGRAM_INTEGRATION_ENABLED` (see [direct Meta](#instagram-via-direct-meta)),
+  `SOCIALAPI_API_KEY`, `SOCIALAPI_BRAND_ID` (see [Instagram via SocialAPI](#instagram-via-socialapi)).
 - **Optional:**
   - `NEXT_PUBLIC_APP_URL` — if set, must equal `APP_URL` (equality-checked in production).
   - `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET` (required when `INSTAGRAM_INTEGRATION_ENABLED=true`);
     `INSTAGRAM_BETA_ORG_IDS` (Clerk org IDs allowed a new direct-Meta connect — empty allows **no one**
     in production); `INSTAGRAM_WEBHOOK_APP_SECRET` (local webhook proxy only).
-  - `SOCIALAPI_API_KEY`, `SOCIALAPI_ENABLED`, `SOCIALAPI_BRAND_ASSIGNMENTS` (`clerk_org_id:brand_id`
-    pairs), `SOCIALAPI_MAX_ACTIVE_ORGS`, `SOCIALAPI_BASE_URL` (test override only) — see
-    [Instagram via SocialAPI](#instagram-via-socialapi).
+  - `SOCIALAPI_BASE_URL` (test override only; ignored in production).
   - `STOREFRONT_CHAT_ENABLED` (off unless exactly `true`), `STOREFRONT_CHAT_SIGNING_SECRET` (must not equal `INTERNAL_API_SECRET`).
   - `NOTICE_EMAIL_FROM` — the From address of [notice emails](#notice-emails); unset sends none.
   - `NEXT_PUBLIC_GATEWAY_EVENTS_URL` — gateway base for live-inbox SSE (pairs with gateway `GATEWAY_REALTIME_ENABLED=true`); empty disables realtime.
@@ -1094,13 +1093,13 @@ gateway URL comes from `RAILWAY_PUBLIC_DOMAIN` under `railway run`, or `--gatewa
 
 ### Instagram via SocialAPI
 
-SocialAPI carries `ig_dm` for new connections. Contract, launch envelope and rollback rules:
+SocialAPI carries `ig_dm` for new connections. Contract and rollback rules:
 [socialapi-transport-plan.md](../socialapi-transport-plan.md). SocialAPI keys are infrastructure
 secrets — never on `Integration`, in logs, jobs or client responses.
 
 | Where | Env |
 | --- | --- |
-| Dashboard (Vercel) | `SOCIALAPI_API_KEY` (connect, replies and disconnect — without it outbound refuses and disconnect can't revoke), `SOCIALAPI_ENABLED`, `SOCIALAPI_BRAND_ASSIGNMENTS`, `SOCIALAPI_MAX_ACTIVE_ORGS` (1–8, default 8); `SOCIALAPI_BASE_URL` is ignored in production |
+| Dashboard (Vercel) | `SOCIALAPI_API_KEY` (connect, replies and disconnect — without it outbound refuses and disconnect can't revoke), `SOCIALAPI_BRAND_ID` (the brand every workspace connects under); `SOCIALAPI_BASE_URL` is ignored in production |
 | Gateway (Railway) | `SOCIALAPI_WEBHOOK_SECRET`; `SOCIALAPI_API_KEY` on both services for display names and Instagram replies (without it the gateway hands its Instagram sends to the dashboard; ingest works either way) |
 
 **Registering the webhook.** SocialAPI verifies a new endpoint with an unsigned `webhook.test`
@@ -1110,30 +1109,22 @@ secret, register `https://<gateway>/webhooks/socialapi`, set the returned secret
 services and redeploy. From then on every delivery, test deliveries included, must pass the V2
 signature (`x-socialapi-signature-v2` over `<timestamp>.<raw body>`); only `dm.received` creates work.
 
-**Admitting a workspace.** Connect is closed until all of this is in place:
+**Opening connect.** Set `SOCIALAPI_API_KEY` and `SOCIALAPI_BRAND_ID` on Vercel and redeploy the
+dashboard. Every workspace then sees a Connect Instagram button and completes SocialAPI's OAuth itself;
+all accounts land in that one brand, and each row is told apart by its account (`providerAccountId`),
+which one workspace at a time may hold. Outbound follows the row's `metadata.instagram.transport`,
+so nothing else needs flipping. Verify the next DM to a connected account becomes a ticket in its
+workspace (`[Webhook] SocialAPI DM queued`). `[Webhook] SocialAPI account maps to no active SocialAPI
+integration — ignoring` means no active row carries that account in `providerAccountId`.
 
-1. Provision a brand for the workspace in SocialAPI (an operator step; callbacks never create brands).
-2. On Vercel set `SOCIALAPI_ENABLED=true`, `SOCIALAPI_API_KEY`, and add `<clerk_org_id>:<brand_id>`
-   to the comma-separated `SOCIALAPI_BRAND_ASSIGNMENTS` — one brand per workspace. A map larger than
-   `SOCIALAPI_MAX_ACTIVE_ORGS` closes connect for **everyone** (`[SocialAPI] SOCIALAPI_BRAND_ASSIGNMENTS
-   exceeds the assigned-slot cap — connect is closed`); a malformed entry or a workspace given two
-   brands throws. Redeploy the dashboard.
-3. The merchant uses the normal Connect Instagram action; `resolveInstagramConnectTransport` sends an
-   assigned workspace through SocialAPI. Outbound follows the row's `metadata.instagram.transport`,
-   so nothing else needs flipping.
-4. Verify the next DM to that account becomes a ticket in that workspace (`[Webhook] SocialAPI DM
-   queued`). `[Webhook] SocialAPI account maps to no active SocialAPI integration — ignoring` means no
-   active row carries that account in `providerAccountId`.
-
-Rolling back admission (remove the assignment, or `SOCIALAPI_ENABLED=false`) stops **new**
-connects only; ingress and replies for connected rows keep working.
+Unsetting `SOCIALAPI_BRAND_ID` stops **new** connects only; ingress and replies for connected rows
+keep working.
 
 **Disconnect.** The dashboard's disconnect, and workspace deletion, delete the account at SocialAPI
 before removing the row. A revoke that fails leaves the integration `cleanup_failed`, with the
 reason in `integration_disconnects.last_error` and a `provider_cleanup` alert (`provider=socialapi`).
 Fix the cause (usually `SOCIALAPI_API_KEY` on Vercel), or remove the account in SocialAPI by hand,
-then disconnect again: a 404 that the brand's account listing confirms completes it. Removing the
-brand and its `SOCIALAPI_BRAND_ASSIGNMENTS` entry stays an operator step.
+then disconnect again: a 404 that the brand's account listing confirms completes it.
 
 **Operator commands.** Until recovery is in the product,
 `npm run spike:socialapi -- <inspect|connect|exchange|send|disconnect|pin> [--execute]` is the tool.
@@ -1147,7 +1138,7 @@ Probe flags: transport plan, *Controlled-account probe*.
   `ig_dm` row, active, with the account in `providerAccountId`. Ingress resolves webhook
   `data.account_id` through that column, active rows only.
 - `disconnect --execute --confirm-controlled-account` — deletes the remote account
-  `SOCIALAPI_ACCOUNT_ID` at SocialAPI. Dashboard disconnect does not revoke it yet.
+  `SOCIALAPI_ACCOUNT_ID` at SocialAPI.
 
 ### Instagram via direct Meta
 
@@ -1160,8 +1151,8 @@ railway run --service shopkeeper --environment production -- npm run audit:insta
 ```
 
 Then set `INSTAGRAM_INTEGRATION_ENABLED=true` and add the workspace's Clerk org ID to
-`INSTAGRAM_BETA_ORG_IDS`; use a workspace that is not in `SOCIALAPI_BRAND_ASSIGNMENTS` and holds no
-Instagram row (`resolveInstagramConnectTransport` prefers SocialAPI, and
+`INSTAGRAM_BETA_ORG_IDS`, with `SOCIALAPI_BRAND_ID` unset, on a workspace that holds no Instagram row
+(`resolveInstagramConnectTransport` prefers SocialAPI whenever it is configured, and
 `integrations_instagram_organization_unique` allows one `ig_dm` row per organization); complete OAuth and confirm `/subscribed_apps` contains `messages`; confirm
 the `GET /webhooks/meta` handshake; send two quick DMs (one with an attachment) and confirm each
 appears once with provider timestamps and the private attachment; approve a reply and confirm its

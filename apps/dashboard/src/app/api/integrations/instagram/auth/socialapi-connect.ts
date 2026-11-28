@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createSocialApiClient } from '@shopkeeper/integrations/socialapi';
 import { getDashboardAppUrl } from '@/lib/env';
 import logger from '@/lib/server/logger';
-import { resolveSocialApiBrandForOrg } from '@/lib/socialapi/config';
+import { getSocialApiConnectConfig } from '@/lib/socialapi/config';
 import {
   createOAuthSessionCookies,
   createOAuthState,
@@ -28,17 +28,17 @@ export async function startSocialApiInstagramConnect(
   request: Request,
   session: AuthenticatedOAuthSession,
 ): Promise<Response> {
-  const assignment = resolveSocialApiBrandForOrg(session.orgId);
-  if (!assignment) {
+  const socialApi = getSocialApiConnectConfig();
+  if (!socialApi) {
     return NextResponse.json({ error: 'instagram_not_available' }, { status: 403 });
   }
 
   const attemptState = createOAuthState();
   const redirectUri = socialApiRedirectUri(getDashboardAppUrl(), attemptState);
   const connect = await createSocialApiClient({
-    apiKey: assignment.apiKey,
-    baseUrl: assignment.baseUrl,
-  }).beginInstagramConnect({ brandId: assignment.brandId, redirectUri });
+    apiKey: socialApi.apiKey,
+    baseUrl: socialApi.baseUrl,
+  }).beginInstagramConnect({ brandId: socialApi.brandId, redirectUri });
 
   if (!connect.ok) {
     logger.error(
@@ -58,7 +58,7 @@ export async function startSocialApiInstagramConnect(
     request,
     { provider: 'instagram' },
     session,
-    { socialApiState: connect.data.state, socialApiBrandId: assignment.brandId },
+    { socialApiState: connect.data.state, socialApiBrandId: socialApi.brandId },
     attemptState,
   );
 

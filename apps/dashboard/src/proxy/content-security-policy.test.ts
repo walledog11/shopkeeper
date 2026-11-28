@@ -26,12 +26,15 @@ describe("cspDirectives", () => {
   // hardcoded. Without the vendor domain the connect dies on the popup spinner
   // with no console error — the 2026-08-15 CSP failure, one provider later.
   // The directives are built at import, so each case needs a fresh module.
-  it("omits the SocialAPI authorize hop while that transport is switched off", async () => {
+  it("omits the SocialAPI authorize hop while connect is not configured", async () => {
+    vi.stubEnv("SOCIALAPI_API_KEY", "sapi-key");
+    vi.stubEnv("SOCIALAPI_BRAND_ID", "");
     expect((await freshDirectives())["form-action"]).not.toContain("https://*.social-api.ai");
   });
 
   it("allows the SocialAPI authorize hop and a non-production base origin", async () => {
-    vi.stubEnv("SOCIALAPI_ENABLED", "true");
+    vi.stubEnv("SOCIALAPI_API_KEY", "sapi-key");
+    vi.stubEnv("SOCIALAPI_BRAND_ID", "brand_1");
     vi.stubEnv("SOCIALAPI_BASE_URL", "https://staging.social-api.test/v1");
 
     expect((await freshDirectives())["form-action"]).toEqual(

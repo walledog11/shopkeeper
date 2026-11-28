@@ -122,12 +122,11 @@ describe('POST /api/integrations/instagram/auth', () => {
   });
 
   // The card links to one connect entry point for the channel. Which transport
-  // it starts is resolved here, so an assigned workspace must never reach the
-  // direct-Meta authorize URL even while the direct flag is still on.
-  it('hands an assigned workspace to SocialAPI instead of direct Meta', async () => {
-    vi.stubEnv('SOCIALAPI_ENABLED', 'true');
+  // it starts is resolved here, so once SocialAPI is configured no workspace
+  // reaches the direct-Meta authorize URL, even while the direct flag is still on.
+  it('hands the workspace to SocialAPI instead of direct Meta once it is configured', async () => {
     vi.stubEnv('SOCIALAPI_API_KEY', 'sapi-key');
-    vi.stubEnv('SOCIALAPI_BRAND_ASSIGNMENTS', 'org_123:brand_1');
+    vi.stubEnv('SOCIALAPI_BRAND_ID', 'brand_1');
 
     const request = new Request('http://localhost/api/integrations/instagram/auth', {
       method: 'POST',
@@ -138,10 +137,9 @@ describe('POST /api/integrations/instagram/auth', () => {
     expect(createSessionCookies).not.toHaveBeenCalled();
   });
 
-  it('leaves an unassigned workspace on direct Meta while that flag is open', async () => {
-    vi.stubEnv('SOCIALAPI_ENABLED', 'true');
+  it('leaves the workspace on direct Meta while SocialAPI has no brand and that flag is open', async () => {
     vi.stubEnv('SOCIALAPI_API_KEY', 'sapi-key');
-    vi.stubEnv('SOCIALAPI_BRAND_ASSIGNMENTS', 'org_other:brand_1');
+    vi.stubEnv('SOCIALAPI_BRAND_ID', '');
 
     const response = await POST(new Request('http://localhost/api/integrations/instagram/auth', {
       method: 'POST',

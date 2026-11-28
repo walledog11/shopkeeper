@@ -34,9 +34,10 @@ function providerAuthorizeOrigins(): string[] {
   ];
 
   // SocialAPI mints the authorize URL at connect time, so its host is not
-  // knowable here. The vendor domain is allowed as a whole while the transport
-  // is switched on, plus whatever origin a non-production base URL points at.
-  if (process.env.SOCIALAPI_ENABLED?.trim().toLowerCase() === 'true') {
+  // knowable here. The vendor domain is allowed as a whole while connect is
+  // open (the same two variables getSocialApiConnectConfig requires), plus
+  // whatever origin a non-production base URL points at.
+  if (process.env.SOCIALAPI_API_KEY?.trim() && process.env.SOCIALAPI_BRAND_ID?.trim()) {
     origins.push('https://social-api.ai', 'https://*.social-api.ai');
     const baseUrl = process.env.SOCIALAPI_BASE_URL?.trim();
     if (baseUrl) {

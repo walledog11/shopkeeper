@@ -15,34 +15,21 @@ Meta, migration, or any cross-provider handoff needs a future dated decision.
 ## Current state
 
 - **Works on a controlled account:** a signed `dm.received` becomes a durable `provider: 'socialapi'` job, a ticket and a plan; an approved reply leaves through SocialAPI's conversation endpoint; an approval card reaches the bound iMessage line. A merchant approval executing a mutative plan end to end through SocialAPI is not yet proven.
-- **Built, never run for a live merchant:** merchant OAuth connect (S2). It is closed in production because `SOCIALAPI_ENABLED` and `SOCIALAPI_BRAND_ASSIGNMENTS` are unset, so `getSocialApiConnectConfig` returns null.
+- **Open to every workspace:** merchant OAuth connect (S2), once `SOCIALAPI_API_KEY` and `SOCIALAPI_BRAND_ID` are set (`getSocialApiConnectConfig`).
 - **Absent:** connection generations, `dm.sent` reconciliation, recovery/catch-up reads, SocialAPI health probing, remote brand deletion, OAuth compensation, and transport-tagged observability.
 - **Blocked on the vendor:** SocialAPI exposes no native Instagram account ID, and the DPA and retention terms are unreconciled ([S0 diligence](production/socialapi-s0-diligence-2026-09-07.md)).
 
 ## Decisions and invariants
 
 1. **SocialAPI is the selected transport through the first 100 users.** Existing direct integrations stay direct and no automatic migration is performed. A future dated decision reopens direct Meta.
-2. **SocialAPI is selected server-side per organization.** Merchants do not choose a provider. An audited, fixed set of organization-to-brand assignments (`SOCIALAPI_BRAND_ASSIGNMENTS`) controls admission; merchants still complete OAuth themselves.
+2. **SocialAPI is selected server-side.** Merchants do not choose a provider and complete OAuth themselves. Every workspace connects under one brand (`SOCIALAPI_BRAND_ID`); a workspace's row is told apart by its account (`providerAccountId`), never by brand. (2026-11-28; replaced per-workspace brand assignment.)
 3. **One integration uses one transport at a time.** An Instagram account is never intentionally active through both transports except during a bounded, observed migration handoff.
 4. **There is no automatic send failover.** A SocialAPI-connected merchant has not authorized Shopkeeper's Meta app. A failed SocialAPI send is never retried through direct Meta, and it alerts as `provider=socialapi` so it cannot read as a Meta outage.
 5. **The existing Shopkeeper workflow remains authoritative.** Both transports normalize into the current durable `InstagramInboundJobData`, ticket, planning, approval, attachment, and outbound-recording paths.
 6. **Customer identity is per transport.** SocialAPI brand, account, and conversation IDs are routing metadata. The worker keys on two job fields: `instagramAccountId` selects the integration through `loadActiveInstagramIntegration`, and `senderIgsid` becomes `Customer.platformId`, half of the `(organizationId, platformId)` unique key. For a SocialAPI job `senderIgsid` is SocialAPI's author ID (`data.author.id`, raw `sender.id` fallback). Instagram-scoped sender IDs are per Meta app, so it is not interchangeable with a direct-Meta IGSID for the same shopper. Customer rows are never merged or migrated between transports; a future direct-Meta handoff needs an explicit sender mapping, not an in-place swap. `Integration.externalAccountId` is meant to hold the native Instagram account ID; the provider-ID stopgap is under Target architecture.
 7. **SocialAPI credentials are infrastructure secrets.** Never store the workspace API key in `Integration`, logs, jobs, or client-visible responses.
-8. **Capacity is enforced in code, and expansion is staged.** Admission is bounded by the vendor tier actually contracted, not by convention, and does not expand merely because the first canaries work. The bound is a capacity contract to renegotiate as the cohort grows, not a deadline to migrate away.
+8. **Capacity is the vendor plan's, not a cap in code.** Connect is open to every workspace; SocialAPI's brand, account and fair-use terms are settled with the vendor as merchants arrive. Unsetting `SOCIALAPI_BRAND_ID` freezes new connects without touching connected accounts: do that for any cross-tenant routing defect. (2026-11-28; replaced a code-enforced admission cap and staged cohorts.)
 9. **A SocialAPI send result proves acceptance only.** Its message ID matched neither the outgoing inbox row's SocialAPI `id` nor its `platform_id`, so it is not delivery or correlation evidence until the `dm.sent` join is established.
-
-## Launch envelope (first stage)
-
-The first stage is sized to the paid Side Hustle tier (webhooks and support are required). It is not a product ceiling: expanding it takes a vendor conversation plus the S6 capacity evidence. Define the admission unit (connected merchant organizations and brands) before raising any number, so "100 users" maps to enforceable provider capacity.
-
-- Maximum **8 active production SocialAPI merchant organizations**, the headroom the published 10-brand tier leaves. Enforced at connect: `SOCIALAPI_MAX_ACTIVE_ORGS` (ceiling 8) bounds the assignment map, and a map larger than the cap closes connect. Raising it requires a contracted tier with documented headroom.
-- Cohorts: 2 canaries, then 5 merchants, then at most 8 on this tier.
-- Review trigger: the earliest of **30 calendar days, 5 active merchants, 500 inbound events/day, or 100 outbound replies/day** across the cohort. Before the first external canary, record its activation date and a capacity-review deadline 30 days later in the runbook. The review decides expand, hold, or renegotiate; without a recorded decision, freeze onboarding but do not drop service for connected merchants.
-- Freeze new SocialAPI connections immediately for any unresolved cross-tenant routing defect, missing supported DM, attachment-loss incident, two consecutive OAuth failures affecting different merchants, or the S6 provider failure alert.
-- Do not upgrade to the 50-brand plan as a reflex. Reaching 8 requires a written decision to negotiate stronger terms or dedicated infrastructure, or to delay expansion, based on observed reliability and support response.
-- Event thresholds are review triggers, not message-dropping limits. A connected account's valid events are always accepted; the connection gate is what limits exposure.
-- Use separate SocialAPI workspaces/keys for non-production if the vendor supports them; otherwise keep non-production brands out of the production slots and count them in the capacity audit.
-- Brands and scoped runtime keys are provisioned through an audited operator workflow before merchant OAuth. Pending connections hold a slot; failed or abandoned OAuth retains it until explicitly released; reconnect reuses it. Automated brand creation and dynamic slot allocation are deferred.
 
 ## Target architecture
 
@@ -118,13 +105,13 @@ Done when existing direct Meta tests pass with at most compatibility-only adjust
 
 ### S2. SocialAPI client and OAuth lifecycle
 
-Built: the core REST client (`packages/integrations/src/socialapi/client.ts`: connect, exchange, account read, conversation send, disconnect) with bounded timeouts, response validation and no blind retry of sends; connect configuration and the assignment cap (`apps/dashboard/src/lib/socialapi/config.ts`, base-URL override ignored in production); OAuth state bound to the initiating organization via the sealed attempt cookie keyed by the redirect URI's `attempt`, with the provider's own state compared before exchange; brand re-resolved from the assignment map on callback; one connect entry point dispatching on `resolveInstagramConnectTransport`; the transactional recheck of the current integration in `persistSocialApiConnection`; before authorization, a note on the onboarding and Integrations connect cards that Instagram will ask the merchant to allow SocialAPI (`instagramConnectNote`).
+Built: the core REST client (`packages/integrations/src/socialapi/client.ts`: connect, exchange, account read, conversation send, disconnect) with bounded timeouts, response validation and no blind retry of sends; connect configuration (`apps/dashboard/src/lib/socialapi/config.ts`: one brand for every workspace, base-URL override ignored in production); OAuth state bound to the initiating organization via the sealed attempt cookie keyed by the redirect URI's `attempt`, with the provider's own state compared before exchange; brand re-read from configuration on callback; one connect entry point dispatching on `resolveInstagramConnectTransport`; the transactional recheck of the current integration in `persistSocialApiConnection`; before authorization, a note on the onboarding and Integrations connect cards that Instagram will ask the merchant to allow SocialAPI (`instagramConnectNote`).
 
 - [ ] Add health, list/sync recovery, and deletion operations to the client as S4/S5 need them.
 - [ ] Validate native account ID and Professional-account eligibility at connect. Blocked: neither `POST /oauth/exchange` nor `GET /accounts` returns them (vendor question 5).
 - [ ] Durably schedule compensation for a remote account proven to have been created by a failed attempt and not adopted by a successful connection; ambiguous ownership goes to reconciliation.
 - [ ] Check the connect note against the live consent screen (S0), and link the privacy disclosure from it once SocialAPI's retention answer is in `/privacy`.
-- [ ] Run connect for one assigned organization against a live merchant OAuth: an unassigned organization keeps the direct behavior, callback replay is harmless, and cross-organization ownership attempts fail.
+- [ ] Run connect against a live merchant OAuth: callback replay is harmless, and cross-organization ownership attempts fail.
 
 ### S3. Signed inbound webhook
 
@@ -159,7 +146,6 @@ Built in `dispatchInstagramDirect`: outbound branches on the pinned transport af
 Built in `cleanupIntegrationProvider`: durable disconnect cleanup routes by transport. Direct unsubscribes Meta; SocialAPI deletes the connected account (`revokeSocialApiAccountBeforeDisconnect`), and workspace deletion runs the same cleanup. A 404 counts as revoked only once the brand's account listing confirms it; any other failure fails the cleanup, so the disconnect retries and records why.
 
 - [ ] SocialAPI health probing for account status and reconnect reason; do not run direct Meta subscription/token-refresh logic for SocialAPI rows.
-- [ ] Workspace deletion also deletes the remote brand when safe (the client has no brand operation; today the operator removes the brand and its assignment).
 - [ ] Reconnect updates the existing integration and thread routing when the verified account is unchanged, increments generation, and prevents stale jobs restoring old routes.
 - [ ] Outage behavior: flag the integration degraded, stop automated sends when outcome safety is unclear, keep reconciliation scheduled, and tell the merchant to use Instagram directly. A provider message ID proves acceptance, not delivery.
 
@@ -172,12 +158,11 @@ Done when send, failure, reconnect, disconnect, and workspace deletion are provi
 - [ ] Measure provider-received-to-ticket lag and approval-to-provider-accepted latency without logging message content or customer identifiers.
 - [ ] Alert immediately on any isolation mismatch, confirmed missing supported message/attachment, or unrecovered reconciliation gap; alert on invalid-signature bursts and webhook-path inbound lag above two minutes.
 - [ ] Provider 5xx/timeout above 2% over a rolling 15 minutes with at least 100 calls; below that volume, alert and freeze onboarding after three consecutive failures within 15 minutes. Attachment failures above 1% with at least 100 attempts in 24 hours; below that, review each and freeze for confirmed loss.
-- [ ] Report active and assigned/pending merchants separately; alert at 5/8 and 7/8 assigned slots; audit all remote brands including test accounts.
-- [ ] Extend `audit:instagram-rollout` with transport counts, invalid metadata, missing provider account IDs, duplicate identities, health, last ingress/send, and cap utilization.
+- [ ] Extend `audit:instagram-rollout` with transport counts, invalid metadata, missing provider account IDs, duplicate identities, health, and last ingress/send.
 - [ ] Add SocialAPI variables to `turbo.json`, launch-environment validation, network test guards, and the runbook. Secret checks report presence/fingerprint only.
 - [ ] A synthetic production canary if SocialAPI permits a dedicated test account; otherwise a documented daily manual check through the supervised stages.
 
-Done when ops can tell direct and SocialAPI failures apart, stop onboarding before the stage limit, and diagnose a merchant without viewing message content.
+Done when ops can tell direct and SocialAPI failures apart and diagnose a merchant without viewing message content.
 
 ### Canaries and staged launch
 
@@ -190,8 +175,6 @@ Entry requires S0 closed, S1–S6 done, and controlled-account acceptance. Live 
 - Revoked provider access shows health/reconnect behavior; disconnect stops new tickets; reconnect restores existing routing.
 - Provider-held data deletion executes.
 - 7–14 days of observation with zero missing supported messages, zero cross-tenant errors, zero duplicate persisted messages, and a provider message ID on every eligible reply.
-
-Then expand: keep the same two canaries (do not reset the clock), go to five after the observation window, hold at least three clean days at five, and go to eight only with diligence closed, clean attachment/reconciliation evidence, and adequate support response. At the stage limit, run the capacity review against the next cohort size.
 
 If a future decision reopens direct Meta, the handoff freezes new SocialAPI connections, pauses automated sends, drains or quarantines old-generation work, persists the cleanup snapshot before changing the integration in place, preserves `replyIntegrationId`, increments generation, runs a bounded dual-subscription overlap with the tested dedupe/mapping, and disconnects the old account only after inbound and outbound are verified. Failure pauses further migrations and never discards queued messages.
 

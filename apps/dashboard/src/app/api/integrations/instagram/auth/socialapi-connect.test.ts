@@ -18,7 +18,7 @@ vi.mock('@/app/api/integrations/_lib/oauth-session', () => ({
 
 import { socialApiRedirectUri, startSocialApiInstagramConnect } from './socialapi-connect';
 
-const SESSION = { orgId: 'org_assigned', userId: 'user_1' };
+const SESSION = { orgId: 'org_1', userId: 'user_1' };
 const ATTEMPT = 'a'.repeat(32);
 
 function request() {
@@ -28,9 +28,8 @@ function request() {
 describe('startSocialApiInstagramConnect', () => {
   beforeEach(() => {
     vi.stubEnv('APP_URL', 'https://app.example.com');
-    vi.stubEnv('SOCIALAPI_ENABLED', 'true');
     vi.stubEnv('SOCIALAPI_API_KEY', 'sapi-key');
-    vi.stubEnv('SOCIALAPI_BRAND_ASSIGNMENTS', 'org_assigned:brand_1');
+    vi.stubEnv('SOCIALAPI_BRAND_ID', 'brand_1');
     createState.mockReturnValue(ATTEMPT);
     createSessionCookies.mockResolvedValue({ state: ATTEMPT, returnTo: null, mode: 'popup' });
     beginInstagramConnect.mockResolvedValue({
@@ -72,8 +71,9 @@ describe('startSocialApiInstagramConnect', () => {
     );
   });
 
-  it('refuses a workspace with no assigned brand', async () => {
-    const response = await startSocialApiInstagramConnect(request(), { ...SESSION, orgId: 'org_x' });
+  it('refuses to start while SocialAPI has no brand configured', async () => {
+    vi.stubEnv('SOCIALAPI_BRAND_ID', '');
+    const response = await startSocialApiInstagramConnect(request(), SESSION);
 
     expect(response.status).toBe(403);
     await expect(response.json()).resolves.toEqual({ error: 'instagram_not_available' });

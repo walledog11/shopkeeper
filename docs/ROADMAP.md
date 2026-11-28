@@ -87,27 +87,18 @@ Resumes with the first real merchant.
 2. **Authenticate at install, not at signup** (built: the app home holds the install's
    grant and its links claim it). Closes when, on the dev store, install → app home →
    sign up → inbox asks for no store URL and no second consent.
-3. **A customer channel an installer can connect alone.** Instagram connect is gated per
-   workspace by SocialAPI brand assignment (`SOCIALAPI_BRAND_ASSIGNMENTS`, at most 8), so
-   every App Store install sees Instagram "Coming soon" while the listing and landing page
-   lead with DMs. Email is no clean fallback yet: Gmail shows Google's unverified-app
-   warning and stops at 100 users until the next item passes, a forwarding merchant's
-   domain is verified in Postmark by hand before their replies send, and website chat is
-   off (`STOREFRONT_CHAT_ENABLED`). Provision a brand on connect, or lead with email and
-   say Instagram opens by invitation. Closes when what the listing promises is what a new
-   install can connect.
-4. **Submit Gmail restricted-scope verification now**
+3. **Submit Gmail restricted-scope verification now**
    ([packet](production/google-gmail-verification-packet.md)). Until it passes, every
    Gmail connect shows Google's unverified-app warning and the app stops at 100 users,
    and the review, with any security assessment Google asks for, runs on Google's
    schedule. Closes when it is submitted.
-5. **Tell a merchant with no linked iPhone what is waiting** (built: with no phone bound,
+4. **Tell a merchant with no linked iPhone what is waiting** (built: with no phone bound,
    plan cards, questions, escalations and the briefing are emailed to every member and
    link into the app; runbook *Notice emails*). Closes when the sender's domain is
    verified in Postmark, `NOTICE_EMAIL_FROM` is set on the dashboard, and a workspace with
    no phone gets an email for a new card, an escalation and the briefing. Auto-execution
    reports and the AI-limit and outage notices still reach phones only.
-6. **Partner dashboard submission:** protected customer data access (level 2: name,
+5. **Partner dashboard submission:** protected customer data access (level 2: name,
    email, phone, address); its requirements are built (runbook *Customer data
    protection*: access log and weekly review, the Terms' data processing section, the
    incident response policy), so every answer is Yes except consent, data sale and
@@ -116,7 +107,7 @@ Resumes with the first real merchant.
    `shopify.app.toml` and chat extension with `shopify app deploy` before submitting.
    Left: listing copy, icon and screenshots; a screencast; reviewer test credentials.
    Closes when the submission form is complete.
-7. **Listing day:** the site's call to action is a waitlist. Point it and the pricing
+6. **Listing day:** the site's call to action is a waitlist. Point it and the pricing
    cards at the listing, and open sign-ups. Closes when the listing is live.
 
 ## Later
@@ -226,8 +217,9 @@ Resumes with the first real merchant.
   once the path it guards runs. Money, tenant isolation and truthful outcomes are never
   skipped. (2026-09-10)
 - **SocialAPI is the `ig_dm` transport through the first 100 users.** Meta App Review
-  gates nothing; direct Meta stays closed to new workspaces. Admission is by
-  `SOCIALAPI_BRAND_ASSIGNMENTS`, capped by `SOCIALAPI_MAX_ACTIVE_ORGS` (max 8). (2026-09-09)
+  gates nothing; direct Meta stays closed to new workspaces. (2026-09-09) Every workspace
+  connects under one SocialAPI brand (`SOCIALAPI_BRAND_ID`), with no per-workspace admission
+  and no cap in code. (2026-11-28)
 - **Gmail working never proves Instagram ready.** Instagram is the core customer
   channel, iMessage the control surface, Telegram internal only. (2026-09-07)
 - **Damage claims need a photo before any compensation** (`damageEvidence:
